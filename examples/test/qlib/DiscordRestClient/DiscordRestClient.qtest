@@ -11,15 +11,38 @@
 %requires ConnectionProvider
 %requires RestClient
 %requires DiscordRestClient
+%requires HttpServerUtil
+%requires HttpServer
 
 %requires json
 
 %exec-class Main
 
+#! A local server that answers every request and records the request paths and authorization headers
+class DiscordEchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"id": "1"}),
+        };
+    }
+}
+
 public class Main inherits QUnit::Test {
     constructor() : Test("DiscordRestClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -30,6 +53,91 @@ public class Main inherits QUnit::Test {
 
     discordTests() {
         checkModule();
+    }
+
+    clientOptionTests() {
+        # the default URL is used with the API version if no URL is given
+        hash<auto> popts = DiscordRestClientBase::getOptions({"token": "t"});
+        assertEq("https://discord.com/api/v10", popts.url);
+        assertEq(popts, DiscordRestClientBase::getOptions(popts));
+        assertEq("https://discord.com/api/v9", DiscordRestClientBase::getOptions({"api": 9}).url);
+        # an explicit URL takes precedence; the API version is added if the path has no version component
+        assertEq("http://proxy.example.com/discord/api/v10", DiscordRestClientBase::getOptions({
+            "url": "http://proxy.example.com/discord/api",
+        }).url);
+        assertEq("http://proxy.example.com/discord/api/v10", DiscordRestClientBase::getOptions({
+            "url": "http://proxy.example.com/discord/api/",
+        }).url);
+        assertEq("http://proxy.example.com/api/v9", DiscordRestClientBase::getOptions({
+            "url": "http://proxy.example.com/api/v9",
+        }).url);
+        # the default API path is added to a URL without a path
+        assertEq("https://discord.com/api/v10", DiscordRestClientBase::getOptions({"url": "https://discord.com"}).url);
+        assertEq("https://discord.com/api/v8", DiscordRestClientBase::getOptions({
+            "url": "https://discord.com/",
+            "api": 8,
+        }).url);
+
+        # the default connection URL is unchanged
+        DiscordRestConnection conn("test", "test", DiscordRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "token": "x",
+        });
+        assertEq("https://discord.com/api/v10", conn.get(False).getURL());
+        assertEq("https://discord.com/api/v10", conn.getAsync(False).getUrl());
+        # a connection URL without a path gets the default API path
+        DiscordRestConnection conn_host("test", "test", "discord://discord.com", {"monitor": False}, {
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "token": "x",
+            "api": 9,
+        });
+        assertEq("https://discord.com/api/v9", conn_host.get(False).getURL());
+        assertEq("https://discord.com/api/v9", conn_host.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        DiscordEchoHandler handler();
+        server.setHandler("discord", "", NOTHING, handler);
+        server.setDefaultHandler("discord", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        DiscordRestClient sync({"url": url + "/api", "token": "test-token"}, True);
+        assertEq(url + "/api/v10", sync.getURL());
+        sync.get("users/@me");
+        assertEq("api/v10/users/@me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and uses the new URL
+        DiscordRestClient sync_copy = cast<DiscordRestClient>(sync.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", sync_copy.getURL());
+        sync_copy.get("users/@me");
+        assertEq("other/v9/users/@me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # the explicit URL is used by the async client
+        DiscordRestClientIo io({
+            "url": url,
+            "token": "test-token",
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+        });
+        assertEq(url + "/api/v10", io.getUrl());
+        io.restGet("users/@me");
+        assertEq("api/v10/users/@me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and uses the new URL
+        DiscordRestClientIo io_copy = cast<DiscordRestClientIo>(io.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", io_copy.getUrl());
+        io_copy.restGet("users/@me");
+        assertEq("other/v9/users/@me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
     }
 
     connectionTests() {

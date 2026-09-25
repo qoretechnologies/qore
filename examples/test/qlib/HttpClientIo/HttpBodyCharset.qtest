@@ -40,6 +40,10 @@
 %requires RestClient
 %requires json
 
+%try-module yaml
+%define NoYaml
+%endtry
+
 %exec-class HttpBodyCharsetTest
 
 #! the expected decoding of a response body
@@ -79,6 +83,9 @@ class TestHandler inherits AbstractHttpRequestHandler {
                 "body": <efbbbf7b2261223a22c3a4227d>, "encoding": "UTF-8", "text": "{\"a\":\"ä\"}"},
             "yaml": <CharsetCase>{"content_type": "application/yaml;charset=iso-8859-1", "body": <613a20c3a4>,
                 "encoding": "UTF-8", "text": "a: ä"},
+            # a byte order mark selects the encoding of YAML
+            "yaml-bom": <CharsetCase>{"content_type": "application/yaml", "body": <fffe61003a002000e400>,
+                "encoding": "UTF-16LE", "text": "a: ä"},
             # XML: the declaration, else UTF-8
             "xml-declaration": <CharsetCase>{"content_type": "application/xml",
                 "body": <3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d2269736f2d383835392d32223f3e3c613eb13c2f613e>,
@@ -485,6 +492,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
             }
         }
+%ifndef NoYaml
+        # YAML is deserialized from its actual encoding, including one given by a byte order mark
+        foreach string name in ("yaml", "yaml-bom") {
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
+            }
+        }
+%endif
     }
 
     restClientTest() {

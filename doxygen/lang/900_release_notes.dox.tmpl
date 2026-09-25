@@ -1887,6 +1887,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider is converted
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
+    - @ref discordrestclientintro "DiscordRestClient" module
+      - @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" honors an explicit \c url option instead of
+        always replacing it with the default URL; the API version is appended to a URL without one
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+
     - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
       - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
         @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
@@ -1930,6 +1935,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
         and @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri()
         "AbstractFileLocationHandler::getPathFromFileUri()"
+      - the stream readers of HTTP locations decode text in the encoding determined from the response, like text
+        reads, with the \c encoding option as the assumed encoding
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref ftppollerintro "FtpPoller" module
       - FTP errors during polling are logged with the new \c "log_error" callback (falling back to \c "log_info" if
@@ -2225,6 +2233,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         @ref RestClient::RestClient::copySelf() "copySelf()" hook, which also fixes the equivalent defect in
         @ref restclientiointro "RestClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+      - a client given a token uses it when options required to acquire a token with its OAuth2 grant type are
+        missing, instead of raising \c OAUTH2-ERROR when it is created with a connection; polling pings decode
+        response bodies by the rules shared by all HTTP clients
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref restclientiointro "RestClientIo" module
       - fixed @ref RestClientIo::RestClientIo::restSseReader() "restSseReader()" not decoding an event stream with a
@@ -2233,6 +2245,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         unusable when the originating client was destroyed: internally created connection managers
         now remain active until the last related client is destroyed, while explicitly shared
         managers retain their caller-owned lifecycle
+
+    - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
+      - JSON and YAML bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed instead of
+        being relabeled, which corrupted correctly labeled text such as YAML with a UTF-16 byte order mark
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref salesforcerestclientintro "SalesforceRestClient" module
       - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
@@ -2246,6 +2263,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         the OAuth2 token response, which @ref RestClientIo::RestClientIo "RestClientIo" would otherwise discard, so
         the identity is available on the async path as well
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+      - the API list of a polling ping is decoded by the rules shared by all HTTP clients instead of as
+        ISO-8859-1 without a charset (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref salesforcerestdataproviderintro "SalesforceRestDataProvider" module
       - declared \c SalesforcePubSubDataProvider as an optional @ref user_module_children "child module", so that

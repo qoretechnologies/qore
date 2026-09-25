@@ -42,11 +42,9 @@
 
 %exec-class ShipStationDataProviderTest
 
-#! A ShipStation client that sends requests to a local server
-class LocalShipStationRestClientIo inherits ShipStationRestClient::ShipStationRestClientIo {
-    constructor(hash<auto> opts, string local_url) : ShipStationRestClientIo(opts) {
-        url = local_url;
-    }
+#! Returns the URL without any user information (the synchronous client includes the credentials in its URL)
+string sub url_without_auth(string url) {
+    return regex_subst(url, "^([a-z]+://)[^@/]*@", "$1");
 }
 
 #! A local ShipStation API server that records requests
@@ -136,6 +134,8 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
         addTestCase("action catalog tests", \actionCatalogTests());
 
@@ -1965,7 +1965,6 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         }
     }
 
-    #! Requests against a local server
     #! The synchronous client retries a rate-limited request
     syncClientRateLimitTest() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -1977,8 +1976,8 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         server.setHandler("shipstation", "", NOTHING, handler);
         server.setDefaultHandler("shipstation", handler);
 
-        ShipStationRestClient::ShipStationRestClient rest({"api_key": "test-key", "api_secret": "test-secret"}, True);
-        rest.setURL("http://localhost:" + port);
+        ShipStationRestClient::ShipStationRestClient rest({"api_key": "test-key", "api_secret": "test-secret",
+            "url": "http://localhost:" + port}, True);
         handler.rate_limited = ({"Retry-After": "1"},);
         hash<auto> info;
         hash<auto> resp = rest.doRequest("GET", "carriers", NOTHING, \info);
@@ -1990,13 +1989,116 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         handler.requests = ();
         handler.rate_limited = ({"Retry-After": "1"},);
         rest = new ShipStationRestClient::ShipStationRestClient({"api_key": "test-key", "api_secret": "test-secret",
-            "error_passthru": True}, True);
-        rest.setURL("http://localhost:" + port);
+            "error_passthru": True, "url": "http://localhost:" + port}, True);
         resp = rest.doRequest("GET", "carriers", NOTHING, \info);
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeShipStationHandler handler();
+        server.setHandler("shipstation", "", NOTHING, handler);
+        server.setDefaultHandler("shipstation", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        hash<auto> opts = {"api_key": "test-key", "api_secret": "test-secret"};
+
+        # the url option takes precedence over the URL built by the client
+        ShipStationRestClient::ShipStationRestClient rest(opts + {"url": url}, True);
+        assertEq(url, url_without_auth(rest.getUrl()));
+        rest.restGet("carriers");
+        assertEq(1, handler.requests.size());
+        assertEq("carriers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test-key:test-secret"), handler.requests[0].authorization);
+
+        ShipStationRestClient::ShipStationRestClientIo io(opts + {"url": url});
+        assertEq(url, url_without_auth(io.getUrl()));
+        handler.requests = ();
+        io.restGet("carriers");
+        assertEq(1, handler.requests.size());
+        assertEq("carriers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test-key:test-secret"), handler.requests[0].authorization);
+
+        # the processed options are processed again without change
+        hash<auto> processed = ShipStationRestClient::ShipStationRestClientBase::getOptions(opts);
+        assertEq("https://ssapi.shipstation.com", processed.url);
+        assertEq("test-key", processed.username);
+        assertEq("test-secret", processed.password);
+        assertEq(processed, ShipStationRestClient::ShipStationRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        ShipStationRestClient::ShipStationRestClient orig(opts, True);
+        assertEq("https://ssapi.shipstation.com", url_without_auth(orig.getUrl()));
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof ShipStationRestClient::ShipStationRestClient);
+        assertEq(url, url_without_auth(copy.getUrl()));
+        assertEq("https://ssapi.shipstation.com", url_without_auth(orig.getUrl()));
+        handler.requests = ();
+        copy.restGet("carriers");
+        assertEq(1, handler.requests.size());
+        assertEq("carriers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test-key:test-secret"), handler.requests[0].authorization);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        ShipStationRestClient::ShipStationRestClientIo orig_io(opts);
+        assertEq("https://ssapi.shipstation.com", url_without_auth(orig_io.getUrl()));
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof ShipStationRestClient::ShipStationRestClientIo);
+        assertEq(url, url_without_auth(copy_io.getUrl()));
+        handler.requests = ();
+        copy_io.restGet("carriers");
+        assertEq(1, handler.requests.size());
+        assertEq("carriers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test-key:test-secret"), handler.requests[0].authorization);
+
+        # the options are validated even with an explicit URL
+        assertThrows("SHIPSTATION-ERROR", sub () {
+            new ShipStationRestClient::ShipStationRestClient(
+                {"api_key": "x", "url": url}, True);
+        });
+        assertThrows("SHIPSTATION-ERROR", sub () {
+            new ShipStationRestClient::ShipStationRestClientIo(
+                {"api_secret": "x", "url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        ShipStationRestClient::ShipStationRestConnection conn({
+            "name": "test",
+            "url": "shipstation://ssapi.shipstation.com",
+            "opts": {"api_key": "k", "api_secret": "s"},
+        });
+        assertEq("https://ssapi.shipstation.com", conn.getConnectionOptions().url);
+        assertEq("https://ssapi.shipstation.com", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://ssapi.shipstation.com", url_without_auth(conn.getAsync(False).getUrl()));
+        assertEq("k", conn.getAsync(False).getConstructorOptions().username);
+
+        conn = new ShipStationRestClient::ShipStationRestConnection("test", "test",
+            ShipStationRestClient::ShipStationRestConnection::DefaultConnectionUrl, {},
+            {"api_key": "k", "api_secret": "s"});
+        assertEq("https://ssapi.shipstation.com", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://ssapi.shipstation.com", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # an explicit connection URL is used by the clients
+        conn = new ShipStationRestClient::ShipStationRestConnection("test", "test", "shipstation://proxy.example.com",
+            {}, {"api_key": "k", "api_secret": "s"});
+        assertEq("https://proxy.example.com", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://proxy.example.com", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # the stored URL is updated to the API URL
+        list<hash<auto>> updates = ();
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": ShipStationRestClient::ShipStationRestConnection::DefaultConnectionUrl},), updates);
+    }
+
+    #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -2007,10 +2109,11 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         server.setHandler("shipstation", "", NOTHING, handler);
         server.setDefaultHandler("shipstation", handler);
 
-        LocalShipStationRestClientIo rest({
+        ShipStationRestClient::ShipStationRestClientIo rest({
             "api_key": "test-key",
             "api_secret": "test-secret",
-        }, "http://localhost:" + port);
+            "url": "http://localhost:" + port,
+        });
         ShipStationDataProvider::ShipStationDataProvider provider(rest);
         string auth = "Basic " + make_base64_string("test-key:test-secret");
 

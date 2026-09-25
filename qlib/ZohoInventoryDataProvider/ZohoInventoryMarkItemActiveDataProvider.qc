@@ -118,7 +118,7 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.item_id ?? request_options.item_id ?? item_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "item_id is required for mark-item-active operation";
@@ -128,7 +128,7 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
         }
 
         string status = req.active ? "active" : "inactive";
-        return doPost(sprintf("/items/%s/%s", id, status));
+        return doPost(sprintf("/items/%s/%s", id, status), NOTHING, org_id);
     }
 
     #! Returns static provider info

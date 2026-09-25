@@ -80,11 +80,11 @@ public class FreshBooksDeleteServiceDataProvider inherits FreshBooksDataProvider
     /** Performs a DELETE request to remove the service
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setBusinessIdFromReq(req);
+        *string business_id = getBusinessIdFromReq(\req);
         if (!req.id) {
             throw "FRESHBOOKS-ERROR", "id is required for delete operation";
         }
-        doDelete(businessPath(sprintf("/service/%d", req.id)));
+        doDelete(businessPath(sprintf("/service/%d", req.id), business_id));
         return {"id": req.id, "vis_state": 1};
     }
 

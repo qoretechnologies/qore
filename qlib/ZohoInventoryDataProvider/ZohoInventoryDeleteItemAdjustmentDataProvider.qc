@@ -111,12 +111,12 @@ public class ZohoInventoryDeleteItemAdjustmentDataProvider inherits ZohoInventor
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.inventory_adjustment_id ?? request_options.inventory_adjustment_id ?? inventory_adjustment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "inventory_adjustment_id is required for delete operation";
         }
-        return doDelete(sprintf("/inventoryadjustments/%s", id));
+        return doDelete(sprintf("/inventoryadjustments/%s", id), org_id);
     }
 
     #! Returns static provider info

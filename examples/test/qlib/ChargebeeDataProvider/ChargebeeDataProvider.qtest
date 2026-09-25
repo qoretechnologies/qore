@@ -42,14 +42,9 @@
 
 %exec-class ChargebeeDataProviderTest
 
-#! A Chargebee REST client that sends its requests to a local server
-/** The API URL is derived from the site name, so the host is replaced after construction; the connection path of
-    the real API URL is kept
-*/
-class LocalChargebeeRestClientIo inherits ChargebeeRestClient::ChargebeeRestClientIo {
-    constructor(hash<auto> opts, string local_url) : ChargebeeRestClientIo(opts) {
-        url = local_url;
-    }
+#! Returns the URL without any user information (the synchronous client includes the credentials in its URL)
+string sub url_without_auth(string url) {
+    return regex_subst(url, "^([a-z]+://)[^@/]*@", "$1");
 }
 
 #! A local Chargebee API server that records requests
@@ -135,6 +130,8 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require CHARGEBEE_API_KEY and CHARGEBEE_SITE)
@@ -444,7 +441,6 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         });
     }
 
-    #! Requests against a local server
     #! The synchronous client retries a rate-limited request
     syncClientRateLimitTest() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -456,16 +452,127 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
-        ChargebeeRestClient::ChargebeeRestClient rest({"api_key": "test_key", "site": "test-site"}, True);
-        rest.setURL("http://localhost:" + port);
+        ChargebeeRestClient::ChargebeeRestClient rest({"api_key": "test_key",
+            "url": "http://localhost:" + port + "/api/v2"}, True);
         handler.rate_limited = 1;
         hash<auto> info;
-        rest.doRequest("GET", "/api/v2/customers", NOTHING, \info);
+        rest.doRequest("GET", "customers", NOTHING, \info);
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
         assertEq(handler.requests[0].path, handler.requests[1].path);
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeChargebeeHandler handler();
+        server.setHandler("chargebee", "", NOTHING, handler);
+        server.setDefaultHandler("chargebee", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        hash<auto> opts = {"api_key": "test_key", "site": "test-site"};
+
+        # the url option takes precedence over the URL built by the client
+        ChargebeeRestClient::ChargebeeRestClient rest(opts + {"url": url}, True);
+        assertEq(url, url_without_auth(rest.getUrl()));
+        rest.restGet("customers");
+        assertEq(1, handler.requests.size());
+        assertEq("customers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test_key:"), handler.requests[0].authorization);
+
+        ChargebeeRestClient::ChargebeeRestClientIo io(opts + {"url": url});
+        assertEq(url, url_without_auth(io.getUrl()));
+        handler.requests = ();
+        io.restGet("customers");
+        assertEq(1, handler.requests.size());
+        assertEq("customers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test_key:"), handler.requests[0].authorization);
+
+        # the processed options are processed again without change
+        hash<auto> processed = ChargebeeRestClient::ChargebeeRestClientBase::getOptions(opts);
+        assertEq("https://test-site.chargebee.com/api/v2", processed.url);
+        assertEq("test_key", processed.username);
+        assertEq("", processed.password);
+        assertEq(processed, ChargebeeRestClient::ChargebeeRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        ChargebeeRestClient::ChargebeeRestClient orig(opts, True);
+        assertEq("https://test-site.chargebee.com/api/v2", url_without_auth(orig.getUrl()));
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof ChargebeeRestClient::ChargebeeRestClient);
+        assertEq(url, url_without_auth(copy.getUrl()));
+        assertEq("https://test-site.chargebee.com/api/v2", url_without_auth(orig.getUrl()));
+        handler.requests = ();
+        copy.restGet("customers");
+        assertEq(1, handler.requests.size());
+        assertEq("customers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test_key:"), handler.requests[0].authorization);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        ChargebeeRestClient::ChargebeeRestClientIo orig_io(opts);
+        assertEq("https://test-site.chargebee.com/api/v2", url_without_auth(orig_io.getUrl()));
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof ChargebeeRestClient::ChargebeeRestClientIo);
+        assertEq(url, url_without_auth(copy_io.getUrl()));
+        handler.requests = ();
+        copy_io.restGet("customers");
+        assertEq(1, handler.requests.size());
+        assertEq("customers", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("test_key:"), handler.requests[0].authorization);
+
+        # the site is not required with an explicit URL
+        rest = new ChargebeeRestClient::ChargebeeRestClient({"api_key": "test_key", "url": url}, True);
+        assertEq(url, url_without_auth(rest.getUrl()));
+
+        # the API key is required even with an explicit URL, and the site is required without one
+        assertThrows("CHARGEBEE-ERROR", sub () {
+            new ChargebeeRestClient::ChargebeeRestClient(
+                {"site": "test-site", "url": url}, True);
+        });
+        assertThrows("CHARGEBEE-ERROR", sub () {
+            new ChargebeeRestClient::ChargebeeRestClientIo(
+                {"api_key": "x"});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        # the URL is derived from the site for connections created from a config hash
+        ChargebeeRestClient::ChargebeeRestConnection conn({
+            "name": "test",
+            "url": "chargebee://localhost",
+            "opts": {"api_key": "k", "site": "acme"},
+        });
+        assertEq("chargebee://acme.chargebee.com/api/v2", conn.url);
+        assertEq("https://acme.chargebee.com/api/v2", conn.getConnectionOptions().url);
+        assertEq("https://acme.chargebee.com/api/v2", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://acme.chargebee.com/api/v2", url_without_auth(conn.getAsync(False).getUrl()));
+        assertEq("k", conn.getAsync(False).getConstructorOptions().username);
+
+        # and for connections created with the default URL
+        conn = new ChargebeeRestClient::ChargebeeRestConnection("test", "test",
+            ChargebeeRestClient::ChargebeeRestConnection::DefaultConnectionUrl, {}, {"api_key": "k", "site": "acme"});
+        assertEq("chargebee://acme.chargebee.com/api/v2", conn.url);
+        assertEq("https://acme.chargebee.com/api/v2", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://acme.chargebee.com/api/v2", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # an explicit connection URL is used by the clients
+        conn = new ChargebeeRestClient::ChargebeeRestConnection("test", "test",
+            "chargebee://proxy.example.com/api/v2", {}, {"api_key": "k", "site": "acme"});
+        assertEq("https://proxy.example.com/api/v2", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://proxy.example.com/api/v2", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # the stored URL is updated to the URL derived from the site
+        list<hash<auto>> updates = ();
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "chargebee://acme.chargebee.com/api/v2"},), updates);
+    }
+
+    #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -476,8 +583,8 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
-        ChargebeeDataProvider::ChargebeeDataProvider provider(new LocalChargebeeRestClientIo(
-            {"api_key": "test_key", "site": "test-site"}, "http://localhost:" + port));
+        ChargebeeDataProvider::ChargebeeDataProvider provider(new ChargebeeRestClient::ChargebeeRestClientIo(
+            {"api_key": "test_key", "url": "http://localhost:" + port + "/api/v2"}));
         assertTrue(provider.getRestClient() instanceof ChargebeeRestClient::ChargebeeRestClientIo);
         AbstractDataProvider customers = provider.getChildProviderPath("customers");
 

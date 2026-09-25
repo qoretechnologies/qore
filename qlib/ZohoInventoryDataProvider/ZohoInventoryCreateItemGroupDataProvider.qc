@@ -67,8 +67,8 @@ public class ZohoInventoryCreateItemGroupDataProvider inherits ZohoInventoryData
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/itemgroups", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/itemgroups", req, org_id);
         return response.item_group;
     }
 

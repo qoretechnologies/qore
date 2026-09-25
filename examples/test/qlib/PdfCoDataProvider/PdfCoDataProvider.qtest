@@ -147,6 +147,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require PDFCO_API_KEY)
         addTestCase("integration tests", \integrationTests());
@@ -670,6 +671,67 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
     }
 
     #! Requests against a local server
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        # the options are processed idempotently; the API key is kept and the header is recomputed
+        hash<auto> popts = PdfCoRestClient::PdfCoRestClientBase::getOptions({"apikey": "key1"});
+        assertEq("https://api.pdf.co/v1", popts.url);
+        assertEq("key1", popts.apikey);
+        assertEq({"x-api-key": "key1"}, popts.headers);
+        assertEq(popts, PdfCoRestClient::PdfCoRestClientBase::getOptions(popts));
+        # the header is not duplicated or kept when the API key changes
+        assertEq({"x-api-key": "key2"}, PdfCoRestClient::PdfCoRestClientBase::getOptions(popts + {
+            "apikey": "key2",
+        }).headers);
+        assertThrows("PDFCO-ERROR", \PdfCoRestClient::PdfCoRestClientBase::getOptions(), {"url": "http://x"});
+
+        # the default connection URL is unchanged
+        PdfCoRestClient::PdfCoRestConnection conn("test", "test",
+            PdfCoRestClient::PdfCoRestConnection::DefaultConnectionUrl, {"monitor": False}, {"apikey": "key1"});
+        assertEq("https://api.pdf.co/v1", conn.get(False).getURL());
+        assertEq("https://api.pdf.co/v1", conn.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakePdfCoHandler handler();
+        server.setHandler("pdfco", "", NOTHING, handler);
+        server.setDefaultHandler("pdfco", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        PdfCoRestClient::PdfCoRestClient sync({"url": url + "/v1", "apikey": "test-key"}, True);
+        assertEq(url + "/v1", sync.getURL());
+        assertEq(100, sync.get("account/credit/balance").body.remainingCredits);
+        assertEq("v1/account/credit/balance", handler.requests.last().path);
+        assertEq("test-key", handler.requests.last()."x-api-key");
+
+        # a copy made with copyWithUrl() keeps the API key and uses the new URL
+        PdfCoRestClient::PdfCoRestClient sync_copy = cast<PdfCoRestClient::PdfCoRestClient>(
+            sync.copyWithUrl(url + "/v2"));
+        assertEq(url + "/v2", sync_copy.getURL());
+        assertEq(100, sync_copy.get("account/credit/balance").body.remainingCredits);
+        assertEq("v2/account/credit/balance", handler.requests.last().path);
+        assertEq("test-key", handler.requests.last()."x-api-key");
+
+        # the explicit URL is used by the async client
+        PdfCoRestClient::PdfCoRestClientIo io({"url": url + "/v1", "apikey": "test-key"});
+        assertEq(url + "/v1", io.getUrl());
+        assertEq(100, io.restGet("account/credit/balance").body.remainingCredits);
+        assertEq("v1/account/credit/balance", handler.requests.last().path);
+        assertEq("test-key", handler.requests.last()."x-api-key");
+
+        # a copy made with copyWithUrl() keeps the API key and uses the new URL
+        PdfCoRestClient::PdfCoRestClientIo io_copy = cast<PdfCoRestClient::PdfCoRestClientIo>(
+            io.copyWithUrl(url + "/v2"));
+        assertEq(url + "/v2", io_copy.getUrl());
+        assertEq(100, io_copy.restGet("account/credit/balance").body.remainingCredits);
+        assertEq("v2/account/credit/balance", handler.requests.last().path);
+        assertEq("test-key", handler.requests.last()."x-api-key");
+    }
+
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),

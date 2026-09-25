@@ -87,13 +87,13 @@ public class ZohoInventoryUpdatePackageDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = remove req.package_id ?? request_options.package_id ?? package_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "package_id is required for update operation";
         }
         hash<auto> body = req - "package_id";
-        hash<auto> response = doPut(sprintf("/packages/%s", id), body);
+        hash<auto> response = doPut(sprintf("/packages/%s", id), body, org_id);
         return response."package";
     }
 

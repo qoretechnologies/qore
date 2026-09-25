@@ -131,10 +131,11 @@ public class PdfCoRestClientBase {
             throw "PDFCO-ERROR", "missing required option 'apikey' (PDF.co API key)";
         }
 
-        # Set x-api-key header and remove apikey from opts
-        # so that RestClient does not attempt to handle it specially
+        # Set the x-api-key header from the apikey option; the header is always recomputed, so it replaces any
+        # x-api-key header already present; the apikey option is kept in the returned hash (it is ignored by the base
+        # classes), so that the options saved in the base class can be used to create a copy of the object with
+        # copyWithUrl(); this method must return the same result when called with its own output
         rv.headers."x-api-key" = opts.apikey;
-        remove rv.apikey;
 
         return rv;
     }
@@ -158,6 +159,8 @@ PdfCoRestClient pdfco({"apikey": "your-api-key"});
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c apikey: the PDF.co API key (required)
+
+        If the \c url option is given, it takes precedence over the default API URL (\c https://api.pdf.co/v1).
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server

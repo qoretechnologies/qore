@@ -97,12 +97,12 @@ public class ZohoInventoryGetPackageDataProvider inherits ZohoInventoryDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.package_id ?? request_options.package_id ?? package_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "package_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/packages/%s", id));
+        hash<auto> response = doGet(sprintf("/packages/%s", id), NOTHING, org_id);
         return response."package";
     }
 

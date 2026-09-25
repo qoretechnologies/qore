@@ -67,8 +67,8 @@ public class FreshBooksCreateExpenseDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
-        return doPost(accountPath("/expenses/expenses"), {"expense": req}).expense;
+        *string account_id = getAccountIdFromReq(\req);
+        return doPost(accountPath("/expenses/expenses", account_id), {"expense": req}).expense;
     }
 
     #! Returns static provider info

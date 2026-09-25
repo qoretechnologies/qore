@@ -88,6 +88,26 @@ class FakeBigCommerceHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A local OAuth2 token endpoint that returns the store in the context of the token response
+class FakeBigCommerceTokenHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of token requests received
+        int requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({
+                "access_token": "oauth-token",
+                "context": "stores/xyz",
+            }),
+        };
+    }
+}
+
 public class BigCommerceDataProviderTest inherits QUnit::Test {
     private {
         #! BigCommerce REST client for integration tests
@@ -126,6 +146,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("OAuth2 option tests", \oAuth2OptionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require BigCommerce credentials)
         addTestCase("integration tests", \integrationTests());
@@ -621,6 +642,178 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         BigCommerceRestClient bc4({"token": "connection-token", "store_hash": "testhash"}, True);
         assertEq("connection-token", bc4.getDefaultHeaders()."X-Auth-Token");
         assertNothing(bc4.getDefaultHeaders().Authorization);
+    }
+
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        checkJson();
+        code get_options = \BigCommerceRestClient::BigCommerceRestClientBase::getOptions();
+
+        # the options are processed idempotently, and the store hash is kept
+        hash<auto> popts = get_options({
+            "token": "t",
+            "store_hash": "abc",
+        });
+        assertEq("https://api.bigcommerce.com/stores/abc", popts.url);
+        assertEq("abc", popts.store_hash);
+        assertEq(popts, get_options(popts));
+        popts = BigCommerceRestClient::BigCommerceRestClientIo::getOptions({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "store_hash": "abc",
+        });
+        assertEq(popts, get_options(popts));
+
+        # an explicit URL with a path takes precedence over the store hash
+        assertEq("http://proxy.example.com/bc/stores/zzz", get_options({
+            "url": "http://proxy.example.com/bc/stores/zzz",
+            "store_hash": "abc",
+        }).url);
+        # the store path is added to a URL without a path
+        assertEq("https://api.bigcommerce.com/stores/abc", get_options({
+            "url": "https://api.bigcommerce.com",
+            "store_hash": "abc",
+        }).url);
+        assertEq("https://api.bigcommerce.com/stores/abc", get_options({
+            "url": "https://api.bigcommerce.com/",
+            "store_hash": "abc",
+        }).url);
+        # explicit OAuth2 options take precedence over the defaults
+        popts = get_options({
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_token_url": "http://localhost/token",
+        });
+        assertEq("client_credentials", popts.oauth2_grant_type);
+        assertEq("http://localhost/token", popts.oauth2_token_url);
+        assertEq(BigCommerceRestClient::BigCommerceRestClientBase::DefaultAuthUrl, popts.oauth2_auth_url);
+
+        # store hash helpers
+        assertEq("xyz", BigCommerceRestClient::BigCommerceRestClientBase::getStoreHashFromContext("stores/xyz"));
+        assertNothing(BigCommerceRestClient::BigCommerceRestClientBase::getStoreHashFromContext(""));
+        assertNothing(BigCommerceRestClient::BigCommerceRestClientBase::getStoreHashFromContext(NOTHING));
+        assertNothing(BigCommerceRestClient::BigCommerceRestClientBase::getStoreHashFromContext("other"));
+        assertEq("/stores/new", BigCommerceRestClient::BigCommerceRestClientBase::getStorePath("/stores/old", "new"));
+        assertEq("/p/stores/new", BigCommerceRestClient::BigCommerceRestClientBase::getStorePath("/p/", "new"));
+        assertEq("/stores/new", BigCommerceRestClient::BigCommerceRestClientBase::getStorePath(NOTHING, "new"));
+        assertEq("http://h:1/stores/new", BigCommerceRestClient::BigCommerceRestClientBase::getStoreUrl("http://h:1",
+            "new"));
+        assertEq("http://h:1/x/stores/new", BigCommerceRestClient::BigCommerceRestClientBase::getStoreUrl(
+            "http://h:1/x/stores/old/", "new"));
+
+        # the connection URL is built from the store hash
+        hash<auto> conn_opts = {
+            "store_hash": "abc",
+            "token": "t",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        };
+        BigCommerceRestClient::BigCommerceRestConnection conn({
+            "name": "test",
+            "url": "bigcommerceres://api.bigcommerce.com",
+            "opts": conn_opts,
+        }, {"monitor": False});
+        assertEq("https://api.bigcommerce.com/stores/abc", conn.get(False).getURL());
+        assertEq("https://api.bigcommerce.com/stores/abc", conn.getAsync(False).getUrl());
+        # a stored connection URL without a path gets the store path
+        BigCommerceRestClient::BigCommerceRestConnection conn_legacy("test", "test",
+            "bigcommerceres://api.bigcommerce.com", {"monitor": False}, conn_opts);
+        assertEq("https://api.bigcommerce.com/stores/abc", conn_legacy.get(False).getURL());
+        assertEq("https://api.bigcommerce.com/stores/abc", conn_legacy.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeBigCommerceHandler handler();
+        FakeBigCommerceTokenHandler token_handler();
+        server.setHandler("bigcommerce-token", "oauth2/token", NOTHING, token_handler);
+        server.setHandler("bigcommerce", "", NOTHING, handler);
+        server.setDefaultHandler("bigcommerce", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        BigCommerceRestClient::BigCommerceRestClient sync({
+            "url": url + "/stores/abc",
+            "token": "test-token",
+            "store_hash": "other",
+        }, True);
+        assertEq(url + "/stores/abc", sync.getURL());
+        sync.get("v3/customers");
+        assertEq("stores/abc/v3/customers", handler.requests.last().path);
+        assertEq("test-token", handler.requests.last()."x-auth-token");
+        assertNothing(handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and uses the new URL
+        BigCommerceRestClient::BigCommerceRestClient sync_copy =
+            cast<BigCommerceRestClient::BigCommerceRestClient>(sync.copyWithUrl(url + "/stores/def"));
+        assertEq(url + "/stores/def", sync_copy.getURL());
+        sync_copy.get("v3/customers");
+        assertEq("stores/def/v3/customers", handler.requests.last().path);
+        assertEq("test-token", handler.requests.last()."x-auth-token");
+
+        # the explicit URL is used by the async client; the store path is added to a URL without a path
+        BigCommerceRestClient::BigCommerceRestClientIo io({
+            "url": url,
+            "token": "test-token",
+            "store_hash": "abc",
+        });
+        assertEq(url + "/stores/abc", io.getUrl());
+        io.restGet("v3/customers");
+        assertEq("stores/abc/v3/customers", handler.requests.last().path);
+        assertEq("test-token", handler.requests.last()."x-auth-token");
+
+        # a copy made with copyWithUrl() keeps the credentials and uses the new URL
+        BigCommerceRestClient::BigCommerceRestClientIo io_copy =
+            cast<BigCommerceRestClient::BigCommerceRestClientIo>(io.copyWithUrl(url + "/stores/def"));
+        assertEq(url + "/stores/def", io_copy.getUrl());
+        io_copy.restGet("v3/customers");
+        assertEq("stores/def/v3/customers", handler.requests.last().path);
+        assertEq("test-token", handler.requests.last()."x-auth-token");
+
+        # the store is taken from the context of the OAuth2 token response
+        hash<auto> oauth2_opts = {
+            "url": url,
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_token_url": url + "/oauth2/token",
+        };
+        BigCommerceRestClient::BigCommerceRestClient sync_oauth2(oauth2_opts);
+        assertEq(1, token_handler.requests);
+        assertEq(url + "/stores/xyz", sync_oauth2.getURL());
+        assertEq(url + "/stores/xyz", sync_oauth2.getConstructorOptions().url);
+        assertEq("xyz", sync_oauth2.getConstructorOptions().store_hash);
+        sync_oauth2.get("v3/customers");
+        assertEq("stores/xyz/v3/customers", handler.requests.last().path);
+        assertEq("oauth-token", handler.requests.last()."x-auth-token");
+        assertNothing(handler.requests.last().authorization);
+        # a copy uses the same store and token
+        BigCommerceRestClient::BigCommerceRestClient sync_oauth2_copy =
+            cast<BigCommerceRestClient::BigCommerceRestClient>(sync_oauth2.copyWithUrl(url + "/stores/xyz"));
+        sync_oauth2_copy.get("v3/customers");
+        assertEq("stores/xyz/v3/customers", handler.requests.last().path);
+        assertEq("oauth-token", handler.requests.last()."x-auth-token");
+        assertEq(1, token_handler.requests);
+
+        BigCommerceRestClient::BigCommerceRestClientIo io_oauth2(oauth2_opts);
+        io_oauth2.restGet("v3/customers");
+        assertEq(2, token_handler.requests);
+        assertEq("stores/xyz/v3/customers", handler.requests.last().path);
+        assertEq("oauth-token", handler.requests.last()."x-auth-token");
+        assertEq("/stores/xyz", io_oauth2.getConnectionPath());
+        assertEq(url + "/stores/xyz", io_oauth2.getConstructorOptions().url);
+        assertEq("xyz", io_oauth2.getConstructorOptions().store_hash);
+        # a copy made with the saved options uses the same store and token
+        BigCommerceRestClient::BigCommerceRestClientIo io_oauth2_copy =
+            cast<BigCommerceRestClient::BigCommerceRestClientIo>(io_oauth2.copyWithUrl(
+                io_oauth2.getConstructorOptions().url));
+        io_oauth2_copy.restGet("v3/customers");
+        assertEq("stores/xyz/v3/customers", handler.requests.last().path);
+        assertEq("oauth-token", handler.requests.last()."x-auth-token");
+        assertEq(2, token_handler.requests);
     }
 
     #! Requests against a local server

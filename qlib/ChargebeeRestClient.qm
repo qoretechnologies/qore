@@ -131,6 +131,15 @@ public class ChargebeeRestClientBase {
     }
 
     #! returns options for ChargebeeRestClient constructors
+    /** The returned options keep the Chargebee-specific input options (\c api_key, \c site), which the REST client
+        ignores, and derive the REST client options from them; this makes the method idempotent, so a client can be
+        recreated from its own processed options, as with @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c site, and \c site is not
+        required
+
+        @throw CHARGEBEE-ERROR missing \c api_key option, or missing \c site option when no \c url option is given
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
@@ -140,22 +149,30 @@ public class ChargebeeRestClientBase {
         if (!opts.api_key) {
             throw "CHARGEBEE-ERROR", "missing required option 'api_key' (Chargebee API key)";
         }
-        if (!opts.site) {
-            throw "CHARGEBEE-ERROR", "missing required option 'site' (Chargebee site name)";
+
+        # an explicit URL takes precedence over the URL derived from the site name
+        if (!rv.url) {
+            if (!opts.site) {
+                throw "CHARGEBEE-ERROR", "missing required option 'site' (Chargebee site name) or 'url'";
+            }
+            rv.url = getApiUrl(opts.site);
         }
 
-        # Build URL from site name
-        rv.url = sprintf("https://%s.chargebee.com/api/v2", opts.site);
-
-        # Set HTTP Basic Auth: username=API_KEY, password=empty
+        # Set HTTP Basic Auth: username=API_KEY, password=empty; the api_key option is kept so that the options can
+        # be processed again
         rv.username = opts.api_key;
         rv.password = "";
 
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.api_key;
-        remove rv.site;
-
         return rv;
+    }
+
+    #! Returns the API URL for the given site name
+    /** @param site the Chargebee site name
+
+        @return the API URL for the given site name (ex: \c "https://acme.chargebee.com/api/v2")
+    */
+    static string getApiUrl(string site) {
+        return sprintf("https://%s.chargebee.com/api/v2", site);
     }
 }
 
@@ -192,13 +209,18 @@ ChargebeeRestClient chargebee({"api_key": "test_xxx", "site": "acme-test"});
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c api_key: the Chargebee API key (required)
-        - \c site: the Chargebee site name (required) - e.g., "acme" for acme.chargebee.com
+        - \c site: the Chargebee site name (required if no \c url option is given) - e.g., "acme" for
+          acme.chargebee.com
+
+        If the \c url option is given, it takes precedence over the URL derived from \c site; the URL must include
+        the API path (ex: \c "https://acme.chargebee.com/api/v2"); this can be used to send requests through a proxy
+        or to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw CHARGEBEE-ERROR missing required option 'api_key' or 'site'
+        @throw CHARGEBEE-ERROR missing required option 'api_key', or 'site' when no 'url' option is given
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(ChargebeeRestClientBase::getOptions(opts), do_not_connect) {
@@ -345,9 +367,21 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
     }
 
     #! creates the ChargebeeRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL; if @ref DefaultConnectionUrl is given, the URL is derived from the \c site option
+        @param attributes connection attributes
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
     constructor(string name, string description, string url = DefaultConnectionUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == DefaultConnectionUrl
+                ? ChargebeeRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the ChargebeeRestConnection object
@@ -357,14 +391,25 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
 
     #! returns config for the constructor - builds URL from site option
     private static hash<auto> getConfig(hash<auto> config) {
-        if (config.opts.site) {
-            return config + {
-                "url": sprintf("chargebee://%s.chargebee.com/api/v2", config.opts.site),
-            };
-        }
         return config + {
-            "url": DefaultConnectionUrl,
+            "url": ChargebeeRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c site option (ex: \c "chargebee://acme.chargebee.com/api/v2"); the
+        URL given to the client is the connection URL with the \c "chargebee" scheme replaced with \c "https", which
+        is the URL that the client would derive from the same option
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options, or @ref DefaultConnectionUrl if the \c site
+        option is not set
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        return opts.site
+            ? regex_subst(ChargebeeRestClientBase::getApiUrl(opts.site), "^https:", "chargebee:")
+            : DefaultConnectionUrl;
     }
 
     #! returns \c "chargebee"
@@ -398,7 +443,7 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options && opts.site) {
-            string expected_url = sprintf("chargebee://%s.chargebee.com/api/v2", opts.site);
+            string expected_url = getConnectionUrl(opts);
             if (url != expected_url) {
                 doUpdateOptions(self, {
                     "url": expected_url,

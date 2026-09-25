@@ -42,16 +42,6 @@
 
 %exec-class InstantlyDataProviderTest
 
-#! An Instantly REST client that sends requests to a local server
-/** The Instantly client always uses the Instantly API URL; only the server part is replaced here, so requests
-    still use the \c /api/v2 connection path of the real API
-*/
-class LocalInstantlyRestClientIo inherits InstantlyRestClient::InstantlyRestClientIo {
-    constructor(string url, hash<auto> opts) : InstantlyRestClientIo(opts) {
-        self.url = url;
-    }
-}
-
 #! A local Instantly API server that records requests
 class FakeInstantlyHandler inherits AbstractHttpRequestHandler {
     public {
@@ -190,6 +180,8 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require INSTANTLY_API_KEY or connection)
@@ -229,7 +221,6 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         client = new InstantlyRestClient::InstantlyRestClientIo({"apikey": apikey});
     }
 
-    #! Requests against a local server
     #! The synchronous client retries a rate-limited request
     syncClientRateLimitTest() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -241,8 +232,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
-        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key"}, True);
-        rest.setURL("http://localhost:" + port);
+        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": "http://localhost:" + port}, True);
         handler.rate_limited = 1;
         hash<auto> info;
         hash<auto> resp = rest.doRequest("GET", "campaigns/c1", NOTHING, \info);
@@ -252,6 +242,104 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         assertEq("Bearer test-key", handler.requests[1].authorization);
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeInstantlyHandler handler();
+        server.setHandler("instantly", "", NOTHING, handler);
+        server.setDefaultHandler("instantly", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        hash<auto> opts = {"apikey": "test-key"};
+
+        # the url option takes precedence over the URL built by the client
+        InstantlyRestClient::InstantlyRestClient rest(opts + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        rest.restGet("campaigns/c1");
+        assertEq(1, handler.requests.size());
+        assertEq("campaigns/c1", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        InstantlyRestClient::InstantlyRestClientIo io(opts + {"url": url});
+        assertEq(url, io.getUrl());
+        handler.requests = ();
+        io.restGet("campaigns/c1");
+        assertEq(1, handler.requests.size());
+        assertEq("campaigns/c1", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # the processed options are processed again without change
+        hash<auto> processed = InstantlyRestClient::InstantlyRestClientBase::getOptions(opts);
+        assertEq("https://api.instantly.ai/api/v2", processed.url);
+        assertEq("Bearer test-key", processed.headers.Authorization);
+        assertEq(processed, InstantlyRestClient::InstantlyRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        InstantlyRestClient::InstantlyRestClient orig(opts, True);
+        assertEq("https://api.instantly.ai/api/v2", orig.getUrl());
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof InstantlyRestClient::InstantlyRestClient);
+        assertEq(url, copy.getUrl());
+        assertEq("https://api.instantly.ai/api/v2", orig.getUrl());
+        handler.requests = ();
+        copy.restGet("campaigns/c1");
+        assertEq(1, handler.requests.size());
+        assertEq("campaigns/c1", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        InstantlyRestClient::InstantlyRestClientIo orig_io(opts);
+        assertEq("https://api.instantly.ai/api/v2", orig_io.getUrl());
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof InstantlyRestClient::InstantlyRestClientIo);
+        assertEq(url, copy_io.getUrl());
+        handler.requests = ();
+        copy_io.restGet("campaigns/c1");
+        assertEq(1, handler.requests.size());
+        assertEq("campaigns/c1", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # the options are validated even with an explicit URL
+        assertThrows("INSTANTLY-ERROR", sub () {
+            new InstantlyRestClient::InstantlyRestClientIo(
+                {"url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        InstantlyRestClient::InstantlyRestConnection conn({
+            "name": "test",
+            "url": "instantly://api.instantly.ai/api/v2",
+            "opts": {"apikey": "k"},
+        });
+        assertEq("https://api.instantly.ai/api/v2", conn.getConnectionOptions().url);
+        assertEq("https://api.instantly.ai/api/v2", conn.get(False).getUrl());
+        assertEq("https://api.instantly.ai/api/v2", conn.getAsync(False).getUrl());
+        assertEq("Bearer k", conn.getAsync(False).getConstructorOptions().headers.Authorization);
+
+        conn = new InstantlyRestClient::InstantlyRestConnection("test", "test",
+            InstantlyRestClient::InstantlyRestConnection::DefaultConnectionUrl, {}, {"apikey": "k"});
+        assertEq("https://api.instantly.ai/api/v2", conn.get(False).getUrl());
+        assertEq("https://api.instantly.ai/api/v2", conn.getAsync(False).getUrl());
+
+        # an explicit connection URL is used by the clients
+        conn = new InstantlyRestClient::InstantlyRestConnection("test", "test", "instantly://proxy.example.com/api/v2",
+            {}, {"apikey": "k"});
+        assertEq("https://proxy.example.com/api/v2", conn.get(False).getUrl());
+        assertEq("https://proxy.example.com/api/v2", conn.getAsync(False).getUrl());
+
+        # the stored URL is updated to the API URL
+        list<hash<auto>> updates = ();
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": InstantlyRestClient::InstantlyRestConnection::DefaultConnectionUrl},), updates);
+    }
+
+    #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -262,7 +350,10 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
-        LocalInstantlyRestClientIo rest("http://localhost:" + port, {"apikey": "test-key"});
+        InstantlyRestClient::InstantlyRestClientIo rest({
+            "apikey": "test-key",
+            "url": "http://localhost:" + port + "/api/v2",
+        });
         InstantlyDataProvider::InstantlyDataProvider provider({
             "instantlyrestclient": rest,
             "apikey": "test-key",

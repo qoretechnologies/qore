@@ -384,7 +384,43 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an HTTP call
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        hash<auto> response = getBinaryStreamIntern(scheme, location, opts);
+        Qore::InputStream stream = response.stream;
+        if (!response.decoded) {
+            # the octets of a body that is not decoded are not text
+            return new StreamReader(stream, opts.encoding);
+        }
+
+        # the encoding of the text is determined by the rules shared by all HTTP clients (see
+        # get_http_body_encoding()) from the headers and the start of the body, with the encoding option as the
+        # assumed encoding
+        binary start;
+        while (start.size() < HttpIoSupport::EncodingSniffSize) {
+            *binary b = stream.read(HttpIoSupport::EncodingSniffSize - start.size());
+            if (!b) {
+                break;
+            }
+            start += b;
+        }
+        auto content_type = response.headers."content-type";
+        if (content_type.typeCode() == NT_LIST) {
+            content_type = content_type[0];
+        }
+        string assumed = opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding;
+        *string enc = get_http_body_encoding(content_type, start, assumed);
+        if (enc && start) {
+            # a byte order mark is not part of the text: the decoded start of the body is shorter by its size
+            data decoded = decode_http_body(content_type, start, assumed);
+            int bom_len = start.size() - decoded.size();
+            if (bom_len) {
+                start = start.substr(bom_len);
+            }
+        }
+        if (start) {
+            stream = new HttpIoPrefixInputStream(start, stream);
+        }
+        # a body that is not text is read in the encoding option, as before
+        return new StreamReader(stream, enc ?? opts.encoding);
     }
 
     #! Retrieves a binary file from the given location
@@ -401,6 +437,21 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an HTTP call
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        return getBinaryStreamIntern(scheme, location, opts).stream;
+    }
+
+    #! Retrieves a file from the given location as a stream
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return a hash with the following keys:
+        - \c stream: an input stream of the file's contents
+        - \c headers: the response headers
+        - \c decoded: @ref True if the stream delivers the decoded body (not a body with a content encoding that
+          is passed through)
+    */
+    private hash<auto> getBinaryStreamIntern(string scheme, string location, *hash<auto> opts) {
         hash<HttpIoRequestInfo> info = getRequestInfo(scheme, location, opts, "GET");
         object mgr = getManager(info);
         HttpIoRequestPollOperation op(mgr, info, True);
@@ -432,7 +483,11 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         if (coding && !info.encoding_passthru) {
             rv = new TransformInputStream(rv, get_decompressor(HttpIoSupport::CodingAlgorithms{coding}));
         }
-        return rv;
+        return {
+            "stream": rv,
+            "headers": resp.headers,
+            "decoded": !coding || !info.encoding_passthru,
+        };
     }
 
     #! Writes data to a file at the given location
@@ -671,6 +726,12 @@ class HttpIoSupport {
             @ref Qore::HTTPClient "HTTPClient"
         */
         const DefaultAssumedEncoding = "ISO-8859-1";
+
+        #! The number of bytes examined at the start of a text body to determine its encoding
+        /** The size of the WHATWG MIME Sniffing resource header; see @ref Qore::get_http_body_encoding()
+            "get_http_body_encoding()"
+        */
+        const EncodingSniffSize = 1445;
 
         #! The module providing the HTTP transport
         const ModuleName = "HttpClientIo";
@@ -1592,6 +1653,52 @@ class HttpIoBodyPollOperation inherits Qore::AbstractPollOperation<auto> {
 #! An input stream reading the response body from an \c HttpClientIo stream
 /** @since FileLocationHandler 3.0
 */
+#! An input stream that returns the given data before the data of another stream
+/** Used to read the start of a body to determine its character encoding before the body is read as text
+*/
+class HttpIoPrefixInputStream inherits Qore::InputStream {
+    private {
+        #! The data returned first
+        binary prefix;
+        #! The stream read after the prefix
+        Qore::InputStream stream;
+    }
+
+    #! Creates the object
+    /** @param prefix the data returned first
+        @param stream the stream read after the prefix
+    */
+    constructor(binary prefix, Qore::InputStream stream) {
+        self.prefix = prefix;
+        self.stream = stream;
+    }
+
+    #! Reads data from the stream
+    /** @param limit the maximum number of bytes to read
+
+        @return the data read, or @ref nothing at the end of the stream
+    */
+    *binary read(int limit) {
+        if (!prefix) {
+            return stream.read(limit);
+        }
+        binary b;
+        if (limit > 0 && prefix.size() > limit) {
+            b = prefix.substr(0, limit);
+            prefix = prefix.substr(limit);
+        } else {
+            b = prefix;
+            prefix = binary();
+        }
+        return b;
+    }
+
+    #! Returns the next byte without reading it, or -1 at the end of the stream
+    int peek() {
+        return prefix ? prefix[0] : stream.peek();
+    }
+}
+
 class HttpIoInputStream inherits Qore::InputStream {
     private {
         #! The stream

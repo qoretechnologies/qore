@@ -97,12 +97,12 @@ public class ZohoInventoryGetItemGroupDataProvider inherits ZohoInventoryDataPro
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.group_id ?? request_options.group_id ?? group_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "group_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/itemgroups/%s", id));
+        hash<auto> response = doGet(sprintf("/itemgroups/%s", id), NOTHING, org_id);
         return response.item_group;
     }
 

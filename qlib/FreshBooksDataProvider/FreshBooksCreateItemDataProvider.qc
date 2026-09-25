@@ -67,8 +67,8 @@ public class FreshBooksCreateItemDataProvider inherits FreshBooksDataProviderBas
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
-        return doPost(accountPath("/items/items"), {"item": req}).item;
+        *string account_id = getAccountIdFromReq(\req);
+        return doPost(accountPath("/items/items", account_id), {"item": req}).item;
     }
 
     #! Returns static provider info

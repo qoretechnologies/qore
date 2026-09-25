@@ -67,8 +67,8 @@ public class ZohoInventoryCreateShipmentOrderDataProvider inherits ZohoInventory
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/shipmentorders", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/shipmentorders", req, org_id);
         return response.shipment_order;
     }
 

@@ -67,12 +67,12 @@ public class FreshBooksUpdateServiceDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setBusinessIdFromReq(req);
+        *string business_id = getBusinessIdFromReq(\req);
         int id = remove req.id;
         if (!id) {
             throw "FRESHBOOKS-ERROR", "id is required for update operation";
         }
-        return doPut(businessPath(sprintf("/service/%d", id)), {"service": req}).service;
+        return doPut(businessPath(sprintf("/service/%d", id), business_id), {"service": req}).service;
     }
 
     #! Returns static provider info

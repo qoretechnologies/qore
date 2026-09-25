@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module DiscordRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for calling Discord REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -85,6 +85,12 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section discordrestclientrelnotes Release Notes
+
+    @subsection discordrestclientv1_1 DiscordRestClient v1.1
+    - @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" now honors an explicit \c url option instead of
+      always replacing it with the default URL; the API version is appended to the URL if its path has no version
+      component, and the default API path is appended to a URL without a path
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection discordrestclientv1_0 DiscordRestClient v1.0
     - the initial version of the %DiscordRestClient module
@@ -321,6 +327,9 @@ public class DiscordRestClientBase {
         #! Default Discord REST API URL
         const DefaultUrl = "https://discord.com/api";
 
+        #! Default Discord REST API path; appended to URLs without a path
+        const DefaultApiPath = "/api";
+
         #! Default authorization request URL
         const DefaultAuthUrl = "https://discord.com/oauth2/authorize";
 
@@ -380,8 +389,41 @@ public class DiscordRestClientBase {
     }
 
     #! returns options for DiscordRestClient constructors
+    /** An explicit \c url option takes precedence over @ref DefaultUrl; see @ref getApiUrl() for how the API
+        version is added to the URL
+
+        This method returns the same result when called with its own output, so that the options saved in the base
+        class can be used to create a copy of the object with \c copyWithUrl()
+    */
     static hash<auto> getOptions(hash<auto> opts) {
-        return DefaultOptions + opts + {"url": DefaultUrl + "/v" + (opts.api ?? DefaultApi)};
+        return DefaultOptions + opts + {
+            "url": DiscordRestClientBase::getApiUrl(opts.url, opts.api ?? DefaultApi),
+        };
+    }
+
+    #! Returns the versioned API URL for the given URL and API version
+    /** @param url the URL given in the constructor options, if any; if not set, @ref DefaultUrl is used
+        @param api the API version
+
+        @return the API URL as follows:
+        - if the URL has no path, then <tt>/api/v&lt;api&gt;</tt> is appended
+        - if the URL's path has no version component (\c /v followed by digits), then <tt>/v&lt;api&gt;</tt> is
+          appended
+        - otherwise the URL is returned unchanged
+    */
+    static string getApiUrl(*string url, softint api) {
+        if (!url.val()) {
+            url = DefaultUrl;
+        }
+        *string path = parse_url(url).path;
+        string base = regex_subst(url, "/+$", "");
+        if (!path.val() || path == "/") {
+            return sprintf("%s%s/v%d", base, DefaultApiPath, api);
+        }
+        if (path !~ /(^|\/)v[0-9]+(\/|$)/) {
+            return sprintf("%s/v%d", base, api);
+        }
+        return url;
     }
 }
 
@@ -403,7 +445,9 @@ DiscordRestClient rest(opts);
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
-        that the URL is set by default if not provided (see @ref DefaultUrl)
+        that the URL is set by default if not provided (see @ref DefaultUrl); an explicit \c url option takes
+        precedence over the default URL; the API version (\c api option, default @ref DefaultApi) is appended to
+        the URL if its path has no version component (see @ref DiscordRestClientBase::getApiUrl())
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -691,7 +735,9 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
 */
 public class DiscordRestClientIo inherits RestClientIo::RestClientIo, DiscordRestClientBase {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; an explicit \c url option takes precedence over the default URL; the API
+        version (\c api option, default @ref DiscordRestClientBase::DefaultApi) is appended to the URL if its path
+        has no version component (see @ref DiscordRestClientBase::getApiUrl())
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)

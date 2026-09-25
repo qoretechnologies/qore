@@ -312,8 +312,8 @@ public class AzureOpenAiRestClientIo inherits RestClientIo::RestClientIo, AzureO
         @throw any transport construction error
     */
     constructor(hash<auto> options, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(AzureOpenAiRestClientBase::getOptions(options)
-                - keys AbstractRestClient::Http1OnlyOptions, shared_mgr), AzureOpenAiRestClientBase(options) {
+            : RestClientIo(AzureOpenAiRestClientBase::getOptions(options), shared_mgr),
+            AzureOpenAiRestClientBase(options) {
         *string project = AzureOpenAiRestClientBase::getProjectPath(getUrl());
         if (project) {
             setConnectionPath(project);

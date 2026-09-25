@@ -67,12 +67,12 @@ public class FreshBooksUpdateInvoiceDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         int id = remove req.id;
         if (!id) {
             throw "FRESHBOOKS-ERROR", "id is required for update operation";
         }
-        return doPut(accountPath(sprintf("/invoices/invoices/%d", id)), {"invoice": req}).invoice;
+        return doPut(accountPath(sprintf("/invoices/invoices/%d", id), account_id), {"invoice": req}).invoice;
     }
 
     #! Returns static provider info

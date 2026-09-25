@@ -60,11 +60,24 @@ text without a `charset` is ISO-8859-1 unless the media type defines its encodin
 default), and each client can change the assumed encoding (`assume_encoding`).  The modules that replaced `HTTPClient`
 therefore return the same strings without re-labelling them.
 
-## Known limitations
+## Resolved limitations
 
-| Limitation | Modules |
-| --- | --- |
-| The client builds its URL from other options and ignores `url`; loopback tests point the client at the local server with a test subclass | CustomerIo, Chargebee, Jotform, Instantly, Mailgun, Zoho*, Tableau, ShipStation, Discord |
-| `copyWithUrl()` rebuilds from options already processed by `getOptions()`, which is not idempotent, so the copy loses the URL or credentials | Mailgun, PdfCo, Zoho*, Instantly, BigCommerce (store hash) |
-| A per-request value (organization / account / business ID) is set on the shared client before a request | ZohoInventory, FreshBooks |
-| `RestClientIo` sends request paths verbatim, while the synchronous client percent-encodes invalid characters; modules must encode the paths they build (CDS does with `CdsRestDataProviderBase::encodeRequestPath()`) | all |
+The limitations found during the migration are fixed:
+
+- **Explicit `url` option**: each service client computes its URL from its options (region, domain, site,
+  subdomain, store hash) only when no `url` is given, so a loopback server, a proxy, or a regional endpoint can be
+  used without a test subclass. Connections always pass their URL to the client, so the connection URLs include the
+  API path (CustomerIo `/v1/api`, ZohoInvoice `/invoice/v3`); a stored connection URL without a path gets the
+  default path, and Discord appends the API version to a URL without one.
+- **`copyWithUrl()`**: the service `getOptions()` methods are idempotent. They keep the options they derive
+  credentials and URLs from (API keys, regions, organization IDs, store hashes) and recompute derived values, so a
+  copy rebuilt from the saved options keeps its credentials and uses the new URL.
+- **Per-request IDs**: ZohoInventory organization IDs and FreshBooks account and business IDs are passed with each
+  request instead of being set on the client shared by the data providers of a connection.
+- **Request path encoding**: `RestClientIo` percent-encodes the characters a request target may not contain with
+  `HttpClientIo::encode_http_request_target()`, as the synchronous client does, except that percent-encoded octets
+  are kept, so paths that callers encode (CDS, FHIR, AWS) are not encoded twice; `pre_encoded_urls` and
+  `encode_chars` are supported.
+- **FileLocationHandler stream readers** decode text in the encoding determined from the response, like text reads.
+- **Token without OAuth2 grant options**: a token that is given is used by both clients when options required to
+  acquire a token with the grant type are missing; the grant type is then not used.

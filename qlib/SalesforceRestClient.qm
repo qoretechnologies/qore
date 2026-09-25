@@ -147,6 +147,8 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - the API list of a polling ping is decoded by the rules shared by all HTTP clients instead of as ISO-8859-1
+      without a charset (see @ref Qore::decode_http_body() "decode_http_body()")
     - @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" polling pings are made with a
       @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3)
       against the identity service URL, as the synchronous and asynchronous pings are; the
@@ -1663,9 +1665,7 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
                 AbstractRestSchemaValidator validator = rc.getValidator();
                 on_error rethrow $1.err, sprintf("%s: info: %y", $1.desc, resp.info{"request-uri",
                     "response-uri"});
-                string body = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string body = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                 hash<RestResponseClientInfo> info = validator.parseResponse(method, path, resp."code", body,
                     resp.info."response-headers" + {"content-type": resp.info."body-content-type"});
                 cast<SalesforceRestClient>(rc).processApis(info.body);

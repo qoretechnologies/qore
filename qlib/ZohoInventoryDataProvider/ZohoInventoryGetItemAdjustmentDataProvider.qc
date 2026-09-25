@@ -97,12 +97,12 @@ public class ZohoInventoryGetItemAdjustmentDataProvider inherits ZohoInventoryDa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.inventory_adjustment_id ?? request_options.inventory_adjustment_id ?? inventory_adjustment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "inventory_adjustment_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/inventoryadjustments/%s", id));
+        hash<auto> response = doGet(sprintf("/inventoryadjustments/%s", id), NOTHING, org_id);
         return response.inventory_adjustment;
     }
 

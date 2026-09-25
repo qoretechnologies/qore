@@ -45,7 +45,7 @@ public class FreshBooksNewInvoiceWatchDataProvider inherits FreshBooksWatchDataP
     string getName() { return EVENT_INVOICE_CREATED; }
 
     #! Returns the API path for invoices
-    private string getResourcePath() { return accountPath("/invoices/invoices"); }
+    private string getResourcePath() { return accountPath("/invoices/invoices", watch_account_id); }
 
     #! Returns the response key for invoices
     private string getResourceKey() { return "invoices"; }
@@ -106,7 +106,7 @@ public class FreshBooksNewPaymentWatchDataProvider inherits FreshBooksWatchDataP
     string getName() { return EVENT_PAYMENT_CREATED; }
 
     #! Returns the API path for payments
-    private string getResourcePath() { return accountPath("/payments/payments"); }
+    private string getResourcePath() { return accountPath("/payments/payments", watch_account_id); }
 
     #! Returns the response key for payments
     private string getResourceKey() { return "payments"; }
@@ -164,7 +164,7 @@ public class FreshBooksNewClientWatchDataProvider inherits FreshBooksWatchDataPr
     string getName() { return EVENT_CLIENT_CREATED; }
 
     #! Returns the API path for clients
-    private string getResourcePath() { return accountPath("/users/clients"); }
+    private string getResourcePath() { return accountPath("/users/clients", watch_account_id); }
 
     #! Returns the response key for clients
     private string getResourceKey() { return "clients"; }
@@ -223,7 +223,7 @@ public class FreshBooksNewExpenseWatchDataProvider inherits FreshBooksWatchDataP
     string getName() { return EVENT_EXPENSE_CREATED; }
 
     #! Returns the API path for expenses
-    private string getResourcePath() { return accountPath("/expenses/expenses"); }
+    private string getResourcePath() { return accountPath("/expenses/expenses", watch_account_id); }
 
     #! Returns the response key for expenses
     private string getResourceKey() { return "expenses"; }
@@ -283,7 +283,7 @@ public class FreshBooksNewEstimateWatchDataProvider inherits FreshBooksWatchData
     string getName() { return EVENT_ESTIMATE_CREATED; }
 
     #! Returns the API path for estimates
-    private string getResourcePath() { return accountPath("/estimates/estimates"); }
+    private string getResourcePath() { return accountPath("/estimates/estimates", watch_account_id); }
 
     #! Returns the response key for estimates
     private string getResourceKey() { return "estimates"; }

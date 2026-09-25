@@ -41,13 +41,6 @@
 
 %exec-class TableauDataProviderTest
 
-#! A Tableau client that sends requests to a local server
-class LocalTableauRestClientIo inherits TableauRestClient::TableauRestClientIo {
-    constructor(hash<auto> opts, string local_url) : TableauRestClientIo(opts) {
-        url = local_url;
-    }
-}
-
 #! A local Tableau API server that records requests
 class FakeTableauHandler inherits AbstractHttpRequestHandler {
     public {
@@ -154,6 +147,8 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
 
         # Integration tests (require Tableau credentials)
         addTestCase("integration tests", \integrationTests());
@@ -733,6 +728,127 @@ public class TableauDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeTableauHandler handler();
+        server.setHandler("tableau", "", NOTHING, handler);
+        server.setDefaultHandler("tableau", handler);
+
+        string url = "http://127.0.0.1:" + port + "/api/3.27";
+        hash<auto> opts = {
+            "subdomain": "pod",
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "content_url": "my-site",
+        };
+        string default_url = "https://pod.online.tableau.com/api/3.27";
+
+        # the url option takes precedence over the URL derived from the subdomain
+        TableauRestClient::TableauRestClient rest(opts + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        rest.restGet("projects");
+        checkSignIn(handler);
+
+        TableauRestClient::TableauRestClientIo io(opts + {"url": url});
+        assertEq(url, io.getUrl());
+        handler.requests = ();
+        io.restGet("projects");
+        checkSignIn(handler);
+
+        # the processed options are processed again without change
+        hash<auto> processed = TableauRestClient::TableauRestClientBase::getOptions(opts);
+        assertEq(default_url, processed.url);
+        assertEq("pat-name", processed.token_name);
+        assertEq(processed, TableauRestClient::TableauRestClientBase::getOptions(processed));
+        assertEq("https://pod.online.tableau.com/api/3.24",
+            TableauRestClient::TableauRestClientBase::getOptions(opts + {"api_version": "3.24"}).url);
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        TableauRestClient::TableauRestClient orig(opts, True);
+        assertEq(default_url, orig.getUrl());
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof TableauRestClient::TableauRestClient);
+        assertEq(url, copy.getUrl());
+        assertEq(default_url, orig.getUrl());
+        handler.requests = ();
+        copy.restGet("projects");
+        checkSignIn(handler);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        TableauRestClient::TableauRestClientIo orig_io(opts);
+        assertEq(default_url, orig_io.getUrl());
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof TableauRestClient::TableauRestClientIo);
+        assertEq(url, copy_io.getUrl());
+        handler.requests = ();
+        copy_io.restGet("projects");
+        checkSignIn(handler);
+
+        # the subdomain is not required with an explicit URL
+        rest = new TableauRestClient::TableauRestClient(opts - "subdomain" + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        io = new TableauRestClient::TableauRestClientIo(opts - "subdomain" + {"url": url});
+        assertEq(url, io.getUrl());
+
+        # but it is required without one
+        assertThrows("TABLEAU-ERROR", sub () {
+            new TableauRestClient::TableauRestClient(opts - "subdomain", True);
+        });
+        assertThrows("TABLEAU-ERROR", sub () {
+            new TableauRestClient::TableauRestClientIo(opts - "subdomain");
+        });
+    }
+
+    #! Checks that a client signed in with the test credentials and sent a request with the session token
+    private checkSignIn(FakeTableauHandler handler) {
+        assertEq(("api/3.27/auth/signin", "api/3.27/sites/site-1/projects"), (map $1.path, handler.requests));
+        assertEq({
+            "personalAccessTokenName": "pat-name",
+            "personalAccessTokenSecret": "pat-secret",
+            "site": {"contentUrl": "my-site"},
+        }, handler.requests[0].body.credentials);
+        assertEq("session-" + handler.sign_ins, handler.requests[1].auth);
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        hash<auto> opts = {"subdomain": "pod", "token_name": "n", "token_secret": "s", "api_version": "3.24"};
+        # the URL is derived from the subdomain and API version for connections created from a config hash
+        TableauRestClient::TableauRestConnection conn({
+            "name": "test",
+            "url": "tableaures://online.tableau.com",
+            "opts": opts,
+        });
+        assertEq("tableaures://pod.online.tableau.com/api/3.24", conn.url);
+        assertEq("https://pod.online.tableau.com/api/3.24", conn.getConnectionOptions().url);
+        assertEq("https://pod.online.tableau.com/api/3.24", conn.get(False).getUrl());
+        assertEq("https://pod.online.tableau.com/api/3.24", conn.getAsync(False).getUrl());
+        assertEq("n", conn.getAsync(False).getConstructorOptions().token_name);
+
+        # and for connections created with the default URL
+        conn = new TableauRestClient::TableauRestConnection("test", "test", "tableaures://online.tableau.com", {},
+            opts);
+        assertEq("tableaures://pod.online.tableau.com/api/3.24", conn.url);
+        assertEq("https://pod.online.tableau.com/api/3.24", conn.get(False).getUrl());
+        assertEq("https://pod.online.tableau.com/api/3.24", conn.getAsync(False).getUrl());
+
+        # an explicit connection URL is used by the clients
+        conn = new TableauRestClient::TableauRestConnection("test", "test",
+            "tableaures://tableau.example.com/api/3.24", {}, opts);
+        assertEq("https://tableau.example.com/api/3.24", conn.get(False).getUrl());
+        assertEq("https://tableau.example.com/api/3.24", conn.getAsync(False).getUrl());
+
+        # the stored URL is updated to the URL derived from the options
+        list<hash<auto>> updates = ();
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "tableaures://pod.online.tableau.com/api/3.24"},), updates);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -744,12 +860,12 @@ public class TableauDataProviderTest inherits QUnit::Test {
         server.setHandler("tableau", "", NOTHING, handler);
         server.setDefaultHandler("tableau", handler);
 
-        LocalTableauRestClientIo rest({
-            "subdomain": "local",
+        TableauRestClient::TableauRestClientIo rest({
             "token_name": "pat-name",
             "token_secret": "pat-secret",
             "content_url": "my-site",
-        }, "http://localhost:" + port);
+            "url": "http://localhost:" + port + "/api/3.27",
+        });
         assertNothing(rest.getSiteLuid());
         TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
         AbstractDataProvider projects = provider.getChildProviderEx("projects");

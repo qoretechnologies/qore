@@ -67,8 +67,8 @@ public class FreshBooksCreateInvoiceDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
-        return doPost(accountPath("/invoices/invoices"), {"invoice": req}).invoice;
+        *string account_id = getAccountIdFromReq(\req);
+        return doPost(accountPath("/invoices/invoices", account_id), {"invoice": req}).invoice;
     }
 
     #! Returns static provider info

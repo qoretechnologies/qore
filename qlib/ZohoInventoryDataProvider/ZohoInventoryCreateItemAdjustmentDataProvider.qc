@@ -67,8 +67,8 @@ public class ZohoInventoryCreateItemAdjustmentDataProvider inherits ZohoInventor
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/inventoryadjustments", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/inventoryadjustments", req, org_id);
         return response.inventory_adjustment;
     }
 

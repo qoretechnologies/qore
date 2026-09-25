@@ -324,6 +324,12 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c assume_encoding: the character encoding assumed for text response bodies whose encoding is not
           determined otherwise (default: ISO-8859-1); see @ref Qore::get_http_body_encoding()
           "get_http_body_encoding()"
+        - \c pre_encoded_urls: if \c True, request paths are already percent-encoded: they are only validated,
+          and a character that must be encoded raises \c URL-ENCODING-ERROR; otherwise the characters that a request
+          target may not contain are percent-encoded (see @ref HttpClientIo::encode_http_request_target()
+          "encode_http_request_target()"), as with the synchronous @ref RestClient::RestClient "RestClient", except
+          that percent-encoded octets are kept
+        - \c encode_chars: additional characters to percent-encode in request paths
         - \c ssl_verify_mode: SSL verification mode
         - \c accept_all_certs: if \c True, accept all certificates including self-signed
         - \c no_charset: if \c True, do not add charset to Content-Type header
@@ -488,6 +494,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string oauth2_redirect_url;
             #! The encoding assumed for text response bodies whose encoding is not determined otherwise
             string assume_encoding = "ISO-8859-1";
+            #! True if request paths are already percent-encoded and are only validated
+            bool pre_encoded_urls;
+            #! Additional characters to percent-encode in request paths
+            *string encode_chars;
             #! OAuth2 token URL
             *string oauth2_token_url;
             #! Alternate OAuth2 token URL; if set, token requests are routed here and oauth2_token_url is sent as a body arg
@@ -741,6 +751,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "max_redirects": True,
                 "max_response_body_size": True,
                 "assume_encoding": True,
+                "pre_encoded_urls": True,
+                "encode_chars": True,
                 "redirect_passthru": True,
                 "enable_cookies": True,
                 "cookie": True,
@@ -848,11 +860,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # preserves the caller's original intent for sibling construction
             saved_opts = opts;
 
-            # Strip HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
-            # and any unknown keys (e.g., service-specific options already
-            # consumed by subclass getOptions() calls like "api_profile",
-            # "encode_chars", "tenant", etc.)
-            opts -= keys RestClient::AbstractRestClient::Http1OnlyOptions;
+            # Strip unknown keys (e.g., service-specific options already consumed by subclass getOptions() calls
+            # like "api_profile", "tenant", etc.)
             opts -= keys (opts - (keys KnownOptions));
 
             # Normalize http_version (RestClient legacy) → protocol (RestClientIo/HttpClientIo)
@@ -960,6 +969,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             if (opts.assume_encoding) {
                 assume_encoding = opts.assume_encoding;
+            }
+            pre_encoded_urls = opts.pre_encoded_urls.toBool();
+            if (opts.encode_chars) {
+                encode_chars = opts.encode_chars;
             }
             if (opts.cookie) {
                 headers.cookie = opts.cookie;
@@ -1076,7 +1089,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # Option update callback for notifying the connection about token changes
             update_options = remove opts.update_options;
-            checkOAuth2Options(opts);
+            if (!checkOAuth2Options(opts)) {
+                # the token given is used; the grant cannot be used to acquire a new one
+                oauth2_grant_type = NOTHING;
+            }
 
             # HTTP Basic auth: set if username provided and no OAuth2 grant type configured
             if (opts.username && (!oauth2_grant_type || oauth2_grant_type == "none")) {
@@ -2881,6 +2897,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 path = "/";
             }
 
+            # the characters that a request target may not contain are percent-encoded, as with the synchronous
+            # client; a pre-encoded path is only validated
+            path = HttpClientIo::encode_http_request_target(path, pre_encoded_urls, encode_chars);
+
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
             hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
 
@@ -3366,10 +3386,13 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @throw OAUTH2-ERROR if the options are invalid
         */
         setOAuth2Options(hash<auto> new_opts) {
-            checkOAuth2Options(new_opts);
+            bool grant_usable = checkOAuth2Options(new_opts);
             {
                 AutoWriteLock al(config_lock);
-                if (new_opts.oauth2_grant_type) {
+                if (!grant_usable) {
+                    # the token is used; the grant cannot be used to acquire a new one
+                    oauth2_grant_type = NOTHING;
+                } else if (new_opts.oauth2_grant_type) {
                     oauth2_grant_type = new_opts.oauth2_grant_type;
                 }
                 if (new_opts.oauth2_client_id) {
@@ -3537,14 +3560,21 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         }
 
         #! Validates OAuth2 options
-        /** @param opts the options hash to validate
+        /** A token that is given can be used without the options needed to acquire a new one with the grant type;
+            the grant type is then not usable, and the token is not refreshed, as with
+            @ref RestClient::RestClient "RestClient".
+
+            @param opts the options hash to validate
+
+            @return @ref False if a token is given and options required by the grant type are missing, so the grant
+            type cannot be used to acquire a new token; @ref True otherwise
 
             @throw OAUTH2-ERROR if the options are invalid
         */
-        private checkOAuth2Options(hash<auto> opts) {
+        private bool checkOAuth2Options(hash<auto> opts) {
             *string grant_type = opts.oauth2_grant_type ?? oauth2_grant_type;
             if (!exists grant_type || grant_type == "none") {
-                return;
+                return True;
             }
             hash<auto> effective = getOAuth2Options() + opts;
             *list<string> req_opts = OAuth2GrantOptions{grant_type};
@@ -3554,6 +3584,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             foreach string req_opt in (req_opts) {
                 if (!effective.hasKey(req_opt) || !effective{req_opt}.val()) {
+                    if (effective.token.val() || token_val.val()) {
+                        log(LoggerLevel::DEBUG, "OAuth2 grant type %y requires option %y, which is not set; the "
+                            "token given is used and cannot be refreshed", grant_type, req_opt);
+                        return False;
+                    }
                     throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this "
                         "option is not set; options provided: %y", grant_type, req_opt, keys opts);
                 }
@@ -3574,6 +3609,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         "password; no password is set";
                 }
             }
+            return True;
         }
 
         #! Returns True if OAuth2 client assertion authentication is configured

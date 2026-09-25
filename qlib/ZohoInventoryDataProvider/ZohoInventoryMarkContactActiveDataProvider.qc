@@ -118,7 +118,7 @@ public class ZohoInventoryMarkContactActiveDataProvider inherits ZohoInventoryDa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.contact_id ?? request_options.contact_id ?? contact_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "contact_id is required for mark-contact-active operation";
@@ -128,7 +128,7 @@ public class ZohoInventoryMarkContactActiveDataProvider inherits ZohoInventoryDa
         }
 
         string status = req.active ? "active" : "inactive";
-        return doPost(sprintf("/contacts/%s/%s", id, status));
+        return doPost(sprintf("/contacts/%s/%s", id, status), NOTHING, org_id);
     }
 
     #! Returns static provider info

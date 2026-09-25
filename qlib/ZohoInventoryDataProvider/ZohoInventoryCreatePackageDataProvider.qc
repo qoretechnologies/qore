@@ -67,8 +67,8 @@ public class ZohoInventoryCreatePackageDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/packages", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/packages", req, org_id);
         return response."package";
     }
 

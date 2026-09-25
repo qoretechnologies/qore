@@ -72,12 +72,14 @@ class JsonEchoHandler inherits AbstractHttpRequestHandler {
             resp_body = {
                 "method": hdr.method,
                 "path": hdr.path,
+                "raw_path": cx.raw_path,
                 "body": parsed,
             };
         } else {
             resp_body = {
                 "method": hdr.method,
                 "path": hdr.path,
+                "raw_path": cx.raw_path,
             };
         }
         int status = hdr.method == "DELETE" ? 204 : 200;
@@ -650,7 +652,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("option http_version invalid", \testOptionHttpVersionInvalid());
         addTestCase("option http_version conflicts with protocol", \testOptionHttpVersionConflict());
         addTestCase("option ssl_verify_cert alias", \testOptionSslVerifyCertAlias());
-        addTestCase("option Http1OnlyOptions rejected", \testOptionHttp1OnlyRejected());
+        addTestCase("token without the options of the OAuth2 grant", \testTokenWithIncompleteGrant());
+        addTestCase("request path encoding", \testRequestPathEncoding());
+        addTestCase("encode_http_request_target()", \testEncodeHttpRequestTarget());
         addTestCase("option token_api_key_header", \testOptionTokenApiKeyHeader());
         addTestCase("option rest_body_auth_error_check", \testOptionRestBodyAuthErrorCheck());
         addTestCase("option swagger/openapi3 mutually exclusive", \testOptionSwaggerOpenapi3Conflict());
@@ -3895,14 +3899,86 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
     }
 
-    testOptionHttp1OnlyRejected() {
-        # Http1-only options are silently stripped (not rejected) so that
-        # subclass constructors and connection adapters work without errors.
-        foreach string key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
-            RestClientIo::RestClientIo rest = createClient({key: True});
-            rest.close();
+    # a token that is given is used without the options needed to acquire a new one with the OAuth2 grant type, by
+    # the asynchronous and the synchronous client alike; the grant type is then not used
+    testTokenWithIncompleteGrant() {
+        hash<auto> opts = {
+            "token": "abc",
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_auth_url": "https://127.0.0.1:1/auth",
+            "oauth2_token_url": "https://127.0.0.1:1/token",
+        };
+        RestClientIo::RestClientIo rest = createClient(opts);
+        on_exit rest.close();
+        assertNothing(rest.getOAuth2Options().oauth2_grant_type);
+        hash<auto> resp = rest.restGet("/echo");
+        assertEq("Bearer abc", resp.body.request_headers.authorization);
+
+        RestClient sync_rest({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "data": "json"} + opts);
+        assertNothing(sync_rest.getOAuth2Options().oauth2_grant_type);
+        assertEq("Bearer abc", sync_rest.get("/echo").body.request_headers.authorization);
+
+        # without a token, the options are required
+        assertThrows("OAUTH2-ERROR", sub () { createClient(opts - "token"); });
+        assertThrows("OAUTH2-ERROR", sub () {
+            RestClient r({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False}
+                + (opts - "token"));
+        });
+    }
+
+    # characters that a request target may not contain are percent-encoded, as with the synchronous client
+    testRequestPathEncoding() {
+        foreach hash<auto> i in ({"label": "h2", "client": createClient()},
+                {"label": "h1", "client": createH1Client()}) {
+            RestClientIo::RestClientIo rest = i.client;
+            on_exit rest.close();
+            # the server receives the encoded request target
+            hash<auto> resp = rest.restGet("/api/my file|x");
+            assertEq("/api/my%20file%7Cx", resp.body.raw_path, i.label);
+            # percent-encoded octets are kept; a "%" that does not start one is encoded
+            resp = rest.restGet("/api/a%20b%zz");
+            assertEq("/api/a%20b%25zz", resp.body.raw_path, i.label);
+            # non-ASCII text is encoded in UTF-8
+            resp = rest.restGet("/api/ä");
+            assertEq("/api/%C3%A4", resp.body.raw_path, i.label);
         }
-        assertTrue(True, "Http1-only options silently stripped");
+
+        # additional characters to encode
+        RestClientIo::RestClientIo rest = createClient({"encode_chars": "~"});
+        on_exit rest.close();
+        assertEq("/api/%7Euser", rest.restGet("/api/~user").body.raw_path);
+
+        # pre-encoded paths are only validated
+        RestClientIo::RestClientIo pre = createClient({"pre_encoded_urls": True});
+        on_exit pre.close();
+        assertEq("/api/a%20b", pre.restGet("/api/a%20b").body.raw_path);
+        assertThrows("URL-ENCODING-ERROR", \pre.restGet(), "/api/a b");
+
+        # the options are accepted from a connection
+        RestConnection conn("test", "test", sprintf("https://127.0.0.1:%d", port), NOTHING,
+            {"pre_encoded_urls": True, "encode_chars": "~", "ssl_verify_cert": False});
+        RestClientIo::RestClientIo conn_rest = conn.getAsync(False);
+        on_exit conn_rest.close();
+        assertThrows("URL-ENCODING-ERROR", \conn_rest.restGet(), "/api/a b");
+    }
+
+    testEncodeHttpRequestTarget() {
+        assertEq("/a", HttpClientIo::encode_http_request_target("/a"));
+        assertEq("/a%20b?q=%22x%22", HttpClientIo::encode_http_request_target("/a b?q=\"x\""));
+        assertEq("/%3C%3E%5C%5E%60%7B%7C%7D%23", HttpClientIo::encode_http_request_target("/<>\\^`{|}#"));
+        assertEq("/%25", HttpClientIo::encode_http_request_target("/%"));
+        # an incomplete percent-encoded octet is not a valid pre-encoded target
+        assertThrows("URL-ENCODING-ERROR", \HttpClientIo::encode_http_request_target(), ("/%2", True));
+        assertEq("/%41%25zz", HttpClientIo::encode_http_request_target("/%41%zz"));
+        assertEq("/%09%7F", HttpClientIo::encode_http_request_target("/\t\x7f"));
+        assertEq("/%E2%82%AC", HttpClientIo::encode_http_request_target(convert_encoding("/€", "ISO-8859-15")));
+        assertEq("/a%2Cb", HttpClientIo::encode_http_request_target("/a,b", False, ","));
+        # reserved and unreserved characters are kept
+        assertEq("/a-._~!$&'()*+,;=:@/?[]", HttpClientIo::encode_http_request_target("/a-._~!$&'()*+,;=:@/?[]"));
+        assertThrows("URL-ENCODING-ERROR", \HttpClientIo::encode_http_request_target(), ("/a b", True));
+        assertThrows("URL-ENCODING-ERROR", \HttpClientIo::encode_http_request_target(), ("/a,b", True, ","));
+        assertEq("/a%20b", HttpClientIo::encode_http_request_target("/a%20b", True));
     }
 
     testOptionTokenApiKeyHeader() {

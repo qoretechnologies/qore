@@ -106,6 +106,9 @@ public class ZohoInventoryRestClientBase {
         #! Default domain
         const DefaultDomain = ".com";
 
+        #! Default API path; appended to the API URL
+        const DefaultApiPath = "/inventory/v1";
+
         #! Allowed subdomains
         const AllowedSubdomains = ("zoho", "zohocloud");
 
@@ -184,8 +187,8 @@ public class ZohoInventoryRestClientBase {
             throw "ZOHOINVENTORY-ERROR", sprintf("invalid domain %y; allowed values: %y", domain, AllowedDomains);
         }
 
-        # Build API URL from domain
-        rv.url = sprintf("https://www.zohoapis%s/inventory/v1", domain);
+        # Build the API URL from the domain unless given explicitly; an explicit URL takes precedence
+        rv.url = ZohoInventoryRestClientBase::getApiUrl(opts.url, domain);
 
         # Check if token-only mode (token provided without OAuth2 credentials)
         bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
@@ -209,12 +212,28 @@ public class ZohoInventoryRestClientBase {
             }
         }
 
-        # Remove custom options that RestClient doesn't understand
-        remove rv.organization_id;
-        remove rv.subdomain;
-        remove rv.domain;
-
+        # the organization_id, subdomain, and domain options are kept in the returned hash (they are ignored by the
+        # base classes), so that the options saved in the base class can be used to create a copy of the object with
+        # copyWithUrl(); this method must return the same result when called with its own output
         return rv;
+    }
+
+    #! Returns the API URL for the given URL and domain
+    /** @param url the URL given in the constructor options, if any; takes precedence over the domain; if the URL
+        has no path, then @ref DefaultApiPath is appended to it
+        @param domain the Zoho domain
+
+        @return the API URL
+    */
+    static string getApiUrl(*string url, string domain) {
+        if (!url.val()) {
+            return sprintf("https://www.zohoapis%s%s", domain, DefaultApiPath);
+        }
+        *string path = parse_url(url).path;
+        if (!path.val() || path == "/") {
+            return regex_subst(url, "/+$", "") + DefaultApiPath;
+        }
+        return url;
     }
 }
 
@@ -222,8 +241,11 @@ public class ZohoInventoryRestClientBase {
 /** Zoho Inventory uses a REST API with OAuth2 authentication.
 
     @par URL Construction:
-    The API URL is constructed from the domain option:
+    The API URL is constructed from the domain option unless the \c url option is given:
     - API: https://www.zohoapis{domain}/inventory/v1
+
+    If the \c url option is given (for example for a proxy or a regional endpoint), it takes precedence over the
+    \c domain option; if the URL given has no path, then \c /inventory/v1 is appended to it.
 
     The OAuth2 URLs are constructed from the subdomain and domain options:
     - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
@@ -277,6 +299,8 @@ ZohoInventoryRestClient zoho({
         - \c organization_id: the Zoho Inventory organization ID (required for most operations)
         - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
         - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+        - \c url: the API URL; takes precedence over the \c domain option; if the URL has no path, then
+          \c /inventory/v1 is appended to it
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -685,6 +709,8 @@ public class ZohoInventoryRestClientIo inherits RestClientIo::RestClientIo, Zoho
         - \c organization_id: the Zoho Inventory organization ID (required for most operations)
         - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
         - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+        - \c url: the API URL; takes precedence over the \c domain option; if the URL has no path, then
+          \c /inventory/v1 is appended to it
         @param shared_mgr optional shared connection manager
 
         @throw ZOHOINVENTORY-ERROR invalid subdomain or domain specified

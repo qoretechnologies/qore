@@ -111,12 +111,12 @@ public class ZohoInventoryDeleteContactDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.contact_id ?? request_options.contact_id ?? contact_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "contact_id is required for delete operation";
         }
-        return doDelete(sprintf("/contacts/%s", id));
+        return doDelete(sprintf("/contacts/%s", id), org_id);
     }
 
     #! Returns static provider info

@@ -127,29 +127,42 @@ public class TableauRestClientBase {
     }
 
     #! returns options for @ref TableauRestClient::TableauRestClient::constructor()
-    /** @throw TABLEAU-ERROR missing required option \c subdomain
+    /** The returned options keep the Tableau-specific input options (\c subdomain, \c token_name,
+        \c token_secret, \c content_url, \c api_version), which the REST client ignores, and derive the REST client
+        options from them; this makes the method idempotent, so a client can be recreated from its own processed
+        options, as with @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version, and \c subdomain is not required; the URL must include the API path
+        (ex: \c "https://us-east-23b.online.tableau.com/api/3.27")
+
+        @throw TABLEAU-ERROR missing required option \c subdomain when no \c url option is given
     */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Build URL from subdomain and api_version
-        *string subdomain = opts.subdomain;
-        if (!subdomain.val()) {
-            throw "TABLEAU-ERROR", "missing required option 'subdomain' (Tableau Cloud pod name)";
+        # an explicit URL takes precedence over the URL derived from the subdomain and api_version options
+        if (!rv.url) {
+            *string subdomain = opts.subdomain;
+            if (!subdomain.val()) {
+                throw "TABLEAU-ERROR", "missing required option 'subdomain' (Tableau Cloud pod name) or 'url'";
+            }
+            rv.url = getApiUrl(subdomain, opts.api_version ?? DefaultApiVersion);
         }
-        string api_version = opts.api_version ?? DefaultApiVersion;
-        rv.url = sprintf("https://%s.online.tableau.com/api/%s", subdomain, api_version);
-
-        # Remove custom options that RestClient doesn't understand
-        remove rv.token_name;
-        remove rv.token_secret;
-        remove rv.content_url;
-        remove rv.subdomain;
-        remove rv.api_version;
 
         return rv;
+    }
+
+    #! Returns the API URL for the given Tableau Cloud pod name and API version
+    /** @param subdomain the Tableau Cloud pod name
+        @param api_version the API version
+
+        @return the API URL (ex: \c "https://us-east-23b.online.tableau.com/api/3.27")
+    */
+    static string getApiUrl(string subdomain, string api_version) {
+        return sprintf("https://%s.online.tableau.com/api/%s", subdomain, api_version);
     }
 }
 
@@ -210,11 +223,16 @@ TableauRestClient tableau({
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
-        - \c subdomain: the Tableau Cloud pod name (required)
+        - \c subdomain: the Tableau Cloud pod name (required if no \c url option is given)
         - \c token_name: the Personal Access Token name (required)
         - \c token_secret: the Personal Access Token secret (required)
         - \c content_url: the site content URL / site name (default: empty string for default site)
-        - \c api_version: the API version (default: 3.27)
+        - \c api_version: the API version (default: 3.27); used to derive the URL if no \c url option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version; the URL must include the API path (ex:
+        \c "https://us-east-23b.online.tableau.com/api/3.27"); this can be used to send requests through a proxy or
+        to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -416,7 +434,8 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     #! creates the TableauRestConnection object
     /** @param name the name of the connection
         @param description connection description
-        @param url connection URL (potentially with password info)
+        @param url connection URL (potentially with password info); if the default URL is given, the URL is derived
+        from the \c subdomain and \c api_version options
         @param attributes various attributes. See below
         @param options connection options
 
@@ -426,7 +445,9 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = "tableaures://online.tableau.com",
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == "tableaures://online.tableau.com"
+                ? TableauRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the TableauRestConnection object
@@ -455,12 +476,24 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     /** Constructs the connection URL from the subdomain and api_version options
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        string subdomain = config.opts.subdomain ?? "online";
-        string api_version = config.opts.api_version ?? TableauRestClientBase::DefaultApiVersion;
-        string url = sprintf("tableaures://%s.online.tableau.com/api/%s", subdomain, api_version);
         return config + {
-            "url": url,
+            "url": TableauRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c subdomain and \c api_version options (ex:
+        \c "tableaures://us-east-23b.online.tableau.com/api/3.27"); the URL given to the client is the connection URL
+        with the \c "tableaures" scheme replaced with \c "https", which is the URL that the client would derive from
+        the same options
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        return regex_subst(TableauRestClientBase::getApiUrl(opts.subdomain ?? "online",
+            opts.api_version ?? TableauRestClientBase::DefaultApiVersion), "^https:", "tableaures:");
     }
 
     #! returns \c "tableaures"
@@ -507,10 +540,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
         if (update_options) {
             hash<auto> updates;
             # Rebuild URL from current subdomain and api_version options
-            string subdomain = opts.subdomain ?? "online";
-            string api_version = opts.api_version ?? TableauRestClientBase::DefaultApiVersion;
-            string correct_url = sprintf("tableaures://%s.online.tableau.com/api/%s",
-                subdomain, api_version);
+            string correct_url = getConnectionUrl(opts);
             if (url != correct_url) {
                 updates.url = correct_url;
             }
@@ -583,17 +613,22 @@ public class TableauRestClientIo inherits RestClientIo::RestClientIo, TableauRes
     #! Creates the object with the given options
     /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
         class plus:
-        - \c subdomain: the Tableau Cloud pod name (required)
+        - \c subdomain: the Tableau Cloud pod name (required if no \c url option is given)
         - \c token_name: the Personal Access Token name (required)
         - \c token_secret: the Personal Access Token secret (required)
         - \c content_url: the site content URL / site name (default: empty string for default site)
-        - \c api_version: the API version (default: 3.27)
+        - \c api_version: the API version (default: 3.27); used to derive the URL if no \c url option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version; the URL must include the API path (ex:
+        \c "https://us-east-23b.online.tableau.com/api/3.27"); this can be used to send requests through a proxy or
+        to a test server
         @param shared_mgr optional shared connection manager
 
         The client signs in when the first request that requires authentication is sent.
 
         @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
-        @throw TABLEAU-ERROR missing required option \c subdomain
+        @throw TABLEAU-ERROR missing required option \c subdomain when no \c url option is given
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(TableauRestClientBase::getOptions(opts), shared_mgr) {

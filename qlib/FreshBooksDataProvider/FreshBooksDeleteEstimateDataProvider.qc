@@ -80,11 +80,11 @@ public class FreshBooksDeleteEstimateDataProvider inherits FreshBooksDataProvide
     /** Performs a soft delete by setting vis_state to 1 (deleted)
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         if (!req.id) {
             throw "FRESHBOOKS-ERROR", "id is required for delete operation";
         }
-        return doPut(accountPath(sprintf("/estimates/estimates/%d", req.id)),
+        return doPut(accountPath(sprintf("/estimates/estimates/%d", req.id), account_id),
             {"estimate": {"vis_state": 1}}).estimate;
     }
 

@@ -80,8 +80,8 @@ public class ZohoInventoryDeleteInvoiceDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        return doDelete(sprintf("/invoices/%s", req.invoice_id));
+        *string org_id = getOrganizationIdFromReq(\req);
+        return doDelete(sprintf("/invoices/%s", req.invoice_id), org_id);
     }
 
     #! Returns static provider info

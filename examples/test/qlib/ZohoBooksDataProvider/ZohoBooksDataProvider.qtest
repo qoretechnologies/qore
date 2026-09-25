@@ -41,16 +41,6 @@
 
 %exec-class ZohoBooksDataProviderTest
 
-#! A Zoho Books client that sends its requests to a local server
-/** The Zoho Books client always derives its URL from the \c domain option, so the target URL is replaced after
-    the client has been created; the connection path of the real URL is kept
-*/
-class LocalZohoBooksRestClientIo inherits ZohoBooksRestClient::ZohoBooksRestClientIo {
-    constructor(string url, hash<auto> opts) : ZohoBooksRestClientIo(opts) {
-        self.url = url;
-    }
-}
-
 #! A local Zoho Books API server that records requests
 class FakeZohoBooksHandler inherits AbstractHttpRequestHandler {
     public {
@@ -112,6 +102,26 @@ class FakeZohoBooksHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A local server that answers every request and records the request paths and authorization headers
+class ZohoEchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"code": 0, "message": "OK"}),
+        };
+    }
+}
+
 public class ZohoBooksDataProviderTest inherits QUnit::Test {
     private {
         #! Zoho Books REST client for integration tests
@@ -159,6 +169,7 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require Zoho Books credentials)
         addTestCase("integration tests", \integrationTests());
@@ -683,6 +694,135 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         }).getOrganizationId());
     }
 
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        code get_options = \ZohoBooksRestClient::ZohoBooksRestClientBase::getOptions();
+
+        # the options are processed idempotently, and the options specific to Zoho are kept
+        hash<auto> popts = get_options({
+            "token": "t",
+            "organization_id": "o1",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq("https://www.zohoapis.eu/books/v3", popts.url);
+        assertEq("o1", popts.organization_id);
+        assertEq("zohocloud", popts.subdomain);
+        assertEq(".eu", popts.domain);
+        assertEq(popts, get_options(popts));
+
+        # OAuth2 URLs are built from the subdomain and domain unless given explicitly
+        hash<auto> oauth2_opts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "domain": ".eu",
+        };
+        popts = get_options(oauth2_opts);
+        assertEq("https://accounts.zoho.eu/oauth/v2/auth", popts.oauth2_auth_url);
+        assertEq("https://accounts.zoho.eu/oauth/v2/token", popts.oauth2_token_url);
+        assertEq(popts, get_options(popts));
+        popts = get_options(oauth2_opts + {
+            "oauth2_auth_url": "https://auth.example.com/auth",
+            "oauth2_token_url": "https://auth.example.com/token",
+        });
+        assertEq("https://auth.example.com/auth", popts.oauth2_auth_url);
+        assertEq("https://auth.example.com/token", popts.oauth2_token_url);
+
+        # an explicit URL takes precedence over the domain; the default API path is added to a URL without a path
+        assertEq("http://proxy.example.com/zoho/api", get_options({
+            "url": "http://proxy.example.com/zoho/api",
+            "domain": ".eu",
+        }).url);
+        assertEq("https://www.zohoapis.eu/books/v3", get_options({"url": "https://www.zohoapis.eu"}).url);
+        assertEq("https://www.zohoapis.eu/books/v3", get_options({"url": "https://www.zohoapis.eu/"}).url);
+
+        # the default connection URL is unchanged
+        ZohoBooksRestClient::ZohoBooksRestConnection conn("test", "test",
+            ZohoBooksRestClient::ZohoBooksRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+            "token": "t",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://www.zohoapis.com/books/v3", conn.getConnectionOptions().url);
+        assertEq("https://www.zohoapis.com/books/v3", get_options(conn.getConnectionOptions()).url);
+        assertEq("https://www.zohoapis.com/books/v3", conn.get(False).getURL());
+        assertEq("https://www.zohoapis.com/books/v3", conn.getAsync(False).getUrl());
+        # the connection URL is built from the domain
+        ZohoBooksRestClient::ZohoBooksRestConnection conn_eu({
+            "name": "test",
+            "url": "zohobooks://www.zohoapis.com/books/v3",
+            "opts": {
+                "token": "t",
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "domain": ".eu",
+            },
+        }, {"monitor": False});
+        assertEq("https://www.zohoapis.eu/books/v3", conn_eu.get(False).getURL());
+        assertEq("https://www.zohoapis.eu/books/v3", conn_eu.getAsync(False).getUrl());
+        # a stored connection URL without a path gets the default API path
+        ZohoBooksRestClient::ZohoBooksRestConnection conn_legacy("test", "test", "zohobooks://www.zohoapis.com",
+            {"monitor": False}, {"token": "t", "oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertEq("https://www.zohoapis.com/books/v3", conn_legacy.get(False).getURL());
+        assertEq("https://www.zohoapis.com/books/v3", conn_legacy.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        ZohoEchoHandler handler();
+        server.setHandler("zoho-echo", "", NOTHING, handler);
+        server.setDefaultHandler("zoho-echo", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        ZohoBooksRestClient::ZohoBooksRestClient sync({
+            "url": url,
+            "token": "test-token",
+            "organization_id": "o1",
+            "domain": ".eu",
+        }, True);
+        assertEq(url + "/books/v3", sync.getURL());
+        sync.get("items/i1");
+        assertEq("books/v3/items/i1?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoBooksRestClient::ZohoBooksRestClient sync_copy = cast<ZohoBooksRestClient::ZohoBooksRestClient>(
+            sync.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", sync_copy.getURL());
+        assertEq("o1", sync_copy.getOrganizationId());
+        assertEq(".eu", sync_copy.getDomain());
+        sync_copy.get("items/i2");
+        assertEq("other/v9/items/i2?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # the explicit URL is used by the async client
+        ZohoBooksRestClient::ZohoBooksRestClientIo io({
+            "url": url + "/proxy",
+            "token": "test-token",
+            "organization_id": "o2",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq(url + "/proxy", io.getUrl());
+        io.restGet("items/i3");
+        assertEq("proxy/items/i3?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoBooksRestClient::ZohoBooksRestClientIo io_copy = cast<ZohoBooksRestClient::ZohoBooksRestClientIo>(
+            io.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", io_copy.getUrl());
+        assertEq("o2", io_copy.getOrganizationId());
+        assertEq("zohocloud", io_copy.getSubdomain());
+        assertEq(".eu", io_copy.getDomain());
+        io_copy.restGet("items/i4");
+        assertEq("other/v9/items/i4?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -694,7 +834,8 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         server.setHandler("zoho", "", NOTHING, handler);
         server.setDefaultHandler("zoho", handler);
 
-        LocalZohoBooksRestClientIo rest("http://localhost:" + port, {
+        ZohoBooksRestClient::ZohoBooksRestClientIo rest({
+            "url": "http://localhost:" + port,
             "token": "test-token",
             "organization_id": "org1",
         });

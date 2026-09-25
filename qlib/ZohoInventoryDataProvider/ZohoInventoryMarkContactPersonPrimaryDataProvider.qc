@@ -112,12 +112,12 @@ public class ZohoInventoryMarkContactPersonPrimaryDataProvider inherits ZohoInve
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.contact_person_id ?? request_options.contact_person_id ?? contact_person_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "contact_person_id is required for mark-contact-person-primary operation";
         }
-        return doPost(sprintf("/contacts/contactpersons/%s/primary", id));
+        return doPost(sprintf("/contacts/contactpersons/%s/primary", id), NOTHING, org_id);
     }
 
     #! Returns static provider info

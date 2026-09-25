@@ -141,24 +141,32 @@ public class InstantlyRestClientBase {
     }
 
     #! returns options for InstantlyRestClient constructors
+    /** The returned options keep the Instantly-specific \c apikey option, which the REST client ignores, and derive
+        the REST client options from it; this makes the method idempotent, so a client can be recreated from its own
+        processed options, as with @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over @ref DefaultApiUrl
+
+        @throw INSTANTLY-ERROR missing \c apikey option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Set URL
-        rv.url = DefaultApiUrl;
+        # an explicit URL takes precedence over the default URL
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
 
         # Validate apikey is provided
         if (!opts.apikey) {
             throw "INSTANTLY-ERROR", "missing required option 'apikey' (Instantly API key)";
         }
 
-        # Set Bearer token authentication
+        # Set Bearer token authentication; the header is set (not added), so processing the options again does not
+        # change them, and the apikey option is kept so that the options can be processed again
         rv.headers.Authorization = "Bearer " + opts.apikey;
-
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.apikey;
 
         return rv;
     }
@@ -194,6 +202,9 @@ InstantlyRestClient instantly({"apikey": "your-api-key"});
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c apikey: the Instantly API key (required)
+
+        If the \c url option is given, it takes precedence over @ref InstantlyRestClientBase::DefaultApiUrl; this
+        can be used to send requests through a proxy or to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server

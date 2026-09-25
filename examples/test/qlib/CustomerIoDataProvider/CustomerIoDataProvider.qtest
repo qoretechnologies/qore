@@ -42,16 +42,6 @@
 
 %exec-class CustomerIoDataProviderTest
 
-#! A Customer.io App API client that sends its requests to a local server
-/** The App API URL is derived from the region, so the host is replaced after construction; the connection
-    path of the real App API URL is kept
-*/
-class LocalCustomerIoRestClientIo inherits CustomerIoRestClient::CustomerIoRestClientIo {
-    constructor(hash<auto> opts, string local_url) : CustomerIoRestClientIo(opts) {
-        url = local_url;
-    }
-}
-
 #! A local Customer.io App API server that records requests
 class FakeCustomerIoHandler inherits AbstractHttpRequestHandler {
     public {
@@ -147,6 +137,8 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require credentials)
@@ -515,7 +507,6 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         });
     }
 
-    #! Requests against a local server
     #! The synchronous client retries a rate-limited request
     syncClientRateLimitTest() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -527,16 +518,141 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
 
-        CustomerIoRestClient::CustomerIoRestClient rest({"app_api_key": "test-key"}, True);
-        rest.setURL("http://localhost:" + port);
+        CustomerIoRestClient::CustomerIoRestClient rest({"app_api_key": "test-key", "url": "http://localhost:" + port},
+            True);
         handler.rate_limited = 1;
         hash<auto> info;
-        rest.doRequest("GET", "/v1/api/segments/7", NOTHING, \info);
+        rest.doRequest("GET", "segments/7", NOTHING, \info);
+        assertEq("v1/api/segments/7", handler.requests[0].path);
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
         assertEq(handler.requests[0].path, handler.requests[1].path);
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeCustomerIoHandler handler();
+        server.setHandler("customerio", "", NOTHING, handler);
+        server.setDefaultHandler("customerio", handler);
+
+        string url = "http://127.0.0.1:" + port + "/v1/api";
+        hash<auto> opts = {"app_api_key": "test-key", "region": "eu"};
+
+        # the url option takes precedence over the URL built by the client
+        CustomerIoRestClient::CustomerIoRestClient rest(opts + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        rest.restGet("segments/7");
+        assertEq(1, handler.requests.size());
+        assertEq("v1/api/segments/7", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        CustomerIoRestClient::CustomerIoRestClientIo io(opts + {"url": url});
+        assertEq(url, io.getUrl());
+        handler.requests = ();
+        io.restGet("segments/7");
+        assertEq(1, handler.requests.size());
+        assertEq("v1/api/segments/7", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # the processed options are processed again without change
+        hash<auto> processed = CustomerIoRestClient::CustomerIoRestClientBase::getOptions(opts);
+        assertEq("https://api-eu.customer.io/v1/api", processed.url);
+        assertEq("test-key", processed.token);
+        assertEq(processed, CustomerIoRestClient::CustomerIoRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        CustomerIoRestClient::CustomerIoRestClient orig(opts, True);
+        assertEq("https://api-eu.customer.io/v1/api", orig.getUrl());
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof CustomerIoRestClient::CustomerIoRestClient);
+        assertEq(url, copy.getUrl());
+        assertEq("https://api-eu.customer.io/v1/api", orig.getUrl());
+        handler.requests = ();
+        copy.restGet("segments/7");
+        assertEq(1, handler.requests.size());
+        assertEq("v1/api/segments/7", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        CustomerIoRestClient::CustomerIoRestClientIo orig_io(opts);
+        assertEq("https://api-eu.customer.io/v1/api", orig_io.getUrl());
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof CustomerIoRestClient::CustomerIoRestClientIo);
+        assertEq(url, copy_io.getUrl());
+        handler.requests = ();
+        copy_io.restGet("segments/7");
+        assertEq(1, handler.requests.size());
+        assertEq("v1/api/segments/7", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # the App API path is appended to a URL without a path
+        string server_url = "http://127.0.0.1:" + port;
+        assertEq(url, CustomerIoRestClient::CustomerIoRestClientBase::getOptions(opts + {"url": server_url}).url);
+        assertEq(url, CustomerIoRestClient::CustomerIoRestClientBase::getOptions(opts + {"url": server_url + "/"}).url);
+        rest = new CustomerIoRestClient::CustomerIoRestClient(opts + {"url": server_url}, True);
+        assertEq(url, rest.getUrl());
+        io = new CustomerIoRestClient::CustomerIoRestClientIo(opts + {"url": server_url});
+        assertEq(url, io.getUrl());
+        # a URL with another path is used as-is
+        io = new CustomerIoRestClient::CustomerIoRestClientIo(opts + {"url": server_url + "/proxy"});
+        assertEq(server_url + "/proxy", io.getUrl());
+        handler.requests = ();
+        io.restGet("segments/7");
+        assertEq("proxy/segments/7", handler.requests[0].path);
+
+        # the region is validated even with an explicit URL
+        assertThrows("CUSTOMERIO-ERROR", sub () {
+            new CustomerIoRestClient::CustomerIoRestClientIo(
+                {"app_api_key": "x", "region": "xx", "url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        # the URL is derived from the region for connections created from a config hash
+        CustomerIoRestClient::CustomerIoRestConnection conn({
+            "name": "test",
+            "url": "customerio://api.customer.io",
+            "opts": {"app_api_key": "k", "site_id": "s", "tracking_api_key": "t", "region": "eu"},
+        });
+        assertEq("customerio://api-eu.customer.io/v1/api", conn.url);
+        assertEq("https://api-eu.customer.io/v1/api", conn.getConnectionOptions().url);
+        assertEq("https://api-eu.customer.io/v1/api", conn.get(False).getUrl());
+        assertEq("https://api-eu.customer.io/v1/api", conn.getAsync(False).getUrl());
+        assertEq("k", conn.getAsync(False).getConstructorOptions().token);
+
+        # and for connections created with the default URL
+        conn = new CustomerIoRestClient::CustomerIoRestConnection("test", "test",
+            CustomerIoRestClient::CustomerIoRestConnection::DefaultConnectionUrl, {},
+            {"app_api_key": "k", "site_id": "s", "tracking_api_key": "t"});
+        assertEq("customerio://api.customer.io/v1/api", conn.url);
+        assertEq("https://api.customer.io/v1/api", conn.get(False).getUrl());
+        assertEq("https://api.customer.io/v1/api", conn.getAsync(False).getUrl());
+
+        # a connection URL without a path, as stored by older versions, gets the App API path
+        conn = new CustomerIoRestClient::CustomerIoRestConnection("test", "test", "customerio://api-eu.customer.io",
+            {}, {"app_api_key": "k", "site_id": "s", "tracking_api_key": "t", "region": "eu"});
+        assertEq("https://api-eu.customer.io/v1/api", conn.get(False).getUrl());
+        assertEq("https://api-eu.customer.io/v1/api", conn.getAsync(False).getUrl());
+
+        # and the stored URL is updated to the URL derived from the region
+        list<hash<auto>> updates = ();
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "customerio://api-eu.customer.io/v1/api"},), updates);
+
+        # an explicit connection URL is used by the clients
+        conn = new CustomerIoRestClient::CustomerIoRestConnection("test", "test",
+            "customerio://proxy.example.com/cio", {}, {"app_api_key": "k", "site_id": "s", "tracking_api_key": "t"});
+        assertEq("https://proxy.example.com/cio", conn.get(False).getUrl());
+        assertEq("https://proxy.example.com/cio", conn.getAsync(False).getUrl());
+    }
+
+    #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -547,8 +663,8 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
 
-        CustomerIoDataProvider::CustomerIoDataProvider provider(new LocalCustomerIoRestClientIo(
-            {"app_api_key": "test-key"}, "http://localhost:" + port));
+        CustomerIoDataProvider::CustomerIoDataProvider provider(new CustomerIoRestClient::CustomerIoRestClientIo(
+            {"app_api_key": "test-key", "url": "http://localhost:" + port}));
         assertTrue(provider.getRestClient() instanceof CustomerIoRestClient::CustomerIoRestClientIo);
 
         # a GET request is sent with the async client and the response is returned

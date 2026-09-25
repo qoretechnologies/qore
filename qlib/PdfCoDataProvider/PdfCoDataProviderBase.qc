@@ -228,7 +228,7 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     #! Makes a POST request to a PDF.co \c /v2 endpoint
     /** PDF.co's primary REST client targets \c /v1; the \c /v2 base hosts only a
         handful of newer endpoints (e.g. \c pdf/compress). This helper lazily builds
-        a sibling REST client rooted at \c /v2 reusing the same API key.
+        a sibling REST client rooted at \c /v2 with the same configuration and API key.
 
         @param path the API path (relative to /v2, without leading slash)
         @param body the request body
@@ -251,20 +251,13 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         if (rest_v2) {
             return rest_v2;
         }
-        *string apikey = rest.getDefaultHeaders()."x-api-key";
-        if (!apikey) {
-            throw "PDFCO-ERROR", "cannot construct v2 REST client: API key is not "
-                "available on the v1 client";
-        }
         string v1_url = rest.getUrl();
         string v2_url = regex_subst(v1_url, "/v1$", "/v2");
         if (v2_url == v1_url) {
             v2_url += (v1_url =~ /\/$/ ? "v2" : "/v2");
         }
-        rest_v2 = new PdfCoRestClient::PdfCoRestClientIo({
-            "url": v2_url,
-            "apikey": apikey,
-        });
+        # the copy keeps the configuration of the v1 client, including the API key, and shares its connection manager
+        rest_v2 = cast<PdfCoRestClient::PdfCoRestClientIo>(rest.copyWithUrl(v2_url));
         return rest_v2;
     }
 

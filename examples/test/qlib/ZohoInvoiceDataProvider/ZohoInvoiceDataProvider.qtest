@@ -41,13 +41,6 @@
 
 %exec-class ZohoInvoiceDataProviderTest
 
-#! A Zoho Invoice client that sends requests to a local server
-class LocalZohoInvoiceRestClientIo inherits ZohoInvoiceRestClient::ZohoInvoiceRestClientIo {
-    constructor(hash<auto> opts, string local_url) : ZohoInvoiceRestClientIo(opts) {
-        url = local_url;
-    }
-}
-
 #! A local Zoho Invoice API server that records requests
 class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
     public {
@@ -105,6 +98,26 @@ class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A local server that answers every request and records the request paths and authorization headers
+class ZohoEchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"code": 0, "message": "OK"}),
+        };
+    }
+}
+
 public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
     private {
         #! Zoho Invoice REST client for integration tests
@@ -151,6 +164,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require Zoho Invoice credentials)
@@ -1973,6 +1987,135 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        code get_options = \ZohoInvoiceRestClient::ZohoInvoiceRestClientBase::getOptions();
+
+        # the options are processed idempotently, and the options specific to Zoho are kept
+        hash<auto> popts = get_options({
+            "token": "t",
+            "organization_id": "o1",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq("https://www.zohoapis.eu/invoice/v3", popts.url);
+        assertEq("o1", popts.organization_id);
+        assertEq("zohocloud", popts.subdomain);
+        assertEq(".eu", popts.domain);
+        assertEq(popts, get_options(popts));
+
+        # OAuth2 URLs are built from the subdomain and domain unless given explicitly
+        hash<auto> oauth2_opts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "domain": ".eu",
+        };
+        popts = get_options(oauth2_opts);
+        assertEq("https://accounts.zoho.eu/oauth/v2/auth", popts.oauth2_auth_url);
+        assertEq("https://accounts.zoho.eu/oauth/v2/token", popts.oauth2_token_url);
+        assertEq(popts, get_options(popts));
+        popts = get_options(oauth2_opts + {
+            "oauth2_auth_url": "https://auth.example.com/auth",
+            "oauth2_token_url": "https://auth.example.com/token",
+        });
+        assertEq("https://auth.example.com/auth", popts.oauth2_auth_url);
+        assertEq("https://auth.example.com/token", popts.oauth2_token_url);
+
+        # an explicit URL takes precedence over the domain; the default API path is added to a URL without a path
+        assertEq("http://proxy.example.com/zoho/api", get_options({
+            "url": "http://proxy.example.com/zoho/api",
+            "domain": ".eu",
+        }).url);
+        assertEq("https://www.zohoapis.eu/invoice/v3", get_options({"url": "https://www.zohoapis.eu"}).url);
+        assertEq("https://www.zohoapis.eu/invoice/v3", get_options({"url": "https://www.zohoapis.eu/"}).url);
+
+        # the default connection URL is unchanged
+        ZohoInvoiceRestClient::ZohoInvoiceRestConnection conn("test", "test",
+            ZohoInvoiceRestClient::ZohoInvoiceRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+            "token": "t",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://www.zohoapis.com/invoice/v3", conn.getConnectionOptions().url);
+        assertEq("https://www.zohoapis.com/invoice/v3", get_options(conn.getConnectionOptions()).url);
+        assertEq("https://www.zohoapis.com/invoice/v3", conn.get(False).getURL());
+        assertEq("https://www.zohoapis.com/invoice/v3", conn.getAsync(False).getUrl());
+        # the connection URL is built from the domain
+        ZohoInvoiceRestClient::ZohoInvoiceRestConnection conn_eu({
+            "name": "test",
+            "url": "zohoinvoice://www.zohoapis.com/invoice/v3",
+            "opts": {
+                "token": "t",
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "domain": ".eu",
+            },
+        }, {"monitor": False});
+        assertEq("https://www.zohoapis.eu/invoice/v3", conn_eu.get(False).getURL());
+        assertEq("https://www.zohoapis.eu/invoice/v3", conn_eu.getAsync(False).getUrl());
+        # a stored connection URL without a path gets the default API path
+        ZohoInvoiceRestClient::ZohoInvoiceRestConnection conn_legacy("test", "test", "zohoinvoice://www.zohoapis.com",
+            {"monitor": False}, {"token": "t", "oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertEq("https://www.zohoapis.com/invoice/v3", conn_legacy.get(False).getURL());
+        assertEq("https://www.zohoapis.com/invoice/v3", conn_legacy.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        ZohoEchoHandler handler();
+        server.setHandler("zoho-echo", "", NOTHING, handler);
+        server.setDefaultHandler("zoho-echo", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        ZohoInvoiceRestClient::ZohoInvoiceRestClient sync({
+            "url": url,
+            "token": "test-token",
+            "organization_id": "o1",
+            "domain": ".eu",
+        }, True);
+        assertEq(url + "/invoice/v3", sync.getURL());
+        sync.get("items/i1");
+        assertEq("invoice/v3/items/i1?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoInvoiceRestClient::ZohoInvoiceRestClient sync_copy = cast<ZohoInvoiceRestClient::ZohoInvoiceRestClient>(
+            sync.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", sync_copy.getURL());
+        assertEq("o1", sync_copy.getOrganizationId());
+        assertEq(".eu", sync_copy.getDomain());
+        sync_copy.get("items/i2");
+        assertEq("other/v9/items/i2?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # the explicit URL is used by the async client
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo io({
+            "url": url + "/proxy",
+            "token": "test-token",
+            "organization_id": "o2",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq(url + "/proxy", io.getUrl());
+        io.restGet("items/i3");
+        assertEq("proxy/items/i3?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo io_copy = cast<ZohoInvoiceRestClient::ZohoInvoiceRestClientIo>(
+            io.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", io_copy.getUrl());
+        assertEq("o2", io_copy.getOrganizationId());
+        assertEq("zohocloud", io_copy.getSubdomain());
+        assertEq(".eu", io_copy.getDomain());
+        io_copy.restGet("items/i4");
+        assertEq("other/v9/items/i4?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -1984,12 +2127,13 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         server.setHandler("zohoinvoice", "", NOTHING, handler);
         server.setDefaultHandler("zohoinvoice", handler);
 
-        LocalZohoInvoiceRestClientIo rest({
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest({
+            "url": "http://localhost:" + port,
             "token": "test-token",
             "organization_id": "org-1",
             "subdomain": "zohocloud",
             "domain": ".eu",
-        }, "http://localhost:" + port);
+        });
         assertEq("org-1", rest.getOrganizationId());
         assertEq("zohocloud", rest.getSubdomain());
         assertEq(".eu", rest.getDomain());

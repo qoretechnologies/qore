@@ -97,12 +97,12 @@ public class ZohoInventoryGetShipmentOrderDataProvider inherits ZohoInventoryDat
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.shipment_id ?? request_options.shipment_id ?? shipment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "shipment_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/shipmentorders/%s", id));
+        hash<auto> response = doGet(sprintf("/shipmentorders/%s", id), NOTHING, org_id);
         return response.shipment_order;
     }
 

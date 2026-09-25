@@ -87,13 +87,13 @@ public class ZohoInventoryUpdateContactPersonDataProvider inherits ZohoInventory
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = remove req.contact_person_id ?? request_options.contact_person_id ?? contact_person_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "contact_person_id is required for update operation";
         }
         hash<auto> body = req - "contact_person_id";
-        hash<auto> response = doPut(sprintf("/contacts/contactpersons/%s", id), body);
+        hash<auto> response = doPut(sprintf("/contacts/contactpersons/%s", id), body, org_id);
         return response.contact_person;
     }
 

@@ -41,16 +41,6 @@
 
 %exec-class ZohoInventoryDataProviderTest
 
-#! A Zoho Inventory client that sends its requests to a local server
-/** The Zoho Inventory client always derives its URL from the \c domain option, so the target URL is replaced after
-    the client has been created; the connection path of the real URL is kept
-*/
-class LocalZohoInventoryRestClientIo inherits ZohoInventoryRestClient::ZohoInventoryRestClientIo {
-    constructor(string url, hash<auto> opts) : ZohoInventoryRestClientIo(opts) {
-        self.url = url;
-    }
-}
-
 #! A local Zoho Inventory API server that records requests
 class FakeZohoInventoryHandler inherits AbstractHttpRequestHandler {
     public {
@@ -112,6 +102,26 @@ class FakeZohoInventoryHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A local server that answers every request and records the request paths and authorization headers
+class ZohoEchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"code": 0, "message": "OK"}),
+        };
+    }
+}
+
 public class ZohoInventoryDataProviderTest inherits QUnit::Test {
     private {
         #! Zoho Inventory REST client for integration tests
@@ -161,6 +171,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require Zoho Inventory credentials)
         addTestCase("integration tests", \integrationTests());
@@ -619,6 +630,136 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         }).getOrganizationId());
     }
 
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        code get_options = \ZohoInventoryRestClient::ZohoInventoryRestClientBase::getOptions();
+
+        # the options are processed idempotently, and the options specific to Zoho are kept
+        hash<auto> popts = get_options({
+            "token": "t",
+            "organization_id": "o1",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq("https://www.zohoapis.eu/inventory/v1", popts.url);
+        assertEq("o1", popts.organization_id);
+        assertEq("zohocloud", popts.subdomain);
+        assertEq(".eu", popts.domain);
+        assertEq(popts, get_options(popts));
+
+        # OAuth2 URLs are built from the subdomain and domain unless given explicitly
+        hash<auto> oauth2_opts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "domain": ".eu",
+        };
+        popts = get_options(oauth2_opts);
+        assertEq("https://accounts.zoho.eu/oauth/v2/auth", popts.oauth2_auth_url);
+        assertEq("https://accounts.zoho.eu/oauth/v2/token", popts.oauth2_token_url);
+        assertEq(popts, get_options(popts));
+        popts = get_options(oauth2_opts + {
+            "oauth2_auth_url": "https://auth.example.com/auth",
+            "oauth2_token_url": "https://auth.example.com/token",
+        });
+        assertEq("https://auth.example.com/auth", popts.oauth2_auth_url);
+        assertEq("https://auth.example.com/token", popts.oauth2_token_url);
+
+        # an explicit URL takes precedence over the domain; the default API path is added to a URL without a path
+        assertEq("http://proxy.example.com/zoho/api", get_options({
+            "url": "http://proxy.example.com/zoho/api",
+            "domain": ".eu",
+        }).url);
+        assertEq("https://www.zohoapis.eu/inventory/v1", get_options({"url": "https://www.zohoapis.eu"}).url);
+        assertEq("https://www.zohoapis.eu/inventory/v1", get_options({"url": "https://www.zohoapis.eu/"}).url);
+
+        # the default connection URL is unchanged
+        ZohoInventoryRestClient::ZohoInventoryRestConnection conn("test", "test",
+            ZohoInventoryRestClient::ZohoInventoryRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+            "token": "t",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertEq("https://www.zohoapis.com/inventory/v1", conn.getConnectionOptions().url);
+        assertEq("https://www.zohoapis.com/inventory/v1", get_options(conn.getConnectionOptions()).url);
+        assertEq("https://www.zohoapis.com/inventory/v1", conn.get(False).getURL());
+        assertEq("https://www.zohoapis.com/inventory/v1", conn.getAsync(False).getUrl());
+        # the connection URL is built from the domain
+        ZohoInventoryRestClient::ZohoInventoryRestConnection conn_eu({
+            "name": "test",
+            "url": "zohoinventory://www.zohoapis.com/inventory/v1",
+            "opts": {
+                "token": "t",
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+                "domain": ".eu",
+            },
+        }, {"monitor": False});
+        assertEq("https://www.zohoapis.eu/inventory/v1", conn_eu.get(False).getURL());
+        assertEq("https://www.zohoapis.eu/inventory/v1", conn_eu.getAsync(False).getUrl());
+        # a stored connection URL without a path gets the default API path
+        ZohoInventoryRestClient::ZohoInventoryRestConnection conn_legacy("test", "test",
+            "zohoinventory://www.zohoapis.com",
+            {"monitor": False}, {"token": "t", "oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertEq("https://www.zohoapis.com/inventory/v1", conn_legacy.get(False).getURL());
+        assertEq("https://www.zohoapis.com/inventory/v1", conn_legacy.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        ZohoEchoHandler handler();
+        server.setHandler("zoho-echo", "", NOTHING, handler);
+        server.setDefaultHandler("zoho-echo", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        ZohoInventoryRestClient::ZohoInventoryRestClient sync({
+            "url": url,
+            "token": "test-token",
+            "organization_id": "o1",
+            "domain": ".eu",
+        }, True);
+        assertEq(url + "/inventory/v1", sync.getURL());
+        sync.get("items/i1");
+        assertEq("inventory/v1/items/i1?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoInventoryRestClient::ZohoInventoryRestClient sync_copy =
+            cast<ZohoInventoryRestClient::ZohoInventoryRestClient>(sync.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", sync_copy.getURL());
+        assertEq("o1", sync_copy.getOrganizationId());
+        assertEq(".eu", sync_copy.getDomain());
+        sync_copy.get("items/i2");
+        assertEq("other/v9/items/i2?organization_id=o1", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # the explicit URL is used by the async client
+        ZohoInventoryRestClient::ZohoInventoryRestClientIo io({
+            "url": url + "/proxy",
+            "token": "test-token",
+            "organization_id": "o2",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        });
+        assertEq(url + "/proxy", io.getUrl());
+        io.restGet("items/i3");
+        assertEq("proxy/items/i3?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and the organization ID, and uses the new URL
+        ZohoInventoryRestClient::ZohoInventoryRestClientIo io_copy =
+            cast<ZohoInventoryRestClient::ZohoInventoryRestClientIo>(io.copyWithUrl(url + "/other/v9"));
+        assertEq(url + "/other/v9", io_copy.getUrl());
+        assertEq("o2", io_copy.getOrganizationId());
+        assertEq("zohocloud", io_copy.getSubdomain());
+        assertEq(".eu", io_copy.getDomain());
+        io_copy.restGet("items/i4");
+        assertEq("other/v9/items/i4?organization_id=o2", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -630,17 +771,23 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         server.setHandler("zoho", "", NOTHING, handler);
         server.setDefaultHandler("zoho", handler);
 
-        LocalZohoInventoryRestClientIo rest("http://localhost:" + port, {"token": "test-token"});
+        # the explicit URL is used; the default API path is appended to a URL without a path
+        ZohoInventoryRestClient::ZohoInventoryRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "test-token",
+            "organization_id": "org0",
+        });
+        assertEq("http://localhost:" + port + "/inventory/v1", rest.getUrl());
         ZohoInventoryDataProvider::ZohoInventoryDataProvider provider({"zohoinventoryrestclient": rest});
         assertEq(rest, provider.getRestClient());
 
-        # the organization ID given in the request is set on the client and added to the request
+        # the organization ID given in the request is added to this request only; the shared client is not changed
         hash<auto> item = provider.getChildProvider("get-item").doRequest({
             "organization_id": "org1",
             "item_id": "i2",
         });
         assertEq("i2", item.item_id);
-        assertEq("org1", rest.getOrganizationId());
+        assertEq("org0", rest.getOrganizationId());
         assertEq(1, handler.requests.size());
         assertEq("GET", handler.requests[0].method);
         assertEq("inventory/v1/items/i2?organization_id=org1", handler.requests[0].path);
@@ -663,17 +810,66 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         assertEq("o1", orgs[0].value);
         assertEq("inventory/v1/organizations", handler.requests[0].path);
 
-        # requests with a body and DELETE requests
+        # requests with a body and DELETE requests use the organization ID of the client if none is given
         handler.requests = ();
         assertEq("POST done", provider.doPost("/items", {"name": "Widget"}).message);
         assertEq("PUT done", provider.doPut("/items/i1", {"rate": 1.5}).message);
         assertEq("DELETE done", provider.doDelete("/items/i1").message);
         assertEq(("POST", "PUT", "DELETE"), (map $1.method, handler.requests));
-        assertEq(("inventory/v1/items?organization_id=org1", "inventory/v1/items/i1?organization_id=org1",
-            "inventory/v1/items/i1?organization_id=org1"), (map $1.path, handler.requests));
+        assertEq(("inventory/v1/items?organization_id=org0", "inventory/v1/items/i1?organization_id=org0",
+            "inventory/v1/items/i1?organization_id=org0"), (map $1.path, handler.requests));
         assertEq({"name": "Widget"}, handler.requests[0].body);
         assertEq({"rate": 1.5}, handler.requests[1].body);
         assertNothing(handler.requests[2].body);
+
+        # an organization ID given for a request overrides the client's organization ID for all request types
+        handler.requests = ();
+        assertEq("POST done", provider.doPost("/items", {"name": "Widget"}, "org5").message);
+        assertEq("PUT done", provider.doPut("/items/i1", {"rate": 1.5}, "org6").message);
+        assertEq("DELETE done", provider.doDelete("/items/i1", "org7").message);
+        assertEq("i8", provider.doGet("/items/i8", {"x": "y"}, "org8").item.item_id);
+        assertEq(("inventory/v1/items?organization_id=org5", "inventory/v1/items/i1?organization_id=org6",
+            "inventory/v1/items/i1?organization_id=org7", "inventory/v1/items/i8?x=y&organization_id=org8"),
+            (map $1.path, handler.requests));
+        assertEq("org0", rest.getOrganizationId());
+
+        # concurrent requests for different organizations on the shared client each use their own organization ID
+        handler.requests = ();
+        {
+            AbstractDataProvider get_item = provider.getChildProvider("get-item");
+            Counter cnt();
+            list<string> errors = ();
+            Mutex err_lck();
+            for (int i = 0; i < 10; ++i) {
+                cnt.inc();
+                background sub () {
+                    on_exit cnt.dec();
+                    try {
+                        string org = i % 2 ? "orgA" : "orgB";
+                        string id = sprintf("%s-%d", org, i);
+                        hash<auto> rec = get_item.doRequest({"organization_id": org, "item_id": id});
+                        if (rec.item_id != id) {
+                            err_lck.lock();
+                            on_exit err_lck.unlock();
+                            errors += sprintf("%s: got %y", id, rec.item_id);
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        err_lck.lock();
+                        on_exit err_lck.unlock();
+                        errors += get_exception_string(ex);
+                    }
+                }();
+            }
+            cnt.waitForZero();
+            assertEq((), errors);
+        }
+        assertEq(10, handler.requests.size());
+        foreach hash<auto> req in (handler.requests) {
+            *list<*string> m = (req.path =~ x/items\/(org[AB])-[0-9]+\?organization_id=(org[AB])$/);
+            assertEq(2, m.size(), req.path);
+            assertEq(m[0], m[1], req.path);
+        }
+        assertEq("org0", rest.getOrganizationId());
 
         # the rate limit headers of the async response are used to wait for the rate limit reset
         handler.requests = ();

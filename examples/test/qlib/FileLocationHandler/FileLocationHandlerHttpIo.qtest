@@ -106,6 +106,24 @@ class HttpIoTestHandler inherits AbstractHttpRequestHandler {
                 return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary("text body"));
             case "/latin1":
                 return makeResponse({"Content-Type": "text/plain"}, 200, <e4f6fc>);
+            case "/utf8-bom":
+                return makeResponse({"Content-Type": "text/plain"}, 200, <efbbbfc3a4c3b6c3bc>);
+            case "/latin2":
+                return makeResponse({"Content-Type": "text/plain;charset=iso-8859-2"}, 200, <b1>);
+            case "/html-meta":
+                return makeResponse({"Content-Type": "text/html"}, 200,
+                    binary("<meta charset=\"windows-1252\">") + <80>);
+            case "/json":
+                return makeResponse({"Content-Type": "application/json;charset=iso-8859-1"}, 200,
+                    binary("{\"a\":\"äöü\"}"));
+            case "/gzip-text": {
+                hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "text/plain;charset=utf-8",
+                    "Content-Encoding": "gzip"}, 200, gzip(binary("äöü")));
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/large-text":
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary(strmul("äb", 2000)));
             case "/gzip": {
                 hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "application/octet-stream",
                     "Content-Encoding": "gzip"}, 200, gzip(getLargeBody()));
@@ -271,6 +289,32 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         # a stream reader
         StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin1{encoding=ISO-8859-1}");
         assertEq("äöü", sr.readString());
+        # the encoding of the text is determined from the response like for a text read; the encoding option is
+        # the assumed encoding
+        hash<string, list<string>> stream_cases = {
+            "/latin1": ("äöü", "ISO-8859-1"),
+            "/utf8-bom": ("äöü", "UTF-8"),
+            "/latin2": ("ą", "ISO-8859-2"),
+            "/html-meta": ("<meta charset=\"windows-1252\">€", "WINDOWS-1252"),
+            "/json": ("{\"a\":\"äöü\"}", "UTF-8"),
+            "/gzip-text": ("äöü", "UTF-8"),
+            "/large-text": (strmul("äb", 2000), "UTF-8"),
+        };
+        foreach hash<auto> i in (stream_cases.pairIterator()) {
+            sr = FileLocationHandler::getStreamReaderFromLocation(url + i.key);
+            string str = sr.readString();
+            assertEq(i.value[1], sr.getEncoding(), i.key);
+            assertEq(i.value[0], convert_encoding(str, "UTF-8"), i.key);
+            # the same text as a text read
+            assertEq(i.value[0], convert_encoding(FileLocationHandler::getTextFileFromLocation(url + i.key),
+                "UTF-8"), i.key);
+        }
+        # the encoding option is the assumed encoding
+        sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin1{encoding=ISO-8859-15}");
+        assertEq("ISO-8859-15", sr.getEncoding());
+        # it does not override a declared encoding
+        sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin2{encoding=ISO-8859-15}");
+        assertEq("ISO-8859-2", sr.getEncoding());
         # small reads
         is = FileLocationHandler::getBinaryStreamFromLocation(url + "/text");
         assertEq(binary("te"), is.read(2));

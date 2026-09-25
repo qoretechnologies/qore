@@ -129,13 +129,24 @@ public class ShipStationRestClientBase {
     }
 
     #! returns options for @ref ShipStationRestClient::ShipStationRestClient::constructor()
+    /** The returned options keep the ShipStation-specific input options (\c api_key, \c api_secret), which the
+        REST client ignores, and derive the REST client options from them; this makes the method idempotent, so a
+        client can be recreated from its own processed options, as with
+        @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over @ref DefaultApiUrl
+
+        @throw SHIPSTATION-ERROR missing \c api_key or \c api_secret option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Set URL
-        rv.url = DefaultApiUrl;
+        # an explicit URL takes precedence over the default URL
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
 
         # Validate api_key is provided
         if (!opts.api_key) {
@@ -147,13 +158,10 @@ public class ShipStationRestClientBase {
             throw "SHIPSTATION-ERROR", "missing required option 'api_secret' (ShipStation API secret)";
         }
 
-        # Set HTTP Basic Auth: username=API_KEY, password=API_SECRET
+        # Set HTTP Basic Auth: username=API_KEY, password=API_SECRET; the api_key and api_secret options are kept
+        # so that the options can be processed again
         rv.username = opts.api_key;
         rv.password = opts.api_secret;
-
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.api_key;
-        remove rv.api_secret;
 
         return rv;
     }
@@ -192,6 +200,9 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
         plus:
         - \c api_key: the ShipStation API key (required)
         - \c api_secret: the ShipStation API secret (required)
+
+        If the \c url option is given, it takes precedence over @ref ShipStationRestClientBase::DefaultApiUrl; this
+        can be used to send requests through a proxy or to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server

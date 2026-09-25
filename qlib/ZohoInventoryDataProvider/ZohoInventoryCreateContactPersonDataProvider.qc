@@ -69,8 +69,8 @@ public class ZohoInventoryCreateContactPersonDataProvider inherits ZohoInventory
     /** Note: contact_id goes in the request body
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/contacts/contactpersons", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/contacts/contactpersons", req, org_id);
         return response.contact_person;
     }
 

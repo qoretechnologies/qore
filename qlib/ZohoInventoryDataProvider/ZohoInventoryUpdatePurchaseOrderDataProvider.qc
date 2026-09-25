@@ -87,13 +87,13 @@ public class ZohoInventoryUpdatePurchaseOrderDataProvider inherits ZohoInventory
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = remove req.purchaseorder_id ?? request_options.purchaseorder_id ?? purchaseorder_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "purchaseorder_id is required for update operation";
         }
         hash<auto> body = req - "purchaseorder_id";
-        hash<auto> response = doPut(sprintf("/purchaseorders/%s", id), body);
+        hash<auto> response = doPut(sprintf("/purchaseorders/%s", id), body, org_id);
         return response.purchaseorder;
     }
 

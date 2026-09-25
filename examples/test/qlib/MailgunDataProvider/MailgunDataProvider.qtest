@@ -42,14 +42,9 @@
 
 %exec-class MailgunDataProviderTest
 
-#! A Mailgun client that sends its requests to a local server
-/** The Mailgun client always derives its URL from the \c api_region option, so the target URL is replaced
-    after the client has been created
-*/
-class LocalMailgunRestClientIo inherits MailgunRestClient::MailgunRestClientIo {
-    constructor(string url) : MailgunRestClientIo({"apikey": "fake-key", "api_domain": "mg.example.com"}) {
-        self.url = url;
-    }
+#! Returns the URL without any user information (the synchronous client includes the credentials in its URL)
+string sub url_without_auth(string url) {
+    return regex_subst(url, "^([a-z]+://)[^@/]*@", "$1");
 }
 
 #! A local Mailgun API server that records requests
@@ -128,6 +123,8 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
 
         # Integration tests (require MAILGUN_API_KEY environment variable or -k option)
         addTestCase("integration tests", \integrationTests());
@@ -367,7 +364,11 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         server.setHandler("mailgun", "", NOTHING, handler);
         server.setDefaultHandler("mailgun", handler);
 
-        LocalMailgunRestClientIo rest("http://localhost:" + port);
+        MailgunRestClient::MailgunRestClientIo rest({
+            "apikey": "fake-key",
+            "api_domain": "mg.example.com",
+            "url": "http://localhost:" + port,
+        });
         MailgunDataProvider::MailgunCreateRouteDataProvider prov(rest);
         hash<auto> resp = prov.doRequest({
             "expression": "match_recipient(\".*@example.com\")",
@@ -452,6 +453,130 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         });
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeMailgunHandler handler();
+        server.setHandler("mailgun", "", NOTHING, handler);
+        server.setDefaultHandler("mailgun", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        string auth = "Basic " + make_base64_string("api:fake-key");
+        hash<auto> opts = {"apikey": "fake-key", "api_region": "EU", "api_domain": "mg.example.com"};
+
+        # the url option takes precedence over the URL derived from the region
+        MailgunRestClient::MailgunRestClient rest(opts + {"url": url}, True);
+        assertEq(url, url_without_auth(rest.getUrl()));
+        assertEq("mg.example.com", rest.restGet("v3/domains").body.items[0].name);
+        assertEq("v3/domains", handler.requests.last().path);
+        assertEq(auth, handler.requests.last().authorization);
+
+        MailgunRestClient::MailgunRestClientIo io(opts + {"url": url});
+        assertEq(url, url_without_auth(io.getUrl()));
+        handler.requests = ();
+        assertEq("mg.example.com", io.restGet("v3/domains").body.items[0].name);
+        assertEq(1, handler.requests.size());
+        assertEq(auth, handler.requests[0].authorization);
+
+        # the processed options are processed again without change
+        hash<auto> processed = MailgunRestClient::MailgunRestClientBase::getOptions(opts);
+        assertEq("https://api.eu.mailgun.net", processed.url);
+        assertEq("api", processed.username);
+        assertEq("fake-key", processed.password);
+        assertEq(processed, MailgunRestClient::MailgunRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        MailgunRestClient::MailgunRestClient orig(opts, True);
+        assertEq("https://api.eu.mailgun.net", url_without_auth(orig.getUrl()));
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof MailgunRestClient::MailgunRestClient);
+        assertEq(url, url_without_auth(copy.getUrl()));
+        assertEq("https://api.eu.mailgun.net", url_without_auth(orig.getUrl()));
+        handler.requests = ();
+        copy.restGet("v3/domains");
+        assertEq(1, handler.requests.size());
+        assertEq(auth, handler.requests[0].authorization);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        MailgunRestClient::MailgunRestClientIo orig_io(opts);
+        assertEq("https://api.eu.mailgun.net", url_without_auth(orig_io.getUrl()));
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof MailgunRestClient::MailgunRestClientIo);
+        assertEq(url, url_without_auth(copy_io.getUrl()));
+        handler.requests = ();
+        copy_io.restGet("v3/domains");
+        assertEq(1, handler.requests.size());
+        assertEq(auth, handler.requests[0].authorization);
+
+        # the region is validated even with an explicit URL
+        assertThrows("MAILGUN-ERROR", sub () {
+            new MailgunRestClient::MailgunRestClient({"apikey": "x", "api_region": "XX", "url": url}, True);
+        });
+        # the API key is required even with an explicit URL
+        assertThrows("MAILGUN-ERROR", sub () {
+            new MailgunRestClient::MailgunRestClientIo({"url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        # the URL is derived from the region for connections created from a config hash
+        MailgunRestClient::MailgunRestConnection conn({
+            "name": "test",
+            "url": "mailgun://api.mailgun.net",
+            "opts": {"apikey": "k", "api_region": "EU"},
+        });
+        assertEq("mailgun://api.eu.mailgun.net", conn.url);
+        assertEq("https://api.eu.mailgun.net", conn.getConnectionOptions().url);
+        assertEq("https://api.eu.mailgun.net", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://api.eu.mailgun.net", url_without_auth(conn.getAsync(False).getUrl()));
+        assertEq("k", conn.get(False).getConstructorOptions().password);
+
+        # and for connections created with the default URL
+        conn = new MailgunRestClient::MailgunRestConnection("test", "test",
+            MailgunRestClient::MailgunRestConnection::DefaultConnectionUrl, {}, {"apikey": "k", "api_region": "EU"});
+        assertEq("https://api.eu.mailgun.net", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://api.eu.mailgun.net", url_without_auth(conn.getAsync(False).getUrl()));
+
+        conn = new MailgunRestClient::MailgunRestConnection("test", "test",
+            MailgunRestClient::MailgunRestConnection::DefaultConnectionUrl, {}, {"apikey": "k"});
+        assertEq("https://api.mailgun.net", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://api.mailgun.net", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # an explicit connection URL is used by the clients
+        conn = new MailgunRestClient::MailgunRestConnection("test", "test", "mailgun://proxy.example.com", {},
+            {"apikey": "k"});
+        assertEq("https://proxy.example.com", url_without_auth(conn.get(False).getUrl()));
+        assertEq("https://proxy.example.com", url_without_auth(conn.getAsync(False).getUrl()));
+
+        # the stored URL is updated to the URL derived from the region
+        list<hash<auto>> updates = ();
+        conn = new MailgunRestClient::MailgunRestConnection("test", "test", "mailgun://api.mailgun.net", {},
+            {"apikey": "k", "api_region": "EU"});
+        # the default URL is replaced with the URL derived from the region
+        assertEq("mailgun://api.eu.mailgun.net", conn.url);
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq((), updates);
+        conn = new MailgunRestClient::MailgunRestConnection("test", "test", "mailgun://api.eu.mailgun.net", {},
+            {"apikey": "k"});
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "mailgun://api.mailgun.net"},), updates);
+
+        # no update is made if the URL is already correct
+        updates = ();
+        conn = new MailgunRestClient::MailgunRestConnection({
+            "name": "test",
+            "url": "mailgun://api.mailgun.net",
+            "opts": {"apikey": "k", "api_region": "EU"},
+        });
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq((), updates);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -463,7 +588,11 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         server.setHandler("mailgun", "", NOTHING, handler);
         server.setDefaultHandler("mailgun", handler);
 
-        LocalMailgunRestClientIo rest("http://localhost:" + port);
+        MailgunRestClient::MailgunRestClientIo rest({
+            "apikey": "fake-key",
+            "api_domain": "mg.example.com",
+            "url": "http://localhost:" + port,
+        });
         MailgunDataProvider::MailgunDataProvider provider({
             "mailgunrestclient": rest,
             "apikey": "fake-key",

@@ -111,12 +111,12 @@ public class ZohoInventoryDeletePurchaseOrderDataProvider inherits ZohoInventory
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.purchaseorder_id ?? request_options.purchaseorder_id ?? purchaseorder_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "purchaseorder_id is required for delete operation";
         }
-        return doDelete(sprintf("/purchaseorders/%s", id));
+        return doDelete(sprintf("/purchaseorders/%s", id), org_id);
     }
 
     #! Returns static provider info

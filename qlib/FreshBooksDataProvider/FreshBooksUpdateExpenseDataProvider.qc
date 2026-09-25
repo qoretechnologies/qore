@@ -67,12 +67,12 @@ public class FreshBooksUpdateExpenseDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         int id = remove req.id;
         if (!id) {
             throw "FRESHBOOKS-ERROR", "id is required for update operation";
         }
-        return doPut(accountPath(sprintf("/expenses/expenses/%d", id)), {"expense": req}).expense;
+        return doPut(accountPath(sprintf("/expenses/expenses/%d", id), account_id), {"expense": req}).expense;
     }
 
     #! Returns static provider info

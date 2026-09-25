@@ -67,8 +67,8 @@ public class FreshBooksCreateEstimateDataProvider inherits FreshBooksDataProvide
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
-        return doPost(accountPath("/estimates/estimates"), {"estimate": req}).estimate;
+        *string account_id = getAccountIdFromReq(\req);
+        return doPost(accountPath("/estimates/estimates", account_id), {"estimate": req}).estimate;
     }
 
     #! Returns static provider info

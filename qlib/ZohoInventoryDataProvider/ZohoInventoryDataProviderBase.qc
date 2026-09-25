@@ -172,62 +172,90 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         rest.setLogger(logger);
     }
 
-    #! Extracts organization_id from a request hash, sets it on the REST client, and returns the cleaned request
-    /** Used by all DPAT_API providers to handle organization_id from action options
+    #! Removes the organization_id from a request hash and returns it
+    /** Used by all DPAT_API providers to handle organization_id from action options; the organization ID must be
+        passed to the request method (ex: @ref doGet()) so that it is used for the current request only; the shared
+        REST client is never modified, so concurrent requests for different organizations do not interfere with
+        each other
+
+        @param req a reference to the request hash; the \c organization_id key is removed from the hash
+
+        @return the organization ID from the request, if any
     */
-    private hash<auto> setOrganizationIdFromReq(hash<auto> req) {
-        *string org_id = remove req.organization_id;
-        if (org_id) {
-            rest.setOrganizationId(org_id);
+    private *string getOrganizationIdFromReq(reference<auto> req) {
+        if (req.typeCode() != NT_HASH) {
+            return;
         }
-        return req;
+        auto org_id = remove req.organization_id;
+        return org_id.val() ? org_id.toString() : NOTHING;
+    }
+
+    #! Adds the organization_id query argument to the given path if an organization ID is given
+    /** The REST client does not add its own organization ID to paths that already contain an
+        \c organization_id query argument, so this overrides the client's organization ID for one request only
+
+        @param path the API path, optionally with query arguments
+        @param org_id the organization ID for this request; if not set, the path is returned unchanged, and the
+        client adds its own organization ID, if any
+
+        @return the path with the \c organization_id query argument, if applicable
+    */
+    static string addOrganizationId(string path, *string org_id) {
+        if (org_id.val() && path !~ /organization_id=/) {
+            path += (path =~ /\?/ ? "&" : "?") + "organization_id=" + encode_url(org_id, True);
+        }
+        return path;
     }
 
     #! Makes a GET request to the Zoho Inventory API
     /** @param path the API path
         @param params optional query parameters
+        @param org_id the organization ID for this request only; if not set, the client's organization ID is used
         @return the response body
 
         @throw ZOHOINVENTORY-API-ERROR if the response indicates an error
     */
-    hash<auto> doGet(string path, *hash<auto> params) {
+    hash<auto> doGet(string path, *hash<auto> params, *string org_id) {
         string url = path;
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        return doRestRequest("GET", url);
+        return doRestRequest("GET", addOrganizationId(url, org_id));
     }
 
     #! Makes a POST request to the Zoho Inventory API
     /** @param path the API path
         @param body the request body
+        @param org_id the organization ID for this request only; if not set, the client's organization ID is used
         @return the response body
 
         @throw ZOHOINVENTORY-API-ERROR if the response indicates an error
     */
-    hash<auto> doPost(string path, *hash<auto> body) {
-        return doRestRequest("POST", path, body);
+    hash<auto> doPost(string path, *hash<auto> body, *string org_id) {
+        return doRestRequest("POST", addOrganizationId(path, org_id), body);
     }
 
     #! Makes a PUT request to the Zoho Inventory API
     /** @param path the API path
         @param body the request body
+        @param org_id the organization ID for this request only; if not set, the client's organization ID is used
         @return the response body
 
         @throw ZOHOINVENTORY-API-ERROR if the response indicates an error
     */
-    hash<auto> doPut(string path, *hash<auto> body) {
-        return doRestRequest("PUT", path, body);
+    hash<auto> doPut(string path, *hash<auto> body, *string org_id) {
+        return doRestRequest("PUT", addOrganizationId(path, org_id), body);
     }
 
     #! Makes a DELETE request to the Zoho Inventory API
     /** @param path the API path
+        @param org_id the organization ID for this request only; if not set, the client's organization ID is used
         @return the response body
 
         @throw ZOHOINVENTORY-API-ERROR if the response indicates an error
     */
-    hash<auto> doDelete(string path) {
-        return doRestRequest("DELETE", path);
+    hash<auto> doDelete(string path, *string org_id) {
+        return doRestRequest("DELETE", addOrganizationId(path, org_id));
     }
 
     #! Makes a REST request with retry and rate limit handling

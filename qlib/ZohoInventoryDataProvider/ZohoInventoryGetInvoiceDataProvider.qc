@@ -77,8 +77,8 @@ public class ZohoInventoryGetInvoiceDataProvider inherits ZohoInventoryDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doGet(sprintf("/invoices/%s", req.invoice_id));
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doGet(sprintf("/invoices/%s", req.invoice_id), NOTHING, org_id);
         return response.invoice;
     }
 

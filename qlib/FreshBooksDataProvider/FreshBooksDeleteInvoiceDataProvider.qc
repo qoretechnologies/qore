@@ -80,11 +80,11 @@ public class FreshBooksDeleteInvoiceDataProvider inherits FreshBooksDataProvider
     /** Performs a soft delete by setting vis_state to 1 (deleted)
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         if (!req.id) {
             throw "FRESHBOOKS-ERROR", "id is required for delete operation";
         }
-        return doPut(accountPath(sprintf("/invoices/invoices/%d", req.id)),
+        return doPut(accountPath(sprintf("/invoices/invoices/%d", req.id), account_id),
             {"invoice": {"vis_state": 1}}).invoice;
     }
 

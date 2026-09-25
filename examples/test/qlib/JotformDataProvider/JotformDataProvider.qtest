@@ -41,15 +41,6 @@
 
 %exec-class JotformDataProviderTest
 
-#! A JotForm REST client that sends its requests to a local server
-/** The JotForm client always builds its URL from the \c api_domain option, so the URL is replaced here
-*/
-class LocalJotformRestClientIo inherits JotformRestClient::JotformRestClientIo {
-    constructor(hash<auto> opts, string local_url) : JotformRestClientIo(opts) {
-        url = local_url;
-    }
-}
-
 #! A local JotForm API server that records requests
 class FakeJotformHandler inherits AbstractHttpRequestHandler {
     public {
@@ -146,6 +137,8 @@ public class JotformDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
 
         # Integration tests (require JOTFORM_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
@@ -181,6 +174,122 @@ public class JotformDataProviderTest inherits QUnit::Test {
         client = new JotformRestClient::JotformRestClientIo(opts);
     }
 
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeJotformHandler handler();
+        server.setHandler("jotform", "", NOTHING, handler);
+        server.setDefaultHandler("jotform", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        hash<auto> opts = {"apikey": "test-key", "api_domain": "eu-api.jotform.com"};
+
+        # the url option takes precedence over the URL built by the client
+        JotformRestClient::JotformRestClient rest(opts + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        rest.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        JotformRestClient::JotformRestClientIo io(opts + {"url": url});
+        assertEq(url, io.getUrl());
+        handler.requests = ();
+        io.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # the processed options are processed again without change
+        hash<auto> processed = JotformRestClient::JotformRestClientBase::getOptions(opts);
+        assertEq("https://eu-api.jotform.com", processed.url);
+        assertEq("test-key", processed.headers.APIKEY);
+        assertEq(processed, JotformRestClient::JotformRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        JotformRestClient::JotformRestClient orig(opts, True);
+        assertEq("https://eu-api.jotform.com", orig.getUrl());
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof JotformRestClient::JotformRestClient);
+        assertEq(url, copy.getUrl());
+        assertEq("https://eu-api.jotform.com", orig.getUrl());
+        handler.requests = ();
+        copy.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        JotformRestClient::JotformRestClientIo orig_io(opts);
+        assertEq("https://eu-api.jotform.com", orig_io.getUrl());
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof JotformRestClient::JotformRestClientIo);
+        assertEq(url, copy_io.getUrl());
+        handler.requests = ();
+        copy_io.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # the API domain is validated and the API key is required even with an explicit URL
+        assertThrows("JOTFORM-ERROR", sub () {
+            new JotformRestClient::JotformRestClient({"apikey": "x", "api_domain": "invalid.example.com",
+                "url": url}, True);
+        });
+        assertThrows("JOTFORM-ERROR", sub () {
+            new JotformRestClient::JotformRestClientIo({"url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        # the URL is derived from the API domain for connections created from a config hash
+        JotformRestClient::JotformRestConnection conn({
+            "name": "test",
+            "url": "jotform://api.jotform.com",
+            "opts": {"apikey": "k", "api_domain": "hipaa-api.jotform.com"},
+        });
+        assertEq("jotform://hipaa-api.jotform.com", conn.url);
+        assertEq("https://hipaa-api.jotform.com", conn.getConnectionOptions().url);
+        assertEq("https://hipaa-api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://hipaa-api.jotform.com", conn.getAsync(False).getUrl());
+        assertEq("k", conn.getAsync(False).getConstructorOptions().headers.APIKEY);
+
+        # and for connections created with the default URL
+        conn = new JotformRestClient::JotformRestConnection("test", "test",
+            JotformRestClient::JotformRestConnection::DefaultConnectionUrl, {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        assertEq("https://eu-api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://eu-api.jotform.com", conn.getAsync(False).getUrl());
+
+        conn = new JotformRestClient::JotformRestConnection("test", "test",
+            JotformRestClient::JotformRestConnection::DefaultConnectionUrl, {}, {"apikey": "k"});
+        assertEq("https://api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://api.jotform.com", conn.getAsync(False).getUrl());
+
+        # an explicit connection URL is used by the clients
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://proxy.example.com", {},
+            {"apikey": "k"});
+        assertEq("https://proxy.example.com", conn.get(False).getUrl());
+        assertEq("https://proxy.example.com", conn.getAsync(False).getUrl());
+
+        # the stored URL is updated to the URL derived from the API domain
+        list<hash<auto>> updates = ();
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://api.jotform.com", {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        assertEq("jotform://eu-api.jotform.com", conn.url);
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq((), updates);
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://api.jotform.com/x", {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "jotform://eu-api.jotform.com"},), updates);
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -192,7 +301,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
         server.setHandler("jotform", "", NOTHING, handler);
         server.setDefaultHandler("jotform", handler);
 
-        LocalJotformRestClientIo rest({"apikey": "test-key"}, "http://localhost:" + port);
+        JotformRestClient::JotformRestClientIo rest({"apikey": "test-key", "url": "http://localhost:" + port});
         JotformDataProvider::JotformDataProvider provider(rest);
         assertTrue(provider.getRestClient() instanceof JotformRestClient::JotformRestClientIo);
 

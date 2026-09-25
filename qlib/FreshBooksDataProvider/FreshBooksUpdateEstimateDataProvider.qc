@@ -67,12 +67,12 @@ public class FreshBooksUpdateEstimateDataProvider inherits FreshBooksDataProvide
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         int id = remove req.id;
         if (!id) {
             throw "FRESHBOOKS-ERROR", "id is required for update operation";
         }
-        return doPut(accountPath(sprintf("/estimates/estimates/%d", id)), {"estimate": req}).estimate;
+        return doPut(accountPath(sprintf("/estimates/estimates/%d", id), account_id), {"estimate": req}).estimate;
     }
 
     #! Returns static provider info

@@ -111,12 +111,12 @@ public class ZohoInventoryDeleteShipmentOrderDataProvider inherits ZohoInventory
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.shipment_id ?? request_options.shipment_id ?? shipment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "shipment_id is required for delete operation";
         }
-        return doDelete(sprintf("/shipmentorders/%s", id));
+        return doDelete(sprintf("/shipmentorders/%s", id), org_id);
     }
 
     #! Returns static provider info

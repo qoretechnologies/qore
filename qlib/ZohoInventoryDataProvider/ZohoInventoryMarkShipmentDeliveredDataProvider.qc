@@ -112,12 +112,12 @@ public class ZohoInventoryMarkShipmentDeliveredDataProvider inherits ZohoInvento
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.shipment_id ?? request_options.shipment_id ?? shipment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "shipment_id is required for mark-shipment-delivered operation";
         }
-        return doPost(sprintf("/shipmentorders/%s/status/delivered", id));
+        return doPost(sprintf("/shipmentorders/%s/status/delivered", id), NOTHING, org_id);
     }
 
     #! Returns static provider info
