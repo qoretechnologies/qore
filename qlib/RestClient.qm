@@ -145,6 +145,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
+      returns the options a client was created with, as \c getConstructorOptions() of
+      <a href="../../RestClientIo/html/index.html">RestClientIo</a> does
     - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
@@ -1102,7 +1105,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     }
 
     private {
-        #! Constructor options hash, kept for @ref copyWithUrl() / @c getConstructorOptions()
+        #! Constructor options hash, kept for @ref copyWithUrl() / @ref getConstructorOptions()
         /** Captured verbatim in the constructor so that a sibling instance can be built
             with the same config via @ref copyWithUrl(). Immutable post-construction.
         */
@@ -1697,6 +1700,19 @@ hash<auto> h = rest.getDefaultHeaders();
     */
     hash<auto> getDefaultHeaders() {
         return headers;
+    }
+
+    #! Returns the options the object was created with
+    /** @return the options the object was created with, after they have been processed by the constructor of the
+        subclass, if any
+
+        @note options changed after the object was created, for example with @ref addDefaultHeaders() or
+        @ref Qore::HTTPClient::setConnectionPath() "setConnectionPath()", are not reflected in the return value
+
+        @since %RestClient 2.7
+    */
+    hash<auto> getConstructorOptions() {
+        return saved_opts;
     }
 
     #! replaces default headers

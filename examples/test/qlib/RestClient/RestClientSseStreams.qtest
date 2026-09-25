@@ -49,6 +49,47 @@ class TrickleInputStream inherits InputStream {
     }
 }
 
+#! Returns the first data, then the data pushed to a queue until NOTHING is pushed
+/** The response stalls until the test pushes more data, so that an event wait times out deterministically
+*/
+class GatedInputStream inherits InputStream {
+    private {
+        *binary first;
+        Queue gate;
+        bool done;
+    }
+
+    constructor(binary first, Queue gate) {
+        self.first = first;
+        self.gate = gate;
+    }
+
+    int peek() {
+        return -1;
+    }
+
+    *binary read(int limit) {
+        if (first) {
+            binary rv = first;
+            remove first;
+            return rv;
+        }
+        if (done) {
+            return;
+        }
+        try {
+            *binary rv = gate.get(30s);
+            if (!rv) {
+                done = True;
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            # the test failed; the response is ended
+            done = True;
+        }
+    }
+}
+
 #! Returns a complete event stream as a chunked response body with the content encoding given in the request
 /** The Content-Type has a charset parameter, as sent by many servers; HttpServer handles a response with exactly
     \c text/event-stream as a live stream that requires a server-sent event handler.  "%s" in the events is replaced
@@ -64,6 +105,11 @@ class SseStreamHandler inherits AbstractHttpRequestHandler {
         };
     }
 
+    public {
+        #! queues for gated responses, by the value of the X-Test-Gate header
+        hash<string, Queue> gates;
+    }
+
     private {
         string events;
     }
@@ -73,6 +119,23 @@ class SseStreamHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."x-test-content-type") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": hdr."x-test-content-type"},
+                "body": "{}",
+            };
+        }
+        if (hdr."x-test-gate") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {
+                    "Content-Type": "text/event-stream; charset=utf-8",
+                    "Transfer-Encoding": "chunked",
+                },
+                "chunked_body": new GatedInputStream(binary("data: first\n\n"), gates{hdr."x-test-gate"}),
+            };
+        }
         if (hdr."x-test-status") {
             return <HttpResponseInfo>{
                 "code": hdr."x-test-status".toInt(),
@@ -85,7 +148,8 @@ class SseStreamHandler inherits AbstractHttpRequestHandler {
             # an event that never ends
             stream = binary("data: " + strmul("x", 4 * 1024 * 1024));
         } else {
-            stream = binary(replace(events, "%s", hdr.path + " " + (body ? body.toString() : "")));
+            stream = binary(replace(replace(events, "%s", hdr.path + " " + (body ? body.toString() : "")), "%h",
+                hdr."x-test-echo" ?? ""));
         }
         hash<auto> rhdr = {
             "Content-Type": "text/event-stream; charset=utf-8",
@@ -106,6 +170,7 @@ class SseStreamHandler inherits AbstractHttpRequestHandler {
 public class RestClientSseStreamsTest inherits QUnit::Test {
     private {
         HttpServer server;
+        SseStreamHandler handler;
         string url;
     }
 
@@ -115,13 +180,16 @@ public class RestClientSseStreamsTest inherits QUnit::Test {
         });
         int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         # the first event gives the path and the request body; line endings of all kinds
-        SseStreamHandler handler("data: %s\n\nevent: e\r\ndata: one\r\n\r\ndata: two\r\rdata: three\n\n");
+        handler = new SseStreamHandler("data: %s\n\nevent: e\r\ndata: one\r\n\r\ndata: two\r\rdata: three%h\n\n");
         server.setHandler("sse", "", NOTHING, handler);
         server.setDefaultHandler("sse", handler);
         url = "http://localhost:" + port;
 
         addTestCase("events", \eventTest());
         addTestCase("limits and errors", \limitTest());
+        addTestCase("event wait timeouts", \timeoutTest());
+        addTestCase("synchronous client state", \syncClientStateTest());
+        addTestCase("closing streams", \closeTest());
         set_return_value(main());
     }
 
@@ -138,8 +206,8 @@ public class RestClientSseStreamsTest inherits QUnit::Test {
     }
 
     # returns openers of the streams of all asynchronous clients, with the path requested
-    private hash<string, list<auto>> getOpenersIo() {
-        hash<auto> opts = {"url": url};
+    private hash<string, list<auto>> getOpenersIo(int max_size = 0) {
+        hash<auto> opts = {"url": url, "max_response_body_size": max_size};
         return getOpenersIntern(new OpenAiRestClientIo(opts + {"token": "x"}),
             new AnthropicRestClientIo(opts + {"apikey": "x"}), new GeminiRestClientIo(opts + {"apikey": "x"}),
             new GrokRestClientIo(opts + {"token": "x"}), new PerplexityRestClientIo(opts + {"token": "x"}));
@@ -207,8 +275,112 @@ public class RestClientSseStreamsTest inherits QUnit::Test {
             assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 500 received", i.value[1],
                 ({}, {"X-Test-Status": "500"}), i.key);
         }
-        foreach hash<auto> i in (getOpenersIo().pairIterator()) {
+        foreach hash<auto> i in (getOpenersIo(1024 * 1024).pairIterator()) {
+            # the maximum response body size of the client limits an event
+            object stream = i.value[1]({}, {"X-Test-Encoding": "gzip", "X-Test-Bomb": "1"});
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \stream.readEvent(), 30s,
+                i.key + "Io");
+
             assertThrows("REST-RESPONSE-ERROR", "500", i.value[1], ({}, {"X-Test-Status": "500"}), i.key + "Io");
+            # a successful response that is not an event stream
+            assertThrows("REST-RESPONSE-ERROR", "expected an event stream", i.value[1],
+                ({}, {"X-Test-Content-Type": "application/json"}), i.key + "Io");
+        }
+        foreach hash<auto> i in (getOpeners().pairIterator()) {
+            # the error response is in the exception argument
+            try {
+                i.value[1]({}, {"X-Test-Status": "503"});
+                assertTrue(False, i.key + ": no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, i.key);
+                assertEq(503, ex.arg.status_code, i.key);
+                assertEq("error", ex.arg.body, i.key);
+                # the response headers are in the argument
+                assertEq("5", ex.arg."content-length", i.key);
+            }
+            # a successful response that is not an event stream
+            assertThrows("SSE-ERROR", "expected an event stream", i.value[1],
+                ({}, {"X-Test-Content-Type": "application/json"}), i.key);
+        }
+    }
+
+    timeoutTest() {
+        int n = 0;
+        foreach hash<auto> i in (getOpeners().pairIterator()) {
+            string gate_id = sprintf("%d", ++n);
+            Queue gate();
+            handler.gates{gate_id} = gate;
+            object stream = i.value[1]({}, {"X-Test-Gate": gate_id});
+            on_exit {
+                # the response is ended whatever happens
+                gate.push(NOTHING);
+            }
+            assertEq("first", stream.readEvent(10s).data, i.key);
+            # no event is received while the response stalls: the synchronous stream raises an exception
+            assertThrows("SOCKET-TIMEOUT", \stream.readEvent(), 100ms, i.key);
+            assertFalse(stream.isDone(), i.key);
+            # the stream remains usable
+            gate.push(binary("data: late\n\n"));
+            assertEq("late", stream.readEvent(10s).data, i.key);
+            gate.push(NOTHING);
+            assertNothing(stream.readEvent(10s), i.key);
+            assertTrue(stream.isDone(), i.key);
+        }
+        foreach hash<auto> i in (getOpenersIo().pairIterator()) {
+            string gate_id = sprintf("%d", ++n);
+            Queue gate();
+            handler.gates{gate_id} = gate;
+            object stream = i.value[1]({}, {"X-Test-Gate": gate_id});
+            on_exit {
+                gate.push(NOTHING);
+            }
+            assertEq("first", stream.readEvent(10s).data, i.key + "Io");
+            # the asynchronous stream returns nothing when the wait times out, and has not ended
+            assertNothing(stream.readEvent(100ms), i.key + "Io");
+            assertFalse(stream.isDone(), i.key + "Io");
+            gate.push(binary("data: late\n\n"));
+            assertEq("late", stream.readEvent(10s).data, i.key + "Io");
+            gate.push(NOTHING);
+            assertNothing(stream.readEvent(10s), i.key + "Io");
+            assertTrue(stream.isDone(), i.key + "Io");
+        }
+    }
+
+    syncClientStateTest() {
+        foreach hash<auto> i in (getOpeners().pairIterator()) {
+            RestClient rest = i.value[2];
+            # the options the client was created with are returned
+            assertEq(url, rest.getConstructorOptions().url, i.key);
+            # default headers and a connection path set after the client was created are used by the stream
+            rest.addDefaultHeaders({"X-Test-Echo": "-echo"});
+            string path = i.value[0];
+            if (path =~ /^v1(beta)?\//) {
+                rest.setConnectionPath("/v2");
+                path =~ s/^v1(beta)?/v2/;
+            } else {
+                rest.setConnectionPath("/api");
+                path = "api/" + path;
+            }
+            object stream = i.value[1]({"model": "m"});
+            list<string> data = ();
+            while (*hash<SseMessageInfo> evt = stream.readEvent(10s)) {
+                data += evt.data;
+            }
+            assertEq((path + " {\"model\":\"m\"}", "one", "two", "three-echo"), data, i.key);
+        }
+    }
+
+    closeTest() {
+        foreach hash<auto> i in (getOpeners().pairIterator()) {
+            object stream = i.value[1]({});
+            assertFalse(stream.isDone(), i.key);
+            stream.close();
+            assertTrue(stream.isDone(), i.key);
+            # a closed stream returns no more events
+            assertNothing(stream.readEvent(10s), i.key);
+            # closing again has no effect
+            stream.close();
+            assertTrue(stream.isDone(), i.key);
         }
     }
 }

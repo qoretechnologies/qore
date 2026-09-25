@@ -233,11 +233,21 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
                 throw "SSE-ERROR", "response streaming requires OpenAiRestClientIo";
             }
             stream = rest.openResponsesStream(req);
+            # a stream opened while stopping is not read
+            if (stop_flag) {
+                stream.close();
+                return;
+            }
 
             while (!stop_flag) {
+                # the wait is limited so that the stop flag is checked regularly; nothing is returned both when
+                # the wait times out and at the end of the stream
                 *hash<SseMessageInfo> evt = stream.readEvent(1s);
                 if (!evt) {
-                    break;
+                    if (stream.isDone()) {
+                        break;
+                    }
+                    continue;
                 }
                 if (evt."data" == "[DONE]") {
                     notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, {"type": "done"});

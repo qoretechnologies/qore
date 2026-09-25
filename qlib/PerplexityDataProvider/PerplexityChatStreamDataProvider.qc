@@ -276,14 +276,11 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
         }
         try {
             hash<auto> req = stream_req + {"stream": True};
-            *object rest = getRestClient();
-            if (rest instanceof PerplexityRestClient::PerplexityRestClient) {
-                stream = cast<PerplexityRestClient::PerplexityRestClient>(rest).openChatStream(req);
-            } else if (rest instanceof PerplexityRestClient::PerplexityRestClientIo) {
-                stream = cast<PerplexityRestClient::PerplexityRestClientIo>(rest).openChatStream(req);
-            } else {
-                throw "SSE-ERROR", "chat streaming requires PerplexityRestClient or PerplexityRestClientIo";
+            *RestClientIo::RestClientIo rest = getRestClient();
+            if (!(rest instanceof PerplexityRestClient::PerplexityRestClientIo)) {
+                throw "SSE-ERROR", "chat streaming requires PerplexityRestClientIo";
             }
+            stream = cast<PerplexityRestClient::PerplexityRestClientIo>(rest).openChatStream(req);
             if (stop_flag) {
                 stream.close();
                 return;

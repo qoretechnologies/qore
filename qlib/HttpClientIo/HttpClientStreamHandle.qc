@@ -145,6 +145,15 @@ public class HttpClientStreamHandle {
         max_response_body_size = max_size;
     }
 
+    #! Returns the maximum size of a response body that is returned whole, after its content encoding is decoded
+    /** @return the maximum size in bytes; <= 0 means no limit
+
+        @see @ref setMaxResponseBodySize()
+    */
+    int getMaxResponseBodySize() {
+        return max_response_body_size;
+    }
+
     #! Releases any unreleased stream reservation
     destructor() {
         releaseReservationIfHeld();
