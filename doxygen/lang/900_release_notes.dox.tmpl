@@ -1861,6 +1861,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - the request and response data type classes are now public, so types serialized in a provider index can be
         restored by programs that import the module
 
+    - @ref empathicbuildingdataproviderintro "EmpathicBuildingDataProvider" module
+      - added \c EmpathicBuildingRestClientIo, an asynchronous client with the Haltian login and token refresh;
+        connections return it from \c getAsync(), and the data providers make all requests with it, converting a
+        synchronous REST client passed to them
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+
     - @ref filelocationhandlerintro "FileLocationHandler" module
       - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()"
         and @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
@@ -2193,6 +2199,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         failing with \c RUNTIME-TYPE-ERROR
 
     - @ref serversenteventclientintro "ServerSentEventClient" module
+      - @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" receives
+        events with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo", converts a
+        synchronous client passed to it, and stops the stream when events are stopped;
+        @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" opens streams with
+        @ref restclientiointro "RestClientIo", raises connection errors, disconnects at once, and has new
+        \c reconnect() and \c getConnectionInfo() methods
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - fixed chunked event streams: each received chunk was parsed as exactly one event, so an event spanning chunks or
         several events in one chunk were misparsed, and an uncompressed chunked stream failed; events are now read with
         @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()", which also decodes \c br and

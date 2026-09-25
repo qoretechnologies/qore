@@ -44,7 +44,7 @@ public class WooCommerceProductRestoredEventDataProvider inherits WooCommerceBas
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest) : WooCommerceBaseEventDataProvider(rest) {
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) : WooCommerceBaseEventDataProvider(rest) {
     }
 
     #! Creates the object with a connection

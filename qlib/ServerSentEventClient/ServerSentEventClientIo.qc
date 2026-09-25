@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file ServerSentEventClientIo.qc SSE client using HttpClientIo for async I/O
+#! @file ServerSentEventClientIo.qc SSE client using RestClientIo for async I/O
 
 /*  ServerSentEventClientIo.qc Copyright 2026 Qore Technologies, s.r.o.
 
@@ -22,13 +22,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+
 #! the ServerSentEventClient namespace contains all the definitions in the ServerSentEventClient module
 public namespace ServerSentEventClient {
 
-#! SSE client using HttpClientIo for async I/O across HTTP/1.x, HTTP/2, and HTTP/3
-/** This class provides the same Observable-based API as @ref ServerSentEventClient but uses
-    @ref HttpClientIo::HttpClientConnectionManager for async I/O and
-    @ref HttpClientStreamingIo::SseStreamReader for SSE event parsing.
+#! SSE client using asynchronous I/O across HTTP/1.x, HTTP/2, and HTTP/3
+/** This class provides the same Observable-based API as @ref ServerSentEventClient; the event stream is opened with
+    <a href="../../RestClientIo/html/index.html">RestClientIo</a>, which validates the response and decodes any
+    content encoding.
 
     @par Example:
     @code{.py}
@@ -45,29 +46,40 @@ sse.connect();
 sse.disconnect();
     @endcode
 
+    @par Events
+    - @ref EVENT_SSE_CONNECTED "EVENT_SSE_CONNECTED": raised when the event stream has been opened, also after a reconnect
+    - @ref EVENT_SSE_DATA "EVENT_SSE_DATA": raised for each event received; the data is deserialized according to the serialization
+      option
+    - @ref EVENT_SSE_CLOSED "EVENT_SSE_CLOSED": raised when the event stream ends, including when it is stopped with
+      @ref disconnect()
+
     @note The event loop runs in a background thread.  Event callbacks are invoked from
-    that thread.  This class is thread-safe for connect/disconnect/reconnect calls.
+    that thread.  This class is thread-safe for connect/disconnect/reconnect calls; the event thread holds a
+    reference to the object, so @ref disconnect() must be called, or the object deleted, to stop it.
 */
 public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper,
         DataProvider::DelayedObservable {
 
     private {
+        #! Protects the connection state
         Mutex m();
+
+        #! Signaled when the event thread terminates and to interrupt a reconnect delay
         Condition stop_cond();
 
-        #! Connection manager
-        HttpClientIo::HttpClientConnectionManager mgr;
+        #! Serializes connect() and disconnect() calls
+        Mutex op_lock();
+
+        #! The REST client used to open the event stream
+        RestClientIo::RestClientIo rest;
 
         #! URL for SSE connection
         string url;
 
-        #! Request path extracted from the URL
-        string url_path;
-
         #! Additional headers for the SSE request
         *hash<auto> connect_headers;
 
-        #! I/O timeout for SSE event reading
+        #! I/O timeout for opening the stream and for SSE event reading
         timeout timeout_ms = ServerSentEventClient::DefaultTimeout;
 
         #! Stop flag
@@ -76,8 +88,17 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! TID of the event thread
         *int tid;
 
+        #! The reader of the open event stream
+        *HttpClientStreamingIo::SseStreamReader cur_reader;
+
+        #! True if an event stream is open
+        bool connected = False;
+
         #! Reconnect flag
         bool reconnect_flag = False;
+
+        #! Set by @ref reconnect() to reconnect immediately
+        bool do_reconnect = False;
 
         #! Reconnect delay
         timeout reconnect_delay = ServerSentEventClient::ReconnectDelay;
@@ -87,6 +108,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
         #! Number of connections made
         int num_connects = 0;
+
+        #! Unique connection ID of the current event stream; -1 when not connected
+        int cid = -1;
 
         #! Data serialization: "json" or "none"
         string serialization = "none";
@@ -104,24 +128,45 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         string method = "GET";
 
         #! Request body for non-GET requests
-        *data request_body;
+        auto request_body;
 
         #! Optional AsyncAPI validator
         *AsyncApi::AsyncApi3Schema asyncapi_validator;
 
         #! AsyncAPI channel name for validation
         *string asyncapi_channel;
+
+        #! Connection sequence
+        static Sequence seq();
+    }
+
+    public {
+        #! Options passed through to the REST client
+        const RestClientOptions = (
+            "http_version", "max_redirects", "redirect_passthru", "proxy", "ssl_cert_path",
+            "ssl_cert_data", "ssl_key_path", "ssl_key_data", "ssl_key_password", "max_response_body_size",
+        );
     }
 
     #! Creates the SSE client
     /** @param opts constructor options:
-        - \c url: (required) the SSE endpoint URL
+        - \c url: (required) the SSE endpoint URL; \c sse:// and \c sses:// URLs are converted to \c http:// and
+          \c https:// URLs
         - \c connect_timeout: connection timeout (default: 30s)
-        - \c timeout: I/O timeout for SSE event reading (default: 15s)
+        - \c timeout: I/O timeout for opening the event stream and for SSE event reading (default: 15s)
         - \c reconnect: if True, auto-reconnect on connection loss (default: False)
         - \c reconnect_delay: delay between reconnect attempts (default: 2s)
         - \c max_reconnect_retries: max retries; negative = infinite (default: -1)
-        - \c serialization: "json" or "none" (default: "none")
+        - \c serialization or \c data: "json" or "none" (default: "none")
+        - \c headers: headers to send in the request
+        - \c token and \c token_type: an authorization token sent in the \c Authorization header
+        - \c username and \c password: credentials for HTTP basic authentication, if not given in the URL
+        - \c last_event_id: the ID sent in the \c Last-Event-ID header
+        - \c method and \c body: the HTTP method and request body (default: \c GET without a body)
+        - \c http_version, \c proxy, \c max_redirects, \c redirect_passthru, \c ssl_verify_cert, \c ssl_cert_path,
+          \c ssl_cert_data, \c ssl_key_path, \c ssl_key_data, \c ssl_key_password, \c max_response_body_size:
+          HTTP options of the REST client
+        - \c logger: a logger
         - \c yield: callable to yield thread execution (for sandboxed environments)
         - \c start_thread: callable to start a new thread (for sandboxed environments)
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
@@ -130,10 +175,11 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
           validation of deserialized event data; this takes precedence over \c asyncapi
         - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
           either validation option is configured
+
+        @throw SSE-ERROR missing or invalid option
     */
     constructor(hash<auto> opts) {
         url = getString(opts, "url");
-        url_path = parse_url(url).path ?? "/";
         if (!url.val()) {
             throw "SSE-ERROR", "missing 'url' option";
         }
@@ -143,7 +189,6 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
         logger = opts.logger;
 
-        timeout connect_timeout = opts.connect_timeout ?? 30s;
         if (exists opts.timeout) {
             timeout_ms = opts.timeout;
         }
@@ -201,71 +246,53 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             request_body = opts.body;
         }
 
-        hash<HttpClientIo::HttpClientConnectionManagerOptions> manager_opts =
-            <HttpClientIo::HttpClientConnectionManagerOptions>{
-                "connect_timeout": connect_timeout,
-                "request_timeout": timeout_ms,
-                "protocol": ConnectionProvider::HttpConnection::AsyncHttpVersionMap{
-                    opts.http_version ?? "auto"},
-                "ssl_verify_mode": opts.ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE,
-                "redirect_passthru": opts.redirect_passthru,
-                "logger": opts.logger,
-            };
-        if (exists opts.max_redirects) {
-            manager_opts.max_redirects = opts.max_redirects;
+        # the credentials are sent in the Authorization header built above
+        string rest_url = url;
+        rest_url =~ s/^([a-z][a-z0-9+.-]*:\/\/)[^@\/]*@/$1/i;
+        hash<auto> rest_opts = {
+            "url": rest_url,
+            "timeout": timeout_ms,
+            "connect_timeout": opts.connect_timeout ?? 30s,
+            "ssl_verify_mode": opts.ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE,
+            "logger": opts.logger,
+        };
+        foreach string key in (RestClientOptions) {
+            if (exists opts{key}) {
+                rest_opts{key} = opts{key};
+            }
         }
-        if (opts.proxy.val()) {
-            manager_opts.proxy_url = opts.proxy;
-        }
-        *data cert_data = opts.ssl_cert_data;
-        if (!exists cert_data && opts.ssl_cert_path.val()) {
-            cert_data = getSslFileData(opts.ssl_cert_path);
-        }
-        if (exists cert_data) {
-            manager_opts.client_cert = new SSLCertificate(cert_data);
-        }
-        *data key_data = opts.ssl_key_data;
-        if (!exists key_data && opts.ssl_key_path.val()) {
-            key_data = getSslFileData(opts.ssl_key_path);
-        }
-        if (exists key_data) {
-            manager_opts.client_pk = new SSLPrivateKey(key_data, opts.ssl_key_password);
-        }
-        mgr = new HttpClientIo::HttpClientConnectionManager(manager_opts);
-    }
-
-    #! Loads string data through FileLocationHandler without introducing a static module dependency
-    private static string getSslFileData(string location) {
-        load_module("FileLocationHandler");
-        Class c = Class::forName("FileLocationHandler");
-        StaticMethod m = c.getStaticMethod("getTextFileFromLocation");
-        return m.call(location);
+        rest = new RestClientIo::RestClientIo(rest_opts);
     }
 
     #! Destroys the client
     destructor() {
         disconnect();
-        mgr.closeAll();
+        rest.close();
+    }
+
+    #! Sets or clears the logger
+    /** @param logger the logger, if any
+    */
+    setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Connects to the SSE endpoint and starts the event loop in a background thread
-    /** If already connected, the existing connection is stopped before starting a new one.
+    /** The event stream is opened in the calling thread, so errors opening it are raised by this method.  If an
+        event thread is already running, it is stopped before the new connection is made.
 
         @param opts optional connection options:
-        - \c hdr: additional headers for the SSE request
+        - \c hdr: headers for the SSE request, replacing the headers given in the constructor
+        - \c method: the HTTP method
+        - \c body: the request body
+
+        @throw SSE-ERROR the server returned an error response or a response that is not an event stream
+        @throw HTTPCLIENT-CONNECT-ERROR the connection cannot be established
     */
     connect(*hash<auto> opts) {
-        {
-            AutoLock al(m);
-            if (tid) {
-                stop = True;
-                stop_cond.broadcast();
-                while (tid) {
-                    stop_cond.wait(m);
-                }
-            }
-            stop = False;
-        }
+        AutoLock al(op_lock);
+        stopEventThread();
 
         if (opts.hdr) {
             connect_headers = opts.hdr;
@@ -277,18 +304,36 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             request_body = opts.body;
         }
 
+        HttpClientStreamingIo::SseStreamReader reader = openStream();
+        on_error reader.cancel();
+
+        {
+            AutoLock al1(m);
+            stop = False;
+            do_reconnect = False;
+            setConnectedUnlocked(reader);
+        }
+
+        code<nothing()> fn = sub () {
+            try {
+                eventLoop(reader);
+            } catch (hash<ExceptionInfo> ex) {
+                # the object was deleted from the event thread itself, for example by an observer
+                if (ex.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+            }
+        };
         int new_tid;
 %ifdef PO_NO_THREAD_CONTROL
-        new_tid = start_thread(\eventLoop());
+        new_tid = start_thread(fn);
 %else
-        new_tid = start_thread ? start_thread(\eventLoop()) : background eventLoop();
+        new_tid = start_thread ? start_thread(fn) : background fn();
 %endif
 
-        # Set tid under lock so disconnect() can find the thread immediately
         {
-            AutoLock al(m);
+            AutoLock al1(m);
             tid = new_tid;
-            ++num_connects;
         }
 
         self.logDebug("SSE I/O thread started: TID %d", new_tid);
@@ -296,19 +341,42 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     }
 
     #! Disconnects from the SSE endpoint and stops the event loop
-    /** Blocks until the background event thread terminates.  Clears the reconnect flag
-        to prevent automatic reconnection.
+    /** The event stream is canceled and the call blocks until the background event thread terminates; when called
+        from the event thread itself, the thread is only told to stop.  Clears the reconnect flag to prevent
+        automatic reconnection.
     */
     disconnect() {
-        AutoLock al(m);
-        reconnect_flag = False;
-        if (tid) {
-            stop = True;
-            stop_cond.broadcast();
-            while (tid) {
-                stop_cond.wait(m);
+        {
+            AutoLock al(m);
+            reconnect_flag = False;
+            if (tid && tid == gettid()) {
+                requestStopUnlocked();
+                return;
             }
         }
+        AutoLock al(op_lock);
+        stopEventThread();
+    }
+
+    #! Initiates a reconnection to the server immediately
+    /** Also sets the reconnect flag, so the client reconnects when the stream is closed
+
+        @return @ref True if the reconnect was started, @ref False if the event thread is not running
+    */
+    bool reconnect() {
+        AutoLock al(m);
+        if (!tid) {
+            return False;
+        }
+        reconnect_flag = True;
+        if (!stop && !do_reconnect) {
+            do_reconnect = True;
+            if (cur_reader) {
+                cur_reader.cancel();
+            }
+            stop_cond.broadcast();
+        }
+        return True;
     }
 
     #! Called when all observers have been added to the object
@@ -317,6 +385,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         with no extra headers.  Callers that need to supply per-request
         headers or an alternate method/body should invoke @ref connect()
         themselves and skip this method.
+
+        @throw SSE-ERROR the server returned an error response or a response that is not an event stream
     */
     observersReady() {
         connect();
@@ -327,12 +397,18 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         disconnect();
     }
 
-    #! Returns True if the event loop is running
-    /** @return \c True if the background event thread is active
+    #! Returns True if an event stream is open
+    /** @return \c True if an event stream is open
     */
     bool isOpen() {
         AutoLock al(m);
-        return exists tid;
+        return connected;
+    }
+
+    #! Returns True if the event thread is running but no event stream is open, because it is being reopened
+    bool isReconnecting() {
+        AutoLock al(m);
+        return tid && !connected;
     }
 
     #! Returns the reconnect flag
@@ -342,11 +418,42 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         return reconnect_flag;
     }
 
+    #! Returns the data serialization value (\c "none", \c "json")
+    string getSerialization() {
+        return serialization;
+    }
+
+    #! Returns the ID of the last event received with an ID, or the ID given in the constructor
+    *string getLastEventId() {
+        AutoLock al(m);
+        return last_event_id;
+    }
+
+    #! Returns information about the current connection
+    /** @return a hash with the following keys:
+        - \c cid: the unique ID of the current event stream; -1 if not connected
+        - \c num_connects: how many times the client has connected to the server
+        - \c connected: @ref True if an event stream is open
+    */
+    hash<auto> getConnectionInfo() {
+        AutoLock al(m);
+        return {
+            "cid": cid,
+            "num_connects": num_connects,
+            "connected": connected,
+        };
+    }
+
     #! Returns the SSE endpoint URL
     /** @return the URL passed to the constructor (with \c sse:// normalized to \c http://)
     */
     string getUrl() {
         return url;
+    }
+
+    #! Returns the URL without any password
+    string getSafeUrl() {
+        return rest.getSafeUrl();
     }
 
     #! Sets an AsyncAPI validator for received SSE event data
@@ -374,88 +481,48 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         delete asyncapi_channel;
     }
 
-    #! Background event loop using HttpClientIo + SseStreamReader
-    private eventLoop() {
-        on_exit {
-            if (self) {
-                AutoLock al(m);
-                remove tid;
-                stop = False;
-                stop_cond.broadcast();
-                self.logDebug("SSE I/O thread TID %d terminating", gettid());
+    #! Stops the event thread and waits for it to terminate; must be called with @ref op_lock held
+    private stopEventThread() {
+        AutoLock al(m);
+        if (tid) {
+            requestStopUnlocked();
+            while (tid) {
+                stop_cond.wait(m);
             }
-        }
-
-        int reconnect_attempts = 0;
-
-        while (True) {
-            if (!self) {
-                return;
-            }
-            {
-                AutoLock al(m);
-                if (stop) {
-                    return;
-                }
-            }
-
-            try {
-                reconnect_attempts = 0;
-                runSseStream();
-            } catch (hash<ExceptionInfo> ex) {
-                if (!self) {
-                    return;
-                }
-                self.logError("SSE stream error: %s: %s", ex.err, ex.desc);
-            }
-
-            if (!self) {
-                return;
-            }
-
-            notifyObservers(EVENT_SSE_CLOSED, {});
-
-            {
-                AutoLock al(m);
-                if (stop || !reconnect_flag) {
-                    return;
-                }
-            }
-
-            # Check retry limit (negative = infinite)
-            ++reconnect_attempts;
-            if (max_reconnect_retries >= 0 && reconnect_attempts > max_reconnect_retries) {
-                self.logInfo("SSE max reconnect retries (%d) exceeded; giving up", max_reconnect_retries);
-                return;
-            }
-
-            # Reconnect with delay
-            self.logInfo("SSE connection lost; reconnecting in %y (attempt %d/%s)",
-                reconnect_delay, reconnect_attempts,
-                max_reconnect_retries < 0 ? "inf" : string(max_reconnect_retries));
-            {
-                AutoLock al(m);
-                stop_cond.wait(m, reconnect_delay);
-                if (stop) {
-                    return;
-                }
-            }
-            {
-                AutoLock al(m);
-                ++num_connects;
-            }
-            self.logDebug("SSE reconnecting (connection %d)", num_connects);
         }
     }
 
-    #! Runs a single SSE stream session (connect, read events, until close or error)
-    private runSseStream() {
-        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+    #! Tells the event thread to stop; must be called with @ref m held
+    private requestStopUnlocked() {
+        stop = True;
+        if (cur_reader) {
+            cur_reader.cancel();
+        }
+        stop_cond.broadcast();
+    }
+
+    #! Records an open event stream; must be called with @ref m held
+    private setConnectedUnlocked(HttpClientStreamingIo::SseStreamReader reader) {
+        cur_reader = reader;
+        connected = True;
+        ++num_connects;
+        cid = seq.next();
+    }
+
+    #! Opens the event stream
+    /** @return the reader of the event stream
+
+        @throw SSE-ERROR the server returned an error response or a response that is not an event stream
+    */
+    private HttpClientStreamingIo::SseStreamReader openStream() {
         hash<auto> headers = {
-            "Accept": "text/event-stream",
+            "Accept": MimeTypeSse,
         } + (connect_headers ?? {});
-        if (last_event_id) {
-            headers."Last-Event-ID" = last_event_id;
+        {
+            AutoLock al(m);
+            if (last_event_id) {
+                headers."Last-Event-ID" = last_event_id;
+            }
         }
 
         # serialize body for non-GET methods
@@ -471,18 +538,129 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             }
         }
 
-        stream.startStreaming(method, url_path, headers, False, send_body);
+        try {
+            return rest.restSseReaderWithTimeout(method, "", headers, send_body, timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH && ex.arg.status_code) {
+                if (ex.arg.status_code >= 300) {
+                    throw "SSE-ERROR", sprintf("HTTP server at URL %y returned status code %d to our request; "
+                        "expecting 200 OK", getSafeUrl(), ex.arg.status_code), ex.arg;
+                }
+                throw "SSE-ERROR", sprintf("HTTP server at URL %y did not return an event stream: %s",
+                    getSafeUrl(), ex.desc), ex.arg;
+            }
+            rethrow;
+        }
+    }
 
-        HttpClientStreamingIo::SseStreamReader reader(stream);
+    #! Background event loop
+    /** @param reader the reader of the event stream opened by @ref connect()
+    */
+    private eventLoop(HttpClientStreamingIo::SseStreamReader reader) {
+        on_exit if (self) {
+            AutoLock al(m);
+            remove tid;
+            remove cur_reader;
+            connected = False;
+            cid = -1;
+            stop = False;
+            do_reconnect = False;
+            stop_cond.broadcast();
+            self.logDebug("SSE I/O thread TID %d terminating", gettid());
+        }
 
+        while (True) {
+            try {
+                readEvents(reader);
+            } catch (hash<ExceptionInfo> ex) {
+                if (!self) {
+                    return;
+                }
+                self.logError("SSE stream error: %s: %s", ex.err, ex.desc);
+            }
+            # the reader is canceled if it has not ended, for example after a stream error
+            reader.cancel();
+            if (!self) {
+                return;
+            }
+
+            {
+                AutoLock al(m);
+                remove cur_reader;
+                connected = False;
+                cid = -1;
+            }
+            notifyObservers(EVENT_SSE_CLOSED, {});
+
+            *HttpClientStreamingIo::SseStreamReader new_reader = reopenStream();
+            if (!new_reader) {
+                return;
+            }
+            reader = new_reader;
+            notifyObservers(EVENT_SSE_CONNECTED, {});
+        }
+    }
+
+    #! Reopens the event stream if the client reconnects
+    /** @return the reader of the new event stream, or @ref nothing if the event thread is to terminate
+    */
+    private *HttpClientStreamingIo::SseStreamReader reopenStream() {
+        int reconnect_attempts = 0;
+        while (True) {
+            {
+                AutoLock al(m);
+                if (stop || !reconnect_flag) {
+                    return;
+                }
+                if (do_reconnect) {
+                    # an immediate reconnect requested with reconnect()
+                    do_reconnect = False;
+                } else {
+                    # Check retry limit (negative = infinite)
+                    ++reconnect_attempts;
+                    if (max_reconnect_retries >= 0 && reconnect_attempts > max_reconnect_retries) {
+                        self.logInfo("SSE max reconnect retries (%d) exceeded; giving up", max_reconnect_retries);
+                        return;
+                    }
+                    self.logInfo("SSE connection lost; reconnecting in %y (attempt %d/%s)",
+                        reconnect_delay, reconnect_attempts,
+                        max_reconnect_retries < 0 ? "inf" : string(max_reconnect_retries));
+                    stop_cond.wait(m, reconnect_delay);
+                    if (stop) {
+                        return;
+                    }
+                    do_reconnect = False;
+                }
+            }
+
+            HttpClientStreamingIo::SseStreamReader reader;
+            try {
+                reader = openStream();
+            } catch (hash<ExceptionInfo> ex) {
+                self.logInfo("SSE reconnect failed: %s: %s", ex.err, ex.desc);
+                continue;
+            }
+
+            AutoLock al(m);
+            if (stop) {
+                reader.cancel();
+                return;
+            }
+            setConnectedUnlocked(reader);
+            self.logDebug("SSE reconnected (connection %d)", num_connects);
+            return reader;
+        }
+    }
+
+    #! Reads events from the stream until it ends or the event thread is told to stop or reconnect
+    private readEvents(HttpClientStreamingIo::SseStreamReader reader) {
         while (True) {
             if (!self) {
                 return;
             }
             {
                 AutoLock al(m);
-                if (stop) {
-                    reader.cancel();
+                if (stop || do_reconnect) {
                     return;
                 }
             }
@@ -496,13 +674,16 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 %ifdef PO_NO_PROCESS_CONTROL
                 yield();
 %else
-                if (yield) { yield(); }
+                if (yield) {
+                    yield();
+                }
 %endif
                 continue;
             }
 
             # Track last event ID for reconnection
             if (evt.id.val()) {
+                AutoLock al(m);
                 last_event_id = string(evt.id);
             }
 

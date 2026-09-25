@@ -31,7 +31,7 @@ public namespace WooCommerceDataProvider {
 */
 public class WooCommerceCustomActionEventDataProvider inherits WooCommerceBaseEventDataProvider {
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest) : WooCommerceBaseEventDataProvider(rest) {
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) : WooCommerceBaseEventDataProvider(rest) {
     }
 
     #! Creates the object with a connection
@@ -74,7 +74,8 @@ public class WooCommerceCustomActionEventDataProvider inherits WooCommerceBaseEv
         # Fetch full resource data
         hash<auto> full_data;
         try {
-            full_data = doGet(sprintf("%s/%s", getEnrichmentResource(), string(arg)));
+            # the argument comes from the webhook payload; the REST client sends request paths verbatim
+            full_data = doGet(sprintf("%s/%s", getEnrichmentResource(), encode_url(string(arg), True)));
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "handleWebhookEvent: error enriching %s/%s: %s",
                 getEnrichmentResource(), string(arg), get_exception_string(ex));

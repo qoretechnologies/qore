@@ -149,6 +149,9 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         #! Connection sequence
         static Sequence seq();
 
+        #! The options the object was created with
+        hash<auto> saved_opts;
+
         #! Event disposition code: continue processing event loop
         const SSEEDC_CONTINUE = 1;
 
@@ -217,6 +220,15 @@ ServerSentEventClient sse(\event(), {
     #! Returns the data serialization value (\c "none", \c "json")
     string getSerialization() {
         return serialization;
+    }
+
+    #! Returns the options the object was created with
+    /** @return the options passed to the constructor
+
+        @since ServerSentEventClient 1.1
+    */
+    hash<auto> getConstructorOptions() {
+        return saved_opts;
     }
 
     #! Sets an AsyncAPI validator for received SSE event data
@@ -619,6 +631,7 @@ sse.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        saved_opts = opts;
         if (parse_boolean(opts.reconnect)) {
             reconnect = True;
         }

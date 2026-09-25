@@ -11,11 +11,141 @@
 %requires HttpServerUtil
 %requires ConnectionProvider
 %requires RestClient
+%requires RestClientIo
+%requires HttpServer
 %requires EmpathicBuildingDataProvider
 
 %requires json
 
 %exec-class Main
+
+#! A local Haltian Empathic Building server
+class FakeHaltianHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+
+        #! the number of logins
+        int logins = 0;
+
+        #! the number of token refresh requests
+        int refreshes = 0;
+
+        #! the token accepted by the server
+        *string valid_token;
+
+        #! the refresh token accepted by the server
+        string valid_refresh_token = "refresh-1";
+
+        #! the number of concurrent API requests to wait for before answering any of them
+        int wait_for = 0;
+
+        #! protects the members
+        Mutex m();
+
+        #! signaled when a request arrives
+        Condition cond();
+
+        #! the number of API requests received while waiting
+        int waiting = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        AutoLock al(m);
+        *hash<auto> args = (body && hdr."content-type" == MimeTypeFormUrlEncoded)
+            ? mime_parse_form_urlencoded_string(body.toString())
+            : NOTHING;
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "content-type": hdr."content-type",
+            "args": args,
+        };
+        if (hdr.path == "v1/login") {
+            if (args.email != "user@example.com" || args.password != "pass") {
+                return <HttpResponseInfo>{
+                    "code": 403,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"error": "invalid credentials"}),
+                };
+            }
+            ++logins;
+            valid_token = "token-" + logins;
+            # the "token" value is preferred to "access_token"
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "token": valid_token,
+                    "access_token": "invalid-access-token",
+                    "refresh_token": "refresh-" + (logins + 1),
+                }),
+            };
+        }
+        if (hdr.path == "v1/token") {
+            ++refreshes;
+            if (args.refresh_token != valid_refresh_token) {
+                return <HttpResponseInfo>{
+                    "code": 401,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"error": "invalid refresh token"}),
+                };
+            }
+            valid_token = "refreshed-" + refreshes;
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"token": valid_token, "token_type": "Bearer"}),
+            };
+        }
+        if (hdr.path == "v1/current_time") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"time": 1}),
+            };
+        }
+        if (hdr.authorization != "Bearer " + valid_token) {
+            if (wait_for) {
+                # answer the concurrent requests together, so that they all need a new token at the same time
+                ++waiting;
+                cond.broadcast();
+                while (waiting < wait_for) {
+                    cond.wait(m);
+                }
+            }
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": "unauthorized"}),
+            };
+        }
+        if (hdr.path == "v2/measurements") {
+            return <HttpResponseInfo>{
+                "code": 204,
+                "hdr": {},
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(({"id": 239, "name": "Test Org"},)),
+        };
+    }
+
+    #! Invalidates the current token
+    expireToken() {
+        AutoLock al(m);
+        remove valid_token;
+    }
+
+    #! Returns the requests made to the given path
+    list<hash<auto>> getRequests(string path) {
+        AutoLock al(m);
+        return (select requests, $1.path == path) ?? ();
+    }
+}
 
 public class Main inherits QUnit::Test {
     private {
@@ -34,6 +164,11 @@ public class Main inherits QUnit::Test {
         addTestCase("data provider tests", \dataProviderTest());
         addTestCase("connection tests", \connectionTest());
         addTestCase("poll tests", \pollTest());
+        addTestCase("login tests", \loginTest());
+        addTestCase("refresh token tests", \refreshTokenTest());
+        addTestCase("concurrent token tests", \concurrentTokenTest());
+        addTestCase("local connection tests", \localConnectionTest());
+        addTestCase("sync client conversion tests", \syncClientConversionTest());
 
         try {
             setupConnection();
@@ -131,6 +266,287 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
+    }
+
+    #! Starts a local Haltian server and returns the handler
+    private FakeHaltianHandler startServer(reference<HttpServer> server, reference<int> port) {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeHaltianHandler handler();
+        server.setHandler("haltian", "", NOTHING, handler);
+        server.setDefaultHandler("haltian", handler);
+        return handler;
+    }
+
+    #! Login and new token acquisition on HTTP 401 responses
+    loginTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        # the client logs in when it is created; the credentials are not sent with Basic authentication
+        EmpathicBuildingRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "pass",
+        });
+        assertEq(1, handler.logins);
+        list<hash<auto>> logins = handler.getRequests("v1/login");
+        assertEq(1, logins.size());
+        assertEq("POST", logins[0].method);
+        assertEq(MimeTypeFormUrlEncoded, logins[0]."content-type");
+        assertEq({"email": "user@example.com", "password": "pass"}, logins[0].args);
+        assertNothing(logins[0].authorization);
+        assertEq("token-1", rest.getToken());
+
+        # the token is sent in requests
+        assertEq(({"id": 239, "name": "Test Org"},), rest.restGet("v1/organizations").body);
+        assertEq("Bearer token-1", handler.getRequests("v1/organizations")[0].authorization);
+
+        # a request rejected with 401 is sent again once after a new login
+        handler.expireToken();
+        assertEq(({"id": 239, "name": "Test Org"},), rest.restGet("v1/organizations").body);
+        assertEq(2, handler.logins);
+        list<hash<auto>> reqs = handler.getRequests("v1/organizations");
+        assertEq(3, reqs.size());
+        assertEq("Bearer token-1", reqs[1].authorization);
+        assertEq("Bearer token-2", reqs[2].authorization);
+        # the refresh API is not used when a username and password are set
+        assertEq(0, handler.refreshes);
+
+        # the credentials can also be given in the URL
+        EmpathicBuildingRestClientIo rest2({
+            "url": "http://user%40example.com:pass@localhost:" + port,
+        });
+        assertEq(3, handler.logins);
+        assertEq("token-3", rest2.getToken());
+        assertEq("http://localhost:" + port, rest2.getUrl());
+
+        # a copy of the client keeps the credentials and the token
+        RestClientIo copy = cast<RestClientIo>(rest2.copyWithUrl("http://localhost:" + port + "/"));
+        assertTrue(copy instanceof EmpathicBuildingRestClientIo);
+        assertEq("token-3", copy.getToken());
+        handler.expireToken();
+        assertEq(({"id": 239, "name": "Test Org"},), copy.restGet("v1/organizations").body);
+        assertEq(4, handler.logins);
+
+        # a client created with skip_login logs in before its first request
+        EmpathicBuildingRestClientIo rest3({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "pass",
+            "skip_login": True,
+        });
+        assertEq(4, handler.logins);
+        assertEq(({"id": 239, "name": "Test Org"},), rest3.restGet("v1/organizations").body);
+        assertEq(5, handler.logins);
+
+        # a failed login is raised with the response
+        try {
+            new EmpathicBuildingRestClientIo({
+                "url": "http://localhost:" + port,
+                "username": "user@example.com",
+                "password": "wrong",
+            });
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(403, ex.arg.status_code);
+            assertEq("invalid credentials", ex.arg.body.error);
+        }
+
+        # without credentials, a 401 response is raised
+        EmpathicBuildingRestClientIo rest4({
+            "url": "http://localhost:" + port,
+            "token": "unknown",
+        });
+        try {
+            rest4.restGet("v1/organizations");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+        }
+    }
+
+    #! New token acquisition with a refresh token
+    refreshTokenTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        # a client with a token and a refresh token does not log in when it is created
+        EmpathicBuildingRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "expired",
+            "refresh_token": "refresh-1",
+        });
+        assertEq(0, handler.logins);
+        assertEq(0, handler.refreshes);
+
+        # the rejected request is sent again with the refreshed token
+        assertEq(({"id": 239, "name": "Test Org"},), rest.restGet("v1/organizations").body);
+        assertEq(1, handler.refreshes);
+        list<hash<auto>> refreshes = handler.getRequests("v1/token");
+        assertEq({"refresh_token": "refresh-1"}, refreshes[0].args);
+        list<hash<auto>> reqs = handler.getRequests("v1/organizations");
+        assertEq(2, reqs.size());
+        assertEq("Bearer expired", reqs[0].authorization);
+        assertEq("Bearer refreshed-1", reqs[1].authorization);
+
+        # a client with only a refresh token acquires a token when it is created
+        EmpathicBuildingRestClientIo rest2({
+            "url": "http://localhost:" + port,
+            "refresh_token": "refresh-1",
+        });
+        assertEq(2, handler.refreshes);
+        assertEq("refreshed-2", rest2.getToken());
+
+        # an invalid refresh token without credentials is raised with the response
+        try {
+            new EmpathicBuildingRestClientIo({
+                "url": "http://localhost:" + port,
+                "refresh_token": "invalid",
+            });
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+        }
+    }
+
+    #! Concurrent requests rejected with 401 share the new token
+    concurrentTokenTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        EmpathicBuildingRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "pass",
+        });
+        assertEq(1, handler.logins);
+
+        handler.expireToken();
+        handler.wait_for = 4;
+        Counter done(4);
+        Queue results();
+        for (int i = 0; i < 4; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    results.push(rest.restGet("v1/organizations").body);
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(ex);
+                }
+            }();
+        }
+        done.waitForZero();
+        for (int i = 0; i < 4; ++i) {
+            assertEq(({"id": 239, "name": "Test Org"},), results.get());
+        }
+        # the token is replaced at least once and at most once for each rejected request
+        assertTrue(handler.logins >= 2 && handler.logins <= 5, sprintf("logins: %d", handler.logins));
+        # every retried request was accepted with a token issued by a login
+        list<hash<auto>> reqs = handler.getRequests("v1/organizations");
+        assertEq(8, reqs.size());
+        assertEq(4, (select reqs, $1.authorization =~ /^Bearer token-[2-5]$/).size());
+    }
+
+    #! Connection, data provider, and ping with a local server
+    localConnectionTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        EmpathicBuildingRestConnection conn({
+            "name": "eb-local",
+            "desc": "eb-local",
+            "url": "ebrests://localhost:" + port,
+            "opts": {
+                "username": "user@example.com",
+                "password": "pass",
+            },
+        });
+        # the connection URL uses the https scheme; a copy of the options for the local http server is used
+        hash<auto> opts = conn.getConnectionOptions() + {"url": "http://localhost:" + port};
+        EmpathicBuildingRestClientIo rest(opts);
+        assertEq(1, handler.logins);
+
+        EmpathicBuildingDataProvider prov(rest);
+        assertTrue(prov.getRestClient() == rest);
+        AbstractDataProvider orgs = prov.getChildProvider("organizations");
+        assertEq(("239",), orgs.getChildProviderNames());
+        assertEq("Bearer token-1", handler.getRequests("v1/organizations")[0].authorization);
+
+        # the child providers make requests with the same client, which logs in again on a 401 response
+        handler.expireToken();
+        AbstractDataProvider create = prov.getChildProviderPath("measurements/create");
+        hash<auto> result = create.doRequest(({
+            "type": "reservation",
+            "vendor_id": "9977",
+            "name": "room-1",
+            "events": ({
+                "start": 2023-11-29T15:00:00,
+                "end": 2023-11-29T16:00:00,
+                "subject": "Booking",
+            },),
+        },));
+        assertEq({"room-1": 1}, result);
+        assertEq(2, handler.logins);
+        assertEq("Bearer token-2", handler.getRequests("v2/measurements").last().authorization);
+
+        # the connection returns the async client
+        object async_rest = conn.getAsync(False);
+        assertTrue(async_rest instanceof EmpathicBuildingRestClientIo);
+        # no login is made when not connecting
+        assertEq(2, handler.logins);
+    }
+
+    #! Synchronous clients passed to the data provider are converted
+    syncClientConversionTest() {
+        HttpServer server;
+        int port;
+        FakeHaltianHandler handler = startServer(\server, \port);
+        on_exit server.stop();
+
+        # a synchronous Haltian client is converted to an async one with the same credentials
+        EmpathicBuildingRestClient sync_rest({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "pass",
+        }, True);
+        EmpathicBuildingDataProvider prov(sync_rest);
+        assertTrue(prov.getRestClient() instanceof EmpathicBuildingRestClientIo);
+        int logins = handler.logins;
+        assertEq(("239",), prov.getChildProvider("organizations").getChildProviderNames());
+        assertEq(logins, handler.logins);
+        assertEq("Bearer " + handler.valid_token, handler.getRequests("v1/organizations")[0].authorization);
+
+        # a plain synchronous client with a gateway token set as a default header
+        RestClient plain({"url": "http://localhost:" + port}, True);
+        plain.addDefaultHeaders({"Authorization": "Bearer " + handler.valid_token});
+        # the default URL option is replaced with the URL of the local server
+        EmpathicBuildingDataProvider prov2({"restclient": plain, "url": "http://localhost:" + port});
+        assertTrue(prov2.getRestClient() instanceof RestClientIo);
+        assertFalse(prov2.getRestClient() instanceof EmpathicBuildingRestClientIo);
+        assertEq(("239",), prov2.getChildProvider("organizations").getChildProviderNames());
+        assertEq("Bearer " + handler.valid_token, handler.getRequests("v1/organizations").last().authorization);
+
+        # the gateway token option is sent with an async client created from options
+        EmpathicBuildingDataProvider prov3({
+            "url": "http://localhost:" + port,
+            "token": handler.valid_token,
+        });
+        assertEq(("239",), prov3.getChildProvider("organizations").getChildProviderNames());
+        assertEq("Bearer " + handler.valid_token, handler.getRequests("v1/organizations").last().authorization);
     }
 
     private error(string fmt) {

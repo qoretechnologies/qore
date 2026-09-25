@@ -49,7 +49,7 @@ public class WooCommerceBaseEventDataProvider inherits WooCommerceDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest) : WooCommerceDataProviderBase(rest) {
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) : WooCommerceDataProviderBase(rest) {
         webhook_secret = get_random_string(32);
     }
 

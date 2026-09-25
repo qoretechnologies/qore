@@ -42,13 +42,14 @@
 %requires(reexport) Logger
 %requires Mime
 %requires HttpClientIo
+%requires RestClientIo
 %requires HttpClientStreamingIo
 %requires AsyncApi >= 1.0
 
 %requires json
 
 module ServerSentEventClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for handling SSE events on the client side";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -108,7 +109,12 @@ module ServerSentEventClient {
     - @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient": uses the legacy
       @ref Qore::HTTPClient "HTTPClient" for HTTP/1.1 SSE connections
     - @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo": uses
-      @ref HttpClientIo::HttpClientConnectionManager for async I/O across HTTP/1.x, HTTP/2, and HTTP/3
+      <a href="../../RestClientIo/html/index.html">RestClientIo</a> for async I/O across HTTP/1.x, HTTP/2, and
+      HTTP/3
+
+    The @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" data
+    provider receives events with a
+    @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" object.
 
     All the public symbols in the module are defined in the ServerSentEventClient namespace.
 
@@ -130,6 +136,22 @@ sse.observersReady();
     @endcode
 
     @section serversenteventclient_relnotes ServerSentEventClient Release History
+
+    @subsection serversenteventclient_v1_1 Version 1.1
+    - @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" receives
+      events with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"; a synchronous client
+      given in the \c sseclient option is converted, and a new constructor accepts an asynchronous client; the data
+      provider stops the event stream when events are stopped
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" opens the event stream with
+      <a href="../../RestClientIo/html/index.html">RestClientIo</a>: \c connect() raises error responses and
+      responses that are not event streams, the \c connected event is raised when the stream is open, the stream
+      is canceled at once by \c disconnect(), the retry limit is applied to consecutive failed reconnects, and the
+      \c reconnect(), \c isReconnecting(), \c getConnectionInfo(), \c getSafeUrl(), \c getSerialization(),
+      and \c getLastEventId() methods were added
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added \c ServerSentEventClient::getConstructorOptions()
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection serversenteventclient_v1_0 Version 1.0
     - the initial version of the ServerSentEventClient module

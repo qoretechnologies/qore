@@ -44,11 +44,30 @@ public class ServerSentEventClientDataProvider inherits ServerSentEventClientDat
     constructor(*hash<auto> options) : ServerSentEventClientDataProviderBase(options) {
     }
 
+    #! Creates the object with the client used to receive events
+    /** @param client the client used to receive events; it is deleted with this object
+        @param logger an optional logger
+
+        @since ServerSentEventClient 1.1
+    */
+    constructor(ServerSentEventClientIo client, *Logger::LoggerInterface logger)
+            : ServerSentEventClientDataProviderBase(client, logger) {
+    }
+
     #! Creates the object from constructor + template options
     constructor(hash<auto> template_options, *hash<auto> options)
             : ServerSentEventClientDataProviderBase(
                 ServerSentEventClientDataProviderBase::getOptionsFromTemplate(template_options, options)
             ) {
+    }
+
+    #! Called to stop generating events
+    /** Disconnects the event stream and stops the event thread of the client
+
+        @since ServerSentEventClient 1.1
+    */
+    stopEvents() {
+        ServerSentEventClientDataProviderBase::stopEvents();
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {
