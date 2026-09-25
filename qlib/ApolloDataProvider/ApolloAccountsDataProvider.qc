@@ -80,7 +80,7 @@ public class ApolloAccountsDataProvider inherits ApolloDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) : ApolloDataProviderBase(rest) {
     }
 
     #! Returns the provider name

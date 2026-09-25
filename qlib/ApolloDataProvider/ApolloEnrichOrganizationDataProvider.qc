@@ -63,7 +63,7 @@ public class ApolloEnrichOrganizationDataProvider inherits ApolloDataProviderBas
         static *AbstractDataProviderType RequestType = new ApolloEnrichOrganizationRequestDataType();
     }
 
-    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) : ApolloDataProviderBase(rest) {
     }
 
     string getName() {
