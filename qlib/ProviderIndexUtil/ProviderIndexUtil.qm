@@ -62,6 +62,16 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - added index build mode
+      (@ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()" and the
+      @ref ProviderIndexUtil::ProviderIndexBuildEnvVar "QORE_PROVIDER_INDEX_BUILD" environment variable), in which
+      the published index is never read, so a process building the index neither loads the provider modules listed
+      in the index it replaces nor holds its metadata in memory
+    - the index is written one app at a time, so the complete serialized index is no longer held in memory while it
+      is written; added
+      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "ProviderIndexUtil::writeDataProviderIndexByApp()"
+    - index files are written deterministically, with apps, actions, and map entries in sorted order
+    - validating the routing index reads the canonical index as binary data, halving the memory used
     - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each
       option's type is described by plain data in \c type_info; reading them never loads the provider modules
       that implement an app, and output types are not indexed

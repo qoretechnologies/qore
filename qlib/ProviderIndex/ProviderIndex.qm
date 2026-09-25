@@ -34,6 +34,10 @@
 %define NoYaml
 %endtry
 
+%try-module process
+%define NoProcess
+%endtry
+
 %requires(reexport) ProviderIndexUtil >= 1.2
 %requires DataProvider >= 3.8
 %requires ConnectionProvider
@@ -59,6 +63,15 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_2 ProviderIndex v1.2
+    - an index can be built with worker processes
+      (@ref ProviderIndex::ProviderIndexCreateOptions::workers "ProviderIndexCreateOptions::workers"): each worker
+      loads a batch of the provider modules and writes the metadata of their apps, and the calling process merges,
+      qualifies, and publishes the index, so the memory used no longer grows with the number of providers, and
+      batches are indexed in parallel; the index written is identical to one built in a single process
+    - an index build never reads the index that it replaces (see
+      @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()")
+    - building an index no longer runs the dynamic type and default value callbacks of action options, which ran
+      without a context and could fail or return context-dependent data
     - each action option's type is published as its complete plain-data description in \c type_info, including
       nested fields, unions, allowed values, and tags, so that reading the index never loads the provider modules
       that define the types

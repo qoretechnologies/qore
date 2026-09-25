@@ -1,0 +1,241 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class ProviderIndexWorkersTest
+
+#! Tests index build mode and index builds with worker processes
+public class ProviderIndexWorkersTest inherits QUnit::Test {
+    private {
+        # registers the provider module in QORE_PROVIDER_INDEX_FIXTURE_MODULE
+        string registration_module = normalize_dir(get_script_dir()) + "/ProviderIndexEnvironmentMapFixture.qm";
+        # registers the "IndexIdentityFixture" app
+        string provider_module = normalize_dir(get_script_dir()) + "/index-identity/IndexIdentityFixture.qm";
+
+        # environment variables changed by the tests and their original values
+        hash<string, auto> saved_env;
+    }
+
+    constructor() : Test("ProviderIndex workers test", "1.0") {
+        addTestCase("build mode never reads the published index", \buildModeTest());
+        addTestCase("a worker build writes the same index as a single-process build", \equivalenceTest());
+        addTestCase("a failed worker publishes nothing", \workerFailureTest());
+        addTestCase("workers that describe an action differently fail the build", \conflictTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules(*bool workers) {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+%ifdef NoProcess
+        if (workers) {
+            testSkip("no process module");
+        }
+%endif
+    }
+
+    #! Sets a process environment variable until restoreEnv() is called; workers inherit it
+    private setEnv(string var, *string value) {
+        if (!saved_env.hasKey(var)) {
+            saved_env{var} = getenv(var);
+        }
+        if (exists value) {
+            setenv(var, value);
+            ENV{var} = value;
+        } else {
+            unsetenv(var);
+            remove ENV{var};
+        }
+    }
+
+    #! Restores the environment variables changed by setEnv()
+    private restoreEnv() {
+        foreach hash<auto> i in (saved_env.pairIterator()) {
+            if (exists i.value) {
+                setenv(i.key, i.value);
+                ENV{i.key} = i.value;
+            } else {
+                unsetenv(i.key);
+                remove ENV{i.key};
+            }
+        }
+        saved_env = {};
+    }
+
+    #! Returns the options of a build that indexes only the providers registered by QORE_DATA_PROVIDERS
+    private hash<ProviderIndexCreateOptions> getOptions(int workers) {
+        return <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_typescript_actions": False,
+            "workers": workers,
+        };
+    }
+
+    #! Returns the contents of all index files in the given directory
+    private hash<string, binary> readIndexFiles(string dir) {
+        hash<string, binary> rv = {};
+        Dir d();
+        d.chdir(dir);
+        foreach string file in (d.listFiles()) {
+            rv{file} = ReadOnlyFile::readBinaryFile(dir + DirSep + file);
+        }
+        return rv;
+    }
+
+    buildModeTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        # the variable is read from the environment of the ProviderIndexUtil module
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {"QoreTestBuildModeApp": {"QoreTestMissingBuildModeModule": True}},
+            "schememap": {},
+            "appinfomap": {"QoreTestBuildModeApp": {"name": "QoreTestBuildModeApp"}},
+            "actioninfomap": {},
+        }, 0s, {});
+
+        assertFalse(ProviderIndexUtil::inBuildMode());
+        assertFalse(ProviderIndexUtil::setBuildMode(True), "the previous mode is returned");
+        on_exit ProviderIndexUtil::setBuildMode(False);
+        assertTrue(ProviderIndexUtil::inBuildMode());
+        assertNothing(ProviderIndexUtil::tryGetAppInfo("QoreTestBuildModeApp"), "the index is not read");
+        assertEq(False, ProviderIndexUtil::checkAppModule("QoreTestBuildModeApp"),
+            "no module is loaded from the index");
+
+        # leaving build mode makes the next lookup read the published index
+        assertTrue(ProviderIndexUtil::setBuildMode(False));
+        assertEq("QoreTestBuildModeApp", ProviderIndexUtil::tryGetAppInfo("QoreTestBuildModeApp").name);
+    }
+
+    equivalenceTest() {
+        checkModules(True);
+
+        string single_dir = make_tmp_dir();
+        on_exit remove_tree(single_dir);
+        string worker_dir = make_tmp_dir();
+        on_exit remove_tree(worker_dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", registration_module);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
+
+        hash<auto> worker_info = ProviderIndex::createDataProviderIndex(NOTHING, worker_dir, getOptions(2));
+        assertTrue(worker_info.summary.qualification.complete);
+        assertEq(1, worker_info.summary.workers.size(), "one worker for the environment module");
+        assertEq(0, worker_info.summary.workers[0].exit_code);
+        assertTrue(inlist("IndexIdentityFixture", worker_info.summary.qualification.apps));
+        assertEq(("IndexIdentityFixture",), keys ProviderIndexUtil::readDataProviderIndex().appmap."IndexIdentityFixture");
+
+        # no staging files are left in the index directory
+        assertEq((), (map $1, readIndexFiles(worker_dir).keyIterator(), $1 =~ /^\./) ?? ());
+
+        ProviderIndex::createDataProviderIndex(NOTHING, single_dir, getOptions(0));
+        assertEq(readIndexFiles(single_dir), readIndexFiles(worker_dir), "the index files are identical");
+    }
+
+    workerFailureTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", registration_module);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
+        ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(1));
+        hash<string, binary> published = readIndexFiles(dir);
+
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", "QoreTestMissingProviderIndexWorkerModule");
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(1));
+            fail("a build with a failed module must not be published");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            assertFalse(ex.arg.complete);
+            assertTrue((select ex.arg.failures, $1.module_context == "QoreTestMissingProviderIndexWorkerModule")
+                .size() > 0, "the worker's failure is reported");
+        }
+        assertEq(published, readIndexFiles(dir), "the published index is untouched");
+    }
+
+    conflictTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+        # two provider modules, loaded by different workers, register the same action with different descriptions
+        list<string> registration = ();
+        File f();
+        foreach string name in (("A", "B")) {
+            string provider = sprintf("%s/ProviderIndexConflictFixture%s.qm", dir, name);
+            f.open2(provider, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(sprintf("%%modern
+%%requires DataProvider
+module ProviderIndexConflictFixture%s {
+    version = \"1.0\"; desc = \"conflict fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            \"name\": \"QoreTestConflictApp\", \"display_name\": \"Conflict\", \"short_desc\": \"Conflict\",
+            \"desc\": \"Conflict\", \"groups\": (AppGroup::DataTransformation,), \"logo\": \"x\",
+            \"logo_mime_type\": \"image/svg+xml\", \"logo_file_name\": \"x.svg\",
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            \"app\": \"QoreTestConflictApp\", \"action\": \"record\", \"path\": \"/record\",
+            \"display_name\": \"Record\", \"short_desc\": \"Record\", \"desc\": \"Record %s\",
+            \"action_code\": DPAT_API,
+        });
+    };
+}
+", name, name));
+
+            string path = sprintf("%s/ProviderIndexConflictRegistration%s.qm", dir, name);
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(sprintf("%%modern
+module ProviderIndexConflictRegistration%s {
+    version = \"1.0\"; desc = \"conflict fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+}
+public hash<string, string> sub get_data_provider_map() {
+    return {\"conflict\": %y};
+}
+", name, provider));
+            registration += path;
+        }
+        f.close();
+
+        string index_dir = dir + "/index";
+        setEnv("QORE_DATA_PROVIDERS", registration.join(PathSep));
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, index_dir, getOptions(2));
+            fail("conflicting workers must not be published");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            list<hash<auto>> conflicts = select ex.arg.failures, $1.error == "PROVIDER-INDEX-WORKER-CONFLICT";
+            assertEq(1, conflicts.size());
+            assertEq("QoreTestConflictApp/record", conflicts[0].identity);
+        }
+        assertFalse(is_file(index_dir + "/qore-data-index.yaml"), "no index is published");
+    }
+}

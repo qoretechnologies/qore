@@ -27,6 +27,15 @@ public namespace ProviderIndexUtil {
 #! The environment variable for the provider index
 public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 
+#! The environment variable that starts a process in index build mode
+/** If set to a true value (ex: \c 1 or \c true), the process starts in index build mode, as if
+    @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode(True)" had been called
+    before any provider module was loaded
+
+    @since ProviderIndexUtil 1.2
+*/
+public const ProviderIndexBuildEnvVar = "QORE_PROVIDER_INDEX_BUILD";
+
 const RoutingIndexVersion = 2;
 #! Version 3 compresses each app chunk with zlib
 const MetadataCacheVersion = 3;
@@ -202,6 +211,88 @@ public class ProviderIndexUtil {
             it is not set when no index has been created yet
         */
         static *string index_read_error;
+
+        #! Index build mode flag; while set, the published index is never read
+        static bool build_mode = parse_boolean(ENV{ProviderIndexBuildEnvVar});
+    }
+
+    #! Enters or leaves index build mode
+    /** A process building the data provider index loads every provider it indexes, so it never needs the published
+        index; reading it would only load the provider modules it lists and hold its metadata in memory while the
+        index that replaces it is built.  In build mode, lookups behave as if no index had been published: app,
+        factory, and scheme lookups load no modules from the index, and no cached app or action metadata is read
+        from it.
+
+        The in-memory index state is discarded whenever the mode changes, so that entering build mode releases any
+        index already read, and leaving it lets the next lookup read the index that has just been published.
+
+        @param build @ref True to enter build mode, @ref False to leave it
+
+        @return the previous mode
+
+        @par Example:
+        @code{.py}
+bool build_mode = ProviderIndexUtil::setBuildMode(True);
+on_exit ProviderIndexUtil::setBuildMode(build_mode);
+        @endcode
+
+        @note @ref ProviderIndex::ProviderIndex::createDataProviderIndex() "ProviderIndex::createDataProviderIndex()"
+        enters build mode itself; an embedder that loads provider modules before it, or that loads modules whose
+        initialization looks up providers, should enter build mode first, or set the @ref ProviderIndexBuildEnvVar
+        environment variable for the process
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool setBuildMode(bool build) {
+        m.lock();
+        on_exit m.unlock();
+        bool rv = build_mode;
+        if (build != build_mode) {
+            # do not discard the state while another thread is reading the index into it
+            while (initializing || raw_metadata_loading || metadata_initializing || app_metadata_initializing
+                    || action_metadata_initializing) {
+                if (initializing_tid == gettid() || raw_metadata_loading_tid == gettid()
+                        || metadata_initializing_tid == gettid()) {
+                    throw "PROVIDER-INDEX-ERROR", "cannot change the index build mode while the data provider "
+                        "index is being read in the same thread";
+                }
+                if (initializing) {
+                    init_cond.wait(m);
+                } else {
+                    metadata_init_cond.wait(m);
+                }
+            }
+            build_mode = build;
+            resetIndexState();
+        }
+        return rv;
+    }
+
+    #! Returns @ref True if the process is in index build mode
+    /** @return @ref True if the process is in index build mode, in which case the published index is never read
+
+        @see setBuildMode()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool inBuildMode() {
+        return build_mode;
+    }
+
+    #! Discards the in-memory index state; the next lookup initializes it again; must be called with the lock held
+    static private resetIndexState() {
+        remove index;
+        initialized = False;
+        raw_appinfomap = {};
+        raw_actioninfomap = {};
+        app_metadata_initialized = {};
+        action_metadata_initialized = {};
+        raw_metadata_deferred = False;
+        raw_metadata_app_loaded = {};
+        remove metadata_cache_sha256;
+        remove metadata_cache_manifest;
+        metadata_cache_manifest_checked = False;
+        apps_loaded = False;
     }
 
     #! Returns any error encountered while reading the canonical data provider index
@@ -560,6 +651,7 @@ public class ProviderIndexUtil {
             return;
         }
 
+        bool build;
         {
             m.lock();
             on_exit m.unlock();
@@ -581,11 +673,15 @@ public class ProviderIndexUtil {
             initializing = True;
             initializing_tid = gettid();
             index = createEmptyDataProviderIndex();
+            build = build_mode;
         }
 
         *hash<DataProviderIndexInfo> new_index;
         try {
-            new_index = readInitialDataProviderIndex();
+            # a process building the index never reads the index it replaces
+            if (!build) {
+                new_index = readInitialDataProviderIndex();
+            }
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -935,54 +1031,268 @@ public class ProviderIndexUtil {
     }
 
     #! Writes the data provider index to the configured directory
+    /** @param h the index
+        @param delta the time taken to create the index
+        @param summary summary information about the index
+
+        @return information about the written index
+
+        @note The index is written one app at a time, so the complete serialized index is never held in memory
+
+        @see writeDataProviderIndexByApp()
+    */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
             hash<auto> summary) {
+        *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
+        hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
+        return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
+            return actioninfomap{app};
+        }, delta, summary);
+    }
+
+    #! Writes the data provider index, retrieving the actions of each app only while that app is written
+    /** The canonical index, the app-sharded metadata cache, and the routing index are written in one pass over the
+        apps, so that only one app's actions are held in memory at a time; apps and map entries are written in
+        sorted order, so the same index is always written identically
+
+        @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index
+        @param action_apps the apps that have actions
+        @param get_app_actions returns the actions of the given app, keyed by action name, in the serialized form
+        stored in the index
+        @param delta the time taken to create the index
+        @param summary summary information about the index
+
+        @return information about the written index
+
+        @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or YAML support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps, *list<string> action_apps,
+            code get_app_actions, date delta, hash<auto> summary) {
+%ifdef NoYaml
+        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot write the data provider index";
+%else
         # verify that the target directory can be written to before writing anything
         getWritableIndexDir();
-        hash<ProviderIndexInfo> info = writeIndex(h, "data", delta, summary);
+
+        foreach string key in (("factorymap", "appmap", "schememap")) {
+            if (exists maps{key}) {
+                maps{key} = sortIndexMap(maps{key}, True);
+            }
+        }
+
+        hash<string, bool> app_set = (map {$1: True}, keys maps.appinfomap) ?? {};
+        map app_set{$1} = True, action_apps;
+        hash<string, bool> action_app_set = (map {$1: True}, action_apps) ?? {};
+
+        string path = getIndexPath("data");
+        int size = 0;
+        # metadata cache chunks; the optional cache is not written if any chunk cannot be written
+        hash<string, DataProviderMetadataCacheChunkInfo> chunks = {};
+%ifdef NoMsgPack
+        bool write_cache = False;
+%else
+        bool write_cache = True;
+%endif
+
+        string tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
+        on_error {
+            try {
+                unlink(tmp_path);
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore errors removing the temporary file; the original error must be propagated
+            }
+        }
+        {
+            File f();
+            f.open2(path: tmp_path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: IndexFileMode);
+            code write = sub (string str) {
+                f.write(str);
+                size += str.size();
+            };
+
+            # every map is written, even if empty, so that the same index is always written identically
+            foreach string key in (("factorymap", "appmap", "schememap", "appinfomap")) {
+                write(make_yaml({key: (key == "appinfomap" ? sortIndexMap(maps{key}, False) : maps{key}) ?? {}},
+                    BlockStyle));
+            }
+
+            bool actions_written;
+            foreach string app in (sort(keys app_set)) {
+                *hash<auto> actions;
+                if (action_app_set{app}) {
+                    actions = sortIndexMap(get_app_actions(app), False);
+                }
+                if (exists actions) {
+                    if (!actions_written) {
+                        write("actioninfomap:\n");
+                        actions_written = True;
+                    }
+                    # each app's entry is indented under the top-level key; strings are written in quoted flow
+                    # style, so indenting every line leaves their values unchanged
+                    string yaml = make_yaml({app: actions}, BlockStyle);
+                    write("  " + replace(yaml.substr(0, -1), "\n", "\n  ") + "\n");
+                }
+%ifndef NoMsgPack
+                if (write_cache) {
+                    try {
+                        binary data = packMetadataCacheChunk(app, maps.appinfomap{app}, actions);
+                        writeFileAtomic(getMetadataCacheChunkPath(app), data);
+                        chunks{app} = <DataProviderMetadataCacheChunkInfo>{
+                            "size": data.size(),
+                            "sha256": digest("sha256", data).toHex(),
+                        };
+                    } catch (hash<ExceptionInfo> ex) {
+                        log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                            get_exception_string(ex));
+                        write_cache = False;
+                    }
+                }
+%endif
+            }
+            if (!actions_written && action_apps) {
+                write("actioninfomap: {}\n");
+            }
+            # ensure that the data is on disk before the file is renamed over the target
+            f.sync();
+        }
+        rename(tmp_path, path);
+
+        hash<ProviderIndexInfo> info = <ProviderIndexInfo>{
+            "path": path,
+            "size": size,
+            "delta": delta,
+            "summary": summary,
+        };
+
         *string cache_sha256;
-        try {
-            cache_sha256 = writeMetadataDataProviderIndex(h);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
-                get_exception_string(ex));
+        if (write_cache) {
+            try {
+                cache_sha256 = writeMetadataCacheManifest(chunks);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                    get_exception_string(ex));
+            }
         }
         try {
-            writeRoutingDataProviderIndex(h, digest("sha256", File::readTextFile(info.path)).toHex(), cache_sha256);
+            # the file is read as binary data, since converting it to a string would double the memory used
+            writeRoutingDataProviderIndex(maps, digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex(),
+                cache_sha256);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
                 get_exception_string(ex));
         }
         return info;
+%endif
     }
 
-    #! Writes the app-sharded MessagePack metadata cache when MessagePack support is available
-    static private *string writeMetadataDataProviderIndex(*hash<DataProviderIndexInfo> h) {
-%ifdef NoMsgPack
-        return;
-%else
-        hash<string, bool> apps = map {$1: True}, keys (h.appinfomap ?? {});
-        map apps{$1} = True, keys (h.actioninfomap ?? {});
-
-        hash<string, DataProviderMetadataCacheChunkInfo> chunks;
-        foreach string app in (keys apps) {
-            hash<DataProviderIndexInfo> app_index = createEmptyDataProviderIndex();
-            if (exists h.appinfomap{app}) {
-                app_index.appinfomap{app} = h.appinfomap{app};
-            }
-            if (exists h.actioninfomap{app}) {
-                app_index.actioninfomap{app} = h.actioninfomap{app};
-            }
-
-            # type descriptions repeat many keys and values, so chunks compress by about 10 times
-            binary data = compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
-            writeFileAtomic(getMetadataCacheChunkPath(app), data);
-            chunks{app} = <DataProviderMetadataCacheChunkInfo>{
-                "size": data.size(),
-                "sha256": digest("sha256", data).toHex(),
-            };
+    #! Returns the given index map with its keys sorted
+    /** @param h the map
+        @param sort_values if @ref True, the keys of hash values are sorted too
+    */
+    static private *hash<auto> sortIndexMap(*hash<auto> h, bool sort_values) {
+        if (!h) {
+            return h;
         }
+        hash<auto> rv = {};
+        foreach string key in (sort(keys h)) {
+            auto value = h{key};
+            if (sort_values && value.typeCode() == NT_HASH) {
+                value = map {$1: value{$1}}, sort(keys value);
+            }
+            rv{key} = value;
+        }
+        return rv;
+    }
 
+    #! Packs one app's metadata into a metadata cache chunk
+    /** @param app the app name
+        @param app_info the app's serialized info, if any
+        @param actions the app's serialized actions, if any
+
+        @return the compressed chunk
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private binary packMetadataCacheChunk(string app, *hash<auto> app_info, *hash<auto> actions) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
+        hash<DataProviderIndexInfo> app_index = createEmptyDataProviderIndex();
+        if (exists app_info) {
+            app_index.appinfomap{app} = app_info;
+        }
+        if (exists actions) {
+            app_index.actioninfomap{app} = actions;
+        }
+        # type descriptions repeat many keys and values, so chunks compress by about 10 times
+        return compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
+%endif
+    }
+
+    #! Unpacks a metadata cache chunk
+    /** @param data the compressed chunk
+
+        @return the chunk's index, with the app's info and actions
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private hash<DataProviderIndexInfo> unpackMetadataCacheChunk(binary data) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
+%else
+        return cast<hash<DataProviderIndexInfo>>(msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE));
+%endif
+    }
+
+    #! Serializes plain data exactly, preserving Qore types
+    /** @param value the value to serialize
+
+        @return the serialized value
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private binary packIndexData(auto value) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
+        return msgpack_pack(value, MSGPACK_QORE_MODE);
+%endif
+    }
+
+    #! Deserializes data serialized with packIndexData()
+    /** @param data the serialized value
+
+        @return the value
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private auto unpackIndexData(binary data) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
+%else
+        return msgpack_unpack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
+    #! Writes the metadata cache manifest and removes the chunks that it does not reference
+    /** @param chunks the chunks written
+
+        @return the SHA-256 digest of the manifest
+    */
+    static private string writeMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
         binary data = msgpack_pack(<DataProviderMetadataCacheManifest>{
             "version": MetadataCacheVersion,
             "apps": chunks,
@@ -1014,8 +1324,8 @@ public class ProviderIndexUtil {
         @note Errors are logged and ignored: failing to remove a stale cache file must never fail an index write,
             because the index itself is already valid at this point.
     */
-    static private removeUnreferencedMetadataCacheChunks(list<string> apps) {
-        hash<string, bool> keep = map {sprintf("qore-data-index-%s.msgpack", digest("sha256", $1).toHex()): True},
+    static private removeUnreferencedMetadataCacheChunks(*list<string> apps) {
+        *hash<string, bool> keep = map {sprintf("qore-data-index-%s.msgpack", digest("sha256", $1).toHex()): True},
             apps;
         *string dir = tryGetIndexDir();
         if (!dir.val()) {
@@ -1058,7 +1368,7 @@ public class ProviderIndexUtil {
     }
 
     #! Writes the compact routing sidecar for a canonical data provider index
-    static private writeRoutingDataProviderIndex(*hash<DataProviderIndexInfo> h, string data_sha256,
+    static private writeRoutingDataProviderIndex(*hash<auto> h, string data_sha256,
             *string cache_sha256) {
         hash<auto> routing = getRoutingIndexPayload(h);
         hash<auto> sidecar = routing + {
@@ -1089,8 +1399,9 @@ public class ProviderIndexUtil {
                 return;
             }
 
-            string data_yaml = File::readTextFile(getIndexPath("data"));
-            if (routing.data_sha256 != digest("sha256", data_yaml).toHex()) {
+            # the canonical index can be large; reading it as binary data does not copy it into a string
+            if (routing.data_sha256
+                    != digest("sha256", ReadOnlyFile::readBinaryFile(getIndexPath("data"))).toHex()) {
                 return;
             }
 
@@ -1240,8 +1551,7 @@ public class ProviderIndexUtil {
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 return;
             }
-            return cast<*hash<DataProviderIndexInfo>>(msgpack_unpack(uncompress_to_binary(data),
-                MSGPACK_QORE_MODE));
+            return unpackMetadataCacheChunk(data);
         } catch (hash<ExceptionInfo> ex) {
             return;
         }

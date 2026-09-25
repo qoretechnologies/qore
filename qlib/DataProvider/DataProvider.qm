@@ -1354,6 +1354,9 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - added @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper", which marks the
+      current thread as reading static metadata, so that fields do not run context-dependent dynamic type, default
+      value, or example value callbacks
     - added @ref DataProvider::DataProviderIndexedActionInfo "DataProviderIndexedActionInfo" and
       @ref DataProvider::IndexedActionOptionInfo "IndexedActionOptionInfo" for actions from the data provider index,
       whose option types are described by plain data; the fields shared with registered actions are in the new
