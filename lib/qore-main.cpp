@@ -41,6 +41,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/qore_stdio.h"
 
 #include <atomic>
 #include <cerrno>
@@ -205,6 +206,8 @@ static bool qore_check_duplicate_libqore() {
 #endif
 
 void qore_init(qore_license_t license, const char* def_charset, bool show_module_errors, int n_qore_library_options) {
+    qore_ensure_standard_fds();
+
     qore_license = license;
     qore_library_options = n_qore_library_options;
 

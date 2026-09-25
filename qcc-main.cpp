@@ -34,6 +34,7 @@
 #include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/qore_stdio.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
@@ -9120,6 +9121,8 @@ static int link_script_objects_to_executable(const std::string& output,
 }
 
 int main(int argc, char** argv) {
+    qore_ensure_standard_fds();
+
     // Parse command-line options
     if (parse_options_cmdline(argc, argv) != 0) {
         return 1;

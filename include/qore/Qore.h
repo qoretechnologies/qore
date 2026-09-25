@@ -217,6 +217,12 @@ DLLEXPORT extern const QoreStringMaker mpfrInfo;
     @param init_options a binary "or" sum of the qore library options
 
     @note The openssl library is also initialized in this function
+    @note Missing standard file descriptors (0, 1, and 2) are opened on the null device before
+    other initialization; existing descriptors and their flags are preserved. Failure to repair a
+    descriptor terminates the process with status 1. Embedders must call this function before other
+    file operations can occupy missing standard descriptors, and must serialize initialization
+    against descriptor changes in other threads or signal handlers. This does not repair descriptors
+    subsequently closed by the application.
     @note This function can only be called once and must be called before any other qore facilities are used
     @note The license value must be QL_LGPL or QL_MIT unless the program using Qore is a GPL program, in which case
     QL_GPL may be used (the default)

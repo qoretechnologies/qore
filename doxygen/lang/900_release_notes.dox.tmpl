@@ -756,6 +756,17 @@ val = "string";      # OK
     <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>.
     @endparblock
 
+    @par Standard Descriptors at Startup
+    @parblock
+    The interpreter, <tt>qcc</tt>, and library initialization now open missing standard file descriptors
+    on the null device before opening other files. A process started with closed stdin, stdout, or
+    stderr can no longer reuse those descriptor numbers for script or data files, preventing output
+    from corrupting unrelated files and avoiding module teardown failures caused by descriptor reuse.
+    Existing standard descriptors and their flags are preserved. Startup exits with status 1 if a
+    missing descriptor cannot be repaired. Embedding applications must initialize Qore before their
+    own file operations can reuse missing standard descriptors.
+    @endparblock
+
     @anchor qore_3_0_0_http_socket_behavior
     @par HTTP and Socket Behavior
     @parblock

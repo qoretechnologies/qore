@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%try-module v8
+%define NoV8
+%endtry
+
+%exec-class StdioStartupTest
+
+class StdioStartupTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    }
+
+    constructor() : Test("Standard descriptors at startup", "1.0") {
+        addTestCase("closed descriptors cannot alias data files", \dataFiles());
+        addTestCase("V8 teardown with closed standard descriptors", \v8Teardown());
+        addTestCase("native initialization and repair failures", \nativeStartup());
+        addTestCase("compiler and AOT executable startup", \aotStartup());
+        set_return_value(main());
+    }
+
+    dataFiles() {
+        if (PlatformOS == "Windows") {
+            testSkip("this test uses POSIX shell descriptor redirection");
+            return;
+        }
+        checkDataFiles(qore_bin, " -b " + shellQuote(get_script_dir() + "/stdio-child.q"));
+    }
+
+    private checkDataFiles(string executable, string options = "") {
+        TmpDir tmp("qore-stdio-");
+        {
+            File f();
+            f.open2(tmp.path + "/input", O_CREAT | O_WRONLY);
+            f.write("input\n");
+        }
+        # The zero mask checks that real redirects survive. Other masks cover every
+        # combination of closed descriptors, including multiple holes in the table.
+        for (int mask = 0; mask < 8; ++mask) {
+            string redirects = sprintf(" <%s >%s 2>%s", shellQuote(tmp.path + "/input"),
+                shellQuote(tmp.path + "/stdout"), shellQuote(tmp.path + "/stderr"));
+            redirects += closedDescriptors(mask);
+            int rc;
+            string output = backquote(sprintf("ulimit -c 0; exec %s%s %s%s", shellQuote(executable),
+                options, shellQuote(tmp.path + "/data"), redirects), \rc);
+            string detail = sprintf("closed descriptor mask %d; shell output: %s", mask, output);
+            assertEq(0, rc, detail);
+            assertEq("data\n" + (mask & 1 ? "" : "input\n"),
+                File::readTextFile(tmp.path + "/data"), detail);
+            assertEq(mask & 2 ? "" : "print\nprintf\nstdout\n",
+                File::readTextFile(tmp.path + "/stdout"), detail);
+            assertEq(mask & 4 ? "" : "stderr\n", File::readTextFile(tmp.path + "/stderr"), detail);
+        }
+    }
+
+    v8Teardown() {
+%ifdef NoV8
+        testSkip("the external v8 module is not installed");
+%else
+        if (PlatformOS == "Windows") {
+            testSkip("this test uses POSIX shell descriptor redirection");
+            return;
+        }
+        foreach int mask in (0, 1, 7) {
+            int rc;
+            string output = backquote(sprintf("ulimit -c 0; exec %s -b %s </dev/null 2>&1%s", shellQuote(qore_bin),
+                shellQuote(get_script_dir() + "/stdio-v8-child.q"), closedDescriptors(mask)), \rc);
+            assertEq(0, rc, sprintf("closed descriptor mask %d; output: %s", mask, output));
+            assertEq(mask & 2 ? "" : "started\n", output);
+        }
+%endif
+    }
+
+    nativeStartup() {
+        string native_bin = ENV.QORE_STDIO_NATIVE_TEST ?? dirname(qore_bin) + "/qore-stdio-startup-test";
+        if (PlatformOS == "Windows" || !is_file(native_bin)) {
+            testSkip("the POSIX native startup test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("exec " + shellQuote(native_bin) + " </dev/null 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("Passed 18 standard-descriptor startup cases\n", output);
+    }
+
+    aotStartup() {
+        string qcc_bin = dirname(qore_bin) + "/qcc";
+        if (PlatformOS == "Windows" || !is_file(qcc_bin)) {
+            testSkip("the POSIX qcc compiler is not available beside the interpreter");
+            return;
+        }
+        TmpDir tmp("qore-stdio-aot-");
+        string executable = tmp.path + "/stdio-child";
+        int rc;
+        # Close compiler stdin and stdout; retain stderr to diagnose compilation failures.
+        string output = backquote(sprintf("ulimit -c 0; exec %s -o %s %s 2>&1 0<&- 1>&-",
+            shellQuote(qcc_bin), shellQuote(executable), shellQuote(get_script_dir() + "/stdio-child.q")), \rc);
+        assertEq(0, rc, output);
+        checkDataFiles(executable);
+    }
+
+    private static string closedDescriptors(int mask) {
+        return (mask & 1 ? " 0<&-" : "") + (mask & 2 ? " 1>&-" : "") + (mask & 4 ? " 2>&-" : "");
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

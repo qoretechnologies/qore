@@ -2701,6 +2701,13 @@ add_executable(qore-native-thread-cleanup-test EXCLUDE_FROM_ALL
 target_include_directories(qore-native-thread-cleanup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-native-thread-cleanup-test PRIVATE libqore Threads::Threads)
+if (UNIX)
+    add_executable(qore-stdio-startup-test
+        examples/test/qore/misc/stdio/stdio-native.cpp)
+    target_include_directories(qore-stdio-startup-test PRIVATE
+        ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(qore-stdio-startup-test PRIVATE libqore)
+endif()
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 

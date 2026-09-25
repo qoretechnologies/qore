@@ -39,6 +39,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_debug_narrowing.h"
+#include "qore/intern/qore_stdio.h"
 
 #include "command-line.h"
 
@@ -1588,6 +1589,8 @@ static char* parse_command_line(unsigned argc, char* argv[]) {
 }
 
 int qore_main_intern(int argc, char* argv[], int other_po) {
+   qore_ensure_standard_fds();
+
    int rc = 0;
 
    if (other_po)
