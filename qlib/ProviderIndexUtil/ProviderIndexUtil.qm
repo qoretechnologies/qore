@@ -78,7 +78,14 @@ module ProviderIndexUtil {
       and @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()",
       which read and verify a published index from its compact routing index and metadata cache instead of the much
       larger canonical index file, and identify it by the digest of its routing index
-    - validating the routing index reads the canonical index as binary data, halving the memory used
+    - the canonical index file, which can be hundreds of megabytes, is no longer read to validate the routing index
+      unless it may have changed since the routing index was written (its size is different, or it is newer than
+      the routing index); it was read in full by every process that used the index; when it is read, it is read as
+      binary data
+    - listing the apps of a published index reads only the metadata cache manifest, which now holds the info of
+      each app, instead of reading the metadata of every app with its actions, which took about 1 GB of memory for
+      a large index; the metadata cache format version is 4, so a cache written by an earlier version is not used
+      until the index is updated
     - added @ref ProviderIndexUtil::ProviderIndexUtil::hasMessagePack() "ProviderIndexUtil::hasMessagePack()",
       which reports if the compact index files can be written and read, and index workers used
     - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each

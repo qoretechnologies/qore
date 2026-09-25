@@ -38,7 +38,7 @@ public const ProviderIndexBuildEnvVar = "QORE_PROVIDER_INDEX_BUILD";
 
 const RoutingIndexVersion = 2;
 #! Version 3 compresses each app chunk with zlib
-const MetadataCacheVersion = 3;
+const MetadataCacheVersion = 4;
 
 #! The mode used when creating the provider index directory
 /** @note the execute bit is required, otherwise the directory cannot be traversed, and no index files in it can be
@@ -139,6 +139,9 @@ hashdecl MetadataDeserializeContext {
 hashdecl DataProviderRoutingIndexInfo {
     int version;
     string data_sha256;
+    # the size of the canonical file; while it is unchanged and the file is not newer than the routing index, the
+    # canonical file is not read to verify its digest
+    *int data_size;
     string routing_sha256;
     *int metadata_cache_version;
     *string metadata_cache_sha256;
@@ -151,6 +154,8 @@ hashdecl DataProviderRoutingIndexInfo {
 hashdecl DataProviderMetadataCacheChunkInfo {
     int size;
     string sha256;
+    # the app's serialized info, so that listing the apps never reads the chunks (manifest version 4)
+    *hash<auto> info;
 }
 
 #! Versioned manifest for app-specific metadata cache chunks
@@ -1194,6 +1199,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
                         chunks{app} = <DataProviderMetadataCacheChunkInfo>{
                             "size": data.size(),
                             "sha256": digest("sha256", data).toHex(),
+                            "info": maps.appinfomap{app},
                         };
                     } catch (hash<ExceptionInfo> ex) {
                         log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
@@ -1230,7 +1236,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         try {
             # the file is read as binary data, since converting it to a string would double the memory used
             writeRoutingDataProviderIndex(maps, digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex(),
-                cache_sha256);
+                cache_sha256, hstat(path).size);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
                 get_exception_string(ex));
@@ -1568,12 +1574,15 @@ if (info) {
 
     #! Writes the compact routing sidecar for a canonical data provider index
     static private writeRoutingDataProviderIndex(*hash<auto> h, string data_sha256,
-            *string cache_sha256) {
+            *string cache_sha256, *int data_size) {
         hash<auto> routing = getRoutingIndexPayload(h);
         hash<auto> sidecar = routing + {
             "version": RoutingIndexVersion,
             "data_sha256": data_sha256,
         };
+        if (exists data_size) {
+            sidecar.data_size = data_size;
+        }
         if (cache_sha256) {
             sidecar.metadata_cache_version = MetadataCacheVersion;
             sidecar.metadata_cache_sha256 = cache_sha256;
@@ -1598,10 +1607,20 @@ if (info) {
                 return;
             }
 
-            # the canonical index can be large; reading it as binary data does not copy it into a string
-            if (routing.data_sha256
-                    != digest("sha256", ReadOnlyFile::readBinaryFile(getIndexPath("data"))).toHex()) {
+            # the canonical index can be large (hundreds of megabytes), so its digest is verified only if it may
+            # have changed since the routing index was written, which is always written after it: if its size is
+            # different, or it is newer than the routing index, as when it has been replaced or the files have been
+            # copied; reading it as binary data does not copy it into a string
+            string data_path = getIndexPath("data");
+            *hash<StatInfo> data_stat = hstat(data_path);
+            *hash<StatInfo> routing_stat = hstat(getIndexPath("routing"));
+            if (!data_stat || !routing_stat) {
                 return;
+            }
+            if (routing.data_size != data_stat.size || data_stat.mtime > routing_stat.mtime) {
+                if (routing.data_sha256 != digest("sha256", ReadOnlyFile::readBinaryFile(data_path)).toHex()) {
+                    return;
+                }
             }
 
             if (routing.metadata_cache_version == MetadataCacheVersion
@@ -1637,6 +1656,9 @@ if (info) {
             "version": h.version,
             "data_sha256": h.data_sha256,
         };
+        if (exists h.data_size) {
+            rv.data_size = h.data_size;
+        }
         if (exists h.metadata_cache_version) {
             rv.metadata_cache_version = h.metadata_cache_version;
         }
@@ -1700,6 +1722,12 @@ if (info) {
         }
 
         hash<DataProviderIndexInfo> rv = createEmptyDataProviderIndex();
+        if (!app && !actions) {
+            # the manifest holds the info of every app; the chunks also hold the actions of each app, which take
+            # many times the memory of the app info while they are read
+            rv.appinfomap = map {$1.key: $1.value.info}, manifest.apps.pairIterator(), exists $1.value.info;
+            return rv;
+        }
         list<string> apps = app ? (app,) : keys manifest.apps;
         foreach string chunk_app in (apps) {
             if (!exists manifest.apps{chunk_app}) {
