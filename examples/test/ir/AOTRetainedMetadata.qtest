@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTRetainedMetadataTest
+
+class AOTRetainedMetadataTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string root = realpath(get_script_dir() + "/../../..");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s",
+            libdir, libdir, libdir, root + "/include");
+    }
+
+    constructor() : QUnit::Test("AOTRetainedMetadata", "1.0", \ARGV) {
+        addTestCase("mapped and temporary metadata lifetime", \testMetadata());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+    }
+
+    private string run(string command) {
+        return backquote(env + " " + command + " 2>&1");
+    }
+
+    private checkRetention(string output, bool copied, int compression = 0) {
+        assertTrue(output.find("RETAINED-METADATA-OK") >= 0, "late execution succeeds: " + output);
+        assertTrue(output.find("value=42") >= 0, "late function and closure result: " + output);
+        assertTrue(output.find("[aot-lazy-context] materialized retainedMain()") >= 0,
+            "first function use occurs after registration: " + output);
+        assertTrue(copied
+            ? output =~ /retained=[1-9][0-9]* compression=[0-9]+ borrowed=0/
+            : output =~ /retained=0 compression=[0-9]+ borrowed=[1-9][0-9]*/,
+            copied ? "temporary input is retained by value: " + output
+                : "mapped input has no retained heap copy: " + output);
+        assertTrue(output.find(sprintf("compression=%d borrowed=", compression)) >= 0,
+            "requested compression was exercised: " + output);
+    }
+
+    testMetadata() {
+        TmpDir tmp("qore-retained-metadata-");
+        string body = "
+int sub retainedValue(int value) { return value + 1; }
+int sub retainedClosure(int value) {
+    code<int()> c = int sub () { return value + 1; };
+    return c();
+}
+int sub retainedMain() {
+    printf(\"value=%d\\n\", retainedClosure(retainedValue(40)));
+    return 0;
+}
+";
+        string script = tmp.path + "/metadata.qr";
+        write(script, "%modern\n" + body);
+        string standalone = tmp.path + "/standalone.qr";
+        write(standalone, "%modern\n" + body + "retainedMain();\nprintf(\"RETAINED-METADATA-OK\\n\");\n");
+        string module = tmp.path + "/RetainedMetadata.qm";
+        write(module, "%modern\nmodule RetainedMetadata {\n"
+            "version = \"1.0\"; desc = \"metadata lifetime test\"; author = \"Qore\"; license = \"MIT\";\n}\n"
+            + body + "public int sub runRetained() { return retainedMain(); }\n");
+        string runner = tmp.path + "/module.qr";
+        write(runner, "%modern\n%no-child-restrictions\n"
+            "{ Program first(PO_NEW_STYLE); first.loadModule(\"RetainedMetadata\"); }\n"
+            "Program later(PO_NEW_STYLE); later.loadModule(\"RetainedMetadata\");\n"
+            "later.callFunction(\"runRetained\");\nprintf(\"RETAINED-METADATA-OK\\n\");\n");
+        *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
+        string flags = target ? target[0] : "-ldl";
+        hash<string, int> compressions = {"none": 0, "zlib": 1, "zstd": 2, "sectioned": 3};
+        foreach string mode in ("none", "zlib", "zstd", "sectioned") {
+            string dir = tmp.path + "/" + mode;
+            mkdir(dir);
+            string out;
+            if (mode == "none") {
+                string object = dir + "/metadata.qo";
+                out = run(sprintf("%s -O0 -c -o %s %s", qcc, object, script));
+                assertTrue(is_file(object), "compile host metadata: " + out);
+                string exe = dir + "/host";
+                out = run(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
+                    "aot_retained_metadata_host.cpp %s -L%s -Wl,-rpath,%s -lqore %s -o %s",
+                    ENV.CXX ?? "c++", root, libdir, root, object, libdir, libdir, flags, exe));
+                assertTrue(is_file(exe), "link host: " + out);
+                foreach string storage in ("borrow", "copy") {
+                    foreach string batch in ("immediate", "batch") {
+                        checkRetention(run(sprintf("QORE_AOT_TRACE_RETAINED_METADATA=1 "
+                            "QORE_AOT_LAZY_CONTEXT_TRACE=1 %s %s %s", exe, storage, batch)), storage == "copy");
+                    }
+                }
+            }
+            string qmod = dir + "/RetainedMetadata.qmod";
+            out = run(sprintf("%s -O0 --aot-metadata-compression=%s -m -o %s %s", qcc, mode, qmod, module));
+            assertTrue(is_file(qmod), "compile module " + mode + ": " + out);
+            checkRetention(run(sprintf("QORE_MODULE_DIR=%s:$QORE_MODULE_DIR "
+                "QORE_AOT_TRACE_RETAINED_METADATA=1 QORE_AOT_LAZY_CONTEXT_TRACE=1 %s %s",
+                dir, qore_bin, runner)), False, compressions{mode});
+            string executable = dir + "/standalone";
+            out = run(sprintf("%s -O0 --aot-metadata-compression=%s -o %s %s",
+                qcc, mode, executable, standalone));
+            assertTrue(is_file(executable), "compile executable " + mode + ": " + out);
+            checkRetention(run(sprintf("QORE_AOT_TRACE_RETAINED_METADATA=1 "
+                "QORE_AOT_LAZY_CONTEXT_TRACE=1 %s", executable)), False, compressions{mode});
+        }
+    }
+}
