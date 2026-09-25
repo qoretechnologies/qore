@@ -42,16 +42,17 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
         const ConstructorOptions = {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
-                "short_desc": "The DiscordRestClient to use for the connection",
-                "type": AbstractDataProviderType::get(new Type("DiscordRestClient")),
-                "desc": "The `DiscordRestClient` object to use for the connection",
+                "short_desc": "The DiscordRestClientIo to use for the connection",
+                "type": AbstractDataProviderType::get(new Type("RestClient::AbstractRestClient")),
+                "desc": "The `DiscordRestClientIo` object to use for the connection; a synchronous "
+                    "`DiscordRestClient` is also accepted, and a `DiscordRestClientIo` is created with its options",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
-                "short_desc": "Options for the DiscordRestClient constructor",
+                "short_desc": "Options for the DiscordRestClientIo constructor",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "desc": "Options to the DiscordRestClient constructor; only used if a DiscordRestClient object is "
-                    "created for a call",
+                "desc": "Options to the `DiscordRestClientIo` constructor; only used if a `DiscordRestClientIo` "
+                    "object is created for a call",
             },
             "oauth2_client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",
@@ -96,10 +97,19 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        rest = DiscordDataProvider::getRestConnection(copts);
+        rest = DiscordDataProvider::getAsyncRestConnection(copts);
+    }
+
+    #! Creates the object from a DiscordRestClientIo
+    /** @since DiscordDataProvider 2.1
+    */
+    constructor(DiscordRestClientIo rest) : DiscordDataProviderBase(rest) {
     }
 
     #! Creates the object from a DiscordRestClient
+    /** API calls are made with a @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo" created with the
+        options and the connection path of \a rest
+    */
     constructor(DiscordRestClient rest) : DiscordDataProviderBase(rest) {
     }
 
@@ -115,36 +125,77 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
         dynamic_children{name} = generator;
     }
 
+    #! Returns a DiscordRestClientIo for API calls from the options
+    /** @param options the constructor options; if \c restclient is a synchronous
+        @ref DiscordRestClient::DiscordRestClient "DiscordRestClient", a
+        @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo" is created with its options and connection
+        path
+
+        @return the REST client for API calls
+
+        @throw CONSTRUCTOR-ERROR the \c restclient option has an unsupported type, or no authentication information
+        is available
+
+        @since DiscordDataProvider 2.1
+    */
+    static DiscordRestClient::DiscordRestClientIo getAsyncRestConnection(*hash<auto> options) {
+        if (options.restclient) {
+            if (options.restclient instanceof DiscordRestClientIo) {
+                return options.restclient;
+            }
+            if (options.restclient instanceof DiscordRestClient) {
+                return DiscordDataProviderBase::getAsyncClient(options.restclient);
+            }
+            throw "CONSTRUCTOR-ERROR", sprintf("the 'restclient' option must be a DiscordRestClientIo or a "
+                "DiscordRestClient object; got class %y", options.restclient.className());
+        }
+        return new DiscordRestClientIo(DiscordDataProvider::getRestClientOptions(options));
+    }
+
     #! Returns a DiscordRestClient connection from the options
+    /** @deprecated use @ref getAsyncRestConnection(); the data provider makes API calls with a
+        @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
+    */
     static DiscordRestClient::DiscordRestClient getRestConnection(*hash<auto> options) {
         DiscordRestClient rest;
         if (options.restclient) {
+            if (!(options.restclient instanceof DiscordRestClient)) {
+                throw "CONSTRUCTOR-ERROR", sprintf("the 'restclient' option must be a DiscordRestClient object; "
+                    "got class %y", options.restclient.className());
+            }
             rest = options.restclient;
         } else {
-            if (!options.oauth2_client_id) {
-                throw "CONSTRUCTOR-ERROR", "no 'restclient' or 'oauth2_client_id' option passed; "
-                    "cannot create REST client to Discord instance without authentication information";
-            }
-            if (!options.oauth2_client_secret) {
-                throw "CONSTRUCTOR-ERROR", "no 'restclient', 'oauth2_client_secret' option passed; "
-                    "cannot create REST client to Discord instance without authentication information";
-            }
-            if (!options.token) {
-                throw "CONSTRUCTOR-ERROR", "no 'restclient', 'token' option passed; "
-                    "cannot create REST client to Discord instance without authentication information";
-            }
-
-            hash<auto> opts;
-            opts += options.restclient_options + options{
-                "oauth2_client_id",
-                "oauth2_client_secret",
-                "token",
-                "oauth2_refresh_token",
-            };
-            rest = new DiscordRestClient(opts);
+            rest = new DiscordRestClient(DiscordDataProvider::getRestClientOptions(options));
         }
         rest.setConnectionPath("/");
         return rest;
+    }
+
+    #! Returns REST client options from the constructor options
+    /** @throw CONSTRUCTOR-ERROR no authentication information is available
+    */
+    private static hash<auto> getRestClientOptions(*hash<auto> options) {
+        if (!options.oauth2_client_id) {
+            throw "CONSTRUCTOR-ERROR", "no 'restclient' or 'oauth2_client_id' option passed; "
+                "cannot create REST client to Discord instance without authentication information";
+        }
+        if (!options.oauth2_client_secret) {
+            throw "CONSTRUCTOR-ERROR", "no 'restclient', 'oauth2_client_secret' option passed; "
+                "cannot create REST client to Discord instance without authentication information";
+        }
+        if (!options.token) {
+            throw "CONSTRUCTOR-ERROR", "no 'restclient', 'token' option passed; "
+                "cannot create REST client to Discord instance without authentication information";
+        }
+
+        hash<auto> opts;
+        opts += options.restclient_options + options{
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "token",
+            "oauth2_refresh_token",
+        };
+        return opts;
     }
 
     #! Returns the data provider name
@@ -154,7 +205,7 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Discord REST API data provider for `%s`", rest.getSafeURL());
+        return sprintf("Discord REST API data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

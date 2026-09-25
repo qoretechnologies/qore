@@ -31,7 +31,7 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
 
     private:internal {
         #! The REST client object for API calls
-        ServiceNowRestClient::ServiceNowRestClient rest;
+        ServiceNowRestClient::ServiceNowRestClientIo rest;
 
         #! current object name
         string name;
@@ -50,7 +50,7 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
         @param where_cond the where clause for the query, if any
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(ServiceNowRestClient::ServiceNowRestClient rest, string name,
+    constructor(ServiceNowRestClient::ServiceNowRestClientIo rest, string name,
             hash<ServiceNowRestRecordInfo> record_info, *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
@@ -59,20 +59,17 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
 
         # make query
         *string query = makeQuery(cast<*hash<DataProviderExpression>>(where_cond), search_options);
-        hash<auto> info;
         try {
             string uri = "table/" + name;
             if (query) {
                 uri += sprintf("?%s", query);
             }
 
-            i = new ListHashIterator(rest.get(uri, NOTHING, \info).body.response.result);
+            i = new ListHashIterator(rest.restGet(uri).body.response.result);
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = {
-                "query": query,
-            } + info{"response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            # the query is added to the exception argument, which includes the response of an error response
+            hash<auto> ex_arg = ex.arg.typeCode() == NT_HASH ? ex.arg : {};
+            throw ex.err, ex.desc, ex_arg + {"query": query};
         }
     }
 

@@ -63,12 +63,12 @@ public class DiscordGuildGetDataProvider inherits DiscordDataProviderBase {
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         checkOptions("CONSTRUCTOR-ERROR", DiscordDataProvider::ConstructorOptions, options);
-        rest = DiscordDataProvider::getRestConnection(options);
+        rest = DiscordDataProvider::getAsyncRestConnection(options);
         guild = getGuild(options.id);
     }
 
     #! Creates the object from a REST connection
-    constructor(DiscordRestClient::DiscordRestClient rest, hash<auto> guild) : DiscordDataProviderBase(rest) {
+    constructor(DiscordRestClient::DiscordRestClientIo rest, hash<auto> guild) : DiscordDataProviderBase(rest) {
         self.guild = guild;
     }
 
@@ -80,7 +80,7 @@ public class DiscordGuildGetDataProvider inherits DiscordDataProviderBase {
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Discord %s data provider for guild `%s` (%y) for `%s`", ProviderInfo.name, guild.id,
-            guild.name, rest.getSafeURL());
+            guild.name, rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response

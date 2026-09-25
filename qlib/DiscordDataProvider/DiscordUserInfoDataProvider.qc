@@ -51,11 +51,11 @@ public class DiscordUserInfoGetDataProvider inherits DiscordDataProviderBase {
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         checkOptions("CONSTRUCTOR-ERROR", DiscordDataProvider::ConstructorOptions, options);
-        rest = DiscordDataProvider::getRestConnection(options);
+        rest = DiscordDataProvider::getAsyncRestConnection(options);
     }
 
     #! Creates the object from a REST connection
-    constructor(DiscordRestClient::DiscordRestClient rest) : DiscordDataProviderBase(rest) {
+    constructor(DiscordRestClient::DiscordRestClientIo rest) : DiscordDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -66,7 +66,7 @@ public class DiscordUserInfoGetDataProvider inherits DiscordDataProviderBase {
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Discord %s data provider for the current user for `%s`", ProviderInfo.name,
-            rest.getSafeURL());
+            rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -76,14 +76,8 @@ public class DiscordUserInfoGetDataProvider inherits DiscordDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> info;
-        try {
-            return doRestCommand("GET", "users/@me", NOTHING, \info).body;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response body
+        return doRestCommand("GET", "users/@me").body;
     }
 
     #! Returns the description of a successful request message, if any

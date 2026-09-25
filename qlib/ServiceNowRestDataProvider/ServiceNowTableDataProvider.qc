@@ -310,7 +310,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
     }
 
     #! Creates the object from the arguments
-    constructor(ServiceNowRestClient rest, string name, hash<auto> access, hash<auto> meta)
+    constructor(ServiceNowRestClientIo rest, string name, hash<auto> access, hash<auto> meta)
             : ServiceNowRestDataProviderBase(rest){
         self.name = name;
         self.access = access;
@@ -373,16 +373,9 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
         duplicate record
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
-        hash<auto> info;
-        # the id is returned in the "id" field in the response
-        hash<auto> resp;
-        try {
-            resp = rest.post(uri_path, rec, \info);
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the id is returned in the "id" field in the response; the exception argument of an error response
+        # includes the response
+        hash<auto> resp = rest.restPost(uri_path, rec);
 
         *string new_key = resp.body.response.result.sys_id;
         if (!new_key) {
@@ -438,32 +431,16 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
     #! updates a single record
     private updateSingleRecord(string id, hash<auto> set) {
         string url = sprintf("%s/%s", uri_path, id);
-        hash<auto> info;
-        hash<auto> resp;
-        try {
-            resp = rest.patch(url, set, \info);
-            # the actual values set on the server (which might be different from those requested):
-            #     resp.body.response.result{keys set};
-            # current cannot be used, so we ignore the response
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response; the response has the actual values
+        # set on the server (which might be different from those requested) in response.result, which are not used
+        rest.restPatch(url, set);
     }
 
     #! deletes a single record
     private deleteSingleRecord(string id) {
         string url = sprintf("%s/%s", uri_path, id);
-        hash<auto> info;
-        hash<auto> resp;
-        try {
-            resp = rest.del(url, NOTHING, \info);
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response
+        rest.restDel(url, NOTHING);
     }
 
     #! Retrieves the record type

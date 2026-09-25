@@ -7,15 +7,118 @@
 %requires QUnit
 
 %requires DataProvider
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServiceNowRestClient
 %requires ServiceNowRestDataProvider
 
+%try-module xml
+%define NoXml
+%endtry
+
 %exec-class ServiceNowRestDataProviderTest
+
+#! A local ServiceNow server that records requests and returns XML documents, as ServiceNow does
+class FakeServiceNowHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "apikey": hdr."x-sn-apikey",
+        };
+        if (!hdr."x-sn-apikey") {
+            return makeXmlResponse(401, {"response": {
+                "error": {
+                    "message": "User Not Authenticated",
+                    "detail": "Required to provide Auth information",
+                },
+                "status": "failure",
+            }});
+        }
+        return makeXmlResponse(200, {"response": {"result": (
+            {"name": "sys_user", "sys_id": "s2", "read_access": "true", "create_access": "false",
+                "update_access": "false", "delete_access": "false"},
+            {"name": "incident", "sys_id": "s1", "read_access": "true", "create_access": "true",
+                "update_access": "true", "delete_access": "false"},
+        )}});
+    }
+
+    private static hash<HttpResponseInfo> makeXmlResponse(int code, hash<auto> doc) {
+%ifndef NoXml
+        return <HttpResponseInfo>{
+            "code": code,
+            "hdr": {"Content-Type": MimeTypeXmlApp},
+            "body": make_xml(doc),
+        };
+%else
+        throw "NO-XML", "the xml module is not available";
+%endif
+    }
+}
 
 public class ServiceNowRestDataProviderTest inherits QUnit::Test {
     constructor() : Test("ServiceNowRestDataProvider test", "1.0") {
         addTestCase("action data dependent options", \testActionDataDependentOptions());
+        addTestCase("local server", \testLocalServer());
 
         set_return_value(main());
+    }
+
+    testLocalServer() {
+%ifdef NoXml
+        testSkip("the xml module is not available");
+%endif
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeServiceNowHandler handler();
+        server.setHandler("sn", "", NOTHING, handler);
+        server.setDefaultHandler("sn", handler);
+        string url = "http://localhost:" + port;
+
+        # the tables are retrieved with the async client, with the API path prefix and the API key header
+        ServiceNowRestDataProvider prov({"url": url, "snrestclient_options": {"apikey": "key-1"}});
+        assertTrue(prov.getRestClient() instanceof ServiceNowRestClientIo);
+        assertEq(("incident", "sys_user"), (select prov.getChildProviderEx("tables").getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName));
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertRegex("^api/now/table/sys_db_object\\?", handler.requests[0].path);
+        assertEq("key-1", handler.requests[0].apikey);
+
+        # a synchronous client is converted, with its options and connection path
+        ServiceNowRestClient sync_rest({"url": url, "apikey": "key-2", "api": "v2"}, True);
+        prov = new ServiceNowRestDataProvider(sync_rest);
+        assertEq("/api/v2", prov.getRestClient().getConnectionPath());
+        assertEq("v2", prov.getRestClient().getApi());
+        prov.getChildProviderEx("tables").getChildProviderNames();
+        assertRegex("^api/v2/table/sys_db_object\\?", handler.requests.last().path);
+        assertEq("key-2", handler.requests.last().apikey);
+
+        # a ServiceNow error response raises the ServiceNow error
+        prov = new ServiceNowRestDataProvider({"url": url});
+        try {
+            prov.getChildProviderEx("tables").getChildProviderNames();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SERVICENOW-REST-RESPONSE-ERROR", ex.err);
+            assertEq("User Not Authenticated", ex.desc);
+            assertEq("Required to provide Auth information", ex.arg.detail);
+            assertEq(401, ex.arg.status_code);
+        }
+
+        # the REST client option must be a ServiceNow client
+        assertThrows("CONSTRUCTOR-ERROR", "must be a ServiceNowRestClientIo or a ServiceNowRestClient",
+            sub () { ServiceNowRestDataProvider p({"snrestclient": new RestClientIo({"url": url})}); });
     }
 
     testActionDataDependentOptions() {

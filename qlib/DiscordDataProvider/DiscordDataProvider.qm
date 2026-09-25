@@ -35,7 +35,7 @@
 %requires(reexport) DiscordWebSocketClient
 
 module DiscordDataProvider {
-    version = "2.0";
+    version = "2.1";
     desc = "user module providing a data provider API for Discord messaging services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -137,6 +137,22 @@ module DiscordDataProvider {
     @endverbatim
 
     @section Discorddataprovider_relnotes Release Notes
+
+    @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - API calls are made with an asynchronous @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
+      from the connection's \c getAsync() or created from the options; a synchronous
+      @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider, directly or in the
+      \c restclient option, is converted with
+      @ref DiscordDataProvider::DiscordDataProviderBase::getAsyncClient() "DiscordDataProviderBase::getAsyncClient()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - the child data providers take a @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
+    - added @ref DiscordDataProvider::DiscordDataProvider::getAsyncRestConnection()
+      "DiscordDataProvider::getAsyncRestConnection()" and
+      @ref DiscordDataProvider::DiscordDataProviderBase::getRestClient() "DiscordDataProviderBase::getRestClient()";
+      @ref DiscordDataProvider::DiscordDataProvider::getRestConnection() "DiscordDataProvider::getRestConnection()"
+      is deprecated
+    - error responses are raised with the response in the exception argument, and the rate-limit handling reads
+      the response headers from it
 
     @subsection Discorddataprovider_v1_0 DiscordDataProvider v1.0
     - initial release of the module
