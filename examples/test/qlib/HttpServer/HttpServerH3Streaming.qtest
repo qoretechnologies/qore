@@ -1535,7 +1535,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         for (int i = 0; i < 150; ++i) {
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             stream.startStreaming("POST", "/early", {"Content-Type": "application/octet-stream"}, True);
-            stream.sendData(binary(strmul("X", 1000)));
+            try {
+                stream.sendData(binary(strmul("X", 1000)));
+            } catch (hash<ExceptionInfo> ex) {
+                # the server may already have answered and stopped reading the stream (RFC 9114 section 4.1.2);
+                # the response is still delivered
+                assertEq("HTTPCLIENT-STREAM-CLOSED", ex.err, sprintf("request %d: %s: %s", i, ex.err, ex.desc));
+            }
             while (True) {
                 auto data = stream.readData(10s);
                 if (!exists data) {

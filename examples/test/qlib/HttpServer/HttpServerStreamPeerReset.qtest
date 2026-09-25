@@ -85,6 +85,52 @@ class EarlyHandler inherits HttpServer::AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that answers a body-streaming request without reading its body
+#! and reports when the response has been sent.  On HTTP/3, the server stops
+#! reading the request with STOP_SENDING(H3_NO_ERROR) when the handler is done
+#! (RFC 9114 section 4.1.2); the stream can only close, and the response is
+#! only reported as sent, after that, because until then the stream's receive
+#! side is open.
+class SignalingEarlyHandler inherits HttpServer::AbstractHttpRequestHandler {
+    public {
+        Queue sent_queue();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<HttpResponseInfo> rv = HttpServer::AbstractHttpRequestHandler::makeResponse(200, "early",
+            {"Content-Type": MimeTypeText});
+        rv.after_send = sub (hash<auto> cx, bool sent) {
+            sent_queue.push(sent);
+        };
+        return rv;
+    }
+}
+
+#! Handler that answers once the response of a SignalingEarlyHandler has been reported as sent
+/** A client that waits for this response keeps reading the connection, so it processes the STOP_SENDING of the early
+    response and answers it with RESET_STREAM, which lets the server close that stream and report the response as
+    sent; once this response has been received, the client has therefore processed the STOP_SENDING.
+*/
+class WaitForSentHandler inherits HttpServer::AbstractHttpRequestHandler {
+    private {
+        SignalingEarlyHandler early;
+    }
+
+    constructor(SignalingEarlyHandler early) {
+        self.early = early;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        bool sent = early.sent_queue.get(30s);
+        return HttpServer::AbstractHttpRequestHandler::makeResponse(200, sent ? "sent" : "not sent",
+            {"Content-Type": MimeTypeText});
+    }
+}
+
 #! Handler that answers a plain request.
 class OkHandler inherits HttpServer::AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -215,6 +261,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H2 peer-reset raises typed exception",\testH2PeerResetTyped());
         addTestCase("H3 peer-reset raises typed exception",\testH3PeerResetTyped());
         addTestCase("H2 send after RST_STREAM(NO_ERROR)",  \testH2SendAfterEarlyResponse());
+        addTestCase("H3 send after STOP_SENDING(H3_NO_ERROR)", \testH3SendAfterEarlyResponse());
         set_return_value(main());
     }
 
@@ -236,10 +283,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         DrainHandler drain();
         RejectHandler reject();
         EarlyHandler early();
+        SignalingEarlyHandler signaling_early();
         OkHandler ok();
         server.setHandler("drain", "/drain", NOTHING, drain);
         server.setHandler("reject", "/reject", NOTHING, reject);
         server.setHandler("early", "/early", NOTHING, early);
+        server.setHandler("sent-signal", "/sent-signal", NOTHING, signaling_early);
+        server.setHandler("wait-for-sent", "/wait-for-sent", NOTHING, new WaitForSentHandler(signaling_early));
         server.setHandler("ok", "/ok", NOTHING, ok);
 
         int h2_port = server.addListener(<HttpListenerOptionInfo>{
@@ -262,6 +312,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "server": server,
             "drain": drain,
             "reject": reject,
+            "signaling_early": signaling_early,
             "h2_url": "https://127.0.0.1:" + h2_port,
             "h3_url": h3_port ? ("https://127.0.0.1:" + h3_port) : NOTHING,
         };
@@ -433,6 +484,81 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # the connection is still usable
         HttpClientIo::HttpClientStreamHandle stream3 = mgr.acquireStream(setup.h2_url);
+        hash<auto> resp3 = stream3.request("GET", "/ok");
+        assertEq(200, resp3.status_code);
+        assertEq("ok", resp3.body.typeCode() == NT_BINARY ? resp3.body.toString() : resp3.body);
+    }
+
+    #! The server answers a body-streaming request without reading the body
+    #! and asks the client to stop sending with STOP_SENDING(H3_NO_ERROR)
+    #! (RFC 9114 section 4.1.2).  A half-close by the client after that is a
+    #! no-op, sending data raises HTTPCLIENT-STREAM-CLOSED, and the response is
+    #! intact.
+    testH3SendAfterEarlyResponse() {
+        hash<auto> setup = makeServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+        if (!exists setup.h3_url) {
+            testSkip("h3 not available");
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr("h3");
+        on_exit delete mgr;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(setup.h3_url);
+        int sid = stream.startStreaming("POST", "/sent-signal",
+            {"content-type": "application/octet-stream"}, True);
+
+        # The response is reported as sent only once the server has closed the
+        # stream, which needs the client's RESET_STREAM answering the server's
+        # STOP_SENDING; a client connection reads packets only while it has a
+        # request in progress, so the server answers a second request on the
+        # same connection only once the response has been reported as sent,
+        # and when the client has the second response, it has processed the
+        # STOP_SENDING
+        HttpClientIo::HttpClientStreamHandle stream2 = mgr.acquireStream(setup.h3_url);
+        assertEq(stream.getConnection(), stream2.getConnection(), "second request uses the same connection");
+        hash<auto> resp2 = stream2.request("GET", "/wait-for-sent");
+        assertEq(200, resp2.status_code, sprintf("%y", resp2.body));
+        assertEq("sent", resp2.body.typeCode() == NT_BINARY ? resp2.body.toString() : resp2.body,
+            "the early response was sent");
+        # the handle has not read the response, so its sends reach the session
+        assertEq(HttpClientIo::HttpClientStreamState::Open, stream.getState());
+
+        # sending data raises a classified error at both levels
+        assertThrows("HTTPCLIENT-STREAM-CLOSED", \stream.sendData(), binary("x"));
+        assertThrows("HTTPCLIENT-STREAM-CLOSED", \stream.sendData(), (binary("x"), True));
+        HttpClientIo::Http3ClientConnection conn = cast<HttpClientIo::Http3ClientConnection>(
+            stream.getConnection());
+        assertThrows("QUIC-STREAM-CLOSED", \conn.sendStreamData(), (sid, binary("x")));
+        assertThrows("QUIC-STREAM-CLOSED", \conn.sendStreamData(), (sid, binary(), False));
+        # an empty half-close on a stream the server has stopped reading is a
+        # no-op at the connection level and on the handle
+        conn.sendStreamData(sid, binary(), True);
+        stream.writesDone();
+
+        # a stream ID that was never used is still an unknown stream
+        assertThrows("QUIC-HTTP3-ERROR", \conn.sendStreamData(), (sid + 1000, binary(), True));
+
+        # the response is not discarded (RFC 9114 section 4.1.2)
+        binary body;
+        while (True) {
+            auto chunk = stream.readData();
+            if (chunk.typeCode() == NT_HASH) {
+                if (chunk.end_stream) {
+                    break;
+                }
+                assertNothing(chunk.error);
+                continue;
+            }
+            body += binary(chunk);
+        }
+        assertEq(200, stream.getResponse().status_code);
+        assertEq("early", body.toString());
+        assertEq(HttpClientIo::HttpClientStreamState::Complete, stream.getState());
+
+        # the connection is still usable
+        HttpClientIo::HttpClientStreamHandle stream3 = mgr.acquireStream(setup.h3_url);
         hash<auto> resp3 = stream3.request("GET", "/ok");
         assertEq(200, resp3.status_code);
         assertEq("ok", resp3.body.typeCode() == NT_BINARY ? resp3.body.toString() : resp3.body);

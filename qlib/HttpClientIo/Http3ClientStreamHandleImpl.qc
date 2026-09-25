@@ -360,6 +360,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, stream is
         closed, or stream is not yet established
+        @throw HTTPCLIENT-STREAM-CLOSED if the connection is closed, or if the
+        server has stopped reading the stream or closed it without an error, for
+        example with \c STOP_SENDING(H3_NO_ERROR) after sending its complete
+        response before the request was complete (RFC 9114 section 4.1.2); the
+        response can still be read with @ref readData()
+        @throw QUIC-STREAM-RESET if the server reset the stream with an error
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -407,7 +413,16 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
-        h3conn.sendStreamData(sid, data, end_stream);
+        try {
+            # a half-close on a stream the server has already closed is a no-op in sendStreamData()
+            h3conn.sendStreamData(sid, data, end_stream);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUIC-STREAM-CLOSED") {
+                throw "HTTPCLIENT-STREAM-CLOSED", sprintf("cannot send data: stream %d was closed by the server",
+                    sid);
+            }
+            rethrow;
+        }
     }
 
     #! Closes the write side of a streaming connection

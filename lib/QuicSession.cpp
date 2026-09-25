@@ -2373,28 +2373,27 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
     return 0;
 }
 
+int QuicSession::sendOnClosedStream(int64_t stream_id, size_t len, bool end_stream, ExceptionSink* xsink) {
+    printd(2, "QuicSession::sendStreamData() stream " QLLD " closed for sending without an error: len=%zu "
+        "end_stream=%d\n", stream_id, len, end_stream ? 1 : 0);
+    if (!len && end_stream) {
+        // the send side of the stream is already closed; a half-close has nothing to do
+        return 0;
+    }
+    xsink->raiseException("QUIC-STREAM-CLOSED", "cannot send data on stream %" PRId64 ": the stream is closed",
+        stream_id);
+    return -1;
+}
+
 int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
                                  bool end_stream, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
-    // If the peer asked us to stop sending (STOP_SENDING / RESET_STREAM after
-    // an early error response), surface a typed exception rather than silently
-    // appending to a staging buffer that nghttp3 will discard — this is what
-    // lets producer loops break out of an otherwise infinite send.  Mirrors
-    // Http2Session::sendStreamData()'s state==Closed check.
-    {
-        auto sit = streams_.find(stream_id);
-        if (sit != streams_.end() && sit->second->peer_stop_sending) {
-            xsink->raiseException("QUIC-STREAM-RESET",
-                "stream %" PRId64 " was reset by peer (error code %" PRIu64 ")",
-                stream_id, sit->second->peer_close_error_code);
-            return -1;
-        }
-    }
-    // The streams_ entry may already have been erased (streamCloseCallback runs
-    // after h3ResetStreamCallback and removes the entry).  Check the standalone
-    // peer_reset_streams_ map — if the peer reset this stream, we must still
-    // surface QUIC-STREAM-RESET rather than the generic QUIC-HTTP3-ERROR below.
+    // If the peer reset the stream with an error (RESET_STREAM, or a close carrying an application error code),
+    // surface a typed exception rather than silently appending to a staging buffer that nghttp3 will discard —
+    // this is what lets producer loops break out of an otherwise infinite send.  The standalone
+    // peer_reset_streams_ map outlives the streams_ entry, which streamCloseCallback() erases.  Mirrors
+    // Http2Session::sendStreamData()'s reset check.
     {
         auto pit = peer_reset_streams_.find(stream_id);
         if (pit != peer_reset_streams_.end()) {
@@ -2404,6 +2403,17 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             return -1;
         }
     }
+    // The peer asked us to stop sending (STOP_SENDING) without resetting the stream with an error, as a server
+    // does with H3_NO_ERROR after a complete response to a request it did not read to the end (RFC 9114 section
+    // 4.1.2): the stream is closed for sending, but the response on it is intact.  A reset with an error is
+    // recorded atomically with the STOP_SENDING (both frames are processed in one readPacketLocked() call), so it
+    // is reported by the check above.
+    {
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end() && sit->second->peer_stop_sending) {
+            return sendOnClosedStream(stream_id, len, end_stream, xsink);
+        }
+    }
 
     auto it = streaming_body_data_.find(stream_id);
     if (it == streaming_body_data_.end()) {
@@ -2411,16 +2421,14 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             (long long)getSessionId(), (long long)stream_id);
         printd(1, "QuicSession::sendStreamData() stream_id=" QLLD " NOT FOUND in streaming_body_data_\n",
             stream_id);
-        // If the stream has been closed (by any path — reset or graceful
-        // FIN), surface QUIC-STREAM-RESET so producer loops can distinguish
-        // "peer closed the stream" from an internal logic error.
+        // A stream that closed without an error (a reset with an error is reported above), including one the
+        // peer closed with STOP_SENDING(H3_NO_ERROR) after its complete response, is closed for sending, so
+        // producer loops can distinguish "the stream is closed" from an internal logic error
         if (closed_streams_.count(stream_id) > 0) {
-            xsink->raiseException("QUIC-STREAM-RESET",
-                "stream %" PRId64 " was closed by peer", stream_id);
-        } else {
-            xsink->raiseException("QUIC-HTTP3-ERROR",
-                "no streaming response for stream %" PRId64, stream_id);
+            return sendOnClosedStream(stream_id, len, end_stream, xsink);
         }
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "no streaming response for stream %" PRId64, stream_id);
         return -1;
     }
 
@@ -3032,8 +3040,9 @@ uint64_t QuicSession::getBytesInFlight() const {
     return cinfo.bytes_in_flight;
 }
 
-void QuicSession::cleanupStream(int64_t stream_id) {
+bool QuicSession::cleanupStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
+    bool queued_frame = false;
     auto it = streams_.find(stream_id);
     if (it != streams_.end()) {
         // RFC 9220: active extended-CONNECT tunnels (WebSocket, CONNECT-UDP,
@@ -3058,7 +3067,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             // All of this is reclaimed later via streamCloseCallback /
             // h3EndStreamCallback / session destruction when the peer
             // actually closes the tunnel.
-            return;
+            return false;
         }
         ASYNC_IO_TRACE("QuicSession::cleanupStream ERASE session=%lld stream_id=%lld is_connect=%d connect_tunnel_active=%d\n",
             (long long)getSessionId(), (long long)stream_id,
@@ -3073,6 +3082,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         // opened on the connection.
         if (is_server_ && !isc && !it->second->body_complete && !it->second->body_too_large) {
             stopReadingStreamLocked(stream_id);
+            queued_frame = true;
         }
         bool notify_data = false;
         if (it->second->dispatched) {
@@ -3101,6 +3111,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         connect_stream_frame_states_.erase(stream_id);
         connect_stream_data_.erase(stream_id);
     }
+    return queued_frame;
 }
 
 void QuicSession::stopReadingStreamLocked(int64_t stream_id) {

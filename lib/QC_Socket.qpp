@@ -7892,6 +7892,10 @@ bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
     @return 0 on success, 1 if buffer full (backpressure), -1 on error
 
     @throw QUIC-ERROR if no QUIC session is active
+    @throw QUIC-STREAM-CLOSED if the server stopped reading the stream (STOP_SENDING) or closed it without an error,
+    for example after a complete early response (RFC 9114 section 4.1.2), and data is sent or \a end_stream is not
+    set; an empty send with \a end_stream set on such a stream is a no-op
+    @throw QUIC-STREAM-RESET if the server reset the stream with an error
 
     @since %Qore 3.0
 */

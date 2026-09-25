@@ -436,9 +436,21 @@ public:
         @param end_stream true if this is the last chunk
         @param xsink exception sink
         @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        A stream the peer reset with an error raises \c QUIC-STREAM-RESET.  A stream that the peer stopped reading
+        without an error, such as with STOP_SENDING(H3_NO_ERROR) after a complete early response (RFC 9114 section
+        4.1.2), or that has closed, is closed for sending: an empty send with \c end_stream is a no-op, and any other
+        send raises \c QUIC-STREAM-CLOSED.
     */
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
                        bool end_stream, ExceptionSink* xsink);
+
+    //! Handles a send on a stream that is closed for sending without an error; see sendStreamData()
+    /** Must be called with \c mtx_ held.
+
+        @return 0 for an empty half-close (a no-op), otherwise -1 with \c QUIC-STREAM-CLOSED raised
+    */
+    DLLLOCAL int sendOnClosedStream(int64_t stream_id, size_t len, bool end_stream, ExceptionSink* xsink);
 
     //! Check whether a streaming body buffer has drained below the backpressure threshold
     /** This method is intentionally nonblocking.  Synchronous public APIs use
@@ -576,8 +588,11 @@ public:
     //! Remove a dispatched stream from the session map
     /** Called after the handler has finished processing all body data.
         @param stream_id the HTTP/3 stream ID
+
+        @return true if a frame for the peer was queued (STOP_SENDING for a request that the handler did not read
+        to the end), which is only written once the I/O thread handles the session, so the caller must wake it
     */
-    DLLLOCAL void cleanupStream(int64_t stream_id);
+    DLLLOCAL bool cleanupStream(int64_t stream_id);
 
     //! Stops reading a request stream: the client is asked to stop sending with STOP_SENDING(H3_NO_ERROR) (server)
     /** Used when the server answers a request without reading all of it (RFC 9114 section 4.1.2); the lock must be

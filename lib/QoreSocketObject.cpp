@@ -2069,7 +2069,7 @@ public:
                 break;
 
             case Action::Cleanup:
-                session->cleanupStream(stream_id);
+                cleanup_queued_frame = session->cleanupStream(stream_id);
                 output = 0;
                 break;
 
@@ -2216,6 +2216,8 @@ private:
             case Action::Trailers:
                 return output == 0;
             case Action::Cleanup:
+                // a STOP_SENDING queued by the cleanup is only written when the I/O thread handles the session
+                return cleanup_queued_frame;
             case Action::WatchResponseSend:
             case Action::RegisterConnectQueue:
             case Action::DeregisterConnectQueue:
@@ -2238,6 +2240,8 @@ private:
     Action action;
     int64_t session_id = 0;
     int64_t stream_id = 0;
+    //! true if a Cleanup action queued a frame for the peer (a STOP_SENDING for an unfinished request)
+    bool cleanup_queued_frame = false;
     int status_code = 0;
     std::string method;
     std::string path;

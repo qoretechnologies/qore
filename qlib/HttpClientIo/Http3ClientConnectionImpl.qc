@@ -248,6 +248,10 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         @throw HTTP3-STATE-ERROR if the connection is not ready
         @throw HTTP3-FLOW-CONTROL if the stream buffer does not drain
+        @throw QUIC-STREAM-CLOSED if the server stopped reading the stream or closed it without an error and
+        \a data is not empty or \a end_stream is not set; an empty send with \a end_stream set on such a stream is
+        a no-op
+        @throw QUIC-STREAM-RESET if the server reset the stream with an error
     */
     int sendStreamData(int stream_id, *data data, bool end_stream = False) {
         if (!self.isReady()) {
