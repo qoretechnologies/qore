@@ -15,7 +15,7 @@
 %define NoYaml
 %endtry
 
-%try-module process
+%try-module process >= 2.1
 %define NoProcess
 %endtry
 
@@ -48,7 +48,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
 %endif
 %ifdef NoProcess
         if (workers) {
-            testSkip("no process module");
+            testSkip("no process module 2.1 or later");
         }
 %endif
     }

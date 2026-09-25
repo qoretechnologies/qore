@@ -43,7 +43,9 @@ public hashdecl ProviderIndexCreateOptions {
     *list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected_inventory;
 
     #! The maximum number of worker processes run at the same time; 0 builds the index in the calling process
-    /** With workers, the calling process loads no provider modules: each worker is a new process that loads a
+    /** Worker builds require the \c process module 2.1 or later.
+
+        With workers, the calling process loads no provider modules: each worker is a new process that loads a
         batch of the provider modules, and writes the index metadata of their apps, and the calling process merges
         the results, qualifies them, and publishes the index.  The memory used is then bounded by the largest
         batches rather than growing with the number of providers.
@@ -57,8 +59,9 @@ public hashdecl ProviderIndexCreateOptions {
     #! The command that starts a worker process, followed by its arguments
     /** The path of the worker's batch file is appended as the last argument; the command must pass it to
         @ref ProviderIndex::ProviderIndex::runIndexWorker() "ProviderIndex::runIndexWorker()" and exit with its
-        return value, after loading any modules that the embedding application requires to be present while
-        providers are indexed.
+        return value.  A command that loads modules that the embedding application requires to be present while
+        providers are indexed must first call
+        @ref ProviderIndex::ProviderIndex::prepareIndexWorker() "ProviderIndex::prepareIndexWorker()".
 
         Workers inherit the environment of the calling process, with the
         @ref ProviderIndexUtil::ProviderIndexBuildEnvVar "QORE_PROVIDER_INDEX_BUILD" environment variable set and
@@ -87,6 +90,11 @@ public hashdecl ProviderIndexCreateOptions {
 #! The main API class
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
+
+    private {
+        #! The batch of this process, if it is an index worker
+        static *hash<auto> worker_batch;
+    }
 
     #! Create the data provider index
     /** @param index optional seeded factory, application and scheme dependencies; logical module names are
@@ -549,6 +557,37 @@ public class ProviderIndex inherits ProviderIndexUtil {
         }}, options.pairIterator();
     }
 
+    #! Prepares an index worker process before any provider module is loaded
+    /** Enters index build mode and sets the environment for the worker's batch: \c QORE_DATA_PROVIDERS names only
+        the batch's environment modules, and the TypeScript app catalogue settings
+        (\c QORE_TYPESCRIPT_MASTER_ACTION_SCRIPT and \c QORE_TYPESCRIPT_ACTION_SCRIPTS) are removed unless the
+        batch indexes the catalogue, so that a worker that loads the TypeScriptActionInterface module for another
+        reason does not load the whole catalogue.
+
+        @ref runIndexWorker() calls this method itself; a worker command that loads modules of its own before
+        calling @ref runIndexWorker() must call it first.
+
+        @param batch_path the path to the batch file, given to the worker command as its last argument
+
+        @throw PROVIDER-INDEX-WORKER-ERROR the batch file cannot be read
+
+        @par Example:
+        A worker command for an application whose own modules load provider modules:
+        @code{.py}
+#!/usr/bin/env qore
+%requires ProviderIndex
+
+ProviderIndex::prepareIndexWorker(ARGV[0]);
+load_module("MyAppProviderSupport");
+exit(ProviderIndex::runIndexWorker(ARGV[0]));
+        @endcode
+
+        @since %ProviderIndex 1.2
+    */
+    static prepareIndexWorker(string batch_path) {
+        getWorkerBatch(batch_path);
+    }
+
     #! Runs one index worker
     /** A worker is a process started by @ref createDataProviderIndex() when
         @ref ProviderIndexCreateOptions::workers "workers" is set.  It enters index build mode, loads the provider
@@ -561,36 +600,25 @@ public class ProviderIndex inherits ProviderIndexUtil {
         case the build reports the failures, or 2 if the worker failed
 
         @par Example:
-        A worker command for an application that must load its own modules before any provider is indexed:
+        A worker command:
         @code{.py}
 #!/usr/bin/env qore
 %requires ProviderIndex
-%requires MyAppProviderSupport
 
 exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @endcode
 
+        @see prepareIndexWorker()
+
         @since %ProviderIndex 1.2
     */
     static int runIndexWorker(string batch_path) {
-        # the index being replaced is never read while its replacement is built
-        setBuildMode(True);
-
         hash<auto> batch;
         try {
-            batch = unpackIndexData(ReadOnlyFile::readBinaryFile(batch_path));
+            batch = getWorkerBatch(batch_path);
         } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("ProviderIndex worker: cannot read batch file %y: %s\n", batch_path,
-                get_exception_string(ex));
+            stderr.printf("ProviderIndex worker: %s\n", get_exception_string(ex));
             return 2;
-        }
-
-        # the worker loads only the environment modules of its batch; getenv() is read when they are loaded
-        list<string> environment = map $1.name, batch.items, $1.type == "environment";
-        if (environment) {
-            setenv("QORE_DATA_PROVIDERS", environment.join(PathSep));
-        } else {
-            unsetenv("QORE_DATA_PROVIDERS");
         }
 
         hash<auto!> result = {"id": batch.id};
@@ -613,6 +641,37 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             stderr.printf("ProviderIndex worker: %s\n", result.error);
         }
         return rc;
+    }
+
+    #! Returns the worker's batch; the first call also prepares the worker process for it
+    private static hash<auto> getWorkerBatch(string batch_path) {
+        if (worker_batch) {
+            return worker_batch;
+        }
+        # the index being replaced is never read while its replacement is built
+        setBuildMode(True);
+
+        hash<auto> batch;
+        try {
+            batch = unpackIndexData(ReadOnlyFile::readBinaryFile(batch_path));
+        } catch (hash<ExceptionInfo> ex) {
+            throw "PROVIDER-INDEX-WORKER-ERROR", sprintf("cannot read batch file %y: %s: %s", batch_path, ex.err,
+                ex.desc);
+        }
+
+        # the worker loads only the environment modules of its batch; getenv() is read when they are loaded
+        list<string> environment = map $1.name, batch.items, $1.type == "environment";
+        if (environment) {
+            setenv("QORE_DATA_PROVIDERS", environment.join(PathSep));
+        } else {
+            unsetenv("QORE_DATA_PROVIDERS");
+        }
+        # only the TypeScript worker loads the TypeScript app catalogue
+        if (!(select batch.items, $1.type == "typescript" || $1.name == "TypeScriptActionInterface")) {
+            unsetenv("QORE_TYPESCRIPT_MASTER_ACTION_SCRIPT");
+            unsetenv("QORE_TYPESCRIPT_ACTION_SCRIPTS");
+        }
+        return worker_batch = batch;
     }
 
     #! Indexes the providers of one worker batch
@@ -639,6 +698,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "factorymap": DataProvider::FactoryMap,
         };
         bool environment;
+        bool typescript;
         foreach hash<auto> item in (batch.items) {
             switch (item.type) {
                 case "module": {
@@ -659,7 +719,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     environment = True;
                     break;
                 case "typescript":
-                    tryLoadTypeScriptActionInterface(discovery);
+                    # loaded after the factories are collected, as in a single-process build
+                    typescript = True;
                     break;
                 default:
                     throw "PROVIDER-INDEX-WORKER-ERROR", sprintf("unknown index worker batch item type %y",
@@ -681,8 +742,17 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     "source", "load-environment", "QORE_DATA_PROVIDERS",
                     ex.err, ex.desc, ex.arg);
             }
+        }
 
+        # a single-process build indexes every factory registered by the time the environment modules have been
+        # loaded, including factories registered by known factory modules that are not known factories
+        # themselves, so every worker does the same
+        if (batch.collect_factories) {
             addDataProviderFactories(\index, discovery);
+        }
+
+        if (typescript) {
+            tryLoadTypeScriptActionInterface(discovery);
         }
 
         list<hash<auto>> type_info_mismatches = ();
@@ -805,7 +875,11 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                         }
                         batch = batches[next++];
                     }
+                    log(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
+                        map $1.name, batch.items);
                     hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms);
+                    log(LoggerLevel::LevelInfo, "index worker %s finished in %y with exit code %y", batch.id,
+                        run.elapsed, run.exit_code);
                     lock.lock();
                     on_exit lock.unlock();
                     runs{batch.id} = run;
@@ -1047,11 +1121,14 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     #! Returns the worker batches for a build
     private static list<hash<auto>> planWorkerBatches(hash<ProviderIndexCreateOptions> opts) {
         list<hash<auto>> batches = ();
+        # as in a single-process build, registered factories are indexed only if environment modules are loaded
+        bool collect_factories = opts.load_environment && getenv("QORE_DATA_PROVIDERS");
         code add = sub (list<hash<auto>> items) {
             batches += {
                 "id": sprintf("w%d", batches.size() + 1),
                 "items": items,
                 "apps": opts.apps,
+                "collect_factories": collect_factories,
             };
         };
         # the TypeScript app catalogue takes the longest to index, so its worker starts first; its module is also a
@@ -1156,15 +1233,18 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     #! Returns the default worker command: the current Qore interpreter running runIndexWorker()
     private static list<string> getDefaultWorkerCommand() {
         *string qore;
-        try {
-            string exe = readlink("/proc/self/exe");
-            if (basename(exe) =~ /^qore/) {
-                qore = exe;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # not available on this platform
-        }
 %ifndef NoProcess
+        if (HAVE_PROCESS_GETEXECUTABLEPATH) {
+            try {
+                string exe = Process::getExecutablePath();
+                # a program embedding the Qore library is not a Qore interpreter
+                if (basename(exe) =~ /^qore/) {
+                    qore = exe;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # use the interpreter in the PATH
+            }
+        }
         qore = qore ?? Process::searchPath("qore");
 %endif
         return (qore ?? "qore", "-l", "ProviderIndex", "-e",

@@ -34,7 +34,7 @@
 %define NoYaml
 %endtry
 
-%try-module process
+%try-module process >= 2.1
 %define NoProcess
 %endtry
 
@@ -67,7 +67,8 @@ module ProviderIndex {
       (@ref ProviderIndex::ProviderIndexCreateOptions::workers "ProviderIndexCreateOptions::workers"): each worker
       loads a batch of the provider modules and writes the metadata of their apps, and the calling process merges,
       qualifies, and publishes the index, so the memory used no longer grows with the number of providers, and
-      batches are indexed in parallel; the index written is identical to one built in a single process
+      batches are indexed in parallel; the index written is identical to one built in a single process; worker
+      builds require the \c process module 2.1 or later
     - an index build never reads the index that it replaces (see
       @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()")
     - building an index no longer runs the dynamic type and default value callbacks of action options, which ran
