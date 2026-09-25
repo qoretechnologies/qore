@@ -584,6 +584,17 @@ public:
     */
     DLLLOCAL int loadProviderModule(ExceptionSink& xsink, const char* name, QoreProgram* path_pgm);
 
+    //! Adds the existing files that could provide the module with the given name in the module search path
+    /** The binary (\c .qmod), source (\c .qm), and split module forms are included; used for build
+        dependencies of AOT artifacts that were compiled without the module, since a change to one of these files
+        can make the module available.
+
+        @param name the module name
+        @param pgm supplies per-Program module search paths, if any
+        @param files receives the paths of the files found
+    */
+    DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
+
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
             qore_binary_module_desc_t desc_fn, const char* path);
@@ -812,10 +823,34 @@ protected:
             int warning_mask = QP_WARN_MODULES, qore_binary_module_desc_t mod_desc_func = nullptr,
             QoreProgram* path_pgm = nullptr, bool* not_found = nullptr);
 
+    //! Loads a binary module from the given path
+    /** An AOT module compiled when a module requested with %try-module was unavailable is stale if the module
+        can be loaded now: if \a source_available is true, an \c AOT-MODULE-STALE exception is raised, so the
+        caller loads the source module instead; otherwise a warning is reported and the binary module is loaded.
+
+        @param source_available true if the caller loads the source module when this function raises an exception
+        @param wsink the warning sink, if warnings can be raised in it; not the caller's exception sink, as a
+        warning raised there would be an error
+        @param warning_mask the warnings enabled in \a wsink
+    */
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
             QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
-            qore_binary_module_desc_t mod_desc = nullptr);
+            qore_binary_module_desc_t mod_desc = nullptr, bool source_available = false,
+            ExceptionSink* wsink = nullptr, int warning_mask = 0);
+
+    //! Returns the first module request that can be loaded now, from the %try-module requests that failed
+    /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
+        manager lock must be held.
+
+        @param specs module requests as written in %try-module directives (a name and an optional version
+        constraint)
+        @param path_pgm supplies module search paths for the load
+        @param available receives the first request that can be loaded
+        @return true if a module can be loaded now
+    */
+    DLLLOCAL bool findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
+            std::string& available);
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,

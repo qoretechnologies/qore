@@ -640,6 +640,161 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
     return result;
 }
 
+bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vector<std::string>& specs,
+        std::string& error) {
+    if (specs.empty()) {
+        return true;
+    }
+    if (specs.size() > QORE_AOT_MODULE_DEPS_MAX_COUNT) {
+        error = "too many optional modules for the AOT optional module trailer";
+        return false;
+    }
+    std::vector<uint8_t> payload;
+    pcmapPut32(payload, static_cast<uint32_t>(specs.size()));
+    for (size_t i = 0; i < specs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT optional module trailer output")) {
+            error = "AOT optional module trailer output cancelled";
+            return false;
+        }
+        const std::string& spec = specs[i];
+        if (spec.empty() || spec.find('\0') != std::string::npos
+                || spec.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - payload.size() - 4) {
+            error = "invalid AOT optional module trailer entry";
+            return false;
+        }
+        pcmapPut32(payload, static_cast<uint32_t>(spec.size()));
+        payload.insert(payload.end(), spec.begin(), spec.end());
+    }
+
+    std::vector<uint8_t> footer;
+    pcmapPut64(footer, payload.size());
+    pcmapPut32(footer, QORE_AOT_OPTIONAL_MODULES_MAGIC);
+    pcmapPut32(footer, QORE_AOT_OPTIONAL_MODULES_VERSION);
+    assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
+
+    FILE* f = fopen(path.c_str(), "ab");
+    if (!f) {
+        error = "failed to open '" + path + "' to append AOT optional modules: " + strerror(errno);
+        return false;
+    }
+    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size()
+        && fwrite(footer.data(), 1, footer.size(), f) == footer.size();
+    if (fclose(f) != 0) {
+        ok = false;
+    }
+    if (!ok) {
+        error = "failed to write AOT optional modules to '" + path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::string>& specs,
+        std::string& error) {
+    specs.clear();
+    error.clear();
+
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return 0;
+    }
+    int result = 0;
+    do {
+        if (fseek(f, 0, SEEK_END) != 0) {
+            break;
+        }
+        long end = ftell(f);
+        uint64_t payload_len = 0;
+        uint32_t magic = 0;
+        uint32_t version = 0;
+        // the trailer precedes the dependency and PC->loc trailers, which are skipped
+        bool found = false;
+        for (unsigned i = 0; i < 3; ++i) {
+            if (end < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+                    || !readAOTTrailerFooter(f, end, payload_len, magic, version)) {
+                break;
+            }
+            if (magic == QORE_AOT_OPTIONAL_MODULES_MAGIC) {
+                found = true;
+                break;
+            }
+            if ((magic != QORE_AOT_MODULE_DEPS_MAGIC && magic != QORE_AOT_PCMAP_MAGIC)
+                    || payload_len > static_cast<uint64_t>(end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+                break;
+            }
+            end -= static_cast<long>(payload_len + QORE_AOT_PCMAP_FOOTER_SIZE);
+        }
+        if (!found) {
+            break;
+        }
+        if (version != QORE_AOT_OPTIONAL_MODULES_VERSION) {
+            error = "unsupported AOT optional module metadata version " + std::to_string(version);
+            result = -1;
+            break;
+        }
+        if (payload_len < 4 || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
+                || payload_len > static_cast<uint64_t>(end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+            error = "invalid AOT optional module metadata size";
+            result = -1;
+            break;
+        }
+        std::vector<uint8_t> payload(payload_len);
+        if (fseek(f, end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE) - static_cast<long>(payload_len),
+                    SEEK_SET) != 0
+                || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
+            error = "cannot read AOT optional module metadata from '" + path + "'";
+            result = -1;
+            break;
+        }
+        size_t p = 0;
+        uint32_t count = 0;
+        // every entry needs at least a four-byte length and one byte of data
+        if (!pcmapGet32(payload.data(), payload.size(), p, count) || count > QORE_AOT_MODULE_DEPS_MAX_COUNT
+                || count > (payload.size() - p) / 5) {
+            error = "invalid AOT optional module count";
+            result = -1;
+            break;
+        }
+        specs.reserve(count);
+        bool valid = true;
+        for (uint32_t i = 0; i < count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT optional module trailer input")) {
+                error = "AOT optional module trailer input cancelled";
+                valid = false;
+                break;
+            }
+            uint32_t len = 0;
+            if (!pcmapGet32(payload.data(), payload.size(), p, len) || !len || len > payload.size() - p) {
+                error = "invalid AOT optional module entry";
+                valid = false;
+                break;
+            }
+            specs.emplace_back(reinterpret_cast<const char*>(payload.data() + p), len);
+            p += len;
+            if (specs.back().find('\0') != std::string::npos) {
+                error = "invalid AOT optional module entry";
+                valid = false;
+                break;
+            }
+        }
+        if (!valid) {
+            result = -1;
+            break;
+        }
+        if (p != payload.size()) {
+            error = "unexpected trailing data in AOT optional module metadata";
+            result = -1;
+            break;
+        }
+        result = 1;
+    } while (false);
+    fclose(f);
+    if (result != 1) {
+        specs.clear();
+    }
+    return result;
+}
+
 void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out) {
     if (payload.empty()) {
         return;

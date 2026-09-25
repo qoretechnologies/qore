@@ -346,6 +346,42 @@ reexport conflicts. This correction does not require recompiling existing qmods.
 Failed reexports propagate their error before the consumer namespace is merged;
 they must not be cleared and presented as a successful partial module import.
 
+## Optional Modules Unavailable at Compile Time
+
+A `%try-module` directive is resolved when the module is compiled: when the module
+cannot be loaded, the code of the fallback branch (typically `%define NoX` and the
+`%ifdef NoX` code that follows) is compiled into the artifact. Nothing else in the
+artifact records that outcome, so without further metadata a qmod compiled before an
+optional module was installed or upgraded silently keeps the reduced behavior forever,
+both in a build tree and in an installation (for example, `ProviderIndex` without
+`process >= 2.1` builds indexes without worker processes).
+
+qcc therefore records every failed `%try-module` request in a `QAOM` EOF trailer: a
+count and the requests as written (a module name with an optional version
+constraint), with the same 16-byte footer shape as the other trailers. It is written
+right after the final link and before the PC→location and `QAMD` trailers, so readers
+that predate it find their trailers at the end of the file as before; it is only
+written when a `%try-module` failed. The recorded requests are collected by the
+scanner in `qore_program_private::unavailable_try_modules`; requests denied by
+`PO_NO_MODULES` are not recorded, since they do not depend on the installation.
+
+Before mapping a qmod, the loader reads the trailer and loads each recorded module as
+the `%try-module` directive in the source module would. If one of them loads now
+(including its version constraint), the artifact is stale:
+
+1. if the source module is available next to the qmod, the loader raises
+   `AOT-MODULE-STALE`, and the existing binary-to-source fallback loads the source
+   module and reports `BINARY-MODULE-SOURCE-FALLBACK` with the reason;
+2. otherwise the qmod is loaded, and the missing functionality is reported as a
+   `BINARY-MODULE-STALE` warning, or on `stderr` when warnings cannot be raised, so a
+   stale artifact is never silently indistinguishable from a current one.
+
+The build side depends on the files that could provide each recorded module: qcc adds
+the existing `.qmod`, `-api-X.Y.qmod`, `.qm`, and split-module files for the module
+name in the module search path to the depfile, so replacing a module that was too old
+rebuilds the artifact. A module installed where none existed is detected by the load-
+time check, and by the configure-time probe stamp for the modules it lists.
+
 ## Namespace Ownership in Metadata
 
 Namespace metadata contains the declarations owned by the compilation unit and the
