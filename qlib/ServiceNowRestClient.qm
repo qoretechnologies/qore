@@ -98,6 +98,8 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - @ref ServiceNowRestClient::ServiceNowRestConnection "ServiceNowRestConnection" data providers make API calls
       with a @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"
+    - @ref ServiceNowRestClient::ServiceNowRestConnection "ServiceNowRestConnection" polling pings are made with a
+      @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3)
     - added \c processAsyncResponse() override for ServiceNow-specific error handling in async REST
       requests
 
@@ -528,22 +530,6 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
             rv{i.value} = real_opts{i.key};
         }
         return rv;
-    }
-
-    #! Called to start a non-blocking polling ping operation on the ServiceNow REST server
-    /**
-        @return a socket poll operation object that will allow the connection goal to be reached with polling
-
-        @see supportsPollingApi()
-    */
-    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        ServiceNowRestClient client = getPollImpl();
-        if (logger) {
-            client.setLogger(logger);
-        }
-
-        # start the polling operation manually using the full request path
-        return new RestPingPollOperation(self, client, real_opts);
     }
 
     #! Sets the auth code feature if supported

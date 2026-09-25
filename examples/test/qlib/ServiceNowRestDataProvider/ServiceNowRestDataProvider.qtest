@@ -116,6 +116,18 @@ public class ServiceNowRestDataProviderTest inherits QUnit::Test {
             assertEq(401, ex.arg.status_code);
         }
 
+        # a polling ping is made with the async client with the API path prefix
+        ServiceNowRestConnection conn("sn", "sn", url, {"monitor": False}, {"apikey": "key-3"});
+        handler.requests = ();
+        AbstractPollOperation op = conn.startPollConnect();
+        assertTrue(op instanceof RestClientIoPingPollOperation);
+        while (*hash<SocketPollInfo> info = op.continuePoll()) {
+            Socket::poll((info,), 10s);
+        }
+        assertTrue(op.goalReached());
+        assertRegex("^api/now/table/sys_properties\\?", handler.requests.last().path);
+        assertEq("key-3", handler.requests.last().apikey);
+
         # the REST client option must be a ServiceNow client
         assertThrows("CONSTRUCTOR-ERROR", "must be a ServiceNowRestClientIo or a ServiceNowRestClient",
             sub () { ServiceNowRestDataProvider p({"snrestclient": new RestClientIo({"url": url})}); });

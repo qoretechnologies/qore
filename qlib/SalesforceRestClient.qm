@@ -147,6 +147,12 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" polling pings are made with a
+      @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3)
+      against the identity service URL, as the synchronous and asynchronous pings are; the
+      @ref SalesforceRestClient::SalesforceRestPingPollOperation "SalesforceRestPingPollOperation" class is no
+      longer used by the connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
       @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
       @ref SalesforceRestClient::SalesforceRestClientBase::getOrgId() "getOrgId()", so that APIs outside the REST
@@ -1632,32 +1638,6 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
         return opts.ping_path == "auto"
             ? (real_opts.id_service_url ?? "https://login.salesforce.com/id/unknown/unknown")
             : opts.ping_path;
-    }
-
-    #! Called to start a non-blocking polling ping operation on the remote REST server
-    /**
-        @return a socket poll operation object that will allow the connection goal to be reached with polling
-
-        @see supportsPollingApi()
-    */
-    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        if (!opts.ping_method || !exists opts.ping_path) {
-            return HttpBasedConnection::startPollConnect();
-        }
-
-        hash<auto> poll_opts = real_opts + {"data": "json"};
-        if (poll_opts.ping_path == "auto") {
-            poll_opts.ping_path = real_opts.id_service_url;
-        }
-
-        SalesforceRestClient rc = getPollImpl();
-        if (logger) {
-            rc.setLogger(logger);
-        }
-        rc.setSerialization("json");
-
-        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new SalesforceRestPingPollOperation(self, rc, poll_opts);
     }
 }
 

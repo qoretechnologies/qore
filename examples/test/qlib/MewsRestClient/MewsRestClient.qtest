@@ -12,10 +12,33 @@
 %requires ConnectionProvider
 %requires RestClient
 %requires MewsRestClient
+%requires HttpServer
+%requires RestClientIo
 
 %requires json
 
 %exec-class Main
+
+#! A local Mews server that records requests
+class FakeMewsHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"Enterprises": ()}),
+        };
+    }
+}
 
 public class Main inherits QUnit::Test {
     private {
@@ -33,6 +56,7 @@ public class Main inherits QUnit::Test {
     constructor() : Test("MewsRestClientTest", "1.0", \ARGV, MyOpts) {
         addTestCase("connection tests", \connectionTest());
         addTestCase("poll tests", \pollTest());
+        addTestCase("local poll test", \localPollTest());
 
         try {
             setupConnection();
@@ -98,6 +122,42 @@ public class Main inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    #! A polling ping is made with the async client against a local server
+    localPollTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeMewsHandler handler();
+        server.setHandler("mews", "", NOTHING, handler);
+        server.setDefaultHandler("mews", handler);
+
+        MewsRestConnection conn({
+            "name": "mews",
+            "url": "http://localhost:" + port,
+            "opts": {
+                "client_token": "client-1",
+                "access_token": "access-1",
+                "client": "test-client",
+            },
+        }, {"monitor": False});
+        AbstractPollOperation op = conn.startPollConnect();
+        assertTrue(op instanceof RestClientIoPingPollOperation);
+        while (*hash<SocketPollInfo> info = op.continuePoll()) {
+            Socket::poll((info,), 10s);
+        }
+        assertTrue(op.goalReached());
+        assertEq(1, handler.requests.size());
+        assertEq(MewsRestConnection::DefaultMewsPingMethod, handler.requests[0].method);
+        assertEq(MewsRestClientBase::DefaultUriPathPrefix + "/" + MewsRestConnection::DefaultMewsPingPath,
+            handler.requests[0].path);
+        # the tokens are sent in the body
+        assertEq("client-1", handler.requests[0].body.ClientToken);
+        assertEq("access-1", handler.requests[0].body.AccessToken);
+        assertEq("test-client", handler.requests[0].body.Client);
     }
 
     pollTest() {
