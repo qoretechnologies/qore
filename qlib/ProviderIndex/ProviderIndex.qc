@@ -52,6 +52,10 @@ public hashdecl ProviderIndexCreateOptions {
 
         Apps and actions registered only in the calling process are not indexed by a worker build.
 
+        Workers return their results with MessagePack; if it is not available (see
+        @ref ProviderIndexUtil::ProviderIndexUtil::hasMessagePack() "ProviderIndexUtil::hasMessagePack()"), a warning
+        is logged and the index is built in the calling process.
+
         @since %ProviderIndex 1.2
     */
     int workers = 0;
@@ -138,7 +142,12 @@ public class ProviderIndex inherits ProviderIndexUtil {
         getWritableIndexDir();
 
         if (opts.workers > 0) {
-            return createDataProviderIndexWithWorkers(index, opts, start);
+            if (ProviderIndexUtil::hasMessagePack()) {
+                return createDataProviderIndexWithWorkers(index, opts, start);
+            }
+            # workers return their results with MessagePack
+            ProviderIndexUtil::log(LoggerLevel::LevelWarn, "MessagePack support is not available; the data "
+                "provider index is built in the calling process instead of with %d worker process(es)", opts.workers);
         }
 
         # the index being replaced is never read while its replacement is built

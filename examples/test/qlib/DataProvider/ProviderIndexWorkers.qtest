@@ -39,6 +39,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
         addTestCase("a failed worker publishes nothing", \workerFailureTest());
         addTestCase("workers that describe an action differently fail the build", \conflictTest());
         addTestCase("a worker setup error is reported and no further workers are started", \setupErrorTest());
+        addTestCase("without MessagePack, a worker build is run in the calling process", \noMessagePackTest());
 
         set_return_value(main());
     }
@@ -52,6 +53,9 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
             testSkip("no process module 2.1 or later");
         }
 %endif
+        if (workers && !ProviderIndexUtil::hasMessagePack()) {
+            testSkip("no MessagePack support");
+        }
     }
 
     #! Sets a process environment variable until restoreEnv() is called; workers inherit it
@@ -238,6 +242,24 @@ public hash<string, string> sub get_data_provider_map() {
             assertEq("QoreTestConflictApp/record", conflicts[0].identity);
         }
         assertFalse(is_file(index_dir + "/qore-data-index.yaml"), "no index is published");
+    }
+
+    noMessagePackTest() {
+        checkModules();
+        if (ProviderIndexUtil::hasMessagePack()) {
+            testSkip("MessagePack support is available");
+        }
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", registration_module);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
+
+        hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(2));
+        assertTrue(info.summary.qualification.complete);
+        assertEq(0, info.summary.workers.size(), "no workers are started");
+        assertTrue(inlist("IndexIdentityFixture", info.summary.qualification.apps));
     }
 
     setupErrorTest() {

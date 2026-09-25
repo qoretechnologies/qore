@@ -3016,13 +3016,46 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
         QoreProgram* pgm, const QoreAOTFunc& aot_func);
 static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm);
 
+enum class AOTMetadataStorage {
+    Copy,
+    Borrow,
+};
+
+// Native descriptors are retained by lazy contexts, so their binary image must remain mapped for those
+// contexts' lifetime.  Generated metadata in the same image has that lifetime too.  Qore's binary module
+// loader never dlcloses loaded modules, even on reinjection or shutdown (see ~QoreBuiltinModule()).
+// Check both ends of the blob: host APIs can also receive temporary heap buffers, which must be copied.
+static AOTMetadataStorage getAOTMetadataStorage(const uint8_t* data, int size, const QoreAOTFunc* functions) {
+#if defined(__linux__) || defined(__APPLE__)
+    if (data && size > 0 && functions) {
+        Dl_info start_info{}, end_info{}, functions_info{};
+        if (dladdr(data, &start_info) && dladdr(data + size - 1, &end_info)
+                && dladdr(functions, &functions_info)
+                && start_info.dli_fbase == end_info.dli_fbase
+                && start_info.dli_fbase == functions_info.dli_fbase) {
+            return AOTMetadataStorage::Borrow;
+        }
+    }
+#endif
+    return AOTMetadataStorage::Copy;
+}
+
 struct QoreAOTDebugMetadata {
     std::vector<uint8_t> metadata;
+    // Immutable input owned by the native binary image, never by a temporary deserializer/reader.
+    const uint8_t* borrowed_data = nullptr;
+    uint32_t borrowed_size = 0;
     mutable std::unique_ptr<QoreAOTBinaryReader> reader;
     mutable std::mutex reader_mutex;
 
-    QoreAOTDebugMetadata(const QoreAOTBinaryReader& reader, const uint8_t* data, uint32_t size) {
+    QoreAOTDebugMetadata(const QoreAOTBinaryReader& reader, const uint8_t* data, uint32_t size,
+            AOTMetadataStorage storage = AOTMetadataStorage::Copy) {
         if (!data || !size) {
+            return;
+        }
+        if (storage == AOTMetadataStorage::Borrow) {
+            borrowed_data = data;
+            borrowed_size = size;
             return;
         }
         if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE) {
@@ -3111,7 +3144,8 @@ struct QoreAOTDebugMetadata {
             return reader.get();
         }
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
-        if (!retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), error)) {
+        if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
+                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error)) {
             return nullptr;
         }
         // Force retained sections to decode before publishing the reader for
@@ -3167,7 +3201,8 @@ struct QoreAOTLazyFunctionIR {
 };
 
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
-        const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len) {
+        const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len,
+        AOTMetadataStorage storage = AOTMetadataStorage::Copy) {
     if ((reader.getHeader().version < QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
                 && (reader.getHeader().feature_flags
                     & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0)
@@ -3175,12 +3210,12 @@ static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         return nullptr;
     }
     auto retained = std::make_shared<QoreAOTDebugMetadata>(
-        reader, metadata, static_cast<uint32_t>(metadata_len));
+        reader, metadata, static_cast<uint32_t>(metadata_len), storage);
     if (std::getenv("QORE_AOT_TRACE_RETAINED_METADATA")) {
         fprintf(stderr,
-            "[aot-retained-metadata] label=%s blob=%d retained=%zu compression=%u\n",
+            "[aot-retained-metadata] label=%s blob=%d retained=%zu compression=%u borrowed=%u\n",
             reader.getLabel() ? reader.getLabel() : "<unknown>", metadata_len,
-            retained->metadata.size(), reader.getHeader().compression);
+            retained->metadata.size(), reader.getHeader().compression, retained->borrowed_size);
     }
     return retained;
 }
@@ -11842,7 +11877,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             std::vector<std::string> registration_errors;
             AOTClosureRuntimeBindingMap native_closure_bindings;
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len);
+                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
 
             // Register _toplevel first so setLVarsFromAOTContext() populates
             // the program LVList before method/function contexts deserialize
@@ -13318,7 +13353,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             std::vector<std::string> registration_errors;
             AOTClosureRuntimeBindingMap native_closure_bindings;
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len);
+                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
 
             // Register _toplevel before other functions so setLVarsFromAOTContext()
             // populates the program LVList for closure deserialization in methods
@@ -14266,7 +14301,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
         std::vector<std::string> registration_errors;
         auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-            metadata, metadata_len);
+            metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
         registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
             local_pgm, func_map, registered, nullptr, deserializer.getTypeResolver(),
             &registration_errors, debug_metadata, false, nullptr, nullptr, &deserializer);
@@ -15905,7 +15940,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // deserialization — no AST available, must use slot map path)
     if (num_functions > 0 && functions) {
         debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-            metadata, metadata_len);
+            metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
         std::unordered_map<std::string, const QoreAOTFunc*> func_map;
         func_map.reserve(static_cast<size_t>(num_functions));
         for (int i = 0; i < num_functions; ++i) {
@@ -16245,7 +16280,8 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
     int ignored_unlinked = 0;
     std::vector<AOTInitFuncExecInfo> init_func_contexts;
     std::vector<std::string> registration_errors;
-    auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len);
+    auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len,
+        getAOTMetadataStorage(metadata, metadata_len, functions));
     registerAOTFunctionsFromSlotMaps(reader, root_ns, tpgm, func_map, registered,
         &init_func_contexts, nullptr, &registration_errors, debug_metadata,
         allow_unlinked_native_inputs, &ignored_unlinked);
@@ -16442,7 +16478,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             int registered = 0;
             std::vector<std::string> registration_errors;
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len);
+                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
             registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts, nullptr,
                 &registration_errors, debug_metadata, false, nullptr, nullptr, &deserializer);
@@ -16790,7 +16826,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             uint64_t t0 = time_on ? now_us() : 0;
             if (!func_map.empty()) {
                 auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
-                    d.metadata, d.metadata_len);
+                    d.metadata, d.metadata_len, getAOTMetadataStorage(d.metadata, d.metadata_len, d.functions));
                 registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
                     tpgm, func_map, registered, &init_func_contexts,
                     session.getTypeResolver(), &registration_errors, debug_metadata,

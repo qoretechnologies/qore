@@ -142,7 +142,9 @@ struct QoreAOTFunc;
     ```
 
     @param tpgm the target program (created e.g. via qore_create_program)
-    @param metadata serialized `QoreAOTBinary` blob
+    @param metadata serialized `QoreAOTBinary` blob; blobs embedded in the same binary image as @p functions
+        must remain immutable and that image must stay mapped while the registered code is in use. Other
+        buffers are copied as needed and may be released after registration (after end_batch in batch mode).
     @param metadata_len byte length of @p metadata
     @param label label for diagnostic messages (source path or name)
     @param functions array of pre-compiled function descriptors
