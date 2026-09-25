@@ -10,6 +10,8 @@
 %requires Logger
 %requires Mime
 %requires JsonLd
+%requires Util
+%requires HttpClientIo
 %exec-class JsonLdContextTest
 
 class TestContextHandler inherits AbstractHttpRequestHandler {
@@ -82,6 +84,9 @@ class TestContextHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path =~ /^\/loader\//) {
+            return handleLoaderRequest(cx, hdr);
+        }
         string path = "/" + hdr.path;
         *hash<auto> ctx_data = contexts{path};
         if (!exists ctx_data) {
@@ -95,6 +100,53 @@ class TestContextHandler inherits AbstractHttpRequestHandler {
             "hdr": {"Content-Type": ctx_data.content_type},
             "body": ctx_data.body,
         };
+    }
+
+    #! serves the HTTP document loader tests
+    private hash<auto> handleLoaderRequest(hash<auto> cx, hash<auto> hdr) {
+        string path = cx.raw_path;
+        if (path =~ /^\/loader\/echo/) {
+            return makeJson(200, {
+                "path": path,
+                "accept": hdr.accept,
+                "authorization": hdr.authorization,
+            });
+        }
+        switch (path) {
+            case "/loader/redirect-301": return {"code": 301, "hdr": {"Location": "/context/person.jsonld"}};
+            case "/loader/redirect-303": return {"code": 303, "hdr": {"Location": "/context/person.jsonld"}};
+            case "/loader/redirect-chain": return {"code": 303, "hdr": {"Location": "/loader/redirect-301"}};
+            case "/loader/loop": return {"code": 302, "hdr": {"Location": "/loader/loop"}};
+            case "/loader/error": return {"code": 500, "body": "server error"};
+            case "/loader/invalid": return {"code": 200, "hdr": {"Content-Type": MimeTypeJsonLd}, "body": "{bad"};
+            case "/loader/link": return {
+                "code": 200,
+                "hdr": {
+                    "Content-Type": MimeTypeJson,
+                    "Link": (
+                        "<http://example.com/next>; rel=\"next\"",
+                        "<ctx.jsonld>; rel=\"http://www.w3.org/ns/json-ld#context\"",
+                    ),
+                },
+                "body": make_json({"name": "x"}),
+            };
+            case "/loader/multilink": return {
+                "code": 200,
+                "hdr": {
+                    "Content-Type": MimeTypeJson,
+                    "Link": (
+                        "<a.jsonld>; rel=\"http://www.w3.org/ns/json-ld#context\"",
+                        "<b.jsonld>; rel=\"http://www.w3.org/ns/json-ld#context\"",
+                    ),
+                },
+                "body": make_json({"name": "x"}),
+            };
+        }
+        return {"code": 404, "body": "not found"};
+    }
+
+    private hash<auto> makeJson(int code, auto data) {
+        return {"code": code, "hdr": {"Content-Type": MimeTypeJson}, "body": make_json(data)};
     }
 }
 
@@ -134,6 +186,7 @@ class JsonLdContextTest inherits QUnit::Test {
         addTestCase("multiple contexts test", \multipleContextsTest());
         addTestCase("file document loader test", \fileDocumentLoaderTest());
         addTestCase("caching document loader test", \cachingDocumentLoaderTest());
+        addTestCase("HTTP document loader test", \httpDocumentLoaderTest());
         set_return_value(main());
     }
 
@@ -677,6 +730,70 @@ class JsonLdContextTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertEq("JSON-LD-ERROR", ex.err);
         }
+    }
+
+    private httpDocumentLoaderTest() {
+        # a JSON-LD document
+        hash<JsonLdRemoteDocument> doc = httpLoader.loadDocument(base_url + "/context/person.jsonld");
+        assertEq(base_url + "/context/person.jsonld", doc.documentUrl);
+        assertEq(MimeTypeJsonLd, doc.contentType);
+        assertEq("http://schema.org/name", doc.document."@context".name);
+        assertNothing(doc.contextUrl);
+
+        # the path and query are requested with JSON-LD content negotiation; user information is sent as basic
+        # authentication, and the fragment is not sent
+        doc = httpLoader.loadDocument(replace(base_url, "http://", "http://user:pass@") + "/loader/echo?x=1#frag");
+        assertEq("/loader/echo?x=1", doc.document.path);
+        assertEq(MimeTypeJsonLd + ", " + MimeTypeJson + ";q=0.9, */*;q=0.1", doc.document.accept);
+        assertEq("Basic " + make_base64_string("user:pass"), doc.document.authorization);
+        assertEq(MimeTypeJson, doc.contentType);
+
+        # redirects are followed; the document URL is the retrieved resource, except for 303 redirects
+        doc = httpLoader.loadDocument(base_url + "/loader/redirect-301");
+        assertEq(base_url + "/context/person.jsonld", doc.documentUrl);
+        assertEq("http://schema.org/name", doc.document."@context".name);
+        doc = httpLoader.loadDocument(base_url + "/loader/redirect-303");
+        assertEq(base_url + "/loader/redirect-303", doc.documentUrl);
+        assertEq("http://schema.org/name", doc.document."@context".name);
+        doc = httpLoader.loadDocument(base_url + "/loader/redirect-chain");
+        assertEq(base_url + "/context/person.jsonld", doc.documentUrl);
+
+        # the JSON-LD context in a Link header is resolved against the retrieved resource; other links are ignored
+        doc = httpLoader.loadDocument(base_url + "/loader/link");
+        assertEq(base_url + "/loader/ctx.jsonld", doc.contextUrl);
+        assertEq("x", doc.document.name);
+        assertThrows("JSON-LD-ERROR", "multiple context Link headers", \httpLoader.loadDocument(),
+            base_url + "/loader/multilink");
+        try {
+            httpLoader.loadDocument(base_url + "/loader/multilink");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(JSONLD_ERR_MULTIPLE_CONTEXT_LINK_HEADERS, ex.arg.code);
+        }
+
+        # errors
+        list<list<string>> errors = (
+            (base_url + "/loader/loop", "maximum redirects \\(10\\) exceeded"),
+            (base_url + "/loader/error", "HTTP 500 loading"),
+            (base_url + "/loader/missing", "HTTP 404 loading"),
+            (base_url + "/loader/invalid", "failed to parse JSON"),
+            ("ftp://localhost/x.jsonld", "unsupported URL scheme"),
+            (sprintf("http://localhost:%d/x.jsonld", get_free_port()), "HTTPCLIENT-CONNECT-ERROR"),
+        );
+        foreach list<string> error in (errors) {
+            try {
+                httpLoader.loadDocument(error[0]);
+                assertTrue(False, sprintf("no exception loading %y", error[0]));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("JSON-LD-ERROR", ex.err);
+                assertEq(JSONLD_ERR_LOADING_DOCUMENT_FAILED, ex.arg.code);
+                assertRegex(error[1], ex.desc);
+            }
+        }
+
+        # options for the connection manager are accepted; the loader sets the timeouts and redirects
+        HttpJsonLdDocumentLoader loader(<HttpClientConnectionManagerOptions>{"max_redirects": 0}, 5000, 5000);
+        doc = loader.loadDocument(base_url + "/loader/redirect-301");
+        assertEq(base_url + "/context/person.jsonld", doc.documentUrl);
     }
 
     private cachingDocumentLoaderTest() {

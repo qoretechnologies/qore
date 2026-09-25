@@ -38,6 +38,8 @@
 %requires(reexport) WebSocketClient >= 1.3.1
 %requires(reexport) ConnectionProvider >= 1.4
 %requires AsyncSocketIo
+%requires HttpClientIo
+%requires Util
 
 %requires json
 
@@ -75,6 +77,10 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - the gateway URL is discovered with <a href="../../HttpClientIo/html/index.html">HttpClientIo</a>;
+      @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
+      accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - fixed platform-generated connection URLs by declaring
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::DefaultConnectionUrl
       "DiscordWebSocketConnection::DefaultConnectionUrl"
@@ -1141,6 +1147,16 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
 
         #! Discord gateway discovery URL
         const GatewayDiscoveryUrl = "https://discord.com/api/gateway";
+
+        #! The connect timeout for gateway discovery
+        /** @since DiscordWebSocketClient 1.2
+        */
+        const GatewayDiscoveryConnectTimeout = 60s;
+
+        #! The response timeout for gateway discovery
+        /** @since DiscordWebSocketClient 1.2
+        */
+        const GatewayDiscoveryTimeout = 5m;
     }
 
     #! creates the DiscordWebSocketConnection connection object
@@ -1221,14 +1237,49 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     }
 
     #! Discover the Discord gateway URL
-    static string discoverUrl() {
+    /** @param discovery_url the URL of the gateway discovery endpoint; redirects are followed
+
+        @return the gateway URL
+
+        @throw HTTP-CLIENT-RECEIVE-ERROR the discovery endpoint returned an error response; the exception argument is
+        a hash of the response headers with lower-case names plus the \c status_code, \c status_message, and
+        \c body keys
+        @throw DISCORD-ERROR the response does not give a gateway URL
+
+        @note the request is sent with <a href="../../HttpClientIo/html/index.html">HttpClientIo</a>, which raises
+        connection and transport errors (ex: \c HTTPCLIENT-CONNECT-ERROR, \c HTTPCLIENT-TIMEOUT)
+
+        @since DiscordWebSocketClient 1.2 the \a discovery_url argument
+    */
+    static string discoverUrl(string discovery_url = GatewayDiscoveryUrl) {
         # lookup gateway address
-        return parse_json((new HTTPClient({
-            "url": GatewayDiscoveryUrl,
-            "headers": {
-                "Accept": MimeTypeJson,
-            },
-        })).get("")).url;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "connect_timeout": GatewayDiscoveryConnectTimeout,
+            "request_timeout": GatewayDiscoveryTimeout,
+            "enable_cookies": False,
+        });
+        on_exit mgr.closeAll();
+        hash<auto> resp = mgr.request(discovery_url, "GET", get_http_request_target(discovery_url), {
+            "Accept": MimeTypeJson,
+        });
+        if (resp.status_code < 200 || resp.status_code >= 300) {
+            throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %s",
+                resp.status_code, resp.status_message ?? "<no message>"), (resp.headers ?? {})
+                + resp{"status_code", "status_message", "body"};
+        }
+        *data body = resp.body;
+        auto info;
+        try {
+            info = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body ?? "");
+        } catch (hash<ExceptionInfo> ex) {
+            throw "DISCORD-ERROR", sprintf("invalid gateway discovery response from %y: %s: %s",
+                get_safe_url(discovery_url), ex.err, ex.desc);
+        }
+        if (info.typeCode() != NT_HASH || info.url.typeCode() != NT_STRING || !info.url.val()) {
+            throw "DISCORD-ERROR", sprintf("gateway discovery response from %y has no gateway URL: %y",
+                get_safe_url(discovery_url), info);
+        }
+        return info.url;
     }
 }
 }

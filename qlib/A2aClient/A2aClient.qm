@@ -30,7 +30,6 @@
 %requires Logger
 %requires DataProvider
 %requires ServerSentEventClient
-%requires HttpStreamClient
 %requires HttpClientIo
 %requires HttpClientStreamingIo
 %requires(reexport) ConnectionProvider >= 1.4

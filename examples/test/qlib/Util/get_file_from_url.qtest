@@ -11,6 +11,8 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires FsUtil
+%requires Mime
+%requires json
 
 %include ../../qore/classes/FtpServer.qc
 
@@ -23,6 +25,8 @@ public class GetFileFromUrlTest inherits QUnit::Test {
     constructor() : Test ("GetFileFromUrlTest", "1.0") {
         addTestCase("file tests for get_file_from_url", \testGetFileFromUrlFile());
         addTestCase("HTTP tests for get_file_from_url", \testGetFileFromUrlHttp());
+        addTestCase("HTTP request target tests", \testHttpRequestTarget());
+        addTestCase("HTTP retrieval tests", \testGetFileFromHttp());
         addTestCase("FTP tests for get_file_from_url", \testGetFileFromUrlFtp());
         addTestCase("SFTP tests for get_file_from_url", \testGetFileFromUrlSftp());
         set_return_value(main());
@@ -93,6 +97,93 @@ public class GetFileFromUrlTest inherits QUnit::Test {
         assertEq(4, file_data.size());
     }
 
+    testHttpRequestTarget() {
+        assertEq("/", get_http_request_target("http://localhost"));
+        assertEq("/", get_http_request_target("http://localhost:8080/#frag"));
+        assertEq("/a/b", get_http_request_target("http://localhost/a/b"));
+        assertEq("/?x=1", get_http_request_target("http://localhost?x=1"));
+        assertEq("/a/b?x=1&y=2", get_http_request_target("https://u:p@localhost:8443/a/b?x=1&y=2#frag"));
+        # characters that cannot appear in a request target are encoded; encoded octets and delimiters are kept
+        assertEq("/a%20b/%C3%A1?q=%22x%22%7C%3C%3E", get_http_request_target("http://localhost/a b/á?q=\"x\"|<>"));
+        assertEq("/a%2Fb/c?x=%26", get_http_request_target("http://localhost/a%2Fb/c?x=%26"));
+        # a CR or LF in a URL can never split the request line
+        assertEq("/a%0D%0AX:%20y", get_http_request_target("http://localhost/a\r\nX: y"));
+    }
+
+    testGetFileFromHttp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger});
+        on_exit delete http;
+        RetrievalHandler handler();
+        http.setHandler("retrieval", "", NOTHING, handler);
+        http.setDefaultHandler("retrieval", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string base = sprintf("http://localhost:%d", port);
+
+        # the path and query of the URL are requested; the fragment is not sent
+        data d = get_file_from_url(base + "/echo/a b?x=1#frag");
+        assertEq(NT_STRING, d.typeCode());
+        hash<auto> req = parse_json(d);
+        assertEq("/echo/a%20b?x=1", req.path);
+        assertEq("GET", req.method);
+        assertEq("*", req.accept);
+        assertNothing(req.authorization);
+
+        # headers are sent, and user information in the URL is sent as basic authentication
+        d = get_file_from_url(sprintf("http://user:pass@localhost:%d/echo", port),
+            <UrlRetrievalOptions>{"http_headers": {"X-Test": "value"}});
+        req = parse_json(d);
+        assertEq("value", req."x-test");
+        assertEq("Basic " + make_base64_string("user:pass"), req.authorization);
+        # an explicit Authorization header takes precedence
+        d = get_file_from_url(sprintf("http://user:pass@localhost:%d/echo", port),
+            <UrlRetrievalOptions>{"http_headers": {"Authorization": "Bearer token"}});
+        assertEq("Bearer token", parse_json(d).authorization);
+
+        # without a path, the path of the URL is requested; an absolute path replaces it, a relative one is
+        # appended to it
+        assertEq("/echo/x?y=1", parse_json(get_file_from_http(base + "/echo/x?y=1")).path);
+        assertEq("/echo/other", parse_json(get_file_from_http(base + "/echo/x?y=1", "/echo/other")).path);
+        assertEq("/echo/x/rel?z=2", parse_json(get_file_from_http(base + "/echo/x?y=1", "rel?z=2")).path);
+
+        # redirects are followed
+        d = get_file_from_url(base + "/redirect/2");
+        assertEq("/echo/final", parse_json(d).path);
+        d = get_file_from_url(base + "/redirect/5");
+        assertEq("/echo/final", parse_json(d).path);
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \get_file_from_url(), base + "/redirect/6");
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", \get_file_from_url(), base + "/nolocation");
+
+        # error responses raise HTTP-CLIENT-RECEIVE-ERROR with the response in the argument
+        try {
+            get_file_from_url(base + "/missing");
+            assertTrue(False, "no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertRegex("HTTP status code 404 received", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertEq("not found here", ex.arg.body);
+            assertRegex("^" + MimeTypeText, ex.arg."content-type");
+        }
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 500", \get_file_from_url(), base + "/error");
+
+        # a binary body is returned as binary data
+        d = get_file_from_url(base + "/binary");
+        assertEq(NT_BINARY, d.typeCode());
+        assertEq(<0001ff>, d);
+
+        # a response without a body returns an empty value
+        assertEq("", get_file_from_url(base + "/empty"));
+        assertEq(binary(), get_file_from_url(base + "/empty", <UrlRetrievalOptions>{"as_binary": True}));
+
+        # connection errors are raised
+        int free_port = get_free_port();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \get_file_from_url(), sprintf("http://localhost:%d/x", free_port));
+    }
+
     testGetFileFromUrlFtp() {
         FtpServer ftp(0, m_options.verbose);
         on_exit ftp.shutdown();
@@ -155,5 +246,32 @@ public class GetFileFromUrlTest inherits QUnit::Test {
 class SimpleStringHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(200, "test", {"Content-Type": MimeTypeText});
+    }
+}
+
+class RetrievalHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = cx.raw_path;
+        if (path =~ /^\/echo/) {
+            return makeResponse(200, make_json({
+                "path": path,
+                "method": hdr.method,
+                "accept": hdr.accept,
+                "authorization": hdr.authorization,
+                "x-test": hdr."x-test",
+            }), {"Content-Type": MimeTypeJson});
+        }
+        *list<*string> m = (path =~ x/^\/redirect\/([0-9]+)$/);
+        if (m) {
+            int n = m[0].toInt();
+            return makeResponse(302, "", {"Location": n > 1 ? sprintf("/redirect/%d", n - 1) : "/echo/final"});
+        }
+        switch (path) {
+            case "/nolocation": return makeResponse(302, "");
+            case "/error": return makeResponse(500, "server error", {"Content-Type": MimeTypeText});
+            case "/binary": return makeResponse(200, <0001ff>, {"Content-Type": MimeTypeOctetStream});
+            case "/empty": return makeResponse(204, NOTHING);
+        }
+        return makeResponse(404, "not found here", {"Content-Type": MimeTypeText});
     }
 }

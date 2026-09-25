@@ -41,8 +41,9 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | 3 | Sync clients created inside async providers: SendCloud cross-host/v3 clients (also fixed dropping a non-default port), AWS STS `assumeRole()`, generic API call discovery through a connection member (CustomerIo and PdfCo moved to phase 5 with their providers) | done |
 | 4 | Discord and ServiceNow providers (sync clients passed in are converted); `ServiceNowRestClientIo` and `CdsRestClientIo` brought to parity with the sync clients (API path, API key, auto OAuth2 URLs, error translation); CDS providers (absolute `@odata.nextLink`, request path encoding) | done |
 | 5 | 27 provider families typed to a sync `FooRestClient` (WooCommerce in phase 7); missing Io behavior added to the clients (GoHighLevel location, Zoho organization, FreshBooks account/business, Tableau sign-in, Unleashed signing, BigCommerce auth header, 429 retries) | done |
-| 6 | Direct `HTTPClient` users (Discord gateway discovery, `get_file_from_http()`, JSON-LD loader, A2A and ONE Record push notifications, `HttpClientDataProvider`, `FileLocationHandler`); `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | pending |
-| 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` | pending |
+| 6a | Discord gateway discovery, `get_file_from_http()` (HttpClientIo loaded at run time: Util cannot require it), JSON-LD loader, A2A and ONE Record push notifications | done |
+| 6b | `HttpClientDataProvider`, `FileLocationHandler`; `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | in progress |
+| 7 | New async clients: FHIR (done), EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` | in progress |
 
 ## Watch providers
 

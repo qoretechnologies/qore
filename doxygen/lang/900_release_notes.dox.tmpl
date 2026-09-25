@@ -1841,6 +1841,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
+      - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
+        @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
+        accepts an optional discovery URL
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - fixed platform-generated connection URLs by declaring the Discord gateway as the connection's
         \c DefaultConnectionUrl
       - fixed a bug where a connection created without a URL did not use the discovered gateway URL
@@ -2254,6 +2258,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         standard output; the statement is only passed to the \c error_callback
 
     - @ref utilintro "Util" module
+      - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
+        send HTTP requests with @ref httpclientiointro "HttpClientIo", which is loaded at
+        run time; timeouts, redirect handling and the errors raised for error responses and redirects are unchanged,
+        and @ref Util::get_file_from_http() "get_file_from_http()" without a path requests the path of the URL, as
+        documented, instead of \c "/"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - added @ref Util::get_http_request_target() "get_http_request_target()"
       - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection
       - fixed @ref Util::normalize_dir() "normalize_dir()" removing the root for a \c ".." segment directly below
         it: \c "/../etc" was returned as the relative path \c "etc"

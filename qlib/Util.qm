@@ -70,6 +70,7 @@ module Util {
     - @ref Util::get_byte_size()
     - @ref Util::get_exception_string()
     - @ref Util::get_free_port()
+    - @ref Util::get_http_request_target()
     - @ref Util::get_marketing_byte_size()
     - @ref Util::get_random_string()
     - @ref Util::glob_to_regex()
@@ -106,6 +107,15 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
+      send HTTP requests with the <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which is
+      loaded at runtime; the timeouts, redirect handling, and the errors raised for error responses and redirects are
+      unchanged; without a \c path argument, @ref Util::get_file_from_http() "get_file_from_http()" now requests the
+      path of the URL as documented instead of \c "/", a relative \c path is appended to the path of the URL, and a
+      response without a body returns an empty value instead of raising a type error
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added @ref Util::get_http_request_target() "get_http_request_target()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - fixed @ref Util::normalize_dir() "normalize_dir()", @ref Util::normalize_dir_unix() "normalize_dir_unix()", and
       @ref Util::normalize_dir_windows() "normalize_dir_windows()" so that a \c ".." segment never removes the root:
       \c "/../etc" returned the relative path \c "etc", and \c "C:\\..\\x" lost its drive
@@ -2472,19 +2482,143 @@ public data sub get_file_from_ftp(string url, string path, *hash<UrlRetrievalOpt
     return options.as_binary ? f.getAsBinary(file) : f.getAsString(file);
 }
 
+#! Returns the HTTP request target (the path and query) of a URL
+/** @par Example:
+    @code{.py}
+string target = get_http_request_target("https://example.com/a b/c?x=1#top");
+# target = "/a%20b/c?x=1"
+    @endcode
+
+    @param url the URL
+
+    @return the path and query of the URL as sent in an HTTP request: \c "/" if the URL has no path; any fragment
+    is removed, since it is never sent; octets that cannot appear in a request target (controls, space, non-ASCII
+    octets, double quotes, angle brackets, curly brackets, the backslash, the caret, the grave accent, and the
+    vertical bar) are percent-encoded, while percent-encoded octets and URI delimiters are kept exactly as given
+
+    @since Util 3.0
+*/
+public string sub get_http_request_target(string url) {
+    return encode_http_request_target(parse_url(url).path);
+}
+
+#! Returns a path and query as an HTTP request target; see get_http_request_target()
+string sub encode_http_request_target(*string target) {
+    # a fragment is never sent
+    target =~ s/#.*//s;
+    if (!target.val()) {
+        return "/";
+    }
+    if (target !~ /^\//) {
+        target = "/" + target;
+    }
+    if (target !~ /[^\x21-\x7e]|["<>\\^`{|}]/) {
+        return target;
+    }
+    binary octets = target.toBinary();
+    string rv;
+    for (int i = 0; i < octets.size(); ++i) {
+        int c = octets[i];
+        if (c <= 0x20 || c >= 0x7f || c == 0x22 || c == 0x3c || c == 0x3e || c == 0x5c || c == 0x5e
+                || c == 0x60 || c == 0x7b || c == 0x7c || c == 0x7d) {
+            rv += sprintf("%%%02X", c);
+        } else {
+            rv += chr(c);
+        }
+    }
+    return rv;
+}
+
+# the connect timeout for get_file_from_http(), the default of Qore::HTTPClient
+const HttpRetrievalConnectTimeout = 60s;
+# the response timeout for get_file_from_http(), the default of Qore::HTTPClient
+const HttpRetrievalTimeout = 5m;
+# the maximum number of redirects followed by get_file_from_http(), the default of Qore::HTTPClient
+const HttpRetrievalMaxRedirects = 5;
+
 #! Retrieves file data from an HTTP URL
-/** @param url the HTTP URL including the path to the resource to retrieve
-    @param path an optional path to append to the URL
+/** The request is sent with the <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which is
+    loaded when the function is first called; up to 5 redirects are followed.  User information in the URL is sent
+    as HTTP basic authentication, unless an \c Authorization header is given in
+    @ref Util::UrlRetrievalOptions::http_headers "http_headers".
+
+    @param url the HTTP URL including the path to the resource to retrieve
+    @param path an optional path for the resource: an absolute path replaces the path of the URL, and a relative
+    path is appended to the path of the URL; if not given, the path of the URL is used
     @param options connection options
+
+    @return the body of the response: a string if its media type is textual, otherwise a binary value, or always a
+    binary value if @ref Util::UrlRetrievalOptions::as_binary "as_binary" is set
+
+    @throw HTTP-CLIENT-RECEIVE-ERROR the response has a status code less than 100 or greater than or equal to
+    300; the exception argument is a hash of the response headers with lower-case names plus the \c status_code,
+    \c status_message, and \c body keys
+    @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED more than 5 redirects
+    @throw HTTP-CLIENT-REDIRECT-ERROR a redirect cannot be followed (no or more than one \c Location value, or
+    a location with no or an invalid host or with an unsupported scheme)
+
+    @note connection and transport errors are raised by
+    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> (ex: \c HTTPCLIENT-CONNECT-ERROR,
+    \c HTTPCLIENT-TIMEOUT)
 
     @since Util 1.5
 */
 public data sub get_file_from_http(string url, *string path, *hash<UrlRetrievalOptions> options) {
-    HTTPClient http({"url": url});
+    hash<UrlInfo> url_info = parse_url(url);
+    string target;
+    if (path.val() && path =~ /^\//) {
+        target = encode_http_request_target(path);
+    } else if (path.val()) {
+        # a relative path is appended to the path of the URL without its query
+        string base = encode_http_request_target(url_info.path);
+        base =~ s/\?.*//s;
+        if (base !~ /\/$/) {
+            base += "/";
+        }
+        target = base + encode_http_request_target(path).substr(1);
+    } else {
+        target = encode_http_request_target(url_info.path);
+    }
+
+    hash<auto> hdr = {"Accept": "*"} + options.http_headers;
+    if (url_info.username.val() && !(select keys hdr, $1.lwr() == "authorization")) {
+        hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
+            url_info.password ?? ""));
+    }
+
+    # HttpClientIo depends on Util, so it is loaded at runtime rather than required by this module
+    load_module("HttpClientIo");
+    hash<auto> mgr_opts = TypedHash::forName("HttpClientIo::HttpClientConnectionManagerOptions").doCast({
+        "connect_timeout": HttpRetrievalConnectTimeout,
+        "request_timeout": HttpRetrievalTimeout,
+        "max_redirects": HttpRetrievalMaxRedirects,
+    });
+    object mgr = create_object("HttpClientIo::HttpClientConnectionManager", mgr_opts);
+    on_exit mgr.closeAll();
+
+    hash<auto> resp;
+    try {
+        resp = mgr.request(url, "GET", target, hdr);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "HTTP-REDIRECT-ERROR") {
+            throw ex.desc =~ /^maximum redirects/
+                ? "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED"
+                : "HTTP-CLIENT-REDIRECT-ERROR", ex.desc, ex.arg;
+        }
+        rethrow;
+    }
+    if (resp.status_code < 100 || resp.status_code >= 300) {
+        throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %s", resp.status_code,
+            resp.status_message ?? "<no message>"), (resp.headers ?? {}) + resp{"status_code", "status_message",
+            "body"};
+    }
     # the media type of the response decides whether the body is a string or binary; a binary body
     # must not be forced to a string here, or its octets are reinterpreted as character data
-    data body = http.get(path ? path : "/", {"Accept": "*"} + options.http_headers);
-    return options.as_binary ? binary(body) : body;
+    *data body = resp.body;
+    if (options.as_binary) {
+        return exists body ? binary(body) : binary();
+    }
+    return body ?? "";
 }
 
 #! Retrieves file data from a local file path
