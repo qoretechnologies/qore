@@ -32,15 +32,16 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
         const BaseConstructorOptions = {
             "instantlyrestclient": <DataProviderOptionInfo>{
                 "display_name": "Instantly REST Client",
-                "short_desc": "The InstantlyRestClient object",
-                "type": AbstractDataProviderType::get(new Type("InstantlyRestClient::InstantlyRestClient")),
-                "desc": "The InstantlyRestClient object to use for API calls",
+                "short_desc": "The InstantlyRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("InstantlyRestClient::InstantlyRestClientIo")),
+                "desc": "The `InstantlyRestClientIo` object to use for API calls",
             },
             "instantlyrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Instantly REST Client Options",
-                "short_desc": "Options for creating an InstantlyRestClient",
+                "short_desc": "Options for creating an InstantlyRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating an InstantlyRestClient object if one is not provided directly",
+                "desc": "Options for creating an `InstantlyRestClientIo` object if one is not provided "
+                    "directly",
             },
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Key",
@@ -56,7 +57,7 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
 
     private {
         #! The REST client object for API calls
-        InstantlyRestClient::InstantlyRestClient rest;
+        InstantlyRestClient::InstantlyRestClientIo rest;
 
         #! The connection object, if applicable
         *InstantlyRestClient::InstantlyRestConnection conn;
@@ -67,14 +68,14 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest) {
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(InstantlyRestClient::InstantlyRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -87,12 +88,12 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new InstantlyRestClient::InstantlyRestClient(client_opts);
+            rest = new InstantlyRestClient::InstantlyRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    InstantlyRestClient::InstantlyRestClient getRestClient() {
+    InstantlyRestClient::InstantlyRestClientIo getRestClient() {
         return rest;
     }
 
@@ -119,7 +120,7 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
             url += "?" + buildQueryString(params);
         }
         try {
-            return rest.get(url).body;
+            return rest.restGet(url).body;
         } catch (hash<ExceptionInfo> ex) {
             handleRestException(ex);
         }
@@ -146,7 +147,7 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     auto doPost(string path, *hash<auto> body) {
         try {
-            return rest.post(path, body).body;
+            return rest.restPost(path, body).body;
         } catch (hash<ExceptionInfo> ex) {
             handleRestException(ex);
         }
@@ -161,7 +162,7 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     auto doPatch(string path, *hash<auto> body) {
         try {
-            return rest.patch(path, body).body;
+            return rest.restPatch(path, body).body;
         } catch (hash<ExceptionInfo> ex) {
             handleRestException(ex);
         }
@@ -176,7 +177,7 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     auto doDelete(string path, *hash<auto> body) {
         try {
-            return rest.del(path, body).body;
+            return rest.restDel(path, body).body;
         } catch (hash<ExceptionInfo> ex) {
             handleRestException(ex);
         }
@@ -357,26 +358,28 @@ public class InstantlyDataProviderBase inherits DataProvider::AbstractDataProvid
     #! Handles REST exceptions by extracting Instantly-specific error details
     /** @param ex the exception info from the REST client
 
-        @throw INSTANTLY-API-ERROR with the Instantly error message extracted from the response body
+        @throw INSTANTLY-API-ERROR with the Instantly error message extracted from the response body; the
+        exception argument is the @ref RestClient::RestResponseInfo "RestResponseInfo" hash of the error response
+        with the \c status_code, \c headers and decoded \c body keys
     */
     private handleRestException(hash<ExceptionInfo> ex) {
         if (ex.err == "REST-RESPONSE-ERROR") {
-            # Try to extract a meaningful error message from the response body
+            # Try to extract a meaningful error message from the decoded response body
             *hash<auto> body;
-            if (ex.arg.typeCode() == NT_HASH) {
-                body = ex.arg;
+            if (ex.arg.body.typeCode() == NT_HASH) {
+                body = ex.arg.body;
             }
             string err_msg;
-            if (body.message) {
+            if (body.message.typeCode() == NT_STRING && body.message.val()) {
                 err_msg = body.message;
-            } else if (body.error) {
+            } else if (body.error.typeCode() == NT_STRING && body.error.val()) {
                 err_msg = body.error;
-            } else if (body.detail) {
+            } else if (body.detail.typeCode() == NT_STRING && body.detail.val()) {
                 err_msg = body.detail;
             } else {
                 err_msg = ex.desc;
             }
-            throw "INSTANTLY-API-ERROR", err_msg, body;
+            throw "INSTANTLY-API-ERROR", err_msg, ex.arg;
         }
         throw ex.err, ex.desc, ex.arg;
     }

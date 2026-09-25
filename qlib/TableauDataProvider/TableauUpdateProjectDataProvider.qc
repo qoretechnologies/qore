@@ -99,7 +99,7 @@ public class TableauUpdateProjectDataProvider inherits TableauDataProviderBase {
         static TableauProjectDataType ResponseType();
     }
 
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     string getName() {

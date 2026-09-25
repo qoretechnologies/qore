@@ -1739,6 +1739,19 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
       - added support for the @ref dataproviderintro "DataProvider" expression framework for OData queries with support for
         contains, startsWith, endsWith, null, and notNull operators
+      - API calls are made with an asynchronous @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo"; a
+        synchronous @ref CdsRestClient::CdsRestClient "CdsRestClient" passed to a data provider, directly or in the
+        \c cdsrestclient option, is converted with
+        @ref CdsRestDataProvider::CdsRestDataProviderBase::getAsyncClient() "CdsRestDataProviderBase::getAsyncClient()"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - OData \c \@odata.nextLink values, which are absolute URLs, are followed with their path and query, and
+        request paths are percent-encoded as with the synchronous client
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - fixed passing a REST client in the \c cdsrestclient option, which always failed with
+        \c METHOD-DOES-NOT-EXIST, and which the Business Central and tables data providers ignored
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - stopping a Dynamics event provider aborts an in-flight polling request without closing the shared REST
+        client (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref connectionproviderintro "ConnectionProvider" module
       - added the \c max_response_body_size option to @ref ConnectionProvider::HttpConnection "HttpConnection"
@@ -1753,6 +1766,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         schemes to @ref ConnectionProvider::ConnectionSchemeCache::SchemeMap "ConnectionSchemeCache::SchemeMap"
 
     - @ref dataproviderintro "DataProvider" module
+      - stopping a watch data provider cancels its polling thread, which ends a blocking operation in it, such as an
+        HTTP request, at once; observer notifications and checkpoint persistence run with cancellation deferred, so
+        they are not interrupted.  The watch data providers of the REST-based modules no longer close their REST
+        client to cancel an in-flight request: the client is shared with the other data providers of the connection,
+        and closing a @ref restclientiointro "RestClientIo" client shuts down its connection manager
+        for good, so every later request failed with \c HTTPCLIENT-SHUTDOWN once a watch data provider had been
+        stopped or destroyed (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - fixed optional @ref DataProvider::SoftListDataType "soft list" types whose elements accept @ref nothing
         reporting themselves as mandatory, so that a hash type rejected a value omitting such a field
       - fixed @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restoring a soft
@@ -1813,6 +1833,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         unread \c default_headers option, so requests and the connection ping were sent without
         authentication and failed with HTTP 401
         (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
+
+    - @ref discorddataproviderintro "DiscordDataProvider" module
+      - API calls are made with an asynchronous
+        @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"; a synchronous
+        @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider is converted
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
       - fixed platform-generated connection URLs by declaring the Discord gateway as the connection's
@@ -2095,6 +2121,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         based on them, can be serialized
 
     - @ref restclientintro "RestClient" module
+      - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
+        providers that make API calls with an asynchronous @ref restclientiointro "RestClientIo" client, and
+        no longer connects to the server to create them
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()"
       - OAuth consent URLs encode optional authorization arguments and state, preserving scope lists and
         reserved characters without introducing extra query parameters
         (<a href="https://github.com/qoretechnologies/qore/issues/5443">issue 5443</a>)
@@ -2170,6 +2201,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
       - added optional AsyncAPI 3.0 validation for outbound SSE event data via the \c asyncapi,
         \c validator, and \c asyncapi_channel handler and bridge options
+
+    - @ref servicenowrestdataproviderintro "ServiceNowRestDataProvider" module
+      - API calls are made with an asynchronous
+        @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"; a synchronous
+        @ref ServiceNowRestClient::ServiceNowRestClient "ServiceNowRestClient" passed to the data provider is
+        converted (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - fixed passing a REST client in the \c snrestclient option, which always failed
 
     - @ref sqlutilintro "SqlUtil" module
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to

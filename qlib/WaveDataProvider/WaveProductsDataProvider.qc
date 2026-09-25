@@ -77,7 +77,7 @@ public class WaveProductsDataProvider inherits WaveDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(WaveRestClient::WaveRestClient rest) : WaveDataProviderBase(rest) {
+    constructor(WaveRestClient::WaveRestClientIo rest) : WaveDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

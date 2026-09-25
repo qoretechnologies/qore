@@ -112,7 +112,7 @@ public class LemlistCreateContactDataProvider inherits LemlistDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(LemlistRestClient::LemlistRestClient rest)
+    constructor(LemlistRestClient::LemlistRestClientIo rest)
             : LemlistDataProviderBase(rest) {
     }
 

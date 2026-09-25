@@ -47,7 +47,7 @@ public class LinearCommentDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string commentId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string commentId) : LinearDataProviderBase(rest) {
         @assert(commentId.val(), "comment ID cannot be empty");
         self.commentId = commentId;
     }

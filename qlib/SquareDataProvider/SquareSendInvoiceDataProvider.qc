@@ -65,7 +65,7 @@ public class SquareSendInvoiceDataProvider inherits SquareDataProviderBase {
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(SquareRestClient::SquareRestClient rest) : SquareDataProviderBase(rest) {
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareDataProviderBase(rest) {
     }
 
     string getName() {

@@ -79,7 +79,7 @@ public class SquarespaceUpdateStockDataProvider inherits SquarespaceDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest) : SquarespaceDataProviderBase(rest) {
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest) : SquarespaceDataProviderBase(rest) {
     }
 
     #! Returns the provider name

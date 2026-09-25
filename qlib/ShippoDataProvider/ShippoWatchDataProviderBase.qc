@@ -51,7 +51,7 @@ public class ShippoWatchDataProviderBase inherits ShippoDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(ShippoRestClient::ShippoRestClient rest, *hash<auto> options)
+    constructor(ShippoRestClient::ShippoRestClientIo rest, *hash<auto> options)
             : ShippoDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -67,11 +67,6 @@ public class ShippoWatchDataProviderBase inherits ShippoDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery

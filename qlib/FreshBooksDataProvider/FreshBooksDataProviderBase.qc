@@ -72,20 +72,28 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             },
         };
 
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for FreshBooks data providers
         const BaseConstructorOptions = {
             "freshbooksrestclient": <DataProviderOptionInfo>{
                 "display_name": "FreshBooks REST Client",
-                "short_desc": "The FreshBooksRestClient object",
+                "short_desc": "The FreshBooksRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("FreshBooksRestClient::FreshBooksRestClient")),
-                "desc": "The FreshBooksRestClient object to use for API calls",
+                    new Type("FreshBooksRestClient::FreshBooksRestClientIo")),
+                "desc": "The `FreshBooksRestClientIo` object to use for API calls",
             },
             "freshbooksrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "FreshBooks REST Client Options",
-                "short_desc": "Options for creating a FreshBooksRestClient",
+                "short_desc": "Options for creating a FreshBooksRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a FreshBooksRestClient object if one is not provided "
+                "desc": "Options for creating a `FreshBooksRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -93,7 +101,7 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
 
     private {
         #! The REST client object for API calls
-        FreshBooksRestClient::FreshBooksRestClient rest;
+        FreshBooksRestClient::FreshBooksRestClientIo rest;
 
         #! The connection object, if applicable
         *FreshBooksRestClient::FreshBooksRestConnection conn;
@@ -104,14 +112,14 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(FreshBooksRestClient::FreshBooksRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -121,12 +129,12 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             rest = copts.freshbooksrestclient;
         } else {
             hash<auto> client_opts = copts.freshbooksrestclient_options ?? {};
-            rest = new FreshBooksRestClient::FreshBooksRestClient(client_opts);
+            rest = new FreshBooksRestClient::FreshBooksRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    FreshBooksRestClient::FreshBooksRestClient getRestClient() {
+    FreshBooksRestClient::FreshBooksRestClientIo getRestClient() {
         return rest;
     }
 
@@ -232,28 +240,15 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "FRESHBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "FRESHBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (headers are lowercase in RestClient)
-                if (info."response-headers"."x-ratelimit-remaining" == "0") {
-                    *string reset = info."response-headers"."retry-after";
+                # Check for rate limiting (response header names are lowercase in RestClientIo)
+                if (response.headers."x-ratelimit-remaining" == "0") {
+                    *string reset = response.headers."retry-after";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {

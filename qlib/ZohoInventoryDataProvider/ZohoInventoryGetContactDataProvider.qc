@@ -65,11 +65,11 @@ public class ZohoInventoryGetContactDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.contact_id) {
             contact_id = options.contact_id;
         }

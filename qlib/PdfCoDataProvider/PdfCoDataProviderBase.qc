@@ -28,20 +28,26 @@ public namespace PdfCoDataProvider {
 #! Base class for PDF.co data providers
 public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+        };
+
         #! Base constructor options for PDF.co data providers
         const BaseConstructorOptions = {
             "pdfcorestclient": <DataProviderOptionInfo>{
                 "display_name": "PDF.co REST Client",
-                "short_desc": "The PdfCoRestClient object",
+                "short_desc": "The PdfCoRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("PdfCoRestClient::PdfCoRestClient")),
-                "desc": "The PdfCoRestClient object to use for API calls",
+                    new Type("PdfCoRestClient::PdfCoRestClientIo")),
+                "desc": "The `PdfCoRestClientIo` object to use for API calls",
             },
             "pdfcorestclient_options": <DataProviderOptionInfo>{
                 "display_name": "PDF.co REST Client Options",
-                "short_desc": "Options for creating a PdfCoRestClient",
+                "short_desc": "Options for creating a PdfCoRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a PdfCoRestClient object if one is not provided "
+                "desc": "Options for creating a `PdfCoRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,13 +55,13 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client object for API calls
-        PdfCoRestClient::PdfCoRestClient rest;
+        PdfCoRestClient::PdfCoRestClientIo rest;
 
         #! The connection object, if applicable
         *PdfCoRestClient::PdfCoRestConnection conn;
 
         #! Lazily-built REST client targeting the /v2 base for v2-only endpoints
-        *PdfCoRestClient::PdfCoRestClient rest_v2;
+        *PdfCoRestClient::PdfCoRestClientIo rest_v2;
     }
 
     #! Creates the object with no arguments for child classes
@@ -63,14 +69,14 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the object with a REST client
-    constructor(PdfCoRestClient::PdfCoRestClient rest) {
+    constructor(PdfCoRestClient::PdfCoRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(PdfCoRestClient::PdfCoRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -79,12 +85,12 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         if (copts.pdfcorestclient) {
             rest = copts.pdfcorestclient;
         } else {
-            rest = new PdfCoRestClient::PdfCoRestClient(copts.pdfcorestclient_options ?? {});
+            rest = new PdfCoRestClient::PdfCoRestClientIo(copts.pdfcorestclient_options ?? {});
         }
     }
 
     #! Returns the REST client
-    PdfCoRestClient::PdfCoRestClient getRestClient() {
+    PdfCoRestClient::PdfCoRestClientIo getRestClient() {
         return rest;
     }
 
@@ -232,7 +238,7 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         @throw PDFCO-JOB-TIMEOUT if the job does not complete within the polling limit
     */
     hash<auto> doPostV2(string path, *hash<auto> body) {
-        PdfCoRestClient::PdfCoRestClient v2 = getRestClientV2();
+        PdfCoRestClient::PdfCoRestClientIo v2 = getRestClientV2();
         hash<auto> resp = doRestRequestWith(v2, "POST", path, body);
         if (body."async") {
             return resp;
@@ -241,7 +247,7 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns (lazily creating) a REST client whose base URL targets PDF.co \c /v2
-    private PdfCoRestClient::PdfCoRestClient getRestClientV2() {
+    private PdfCoRestClient::PdfCoRestClientIo getRestClientV2() {
         if (rest_v2) {
             return rest_v2;
         }
@@ -250,12 +256,12 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
             throw "PDFCO-ERROR", "cannot construct v2 REST client: API key is not "
                 "available on the v1 client";
         }
-        string v1_url = rest.getURL();
+        string v1_url = rest.getUrl();
         string v2_url = regex_subst(v1_url, "/v1$", "/v2");
         if (v2_url == v1_url) {
             v2_url += (v1_url =~ /\/$/ ? "v2" : "/v2");
         }
-        rest_v2 = new PdfCoRestClient::PdfCoRestClient({
+        rest_v2 = new PdfCoRestClient::PdfCoRestClientIo({
             "url": v2_url,
             "apikey": apikey,
         });
@@ -336,23 +342,16 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
 
         @throw PDFCO-API-ERROR if the response indicates an error
     */
-    private hash<auto> doRestRequestWith(PdfCoRestClient::PdfCoRestClient client, string method,
+    private hash<auto> doRestRequestWith(PdfCoRestClient::PdfCoRestClientIo client, string method,
             string path, auto body = NOTHING) {
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = client.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = client.post(path, body, \info);
-                        break;
-                    default:
-                        throw "PDFCO-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "PDFCO-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = client.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 if (!exists response.body || response.body.typeCode() != NT_HASH) {

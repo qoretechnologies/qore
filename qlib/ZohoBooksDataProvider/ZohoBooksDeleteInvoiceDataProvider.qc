@@ -78,11 +78,11 @@ public class ZohoBooksDeleteInvoiceDataProvider inherits ZohoBooksDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options) : ZohoBooksDataProviderBase(rest) {
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options) : ZohoBooksDataProviderBase(rest) {
         if (options.invoice_id) {
             invoice_id = options.invoice_id;
         }

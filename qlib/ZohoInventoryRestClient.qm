@@ -668,12 +668,98 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
 /** @see ZohoInventoryRestClient for more information
 */
 public class ZohoInventoryRestClientIo inherits RestClientIo::RestClientIo, ZohoInventoryRestClientBase {
+    private {
+        #! The organization ID - required for all API calls except /organizations
+        *string organization_id;
+
+        #! Subdomain for Zoho URLs (zoho or zohocloud)
+        string subdomain;
+
+        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+        string domain;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo" class
+        plus:
+        - \c organization_id: the Zoho Inventory organization ID (required for most operations)
+        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
         @param shared_mgr optional shared connection manager
+
+        @throw ZOHOINVENTORY-ERROR invalid subdomain or domain specified
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(ZohoInventoryRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.organization_id) {
+            organization_id = opts.organization_id;
+        }
+        subdomain = opts.subdomain ?? DefaultSubdomain;
+        domain = opts.domain ?? DefaultDomain;
+    }
+
+    #! Returns the organization ID
+    /** @return the organization ID added to requests, or @ref nothing if none has been set
+    */
+    *string getOrganizationId() {
+        return organization_id;
+    }
+
+    #! Sets the organization ID added to all subsequent requests
+    /** The organization ID is added as the \c organization_id query parameter to all requests except
+        for requests to \c /organizations and requests whose path already contains \c organization_id.
+
+        This method can be called while requests are in progress; each request uses the organization ID
+        set when the request is prepared.
+
+        @param org_id the Zoho Inventory organization ID
+    */
+    setOrganizationId(string org_id) {
+        organization_id = org_id;
+    }
+
+    #! Returns the subdomain
+    /** @return the Zoho subdomain ("zoho" or "zohocloud")
+    */
+    string getSubdomain() {
+        return subdomain;
+    }
+
+    #! Returns the domain
+    /** @return the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+    */
+    string getDomain() {
+        return domain;
+    }
+
+    #! Adds the organization ID to the request path before the request is prepared
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        addOrganizationId(\path);
+        return RestClientIo::prepareRequest(method, \path, body, \hdr);
+    }
+
+    #! Adds the organization ID to the request path before the raw request is prepared
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        addOrganizationId(\path);
+        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+    }
+
+    #! Appends the organization_id query parameter to the given path
+    /** The organization_id is appended to all API paths except for /organizations, which is used to retrieve
+        the list of available organizations, and paths that already contain organization_id.
+
+        A request that is sent again (ex: after an authorization retry) is prepared again with the path that
+        already has the connection path prepended, therefore the /organizations path is matched as the last path
+        component.
+    */
+    private addOrganizationId(reference<string> path) {
+        # take a single snapshot of the organization ID, which can be changed concurrently
+        *string org_id = organization_id;
+        if (org_id && path !~ /(^|\/)organizations($|\?)/ && path !~ /organization_id=/) {
+            path += (path =~ /\?/ ? "&" : "?") + "organization_id=" + org_id;
+        }
     }
 }
 }

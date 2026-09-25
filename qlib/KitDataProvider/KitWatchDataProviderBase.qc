@@ -42,7 +42,7 @@ public class KitWatchDataProviderBase inherits KitDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -51,11 +51,6 @@ public class KitWatchDataProviderBase inherits KitDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery

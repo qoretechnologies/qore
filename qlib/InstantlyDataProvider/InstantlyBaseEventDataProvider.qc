@@ -56,7 +56,7 @@ public class InstantlyBaseEventDataProvider inherits InstantlyDataProviderBase, 
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest, *hash<auto> options)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest, *hash<auto> options)
             : InstantlyDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", LocalOptions, options);
         if (copts.campaign_id) {
@@ -150,7 +150,7 @@ public class InstantlyBaseEventDataProvider inherits InstantlyDataProviderBase, 
     private hash<auto> getExampleEventDataFromApi() {
         # Try to get a real lead to use for example data
         hash<auto> body = {"limit": 1};
-        hash<auto> response = rest.post("/leads/list", body);
+        hash<auto> response = rest.restPost("/leads/list", body);
         if (response.body.typeCode() == NT_HASH && response.body.items.size() > 0) {
             hash<auto> lead = response.body.items[0];
             hash<auto> example = getFakeExampleData();

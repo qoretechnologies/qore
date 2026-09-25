@@ -39,7 +39,7 @@ public class Cin7CoreNewSaleInvoiceWatchDataProvider inherits Cin7CoreWatchDataP
     }
 
     #! Creates the object with a REST client
-    constructor(Cin7CoreRestClient::Cin7CoreRestClient rest, *hash<auto> options)
+    constructor(Cin7CoreRestClient::Cin7CoreRestClientIo rest, *hash<auto> options)
             : Cin7CoreWatchDataProviderBase(rest, options) {
     }
 

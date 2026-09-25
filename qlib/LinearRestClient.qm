@@ -460,5 +460,43 @@ public class LinearRestClientIo inherits RestClientIo::RestClientIo, LinearRestC
     hash<auto> graphql(string query, *hash<auto> variables, *hash<auto> hdr) {
         return checkGraphQLResponse(restPost("", GraphQLClientBase::makeGraphQLBody(query, variables), hdr));
     }
+
+    #! Executes a GraphQL query
+    /** @param query the GraphQL query string
+        @param variables optional variables for the query
+        @param hdr optional headers to send with the request
+
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
+
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
+        @throw REST-RESPONSE-ERROR if the server returns an HTTP error response
+
+        @see graphql()
+    */
+    hash<auto> query(string query, *hash<auto> variables, *hash<auto> hdr) {
+        return graphql(query, variables, hdr);
+    }
+
+    #! Executes a GraphQL mutation
+    /** @param mutation the GraphQL mutation string
+        @param variables optional variables for the mutation
+        @param hdr optional headers to send with the request
+
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
+
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
+        @throw REST-RESPONSE-ERROR if the server returns an HTTP error response
+
+        @see graphql()
+    */
+    hash<auto> mutate(string mutation, *hash<auto> variables, *hash<auto> hdr) {
+        return graphql(mutation, variables, hdr);
+    }
 }
 }

@@ -39,7 +39,7 @@ public class SquarespaceWatchOrdersDataProvider inherits SquarespaceWatchDataPro
     }
 
     #! Creates the object with a REST client
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest, *hash<auto> options)
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest, *hash<auto> options)
             : SquarespaceWatchDataProviderBase(rest, options) {
     }
 

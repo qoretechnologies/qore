@@ -39,7 +39,7 @@ public class TableauWatchDatasourcesDataProvider inherits TableauPollEventDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauPollEventDataProviderBase(rest, options) {
     }
 
@@ -109,7 +109,7 @@ public class TableauWatchProjectsDataProvider inherits TableauPollEventDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauPollEventDataProviderBase(rest, options) {
     }
 

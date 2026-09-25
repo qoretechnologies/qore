@@ -38,15 +38,15 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         const BaseConstructorOptions = {
             "mailgunrestclient": <DataProviderOptionInfo>{
                 "display_name": "Mailgun REST Client",
-                "short_desc": "The MailgunRestClient object",
-                "type": AbstractDataProviderType::get(new Type("MailgunRestClient::MailgunRestClient")),
-                "desc": "The MailgunRestClient object to use for API calls",
+                "short_desc": "The MailgunRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("MailgunRestClient::MailgunRestClientIo")),
+                "desc": "The `MailgunRestClientIo` object to use for API calls",
             },
             "mailgunrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Mailgun REST Client Options",
-                "short_desc": "Options for creating a MailgunRestClient",
+                "short_desc": "Options for creating a MailgunRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a MailgunRestClient object if one is not provided directly",
+                "desc": "Options for creating a `MailgunRestClientIo` object if one is not provided directly",
             },
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Key",
@@ -88,7 +88,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
 
     private {
         #! The REST client object for API calls
-        MailgunRestClient::MailgunRestClient rest;
+        MailgunRestClient::MailgunRestClientIo rest;
 
         #! The connection object, if applicable
         *MailgunRestClient::MailgunRestConnection conn;
@@ -105,19 +105,20 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(MailgunRestClient::MailgunRestClient rest, *string api_domain) {
+    constructor(MailgunRestClient::MailgunRestClientIo rest, *string api_domain) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
         self.api_domain = api_domain;
-        # Default webhook signing key to the API key from the REST client
-        self.webhook_signing_key = rest.getPassword();
+        # Default webhook signing key to the API key from the REST client, which is the HTTP basic
+        # authentication password
+        self.webhook_signing_key = rest.getConstructorOptions().password;
     }
 
     #! Creates the object with a connection
     constructor(MailgunRestClient::MailgunRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
         # Get options from connection
         hash<auto> conn_opts = conn.getConnectionOptions();
@@ -143,13 +144,13 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
             if (copts.api_domain) {
                 client_opts.api_domain = copts.api_domain;
             }
-            rest = new MailgunRestClient::MailgunRestClient(client_opts);
+            rest = new MailgunRestClient::MailgunRestClientIo(client_opts);
         }
         api_domain = copts.api_domain;
     }
 
     #! Returns the REST client
-    MailgunRestClient::MailgunRestClient getRestClient() {
+    MailgunRestClient::MailgunRestClientIo getRestClient() {
         return rest;
     }
 
@@ -197,7 +198,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -226,7 +227,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -268,17 +269,13 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
 
         @debug(log(LoggerLevel::DEBUG, "doPostFormEncoded: encoded body: %s", encoded_body));
 
-        # Set Content-Type header and send as raw text
+        # Set Content-Type header and send the encoded body as-is; the client is shared, so the body is sent
+        # with a raw request instead of changing the serialization of the client
         hash<auto> headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         };
 
-        # Save current serialization and switch to "text" to send raw body
-        string old_serialization = rest.getSerialization();
-        rest.setSerialization("text");
-        on_exit rest.setSerialization(old_serialization);
-
-        hash<auto> response = rest.post(path, encoded_body, NOTHING, headers);
+        hash<auto> response = rest.restDoRawRequest("POST", path, encoded_body, headers);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPostFormEncoded: success, response keys: %y", keys response.body));
         return response.body;
@@ -329,8 +326,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
 
         # Send multipart request
         hash<auto> msgInfo = msg.getMsgAndHeaders();
-        hash<auto> info;
-        hash<auto> response = rest.doRequest("POST", path, msgInfo.body, \info, NOTHING, msgInfo.hdr);
+        hash<auto> response = rest.restDoRawRequest("POST", path, msgInfo.body, msgInfo.hdr);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPostMultipart: success, response keys: %y", keys response.body));
         return response.body;
@@ -347,7 +343,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPut: PUT %s with body: %y", path, body));
-        hash<auto> response = rest.put(path, body);
+        hash<auto> response = rest.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPut: success, response keys: %y", keys response.body));
         return response.body;
@@ -363,7 +359,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doDelete: DELETE %s", path));
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;

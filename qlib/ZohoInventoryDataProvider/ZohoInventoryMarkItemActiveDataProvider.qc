@@ -86,11 +86,11 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.item_id) {
             item_id = options.item_id;
         }

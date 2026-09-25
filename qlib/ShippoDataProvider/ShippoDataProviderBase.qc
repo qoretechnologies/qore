@@ -32,15 +32,15 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
         const BaseConstructorOptions = {
             "shipporestclient": <DataProviderOptionInfo>{
                 "display_name": "Shippo REST Client",
-                "short_desc": "The ShippoRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ShippoRestClient::ShippoRestClient")),
-                "desc": "The ShippoRestClient object to use for API calls",
+                "short_desc": "The ShippoRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("ShippoRestClient::ShippoRestClientIo")),
+                "desc": "The `ShippoRestClientIo` object to use for API calls",
             },
             "shipporestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Shippo REST Client Options",
-                "short_desc": "Options for creating a ShippoRestClient",
+                "short_desc": "Options for creating a ShippoRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a ShippoRestClient object if one is not provided directly",
+                "desc": "Options for creating a `ShippoRestClientIo` object if one is not provided directly",
             },
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Token",
@@ -54,7 +54,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        ShippoRestClient::ShippoRestClient rest;
+        ShippoRestClient::ShippoRestClientIo rest;
 
         #! The connection object, if applicable
         *ShippoRestClient::ShippoRestConnection conn;
@@ -65,7 +65,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object with a REST client
-    constructor(ShippoRestClient::ShippoRestClient rest) {
+    constructor(ShippoRestClient::ShippoRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -74,7 +74,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
     constructor(ShippoRestClient::ShippoRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -88,12 +88,12 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new ShippoRestClient::ShippoRestClient(client_opts);
+            rest = new ShippoRestClient::ShippoRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ShippoRestClient::ShippoRestClient getRestClient() {
+    ShippoRestClient::ShippoRestClientIo getRestClient() {
         return rest;
     }
 
@@ -122,7 +122,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -155,7 +155,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -172,7 +172,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPut: PUT %s with body: %y", path, body));
-        hash<auto> response = rest.put(path, body);
+        hash<auto> response = rest.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPut: success, response keys: %y", keys response.body));
         return response.body;
@@ -188,7 +188,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doDelete: DELETE %s", path));
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;

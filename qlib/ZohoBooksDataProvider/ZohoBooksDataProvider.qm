@@ -2157,7 +2157,7 @@ module ZohoBooksDataProvider {
 %requires ZohoBooksRestClient
 
 # Create a REST client with credentials
-ZohoBooksRestClient rest({
+ZohoBooksRestClientIo rest({
     "oauth2_client_id": ENV.ZOHOBOOKS_CLIENT_ID,
     "oauth2_client_secret": ENV.ZOHOBOOKS_CLIENT_SECRET,
     "oauth2_refresh_token": ENV.ZOHOBOOKS_REFRESH_TOKEN,

@@ -89,7 +89,7 @@ public class WaveInvoiceEventDataProvider inherits WaveDataProviderBase, DataPro
     }
 
     #! Creates the object with a REST client
-    constructor(WaveRestClient::WaveRestClient rest, *hash<auto> options) : WaveDataProviderBase(rest) {
+    constructor(WaveRestClient::WaveRestClientIo rest, *hash<auto> options) : WaveDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.businessId) {
             businessId = copts.businessId;

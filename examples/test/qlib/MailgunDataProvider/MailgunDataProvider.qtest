@@ -37,31 +37,62 @@
 
 %requires MailgunRestClient
 %requires MailgunDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class MailgunDataProviderTest
 
-#! Records the form-encoded request body without contacting the Mailgun API
-class FakeMailgunRestClient inherits MailgunRestClient::MailgunRestClient {
+#! A Mailgun client that sends its requests to a local server
+/** The Mailgun client always derives its URL from the \c api_region option, so the target URL is replaced
+    after the client has been created
+*/
+class LocalMailgunRestClientIo inherits MailgunRestClient::MailgunRestClientIo {
+    constructor(string url) : MailgunRestClientIo({"apikey": "fake-key", "api_domain": "mg.example.com"}) {
+        self.url = url;
+    }
+}
+
+#! A local Mailgun API server that records requests
+class FakeMailgunHandler inherits AbstractHttpRequestHandler {
     public {
-        string last_path;
-        auto last_body;
-        hash<auto> response_body = {"message": "Route has been created", "route": {"id": "route_1"}};
+        #! the requests received
+        list<hash<auto>> requests = ();
     }
 
-    constructor() : MailgunRestClient({"apikey": "fake-key", "api_domain": "mg.example.com"}, True) {
-    }
-
-    hash<auto> post(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        last_path = path;
-        last_body = body;
-        return {"body": response_body};
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "content-type": hdr."content-type",
+            "body": body ? body.toString() : NOTHING,
+        };
+        hash<auto> rv;
+        int code = 200;
+        if (hdr.path =~ /lists\/missing@/) {
+            code = 404;
+            rv = {"message": "Mailing list not found"};
+        } else if (hdr.path =~ /^v3\/routes/) {
+            rv = {"message": "Route has been created", "route": {"id": "route_1"}};
+        } else if (hdr.path =~ /^v3\/domains/) {
+            rv = {"total_count": 1, "items": ({"name": "mg.example.com", "state": "active"},)};
+        } else if (hdr.path =~ /messages$/) {
+            rv = {"id": "<msg1@mg.example.com>", "message": "Queued. Thank you."};
+        } else {
+            rv = {"message": hdr.method + " done"};
+        }
+        return <HttpResponseInfo>{
+            "code": code,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(rv),
+        };
     }
 }
 
 public class MailgunDataProviderTest inherits QUnit::Test {
     private {
         #! Mailgun REST client for integration tests
-        *MailgunRestClient::MailgunRestClient client;
+        *MailgunRestClient::MailgunRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -96,6 +127,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require MAILGUN_API_KEY environment variable or -k option)
         addTestCase("integration tests", \integrationTests());
@@ -151,7 +183,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         if (m_options.list) {
             testMailingList = m_options.list;
         }
-        client = new MailgunRestClient::MailgunRestClient(opts);
+        client = new MailgunRestClient::MailgunRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -326,7 +358,16 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     */
     createRouteBodyTests() {
         checkJson();
-        FakeMailgunRestClient rest();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeMailgunHandler handler();
+        server.setHandler("mailgun", "", NOTHING, handler);
+        server.setDefaultHandler("mailgun", handler);
+
+        LocalMailgunRestClientIo rest("http://localhost:" + port);
         MailgunDataProvider::MailgunCreateRouteDataProvider prov(rest);
         hash<auto> resp = prov.doRequest({
             "expression": "match_recipient(\".*@example.com\")",
@@ -335,8 +376,8 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             "priority": 3,
         });
         assertEq("route_1", resp.id);
-        assertEq("/v3/routes", rest.last_path);
-        list<string> params = split("&", rest.last_body);
+        assertEq("v3/routes", handler.requests.last().path);
+        list<string> params = split("&", handler.requests.last().body);
         assertEq(1, (select params, $1 =~ /^priority=3$/).size());
         assertEq(1, (select params, $1 =~ /^description=test%20route$/).size());
         assertEq(1, (select params, $1 =~ /^expression=/).size());
@@ -347,7 +388,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             "expression": "match_recipient(\".*@example.com\")",
             "action": ("stop()", "forward(\"http://example.com/hook\")"),
         });
-        assertEq(2, (select split("&", rest.last_body), $1 =~ /^action=/).size());
+        assertEq(2, (select split("&", handler.requests.last().body), $1 =~ /^action=/).size());
     }
 
     #! Negative tests - test error handling and invalid inputs
@@ -387,6 +428,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             # Test default region
             MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
             assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+
+            # the async client uses the same regional URLs
+            assertEq("https://api.eu.mailgun.net",
+                new MailgunRestClient::MailgunRestClientIo({"apikey": "x", "api_region": "EU"}).getUrl());
         } catch (hash<ExceptionInfo> ex) {
             if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
                     || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
@@ -405,6 +450,94 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         assertThrows("MAILGUN-ERROR", sub() {
             new MailgunRestClient::MailgunRestClient({});
         });
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeMailgunHandler handler();
+        server.setHandler("mailgun", "", NOTHING, handler);
+        server.setDefaultHandler("mailgun", handler);
+
+        LocalMailgunRestClientIo rest("http://localhost:" + port);
+        MailgunDataProvider::MailgunDataProvider provider({
+            "mailgunrestclient": rest,
+            "apikey": "fake-key",
+            "api_domain": "mg.example.com",
+        });
+        assertEq(rest, provider.getRestClient());
+        MailgunDataProvider::MailgunDataProvider rest_provider(rest, "mg.example.com");
+        # the webhook signing key defaults to the API key of the client
+        assertEq("fake-key", rest_provider.getWebhookSigningKey());
+        string auth = "Basic " + make_base64_string("api:fake-key");
+
+        # records are retrieved with the async client
+        list<hash<auto>> domains = map $1, provider.getChildProvider("domains").searchRecords(NOTHING,
+            {"limit": 5});
+        assertEq("mg.example.com", domains[0].name);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("v3/domains?limit=5", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+
+        # an email is sent as a form-encoded request
+        handler.requests = ();
+        hash<auto> result = provider.getChildProvider("send-email").doRequest({
+            "from": "sender@example.com",
+            "to": ("a@example.com", "b@example.com"),
+            "subject": "hello there",
+            "text": "a test",
+        });
+        assertEq("<msg1@mg.example.com>", result.id);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("v3/mg.example.com/messages", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+        assertRegex("^application/x-www-form-urlencoded", handler.requests[0]."content-type");
+        list<string> params = split("&", handler.requests[0].body);
+        assertEq(1, (select params, $1 == "subject=hello%20there").size());
+        assertEq(1, (select params, $1 == "to=a%40example.com%2Cb%40example.com").size());
+        assertEq(1, (select params, $1 == "text=a%20test").size());
+        # the form-encoded request does not change the serialization of the shared client
+        assertEq("json", rest.getSerialization());
+
+        # a multipart request is sent with the attachment
+        handler.requests = ();
+        result = provider.doPostMultipart("/v3/mg.example.com/messages", {"to": "a@example.com"},
+            ({"filename": "file.txt", "content": "attached text", "content_type": "text/plain"},));
+        assertEq("Queued. Thank you.", result.message);
+        assertRegex("^multipart/form-data;.*boundary=", handler.requests[0]."content-type");
+        assertRegex("name=\"to\"", handler.requests[0].body);
+        assertRegex("filename=\"file.txt\"", handler.requests[0].body);
+        assertRegex("attached text", handler.requests[0].body);
+
+        # PUT and DELETE requests
+        handler.requests = ();
+        assertEq("PUT done", provider.doPut("/v3/lists/l@mg.example.com", {"name": "x"}).message);
+        assertEq("DELETE done", provider.getChildProvider("delete-mailing-list-member").doRequest({
+            "list_address": "l@mg.example.com",
+            "member_address": "m@example.com",
+        }).message);
+        assertEq(("PUT", "DELETE"), (map $1.method, handler.requests));
+        assertEq({"name": "x"}, parse_json(handler.requests[0].body));
+        assertEq("v3/lists/l@mg.example.com/members/m@example.com", handler.requests[1].path);
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProvider("get-mailing-list-member").doRequest({
+                "list_address": "missing@mg.example.com",
+                "member_address": "m@example.com",
+            });
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Mailing list not found", ex.arg.body.message);
+        }
     }
 
     #! Connection tests - verify connection scheme registration
@@ -507,7 +640,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("/v3/domains");
+        hash<auto> response = client.restGet("/v3/domains");
         assertTrue(response.body.hasKey("items") || response.body.hasKey("total_count"));
         if (m_options.verbose) {
             printf("Connected to Mailgun API successfully\n");

@@ -32,15 +32,15 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
         const BaseConstructorOptions = {
             "chargebeerestclient": <DataProviderOptionInfo>{
                 "display_name": "Chargebee REST Client",
-                "short_desc": "The ChargebeeRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ChargebeeRestClient::ChargebeeRestClient")),
-                "desc": "The ChargebeeRestClient object to use for API calls",
+                "short_desc": "The ChargebeeRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("ChargebeeRestClient::ChargebeeRestClientIo")),
+                "desc": "The `ChargebeeRestClientIo` object to use for API calls",
             },
             "chargebeerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Chargebee REST Client Options",
-                "short_desc": "Options for creating a ChargebeeRestClient",
+                "short_desc": "Options for creating a ChargebeeRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a ChargebeeRestClient object if one is not provided directly",
+                "desc": "Options for creating a `ChargebeeRestClientIo` object if one is not provided directly",
             },
             "api_key": <DataProviderOptionInfo>{
                 "display_name": "API Key",
@@ -62,7 +62,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
 
     private {
         #! The REST client object for API calls
-        ChargebeeRestClient::ChargebeeRestClient rest;
+        ChargebeeRestClient::ChargebeeRestClientIo rest;
 
         #! The connection object, if applicable
         *ChargebeeRestClient::ChargebeeRestConnection conn;
@@ -73,7 +73,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(ChargebeeRestClient::ChargebeeRestClient rest) {
+    constructor(ChargebeeRestClient::ChargebeeRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -82,7 +82,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
     constructor(ChargebeeRestClient::ChargebeeRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -99,12 +99,12 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
             if (copts.site) {
                 client_opts.site = copts.site;
             }
-            rest = new ChargebeeRestClient::ChargebeeRestClient(client_opts);
+            rest = new ChargebeeRestClient::ChargebeeRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ChargebeeRestClient::ChargebeeRestClient getRestClient() {
+    ChargebeeRestClient::ChargebeeRestClientIo getRestClient() {
         return rest;
     }
 
@@ -133,7 +133,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -186,7 +186,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
             body = remove_nothing(body);
         }
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body ? body : NOTHING);
+        hash<auto> response = rest.restPost(path, body ? body : NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -213,7 +213,7 @@ public class ChargebeeDataProviderBase inherits DataProvider::AbstractDataProvid
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doDelete: DELETE %s", path));
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;

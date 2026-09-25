@@ -66,10 +66,14 @@ public namespace ZohoInventoryDataProvider {
     #! Maximum number of retries for rate-limited requests
     public const MaxRetries = 5;
 
-    #! Set of retriable socket errors
+    #! Set of retriable transport errors of the synchronous and asynchronous REST clients
     public const RetrySet = {
         "SOCKET-SSL-ERROR": True,
         "SOCKET-CLOSED": True,
+        "HTTPCLIENT-CONNECT-ERROR": True,
+        "HTTPCLIENT-STREAM-CLOSED": True,
+        "HTTPCLIENT-TIMEOUT": True,
+        "FUTURE-TIMEOUT": True,
     };
 
     #! Zoho Inventory logo in SVG format (loaded from file)

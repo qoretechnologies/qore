@@ -58,7 +58,7 @@ public class LinearCommentEventDataProvider inherits LinearDataProviderBase, Dat
     }
 
     #! Creates the object with a REST client
-    constructor(LinearRestClient::LinearRestClient rest, *hash<auto> options) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, *hash<auto> options) : LinearDataProviderBase(rest) {
     }
 
     #! Stops observing and deletes the object

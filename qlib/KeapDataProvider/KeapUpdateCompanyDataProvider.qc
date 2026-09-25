@@ -99,7 +99,7 @@ public class KeapUpdateCompanyDataProvider inherits KeapDataProviderBase {
         static *AbstractDataProviderType RequestType = new KeapUpdateCompanyRequestDataType();
     }
 
-    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    constructor(KeapRestClient::KeapRestClientIo rest) : KeapDataProviderBase(rest) {
     }
 
     string getName() {

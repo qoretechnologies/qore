@@ -60,7 +60,7 @@ public class InstantlyBackgroundJobsDataProvider inherits InstantlyDataProviderB
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest)
             : InstantlyDataProviderBase(rest) {
     }
 

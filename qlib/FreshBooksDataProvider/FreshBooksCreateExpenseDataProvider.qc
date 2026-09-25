@@ -42,7 +42,7 @@ public class FreshBooksCreateExpenseDataProvider inherits FreshBooksDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name

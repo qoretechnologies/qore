@@ -92,7 +92,7 @@ public class DeelWorkersDataProvider inherits DeelDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(DeelRestClient::DeelRestClient rest) : DeelDataProviderBase(rest) {
+    constructor(DeelRestClient::DeelRestClientIo rest) : DeelDataProviderBase(rest) {
     }
 
     #! Returns the provider name

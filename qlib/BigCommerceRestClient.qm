@@ -560,13 +560,36 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
 }
 
 #! BigCommerce REST client for non-blocking I/O
+/** Like @ref BigCommerceRestClient, tokens are sent in the \c X-Auth-Token header as required by the
+    BigCommerce API
+*/
 public class BigCommerceRestClientIo inherits RestClientIo::RestClientIo, BigCommerceRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(BigCommerceRestClientBase::getOptions(opts), shared_mgr) {
+            : RestClientIo(BigCommerceRestClientIo::getIoOptions(opts), shared_mgr) {
+    }
+
+    #! Returns the options for the RestClientIo constructor
+    /** Tokens are sent in the \c X-Auth-Token header instead of \c "Authorization: Bearer"
+    */
+    private static hash<auto> getIoOptions(hash<auto> opts) {
+        return BigCommerceRestClientBase::getOptions(opts) + {"token_api_key_header": "X-Auth-Token"};
+    }
+
+    #! Called when OAuth2 login information has been received
+    /** BigCommerce may not return the \c token_type in the token response, so \c "Bearer" is assumed in this
+        case; the token is sent in the \c X-Auth-Token header
+
+        @param h the OAuth2 login response hash
+    */
+    private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+        if (!h.token_type) {
+            h.token_type = "Bearer";
+        }
+        return RestClientIo::gotOAuth2LoginInfo(h);
     }
 }
 }

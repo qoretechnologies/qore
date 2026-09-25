@@ -36,13 +36,91 @@
 
 %requires TableauRestClient
 %requires TableauDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class TableauDataProviderTest
+
+#! A Tableau client that sends requests to a local server
+class LocalTableauRestClientIo inherits TableauRestClient::TableauRestClientIo {
+    constructor(hash<auto> opts, string local_url) : TableauRestClientIo(opts) {
+        url = local_url;
+    }
+}
+
+#! A local Tableau API server that records requests
+class FakeTableauHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of sign-ins
+        int sign_ins;
+        #! the number of requests still to be answered with 401 Unauthorized
+        int expire_session;
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "auth": hdr."x-tableau-auth",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.path =~ /auth\/signin$/) {
+            ++sign_ins;
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"credentials": {"token": "session-" + sign_ins, "site": {"id": "site-1"}}}),
+            };
+        }
+        if (expire_session > 0) {
+            --expire_session;
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": {"summary": "Signin Error", "code": "401002"}}),
+            };
+        }
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"error": {"summary": "Too Many Requests"}}),
+            };
+        }
+        if (hdr.path =~ /users\/missing$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": {"summary": "Resource Not Found", "code": "404002"}}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"project": {"id": "p2", "name": "New"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({
+                "pagination": {"pageNumber": "1", "pageSize": "100", "totalAvailable": "1"},
+                "projects": {"project": ({"id": "p1", "name": "Default"},)},
+            }),
+        };
+    }
+}
 
 public class TableauDataProviderTest inherits QUnit::Test {
     private {
         #! Tableau REST client for integration tests
-        *TableauRestClient::TableauRestClient client;
+        *TableauRestClient::TableauRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -75,6 +153,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Tableau credentials)
         addTestCase("integration tests", \integrationTests());
@@ -130,7 +209,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             opts.content_url = content_url;
         }
 
-        client = new TableauRestClient::TableauRestClient(opts);
+        client = new TableauRestClient::TableauRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -652,5 +731,92 @@ public class TableauDataProviderTest inherits QUnit::Test {
                 }
             }
         }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeTableauHandler handler();
+        server.setHandler("tableau", "", NOTHING, handler);
+        server.setDefaultHandler("tableau", handler);
+
+        LocalTableauRestClientIo rest({
+            "subdomain": "local",
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "content_url": "my-site",
+        }, "http://localhost:" + port);
+        assertNothing(rest.getSiteLuid());
+        TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
+        AbstractDataProvider projects = provider.getChildProviderEx("projects");
+
+        # the client signs in with the PAT, then sends the request for the site with the session token
+        list<hash<auto>> recs = map $1, projects.searchRecords();
+        assertEq(({"id": "p1", "name": "Default"},), recs);
+        assertEq(2, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/3.27/auth/signin", handler.requests[0].path);
+        assertEq({
+            "personalAccessTokenName": "pat-name",
+            "personalAccessTokenSecret": "pat-secret",
+            "site": {"contentUrl": "my-site"},
+        }, handler.requests[0].body.credentials);
+        assertEq("GET", handler.requests[1].method);
+        assertEq("api/3.27/sites/site-1/projects?pageSize=100&pageNumber=1", handler.requests[1].path);
+        assertEq("session-1", handler.requests[1].auth);
+        assertEq("site-1", rest.getSiteLuid());
+
+        # the session is reused; a POST request sends the body
+        handler.requests = ();
+        hash<auto> project = provider.getChildProviderPath("projects/create").doRequest({"name": "New"});
+        assertEq({"id": "p2", "name": "New"}, project);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/3.27/sites/site-1/projects", handler.requests[0].path);
+        assertEq("session-1", handler.requests[0].auth);
+        assertEq({"project": {"name": "New"}}, handler.requests[0].body);
+
+        # an expired session is renewed and the request is retried once
+        handler.requests = ();
+        handler.expire_session = 1;
+        recs = map $1, projects.searchRecords();
+        assertEq(({"id": "p1", "name": "Default"},), recs);
+        assertEq(("GET", "POST", "GET"), (map $1.method, handler.requests));
+        assertEq("api/3.27/auth/signin", handler.requests[1].path);
+        assertEq("session-2", handler.requests[2].auth);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        recs = map $1, projects.searchRecords();
+        assertEq(({"id": "p1", "name": "Default"},), recs);
+        assertEq(2, handler.requests.size());
+        assertEq("session-2", handler.requests[1].auth);
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderEx("users").searchRecords(NOTHING, {"user_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("404002", ex.arg.body.error.code);
+        }
+
+        # a session that cannot be renewed raises the authentication error
+        handler.requests = ();
+        handler.expire_session = 2;
+        try {
+            projects.searchRecords();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+        }
+        assertEq(("GET", "POST", "GET"), (map $1.method, handler.requests));
     }
 }

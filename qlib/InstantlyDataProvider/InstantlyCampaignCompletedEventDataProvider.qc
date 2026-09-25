@@ -43,7 +43,7 @@ public class InstantlyCampaignCompletedEventDataProvider inherits InstantlyBaseE
         static InstantlyCampaignCompletedEventDataType eventDataType();
     }
 
-    constructor(InstantlyRestClient::InstantlyRestClient rest, *hash<auto> options)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest, *hash<auto> options)
             : InstantlyBaseEventDataProvider(rest, options) {
     }
 

@@ -37,13 +37,61 @@
 
 %requires DeelRestClient
 %requires DeelDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class DeelDataProviderTest
+
+#! A local Deel API server that records requests
+class FakeDeelHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"errors": ({"message": "rate limited"},)}),
+            };
+        }
+        if (hdr.path =~ /contracts\/missing$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"errors": ({"message": "contract not found"},)}),
+            };
+        }
+        if (hdr.method == "PATCH") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"data": {"id": "c1"} + parse_json(body.toString()).data}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"data": {"id": "c1", "title": "Engineer"}}),
+        };
+    }
+}
 
 public class DeelDataProviderTest inherits QUnit::Test {
     private {
         #! Deel REST client for integration tests
-        *DeelRestClient::DeelRestClient client;
+        *DeelRestClient::DeelRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -72,6 +120,7 @@ public class DeelDataProviderTest inherits QUnit::Test {
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require DEEL_API_TOKEN)
         addTestCase("integration tests", \integrationTests());
@@ -112,7 +161,7 @@ public class DeelDataProviderTest inherits QUnit::Test {
                 printf("Using custom API URL: %s\n", m_options.url);
             }
         }
-        client = new DeelRestClient::DeelRestClient(client_opts);
+        client = new DeelRestClient::DeelRestClientIo(client_opts);
     }
 
     #! Check if json module is available
@@ -381,6 +430,67 @@ public class DeelDataProviderTest inherits QUnit::Test {
             assertTrue(refData.hasKey("adjustments"));
             assertTrue(refData.hasKey("time_off_types"));
             assertTrue(refData.hasKey("time_off_requests"));
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeDeelHandler handler();
+        server.setHandler("deel", "", NOTHING, handler);
+        server.setDefaultHandler("deel", handler);
+
+        DeelDataProvider::DeelDataProvider provider({
+            "deelrestclient_options": {
+                "url": "http://localhost:" + port + "/rest/v2",
+                "apikey": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof DeelRestClient::DeelRestClientIo);
+        AbstractDataProvider contracts = provider.getChildProviderPath("contracts");
+
+        # the request is sent with the async client and the API token as a bearer token
+        list<hash<auto>> records = map $1, contracts.searchRecords(NOTHING, {"contract_id": "c1"});
+        assertEq(1, records.size());
+        assertEq("c1", records[0].id);
+        assertEq("Engineer", records[0].title);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("rest/v2/contracts/c1", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # a PATCH request sends the request body
+        handler.requests = ();
+        auto result = contracts.getChildProviderPath("update").doRequest({
+            "contract_id": "c1",
+            "title": "Senior Engineer",
+        });
+        assertEq("c1", result.id);
+        assertEq("Senior Engineer", result.title);
+        assertEq(1, handler.requests.size());
+        assertEq("PATCH", handler.requests[0].method);
+        assertEq("rest/v2/contracts/c1", handler.requests[0].path);
+        assertEq({"data": {"title": "Senior Engineer"}}, handler.requests[0].body);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        records = map $1, contracts.searchRecords(NOTHING, {"contract_id": "c1"});
+        assertEq("c1", records[0].id);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            contracts.searchRecords(NOTHING, {"contract_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("contract not found", ex.arg.body.errors[0].message);
         }
     }
 

@@ -36,13 +36,62 @@
 
 %requires BigCommerceRestClient
 %requires BigCommerceDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class BigCommerceDataProviderTest
+
+#! A local BigCommerce API server that records requests
+class FakeBigCommerceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "x-auth-token": hdr."x-auth-token",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "X-Rate-Limit-Time-Reset-Ms": "100"},
+                "body": make_json({"status": 429, "title": "Too many requests"}),
+            };
+        }
+        if (hdr.path =~ /id:in=404/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"status": 404, "title": "The requested resource was not found"}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"data": ({"id": 9} + parse_json(body.toString())[0],)}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"data": ({"id": 5, "email": "jane@example.com"},)}),
+        };
+    }
+}
 
 public class BigCommerceDataProviderTest inherits QUnit::Test {
     private {
         #! BigCommerce REST client for integration tests
-        *BigCommerceRestClient::BigCommerceRestClient client;
+        *BigCommerceRestClient::BigCommerceRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -76,6 +125,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("OAuth2 option tests", \oAuth2OptionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require BigCommerce credentials)
         addTestCase("integration tests", \integrationTests());
@@ -100,7 +150,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = get_connection(conn_name).getAsync();
             return;
         }
 
@@ -114,7 +164,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Connecting to BigCommerce store (OAuth2): %s\n", store_hash);
             }
-            client = new BigCommerceRestClient::BigCommerceRestClient({
+            client = new BigCommerceRestClient::BigCommerceRestClientIo({
                 "oauth2_client_id": client_id,
                 "oauth2_client_secret": client_secret,
                 "store_hash": store_hash,
@@ -142,7 +192,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             printf("Connecting to BigCommerce store: %s\n", store_hash);
         }
 
-        client = new BigCommerceRestClient::BigCommerceRestClient({
+        client = new BigCommerceRestClient::BigCommerceRestClientIo({
             "token": access_token,
             "store_hash": store_hash,
         });
@@ -571,6 +621,64 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         BigCommerceRestClient bc4({"token": "connection-token", "store_hash": "testhash"}, True);
         assertEq("connection-token", bc4.getDefaultHeaders()."X-Auth-Token");
         assertNothing(bc4.getDefaultHeaders().Authorization);
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeBigCommerceHandler handler();
+        server.setHandler("bigcommerce", "", NOTHING, handler);
+        server.setDefaultHandler("bigcommerce", handler);
+
+        BigCommerceDataProvider::BigCommerceDataProvider provider({
+            "bigcommercerestclient_options": {
+                "url": "http://localhost:" + port + "/stores/abc",
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof BigCommerceRestClient::BigCommerceRestClientIo);
+        AbstractDataProvider get_customer = provider.getChildProviderPath("customers/get");
+
+        # the request is sent with the async client and the token in the X-Auth-Token header
+        auto result = get_customer.doRequest({"customer_id": 5});
+        assertEq({"id": 5, "email": "jane@example.com"}, result);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("stores/abc/v3/customers?id:in=5", handler.requests[0].path);
+        assertEq("test-token", handler.requests[0]."x-auth-token");
+        assertNothing(handler.requests[0].authorization);
+
+        # a POST request sends the record wrapped in a list
+        handler.requests = ();
+        hash<auto> customer = {"first_name": "Jane", "last_name": "Doe", "email": "jane@example.com"};
+        result = provider.getChildProviderPath("customers/create").doRequest(customer);
+        assertEq(9, result.id);
+        assertEq("Doe", result.last_name);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("stores/abc/v3/customers", handler.requests[0].path);
+        assertEq((customer,), handler.requests[0].body);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        result = get_customer.doRequest({"customer_id": 5});
+        assertEq(5, result.id);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            get_customer.doRequest({"customer_id": 404});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("The requested resource was not found", ex.arg.body.title);
+        }
     }
 
     #! Integration tests - require real BigCommerce credentials

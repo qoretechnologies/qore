@@ -103,7 +103,7 @@ public class JotformFormSubmissionsDataProvider inherits JotformDataProviderBase
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest, *string formID) : JotformDataProviderBase(rest) {
+    constructor(JotformRestClient::JotformRestClientIo rest, *string formID) : JotformDataProviderBase(rest) {
         self.formID = formID;
     }
 

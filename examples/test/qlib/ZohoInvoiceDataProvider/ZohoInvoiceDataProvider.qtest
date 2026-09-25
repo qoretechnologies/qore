@@ -36,13 +36,79 @@
 
 %requires ZohoInvoiceRestClient
 %requires ZohoInvoiceDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class ZohoInvoiceDataProviderTest
+
+#! A Zoho Invoice client that sends requests to a local server
+class LocalZohoInvoiceRestClientIo inherits ZohoInvoiceRestClient::ZohoInvoiceRestClientIo {
+    constructor(hash<auto> opts, string local_url) : ZohoInvoiceRestClientIo(opts) {
+        url = local_url;
+    }
+}
+
+#! A local Zoho Invoice API server that records requests
+class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! if the rate limit is reported as exhausted in the next response
+        bool rate_limit_exhausted;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        hash<auto> resp_hdr = {"Content-Type": MimeTypeJson};
+        if (rate_limit_exhausted) {
+            rate_limit_exhausted = False;
+            resp_hdr += {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": "1"};
+        }
+        if (hdr.path =~ /contacts\/missing/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": resp_hdr,
+                "body": make_json({"code": 1002, "message": "Contact does not exist."}),
+            };
+        }
+        if (hdr.path =~ /contacts\/invalid/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": resp_hdr,
+                "body": make_json({"code": 2, "message": "Invalid value passed for contact_id"}),
+            };
+        }
+        if (hdr.path =~ /organizations/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": resp_hdr,
+                "body": make_json({"code": 0, "organizations": ({"organization_id": "org-1", "name": "Acme"},)}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": resp_hdr,
+                "body": make_json({"code": 0, "contact": {"contact_id": "c2", "contact_name": "Beta Ltd"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": resp_hdr,
+            "body": make_json({"code": 0, "contacts": ({"contact_id": "c1", "contact_name": "Acme Co"},)}),
+        };
+    }
+}
 
 public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
     private {
         #! Zoho Invoice REST client for integration tests
-        *ZohoInvoiceRestClient::ZohoInvoiceRestClient client;
+        *ZohoInvoiceRestClient::ZohoInvoiceRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -84,6 +150,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require Zoho Invoice credentials)
@@ -160,7 +227,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        client = new ZohoInvoiceRestClient::ZohoInvoiceRestClient(opts);
+        client = new ZohoInvoiceRestClient::ZohoInvoiceRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -809,7 +876,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         }
 
         # Test that we can connect to the API
-        hash<auto> response = client.get("/organizations");
+        hash<auto> response = client.restGet("/organizations");
         assertTrue(response.body.organizations.val());
         if (m_options.verbose) {
             printf("Connected to Zoho Invoice - Organization: %s\n",
@@ -1903,6 +1970,98 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeZohoInvoiceHandler handler();
+        server.setHandler("zohoinvoice", "", NOTHING, handler);
+        server.setDefaultHandler("zohoinvoice", handler);
+
+        LocalZohoInvoiceRestClientIo rest({
+            "token": "test-token",
+            "organization_id": "org-1",
+            "subdomain": "zohocloud",
+            "domain": ".eu",
+        }, "http://localhost:" + port);
+        assertEq("org-1", rest.getOrganizationId());
+        assertEq("zohocloud", rest.getSubdomain());
+        assertEq(".eu", rest.getDomain());
+        ZohoInvoiceDataProvider::ZohoInvoiceDataProvider provider(rest);
+
+        # the organization ID is added to the query string of a GET request
+        list<hash<auto>> recs = map $1, provider.getChildProviderEx("contacts").searchRecords(NOTHING,
+            {"contact_name": "Acme"});
+        assertEq(({"contact_id": "c1", "contact_name": "Acme Co"},), recs);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("invoice/v3/contacts?contact_name=Acme&organization_id=org-1", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # the organization ID is added to a POST request without a query string, and the body is sent
+        handler.requests = ();
+        hash<auto> contact = provider.getChildProviderEx("create-contact").doRequest({"contact_name": "Beta Ltd"});
+        assertEq("c2", contact.contact_id);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("invoice/v3/contacts?organization_id=org-1", handler.requests[0].path);
+        assertEq("Beta Ltd", handler.requests[0].body.contact_name);
+
+        # the organization ID is not added for the organizations list
+        handler.requests = ();
+        *list<hash<AllowedValueInfo>> orgs = provider.getReferenceData("organizations");
+        assertEq(("org-1",), (map $1.value, orgs));
+        assertEq("invoice/v3/organizations", handler.requests[0].path);
+
+        # a changed organization ID is used in subsequent requests
+        rest.setOrganizationId("org-2");
+        assertEq("org-2", rest.getOrganizationId());
+        handler.requests = ();
+        provider.getChildProviderEx("contacts").searchRecords();
+        assertEq("invoice/v3/contacts?organization_id=org-2", handler.requests[0].path);
+
+        # an explicit organization ID is not overridden, and requests with a pre-serialized body get the
+        # organization ID too
+        handler.requests = ();
+        rest.restGet("/contacts?organization_id=org-3");
+        rest.restDoRawRequest("POST", "/contacts", make_json({"contact_name": "Gamma"}),
+            {"Content-Type": MimeTypeJson});
+        assertEq(("invoice/v3/contacts?organization_id=org-3", "invoice/v3/contacts?organization_id=org-2"),
+            (map $1.path, handler.requests));
+        assertEq({"contact_name": "Gamma"}, handler.requests[1].body);
+
+        # when the rate limit is exhausted, the provider waits for the reset time given by the server
+        handler.requests = ();
+        handler.rate_limit_exhausted = True;
+        date start = now_us();
+        recs = map $1, provider.getChildProviderEx("contacts").searchRecords();
+        assertEq(({"contact_id": "c1", "contact_name": "Acme Co"},), recs);
+        assertGe(1s, now_us() - start);
+        assertEq(1, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderEx("contacts").searchRecords(NOTHING, {"contact_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Contact does not exist.", ex.arg.body.message);
+        }
+
+        # an API error in a successful response is raised as an API error
+        try {
+            provider.getChildProviderEx("contacts").searchRecords(NOTHING, {"contact_id": "invalid"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ZOHOINVOICE-API-ERROR", ex.err);
+            assertEq("Invalid value passed for contact_id", ex.desc);
         }
     }
 }

@@ -75,7 +75,7 @@ public class JotformPaymentEventDataProvider inherits JotformDataProviderBase, D
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest, *hash<auto> options) : JotformDataProviderBase(rest) {
+    constructor(JotformRestClient::JotformRestClientIo rest, *hash<auto> options) : JotformDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", LocalOptions, options);
         if (copts.formID) {
             formID = copts.formID.value ?? copts.formID;

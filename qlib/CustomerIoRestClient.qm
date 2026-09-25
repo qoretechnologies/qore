@@ -524,5 +524,57 @@ public class CustomerIoRestClientIo inherits RestClientIo::RestClientIo, Custome
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(CustomerIoRestClientBase::getOptions(opts), shared_mgr) {
     }
+
+    #! Makes a REST request with automatic retry on 429 (Too Many Requests) errors
+    /** A rate-limited request is retried after the time given in the \c Retry-After response header, or after an
+        exponentially increasing delay if the header is not present, for up to @ref MaxRetryTime in total
+
+        @param method the HTTP method
+        @param path the request path
+        @param body the request body, if any
+        @param hdr any additional request headers
+
+        @return the response
+
+        @throw REST-RESPONSE-ERROR an HTTP error response was received, or the request was still rate-limited after
+        @ref MaxRetryTime
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+        while (True) {
+            try {
+                return RestClientIo::restDoRequest(method, path, body, hdr);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    rethrow;
+                }
+                date retry_delay = getRetryDelay(ex.arg, current_delay);
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                }
+                usleep(retry_delay);
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+            }
+        }
+    }
+
+    #! Returns the retry delay based on response headers or exponential backoff
+    private date getRetryDelay(hash<auto> info, date default_delay) {
+        if (info.headers."retry-after") {
+            int secs = info.headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+        return default_delay;
+    }
 }
 } # namespace CustomerIoRestClient

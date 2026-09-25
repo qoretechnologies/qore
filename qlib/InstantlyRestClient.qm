@@ -457,5 +457,59 @@ public class InstantlyRestClientIo inherits RestClientIo::RestClientIo, Instantl
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(InstantlyRestClientBase::getOptions(opts), shared_mgr) {
     }
+
+    #! Sends a REST request with automatic retry on 429 (Too Many Requests) errors
+    /** Rate-limited requests are retried like with @ref InstantlyRestClient::InstantlyRestClient::doRequest(),
+        using the \c Retry-After response header when available or else exponential backoff, for a total retry
+        time of at most @ref InstantlyRestClientBase::MaxRetryTime.
+
+        @param method the HTTP method
+        @param path the request path
+        @param body the request body, if any
+        @param hdr any additional request headers
+
+        @return the response from the server
+
+        @throw REST-RESPONSE-ERROR an HTTP error response was received, or the request was still rate-limited
+        after the maximum retry time
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+
+        while (True) {
+            try {
+                return RestClientIo::restDoRequest(method, path, body, hdr);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    rethrow;
+                }
+
+                # use the delay given by the server, if any
+                date retry_delay = getRetryDelay(ex.arg, current_delay);
+
+                # do not wait beyond the maximum retry time
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                    if (retry_delay <= 0s) {
+                        rethrow;
+                    }
+                }
+
+                sleep(retry_delay);
+
+                # increase the delay for the next retry (exponential backoff)
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+            }
+        }
+    }
 }
 }

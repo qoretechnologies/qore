@@ -63,7 +63,7 @@ public class TableauDeleteDatasourceDataProvider inherits TableauDataProviderBas
         const ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     string getName() {

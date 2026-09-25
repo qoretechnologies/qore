@@ -37,13 +37,68 @@
 
 %requires ShipStationRestClient
 %requires ShipStationDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class ShipStationDataProviderTest
+
+#! A ShipStation client that sends requests to a local server
+class LocalShipStationRestClientIo inherits ShipStationRestClient::ShipStationRestClientIo {
+    constructor(hash<auto> opts, string local_url) : ShipStationRestClientIo(opts) {
+        url = local_url;
+    }
+}
+
+#! A local ShipStation API server that records requests
+class FakeShipStationHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the rate-limit headers for requests still to be answered with 429 Too Many Requests
+        list<hash<auto>> rate_limited = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited) {
+            hash<auto> rate_limit_hdr = shift rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson} + rate_limit_hdr,
+                "body": make_json({"Message": "Too Many Requests"}),
+            };
+        }
+        if (hdr.path =~ /orders\/404$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"Message": "Order not found"}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"success": True, "message": "Tag added successfully."}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(({"name": "UPS", "code": "ups"},)),
+        };
+    }
+}
 
 public class ShipStationDataProviderTest inherits QUnit::Test {
     private {
         #! ShipStation REST client for integration tests
-        *ShipStationRestClient::ShipStationRestClient client;
+        *ShipStationRestClient::ShipStationRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -80,6 +135,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET)
@@ -114,7 +170,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
             "api_key": apikey,
             "api_secret": apisecret,
         };
-        client = new ShipStationRestClient::ShipStationRestClient(opts);
+        client = new ShipStationRestClient::ShipStationRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -561,7 +617,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("/carriers");
+        hash<auto> response = client.restGet("/carriers");
         assertTrue(response.body.typeCode() == NT_LIST || response.body.typeCode() == NT_HASH);
         if (m_options.verbose) {
             printf("Connected to ShipStation API successfully\n");
@@ -1905,6 +1961,62 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("\n--- Webhook Trigger tests completed ---\n");
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeShipStationHandler handler();
+        server.setHandler("shipstation", "", NOTHING, handler);
+        server.setDefaultHandler("shipstation", handler);
+
+        LocalShipStationRestClientIo rest({
+            "api_key": "test-key",
+            "api_secret": "test-secret",
+        }, "http://localhost:" + port);
+        ShipStationDataProvider::ShipStationDataProvider provider(rest);
+        string auth = "Basic " + make_base64_string("test-key:test-secret");
+
+        # a GET request is sent with basic authentication and the response is returned
+        list<hash<auto>> recs = map $1, provider.getChildProviderEx("carriers").searchRecords();
+        assertEq(1, recs.size());
+        assertEq("ups", recs[0].code);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("carriers", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+
+        # a POST request sends the body
+        handler.requests = ();
+        hash<auto> resp = provider.getChildProviderEx("add-tag-to-order").doRequest({"orderId": 1, "tagId": 2});
+        assertTrue(resp.success);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("orders/addtag", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+        assertEq({"orderId": 1, "tagId": 2}, handler.requests[0].body);
+
+        # rate-limited requests are retried after the time given by the server in either header
+        handler.requests = ();
+        handler.rate_limited = ({"Retry-After": "1"}, {"X-Rate-Limit-Reset": "1"});
+        recs = map $1, provider.getChildProviderEx("carriers").searchRecords();
+        assertEq("ups", recs[0].code);
+        assertEq(3, handler.requests.size());
+        assertEq(("carriers", "carriers", "carriers"), (map $1.path, handler.requests));
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderEx("get-order").doRequest({"orderId": 404});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Order not found", ex.arg.body.Message);
         }
     }
 }

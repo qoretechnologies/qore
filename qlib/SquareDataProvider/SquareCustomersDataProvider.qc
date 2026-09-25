@@ -83,7 +83,7 @@ public class SquareCustomersDataProvider inherits SquareDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest) : SquareDataProviderBase(rest) {
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareDataProviderBase(rest) {
     }
 
     #! Returns the provider name

@@ -110,7 +110,7 @@ public class ZohoInventoryDataProvider inherits ZohoInventoryDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

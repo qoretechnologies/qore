@@ -45,12 +45,16 @@ public namespace BigCommerceDataProvider {
     #! Maximum number of retries for rate-limited or transient error requests
     public const MaxRetries = 3;
 
-    #! Set of retriable socket errors
+    #! Set of retriable transport errors of the synchronous and asynchronous REST clients
     public const RetrySet = {
         "SOCKET-CONNECT-ERROR": True,
         "SOCKET-SSL-ERROR": True,
         "SOCKET-CLOSED": True,
         "SOCKET-TIMEOUT": True,
+        "HTTPCLIENT-CONNECT-ERROR": True,
+        "HTTPCLIENT-STREAM-CLOSED": True,
+        "HTTPCLIENT-TIMEOUT": True,
+        "FUTURE-TIMEOUT": True,
     };
 
     # --- Event name constants (used in triggers) ---

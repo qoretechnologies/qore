@@ -38,7 +38,7 @@ public class CustomerIoSmsDeliveredEventDataProvider inherits CustomerIoBaseEven
     }
 
     #! Creates the object with a REST client
-    constructor(CustomerIoRestClient::CustomerIoRestClient rest)
+    constructor(CustomerIoRestClient::CustomerIoRestClientIo rest)
             : CustomerIoBaseEventDataProvider(rest) {
     }
 

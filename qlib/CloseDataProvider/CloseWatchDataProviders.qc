@@ -39,7 +39,7 @@ public class CloseWatchLeadCreatedDataProvider inherits CloseWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -96,7 +96,7 @@ public class CloseWatchLeadUpdatedDataProvider inherits CloseWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -155,7 +155,7 @@ public class CloseWatchLeadDeletedDataProvider inherits CloseWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -212,7 +212,7 @@ public class CloseWatchContactCreatedDataProvider inherits CloseWatchDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -269,7 +269,7 @@ public class CloseWatchContactUpdatedDataProvider inherits CloseWatchDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -328,7 +328,7 @@ public class CloseWatchContactDeletedDataProvider inherits CloseWatchDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -385,7 +385,7 @@ public class CloseWatchOpportunityCreatedDataProvider inherits CloseWatchDataPro
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -446,7 +446,7 @@ public class CloseWatchOpportunityUpdatedDataProvider inherits CloseWatchDataPro
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -509,7 +509,7 @@ public class CloseWatchOpportunityDeletedDataProvider inherits CloseWatchDataPro
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name

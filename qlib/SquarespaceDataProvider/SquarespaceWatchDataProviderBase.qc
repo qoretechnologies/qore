@@ -48,7 +48,7 @@ public class SquarespaceWatchDataProviderBase inherits SquarespaceDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest, *hash<auto> options)
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest, *hash<auto> options)
             : SquarespaceDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -57,11 +57,6 @@ public class SquarespaceWatchDataProviderBase inherits SquarespaceDataProviderBa
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery

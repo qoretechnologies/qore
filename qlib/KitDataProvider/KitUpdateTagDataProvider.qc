@@ -69,7 +69,7 @@ public class KitUpdateTagDataProvider inherits KitDataProviderBase {
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(KitRestClient::KitRestClient rest) : KitDataProviderBase(rest) {
+    constructor(KitRestClient::KitRestClientIo rest) : KitDataProviderBase(rest) {
     }
 
     string getName() {

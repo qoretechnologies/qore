@@ -97,7 +97,7 @@ public class InstantlyPatchLeadDataProvider inherits InstantlyDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest) : InstantlyDataProviderBase(rest) {
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest) : InstantlyDataProviderBase(rest) {
     }
 
     #! Returns the provider name

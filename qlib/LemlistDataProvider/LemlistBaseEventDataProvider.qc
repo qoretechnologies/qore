@@ -56,7 +56,7 @@ public class LemlistBaseEventDataProvider inherits LemlistDataProviderBase, Data
     }
 
     #! Creates the object with a REST client
-    constructor(LemlistRestClient::LemlistRestClient rest, *hash<auto> options)
+    constructor(LemlistRestClient::LemlistRestClientIo rest, *hash<auto> options)
             : LemlistDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", LocalOptions, options);
         if (copts.campaignId) {

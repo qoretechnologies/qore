@@ -36,7 +36,7 @@ public class KitWatchSubscriberActivateDataProvider inherits KitWatchDataProvide
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_SUBSCRIBER_ACTIVATE; }
@@ -79,7 +79,7 @@ public class KitWatchSubscriberUnsubscribeDataProvider inherits KitWatchDataProv
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_SUBSCRIBER_UNSUBSCRIBE; }
@@ -125,7 +125,7 @@ public class KitWatchSubscriberBounceDataProvider inherits KitWatchDataProviderB
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_SUBSCRIBER_BOUNCE; }
@@ -171,7 +171,7 @@ public class KitWatchSubscriberComplainDataProvider inherits KitWatchDataProvide
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_SUBSCRIBER_COMPLAIN; }
@@ -217,7 +217,7 @@ public class KitWatchFormSubscribeDataProvider inherits KitWatchDataProviderBase
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_FORM_SUBSCRIBE; }
@@ -260,7 +260,7 @@ public class KitWatchCourseSubscribeDataProvider inherits KitWatchDataProviderBa
         };
     }
 
-    constructor(KitRestClient::KitRestClient rest, *hash<auto> options)
+    constructor(KitRestClient::KitRestClientIo rest, *hash<auto> options)
             : KitWatchDataProviderBase(rest, options) {}
 
     string getName() { return EVENT_COURSE_SUBSCRIBE; }

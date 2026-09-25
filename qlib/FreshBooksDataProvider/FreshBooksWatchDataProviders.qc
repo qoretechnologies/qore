@@ -38,7 +38,7 @@ public class FreshBooksNewInvoiceWatchDataProvider inherits FreshBooksWatchDataP
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -99,7 +99,7 @@ public class FreshBooksNewPaymentWatchDataProvider inherits FreshBooksWatchDataP
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -157,7 +157,7 @@ public class FreshBooksNewClientWatchDataProvider inherits FreshBooksWatchDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -216,7 +216,7 @@ public class FreshBooksNewExpenseWatchDataProvider inherits FreshBooksWatchDataP
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -276,7 +276,7 @@ public class FreshBooksNewEstimateWatchDataProvider inherits FreshBooksWatchData
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name

@@ -38,7 +38,7 @@ public class KeapWatchContactsAddedDataProvider inherits KeapWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -90,7 +90,7 @@ public class KeapWatchContactsUpdatedDataProvider inherits KeapWatchDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -162,7 +162,7 @@ public class KeapWatchTagAppliedDataProvider inherits KeapWatchDataProviderBase 
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {
         tag_id = options.tag_id;
     }
@@ -219,7 +219,7 @@ public class KeapWatchOpportunitiesDataProvider inherits KeapWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -270,7 +270,7 @@ public class KeapWatchOrdersDataProvider inherits KeapWatchDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -321,7 +321,7 @@ public class KeapWatchTasksDataProvider inherits KeapWatchDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -383,7 +383,7 @@ public class KeapWatchNotesDataProvider inherits KeapWatchDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapWatchDataProviderBase(rest, options) {
         contact_id = options.contact_id;
     }

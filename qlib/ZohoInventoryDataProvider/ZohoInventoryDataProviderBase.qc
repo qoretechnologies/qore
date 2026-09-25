@@ -28,6 +28,14 @@ public namespace ZohoInventoryDataProvider {
 #! Base class for Zoho Inventory data providers
 public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Organization ID field for request types - added to all DPAT_API request types
         const OrganizationIdField = {
             "organization_id": {
@@ -42,22 +50,22 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         const BaseConstructorOptions = {
             "zohoinventoryrestclient": <DataProviderOptionInfo>{
                 "display_name": "Zoho Inventory REST Client",
-                "short_desc": "The ZohoInventoryRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ZohoInventoryRestClient::ZohoInventoryRestClient")),
-                "desc": "The ZohoInventoryRestClient object to use for API calls",
+                "short_desc": "The ZohoInventoryRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("ZohoInventoryRestClient::ZohoInventoryRestClientIo")),
+                "desc": "The `ZohoInventoryRestClientIo` object to use for API calls",
             },
             "zohoinventoryrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Zoho Inventory REST Client Options",
-                "short_desc": "Options for creating a ZohoInventoryRestClient",
+                "short_desc": "Options for creating a ZohoInventoryRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a ZohoInventoryRestClient object if one is not provided directly",
+                "desc": "Options for creating a `ZohoInventoryRestClientIo` object if one is not provided directly",
             },
             "subdomain": <DataProviderOptionInfo>{
                 "display_name": "Sub Domain",
                 "short_desc": "Zoho subdomain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho subdomain for your account (zoho or zohocloud)",
-                "default_value": ZohoInventoryRestClient::ZohoInventoryRestClient::DefaultSubdomain,
+                "default_value": ZohoInventoryRestClient::ZohoInventoryRestClientIo::DefaultSubdomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "zoho",
@@ -74,7 +82,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
                 "short_desc": "Zoho domain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho domain for your data center region",
-                "default_value": ZohoInventoryRestClient::ZohoInventoryRestClient::DefaultDomain,
+                "default_value": ZohoInventoryRestClient::ZohoInventoryRestClientIo::DefaultDomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": ".com",
@@ -111,7 +119,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
 
     private {
         #! The REST client object for API calls
-        ZohoInventoryRestClient::ZohoInventoryRestClient rest;
+        ZohoInventoryRestClient::ZohoInventoryRestClientIo rest;
 
         #! The connection object, if applicable
         *ZohoInventoryRestClient::ZohoInventoryRestConnection conn;
@@ -122,14 +130,14 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(ZohoInventoryRestClient::ZohoInventoryRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -145,12 +153,12 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
             if (copts.domain) {
                 client_opts.domain = copts.domain;
             }
-            rest = new ZohoInventoryRestClient::ZohoInventoryRestClient(client_opts);
+            rest = new ZohoInventoryRestClient::ZohoInventoryRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ZohoInventoryRestClient::ZohoInventoryRestClient getRestClient() {
+    ZohoInventoryRestClient::ZohoInventoryRestClientIo getRestClient() {
         return rest;
     }
 
@@ -234,28 +242,15 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "ZOHOINVENTORY-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "ZOHOINVENTORY-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (headers are lowercase in RestClient)
-                if (info."response-headers"."x-rate-limit-remaining" == "0") {
-                    *string reset = info."response-headers"."x-rate-limit-reset";
+                # Check for rate limiting (response header names are lowercase)
+                if (response.headers."x-rate-limit-remaining" == "0") {
+                    *string reset = response.headers."x-rate-limit-reset";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
@@ -401,7 +396,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         list<hash<AllowedValueInfo>> rv = ();
         try {
             # Note: /organizations endpoint doesn't require organization_id
-            hash<auto> response = rest.get("/organizations");
+            hash<auto> response = rest.restGet("/organizations");
             if (response.body.organizations) {
                 foreach hash<auto> org in (response.body.organizations) {
                     string display_name = org.name ?? sprintf("Organization %s", org.organization_id);

@@ -39,7 +39,7 @@ public class UnleashedNewSalesOrderEventDataProvider inherits UnleashedWatchData
     }
 
     #! Creates the object with a REST client
-    constructor(UnleashedRestClient::UnleashedRestClient rest, *hash<auto> options)
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest, *hash<auto> options)
             : UnleashedWatchDataProviderBase(rest, options) {
     }
 

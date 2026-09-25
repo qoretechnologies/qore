@@ -38,12 +38,59 @@
 %requires PdfCoRestClient
 %requires PdfCoDataProvider
 
+%requires HttpServerUtil
+%requires HttpServer
+
 %exec-class PdfCoDataProviderTest
+
+#! A local PDF.co API server that records requests
+class FakePdfCoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "x-api-key": hdr."x-api-key",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        int code = 200;
+        hash<auto> rv;
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"error": True, "message": "rate limited"}),
+            };
+        }
+        if (hdr.path =~ /bad-request/) {
+            code = 400;
+            rv = {"error": True, "status": 400, "message": "invalid parameters"};
+        } else if (hdr.path =~ /failed-op/) {
+            rv = {"error": True, "status": 200, "message": "operation failed"};
+        } else if (hdr.path =~ /credit/) {
+            rv = {"remainingCredits": 100};
+        } else {
+            rv = {"url": "https://example.com/out.pdf", "error": False, "status": 200, "name": "out.pdf"};
+        }
+        return <HttpResponseInfo>{
+            "code": code,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(rv),
+        };
+    }
+}
 
 public class PdfCoDataProviderTest inherits QUnit::Test {
     private {
         #! PDF.co REST client for integration tests
-        *PdfCoRestClient::PdfCoRestClient client;
+        *PdfCoRestClient::PdfCoRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -99,6 +146,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("negative tests", \negativeTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require PDFCO_API_KEY)
         addTestCase("integration tests", \integrationTests());
@@ -131,7 +179,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
                 printf("Using custom API URL: %s\n", m_options.url);
             }
         }
-        client = new PdfCoRestClient::PdfCoRestClient(client_opts);
+        client = new PdfCoRestClient::PdfCoRestClientIo(client_opts);
     }
 
     #! Check if json module is available
@@ -621,6 +669,69 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         });
     }
 
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakePdfCoHandler handler();
+        server.setHandler("pdfco", "", NOTHING, handler);
+        server.setDefaultHandler("pdfco", handler);
+
+        PdfCoDataProvider::PdfCoDataProvider provider({
+            "pdfcorestclient_options": {
+                "url": "http://localhost:" + port + "/v1",
+                "apikey": "test-key",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof PdfCoRestClient::PdfCoRestClientIo);
+
+        # a v1 GET request is sent with the API key
+        assertEq(100, provider.doGet("account/credit/balance").remainingCredits);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("v1/account/credit/balance", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0]."x-api-key");
+
+        # a v2 request is sent by a child provider with a client for the v2 URL using the same API key
+        handler.requests = ();
+        hash<auto> result = provider.getChildProvider("compress-pdf").doRequest({"url": "https://example.com/in.pdf"});
+        assertEq("https://example.com/out.pdf", result.url);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("v2/pdf/compress", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0]."x-api-key");
+        assertEq("https://example.com/in.pdf", handler.requests[0].body.url);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        assertEq("out.pdf", provider.doPost("pdf/info", {"url": "https://example.com/in.pdf"}).name);
+        assertEq(2, handler.requests.size());
+        assertEq(("v1/pdf/info", "v1/pdf/info"), (map $1.path, handler.requests));
+
+        # an error response is raised with the response
+        try {
+            provider.doPost("bad-request", {"url": "x"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+            assertEq("invalid parameters", ex.arg.body.message);
+        }
+
+        # an error reported in a successful response is raised as a PDF.co API error
+        try {
+            provider.doPost("failed-op", {"url": "x"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PDFCO-API-ERROR", ex.err);
+            assertEq("operation failed", ex.desc);
+        }
+    }
+
     #! Integration tests - require a real PDF.co API key
     integrationTests() {
         checkJson();
@@ -672,7 +783,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("Testing credit balance...\n");
         }
-        hash<auto> result = client.get("account/credit/balance");
+        hash<auto> result = client.restGet("account/credit/balance");
         assertTrue(result.body.hasKey("remainingCredits"));
         # Credit balance must be a non-negative integer; a zero or absent value would
         # render every other integration test useless

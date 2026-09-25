@@ -519,13 +519,97 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
 }
 
 #! ShipStation REST client for non-blocking I/O
+/** Rate-limited requests are retried as with @ref ShipStationRestClient::ShipStationRestClient "ShipStationRestClient";
+    see @ref restDoRequest()
+*/
 public class ShipStationRestClientIo inherits RestClientIo::RestClientIo, ShipStationRestClientBase {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
+        class plus:
+        - \c api_key: the ShipStation API key (required)
+        - \c api_secret: the ShipStation API secret (required)
         @param shared_mgr optional shared connection manager
+
+        @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
+        @throw SHIPSTATION-ERROR missing required option 'api_key' or 'api_secret'
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(ShipStationRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Sends a REST request, retrying requests rejected with HTTP 429 (Too Many Requests)
+    /** When ShipStation returns HTTP 429, the request is retried with exponential backoff (1s, 2s, 4s, ... up to
+        30s per retry) for up to 75 seconds in total; the delay given by a \c Retry-After or
+        \c X-Rate-Limit-Reset response header is used when present.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body to send (if any)
+        @param hdr any headers to send with the request
+
+        @return the response from the server
+
+        @throw REST-RESPONSE-ERROR the server returned an error response; a 429 response is raised when the
+        maximum retry time has been reached
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+        while (True) {
+            try {
+                return RestClientIo::restDoRequest(method, path, body, hdr);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    rethrow;
+                }
+                date retry_delay = getRetryDelay(ex.arg.headers, current_delay);
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                    if (retry_delay <= 0s) {
+                        rethrow;
+                    }
+                }
+
+                # Wait before retrying
+                sleep(retry_delay);
+
+                # Increase delay for next retry (exponential backoff)
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+            }
+        }
+    }
+
+    #! Returns the retry delay based on response headers or exponential backoff
+    /** @param headers the response headers
+        @param default_delay the default delay to use if no header is present
+
+        @return the delay to use before retrying
+    */
+    private date getRetryDelay(*hash<auto> headers, date default_delay) {
+        # Check for Retry-After header (standard HTTP header)
+        if (headers."retry-after") {
+            int secs = headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        # Check for X-Rate-Limit-Reset header (ShipStation specific)
+        if (headers."x-rate-limit-reset") {
+            int secs = headers."x-rate-limit-reset".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        return default_delay;
     }
 }
 }

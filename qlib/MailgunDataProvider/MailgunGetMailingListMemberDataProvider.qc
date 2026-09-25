@@ -76,7 +76,7 @@ public class MailgunGetMailingListMemberDataProvider inherits MailgunDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(MailgunRestClient::MailgunRestClient rest, *string api_domain)
+    constructor(MailgunRestClient::MailgunRestClientIo rest, *string api_domain)
             : MailgunDataProviderBase(rest, api_domain) {
     }
 

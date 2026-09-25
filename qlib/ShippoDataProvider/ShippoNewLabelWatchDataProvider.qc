@@ -39,7 +39,7 @@ public class ShippoNewLabelWatchDataProvider inherits ShippoWatchDataProviderBas
     }
 
     #! Creates the object with a REST client
-    constructor(ShippoRestClient::ShippoRestClient rest, *hash<auto> options)
+    constructor(ShippoRestClient::ShippoRestClientIo rest, *hash<auto> options)
             : ShippoWatchDataProviderBase(rest, options) {
     }
 

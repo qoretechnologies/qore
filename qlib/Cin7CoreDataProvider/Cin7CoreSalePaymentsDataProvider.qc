@@ -79,7 +79,7 @@ public class Cin7CoreSalePaymentsDataProvider inherits Cin7CoreDataProviderBase 
     }
 
     #! Creates the object with a REST client
-    constructor(Cin7CoreRestClient::Cin7CoreRestClient rest) : Cin7CoreDataProviderBase(rest) {
+    constructor(Cin7CoreRestClient::Cin7CoreRestClientIo rest) : Cin7CoreDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

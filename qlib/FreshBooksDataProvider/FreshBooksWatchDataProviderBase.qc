@@ -51,7 +51,7 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -63,11 +63,6 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery

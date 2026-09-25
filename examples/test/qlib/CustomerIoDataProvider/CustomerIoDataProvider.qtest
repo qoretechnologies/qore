@@ -37,13 +37,71 @@
 
 %requires CustomerIoRestClient
 %requires CustomerIoDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class CustomerIoDataProviderTest
+
+#! A Customer.io App API client that sends its requests to a local server
+/** The App API URL is derived from the region, so the host is replaced after construction; the connection
+    path of the real App API URL is kept
+*/
+class LocalCustomerIoRestClientIo inherits CustomerIoRestClient::CustomerIoRestClientIo {
+    constructor(hash<auto> opts, string local_url) : CustomerIoRestClientIo(opts) {
+        url = local_url;
+    }
+}
+
+#! A local Customer.io App API server that records requests
+class FakeCustomerIoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"meta": {"error": "rate limited"}}),
+            };
+        }
+        if (hdr.path =~ /segments\/404$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"errors": ({"detail": "segment not found"},)}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"name": "greeting", "value": "hello"}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"id": 7, "name": "Active users"}),
+        };
+    }
+}
 
 public class CustomerIoDataProviderTest inherits QUnit::Test {
     private {
         #! Customer.io REST client for integration tests
-        *CustomerIoRestClient::CustomerIoRestClient client;
+        *CustomerIoRestClient::CustomerIoRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -88,6 +146,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require credentials)
         addTestCase("integration: App API read actions", \integrationAppApiReadTests());
@@ -136,7 +195,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "tracking_api_key": tracking_api_key,
             "region": region,
         };
-        client = new CustomerIoRestClient::CustomerIoRestClient(opts);
+        client = new CustomerIoRestClient::CustomerIoRestClientIo(opts);
     }
 
     #! Creates a CustomerIoDataProvider with full credentials (including Track API)
@@ -451,8 +510,65 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
 
         # Invalid region
         assertThrows("CUSTOMERIO-ERROR", sub() {
-            new CustomerIoRestClient::CustomerIoRestClient({"app_api_key": "x", "region": "invalid"});
+            new CustomerIoRestClient::CustomerIoRestClientIo({"app_api_key": "x", "region": "invalid"});
         });
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeCustomerIoHandler handler();
+        server.setHandler("customerio", "", NOTHING, handler);
+        server.setDefaultHandler("customerio", handler);
+
+        CustomerIoDataProvider::CustomerIoDataProvider provider(new LocalCustomerIoRestClientIo(
+            {"app_api_key": "test-key"}, "http://localhost:" + port));
+        assertTrue(provider.getRestClient() instanceof CustomerIoRestClient::CustomerIoRestClientIo);
+
+        # a GET request is sent with the async client and the response is returned
+        auto result = provider.getChildProviderPath("get-segment").doRequest({"segment_id": 7});
+        assertEq(7, result.id);
+        assertEq("Active users", result.name);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("v1/api/segments/7", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+
+        # a POST request sends the request body
+        handler.requests = ();
+        result = provider.getChildProviderPath("create-snippet").doRequest({"name": "greeting", "value": "hello"});
+        assertEq({"name": "greeting", "value": "hello"}, result);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("v1/api/snippets", handler.requests[0].path);
+        assertEq({"name": "greeting", "value": "hello"}, handler.requests[0].body);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        result = provider.getChildProviderPath("get-segment").doRequest({"segment_id": 7});
+        assertEq(7, result.id);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderPath("get-segment").doRequest({"segment_id": 404});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("segment not found", ex.arg.body.errors[0].detail);
+        }
+
+        # the Track API client is an async client for the region's Track API URL
+        provider.setTrackApiCredentials("site", "tracking-key", "eu");
+        RestClientIo::RestClientIo track = provider.getTrackRestClient();
+        assertEq("https://track-eu.customer.io/api/v1", track.getUrl());
+        assertEq(track, provider.getTrackRestClient());
     }
 
     #! Connection tests

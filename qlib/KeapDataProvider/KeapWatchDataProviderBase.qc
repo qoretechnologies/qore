@@ -48,7 +48,7 @@ public class KeapWatchDataProviderBase inherits KeapDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest, *hash<auto> options)
+    constructor(KeapRestClient::KeapRestClientIo rest, *hash<auto> options)
             : KeapDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -57,11 +57,6 @@ public class KeapWatchDataProviderBase inherits KeapDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery

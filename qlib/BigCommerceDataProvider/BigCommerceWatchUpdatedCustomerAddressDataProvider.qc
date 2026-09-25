@@ -44,7 +44,7 @@ public class BigCommerceWatchUpdatedCustomerAddressDataProvider inherits BigComm
     }
 
     #! Creates the object with a REST client
-    constructor(BigCommerceRestClient::BigCommerceRestClient rest, *hash<auto> options)
+    constructor(BigCommerceRestClient::BigCommerceRestClientIo rest, *hash<auto> options)
             : BigCommerceWatchDataProviderBase(rest, options) {
     }
 

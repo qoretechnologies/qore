@@ -37,13 +37,71 @@
 
 %requires InstantlyRestClient
 %requires InstantlyDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class InstantlyDataProviderTest
+
+#! An Instantly REST client that sends requests to a local server
+/** The Instantly client always uses the Instantly API URL; only the server part is replaced here, so requests
+    still use the \c /api/v2 connection path of the real API
+*/
+class LocalInstantlyRestClientIo inherits InstantlyRestClient::InstantlyRestClientIo {
+    constructor(string url, hash<auto> opts) : InstantlyRestClientIo(opts) {
+        self.url = url;
+    }
+}
+
+#! A local Instantly API server that records requests
+class FakeInstantlyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"message": "rate limited"}),
+            };
+        }
+        if (hdr.path =~ /campaigns\/missing$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"message": "campaign not found"}),
+            };
+        }
+        if (hdr.method == "GET" && hdr.path =~ /campaigns\/c1$/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": "c1", "name": "Campaign 1"}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"id": "l1", "name": "Leads"}),
+        };
+    }
+}
 
 public class InstantlyDataProviderTest inherits QUnit::Test {
     private {
         #! Instantly REST client for integration tests
-        *InstantlyRestClient::InstantlyRestClient client;
+        *InstantlyRestClient::InstantlyRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -131,6 +189,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require INSTANTLY_API_KEY or connection)
         addTestCase("child provider tests", \childProviderTests());
@@ -155,7 +214,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         *string conn_name = m_options.conn ?? ENV.INSTANTLY_CONNECTION;
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
-            client = conn.get(True);
+            client = conn.getAsync();
             return;
         }
         *string apikey = ENV.INSTANTLY_API_KEY;
@@ -166,7 +225,84 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new InstantlyRestClient::InstantlyRestClient({"apikey": apikey});
+        client = new InstantlyRestClient::InstantlyRestClientIo({"apikey": apikey});
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeInstantlyHandler handler();
+        server.setHandler("instantly", "", NOTHING, handler);
+        server.setDefaultHandler("instantly", handler);
+
+        LocalInstantlyRestClientIo rest("http://localhost:" + port, {"apikey": "test-key"});
+        InstantlyDataProvider::InstantlyDataProvider provider({
+            "instantlyrestclient": rest,
+            "apikey": "test-key",
+        });
+        assertEq(rest, provider.getRestClient());
+
+        # a POST request is sent with the async client, the API key and the request body
+        auto result = provider.getChildProviderPath("create-lead-list").doRequest({"name": "Leads"});
+        assertEq({"id": "l1", "name": "Leads"}, result);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v2/lead-lists", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+        assertEq({"name": "Leads"}, handler.requests[0].body);
+
+        # a GET request is sent without a body
+        handler.requests = ();
+        result = provider.getChildProviderPath("get-campaign").doRequest({"id": "c1"});
+        assertEq({"id": "c1", "name": "Campaign 1"}, result);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("api/v2/campaigns/c1", handler.requests[0].path);
+        assertEq("Bearer test-key", handler.requests[0].authorization);
+        assertNothing(handler.requests[0].body);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        result = provider.getChildProviderPath("create-lead-list").doRequest({"name": "Leads"});
+        assertEq({"id": "l1", "name": "Leads"}, result);
+        assertEq(2, handler.requests.size());
+        assertEq("api/v2/lead-lists", handler.requests[1].path);
+
+        # an error response is raised with the Instantly error message and the response
+        try {
+            provider.getChildProviderPath("get-campaign").doRequest({"id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INSTANTLY-API-ERROR", ex.err);
+            assertEq("campaign not found", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertEq("campaign not found", ex.arg.body.message);
+        }
+
+        # a provider created from a connection uses the connection's async client
+        InstantlyRestClient::InstantlyRestConnection conn({
+            "name": "test",
+            "desc": "test",
+            "opts": {"apikey": "test-key"},
+        }, {"monitor": False});
+        InstantlyDataProvider::InstantlyDataProvider conn_provider =
+            cast<InstantlyDataProvider::InstantlyDataProvider>(conn.getDataProvider());
+        assertEq(conn, conn_provider.getConnection());
+        assertEq("InstantlyRestClientIo", conn_provider.getRestClient().className());
+
+        # the client raises REST-RESPONSE-ERROR for error responses
+        try {
+            rest.restGet("campaigns/missing");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+        }
     }
 
     #! Check if json module is available
@@ -753,7 +889,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         )) {
             if (cleanup.id) {
                 try {
-                    client.del(cleanup.path + cleanup.id);
+                    client.restDel(cleanup.path + cleanup.id, NOTHING);
                 } catch () {
                     # ignore cleanup errors
                 }

@@ -90,7 +90,7 @@ public class UnleashedDataProvider inherits UnleashedDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(UnleashedRestClient::UnleashedRestClient rest) : UnleashedDataProviderBase(rest) {
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest) : UnleashedDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

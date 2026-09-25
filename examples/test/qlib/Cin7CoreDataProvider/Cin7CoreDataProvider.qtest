@@ -37,13 +37,52 @@
 
 %requires Cin7CoreRestClient
 %requires Cin7CoreDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class Cin7CoreDataProviderTest
+
+#! A local Cin7 Core API server that records requests
+class FakeCin7CoreHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "account_id": hdr."api-auth-accountid",
+            "apikey": hdr."api-auth-applicationkey",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.path =~ /ID=missing$/) {
+            return <HttpResponseInfo>{
+                "code": 400,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"ErrorMessage": "invalid customer ID"}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"CustomerList": ({"ID": "c2"} + parse_json(body.toString()),)}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"CustomerList": ({"ID": "c1", "Name": "Acme"},)}),
+        };
+    }
+}
 
 public class Cin7CoreDataProviderTest inherits QUnit::Test {
     private {
         #! Cin7Core REST client for integration tests
-        *Cin7CoreRestClient::Cin7CoreRestClient client;
+        *Cin7CoreRestClient::Cin7CoreRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -75,6 +114,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require CIN7CORE_ACCOUNT_ID and CIN7CORE_API_KEY)
         addTestCase("integration tests", \integrationTests());
@@ -109,7 +149,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             "account_id": account_id,
             "apikey": apikey,
         };
-        client = new Cin7CoreRestClient::Cin7CoreRestClient(opts);
+        client = new Cin7CoreRestClient::Cin7CoreRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -384,11 +424,11 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         checkJson();
         # Test REST client URL
         try {
-            Cin7CoreRestClient::Cin7CoreRestClient client1({
+            Cin7CoreRestClient::Cin7CoreRestClientIo client1({
                 "account_id": "x",
                 "apikey": "x",
             });
-            assertTrue(client1.getURL() =~ /inventory\.dearsystems\.com/);
+            assertTrue(client1.getUrl() =~ /inventory\.dearsystems\.com/);
         } catch (hash<ExceptionInfo> ex) {
             # the external API may be unreachable, slow, or block TLS/ALPN in CI;
             # skip gracefully on any connectivity or timeout error rather than failing
@@ -398,6 +438,57 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
                 testSkip(sprintf("cannot connect to Cin7Core API: %s: %s", ex.err, ex.desc));
             }
             rethrow;
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeCin7CoreHandler handler();
+        server.setHandler("cin7core", "", NOTHING, handler);
+        server.setDefaultHandler("cin7core", handler);
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider provider({
+            "cin7corerestclient_options": {
+                "url": "http://localhost:" + port + "/ExternalApi/v2",
+            },
+            "account_id": "test-account",
+            "apikey": "test-key",
+        });
+        assertTrue(provider.getRestClient() instanceof Cin7CoreRestClient::Cin7CoreRestClientIo);
+
+        # the request is sent with the async client and the credentials in the authentication headers
+        auto result = provider.getChildProviderPath("get-customer").doRequest({"ID": "c1"});
+        assertEq("c1", result.ID);
+        assertEq("Acme", result.Name);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("ExternalApi/v2/Customer?ID=c1", handler.requests[0].path);
+        assertEq("test-account", handler.requests[0].account_id);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # a POST request sends the request body
+        handler.requests = ();
+        result = provider.getChildProviderPath("create-customer").doRequest({"Name": "Widgets Inc"});
+        assertEq("c2", result.ID);
+        assertEq("Widgets Inc", result.Name);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("ExternalApi/v2/Customer", handler.requests[0].path);
+        assertEq({"Name": "Widgets Inc", "Status": "Active"}, handler.requests[0].body);
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderPath("get-customer").doRequest({"ID": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+            assertEq("invalid customer ID", ex.arg.body.ErrorMessage);
         }
     }
 

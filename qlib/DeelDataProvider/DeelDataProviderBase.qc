@@ -28,20 +28,28 @@ public namespace DeelDataProvider {
 #! Base class for Deel data providers
 public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PATCH": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Deel data providers
         const BaseConstructorOptions = {
             "deelrestclient": <DataProviderOptionInfo>{
                 "display_name": "Deel REST Client",
-                "short_desc": "The DeelRestClient object",
+                "short_desc": "The DeelRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("DeelRestClient::DeelRestClient")),
-                "desc": "The DeelRestClient object to use for API calls",
+                    new Type("DeelRestClient::DeelRestClientIo")),
+                "desc": "The `DeelRestClientIo` object to use for API calls",
             },
             "deelrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Deel REST Client Options",
-                "short_desc": "Options for creating a DeelRestClient",
+                "short_desc": "Options for creating a DeelRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a DeelRestClient object if one is not provided "
+                "desc": "Options for creating a `DeelRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client object for API calls
-        DeelRestClient::DeelRestClient rest;
+        DeelRestClient::DeelRestClientIo rest;
 
         #! The connection object, if applicable
         *DeelRestClient::DeelRestConnection conn;
@@ -60,14 +68,14 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the object with a REST client
-    constructor(DeelRestClient::DeelRestClient rest) {
+    constructor(DeelRestClient::DeelRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(DeelRestClient::DeelRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -83,12 +91,12 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
                 "apikey", "url", "proxy", "timeout", "connect_timeout",
                 "http_version", "max_redirects", "headers",
             };
-            rest = new DeelRestClient::DeelRestClient(client_opts);
+            rest = new DeelRestClient::DeelRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    DeelRestClient::DeelRestClient getRestClient() {
+    DeelRestClient::DeelRestClientIo getRestClient() {
         return rest;
     }
 
@@ -228,24 +236,11 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PATCH":
-                        response = rest.patch(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "DEEL-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "DEEL-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

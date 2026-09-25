@@ -32,15 +32,15 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
         const BaseConstructorOptions = {
             "linearrestclient": <DataProviderOptionInfo>{
                 "display_name": "Linear REST Client",
-                "short_desc": "The LinearRestClient object",
-                "type": AbstractDataProviderType::get(new Type("LinearRestClient::LinearRestClient")),
-                "desc": "The LinearRestClient object to use for API calls",
+                "short_desc": "The LinearRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("LinearRestClient::LinearRestClientIo")),
+                "desc": "The `LinearRestClientIo` object to use for API calls",
             },
             "linearrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Linear REST Client Options",
-                "short_desc": "Options for creating a LinearRestClient",
+                "short_desc": "Options for creating a LinearRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a LinearRestClient object if one is not provided directly",
+                "desc": "Options for creating a `LinearRestClientIo` object if one is not provided directly",
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "API Token",
@@ -67,7 +67,7 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        LinearRestClient::LinearRestClient rest;
+        LinearRestClient::LinearRestClientIo rest;
 
         #! The connection object, if applicable
         *LinearRestClient::LinearRestConnection conn;
@@ -78,7 +78,7 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object with a REST client
-    constructor(LinearRestClient::LinearRestClient rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -87,7 +87,7 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
     constructor(LinearRestClient::LinearRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -107,12 +107,12 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
             if (copts.oauth2_client_secret) {
                 client_opts.oauth2_client_secret = copts.oauth2_client_secret;
             }
-            rest = new LinearRestClient::LinearRestClient(client_opts);
+            rest = new LinearRestClient::LinearRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    LinearRestClient::LinearRestClient getRestClient() {
+    LinearRestClient::LinearRestClientIo getRestClient() {
         return rest;
     }
 

@@ -57,7 +57,7 @@ public class ShipStationBaseEventDataProvider inherits ShipStationDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(ShipStationRestClient::ShipStationRestClient rest, *hash<auto> options)
+    constructor(ShipStationRestClient::ShipStationRestClientIo rest, *hash<auto> options)
             : ShipStationDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", LocalOptions, options);
         if (copts.store_id) {
