@@ -105,13 +105,6 @@ public class XeroWatchDataProviderBase inherits DataProvider::AbstractTimestampW
         stopEventsIntern();
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! A Xero record is positioned by when it was last changed
     private string getTimestampField() {
         return TimestampField;

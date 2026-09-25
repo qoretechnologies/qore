@@ -148,13 +148,6 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
         }
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! Returns the configuration that defines which scan this provider follows
     /** The project scopes the feed, so watching a different project is a different scan and the previous
         cursor must not be resumed against it.

@@ -8,6 +8,10 @@
 %requires Util
 %requires QUnit
 %requires DataProvider
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClientIo
 
 %exec-class WatchDataProviderShutdownTest
 
@@ -242,9 +246,139 @@ class CheckpointWatchDataProvider inherits DataProvider::AbstractWatchDataProvid
     }
 }
 
+#! A watch data provider whose poll blocks with no cancelPollOperation() override
+/** The poll blocks on a queue, or in a request with a REST client shared with the test, until the polling thread
+    is cancelled
+*/
+class BlockingWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    public {
+        #! Receives the TID of the polling thread when the poll starts
+        Queue poll_entered();
+        #! The errors of the poll
+        list<hash<ExceptionInfo>> errors();
+    }
+
+    private {
+        #! The poll blocks on this queue if no REST client is set
+        Queue block();
+        #! An optional REST client shared with the test
+        *RestClientIo rest;
+    }
+
+    constructor(*RestClientIo rest) : AbstractWatchDataProviderBase(60) {
+        self.rest = rest;
+    }
+
+    private pollOnce() {
+        poll_entered.push(gettid());
+        if (rest) {
+            rest.restGet("/block");
+        } else {
+            block.get();
+        }
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+        errors += ex;
+    }
+
+    string getName() { return "test-blocking-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
+#! A watch data provider that raises one event and stores one checkpoint per poll
+class DeferredWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    public {
+        #! Receives the TID of the polling thread when a checkpoint is being stored
+        Queue saving();
+        #! Released to let the checkpoint be stored
+        Queue save_release();
+        #! The checkpoints stored
+        list<hash<auto>> saved();
+        #! The errors of the poll
+        list<hash<ExceptionInfo>> errors();
+        #! Set if the checkpoint is stored before notifying
+        bool save_first;
+    }
+
+    constructor(bool save_first) : AbstractWatchDataProviderBase(60) {
+        self.save_first = save_first;
+        setCheckpointPersistence(NOTHING, sub (hash<auto> checkpoint) {
+            saving.push(gettid());
+            save_release.get();
+            saved += checkpoint;
+        });
+    }
+
+    private pollOnce() {
+        if (save_first) {
+            persistCheckpoint({"n": 1});
+        } else {
+            notifyObservers("event", {"n": 1});
+        }
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+        errors += ex;
+    }
+
+    string getName() { return "test-deferred-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
+#! An observer that blocks until released
+class BlockingObserver inherits DataProvider::Observer {
+    public {
+        #! Receives the TID of the notifying thread when an event is being handled
+        Queue entered();
+        #! Released to let the event be handled
+        Queue release();
+        #! The events handled completely
+        list<hash<auto>> handled();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        entered.push(gettid());
+        release.get();
+        handled += data_;
+    }
+}
+
+#! Blocks requests to "/block" until released
+class BlockingRequestHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block") {
+            release.get(30s);
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeText},
+            "body": hdr.path,
+        };
+    }
+}
+
 class WatchDataProviderShutdownTest inherits QUnit::Test {
     constructor() : Test("WatchDataProviderShutdownTest", "1.0") {
         addTestCase("cancel during blocked poll", \testCancelDuringBlockedPoll());
+        addTestCase("polling thread cancelled on stop", \testPollThreadCancelled());
+        addTestCase("notification not interrupted by cancellation", \testNotificationNotInterrupted());
+        addTestCase("checkpoint not interrupted by cancellation", \testCheckpointNotInterrupted());
+        addTestCase("shared REST client survives stop", \testSharedRestClient());
         addTestCase("cancel during sleep", \testCancelDuringSleep());
         addTestCase("cancel error does not break shutdown", \testCancelErrorHandling());
         addTestCase("isStopping flag", \testIsStoppingFlag());
@@ -274,6 +408,75 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
         assertTrue(prov.cancel_called, "cancelPollOperation() was called");
         # Should complete in well under 2 seconds (not waiting for poll interval)
         assertTrue(elapsed < 2s, sprintf("shutdown completed promptly (elapsed: %y)", elapsed));
+    }
+
+    #! A blocking poll without a cancelPollOperation() override ends when polling is stopped
+    testPollThreadCancelled() {
+        BlockingWatchDataProvider prov();
+        prov.registerObserver(new TestObserver());
+        prov.observersReady();
+        prov.poll_entered.get(5s);
+
+        prov.stopEvents();
+        assertFalse(prov.isActive());
+        # the cancellation is not reported as a poll error
+        assertEq((), prov.errors);
+    }
+
+    #! An observer notification is completed when the polling thread is cancelled during it
+    testNotificationNotInterrupted() {
+        DeferredWatchDataProvider prov(False);
+        BlockingObserver obs();
+        prov.registerObserver(obs);
+        prov.observersReady();
+        int tid = obs.entered.get(5s);
+
+        # the cancellation is delivered while the event is being handled
+        assertTrue(cancel_thread(tid, "test"));
+        obs.release.push(1);
+        prov.stopEvents();
+        assertEq(({"n": 1},), obs.handled);
+        # the cancellation is raised after the notification, where it can only end the poll
+        assertEq((), (select prov.errors, $1.err != "THREAD-CANCELLED"));
+    }
+
+    #! A checkpoint is stored completely when the polling thread is cancelled while it is being stored
+    testCheckpointNotInterrupted() {
+        DeferredWatchDataProvider prov(True);
+        prov.registerObserver(new TestObserver());
+        prov.observersReady();
+        int tid = prov.saving.get(5s);
+
+        assertTrue(cancel_thread(tid, "test"));
+        prov.save_release.push(1);
+        prov.stopEvents();
+        assertEq(({"n": 1},), prov.saved);
+    }
+
+    #! A request of the polling thread is cancelled on stop without closing a REST client shared with others
+    testSharedRestClient() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        BlockingRequestHandler handler();
+        server.setHandler("block", "", NOTHING, handler);
+        server.setDefaultHandler("block", handler);
+        on_exit handler.release.push(1);
+
+        RestClientIo rest({"url": "http://localhost:" + port});
+        {
+            BlockingWatchDataProvider prov(rest);
+            prov.registerObserver(new TestObserver());
+            prov.observersReady();
+            prov.poll_entered.get(5s);
+            # the request of the poll is in flight until the polling thread is cancelled
+            prov.stopEvents();
+            assertEq((), prov.errors);
+        }
+        # the shared client still works
+        assertEq("other", rest.restGet("/other").body);
     }
 
     testCancelDuringSleep() {

@@ -2199,6 +2199,24 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             });
         });
 
+        # with a token, the client is created, and the redirect URL has the same default as with RestClient
+        hash<auto> opts = {
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_auth_url": "https://example.com/auth",
+            "token": "test-token",
+        };
+        RestClientIo::RestClientIo rest(opts);
+        assertEq(RestClient::RestClient::DefaultOAuth2RedirectUrl, rest.getOAuth2Options().oauth2_redirect_url);
+        # an explicit redirect URL is kept
+        rest = new RestClientIo::RestClientIo(opts + {"oauth2_redirect_url": "https://example.com/callback"});
+        assertEq("https://example.com/callback", rest.getOAuth2Options().oauth2_redirect_url);
+
         # implicit grant should throw on auto-login
         assertThrows("OAUTH2-ERROR", "manually authorized", sub () {
             new RestClientIo::RestClientIo({

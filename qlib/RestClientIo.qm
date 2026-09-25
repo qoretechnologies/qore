@@ -345,7 +345,8 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_auth_args: additional authorization arguments
         - \c oauth2_token_args: additional token request arguments
         - \c oauth2_auth_url: OAuth2 authorization URL
-        - \c oauth2_redirect_url: OAuth2 redirect URL
+        - \c oauth2_redirect_url: OAuth2 redirect URL (default: \c "auto", as with
+          @ref RestClient::RestClient "RestClient")
         - \c oauth2_auto_refresh: if \c True (default), automatically refresh expired tokens
         - \c oauth2_token_use_basic_auth: if \c True, use HTTP Basic auth for token requests
         - \c oauth2_token_auth_secret_only: if \c True, use only the secret for Basic auth
@@ -1014,9 +1015,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.oauth2_auth_url) {
                 oauth2_auth_url = opts.oauth2_auth_url;
             }
-            if (opts.oauth2_redirect_url) {
-                oauth2_redirect_url = opts.oauth2_redirect_url;
+            # the redirect URL has the same default as with RestClient, so that the same options are accepted
+            if (!opts.oauth2_redirect_url) {
+                opts.oauth2_redirect_url = RestClient::RestClient::DefaultOAuth2RedirectUrl;
             }
+            oauth2_redirect_url = opts.oauth2_redirect_url;
             if (exists opts.oauth2_auto_refresh) {
                 oauth2_auto_refresh = opts.oauth2_auto_refresh.toBool();
             }

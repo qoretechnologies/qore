@@ -39,7 +39,23 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | 1 | Streaming: sync SSE streams as wrappers, `restSseReader()` event limit, `OpenAiResponseStreamDataProvider` ending on a wait timeout, Perplexity dead sync branch | done |
 | 2 | Connections passing `get()` to providers: `RestConnection` (failed with `RUNTIME-OVERLOAD-ERROR` without a schema), AWS (same), Mews, ElasticSearch, OpenSearch | done |
 | 3 | Sync clients created inside async providers: SendCloud cross-host/v3 clients (also fixed dropping a non-default port), AWS STS `assumeRole()`, generic API call discovery through a connection member (CustomerIo and PdfCo moved to phase 5 with their providers) | done |
-| 4 | CDS, Discord, ServiceNow providers | pending |
-| 5 | 28 provider families typed to a sync `FooRestClient`, including the CustomerIo Track API and PdfCo v2 clients | pending |
+| 4 | Discord and ServiceNow providers (sync clients passed in are converted); `ServiceNowRestClientIo` and `CdsRestClientIo` brought to parity with the sync clients (API path, API key, auto OAuth2 URLs, error translation); CDS providers (absolute `@odata.nextLink`, request path encoding) | done |
+| 5 | 27 provider families typed to a sync `FooRestClient` (WooCommerce in phase 7); missing Io behavior added to the clients (GoHighLevel location, Zoho organization, FreshBooks account/business, Tableau sign-in, Unleashed signing, BigCommerce auth header, 429 retries) | done |
 | 6 | Direct `HTTPClient` users (Discord gateway discovery, `get_file_from_http()`, JSON-LD loader, A2A and ONE Record push notifications, `HttpClientDataProvider`, `FileLocationHandler`); `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | pending |
 | 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` | pending |
+
+## Watch providers
+
+`AbstractWatchDataProviderBase` cancels its polling thread with `cancel_thread()` when polling is stopped, which ends
+an in-flight `RestClientIo` request at once; observer notifications and checkpoint persistence run under
+`defer_thread_cancel()`.  A watch provider must not close its REST client: the client is shared with the other
+providers of the connection, and `RestClientIo::close()` shuts down the connection manager for good.
+
+## Known limitations
+
+| Limitation | Modules |
+| --- | --- |
+| The client builds its URL from other options and ignores `url`; loopback tests point the client at the local server with a test subclass | CustomerIo, Chargebee, Jotform, Instantly, Mailgun, Zoho*, Tableau, ShipStation, Discord |
+| `copyWithUrl()` rebuilds from options already processed by `getOptions()`, which is not idempotent, so the copy loses the URL or credentials | Mailgun, PdfCo, Zoho*, Instantly, BigCommerce (store hash) |
+| A per-request value (organization / account / business ID) is set on the shared client before a request | ZohoInventory, FreshBooks |
+| `RestClientIo` sends request paths verbatim, while the synchronous client percent-encodes invalid characters; modules must encode the paths they build (CDS does with `CdsRestDataProviderBase::encodeRequestPath()`) | all |

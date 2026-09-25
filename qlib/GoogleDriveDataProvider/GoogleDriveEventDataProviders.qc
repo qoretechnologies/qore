@@ -109,11 +109,6 @@ public class GoogleDriveWatchDataProviderBase inherits GoogleDriveDataProviderBa
         watch_drive_id = options.drive_id;
     }
 
-    #! Cancels an in-flight request so that a stop does not wait out the poll
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! The change feed returns changes in ascending change order, and they are dispatched as received
     /** The page token is an opaque cursor with no per-change key to sort on, so this provider is a documented
         exemption from the shared ordered template: it dispatches in the order the feed returns, and makes the

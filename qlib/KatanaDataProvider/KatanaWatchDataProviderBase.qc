@@ -50,13 +50,6 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
         stopEventsIntern();
     }
 
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery
     /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
         advances only after a record has been delivered successfully.
