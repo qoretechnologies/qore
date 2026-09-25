@@ -123,6 +123,12 @@ public class GetFileFromUrlTest inherits QUnit::Test {
         int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         string base = sprintf("http://localhost:%d", port);
 
+        # text without a charset is ISO-8859-1, as with HTTPClient; a charset is respected
+        string str = get_file_from_url(base + "/latin1");
+        assertEq("äöü", str);
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq("äöü", get_file_from_url(base + "/utf8"));
+
         # the path and query of the URL are requested; the fragment is not sent
         data d = get_file_from_url(base + "/echo/a b?x=1#frag");
         assertEq(NT_STRING, d.typeCode());
@@ -270,6 +276,8 @@ class RetrievalHandler inherits AbstractHttpRequestHandler {
             case "/nolocation": return makeResponse(302, "");
             case "/error": return makeResponse(500, "server error", {"Content-Type": MimeTypeText});
             case "/binary": return makeResponse(200, <0001ff>, {"Content-Type": MimeTypeOctetStream});
+            case "/latin1": return makeResponse(200, <e4f6fc>, {"Content-Type": "text/plain"});
+            case "/utf8": return makeResponse(200, binary("äöü"), {"Content-Type": "text/plain;charset=utf-8"});
             case "/empty": return makeResponse(204, NOTHING);
         }
         return makeResponse(404, "not found here", {"Content-Type": MimeTypeText});
