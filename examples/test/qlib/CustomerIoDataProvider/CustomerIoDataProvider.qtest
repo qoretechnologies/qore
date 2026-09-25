@@ -147,6 +147,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require credentials)
         addTestCase("integration: App API read actions", \integrationAppApiReadTests());
@@ -515,6 +516,27 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
     }
 
     #! Requests against a local server
+    #! The synchronous client retries a rate-limited request
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeCustomerIoHandler handler();
+        server.setHandler("customerio", "", NOTHING, handler);
+        server.setDefaultHandler("customerio", handler);
+
+        CustomerIoRestClient::CustomerIoRestClient rest({"app_api_key": "test-key"}, True);
+        rest.setURL("http://localhost:" + port);
+        handler.rate_limited = 1;
+        hash<auto> info;
+        rest.doRequest("GET", "/v1/api/segments/7", NOTHING, \info);
+        assertEq(200, info."response-code");
+        assertEq(2, handler.requests.size());
+        assertEq(handler.requests[0].path, handler.requests[1].path);
+    }
+
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),

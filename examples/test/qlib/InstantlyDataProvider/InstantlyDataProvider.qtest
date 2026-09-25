@@ -190,6 +190,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require INSTANTLY_API_KEY or connection)
         addTestCase("child provider tests", \childProviderTests());
@@ -229,6 +230,28 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
     }
 
     #! Requests against a local server
+    #! The synchronous client retries a rate-limited request
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeInstantlyHandler handler();
+        server.setHandler("instantly", "", NOTHING, handler);
+        server.setDefaultHandler("instantly", handler);
+
+        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key"}, True);
+        rest.setURL("http://localhost:" + port);
+        handler.rate_limited = 1;
+        hash<auto> info;
+        hash<auto> resp = rest.doRequest("GET", "campaigns/c1", NOTHING, \info);
+        assertEq("c1", resp.body.id);
+        assertEq(200, info."response-code");
+        assertEq(2, handler.requests.size());
+        assertEq("Bearer test-key", handler.requests[1].authorization);
+    }
+
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),

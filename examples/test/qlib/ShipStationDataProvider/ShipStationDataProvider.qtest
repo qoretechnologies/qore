@@ -136,6 +136,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("sync client rate limit", \syncClientRateLimitTest());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET)
@@ -1965,6 +1966,37 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     }
 
     #! Requests against a local server
+    #! The synchronous client retries a rate-limited request
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeShipStationHandler handler();
+        server.setHandler("shipstation", "", NOTHING, handler);
+        server.setDefaultHandler("shipstation", handler);
+
+        ShipStationRestClient::ShipStationRestClient rest({"api_key": "test-key", "api_secret": "test-secret"}, True);
+        rest.setURL("http://localhost:" + port);
+        handler.rate_limited = ({"Retry-After": "1"},);
+        hash<auto> info;
+        hash<auto> resp = rest.doRequest("GET", "carriers", NOTHING, \info);
+        assertEq("ups", resp.body[0].code);
+        assertEq(200, info."response-code");
+        assertEq(2, handler.requests.size());
+
+        # with errors passed through, a rate-limited response is also retried
+        handler.requests = ();
+        handler.rate_limited = ({"Retry-After": "1"},);
+        rest = new ShipStationRestClient::ShipStationRestClient({"api_key": "test-key", "api_secret": "test-secret",
+            "error_passthru": True}, True);
+        rest.setURL("http://localhost:" + port);
+        resp = rest.doRequest("GET", "carriers", NOTHING, \info);
+        assertEq(200, info."response-code");
+        assertEq(2, handler.requests.size());
+    }
+
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),

@@ -225,7 +225,10 @@ InstantlyRestClient instantly({"apikey": "your-api-key"});
             try {
                 return RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "REST-RESPONSE-ERROR" || info.response_code != 429) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR")
+                    || (info."response-code" ?? ex.arg.status_code) != 429) {
                     rethrow;
                 }
 
@@ -235,7 +238,7 @@ InstantlyRestClient instantly({"apikey": "your-api-key"});
                 }
 
                 # Calculate retry delay
-                date retry_delay = getRetryDelay(info, current_delay);
+                date retry_delay = getRetryDelay({"headers": info."response-headers" ?? ex.arg}, current_delay);
 
                 # Check if waiting would exceed max retry time
                 if (elapsed + retry_delay > MaxRetryTime) {

@@ -135,6 +135,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("sync client rate limit", \syncClientRateLimitTest());
 
         # Integration tests (require CHARGEBEE_API_KEY and CHARGEBEE_SITE)
         addTestCase("integration tests", \integrationTests());
@@ -444,6 +445,27 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
     }
 
     #! Requests against a local server
+    #! The synchronous client retries a rate-limited request
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeChargebeeHandler handler();
+        server.setHandler("chargebee", "", NOTHING, handler);
+        server.setDefaultHandler("chargebee", handler);
+
+        ChargebeeRestClient::ChargebeeRestClient rest({"api_key": "test_key", "site": "test-site"}, True);
+        rest.setURL("http://localhost:" + port);
+        handler.rate_limited = 1;
+        hash<auto> info;
+        rest.doRequest("GET", "/api/v2/customers", NOTHING, \info);
+        assertEq(200, info."response-code");
+        assertEq(2, handler.requests.size());
+        assertEq(handler.requests[0].path, handler.requests[1].path);
+    }
+
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),

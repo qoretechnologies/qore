@@ -236,33 +236,49 @@ CustomerIoRestClient cio({
         date current_delay = InitialRetryDelay;
 
         while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            if (info.response_code == 429) {
-                date elapsed = now_us() - start_time;
-                if (elapsed >= MaxRetryTime) {
-                    return response;
+            # a 429 response is raised as an error, or returned if errors are passed through
+            *hash<auto> response;
+            *hash<ExceptionInfo> error;
+            # the status code and headers of the response
+            *int status;
+            *hash<auto> response_headers;
+            try {
+                response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+                status = info."response-code";
+                response_headers = info."response-headers";
+            } catch (hash<ExceptionInfo> ex) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                status = info."response-code" ?? ex.arg.status_code;
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR") || status != 429) {
+                    rethrow;
                 }
-
-                date retry_delay = getRetryDelay(info, current_delay);
-
-                if (elapsed + retry_delay > MaxRetryTime) {
-                    retry_delay = MaxRetryTime - elapsed;
-                    if (retry_delay <= 0s) {
-                        return response;
-                    }
-                }
-
-                sleep(retry_delay);
-
-                current_delay = current_delay * 2;
-                if (current_delay > MaxRetryDelay) {
-                    current_delay = MaxRetryDelay;
-                }
-                continue;
+                response_headers = info."response-headers" ?? ex.arg;
+                error = ex;
+            }
+            if (status != 429) {
+                return response;
             }
 
-            return response;
+            date elapsed = now_us() - start_time;
+            date retry_delay = getRetryDelay({"headers": response_headers}, current_delay);
+            if (elapsed + retry_delay > MaxRetryTime) {
+                retry_delay = MaxRetryTime - elapsed;
+            }
+            if (retry_delay <= 0s) {
+                # the maximum retry time has been exceeded; the 429 error is returned or raised
+                if (error) {
+                    throw error.err, error.desc, error.arg;
+                }
+                return response;
+            }
+
+            sleep(retry_delay);
+
+            current_delay = current_delay * 2;
+            if (current_delay > MaxRetryDelay) {
+                current_delay = MaxRetryDelay;
+            }
         }
     }
 
