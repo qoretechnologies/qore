@@ -120,6 +120,55 @@ class TestRestAppDataProvider inherits DataProvider::AbstractDataProvider {
     }
 }
 
+#! A data provider following the connection member convention of module-v8 TypeScript apps
+class TestConnMemberDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "test-conn-app",
+            "type": "TestConnMemberDataProvider",
+            "supports_children": True,
+            "children_can_support_apis": True,
+        };
+    }
+
+    private {
+        #! The connection — the conventional member name the framework discovers reflectively
+        object conn;
+    }
+
+    constructor(object conn) {
+        self.conn = conn;
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+#! A connection without async I/O support, which only has a synchronous client
+class SyncOnlyConnection {
+    private {
+        string url;
+    }
+
+    constructor(string url) {
+        self.url = url;
+    }
+
+    object getAsync(bool connect = True) {
+        throw "CONNECTION-ASYNC-UNSUPPORTED", "no async I/O";
+    }
+
+    object get(bool connect = True) {
+        return new RestClient({"url": url}, !connect);
+    }
+}
+
 #! A non-REST data provider whose child IS REST-based
 /** Verifies that suppression is propagated from the provider that actually exposes the generic API call
     child, not from any parent: a REST subtree hanging off a non-REST parent still gets its own
@@ -193,6 +242,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         addTestCase("__call__ child resolves and dispatches", \testCallChildDispatches());
         addTestCase("__call__ shows up in getChildProviderNames", \testCallChildInNames());
         addTestCase("getRestClientForGenericCall override returns rest", \testOverrideReturnsRest());
+        addTestCase("connection member discovery prefers the async client", \testConnMemberDiscovery());
         # the generic API call child is injected once per provider tree, at its root
         addTestCase("__call__ is injected only at the tree root", \testCallChildOnlyAtTreeRoot());
         addTestCase("__call__ does not nest inside itself", \testCallChildNotRecursive());
@@ -447,6 +497,26 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         assertTrue(exists rc, "reflective discovery must return the rest client");
         assertTrue(rc instanceof RestClient::AbstractRestClient,
             "returned client must be an AbstractRestClient subclass");
+    }
+
+    testConnMemberDiscovery() {
+        string url = "http://localhost:" + port;
+        # the async client of the connection is discovered, and requests are sent with it
+        {
+            RestConnection conn("test", "test", url, {"monitor": False});
+            TestConnMemberDataProvider prov(conn);
+            *object rc = prov.getRestClientForGenericCall();
+            assertTrue(rc instanceof RestClientIo::RestClientIo, "the async client must be discovered");
+            hash<auto> resp = cast<RestClientIo::RestClientIo>(rc).restDoRequest("GET", "/echo");
+            assertEq(200, resp.status_code);
+            assertEq("GET", resp.body.method);
+        }
+        # a connection without async I/O falls back to its synchronous client
+        {
+            TestConnMemberDataProvider prov(new SyncOnlyConnection(url));
+            *object rc = prov.getRestClientForGenericCall();
+            assertTrue(rc instanceof RestClient::RestClient, "the sync client must be the fallback");
+        }
     }
 
     testCallChildOnlyAtTreeRoot() {

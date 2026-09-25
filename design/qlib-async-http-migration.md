@@ -38,8 +38,8 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | --- | --- | --- |
 | 1 | Streaming: sync SSE streams as wrappers, `restSseReader()` event limit, `OpenAiResponseStreamDataProvider` ending on a wait timeout, Perplexity dead sync branch | done |
 | 2 | Connections passing `get()` to providers: `RestConnection` (failed with `RUNTIME-OVERLOAD-ERROR` without a schema), AWS (same), Mews, ElasticSearch, OpenSearch | done |
-| 3 | Sync clients created inside async providers (SendCloud, CustomerIo, PdfCo, AWS STS, generic API discovery) | pending |
+| 3 | Sync clients created inside async providers: SendCloud cross-host/v3 clients (also fixed dropping a non-default port), AWS STS `assumeRole()`, generic API call discovery through a connection member (CustomerIo and PdfCo moved to phase 5 with their providers) | done |
 | 4 | CDS, Discord, ServiceNow providers | pending |
-| 5 | 28 provider families typed to a sync `FooRestClient` | pending |
+| 5 | 28 provider families typed to a sync `FooRestClient`, including the CustomerIo Track API and PdfCo v2 clients | pending |
 | 6 | Direct `HTTPClient` users (Discord gateway discovery, `get_file_from_http()`, JSON-LD loader, A2A and ONE Record push notifications, `HttpClientDataProvider`, `FileLocationHandler`); `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | pending |
 | 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` | pending |

@@ -6980,8 +6980,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         2. **Connection member** (the module-v8 convention): if no direct @c rest member is found,
            walks for a member named @ref GenericApiCallConnectionMemberName "\"conn\"" that exposes
-           @c get(bool); the framework calls @c get(False) to obtain the underlying client without
-           establishing a network connection, then returns it if it responds to @c restDoRequest().
+           @c getAsync(bool) or @c get(bool); the framework calls @c getAsync(False) to obtain the underlying
+           asynchronous client without establishing a network connection, and returns it if it responds to
+           @c restDoRequest(); @c get(False) is only used if the connection does not support async I/O
+           (\c CONNECTION-ASYNC-UNSUPPORTED) or its async client does not respond to @c restDoRequest()
 
         Together these conventions cover every REST-based data provider in qore qlib and in
         module-v8's TypeScript app framework with no per-provider overrides. The duck-typed
@@ -7025,16 +7027,32 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         # 2. Fallback: try the connection-member convention (module-v8 TypeScript apps store an
         # AbstractConnection in "conn" rather than the REST client directly). Resolve the
-        # underlying client via conn.get(False) so we don't establish a network connection just
-        # to inspect the type.
+        # underlying client without connecting so we don't establish a network connection just
+        # to inspect the type; the async client is preferred, and the sync client is only used by
+        # connections without one
         try {
             *Reflection::AbstractClassMember m = cls.getMember(GenericApiCallConnectionMemberName);
             if (m) {
                 auto val = m.getValue(self);
-                if (val.typeCode() == NT_OBJECT && cast<object>(val).hasCallableMethod("get")) {
-                    object client = cast<object>(val).get(False);
-                    if (exists client && client.hasCallableMethod("restDoRequest")) {
-                        return client;
+                if (val.typeCode() == NT_OBJECT) {
+                    object conn = cast<object>(val);
+                    if (conn.hasCallableMethod("getAsync")) {
+                        try {
+                            object client = conn.getAsync(False);
+                            if (client.hasCallableMethod("restDoRequest")) {
+                                return client;
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err != "CONNECTION-ASYNC-UNSUPPORTED") {
+                                rethrow;
+                            }
+                        }
+                    }
+                    if (conn.hasCallableMethod("get")) {
+                        object client = conn.get(False);
+                        if (exists client && client.hasCallableMethod("restDoRequest")) {
+                            return client;
+                        }
                     }
                 }
             }

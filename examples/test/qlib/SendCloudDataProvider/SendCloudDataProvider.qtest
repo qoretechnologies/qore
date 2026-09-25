@@ -37,8 +37,21 @@
 
 %requires SendCloudRestClient
 %requires SendCloudDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class SendCloudDataProviderTest
+
+#! Returns the request path and the Authorization header as JSON
+class EchoRequestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"path": hdr.path, "authorization": hdr.authorization}),
+        };
+    }
+}
 
 public class SendCloudDataProviderTest inherits QUnit::Test {
     private {
@@ -80,6 +93,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         addTestCase("create-parcel required fields", \testCreateParcelRequiredFields());
         addTestCase("create-return v3 request type", \testCreateReturnV3RequestType());
         addTestCase("credential propagation", \testCredentialPropagation());
+        addTestCase("other base URL requests", \testOtherBaseUrlRequests());
 
         # Integration tests (require -c <connection>)
         addTestCase("integration: ping", \testPing());
@@ -307,6 +321,33 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         SendCloudDataProvider::SendCloudDataProvider dp2({"restclient": io});
         assertEq("pk-test", dp2.getSendCloudCredentials().public_key,
             "data provider should recover credentials when restclient is passed via options");
+    }
+
+    #! Requests to another host are sent with a client created with the SendCloud credentials
+    testOtherBaseUrlRequests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        EchoRequestHandler handler();
+        server.setHandler("echo", "", NOTHING, handler);
+        server.setDefaultHandler("echo", handler);
+
+        SendCloudDataProvider::SendCloudDataProvider dp({
+            "restclient_options": {"public_key": "pk-test", "secret_key": "sk-test"},
+        });
+        string url = "http://localhost:" + port;
+        hash<auto> body = dp.doAbsoluteGet(url + "/api/v2/service-points", {"country": "NL"});
+        assertEq("api/v2/service-points?country=NL", body.path);
+        assertEq("Basic " + make_base64_string("pk-test:sk-test"), body.authorization);
+        # the client for the base URL is reused
+        body = dp.doAbsoluteGet(url + "/other");
+        assertEq("other", body.path);
+
+        # without credentials, no client can be created for another base URL
+        SendCloudDataProvider::SendCloudDataProvider no_creds(new RestClientIo({"url": url}));
+        assertThrows("SENDCLOUD-ERROR", "no credentials", \no_creds.doAbsoluteGet(), url + "/x");
     }
 
     #! Verify every advertised action is resolvable via the factory's action catalog
