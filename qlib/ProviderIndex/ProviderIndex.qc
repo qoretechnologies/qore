@@ -92,6 +92,20 @@ public hashdecl ProviderIndexCreateOptions {
     #! The maximum time in milliseconds that a worker may run before it is terminated and the build fails
     /** @since %ProviderIndex 1.2 */
     int worker_timeout_ms = 3600000;
+
+    #! Also write the canonical index file (\c qore-data-index.yaml)
+    /** The published index is its routing index and metadata cache; the canonical index file holds the complete
+        index as YAML, is many times larger, and is not needed by any reader, so it is only written if this is set,
+        or if the @ref ProviderIndexUtil::ProviderIndexCanonicalYamlEnvVar "QORE_PROVIDER_INDEX_CANONICAL_YAML"
+        environment variable is set, or if MessagePack support is not available.  Set it while a consumer that
+        requires the file, such as an earlier version of ProviderIndexUtil sharing the index directory, is in use.
+
+        A published index can be written as YAML on demand with
+        @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()".
+
+        @since %ProviderIndex 1.2
+    */
+    bool write_canonical_yaml = False;
 }
 
 #! The main API class
@@ -241,7 +255,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
                                 "schemes": index.schememap.size(),
                                 "qualification": qualification_report,
                                 "type_info_mismatches": type_info_mismatches,
-                            });
+                            }, opts.write_canonical_yaml);
                     });
                 });
     }
@@ -1148,7 +1162,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "qualification": report,
             "type_info_mismatches": type_info_mismatches,
             "workers": worker_summary,
-        });
+        }, opts.write_canonical_yaml);
 %endif
     }
 

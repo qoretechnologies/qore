@@ -112,7 +112,7 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         hash<ExceptionInfo> first = createIndexExpectingFailure(app, dir);
         checkFailure(first, "action", app, "broken-action", "DEFERRED-REGISTRATION-ERROR",
             "synthetic deferred action failure", {"state": "deferred"});
-        assertFalse(is_readable(join_paths(dir, "qore-data-index.yaml")),
+        assertFalse(is_readable(join_paths(dir, "qore-routing-index.yaml")),
             "an incomplete index is not written");
 
         # The pending callback is consumed on the first attempt, so only retained structured state can make the
@@ -216,7 +216,7 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
                 assertTrue(failures[0].description.val(),
                     "the original loader description is retained");
             }
-            assertFalse(is_readable(join_paths(dir, "qore-data-index.yaml")),
+            assertFalse(is_readable(join_paths(dir, "qore-routing-index.yaml")),
                 "a source failure cannot publish an index on attempt " + (i + 1));
         }
     }
@@ -289,7 +289,7 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
                 assertEq(provider_module, failures[0].module_context);
             }
             assertFalse(is_readable(join_paths(dir,
-                "qore-data-index.yaml")),
+                "qore-routing-index.yaml")),
                 "a provider-module failure cannot publish an index on attempt "
                     + (i + 1));
         }
@@ -314,7 +314,7 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
             });
         assertTrue(recovered.summary.qualification.complete,
             "the same failed environment provider is retried successfully after its dependency appears");
-        assertTrue(is_readable(join_paths(dir, "qore-data-index.yaml")),
+        assertTrue(is_readable(join_paths(dir, "qore-routing-index.yaml")),
             "the recovered discovery attempt can publish its qualified index");
     }
 }

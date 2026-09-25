@@ -86,9 +86,9 @@ public class DataProviderAOTTest inherits QUnit::Test {
             "routing-only lookup does not find an unknown app");
 
 %ifndef NoMsgPack
-        string cache_path = dir + DirSep + "qore-data-index.msgpack";
-        assertTrue(hstat(cache_path) != NOTHING, "provider index writer creates the optional metadata cache");
-        unlink(ProviderIndexUtil::getIndexPath("data"));
+        assertEq(1, glob(dir + DirSep + "qore-data-index-manifest-*.msgpack").size(),
+            "provider index writer creates the metadata cache");
+        assertFalse(is_file(ProviderIndexUtil::getIndexPath("data")), "no canonical index file is published");
 %endif
 
         Counter metadata_cnt(8);

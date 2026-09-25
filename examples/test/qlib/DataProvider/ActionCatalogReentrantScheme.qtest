@@ -68,9 +68,10 @@ class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
             "top_actioninfomap": {},
         }, 0s, {});
 
-        # Replace only the canonical index so the stale routing sidecar must be rejected.
+        # Write a canonical index after the routing index, which was published without one, so the stale routing
+        # sidecar must be rejected.
         File data_index();
-        data_index.open(ProviderIndexUtil::getIndexPath("data"), O_WRONLY | O_TRUNC);
+        data_index.open(ProviderIndexUtil::getIndexPath("data"), O_CREAT | O_WRONLY | O_TRUNC);
         data_index.write(make_yaml(<DataProviderIndexInfo>{
             "schememap": {
                 ReentrantScheme: modules,

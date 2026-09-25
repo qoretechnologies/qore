@@ -285,6 +285,25 @@
     - text is tagged with its encoding and never converted, so the octets received are those returned
     @endparblock
 
+    @par Data Provider Indexes Are Published Without the Canonical Index File
+    @parblock
+    A data provider index is now published as its routing index (\c qore-routing-index.yaml) and its metadata
+    cache; the canonical index file \c qore-data-index.yaml, a YAML copy of the complete index that can be hundreds
+    of megabytes, is only written on request, with
+    @ref ProviderIndex::ProviderIndexCreateOptions::write_canonical_yaml "ProviderIndexCreateOptions::write_canonical_yaml"
+    or the @ref ProviderIndexUtil::ProviderIndexCanonicalYamlEnvVar "QORE_PROVIDER_INDEX_CANONICAL_YAML" environment
+    variable, and a canonical index file left by an earlier index is removed when an index is published without
+    one.  Earlier versions of the @ref providerindexutilintro "ProviderIndexUtil" module cannot read an index
+    published without it, so request it while such a version shares the index directory.  Programs that read
+    \c qore-data-index.yaml themselves can produce the same YAML from a published index with
+    @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()".
+
+    A canonical index file larger than 128 MiB
+    (@ref ProviderIndexUtil::ProviderIndexMaxCanonicalSizeEnvVar "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES") is no
+    longer read; this is reported as a \c PROVIDER-INDEX-TOO-LARGE error by
+    @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()".
+    @endparblock
+
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
     @parblock
     A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
@@ -3966,6 +3985,18 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         structured choices, and media/job results; reading the index never loads the provider modules that
         implement an app, and output types, which no index consumer uses, are not indexed
       - an option type whose description does not restore an equivalent type is reported in the index summary
+      - the canonical index file \c qore-data-index.yaml is no longer published by default (see
+        @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility"); for a large index, this
+        saves hundreds of megabytes per index directory, and the memory and time to write and hash the file at the
+        end of an index build
+      - added @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()",
+        which writes a published index, or one app of it, as YAML
+      - publishing an index never changes a file that the previous index references, so an interrupted or failed
+        publication leaves the previous index readable
+      - an index whose routing index or metadata cache is corrupt or incomplete is reported by
+        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()"
+        instead of being read from a canonical index file of any size, which could take gigabytes of memory; an
+        app whose metadata cannot be read is unavailable without affecting the other apps
       - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
         @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
         @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard

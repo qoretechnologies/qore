@@ -138,7 +138,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
 
     private lateFailure(bool callback_error) {
         createIndex();
-        string before = ReadOnlyFile::readTextFile(root + "/qore-data-index.yaml");
+        string before = ReadOnlyFile::readTextFile(root + "/qore-routing-index.yaml");
         string source = "warmup-error-" + get_random_string(8);
         on_exit DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(source);
         hash<DataProviderActionInfo> info = action(source);
@@ -159,7 +159,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
         assertEq(1, failures.size());
         assertEq(callback_error ? source : App + "/" + missing, failures[0].identity);
         assertEq(callback_error ? "inventory" : "expected-inventory", failures[0].phase);
-        assertEq(before, ReadOnlyFile::readTextFile(root + "/qore-data-index.yaml"));
+        assertEq(before, ReadOnlyFile::readTextFile(root + "/qore-routing-index.yaml"));
     }
 
     private hash<DataProviderDiscoveryReportInfo> failureReport() {
@@ -178,7 +178,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
     private mutationTest() {
         checkYaml();
         createIndex();
-        string before = ReadOnlyFile::readTextFile(root + "/qore-data-index.yaml");
+        string before = ReadOnlyFile::readTextFile(root + "/qore-routing-index.yaml");
         string source = "warmup-mutation-" + get_random_string(8);
         on_exit DataProviderActionCatalog::deregisterDiscoveryInventoryProvider(source);
         int collections = 0;
@@ -193,7 +193,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
             assertEq(attempt, collections, "mutation must fail, not trigger an unbounded retry");
             assertEq(1, (select report.failures,
                 $1.error == "DATA-PROVIDER-DISCOVERY-INVENTORY-STALE").size());
-            assertEq(before, ReadOnlyFile::readTextFile(root + "/qore-data-index.yaml"));
+            assertEq(before, ReadOnlyFile::readTextFile(root + "/qore-routing-index.yaml"));
         }
     }
 }

@@ -147,7 +147,8 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
             "factorymap": {"preserved": "Original"},
         };
         ProviderIndexUtil::writeDataProviderIndex(original, 0s, {});
-        binary before = ReadOnlyFile::readBinaryFile(tmp.path + "/qore-data-index.yaml");
+        # the routing index identifies the published index
+        binary before = ReadOnlyFile::readBinaryFile(tmp.path + "/qore-routing-index.yaml");
         try {
             ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{
                 "appmap": {"Synthetic": {"/missing/DoNotGuess.qmod": True}},
@@ -159,7 +160,7 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertEq("PROVIDER-INDEX-MODULE-ERROR", ex.err);
         }
-        assertEq(before, ReadOnlyFile::readBinaryFile(tmp.path + "/qore-data-index.yaml"),
+        assertEq(before, ReadOnlyFile::readBinaryFile(tmp.path + "/qore-routing-index.yaml"),
             "the previous index remains byte-identical on failure");
     }
 }

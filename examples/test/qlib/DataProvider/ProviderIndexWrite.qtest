@@ -131,7 +131,8 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
 
         # verify that the directory can actually be used
         hash<ProviderIndexInfo> rv = ProviderIndexUtil::writeDataProviderIndex(makeIndex(), 0s, {});
-        assertEq(join_paths(dir, "qore-data-index.yaml"), rv.path, "the index was written to the new directory");
+        # the routing index identifies an index published without a canonical index file
+        assertEq(join_paths(dir, "qore-routing-index.yaml"), rv.path, "the index was written to the new directory");
         assertTrue(hstat(rv.path).size > 0, "the index file is not empty");
     }
 
@@ -148,7 +149,8 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
         hash<DataProviderIndexInfo> first = makeIndex({"qore-test-factory-1": "/qore/test/module1.qm"});
         hash<DataProviderIndexInfo> second = makeIndex({"qore-test-factory-2": "/qore/test/module2.qm"});
 
-        string path = ProviderIndexUtil::getIndexPath("data");
+        # the routing index holds the factory map
+        string path = ProviderIndexUtil::getIndexPath("routing");
         ProviderIndexUtil::writeDataProviderIndex(first, 0s, {});
         assertTrue(File::readTextFile(path).find("qore-test-factory-1") >= 0, "the first index was written");
         int inode = hstat(path).inode;
@@ -180,7 +182,7 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
         on_exit restore();
 
         # create a valid index in a usable directory
-        string path = ProviderIndexUtil::getIndexPath("data");
+        string path = ProviderIndexUtil::getIndexPath("routing");
         ProviderIndexUtil::writeDataProviderIndex(makeIndex({"qore-test-original": "/qore/test/original.qm"}),
             0s, {});
         string orig = File::readTextFile(path);

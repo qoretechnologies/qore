@@ -81,6 +81,9 @@ module ProviderIndex {
     - an option type whose description does not restore an equivalent type is reported in the
       \c type_info_mismatches key of the index summary
     - action metadata that is not plain data blocks publication with structured action evidence
+    - indexes are published without the canonical index file (\c qore-data-index.yaml) unless
+      @ref ProviderIndex::ProviderIndexCreateOptions::write_canonical_yaml "ProviderIndexCreateOptions::write_canonical_yaml"
+      is set
     - indexes written by this version require ProviderIndexUtil 1.2 or later
 
     @subsection providerindex_v1_1 ProviderIndex v1.1

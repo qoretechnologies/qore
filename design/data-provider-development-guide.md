@@ -346,12 +346,13 @@ Running `qctl update-index` before the modules are in place fails qualification 
 inventory names the app. The ordering still matters: install first so the discovery source and its
 owner path are available to the qualified generation.
 
-To verify, either ask for the app directly, or look for its index chunk, which is named for the
-SHA-256 of the **app name**:
+To verify, either ask for the app directly, or write its indexed metadata as YAML from the
+published index (the index is stored as compressed MessagePack chunks, and the full
+`qore-data-index.yaml` file is not published by default):
 
 ```bash
 qdp @MyService
-ls "${QORE_PROVIDER_INDEX_DIR}/qore-data-index-$(printf 'MyService' | sha256sum | cut -d' ' -f1).msgpack"
+qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, "MyService", "-");'
 ```
 
 **Two conditions make an app ineligible for a qualified index**. Both are structured discovery

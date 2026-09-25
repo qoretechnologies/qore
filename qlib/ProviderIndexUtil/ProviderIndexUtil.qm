@@ -62,6 +62,33 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - the routing index and the metadata cache are the published index; the canonical index file
+      (\c qore-data-index.yaml), a YAML copy of the complete index that can be hundreds of megabytes, is only
+      written if requested with the new \c write_canonical_yaml argument of
+      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "ProviderIndexUtil::writeDataProviderIndex()"
+      and @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "ProviderIndexUtil::writeDataProviderIndexByApp()",
+      or with the @ref ProviderIndexUtil::ProviderIndexCanonicalYamlEnvVar "QORE_PROVIDER_INDEX_CANONICAL_YAML"
+      environment variable, or if MessagePack support is not available; a canonical index file left by an earlier
+      index is removed when an index is published without one; indexes published with it are still read, with or
+      without the file; earlier versions of this module cannot read an index published without it
+    - added @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()", which
+      writes a published index, or one app of it, as YAML in the format of the canonical index file
+    - each metadata cache file is named after the digest of its contents (routing index version 3, metadata cache
+      version 5), so that publishing an index never changes a file that the previous index references, and the
+      routing index, which is written last, publishes the new index atomically; the files that it no longer
+      references are then removed; indexes written with metadata cache version 4 are still read
+    - errors reading the routing index or the metadata cache are reported by
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()";
+      the canonical index file is only read if there is one, and an app whose metadata cannot be read is
+      unavailable without affecting the other apps
+    - a canonical index file larger than
+      @ref ProviderIndexUtil::ProviderIndexUtil::getMaxCanonicalIndexSize() "ProviderIndexUtil::getMaxCanonicalIndexSize()"
+      (128 MiB by default, set with the
+      @ref ProviderIndexUtil::ProviderIndexMaxCanonicalSizeEnvVar "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES"
+      environment variable) is not read, since it takes several times its size in memory to parse; this is
+      reported as a \c PROVIDER-INDEX-TOO-LARGE error
+    - @ref ProviderIndexUtil::ProviderIndexUtil::readDataProviderIndex() "ProviderIndexUtil::readDataProviderIndex()"
+      reads the index currently published, instead of the metadata cache of an index that the process read earlier
     - added index build mode
       (@ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()" and the
       @ref ProviderIndexUtil::ProviderIndexBuildEnvVar "QORE_PROVIDER_INDEX_BUILD" environment variable), in which

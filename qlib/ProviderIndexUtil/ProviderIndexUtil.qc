@@ -36,9 +36,44 @@ public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 */
 public const ProviderIndexBuildEnvVar = "QORE_PROVIDER_INDEX_BUILD";
 
-const RoutingIndexVersion = 2;
-#! Version 3 compresses each app chunk with zlib
-const MetadataCacheVersion = 4;
+#! The environment variable that makes index builds also write the canonical index file
+/** If set to a true value (ex: \c 1 or \c true), every index written also includes the canonical index file
+    (\c qore-data-index.yaml), as if
+    @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "ProviderIndexUtil::writeDataProviderIndex()"
+    had been called with \c write_canonical_yaml set; it is only a diagnostic and transition aid, since no reader
+    needs the file
+
+    @since ProviderIndexUtil 1.2
+*/
+public const ProviderIndexCanonicalYamlEnvVar = "QORE_PROVIDER_INDEX_CANONICAL_YAML";
+
+#! The environment variable that sets the largest canonical index file that is read
+/** The value is a size in bytes; if unset or not a positive integer,
+    @ref ProviderIndexUtil::DefaultMaxCanonicalIndexSize "DefaultMaxCanonicalIndexSize" is used
+
+    @since ProviderIndexUtil 1.2
+*/
+public const ProviderIndexMaxCanonicalSizeEnvVar = "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES";
+
+#! The default size in bytes of the largest canonical index file that is read (128 MiB)
+/** The canonical index file is parsed in full, which takes several times its size in memory, so a larger file is
+    reported as an index read error with the \c PROVIDER-INDEX-TOO-LARGE code instead of being parsed
+
+    @see ProviderIndexMaxCanonicalSizeEnvVar
+
+    @since ProviderIndexUtil 1.2
+*/
+public const DefaultMaxCanonicalIndexSize = 128 * 1024 * 1024;
+
+#! Version 3 records whether a canonical index file was published with the routing index
+const RoutingIndexVersion = 3;
+#! Version 5 names each metadata cache file after the digest of its contents, so that publishing an index never
+#! changes a file that the previous index references
+const MetadataCacheVersion = 5;
+#! The earliest routing index and metadata cache versions that are read; they name the metadata cache files after
+#! their apps
+const MinRoutingIndexVersion = 2;
+const MinMetadataCacheVersion = 4;
 
 #! The mode used when creating the provider index directory
 /** @note the execute bit is required, otherwise the directory cannot be traversed, and no index files in it can be
@@ -80,9 +115,15 @@ public hashdecl DataProviderIndexInfo {
 #! Index info
 public hashdecl ProviderIndexInfo {
     #! Path to the index file
+    /** The canonical index file (\c qore-data-index.yaml) if it was written, otherwise the routing index
+        (\c qore-routing-index.yaml), which identifies the published index
+    */
     string path;
 
     #! Size of the index file
+    /** The size of the canonical index file if it was written, otherwise the total size of the routing index and
+        the metadata cache files
+    */
     int size;
 
     #! Elapsed time to create the Index
@@ -97,14 +138,15 @@ public hashdecl ProviderIndexInfo {
 */
 public hashdecl SerializedDataProviderIndexInfo {
     #! The \c factorymap, \c appmap, \c schememap, \c appinfomap, and \c actioninfomap members of the index
-    /** App and action metadata is in the serialized form stored in the index, as in the canonical index file
+    /** App and action metadata is in the serialized form stored in the index, as in the YAML written by
+        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"
     */
     *hash<auto> index;
 
     #! The SHA-256 digest of the routing index
     /** The routing index holds the index maps and records the digests of the metadata cache manifest, which
-        records the digest of each app's metadata, and of the canonical index file, so this digest identifies the
-        complete index
+        records the digest of each app's metadata, and of any canonical index file published with it, so this
+        digest identifies the complete index
     */
     string sha256;
 
@@ -138,10 +180,14 @@ hashdecl MetadataDeserializeContext {
 #! Versioned routing sidecar for a data provider index
 hashdecl DataProviderRoutingIndexInfo {
     int version;
-    string data_sha256;
+    # the digest of the canonical file, if one was published with the routing index
+    *string data_sha256;
     # the size of the canonical file; while it is unchanged and the file is not newer than the routing index, the
     # canonical file is not read to verify its digest
     *int data_size;
+    # set if a canonical file was published with the routing index (version 3); a version 2 routing index was
+    # always published with one
+    *bool canonical_yaml;
     string routing_sha256;
     *int metadata_cache_version;
     *string metadata_cache_sha256;
@@ -162,6 +208,16 @@ hashdecl DataProviderMetadataCacheChunkInfo {
 hashdecl DataProviderMetadataCacheManifest {
     int version;
     hash<string, DataProviderMetadataCacheChunkInfo> apps;
+}
+
+#! A published index's routing index and metadata cache manifest, verified
+hashdecl CompactIndexInfo {
+    hash<DataProviderRoutingIndexInfo> routing;
+    # the routing index as read, whose digest identifies the index
+    binary routing_data;
+    hash<DataProviderMetadataCacheManifest> manifest;
+    # the total size of the routing index and the manifest
+    int size;
 }
 
 #! Result of loading deferred raw metadata
@@ -223,6 +279,8 @@ public class ProviderIndexUtil {
 
         #! Validated manifest digest set only by serialized index initialization and immutable after initialization
         static *string metadata_cache_sha256;
+        #! The version of the validated manifest, which determines the names of the metadata cache files
+        static *int metadata_cache_version;
         static *hash<DataProviderMetadataCacheManifest> metadata_cache_manifest;
         static bool metadata_cache_manifest_checked;
 
@@ -233,7 +291,7 @@ public class ProviderIndexUtil {
         #! the global module lock even when a module is already loaded
         static hash<string, bool> loaded_module_cache;
 
-        #! The last error encountered when reading the canonical data provider index, if any
+        #! The last error encountered when reading the published data provider index, if any
         /** This is set when the index exists but could not be read (ex: a permissions problem or a corrupt file);
             it is not set when no index has been created yet
         */
@@ -338,17 +396,30 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         raw_metadata_app_loaded = {};
         raw_metadata_apps_loaded = False;
         remove metadata_cache_sha256;
+        remove metadata_cache_version;
         remove metadata_cache_manifest;
         metadata_cache_manifest_checked = False;
         apps_loaded = False;
     }
 
-    #! Returns any error encountered while reading the canonical data provider index
-    /** @return the description of the error encountered when trying to read the data provider index, if any;
-        @ref nothing is returned if the index was read successfully or if no index has been created yet
+    #! Returns any error encountered while reading the published data provider index
+    /** @return the description of the error encountered when trying to read the data provider index, if any, as
+        \c "<code>: <description>"; @ref nothing is returned if the index was read successfully or if no index has
+        been created yet
 
         Callers can use this to distinguish an unreadable or corrupt index (which silently degrades the set of
-        known apps and factories) from a system where no index has been created at all
+        known apps and factories) from a system where no index has been created at all.  The error is reported when
+        the routing index, the metadata cache manifest, or the metadata of any app cannot be read or does not match
+        the digest recorded for it, and when the canonical index file cannot be read, or is larger than
+        @ref getMaxCanonicalIndexSize() (\c PROVIDER-INDEX-TOO-LARGE); the metadata of an app is read when it is
+        first needed, so an error can be reported after the index has been initialized.
+
+        @par Example:
+        @code{.py}
+if (*string err = ProviderIndexUtil::getIndexReadError()) {
+    log(LoggerLevel::LevelError, "the data provider index is unavailable: %s", err);
+}
+        @endcode
     */
     static *string getIndexReadError() {
         return index_read_error;
@@ -1091,6 +1162,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     /** @param h the index
         @param delta the time taken to create the index
         @param summary summary information about the index
+        @param write_canonical_yaml if @ref True, the canonical index file (\c qore-data-index.yaml) is written too;
+        see @ref writeDataProviderIndexByApp()
 
         @return information about the written index
 
@@ -1099,18 +1172,31 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @see writeDataProviderIndexByApp()
     */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
-            hash<auto> summary) {
+            hash<auto> summary, *bool write_canonical_yaml) {
         *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
         hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
         return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
             return actioninfomap{app};
-        }, delta, summary);
+        }, delta, summary, write_canonical_yaml);
     }
 
     #! Writes the data provider index, retrieving the actions of each app only while that app is written
-    /** The canonical index, the app-sharded metadata cache, and the routing index are written in one pass over the
-        apps, so that only one app's actions are held in memory at a time; apps and map entries are written in
-        sorted order, so the same index is always written identically
+    /** The app-sharded metadata cache and the routing index are written in one pass over the apps, so that only one
+        app's actions are held in memory at a time; apps and map entries are written in sorted order, so the same
+        index is always written identically.
+
+        The routing index and the metadata cache are the published index: the routing index holds the index maps
+        and the digest of the metadata cache manifest, which holds the size and digest of each app's metadata.  Each
+        metadata cache file is named after the digest of its contents, so publishing an index never changes a file
+        that the previous index references; the routing index is replaced last, which publishes the new index
+        atomically, and the files that it no longer references are then removed.
+
+        The canonical index file (\c qore-data-index.yaml) holds the complete index as YAML; it is many times larger
+        than the other files, and no reader needs it, so it is only written if requested, or if the
+        @ref ProviderIndexCanonicalYamlEnvVar "QORE_PROVIDER_INDEX_CANONICAL_YAML" environment variable is set, or
+        if MessagePack support is not available, since the metadata cache cannot be written without it; otherwise
+        any canonical index file left by an earlier index is removed.  The same YAML can be produced from a
+        published index with @ref dumpIndexYaml().
 
         @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index
         @param action_apps the apps that have actions
@@ -1118,20 +1204,38 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         stored in the index
         @param delta the time taken to create the index
         @param summary summary information about the index
+        @param write_canonical_yaml if @ref True, the canonical index file is written too
 
         @return information about the written index
 
-        @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or YAML support is not available
+        @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or YAML support is not available, or
+        the metadata cache or routing index cannot be written when no canonical index file is written
+
+        @par Example:
+        @code{.py}
+# publish an index that also includes qore-data-index.yaml for a consumer that still reads it
+hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions,
+    *hash<auto> sub (string app) { return actions{app}; }, now_us() - start, {}, True);
+        @endcode
 
         @since ProviderIndexUtil 1.2
     */
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps, *list<string> action_apps,
-            code get_app_actions, date delta, hash<auto> summary) {
+            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
 %ifdef NoYaml
         throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot write the data provider index";
 %else
         # verify that the target directory can be written to before writing anything
         getWritableIndexDir();
+
+        bool canonical = write_canonical_yaml || parse_boolean(getenv(ProviderIndexCanonicalYamlEnvVar));
+%ifdef NoMsgPack
+        # the metadata cache is written with MessagePack, so without it the canonical index file is the only index
+        canonical = True;
+        bool write_cache = False;
+%else
+        bool write_cache = True;
+%endif
 
         foreach string key in (("factorymap", "appmap", "schememap")) {
             if (exists maps{key}) {
@@ -1145,103 +1249,161 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
         string path = getIndexPath("data");
         int size = 0;
-        # metadata cache chunks; the optional cache is not written if any chunk cannot be written
+        # metadata cache chunks; without a canonical index file, any chunk that cannot be written fails the write,
+        # otherwise the optional cache is not written
         hash<string, DataProviderMetadataCacheChunkInfo> chunks = {};
-%ifdef NoMsgPack
-        bool write_cache = False;
-%else
-        bool write_cache = True;
-%endif
 
-        string tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
-        on_error {
+        *File f;
+        *string tmp_path;
+        on_error if (tmp_path) {
             try {
                 unlink(tmp_path);
             } catch (hash<ExceptionInfo> ex) {
                 # ignore errors removing the temporary file; the original error must be propagated
             }
         }
-        {
-            File f();
+        code<nothing(string)> write = sub (string str) {
+            f.write(str);
+            size += str.size();
+        };
+        if (canonical) {
+            tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
+            f = new File();
             f.open2(path: tmp_path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: IndexFileMode);
-            code write = sub (string str) {
-                f.write(str);
-                size += str.size();
-            };
+            writeCanonicalMaps(write, maps);
+        }
 
-            # every map is written, even if empty, so that the same index is always written identically
-            foreach string key in (("factorymap", "appmap", "schememap", "appinfomap")) {
-                write(make_yaml({key: (key == "appinfomap" ? sortIndexMap(maps{key}, False) : maps{key}) ?? {}},
-                    BlockStyle));
+        bool actions_written;
+        foreach string app in (sort(keys app_set)) {
+            *hash<auto> actions;
+            if (action_app_set{app}) {
+                actions = sortIndexMap(get_app_actions(app), False);
             }
-
-            bool actions_written;
-            foreach string app in (sort(keys app_set)) {
-                *hash<auto> actions;
-                if (action_app_set{app}) {
-                    actions = sortIndexMap(get_app_actions(app), False);
-                }
-                if (exists actions) {
-                    if (!actions_written) {
-                        write("actioninfomap:\n");
-                        actions_written = True;
-                    }
-                    # each app's entry is indented under the top-level key; strings are written in quoted flow
-                    # style, so indenting every line leaves their values unchanged
-                    string yaml = make_yaml({app: actions}, BlockStyle);
-                    write("  " + replace(yaml.substr(0, -1), "\n", "\n  ") + "\n");
-                }
+            if (canonical && exists actions) {
+                writeCanonicalAppActions(write, app, actions, !actions_written);
+                actions_written = True;
+            }
 %ifndef NoMsgPack
-                if (write_cache) {
-                    try {
-                        binary data = packMetadataCacheChunk(app, maps.appinfomap{app}, actions);
-                        writeFileAtomic(getMetadataCacheChunkPath(app), data);
-                        chunks{app} = <DataProviderMetadataCacheChunkInfo>{
-                            "size": data.size(),
-                            "sha256": digest("sha256", data).toHex(),
-                            "info": maps.appinfomap{app},
-                        };
-                    } catch (hash<ExceptionInfo> ex) {
-                        log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
-                            get_exception_string(ex));
-                        write_cache = False;
+            if (write_cache) {
+                try {
+                    binary data = packMetadataCacheChunk(app, maps.appinfomap{app}, actions);
+                    string sha256 = digest("sha256", data).toHex();
+                    writeFileAtomic(getMetadataCacheChunkPath(app, sha256, MetadataCacheVersion), data);
+                    chunks{app} = <DataProviderMetadataCacheChunkInfo>{
+                        "size": data.size(),
+                        "sha256": sha256,
+                        "info": maps.appinfomap{app},
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!canonical) {
+                        rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata of app %y: "
+                            "%s: %s", app, ex.err, ex.desc);
                     }
+                    log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                        get_exception_string(ex));
+                    write_cache = False;
                 }
-%endif
             }
+%endif
+        }
+        if (canonical) {
             if (!actions_written && action_apps) {
                 write("actioninfomap: {}\n");
             }
             # ensure that the data is on disk before the file is renamed over the target
             f.sync();
+            f.close();
+            rename(tmp_path, path);
+            remove tmp_path;
         }
-        rename(tmp_path, path);
-
-        hash<ProviderIndexInfo> info = <ProviderIndexInfo>{
-            "path": path,
-            "size": size,
-            "delta": delta,
-            "summary": summary,
-        };
 
         *string cache_sha256;
+        int cache_size = 0;
         if (write_cache) {
             try {
-                cache_sha256 = writeMetadataCacheManifest(chunks);
+                binary manifest = packMetadataCacheManifest(chunks);
+                cache_sha256 = digest("sha256", manifest).toHex();
+                writeFileAtomic(getMetadataCachePath(cache_sha256), manifest);
+                cache_size = manifest.size() + ((foldl $1 + $2, (map $1.size, chunks.iterator())) ?? 0);
             } catch (hash<ExceptionInfo> ex) {
+                if (!canonical) {
+                    rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata cache "
+                        "manifest: %s: %s", ex.err, ex.desc);
+                }
+                remove cache_sha256;
                 log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                     get_exception_string(ex));
             }
         }
+
+        # the routing index is written last: replacing it publishes the new index
+        int routing_size;
         try {
-            # the file is read as binary data, since converting it to a string would double the memory used
-            writeRoutingDataProviderIndex(maps, digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex(),
-                cache_sha256, hstat(path).size);
+            if (canonical) {
+                # the file is read as binary data, since converting it to a string would double the memory used
+                routing_size = writeRoutingDataProviderIndex(maps, cache_sha256,
+                    digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex(), hstat(path).size);
+            } else {
+                routing_size = writeRoutingDataProviderIndex(maps, cache_sha256);
+            }
         } catch (hash<ExceptionInfo> ex) {
+            if (!canonical) {
+                rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider routing index: %s: %s",
+                    ex.err, ex.desc);
+            }
             log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
                 get_exception_string(ex));
+            return <ProviderIndexInfo>{
+                "path": path,
+                "size": size,
+                "delta": delta,
+                "summary": summary,
+            };
         }
-        return info;
+
+        removeUnreferencedIndexFiles(cache_sha256 ? chunks : NOTHING, cache_sha256, canonical);
+
+        return <ProviderIndexInfo>{
+            "path": canonical ? path : getIndexPath("routing"),
+            "size": canonical ? size : routing_size + cache_size,
+            "delta": delta,
+            "summary": summary,
+        };
+%endif
+    }
+
+    #! Writes the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the canonical index file
+    /** @param write writes a string to the output
+        @param maps the maps; every map is written, even if empty, so that the same index is always written
+        identically
+        @param names the maps to write, in the order written
+    */
+    static private writeCanonicalMaps(code<nothing(string)> write, hash<auto> maps,
+            list<string> names = ("factorymap", "appmap", "schememap", "appinfomap")) {
+%ifndef NoYaml
+        foreach string key in (names) {
+            write(make_yaml({key: (key == "appinfomap" ? sortIndexMap(maps{key}, False) : maps{key}) ?? {}},
+                BlockStyle));
+        }
+%endif
+    }
+
+    #! Writes the actions of one app to the \c actioninfomap member of the canonical index file
+    /** @param write writes a string to the output
+        @param app the app name
+        @param actions the app's actions in the serialized form stored in the index, sorted by action name
+        @param first @ref True if this is the first app written, in which case the \c actioninfomap key is written
+        first
+    */
+    static private writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions, bool first) {
+%ifndef NoYaml
+        if (first) {
+            write("actioninfomap:\n");
+        }
+        # each app's entry is indented under the top-level key; strings are written in quoted flow style, so
+        # indenting every line leaves their values unchanged
+        string yaml = make_yaml({app: actions}, BlockStyle);
+        write("  " + replace(yaml.substr(0, -1), "\n", "\n  ") + "\n");
 %endif
     }
 
@@ -1342,85 +1504,99 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 %endif
     }
 
-    #! Writes the metadata cache manifest and removes the chunks that it does not reference
+    #! Packs the metadata cache manifest
     /** @param chunks the chunks written
 
-        @return the SHA-256 digest of the manifest
+        @return the packed manifest
     */
-    static private string writeMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks) {
-%ifdef NoMsgPack
-        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
-%else
-        binary data = msgpack_pack(<DataProviderMetadataCacheManifest>{
+    static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks) {
+        return packIndexData(<DataProviderMetadataCacheManifest>{
             "version": MetadataCacheVersion,
             "apps": chunks,
-        }, MSGPACK_QORE_MODE);
-        writeFileAtomic(getMetadataCachePath(), data);
-        # the manifest is the only way a chunk is ever reached, so every chunk it does not name is
-        # unreachable from this point on; remove them rather than leaving them to accumulate
-        removeUnreferencedMetadataCacheChunks(keys chunks);
-        return digest("sha256", data).toHex();
-%endif
+        });
     }
 
-    #! Removes app metadata cache chunks that the current manifest does not reference
-    /** A chunk is only ever read through the manifest written above (@ref readMetadataCacheChunk is called only
-        for an app the manifest names, and re-verifies the recorded size and SHA-256), so a chunk for an app that
-        is no longer indexed can never be read again.  Nothing removed them, so renaming or uninstalling a
-        provider module stranded its chunk in the index directory permanently: the files are regenerable cache,
-        but they are not small, and they accumulated for the life of the installation.
+    #! Removes the index files that the routing index just written does not reference
+    /** A metadata cache file is only ever reached through the routing index: the manifest through the digest that
+        the routing index records, and each app's chunk through the manifest, which records its size and digest.
+        Once a new routing index has been written, the files that only the previous index referenced can never be
+        read again, so they are removed rather than left to accumulate; this includes the files of an app that is no
+        longer indexed, and the files of metadata cache versions that named them after their apps.
 
         Removal is deliberately driven by the manifest rather than by comparing against the modules present:
         the manifest is what the reader consults, so "unreferenced" is exactly "unreachable".
 
-        @param apps the app names the manifest references
+        A canonical index file is removed if the routing index was published without one, so that it can never be
+        mistaken for the current index.
+
+        @param chunks the chunks that the manifest references, if a metadata cache was written
+        @param manifest_sha256 the digest of the manifest, if a metadata cache was written
+        @param canonical @ref True if a canonical index file was written with the routing index
 
         @par Example
         Uninstalling a provider module and rebuilding the index removes that app's chunk, so the index directory
         holds one chunk per indexed app and nothing else.
 
-        @note Errors are logged and ignored: failing to remove a stale cache file must never fail an index write,
-            because the index itself is already valid at this point.
+        @note Errors are logged and ignored: failing to remove a stale file must never fail an index write, because
+        the index itself is already published at this point.
     */
-    static private removeUnreferencedMetadataCacheChunks(*list<string> apps) {
-        *hash<string, bool> keep = map {sprintf("qore-data-index-%s.msgpack", digest("sha256", $1).toHex()): True},
-            apps;
+    static private removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
+            *string manifest_sha256, bool canonical) {
         *string dir = tryGetIndexDir();
         if (!dir.val()) {
             return;
         }
+        hash<string, bool> keep = (map {basename(getMetadataCacheChunkPath($1.key, $1.value.sha256,
+            MetadataCacheVersion)): True}, chunks.pairIterator()) ?? {};
+        if (manifest_sha256) {
+            keep{basename(getMetadataCachePath(manifest_sha256))} = True;
+        }
         try {
             Dir d();
             d.chdir(dir);
-            # the manifest itself (`qore-data-index.msgpack`) has no chunk suffix and must not match
-            foreach string name in (d.listFiles("^qore-data-index-[0-9a-f]{64}\\.msgpack$")) {
+            # chunks, current and legacy manifests; temporary files of a concurrent write never match
+            foreach string name in (d.listFiles("^qore-data-index(-manifest)?(-[0-9a-f]{64})?\\.msgpack$")) {
                 if (keep{name}) {
                     continue;
                 }
-                try {
-                    unlink(dir + DirSep + name);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::LevelWarn, "Unable to remove stale data provider metadata cache chunk %y: "
-                        "%s: %s", name, ex.err, ex.desc);
-                }
+                removeIndexFile(dir + DirSep + name);
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelWarn, "Unable to scan the data provider index directory for stale metadata "
-                "cache chunks: %s: %s", ex.err, ex.desc);
+                "cache files: %s: %s", ex.err, ex.desc);
+        }
+        if (!canonical) {
+            string path = getIndexPath("data", dir);
+            if (hlstat(path)) {
+                removeIndexFile(path);
+            }
+        }
+    }
+
+    #! Removes a stale index file, logging any error
+    static private removeIndexFile(string path) {
+        try {
+            unlink(path);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelWarn, "Unable to remove stale data provider index file %y: %s: %s", path, ex.err,
+                ex.desc);
         }
     }
 
     #! Reads a published index from its routing index and metadata cache, without the canonical index file
-    /** The canonical index file (\c qore-data-index.yaml) holds the same metadata as the metadata cache, but
-        uncompressed and as text, so it is many times larger; this reads the compact files instead and verifies
-        them: the routing index against its own checksum, the metadata cache manifest against the digest recorded
-        in the routing index, and each app's metadata against the size and digest recorded in the manifest.
+    /** The routing index and the metadata cache are the published index; a canonical index file
+        (\c qore-data-index.yaml), which holds the same metadata uncompressed and as text, and so is many times
+        larger, is only published on request.  This reads the compact files and verifies them: the routing index
+        against its own checksum, the metadata cache manifest against the digest recorded in the routing index, and
+        each app's metadata against the size and digest recorded in the manifest.
 
         @param dir the index directory
+        @param per_app optional code called with each app's name, info, and actions, in app name order, as each
+        app's metadata is read; the index then holds only its \c factorymap, \c appmap, and \c schememap
+        members, so the metadata of only one app is in memory at a time
 
         @return the index, or @ref nothing if the directory holds no routing index with a metadata cache, or if the
-        files are inconsistent (for example while an index is being published); the caller can then read the
-        canonical index file
+        files are inconsistent; if the index was published with a canonical index file, the caller can then read it
 
         @par Example:
         @code{.py}
@@ -1430,11 +1606,7 @@ if (info) {
 }
         @endcode
 
-        @param per_app optional code called with each app's name, info, and actions, in app name order, as each
-        app's metadata is read; the index then holds only its \c factorymap, \c appmap, and \c schememap
-        members, so the metadata of only one app is in memory at a time
-
-        @note The canonical index file is not read, so its content is not verified against the digest recorded in
+        @note Any canonical index file is not read, so its content is not verified against the digest recorded in
         the routing index
         @note With @a per_app, apps are passed on as they are verified, so if @ref nothing is returned, the apps
         already passed must be discarded; an exception raised by @a per_app is passed on to the caller
@@ -1461,9 +1633,125 @@ if (info) {
         return readSerializedIndexIntern(dir, False);
     }
 
+    #! Writes a published index as YAML in the format of the canonical index file
+    /** Builds the YAML from the routing index and the metadata cache, so the canonical index file, which is not
+        published by default, never needs to be stored for a person to read the index.  The metadata of one app at
+        a time is held in memory; when the output is written to a file or to standard output, it is written as each
+        app is read.
+
+        The YAML of the whole index is the canonical index file that
+        @ref writeDataProviderIndexByApp() would have written for the index, except that an index in which no app
+        has actions has no \c actioninfomap member.  The YAML of one app has the \c appmap, \c appinfomap, and
+        \c actioninfomap members of the index restricted to that app.
+
+        @param dir the index directory; if not given, the configured index directory
+        @param app the app to write; if not given, the whole index is written
+        @param output_path the file to write the YAML to, or \c "-" for standard output; if not given, the YAML
+        is returned
+
+        @return the YAML, if no @a output_path is given
+
+        @throw PROVIDER-INDEX-ERROR the directory holds no published index with a routing index and metadata cache,
+        or the files are inconsistent, or the app is not in the index, or YAML or MessagePack support is not
+        available
+
+        @par Example:
+        @code{.py}
+# write the actions indexed for OpenSearch for review
+ProviderIndexUtil::dumpIndexYaml(NOTHING, "OpenSearch", "/tmp/opensearch-index.yaml");
+        @endcode
+
+        From the command line:
+        @verbatim
+qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING, "-");' > qore-data-index.yaml
+        @endverbatim
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *string dumpIndexYaml(*string dir, *string app, *string output_path) {
+%ifdef NoYaml
+        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot write the data provider index as YAML";
+%else
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the data provider metadata";
+%else
+        if (!dir.val()) {
+            dir = tryGetIndexDir(True);
+        }
+        *hash<CompactIndexInfo> compact = readCompactIndex(dir);
+        if (!compact) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("%y does not hold a published data provider index with a "
+                "consistent routing index and metadata cache", dir);
+        }
+        hash<string, DataProviderMetadataCacheChunkInfo> apps = compact.manifest.apps;
+        if (exists app && !apps{app}) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("app %y is not in the data provider index in %y", app, dir);
+        }
+
+        *string rv;
+        *File f;
+        code<nothing(string)> write;
+        if (output_path == "-") {
+            write = sub (string str) {
+                stdout.write(str);
+            };
+        } else if (output_path.val()) {
+            f = new File();
+            f.open2(output_path, O_CREAT | O_TRUNC | O_WRONLY, IndexFileMode);
+            write = sub (string str) {
+                f.write(str);
+            };
+        } else {
+            rv = "";
+            write = sub (string str) {
+                rv += str;
+            };
+        }
+
+        hash<DataProviderRoutingIndexInfo> routing = compact.routing;
+        list<string> dump_apps;
+        if (exists app) {
+            dump_apps = (app,);
+            writeCanonicalMaps(write, {
+                "appmap": exists routing.appmap{app} ? {app: routing.appmap{app}} : {},
+                "appinfomap": exists apps{app}.info ? {app: apps{app}.info} : {},
+            }, ("appmap", "appinfomap"));
+        } else {
+            dump_apps = sort(keys apps);
+            writeCanonicalMaps(write, {
+                "factorymap": routing.factorymap,
+                "appmap": routing.appmap,
+                "schememap": routing.schememap,
+                "appinfomap": (map {$1.key: $1.value.info}, apps.pairIterator(), exists $1.value.info),
+            });
+        }
+        bool actions_written;
+        foreach string chunk_app in (dump_apps) {
+            hash<DataProviderMetadataCacheChunkInfo> info = apps{chunk_app};
+            binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(chunk_app, info.sha256,
+                compact.manifest.version, dir));
+            if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("the metadata of app %y in the data provider index in %y is "
+                    "corrupt", chunk_app, dir);
+            }
+            *hash<auto> actions = unpackMetadataCacheChunk(data).actioninfomap{chunk_app};
+            if (exists actions) {
+                writeCanonicalAppActions(write, chunk_app, actions, !actions_written);
+                actions_written = True;
+            }
+        }
+        if (f) {
+            f.close();
+        }
+        return rv;
+%endif
+%endif
+    }
+
     #! Reads and verifies a published index from its routing index and metadata cache
     /** @param dir the index directory
         @param unpack @ref True to unpack the metadata, @ref False to only verify it
+        @param per_app optional code called with each app's metadata; see readSerializedDataProviderIndex()
     */
     static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack,
             *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
@@ -1473,39 +1761,21 @@ if (info) {
 %ifdef NoMsgPack
         return;
 %else
-        string routing_path = getIndexPath("routing", dir);
-        if (!is_file(routing_path)) {
-            return;
-        }
         # an exception raised by the caller's code is not an error reading the index
         bool per_app_error;
         try {
-            binary routing_data = ReadOnlyFile::readBinaryFile(routing_path);
-            *hash<DataProviderRoutingIndexInfo> routing =
-                cast<*hash<DataProviderRoutingIndexInfo>>(parse_yaml(routing_data.toString("UTF-8")));
-            if (!routing || routing.version != RoutingIndexVersion
-                    || routing.metadata_cache_version != MetadataCacheVersion || !routing.metadata_cache_sha256
-                    || routing.routing_sha256
-                        != digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex()) {
+            *hash<CompactIndexInfo> compact = readCompactIndex(dir);
+            if (!compact) {
                 return;
             }
 
-            binary manifest_data = ReadOnlyFile::readBinaryFile(getMetadataCachePath(dir));
-            if (digest("sha256", manifest_data).toHex() != routing.metadata_cache_sha256) {
-                return;
-            }
-            *hash<DataProviderMetadataCacheManifest> manifest =
-                cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(manifest_data));
-            if (!manifest || manifest.version != MetadataCacheVersion) {
-                return;
-            }
-
-            int size = routing_data.size() + manifest_data.size();
+            int size = compact.size;
             hash<auto> appinfomap = {};
             hash<auto> actioninfomap = {};
-            foreach string app in (sort(keys manifest.apps)) {
-                hash<DataProviderMetadataCacheChunkInfo> chunk_info = manifest.apps{app};
-                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(app, dir));
+            foreach string app in (sort(keys compact.manifest.apps)) {
+                hash<DataProviderMetadataCacheChunkInfo> chunk_info = compact.manifest.apps{app};
+                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(app, chunk_info.sha256,
+                    compact.manifest.version, dir));
                 if (data.size() != chunk_info.size || digest("sha256", data).toHex() != chunk_info.sha256) {
                     return;
                 }
@@ -1528,14 +1798,14 @@ if (info) {
             }
 
             hash<SerializedDataProviderIndexInfo> rv = <SerializedDataProviderIndexInfo>{
-                "sha256": digest("sha256", routing_data).toHex(),
+                "sha256": digest("sha256", compact.routing_data).toHex(),
                 "size": size,
             };
             if (unpack) {
                 rv.index = {
-                    "factorymap": routing.factorymap ?? {},
-                    "appmap": routing.appmap ?? {},
-                    "schememap": routing.schememap ?? {},
+                    "factorymap": compact.routing.factorymap ?? {},
+                    "appmap": compact.routing.appmap ?? {},
+                    "schememap": compact.routing.schememap ?? {},
                 };
                 if (!per_app) {
                     rv.index += {
@@ -1549,7 +1819,7 @@ if (info) {
             if (per_app_error) {
                 rethrow;
             }
-            # a missing or unreadable file, as while an index is being published: the canonical index can be read
+            # a missing or unreadable file, as while files are copied
             log(LoggerLevel::LevelDebug, "Cannot read the data provider metadata cache in %y: %s: %s", dir, ex.err,
                 ex.desc);
         }
@@ -1557,88 +1827,271 @@ if (info) {
 %endif
     }
 
-    #! Reads the data provider index from the configured directory
+    #! Reads and verifies the routing index and metadata cache manifest of a published index
+    /** @param dir the index directory
+
+        @return the routing index and manifest, or @ref nothing if the directory holds no routing index with a
+        metadata cache, or if they are inconsistent
+
+        @throw any error reading the files
+    */
+    static private *hash<CompactIndexInfo> readCompactIndex(string dir) {
+        string routing_path = getIndexPath("routing", dir);
+        if (!is_file(routing_path)) {
+            return;
+        }
+        binary routing_data = ReadOnlyFile::readBinaryFile(routing_path);
+        *hash<DataProviderRoutingIndexInfo> routing = parseRoutingIndex(routing_data);
+        if (!routing || !checkRoutingIndex(routing) || !checkMetadataCacheVersion(routing.metadata_cache_version)
+                || !routing.metadata_cache_sha256) {
+            return;
+        }
+
+        binary manifest_data = ReadOnlyFile::readBinaryFile(getMetadataCachePath(routing.metadata_cache_sha256,
+            routing.metadata_cache_version, dir));
+        if (digest("sha256", manifest_data).toHex() != routing.metadata_cache_sha256) {
+            return;
+        }
+        *hash<DataProviderMetadataCacheManifest> manifest =
+            cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(manifest_data));
+        if (!manifest || manifest.version != routing.metadata_cache_version) {
+            return;
+        }
+        return <CompactIndexInfo>{
+            "routing": routing,
+            "routing_data": routing_data,
+            "manifest": manifest,
+            "size": routing_data.size() + manifest_data.size(),
+        };
+    }
+
+    #! Parses a routing index
+    static private *hash<DataProviderRoutingIndexInfo> parseRoutingIndex(binary data) {
+%ifdef NoYaml
+        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot read the data provider routing index";
+%else
+        return cast<*hash<DataProviderRoutingIndexInfo>>(parse_yaml(data.toString("UTF-8")));
+%endif
+    }
+
+    #! Returns @ref True if the routing index has a supported version and matches its checksum
+    static private bool checkRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
+%ifdef NoYaml
+        return False;
+%else
+        return routing.version >= MinRoutingIndexVersion && routing.version <= RoutingIndexVersion
+            && routing.routing_sha256
+                == digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex();
+%endif
+    }
+
+    #! Returns @ref True if the given metadata cache version can be read
+    static private bool checkMetadataCacheVersion(*int version) {
+        return exists version && version >= MinMetadataCacheVersion && version <= MetadataCacheVersion;
+    }
+
+    #! Returns @ref True if a canonical index file was published with the given routing index
+    static private bool isCanonicalRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
+        # a version 2 routing index was always published with a canonical index file
+        return routing.version < 3 || routing.canonical_yaml;
+    }
+
+    #! Reads the complete data provider index from the configured directory
+    /** The index currently published is read, independently of the index state of the process.
+
+        @return the index, or @ref nothing if no index is published, or it cannot be read, in which case the error
+        is reported by @ref getIndexReadError()
+    */
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
-        return deserializeDataProviderIndex(readRawDataProviderIndex());
+        *hash<DataProviderRoutingIndexInfo> routing = readValidRoutingIndex();
+        if (!routing.metadata_cache_sha256) {
+            return deserializeDataProviderIndex(readCanonicalDataProviderIndex());
+        }
+        bool failed;
+        *hash<DataProviderIndexInfo> cache;
+        if (*hash<DataProviderMetadataCacheManifest> manifest =
+                readMetadataCacheManifestFile(routing.metadata_cache_sha256, routing.metadata_cache_version)) {
+            cache = readMetadataCacheChunks(manifest, NOTHING, True, \failed);
+            cache += getRoutingIndexPayload(routing);
+        } else {
+            failed = True;
+        }
+        if (failed) {
+            cache = readCanonicalDataProviderIndex() ?? cache;
+        }
+        return deserializeDataProviderIndex(cache);
+    }
+
+    #! Returns the size in bytes of the largest canonical index file that is read
+    /** @return the value of the @ref ProviderIndexMaxCanonicalSizeEnvVar "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES"
+        environment variable if it is a positive integer, otherwise
+        @ref DefaultMaxCanonicalIndexSize "DefaultMaxCanonicalIndexSize"
+
+        @since ProviderIndexUtil 1.2
+    */
+    static int getMaxCanonicalIndexSize() {
+        *string value = getenv(ProviderIndexMaxCanonicalSizeEnvVar);
+        if (value =~ /^[0-9]+$/ && value.toInt() > 0) {
+            return value.toInt();
+        }
+        return DefaultMaxCanonicalIndexSize;
     }
 
     #! Reads a validated routing sidecar when available, otherwise reads the canonical index
     static private *hash<DataProviderIndexInfo> readInitialDataProviderIndex() {
+        # each read of the index reports its own errors
+        remove index_read_error;
         *hash<DataProviderIndexInfo> rv = readRoutingDataProviderIndex();
         if (rv) {
             raw_metadata_deferred = True;
             return rv;
         }
-        return readRawDataProviderIndex();
+        return readCanonicalDataProviderIndex();
     }
 
-    #! Writes the compact routing sidecar for a canonical data provider index
-    static private writeRoutingDataProviderIndex(*hash<auto> h, string data_sha256,
-            *string cache_sha256, *int data_size) {
-        hash<auto> routing = getRoutingIndexPayload(h);
-        hash<auto> sidecar = routing + {
+    #! Writes the compact routing sidecar for a data provider index
+    /** @param h the index maps
+        @param cache_sha256 the digest of the metadata cache manifest, if written
+        @param data_sha256 the digest of the canonical index file, if written
+        @param data_size the size of the canonical index file, if written
+
+        @return the size of the routing index
+    */
+    static private int writeRoutingDataProviderIndex(*hash<auto> h, *string cache_sha256, *string data_sha256,
+            *int data_size) {
+        hash<auto> sidecar = getRoutingIndexPayload(h) + {
             "version": RoutingIndexVersion,
-            "data_sha256": data_sha256,
         };
-        if (exists data_size) {
+        if (data_sha256) {
+            sidecar.data_sha256 = data_sha256;
             sidecar.data_size = data_size;
         }
+        sidecar.canonical_yaml = exists data_sha256;
         if (cache_sha256) {
             sidecar.metadata_cache_version = MetadataCacheVersion;
             sidecar.metadata_cache_sha256 = cache_sha256;
         }
+%ifndef NoYaml
         sidecar.routing_sha256 =
             digest("sha256", make_yaml(getRoutingIndexChecksumPayload(sidecar), BlockStyle)).toHex();
-        writeIndex(sidecar, "routing", 0s, {});
+%endif
+        return writeIndex(sidecar, "routing", 0s, {}).size;
+    }
+
+    #! Records and logs an error reading a published index
+    /** @param err the error code
+        @param desc the error description
+    */
+    static private setIndexReadError(string err, string desc) {
+        index_read_error = sprintf("%s: %s", err, desc);
+        log(LoggerLevel::LevelError, "Error reading the data provider index: %s: %s", err, desc);
     }
 
     #! Reads and validates the compact routing sidecar
+    /** @return the index maps, with the metadata deferred, or @ref nothing if the routing index cannot be used, in
+        which case the canonical index file is read if there is one
+    */
     static private *hash<DataProviderIndexInfo> readRoutingDataProviderIndex() {
         remove metadata_cache_sha256;
-        try {
-            *hash<DataProviderRoutingIndexInfo> routing =
-                cast<*hash<DataProviderRoutingIndexInfo>>(readIndex("routing", True));
-            if (!routing || routing.version != RoutingIndexVersion) {
-                return;
-            }
-
-            if (routing.routing_sha256
-                    != digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex()) {
-                return;
-            }
-
-            # the canonical index can be large (hundreds of megabytes), so its digest is verified only if it may
-            # have changed since the routing index was written, which is always written after it: if its size is
-            # different, or it is newer than the routing index, as when it has been replaced or the files have been
-            # copied; reading it as binary data does not copy it into a string
-            string data_path = getIndexPath("data");
-            *hash<StatInfo> data_stat = hstat(data_path);
-            *hash<StatInfo> routing_stat = hstat(getIndexPath("routing"));
-            if (!data_stat || !routing_stat) {
-                return;
-            }
-            if (routing.data_size != data_stat.size || data_stat.mtime > routing_stat.mtime) {
-                if (routing.data_sha256 != digest("sha256", ReadOnlyFile::readBinaryFile(data_path)).toHex()) {
-                    return;
-                }
-            }
-
-            if (routing.metadata_cache_version == MetadataCacheVersion
-                    && routing.metadata_cache_sha256) {
-                metadata_cache_sha256 = routing.metadata_cache_sha256;
-            }
-
-            return <DataProviderIndexInfo>{
-                "factorymap": routing.factorymap ?? {},
-                "appmap": routing.appmap ?? {},
-                "schememap": routing.schememap ?? {},
-                "appinfomap": {},
-                "actioninfomap": {},
-                "top_actioninfomap": {},
-            };
-        } catch (hash<ExceptionInfo> ex) {
+        remove metadata_cache_version;
+        *hash<DataProviderRoutingIndexInfo> routing = readValidRoutingIndex();
+        if (!routing) {
             return;
         }
+        if (routing.metadata_cache_sha256) {
+            metadata_cache_sha256 = routing.metadata_cache_sha256;
+            metadata_cache_version = routing.metadata_cache_version;
+        }
+        return <DataProviderIndexInfo>{
+            "factorymap": routing.factorymap ?? {},
+            "appmap": routing.appmap ?? {},
+            "schememap": routing.schememap ?? {},
+            "appinfomap": {},
+            "actioninfomap": {},
+            "top_actioninfomap": {},
+        };
+    }
+
+    #! Reads and validates the routing index in the configured directory
+    /** An index is published with a routing index and a metadata cache, and optionally with a canonical index file;
+        this validates the routing index against its own checksum, and against the canonical index file if one was
+        published with it.
+
+        @return the routing index, or @ref nothing if it cannot be used, in which case the canonical index file is
+        read if there is one; the returned routing index has a metadata cache with a supported version, or was
+        published with a canonical index file; any error is reported by @ref getIndexReadError()
+    */
+    static private *hash<DataProviderRoutingIndexInfo> readValidRoutingIndex() {
+        # skip silently when the index env var is not configured, as in readIndex()
+        if (!ENV{ProviderIndexEnvVar}.val()) {
+            return;
+        }
+        string routing_path;
+        *hash<StatInfo> routing_stat;
+        *hash<DataProviderRoutingIndexInfo> routing;
+        try {
+            routing_path = getIndexPath("routing");
+            routing_stat = hstat(routing_path);
+            if (!routing_stat) {
+                return;
+            }
+            routing = parseRoutingIndex(ReadOnlyFile::readBinaryFile(routing_path));
+        } catch (hash<ExceptionInfo> ex) {
+            # the routing index is replaced atomically, so a file that cannot be read is not a partial write
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the routing index %y: %s: %s",
+                routing_path ?? "<unknown>", ex.err, ex.desc));
+            return;
+        }
+        if (!routing || !checkRoutingIndex(routing)) {
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the routing index %y is corrupt or has an "
+                "unsupported version (%y)", routing_path, routing.version));
+            return;
+        }
+
+        bool canonical = isCanonicalRoutingIndex(routing);
+        try {
+            string data_path = getIndexPath("data");
+            *hash<StatInfo> data_stat = hstat(data_path);
+            if (data_stat) {
+                if (canonical) {
+                    # the canonical index can be large (hundreds of megabytes), so its digest is verified only if
+                    # it may have changed since the routing index was written, which is always written after it:
+                    # if its size is different, or it is newer than the routing index, as when it has been replaced
+                    # or the files have been copied; reading it as binary data does not copy it into a string
+                    if (routing.data_size != data_stat.size || data_stat.mtime > routing_stat.mtime) {
+                        if (routing.data_sha256
+                                != digest("sha256", ReadOnlyFile::readBinaryFile(data_path)).toHex()) {
+                            # a canonical index file written after the routing index is the current index
+                            return;
+                        }
+                    }
+                } else if (data_stat.mtime > routing_stat.mtime) {
+                    # a canonical index file left by an index published without one is removed after its routing
+                    # index is written, so a newer one was written after it, and is the current index
+                    return;
+                }
+            } else if (canonical && !routing.metadata_cache_sha256) {
+                # no file holds the metadata of the index
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the canonical index file is read instead, which reports the error
+            return;
+        }
+
+        if (!checkMetadataCacheVersion(routing.metadata_cache_version) || !routing.metadata_cache_sha256) {
+            if (!canonical) {
+                # the metadata cache is the only copy of the metadata of an index published without a canonical
+                # file
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the routing index %y has no metadata cache with "
+                    "a supported version (%y)", routing_path, routing.metadata_cache_version));
+                return;
+            }
+            # the canonical index file holds the metadata
+            remove routing.metadata_cache_sha256;
+            remove routing.metadata_cache_version;
+        }
+        return routing;
     }
 
     #! Returns the canonical routing payload for sidecar checksumming
@@ -1654,10 +2107,16 @@ if (info) {
     static private hash<auto> getRoutingIndexChecksumPayload(*hash<auto> h) {
         hash<auto> rv = getRoutingIndexPayload(h) + {
             "version": h.version,
-            "data_sha256": h.data_sha256,
         };
+        # the members are added in the order of earlier versions, so that their checksums are unchanged
+        if (exists h.data_sha256) {
+            rv.data_sha256 = h.data_sha256;
+        }
         if (exists h.data_size) {
             rv.data_size = h.data_size;
+        }
+        if (exists h.canonical_yaml) {
+            rv.canonical_yaml = h.canonical_yaml;
         }
         if (exists h.metadata_cache_version) {
             rv.metadata_cache_version = h.metadata_cache_version;
@@ -1668,59 +2127,88 @@ if (info) {
         return rv;
     }
 
-    #! Reads the serialized data provider index without reconstructing typed metadata
-    static private *hash<DataProviderIndexInfo> readRawDataProviderIndex() {
-        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex();
-        if (cache) {
-            return cache;
-        }
-        try {
-            return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
-        }
-    }
+    #! Reads deferred metadata from the metadata cache
+    /** If the metadata cache cannot be read, the canonical index file is read in full, if there is one; otherwise,
+        the metadata that could be read is returned, and the error is reported by @ref getIndexReadError().
 
-    #! Reads deferred metadata and falls back to the complete canonical index on any cache error
-    /** @param app an optional app name; when present, only that app's metadata is read
+        @param app an optional app name; when present, only that app's metadata is read
         @param actions if @ref False and no app is given, only the info of every app is read from the cache
     */
     static private hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app, bool actions = True) {
-        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app, actions || exists app);
-        if (cache) {
+        bool failed;
+        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app, actions || exists app, \failed);
+        if (cache && !failed) {
             return <RawMetadataIndexResult>{
                 "index": cache,
                 "complete": !app && actions,
             };
         }
 
-        *hash<DataProviderIndexInfo> canonical;
-        try {
-            canonical = cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s",
-                get_exception_string(ex));
+        if (*hash<DataProviderIndexInfo> canonical = readCanonicalDataProviderIndex()) {
+            return <RawMetadataIndexResult>{
+                "index": canonical,
+                "complete": True,
+            };
         }
+        # the apps whose metadata could be read are still used; if no metadata can be read, it is not read again
         return <RawMetadataIndexResult>{
-            "index": canonical,
-            "complete": True,
+            "index": cache,
+            "complete": !cache || (!app && actions),
         };
     }
 
-    #! Reads and validates app-specific chunks from the MessagePack metadata cache
-    /** @param app an optional app name; when present, only that app's chunk is read
-        @param actions if @ref False, the actions in each chunk are dropped as soon as it is read
+    #! Reads the canonical index file, if there is one
+    /** @return the index, or @ref nothing if there is no canonical index file, or if it cannot be read, in which
+        case the error is reported by @ref getIndexReadError(); a file larger than @ref getMaxCanonicalIndexSize()
+        is not read
     */
-    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app = NOTHING,
-            bool actions = True) {
-%ifdef NoMsgPack
-        return;
-%else
-        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
-        if (!manifest) {
+    static private *hash<DataProviderIndexInfo> readCanonicalDataProviderIndex() {
+        # a missing canonical index file is the normal state of an index published without one; it must not clear
+        # an error reading the metadata cache
+        if (!ENV{ProviderIndexEnvVar}.val()) {
             return;
         }
+        try {
+            if (!hstat(getIndexPath("data"))) {
+                return;
+            }
+            return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
+        }
+    }
 
+    #! Reads and validates app-specific chunks from the MessagePack metadata cache of the process's index
+    /** @param app an optional app name; when present, only that app's chunk is read
+        @param actions if @ref False, the actions in each chunk are dropped as soon as it is read
+        @param failed set to @ref True if the manifest or any chunk cannot be read, in which case the error is
+        reported by @ref getIndexReadError(); the chunks that can be read are returned
+
+        @return the metadata read, or @ref nothing if no metadata cache is published, or if its manifest cannot be
+        read
+    */
+    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app, bool actions,
+            reference<bool> failed) {
+        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
+        if (!manifest) {
+            # the routing index references a manifest that cannot be read
+            failed = exists metadata_cache_sha256;
+            return;
+        }
+        return readMetadataCacheChunks(manifest, app, actions, \failed);
+    }
+
+    #! Reads and validates app-specific chunks from a MessagePack metadata cache
+    /** @param manifest the verified manifest
+        @param app an optional app name; when present, only that app's chunk is read
+        @param actions if @ref False, the actions in each chunk are dropped as soon as it is read
+        @param failed set to @ref True if any chunk cannot be read, in which case the error is reported by
+        @ref getIndexReadError(); the chunks that can be read are returned
+
+        @return the metadata read
+    */
+    static private hash<DataProviderIndexInfo> readMetadataCacheChunks(hash<DataProviderMetadataCacheManifest> manifest,
+            *string app, bool actions, reference<bool> failed) {
         hash<DataProviderIndexInfo> rv = createEmptyDataProviderIndex();
         if (!app && !actions) {
             # the manifest holds the info of every app; the chunks also hold the actions of each app, which take
@@ -1733,9 +2221,11 @@ if (info) {
             if (!exists manifest.apps{chunk_app}) {
                 continue;
             }
-            *hash<DataProviderIndexInfo> chunk = readMetadataCacheChunk(chunk_app, manifest.apps{chunk_app});
+            *hash<DataProviderIndexInfo> chunk = readMetadataCacheChunk(chunk_app, manifest.apps{chunk_app},
+                manifest.version);
             if (!chunk) {
-                return;
+                failed = True;
+                continue;
             }
             rv.appinfomap += chunk.appinfomap ?? {};
             if (actions) {
@@ -1743,14 +2233,10 @@ if (info) {
             }
         }
         return rv;
-%endif
     }
 
-    #! Reads and validates the metadata cache manifest once per process
+    #! Reads and validates the metadata cache manifest of the process's index once per process
     static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifest() {
-%ifdef NoMsgPack
-        return;
-%else
         if (metadata_cache_manifest_checked) {
             return metadata_cache_manifest;
         }
@@ -1758,40 +2244,72 @@ if (info) {
         if (!metadata_cache_sha256) {
             return;
         }
+        return metadata_cache_manifest = readMetadataCacheManifestFile(metadata_cache_sha256,
+            metadata_cache_version ?? MetadataCacheVersion);
+    }
+
+    #! Reads and validates a metadata cache manifest in the configured directory
+    /** @param sha256 the digest of the manifest recorded in the routing index
+        @param version the metadata cache version recorded in the routing index
+
+        @return the manifest, or @ref nothing if it cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+    */
+    static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifestFile(string sha256,
+            int version) {
+%ifdef NoMsgPack
+        setIndexReadError("PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the metadata "
+            "cache");
+        return;
+%else
+        *string path;
         try {
-            binary data = ReadOnlyFile::readBinaryFile(getMetadataCachePath());
-            if (digest("sha256", data).toHex() != metadata_cache_sha256) {
+            path = getMetadataCachePath(sha256, version);
+            binary data = ReadOnlyFile::readBinaryFile(path);
+            if (digest("sha256", data).toHex() != sha256) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata cache manifest %y does not match "
+                    "the digest recorded in the routing index", path));
                 return;
             }
             *hash<DataProviderMetadataCacheManifest> manifest =
-                cast<*hash<DataProviderMetadataCacheManifest>>(msgpack_unpack(data, MSGPACK_QORE_MODE));
-            if (!manifest || manifest.version != MetadataCacheVersion) {
+                cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(data));
+            if (!manifest || manifest.version != version) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata cache manifest %y has version %y; "
+                    "expecting %y", path, manifest.version, version));
                 return;
             }
-            metadata_cache_manifest = manifest;
             return manifest;
         } catch (hash<ExceptionInfo> ex) {
-            return;
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the metadata cache manifest %y: %s: %s",
+                path ?? "<unknown>", ex.err, ex.desc));
         }
 %endif
     }
 
     #! Reads and validates one app-specific metadata cache chunk
+    /** @param app the app name
+        @param info the chunk's size and digest from the manifest
+        @param version the metadata cache version
+
+        @return the chunk, or @ref nothing if it cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+    */
     static private *hash<DataProviderIndexInfo> readMetadataCacheChunk(string app,
-            hash<DataProviderMetadataCacheChunkInfo> info) {
-%ifdef NoMsgPack
-        return;
-%else
+            hash<DataProviderMetadataCacheChunkInfo> info, int version) {
+        *string path;
         try {
-            binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(app));
+            path = getMetadataCacheChunkPath(app, info.sha256, version);
+            binary data = ReadOnlyFile::readBinaryFile(path);
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata of app %y in %y does not match the "
+                    "size and digest recorded in the metadata cache manifest", app, path));
                 return;
             }
             return unpackMetadataCacheChunk(data);
         } catch (hash<ExceptionInfo> ex) {
-            return;
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the metadata of app %y from %y: %s: %s",
+                app, path ?? "<unknown>", ex.err, ex.desc));
         }
-%endif
     }
 
     #! Reconstructs typed app and action metadata in a serialized data provider index
@@ -2144,6 +2662,16 @@ if (info) {
         *string path;
         try {
             path = getIndexPath(type);
+            if (type == "data") {
+                # the canonical index file is parsed in full, which takes several times its size in memory
+                int max = getMaxCanonicalIndexSize();
+                *hash<StatInfo> info = hstat(path);
+                if (info && info.size > max) {
+                    throw "PROVIDER-INDEX-TOO-LARGE", sprintf("the canonical data provider index %y is %d bytes, "
+                        "which is larger than the limit of %d bytes (set with the %s environment variable); it is "
+                        "not read", path, info.size, max, ProviderIndexMaxCanonicalSizeEnvVar);
+                }
+            }
             *hash<auto> rv = parse_yaml(File::readTextFile(path));
             if (type == "data") {
                 remove index_read_error;
@@ -2181,15 +2709,29 @@ if (info) {
         return sprintf("%s%sqore-%s-index.yaml", dir ?? tryGetIndexDir(True), DirSep, type);
     }
 
-    #! Returns the optional data provider metadata cache path
-    static private string getMetadataCachePath(*string dir) {
-        return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDir(True), DirSep);
+    #! Returns the path of a metadata cache manifest
+    /** @param sha256 the digest of the manifest
+        @param version the metadata cache version; the manifest of a version before 5 has a fixed name
+        @param dir the index directory; if not given, the configured index directory
+    */
+    static private string getMetadataCachePath(string sha256, int version = MetadataCacheVersion, *string dir) {
+        if (version < 5) {
+            return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDir(True), DirSep);
+        }
+        return sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep, sha256);
     }
 
-    #! Returns the app-specific data provider metadata cache chunk path
-    static private string getMetadataCacheChunkPath(string app, *string dir) {
+    #! Returns the path of an app-specific metadata cache chunk
+    /** @param app the app name
+        @param sha256 the digest of the chunk
+        @param version the metadata cache version; the chunk of a version before 5 is named after the digest of its
+        app's name instead of its own
+        @param dir the index directory; if not given, the configured index directory
+    */
+    static private string getMetadataCacheChunkPath(string app, string sha256, int version = MetadataCacheVersion,
+            *string dir) {
         return sprintf("%s%sqore-data-index-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep,
-            digest("sha256", app).toHex());
+            version < 5 ? digest("sha256", app).toHex() : sha256);
     }
 
     #! Sets the environment variable

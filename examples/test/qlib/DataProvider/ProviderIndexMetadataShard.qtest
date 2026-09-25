@@ -50,7 +50,19 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
             },
             "top_actioninfomap": {},
         }, 0s, {});
-        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, digest("sha256", app).toHex());
+        return getChunkPath(dir, app);
+    }
+
+    #! Returns the path of the given app's chunk in the published index
+    private static string getChunkPath(string dir, string app) {
+%ifdef NoMsgPack
+        throw "NO-MSGPACK";
+%else
+        # each chunk is named after its digest, which the manifest records
+        list<string> manifests = glob(dir + DirSep + "qore-data-index-manifest-*.msgpack");
+        hash<auto> manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(manifests[0]), MSGPACK_QORE_MODE);
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.apps{app}.sha256);
+%endif
     }
 
     #! A chunk the manifest no longer names can never be read again, so it must not survive.
@@ -85,9 +97,9 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
         assertEq(NOTHING, hstat(gone_chunk),
             "a chunk the manifest no longer references is removed rather than stranded");
 
-        # the manifest itself has no chunk suffix and must never be swept up with them
-        assertTrue(hstat(sprintf("%s%sqore-data-index.msgpack", dir, DirSep)) != NOTHING,
-            "the manifest survives the sweep");
+        # the current manifest must never be swept up with them
+        assertEq(1, glob(dir + DirSep + "qore-data-index-manifest-*.msgpack").size(),
+            "the current manifest survives the sweep");
 
         # an unrelated file in the index directory is not the cache's to delete
         string unrelated = sprintf("%s%sqore-data-index-notahash.msgpack", dir, DirSep);
@@ -162,16 +174,15 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
         }, 0s, {});
 
         assertFalse(ProviderIndexUtil::checkAppModule("QoreTestUnknownApp"),
-            "routing sidecar is validated while the canonical index exists");
+            "routing sidecar is validated");
 
-        string other_chunk_path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep,
-            digest("sha256", other_app).toHex());
+        string other_chunk_path = getChunkPath(dir, other_app);
         assertTrue(hstat(other_chunk_path) != NOTHING, "writer creates an app-specific cache chunk");
         File other_chunk();
         other_chunk.open2(path: other_chunk_path, flags: O_WRONLY | O_TRUNC);
         other_chunk.write(<deadbeef>);
         other_chunk.close();
-        unlink(ProviderIndexUtil::getIndexPath("data"));
+        assertFalse(is_file(ProviderIndexUtil::getIndexPath("data")), "no canonical index file is published");
 
         assertEq(requested_app, ProviderIndexUtil::tryGetAppInfo(requested_app).name,
             "requested app loads without reading an unrelated corrupt chunk");

@@ -29,6 +29,16 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         addTestCase("listing apps reads only the metadata cache manifest", \appsFromManifestTest());
         addTestCase("a canonical index changed after it was published is read instead of the compact files",
             \changedCanonicalTest());
+        addTestCase("an index is published without the canonical index file by default", \defaultCompactTest());
+        addTestCase("the canonical index file is written on request", \optInCanonicalTest());
+        addTestCase("a stale canonical index file is removed when an index is published",
+            \staleCanonicalRemovedTest());
+        addTestCase("an interrupted publication leaves the previous index readable", \interruptedPublishTest());
+        addTestCase("corrupt compact files are reported without reading a canonical index file",
+            \integrityTest());
+        addTestCase("a canonical index file over the size limit is not read", \canonicalSizeLimitTest());
+        addTestCase("an index published by an earlier version is read", \earlierVersionTest());
+        addTestCase("a published index is written as YAML on demand", \dumpTest());
 
         set_return_value(main());
     }
@@ -80,10 +90,11 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
                 },
             },
             "top_actioninfomap": {},
-        }, 0s, {});
+        }, 0s, {}, True);
 
-        string cache_path = dir + DirSep + "qore-data-index.msgpack";
-        assertTrue(hstat(cache_path) != NOTHING, "provider index writer creates the optional metadata cache");
+        list<string> manifests = glob(dir + DirSep + "qore-data-index-manifest-*.msgpack");
+        assertEq(1, manifests.size(), "provider index writer creates the metadata cache");
+        string cache_path = manifests[0];
         File cache();
         cache.open2(path: cache_path, flags: O_WRONLY | O_TRUNC);
         cache.write(<deadbeef>);
@@ -127,7 +138,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         ProviderIndexUtil::setEnvironmentVariable(dir);
         ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
             return actions{app};
-        }, 0s, {});
+        }, 0s, {}, True);
 
         # the same index as the canonical index file
         *hash<SerializedDataProviderIndexInfo> info = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
@@ -166,8 +177,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq(info, ProviderIndexUtil::readSerializedDataProviderIndex(dir));
 
         # inconsistent files are not read: a changed app chunk, a changed manifest, and a changed routing index
-        string chunk = sprintf("%s/qore-data-index-%s.msgpack", dir, digest("sha256", "QoreTestApp").toHex());
-        foreach string path in ((chunk, dir + "/qore-data-index.msgpack", dir + "/qore-routing-index.yaml")) {
+        foreach string path in ((getChunks(dir)[0], getManifest(dir), dir + "/qore-routing-index.yaml")) {
             binary data = ReadOnlyFile::readBinaryFile(path);
             {
                 File f();
@@ -242,15 +252,12 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
             "appinfomap": map {$1: {"name": $1, "desc": "the " + $1 + " app"}}, keys actions,
         }, keys actions, *hash<auto> sub (string app) { return actions{app}; }, 0s, {});
 
-        # the chunks hold each app's actions as well as its info, and the canonical file holds everything; when
-        # neither can be read, the apps can only have been read from the manifest (the canonical file must exist for
-        # the index to be current, so it is made unreadable instead; this does not apply when run as root)
-        list<string> chunks = glob(dir + DirSep + "qore-data-index-*.msgpack");
+        # the chunks hold each app's actions as well as its info, and no canonical file is published; when the
+        # chunks cannot be read, the apps can only have been read from the manifest
+        assertFalse(is_file(dir + DirSep + "qore-data-index.yaml"));
+        list<string> chunks = getChunks(dir);
         assertEq(2, chunks.size());
         map unlink($1), chunks;
-        string canonical = dir + DirSep + "qore-data-index.yaml";
-        chmod(canonical, 0);
-        on_exit chmod(canonical, 0644);
 
         # discard any index state read by other test cases, so this index is read from its files
         ProviderIndexUtil::setBuildMode(True);
@@ -279,7 +286,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
             "appinfomap": {"QoreTestOrders": {"name": "QoreTestOrders", "desc": "published"}},
             "actioninfomap": {},
             "top_actioninfomap": {},
-        }, 0s, {});
+        }, 0s, {}, True);
 
         # the canonical file is changed without changing its size, so only its modification time shows the change
         string canonical = dir + DirSep + "qore-data-index.yaml";
@@ -297,5 +304,467 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
 
         assertEq("changed!!", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc,
             "the changed canonical index is read");
+    }
+
+    #! Returns the app metadata chunks in the given index directory
+    private static list<string> getChunks(string dir) {
+        return sort(glob(dir + DirSep + "qore-data-index-[0-9a-f]*.msgpack"));
+    }
+
+    #! Returns the metadata cache manifest in the given index directory
+    private string getManifest(string dir) {
+        list<string> manifests = glob(dir + DirSep + "qore-data-index-manifest-*.msgpack");
+        assertEq(1, manifests.size(), "one manifest");
+        return manifests[0];
+    }
+
+    #! Sets the index directory for a test case; the previous one is restored on exit by the returned code
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            # no later test case reads this index
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        };
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    #! Returns the maps of a test index
+    private static hash<auto> getTestMaps(string desc = "orders") {
+        return {
+            "factorymap": {"qoretest": "QoreTestModule"},
+            "appmap": {
+                "QoreTestOrders": {"QoreTestModule": True},
+                "QoreTestInvoices": {"QoreTestModule": True},
+            },
+            "schememap": {"qoretest": {"QoreTestModule": True}},
+            "appinfomap": {
+                "QoreTestOrders": {"name": "QoreTestOrders", "desc": desc},
+                "QoreTestInvoices": {"name": "QoreTestInvoices", "desc": "invoices"},
+                "QoreTestEmpty": {"name": "QoreTestEmpty"},
+            },
+        };
+    }
+
+    #! Returns the actions of a test index
+    private static hash<auto> getTestActions(string desc = "creates an order") {
+        return {
+            "QoreTestOrders": {
+                "create-order": {"app": "QoreTestOrders", "action": "create-order", "desc": desc},
+                "cancel-order": {"app": "QoreTestOrders", "action": "cancel-order", "desc": "cancels an order"},
+            },
+            "QoreTestInvoices": {
+                "send-invoice": {"app": "QoreTestInvoices", "action": "send-invoice", "desc": "sends an invoice"},
+            },
+        };
+    }
+
+    #! Writes a test index to the configured directory
+    private static hash<ProviderIndexInfo> writeTestIndex(*bool canonical, hash<auto> maps = getTestMaps(),
+            hash<auto> actions = getTestActions()) {
+        return ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
+            return actions{app};
+        }, 0s, {}, canonical);
+    }
+
+    #! Returns the routing index in the given directory
+    private static hash<auto> readRouting(string dir) {
+        return parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+    }
+
+    defaultCompactTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<ProviderIndexInfo> info = writeTestIndex();
+        assertFalse(is_file(dir + DirSep + "qore-data-index.yaml"), "no canonical index file is written");
+        assertEq(dir + DirSep + "qore-routing-index.yaml", info.path, "the routing index identifies the index");
+        int size = hstat(info.path).size + hstat(getManifest(dir)).size + (foldl $1 + $2,
+            (map hstat($1).size, getChunks(dir)));
+        assertEq(size, info.size, "the size is the total size of the published files");
+
+        hash<auto> routing = readRouting(dir);
+        assertEq(3, routing.version);
+        assertFalse(routing.canonical_yaml);
+        assertFalse(routing.hasKey("data_sha256"));
+        assertFalse(routing.hasKey("data_size"));
+        # one chunk per app, each named after its own digest
+        assertEq(3, getChunks(dir).size());
+
+        resetIndexState();
+        assertEq(("QoreTestEmpty", "QoreTestInvoices", "QoreTestOrders"),
+            sort(map $1.name, ProviderIndexUtil::getCachedApps()));
+        assertEq(("cancel-order", "create-order"),
+            sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestOrders")));
+        assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        assertEq(getTestMaps() + {"actioninfomap": getTestActions()},
+            ProviderIndexUtil::readSerializedDataProviderIndex(dir).index);
+        assertEq(ProviderIndexUtil::readSerializedDataProviderIndex(dir).sha256,
+            ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).sha256);
+
+        # the complete index has the same content as one published with a canonical index file
+        hash<auto> compact = ProviderIndexUtil::readDataProviderIndex();
+        string canonical_dir = make_tmp_dir();
+        on_exit remove_tree(canonical_dir);
+        ProviderIndexUtil::setEnvironmentVariable(canonical_dir);
+        writeTestIndex(True);
+        assertEq(compact, ProviderIndexUtil::readDataProviderIndex());
+        unlink(canonical_dir + DirSep + "qore-routing-index.yaml");
+        assertEq(compact, ProviderIndexUtil::readDataProviderIndex(), "the same as the canonical index file");
+    }
+
+    optInCanonicalTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        string canonical = dir + DirSep + "qore-data-index.yaml";
+        hash<ProviderIndexInfo> info = writeTestIndex(True);
+        assertEq(canonical, info.path);
+        binary data = ReadOnlyFile::readBinaryFile(canonical);
+        assertEq(data.size(), info.size);
+        hash<auto> routing = readRouting(dir);
+        assertEq(3, routing.version);
+        assertTrue(routing.canonical_yaml);
+        assertEq(digest("sha256", data).toHex(), routing.data_sha256);
+        assertEq(data.size(), routing.data_size);
+        assertEq(getTestMaps() + {"actioninfomap": getTestActions()}, parse_yaml(data.toString()));
+
+        # the file is written identically every time
+        unlink(canonical);
+        writeTestIndex(True);
+        assertEq(data, ReadOnlyFile::readBinaryFile(canonical));
+
+        resetIndexState();
+        assertEq("orders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the environment variable requests the file too
+        unlink(canonical);
+        on_exit unsetenv(ProviderIndexCanonicalYamlEnvVar);
+        setenv(ProviderIndexCanonicalYamlEnvVar, "1");
+        writeTestIndex();
+        assertEq(data, ReadOnlyFile::readBinaryFile(canonical), "the environment variable requests the file");
+    }
+
+    staleCanonicalRemovedTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(True);
+        string canonical = dir + DirSep + "qore-data-index.yaml";
+        assertTrue(is_file(canonical));
+        list<string> old_chunks = getChunks(dir);
+        string old_manifest = getManifest(dir);
+
+        # the index changes, so the chunk and the manifest of the changed app are replaced
+        writeTestIndex(False, getTestMaps("changed orders"));
+        assertFalse(is_file(canonical), "the stale canonical index file is removed");
+        assertFalse(is_file(old_manifest), "the previous manifest is removed");
+        assertEq(3, getChunks(dir).size(), "the previous chunk of the changed app is removed");
+        assertEq(2, (select getChunks(dir), inlist($1, old_chunks)).size(), "unchanged chunks are kept");
+
+        resetIndexState();
+        assertEq("changed orders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the files of an earlier metadata cache version are removed too
+        foreach string name in (("qore-data-index.msgpack",
+                sprintf("qore-data-index-%s.msgpack", digest("sha256", "QoreTestOrders").toHex()))) {
+            File f();
+            f.open2(dir + DirSep + name, O_CREAT | O_WRONLY);
+            f.write("stale");
+        }
+        # a file that is not index metadata is kept
+        string unrelated = dir + DirSep + "qore-data-index-notahash.msgpack";
+        {
+            File f();
+            f.open2(unrelated, O_CREAT | O_WRONLY);
+            f.write("keep");
+        }
+        writeTestIndex();
+        assertFalse(is_file(dir + DirSep + "qore-data-index.msgpack"));
+        assertEq(3, getChunks(dir).size());
+        assertTrue(is_file(unrelated));
+    }
+
+    interruptedPublishTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex();
+        binary routing = ReadOnlyFile::readBinaryFile(dir + DirSep + "qore-routing-index.yaml");
+
+        # a publication that fails after the metadata of the changed app has been written
+        hash<auto> actions = getTestActions("creates a changed order");
+        assertThrows("QORE-TEST-INTERRUPTED", \ProviderIndexUtil::writeDataProviderIndexByApp(),
+            (getTestMaps(), keys actions, *hash<auto> sub (string app) {
+                if (app == "QoreTestOrders") {
+                    throw "QORE-TEST-INTERRUPTED";
+                }
+                return actions{app};
+            }, 0s, {}));
+        assertEq(routing, ReadOnlyFile::readBinaryFile(dir + DirSep + "qore-routing-index.yaml"));
+
+        # a publication that fails when the routing index is written, after the chunks and the manifest; the
+        # temporary file cannot be created where a directory exists
+        string tmp = sprintf("%s%sqore-routing-index.yaml.tmp.%d.%d", dir, DirSep, getpid(), gettid());
+        mkdir(tmp);
+        assertThrows("PROVIDER-INDEX-ERROR", \writeTestIndex(), (False, getTestMaps("changed orders"), actions));
+        rmdir(tmp);
+        assertEq(routing, ReadOnlyFile::readBinaryFile(dir + DirSep + "qore-routing-index.yaml"));
+        assertEq(2, glob(dir + DirSep + "qore-data-index-manifest-*.msgpack").size(), "both manifests exist");
+
+        resetIndexState();
+        assertEq("orders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc, "the previous index is read");
+        assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the next publication completes and removes the files of the failed one
+        writeTestIndex(False, getTestMaps("changed orders"), actions);
+        assertEq(1, glob(dir + DirSep + "qore-data-index-manifest-*.msgpack").size());
+        assertEq(3, getChunks(dir).size());
+        resetIndexState();
+        assertEq("changed orders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc);
+    }
+
+    integrityTest() {
+        checkModules();
+%ifndef NoMsgPack
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex();
+        hash<auto> routing = readRouting(dir);
+        hash<auto> manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(getManifest(dir)), MSGPACK_QORE_MODE);
+        string orders_chunk = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep,
+            manifest.apps."QoreTestOrders".sha256);
+
+        # a corrupt chunk: only its app is unavailable, and the error is reported
+        binary data = ReadOnlyFile::readBinaryFile(orders_chunk);
+        {
+            File f();
+            f.open2(orders_chunk, O_WRONLY | O_TRUNC);
+            f.write(data + <00>);
+        }
+        resetIndexState();
+        assertNothing(ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestOrders"));
+        assertRegex("QoreTestOrders", ProviderIndexUtil::getIndexReadError());
+        assertEq(("send-invoice",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestInvoices"));
+        assertEq(1, ProviderIndexUtil::getAllCachedActions().size());
+        assertNothing(ProviderIndexUtil::readDataProviderIndex().actioninfomap."QoreTestOrders");
+        assertFalse(is_file(dir + DirSep + "qore-data-index.yaml"), "no canonical index file is involved");
+        {
+            File f();
+            f.open2(orders_chunk, O_WRONLY | O_TRUNC);
+            f.write(data);
+        }
+
+        # a corrupt manifest: no metadata is available
+        string manifest_path = getManifest(dir);
+        data = ReadOnlyFile::readBinaryFile(manifest_path);
+        {
+            File f();
+            f.open2(manifest_path, O_WRONLY | O_TRUNC);
+            f.write(data + <00>);
+        }
+        resetIndexState();
+        assertEq(0, (ProviderIndexUtil::getCachedApps() ?? ()).size());
+        assertRegex("manifest", ProviderIndexUtil::getIndexReadError());
+        {
+            File f();
+            f.open2(manifest_path, O_WRONLY | O_TRUNC);
+            f.write(data);
+        }
+        resetIndexState();
+        assertEq(3, ProviderIndexUtil::getCachedApps().size(), "the restored manifest is read");
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # a corrupt routing index: the index is not read
+        string routing_path = dir + DirSep + "qore-routing-index.yaml";
+        routing.appmap."QoreTestOrders" = {"QoreTestOtherModule": True};
+        {
+            File f();
+            f.open2(routing_path, O_WRONLY | O_TRUNC);
+            f.write(make_yaml(routing, BlockStyle));
+        }
+        resetIndexState();
+        assertFalse(ProviderIndexUtil::checkAppModule("QoreTestOrders"));
+        assertEq(0, (ProviderIndexUtil::getCachedApps() ?? ()).size());
+        assertRegex("routing index", ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    canonicalSizeLimitTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # an index with only a canonical index file, as written by earlier versions without MessagePack
+        writeTestIndex(True);
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        int size = hstat(dir + DirSep + "qore-data-index.yaml").size;
+        assertEq(DefaultMaxCanonicalIndexSize, ProviderIndexUtil::getMaxCanonicalIndexSize());
+
+        on_exit unsetenv(ProviderIndexMaxCanonicalSizeEnvVar);
+        setenv(ProviderIndexMaxCanonicalSizeEnvVar, string(size - 1));
+        assertEq(size - 1, ProviderIndexUtil::getMaxCanonicalIndexSize());
+        resetIndexState();
+        assertNothing(ProviderIndexUtil::tryGetAppInfo("QoreTestOrders"), "a file over the limit is not read");
+        assertRegex("^PROVIDER-INDEX-TOO-LARGE: ", ProviderIndexUtil::getIndexReadError());
+        assertNothing(ProviderIndexUtil::readDataProviderIndex());
+
+        setenv(ProviderIndexMaxCanonicalSizeEnvVar, string(size));
+        resetIndexState();
+        assertEq("orders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").desc, "a file within the limit is read");
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # an invalid limit is ignored
+        setenv(ProviderIndexMaxCanonicalSizeEnvVar, "none");
+        assertEq(DefaultMaxCanonicalIndexSize, ProviderIndexUtil::getMaxCanonicalIndexSize());
+    }
+
+    earlierVersionTest() {
+        checkModules();
+%ifndef NoMsgPack
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # an index as published by ProviderIndexUtil 1.2 before the canonical index file became optional: a
+        # version 2 routing index, and a version 4 metadata cache whose files are named after their apps
+        hash<auto> maps = getTestMaps();
+        hash<auto> actions = getTestActions();
+        string yaml = make_yaml(maps + {"actioninfomap": actions}, BlockStyle);
+        writeFile(dir + DirSep + "qore-data-index.yaml", yaml);
+        hash<auto> chunks = {};
+        foreach string app in (keys maps.appinfomap) {
+            hash<auto> app_index = {
+                "factorymap": {}, "appmap": {}, "schememap": {},
+                "appinfomap": {app: maps.appinfomap{app}},
+                "actioninfomap": exists actions{app} ? {app: actions{app}} : {},
+                "top_actioninfomap": {},
+            };
+            binary data = compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
+            writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, digest("sha256", app).toHex()), data);
+            chunks{app} = {"size": data.size(), "sha256": digest("sha256", data).toHex(),
+                "info": maps.appinfomap{app}};
+        }
+        binary manifest = msgpack_pack({"version": 4, "apps": chunks}, MSGPACK_QORE_MODE);
+        writeFile(dir + DirSep + "qore-data-index.msgpack", manifest);
+        hash<auto> routing = maps{"factorymap", "appmap", "schememap"} + {
+            "version": 2,
+            "data_sha256": digest("sha256", yaml).toHex(),
+            "data_size": yaml.size(),
+            "metadata_cache_version": 4,
+            "metadata_cache_sha256": digest("sha256", manifest).toHex(),
+        };
+        routing.routing_sha256 = digest("sha256", make_yaml(routing, BlockStyle)).toHex();
+        # the routing index is written after the canonical file
+        usleep(10ms);
+        writeFile(dir + DirSep + "qore-routing-index.yaml", make_yaml(routing, BlockStyle));
+
+        hash<auto> expected = maps + {"actioninfomap": actions};
+        assertEq(expected, ProviderIndexUtil::readSerializedDataProviderIndex(dir).index);
+        resetIndexState();
+        assertEq(3, ProviderIndexUtil::getCachedApps().size());
+        assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        assertEq(parse_yaml(yaml), parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir)));
+
+        # without its canonical index file, the index is read from its compact files
+        unlink(dir + DirSep + "qore-data-index.yaml");
+        resetIndexState();
+        assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
+        assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    dumpTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(True);
+        string canonical = ReadOnlyFile::readTextFile(dir + DirSep + "qore-data-index.yaml");
+        writeTestIndex();
+        assertFalse(is_file(dir + DirSep + "qore-data-index.yaml"));
+
+        assertEq(canonical, ProviderIndexUtil::dumpIndexYaml(), "the YAML of the canonical index file");
+        assertEq(canonical, ProviderIndexUtil::dumpIndexYaml(dir));
+        string output = dir + DirSep + "dump.yaml";
+        assertNothing(ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING, output));
+        assertEq(canonical, ReadOnlyFile::readTextFile(output), "streamed to a file");
+
+        hash<auto> index = parse_yaml(canonical);
+        foreach string app in (keys index.appinfomap) {
+            hash<auto> expected = {
+                "appmap": exists index.appmap{app} ? {app: index.appmap{app}} : {},
+                "appinfomap": {app: index.appinfomap{app}},
+            };
+            if (exists index.actioninfomap{app}) {
+                expected.actioninfomap = {app: index.actioninfomap{app}};
+            }
+            assertEq(expected, parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir, app)), app);
+        }
+        assertThrows("PROVIDER-INDEX-ERROR", "QoreTestMissing", \ProviderIndexUtil::dumpIndexYaml(),
+            (dir, "QoreTestMissing"));
+
+        # an index without apps
+        writeTestIndex(False, {"factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {}}, {});
+        assertEq({"factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {}},
+            parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir)));
+
+        string empty_dir = make_tmp_dir();
+        on_exit remove_tree(empty_dir);
+        assertThrows("PROVIDER-INDEX-ERROR", \ProviderIndexUtil::dumpIndexYaml(), empty_dir);
+    }
+
+    #! Writes a file
+    private static writeFile(string path, data contents) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
     }
 }
