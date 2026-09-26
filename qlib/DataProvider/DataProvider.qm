@@ -1371,8 +1371,10 @@ fetch
       @ref DataProvider::ActionOptionBaseInfo "ActionOptionBaseInfo" hashdecls
     - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
       restores types from their descriptions more faithfully: class-backed named types in unions, hash types
-      without fields, options of "or nothing" types, and the descriptions of union types are restored, and an
-      example value that the restored field does not accept is dropped instead of failing the restoration
+      without fields, options of "or nothing" types, and the descriptions of union types are restored, an
+      example value that the restored field does not accept is dropped instead of failing the restoration, and a
+      description whose type path is registered only where its provider is loaded, such as a TypeScript action's
+      option type, is restored from its structure in a process that has not loaded the provider
     - generated example values respect the field's allowed values and the formats of the string format types, so
       a field no longer publishes an example that it would reject
     - @ref DataProvider::QoreUnionDataType "QoreUnionDataType" accepts an explicit display name and descriptions
@@ -1387,7 +1389,8 @@ fetch
     - a mandatory @ref DataProvider::SoftListDataType "SoftListDataType" does not accept @ref nothing, like the Qore
       \c list type, and does not list it among its accepted types
     - a type description whose type is known only in the program defining it, such as a type based on a custom Qore
-      type, is restored from the value type it returns and the values it accepts instead of failing
+      type, is restored from the value type it returns and the values it accepts instead of failing, and keeps the
+      name and presentation it is described with
     - simulating a write to an empty table works: the table's example record falls back to data generated from its
       record type instead of failing with a runtime type error, so a simulated test step can create a record in a
       table that has no rows yet

@@ -1305,9 +1305,20 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns an appropriate object for the given type description
     /** @param info the description of the type
 
+        @return the type registered with the description's \c path in this process, if any, otherwise a type
+        restored from the structure in the description
+
+        @throw TYPE-ARG-ERROR the description has a \c path that is not registered in this process, and no name or
+        base type to restore the type from
+
         @note A list type is restored as a @ref SoftListDataType when its name is a soft list type name such as
         \c "softlist<string>" or \c "*softlist<string>", so that it converts a single value to a list like the
         described type does; a list type with any other name is restored as a @ref ListDataType
+
+        @note A type path, such as one registered when a provider app is loaded, identifies the registered type
+        only in a process where that registration has been made.  Elsewhere the type is restored from its
+        description, like a type without a path: it has the described structure and constraints but not any
+        custom behavior of the original type's class, and it has no path
     */
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
         AbstractDataProviderType rv = AbstractDataProviderType::getFromInfo(info);
@@ -1324,7 +1335,17 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     */
     private static AbstractDataProviderType getFromInfo(hash<DataTypeInfo> info) {
         if (info.path) {
-            return DataProvider::getTypeCache().lookupTypeFromPathEx(info.path);
+            # the path identifies the type registered in this process, which keeps the custom behavior of the
+            # original type's class; a path registered only where its app is loaded is not known here, and the type
+            # is then restored from the structure the description also holds
+            *AbstractDataProviderType rv = DataProvider::getTypeCache().lookupTypeFromPath(info.path);
+            if (rv) {
+                return rv;
+            }
+            if (!info.name && !info.base_type) {
+                throw "TYPE-ARG-ERROR", sprintf("Cannot find any type with path %y, and the description has no "
+                    "structure to restore it from", info.path);
+            }
         }
         # class-backed named types (e.g. "file", "email") are identified by their name, even when their description
         # also lists fields
@@ -1402,8 +1423,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         # a type whose name and base type are known only in the program defining it, such as a type based on a custom
         # Qore type, is restored from the value type it returns and the values it accepts
         if (*Type value_type = AbstractDataProviderType::getValueTypeFromInfo(info)) {
+            # the type keeps the name it is described by, which is not the name of the Qore value type
+            hash<NameDescInfo> named = <NameDescInfo>{
+                "name": info.name ?? value_type.getName(),
+                "display_name": info.display_name ?? info.name ?? value_type.getName(),
+                "short_desc": info.short_desc,
+                "desc": info.desc ?? info.short_desc ?? info.name ?? value_type.getName(),
+            };
             AbstractDataProviderType rv = AbstractDataProviderType::get(value_type, info.options, info.tags,
-                info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+                info.default_value, named);
             return AbstractDataProviderType::setDataTypeInfo(rv, info);
         }
 

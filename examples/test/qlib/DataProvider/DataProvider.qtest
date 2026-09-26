@@ -913,6 +913,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
         addTestCase("return-based processor API test", \returnBasedApiTest());
         addTestCase("type cache test", \typeCacheTest());
+        addTestCase("type info with an unregistered path", \typeInfoUnregisteredPathTest());
         addTestCase("static factory map test", \factoryMapTest());
         addTestCase("union optional type test", \unionOptionalTypeTest());
         addTestCase("optional field attribute test", \optionalFieldAttributeTest());
@@ -4479,6 +4480,74 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq({"val": 2}, sink.recs[1]);
             assertEq({"val": 3}, sink.recs[2]);
         }
+    }
+
+    #! A type description with a path restores from its structure where the path is not registered
+    /** An indexed option type registered under a provider-schema path when its app is loaded keeps that path in its
+        description; a process that has not loaded the app must still restore the type from the description.
+    */
+    typeInfoUnregisteredPathTest() {
+        string unregistered = "provider-schema-v1/app/QWN0aXZlQ2FtcGFpZ24/action/Y3JlYXRlX2FjY291bnQ/role/b3B0aW9u"
+            "/option/ZmllbGRPcHRpb25z/type/aGFzaA";
+        assertNothing(DataProvider::getTypeCache().lookupTypeFromPath(unregistered));
+
+        # the indexed description of an ActiveCampaign option type, as a process without the app reads it
+        hash<DataTypeInfo> info = <DataTypeInfo>{
+            "name": "*hash<auto>",
+            "path": unregistered,
+            "base_type": "hash",
+            "mandatory": False,
+            "types_accepted": ("hash<auto>", "nothing", "null"),
+            "types_returned": ("hash<auto>", "nothing"),
+            "fields": {},
+            "element_type": <DataTypeInfo>{
+                "name": "auto",
+                "base_type": "auto",
+                "types_accepted": ("any",),
+                "types_returned": ("any",),
+            },
+            "can_manage_fields": True,
+        };
+        AbstractDataProviderType restored = AbstractDataProviderType::get(info);
+        assertEq("*hash<auto>", restored.getName());
+        assertEq({"a": 1}, restored.acceptsValue({"a": 1}));
+        assertNothing(restored.acceptsValue(NOTHING));
+        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), "string",
+            "the restored type keeps the described base type");
+        assertNothing(restored.getPath(), "a structurally restored type has no path of its own");
+        assertNothing(AbstractDataProviderType::get(<DataTypeInfo>{"name": "*hash<auto>"}).getPath(),
+            "restoring a described path never changes a shared type");
+
+        # a hash type with fields restores its fields
+        AbstractDataProviderType fields_type = AbstractDataProviderType::get(<DataTypeInfo>{
+            "name": "record",
+            "path": unregistered + "/record",
+            "base_type": "hash",
+            "mandatory": True,
+            "fields": {
+                "id": <DataFieldInfo>{
+                    "name": "id",
+                    "type": <DataTypeInfo>{"name": "int", "base_type": "int", "mandatory": True},
+                },
+            },
+        });
+        assertEq("record", fields_type.getName());
+        assertEq(("id",), keys fields_type.getFields());
+        assertEq({"id": 1}, fields_type.acceptsValue({"id": 1}));
+
+        # a path registered in this process identifies the registered type, which keeps its class
+        string registered = "/test/type-info-unregistered-path/registered";
+        HashDataType original("registered-type");
+        DataProviderTypeCache type_cache = DataProvider::getTypeCache();
+        type_cache.registerType(registered, original);
+        on_exit type_cache.removeType(registered);
+        assertTrue(AbstractDataProviderType::get(<DataTypeInfo>{"name": "*hash<auto>", "path": registered,
+            "base_type": "hash"}) == original, "a registered path returns the registered type itself");
+
+        # a path with no structure to restore from cannot be restored
+        assertThrows("TYPE-ARG-ERROR", ".*no structure.*", sub () {
+            AbstractDataProviderType::get(<DataTypeInfo>{"path": unregistered});
+        });
     }
 
     typeCacheTest() {

@@ -210,6 +210,30 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         AbstractDataProviderType t = AbstractDataProviderType::get(info);
         assertEq("5", t.acceptsValue(5));
         assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+        # the restored type is named and presented as described, not after its Qore value type
+        assertEq("workflow", t.getName());
+        assertEq("Workflow", t.getDisplayName());
+        assertEq("A workflow", t.getShortDescription());
+        # it accepts what its soft value type accepts, which may be more than the description lists
+        assertEq(info{"name", "types_returned", "mandatory"}, t.getInfo(){"name", "types_returned", "mandatory"},
+            "the restored type describes itself by the described name and value type");
+
+        # the "or nothing" form keeps its name too
+        AbstractDataProviderType opt_t = AbstractDataProviderType::get(cast<hash<DataTypeInfo>>(info + {
+            "name": "*workflow",
+            "mandatory": False,
+            "types_accepted": ("string", "int", "float", "nothing"),
+            "types_returned": ("string", "nothing"),
+        }));
+        assertEq("*workflow", opt_t.getName());
+        assertNothing(opt_t.acceptsValue(NOTHING));
+        assertEq("5", opt_t.acceptsValue(5));
+
+        # without presentation text the name is also its display name
+        AbstractDataProviderType bare_t = AbstractDataProviderType::get(
+            cast<hash<DataTypeInfo>>(info - ("display_name", "short_desc", "desc")));
+        assertEq("workflow", bare_t.getName());
+        assertEq("workflow", bare_t.getDisplayName());
 
         # a type that accepts only its own value type is not a soft type
         info.types_accepted = ("string",);
