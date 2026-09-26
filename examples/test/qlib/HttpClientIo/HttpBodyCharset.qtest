@@ -277,9 +277,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HttpClientIo over HTTP/1.1", \httpClientIoHttp1Test());
         addTestCase("HttpClientIo over HTTP/2", \httpClientIoHttp2Test());
         addTestCase("HttpClientIo stream handle", \httpClientIoStreamTest());
+        addTestCase("HttpClientIo octets", \httpClientIoOctetsTest());
+        addTestCase("HttpClientIo text decoding", \decodeResponseTextTest());
         addTestCase("no Content-Type", \noContentTypeTest());
         addTestCase("RestClient", \restClientTest());
         addTestCase("RestClientIo", \restClientIoTest());
+        addTestCase("RestClientIo raw body", \restClientIoRawBodyTest());
         addTestCase("assumed encoding", \assumedEncodingTest());
         set_return_value(main());
     }
@@ -472,6 +475,102 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
     }
 
+    # checks all cases and variants with the given function returning a response body as octets: the body as sent,
+    # after any content encoding is decoded, including any byte order mark
+    private checkOctets(code get_body, string label, bool raw = False) {
+        foreach string name in (keys TestHandler::Cases) {
+            hash<CharsetCase> c = TestHandler::Cases{name};
+            if (!raw && !c.content_type) {
+                continue;
+            }
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                auto body = get_body(path);
+                assertEq(NT_BINARY, body.typeCode(), sprintf("%s %s", label, path));
+                assertEq(c.body, body, sprintf("%s %s", label, path));
+            }
+        }
+    }
+
+    # a request for the octets of the body receives them unchanged over each protocol and API, and the default
+    # still decodes text
+    httpClientIoOctetsTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"},
+                {"url": getRawUrl(), "protocol": "h1", "raw": True}) {
+            string label = i.protocol + (i.raw ? " raw" : "");
+            HttpClientConnectionManager mgr = getManager({"protocol": i.protocol});
+            checkOctets(auto sub (string path) {
+                hash<auto> resp = mgr.request(i.url, "GET", path, NOTHING, NOTHING, NOTHING, False);
+                assertEq(i.protocol, resp.protocol, path);
+                return resp.body;
+            }, "request octets " + label, i.raw);
+            checkOctets(auto sub (string path) {
+                return mgr.requestAsync(i.url, "GET", path, NOTHING, NOTHING, False).get(30s).body;
+            }, "requestAsync octets " + label, i.raw);
+            checkOctets(auto sub (string path) {
+                return mgr.submitRequestAsync(i.url, "GET", path, NOTHING, NOTHING, False).future.get(30s).body;
+            }, "submitRequestAsync octets " + label, i.raw);
+            checkOctets(auto sub (string path) {
+                HttpClientStreamHandle stream = mgr.acquireStream(i.url);
+                assertTrue(stream.getDecodeText());
+                stream.setDecodeText(False);
+                assertFalse(stream.getDecodeText());
+                return stream.submitAsync("GET", path).future.get(30s).body;
+            }, "stream octets " + label, i.raw);
+            # the octets decode to the text that a request decoding text returns
+            checkAll(auto sub (string path) {
+                hash<auto> resp = mgr.request(i.url, "GET", path, NOTHING, NOTHING, NOTHING, False);
+                return HttpClientStreamHandle::decodeResponseText(resp).body;
+            }, "decoded octets " + label, i.raw);
+            # the same manager and connections still decode text by default
+            checkAll(auto sub (string path) { return mgr.request(i.url, "GET", path).body; }, "default " + label,
+                i.raw);
+        }
+    }
+
+    # the text decoding of a response whose body has been received as octets
+    decodeResponseTextTest() {
+        # a character encoding sent as the content encoding of the body is its charset, as with HTTPClient
+        hash<auto> resp = HttpClientStreamHandle::decodeResponseText({
+            "headers": {"content-encoding": "iso-8859-2"},
+            "body": <b1>,
+        });
+        assertEq("ISO-8859-2", resp.body.encoding());
+        assertEq("ą", convert_encoding(resp.body, "UTF-8"));
+        # a charset parameter takes precedence
+        resp = HttpClientStreamHandle::decodeResponseText({
+            "headers": {"content-type": "text/plain;charset=utf-8", "content-encoding": "iso-8859-2"},
+            "body": <c3a4>,
+        });
+        assertEq("ä", resp.body);
+        # the last Content-Type of a header sent more than once is used
+        resp = HttpClientStreamHandle::decodeResponseText({
+            "headers": {"content-type": ("image/png", "text/plain;charset=utf-8")},
+            "body": <c3a4>,
+        });
+        assertEq("ä", resp.body);
+        # the assumed encoding applies to text without a declaration
+        resp = HttpClientStreamHandle::decodeResponseText({
+            "headers": {"content-type": "text/plain"},
+            "body": <a4>,
+        }, "ISO-8859-15");
+        assertEq("€", convert_encoding(resp.body, "UTF-8"));
+        # binary data, an empty body, and a string body are not changed
+        assertEq(<89504e47>, HttpClientStreamHandle::decodeResponseText({
+            "headers": {"content-type": "image/png"},
+            "body": <89504e47>,
+        }).body);
+        assertEq(binary(), HttpClientStreamHandle::decodeResponseText({"headers": {}, "body": binary()}).body);
+        assertEq("text", HttpClientStreamHandle::decodeResponseText({"headers": {}, "body": "text"}).body);
+        # normalizeResponseBody() decompresses the body and keeps its octets when text is not decoded
+        resp = HttpClientStreamHandle::normalizeResponseBody({
+            "headers": {"content-type": "text/plain", "content-encoding": "gzip"},
+            "body": gzip(<efbbbfc3a4>),
+        }, 0, "ISO-8859-1", False);
+        assertEq(<efbbbfc3a4>, resp.body);
+        assertEq("text/plain", resp.content_type);
+    }
+
     # the cases that REST clients return as decoded, without deserializing them to other values
     private list<string> getRestCases() {
         return select keys TestHandler::Cases, TestHandler::Cases{$1}.content_type =~ /^(text\/plain|application\/octet-stream)/;
@@ -518,6 +617,35 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"}) {
             RestClientIo rest({"url": i.url, "protocol": i.protocol, "ssl_verify_mode": SSL_VERIFY_NONE});
             checkRest(auto sub (string path) { return rest.restGet(path).body; }, "RestClientIo " + i.protocol);
+        }
+    }
+
+    # the raw response body of RestClientIo is the octets received, after any content encoding is decoded, while the
+    # body is decoded and deserialized
+    restClientIoRawBodyTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"}) {
+            RestClientIo rest({"url": i.url, "protocol": i.protocol, "ssl_verify_mode": SSL_VERIFY_NONE});
+            list<string> names = getRestCases() + ("json", "json-charset");
+%ifndef NoYaml
+            names += ("yaml", "yaml-bom");
+%endif
+            foreach string name in (names) {
+                hash<CharsetCase> c = TestHandler::Cases{name};
+                foreach string variant in (Variants) {
+                    string path = sprintf("/%s/%s", name, variant);
+                    string label = sprintf("RestClientIo %s %s", i.protocol, path);
+                    hash<auto> resp = rest.restGet(path);
+                    assertEq(c.body, resp.response_body_raw, label);
+                    if (name =~ /^(json|yaml)/) {
+                        assertEq({"a": "ä"}, resp.body, label);
+                    } else {
+                        checkBody(resp.body, c, label);
+                    }
+                    # the asynchronous request path keeps the octets as well
+                    resp = rest.restDoRequestAsync("GET", path).get(30s);
+                    assertEq(c.body, resp.response_body_raw, label + " async");
+                }
+            }
         }
     }
 

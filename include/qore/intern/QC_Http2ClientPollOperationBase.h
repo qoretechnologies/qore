@@ -286,6 +286,18 @@ public:
         }
     }
 
+    //! Sets whether a whole text response body is decoded to a string
+    /** The session reads the value from the socket when a response is complete; see
+        qore_socket_private::http_decode_body
+
+        @param decode if false, bodies are returned as received
+    */
+    DLLLOCAL void setDecodeBody(bool decode) {
+        if (sock_obj) {
+            sock_obj->setHttpDecodeBody(decode);
+        }
+    }
+
     DLLLOCAL void setIdleTimeout(int64_t timeout_us) {
         idle_timeout_us = timeout_us;
     }

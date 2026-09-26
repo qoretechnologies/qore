@@ -1223,6 +1223,12 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     std::atomic<const QoreEncoding*> http_assumed_encoding{nullptr};
 
+    //! If whole text HTTP/2 client response bodies are decoded to strings
+    /** Set by the HTTP client connection that owns the socket and read by the session when a response is complete;
+        if false, bodies are returned as received, for an owner that decodes them itself or needs their octets
+    */
+    std::atomic<bool> http_decode_body{true};
+
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
         (RFC 8441), so clients will not attempt WebSocket over HTTP/2 CONNECT.

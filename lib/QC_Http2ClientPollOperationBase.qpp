@@ -1768,6 +1768,20 @@ nothing Http2ClientPollOperationBase::setAssumedEncoding(string encoding) [flags
     priv->setAssumedEncoding(QEM.findCreate(encoding));
 }
 
+//! Sets whether a whole text response body is decoded to a string
+/** By default a response body that is text is decoded by the rules documented for
+    @ref Qore::get_http_body_encoding() "get_http_body_encoding()" to a string in its character encoding, without
+    any byte order mark.  If decoding is disabled, the body is returned as binary data as received, so an owner that
+    decodes bodies itself, or that needs the octets of a body, gets them unchanged; a streamed body is never decoded.
+
+    @param decode @ref False to return response bodies as received
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::setDecodeBody(bool decode) [flags=NAMED_ARGS] {
+    priv->setDecodeBody(decode);
+}
+
 //! Sets the connect-phase timeout for this connection.
 /** Bounds the time spent establishing the connection - TCP connect, TLS handshake
     (including ALPN) and proxy \c CONNECT tunnel - independently of the caller's request

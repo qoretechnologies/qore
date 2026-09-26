@@ -316,6 +316,14 @@ public:
         assumed_encoding.store(enc, std::memory_order_relaxed);
     }
 
+    //! Sets whether a whole response body is decoded to a string when it is text
+    /** @param decode if false, the body is returned as received (after chunked transfer decoding), so the caller
+        can decode it or keep its octets
+    */
+    DLLLOCAL void setDecodeBody(bool decode) {
+        decode_body.store(decode, std::memory_order_relaxed);
+    }
+
     //! Sets the connect-phase timeout for this connection (microseconds)
     /** Bounds the time the connection may spend establishing itself — TCP connect,
         TLS handshake and proxy \c CONNECT tunnel — independently of the caller's
@@ -520,6 +528,10 @@ private:
     // atomic: setAssumedEncoding() is called from the thread configuring the connection while the I/O thread reads it
     // for each response; encodings are never freed
     std::atomic<const QoreEncoding*> assumed_encoding{nullptr};
+
+    //! If a whole text response body is decoded to a string; see setDecodeBody()
+    // atomic: set from the thread configuring the connection while the I/O thread reads it for each response
+    std::atomic<bool> decode_body{true};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
     /** Set on first handleIdle entry with no pending request; cleared when a

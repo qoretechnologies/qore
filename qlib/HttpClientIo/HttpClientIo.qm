@@ -181,6 +181,12 @@ manager.closeAll();
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
     - Sync and async (\c Future / \c EventNotifier) request APIs
+    - Response bodies decoded once, by the rules shared by all HTTP clients, after any content encoding is
+      decompressed; a request can receive a text body as octets instead (the \c decode_text argument of the
+      request methods and @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
+      "HttpClientStreamHandle::setDecodeText()"), and
+      @ref HttpClientIo::HttpClientStreamHandle::decodeResponseText() "HttpClientStreamHandle::decodeResponseText()"
+      decodes it as the default would
     - Streaming support (WebSocket, SSE) over HTTP/1.1, HTTP/2, and HTTP/3
 */
 
@@ -626,7 +632,9 @@ public namespace HttpClientIo {
         /** Response bodies are decoded by the rules documented for @ref Qore::get_http_body_encoding()
             "get_http_body_encoding()", the same for all HTTP clients: the assumed encoding applies to text types
             without a default encoding of their own and without an encoding declaration.  The default is ISO-8859-1,
-            the default character set of text media types in HTTP/1.1 (RFC 2616).
+            the default character set of text media types in HTTP/1.1 (RFC 2616).  A request for the octets of a
+            body does not decode it; see @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
+            "HttpClientStreamHandle::setDecodeText()"
         */
         string assume_encoding = "ISO-8859-1";
 

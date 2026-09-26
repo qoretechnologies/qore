@@ -145,6 +145,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - a REST schema read from a location (the \c openapi3 and \c swagger options) is decoded by the encoding rules
+      of JSON and YAML: a byte order mark gives its character encoding, which is UTF-8 otherwise, and is not part of
+      the text; added @ref RestClient::RestClient::getSchemaText() "RestClient::getSchemaText()"
     - a client given a token uses it when options required to acquire a token with its OAuth2 grant type are
       missing, instead of raising \c OAUTH2-ERROR when it is created with a connection; the grant type is not used,
       and the token is not refreshed
@@ -2244,6 +2247,25 @@ hash<auto> ans = rest.del("/orders/1");
             return value[0].val() ? value[0].toString() : NOTHING;
         }
         return value.val() ? value.toString() : NOTHING;
+    }
+
+    #! Returns the text of a REST schema document read from a location
+    /** A schema document is JSON or YAML, whose character encoding is given by a byte order mark and is UTF-8
+        otherwise; a document read as binary data is decoded by those rules, and its byte order mark is not part of
+        the text
+
+        @param doc the document as read from its location
+
+        @return the text of the document
+
+        @since RestClient 2.7
+    */
+    static string getSchemaText(data doc) {
+        if (doc.typeCode() == NT_STRING) {
+            return doc;
+        }
+        data rv = decode_http_body("application/yaml", doc);
+        return rv.typeCode() == NT_STRING ? rv : rv.toString();
     }
 
     #! Returns the body of the output of a polling HTTP request as text
@@ -5833,7 +5855,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
             if (state == SPS_GET_OPENAPI3) {
                 # create OpenAPI 3 validator from file
-                rc.setValidator(OpenApi3Loader::fromString(poller.getOutput().toString()));
+                rc.setValidator(OpenApi3Loader::fromString(RestClient::getSchemaText(poller.getOutput())));
                 rc.debug("RestConnection ping: set OpenApi 3 schema for %y", rc.getValidator().getTargetUrl());
                 if (rc.requiresOAuth2Token()) {
                     doStartGetToken();
@@ -5847,7 +5869,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
             if (state == SPS_GET_SWAGGER) {
                 # create Swagger validator from file
-                rc.setValidator(SwaggerLoader::fromString(poller.getOutput().toString()));
+                rc.setValidator(SwaggerLoader::fromString(RestClient::getSchemaText(poller.getOutput())));
                 rc.debug("RestConnection ping: set Swagger schema for %y", rc.getValidator().getTargetUrl());
                 if (rc.requiresOAuth2Token()) {
                     doStartGetToken();

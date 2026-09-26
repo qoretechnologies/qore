@@ -238,8 +238,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     }
 
     #! Retrieves an I/O poller to retrieve a binary file from the given location
-    /** The poller's output is the response body before deserialization; error responses are returned like any
-        other response
+    /** The poller's output is the response body before deserialization: the octets received, after any content
+        encoding is decoded; error responses are returned like any other response
 
         @param scheme the scheme being used
         @param location the location string without the scheme

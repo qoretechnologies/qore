@@ -18513,7 +18513,8 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         // decoded on its own, as the encoding depends on the start of the body: it stays binary for the consumer,
         // which decodes the whole body
         QoreHttpBodyCharset charset;
-        if (!has_content_encoding && !stream->streaming) {
+        if (!has_content_encoding && !stream->streaming
+                && sock->priv->socket->priv->http_decode_body.load(std::memory_order_relaxed)) {
             // a response without a Content-Type is examined to tell text from binary data
             auto ct_it = stream->headers.find("content-type");
             const char* ct = ct_it != stream->headers.end() && !ct_it->second.empty()

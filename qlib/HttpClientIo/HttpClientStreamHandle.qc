@@ -122,6 +122,9 @@ public class HttpClientStreamHandle {
 
         #! The encoding assumed for text response bodies whose encoding is not determined otherwise
         string assumed_encoding = "ISO-8859-1";
+
+        #! If a whole text response body is decoded to a string; see @ref setDecodeText()
+        bool decode_text = True;
     }
 
     #! Creates a new stream handle
@@ -164,6 +167,28 @@ public class HttpClientStreamHandle {
     */
     setAssumedEncoding(string encoding) {
         assumed_encoding = encoding;
+    }
+
+    #! Sets whether a whole text response body is decoded to a string
+    /** By default the body of a response returned by @ref request() or by the \c Future of the \c submitAsync*()
+        methods is decoded by @ref normalizeResponseBody(): its content encoding is decompressed, and a text body is
+        then converted to a string in its character encoding, without any byte order mark.  If text is not decoded,
+        the body is returned as binary data after its content encoding is decompressed: the octets of the resource,
+        which @ref decodeResponseText() can convert as the default would.
+
+        @param decode @ref False to return response bodies as octets
+
+        @since HttpClientIo 1.0
+    */
+    setDecodeText(bool decode) {
+        decode_text = decode;
+    }
+
+    #! Returns @ref True if a whole text response body is decoded to a string; see @ref setDecodeText()
+    /** @since HttpClientIo 1.0
+    */
+    bool getDecodeText() {
+        return decode_text;
     }
 
     #! Releases any unreleased stream reservation
@@ -466,7 +491,7 @@ public class HttpClientStreamHandle {
                 state = HttpClientStreamState::Complete;
                 response = rv;
             }
-            return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding);
+            return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding, decode_text);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
@@ -869,7 +894,8 @@ public class HttpClientStreamHandle {
     #! Internal: returns the result of an async submission with a future that decodes the response
     private hash<auto> decodeResultFuture(hash<auto> result) {
         if (result.future) {
-            result.future = new DecodingResponseFuture(result.future, max_response_body_size, assumed_encoding);
+            result.future = new DecodingResponseFuture(result.future, max_response_body_size, assumed_encoding,
+                decode_text);
         }
         return result;
     }
@@ -881,19 +907,20 @@ public class HttpClientStreamHandle {
         coding, and an unknown coding leave the body as it is.  The decoded body is limited to \a max_size; the
         \c Content-Encoding header is left in the response.
 
-        Then a binary body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
-        "decode_http_body()"): a text body becomes a string in its character encoding and any other body stays
-        binary.  The H1 and H2 layers already decode a body that is not compressed by the same rules; the H3 (QUIC)
-        layer returns bodies as binary.
+        Then, unless \a decode_text is @ref False, the body is decoded by @ref decodeResponseText(): a text body
+        becomes a string in its character encoding and any other body stays binary.  The connections of this module
+        return bodies as received, so the rules are applied here, once.
 
         @param resp the response
         @param max_size the maximum size of the decoded body; <= 0 means no limit
         @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+        @param decode_text if @ref False, the body is returned as binary data after its content encoding is
+        decompressed: the octets of the resource
 
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds \a max_size
     */
     static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0,
-            string assumed_encoding = "ISO-8859-1") {
+            string assumed_encoding = "ISO-8859-1", bool decode_text = True) {
         if (resp.body) {
             *string coding = getContentCoding(resp.headers."content-encoding");
             if (coding) {
@@ -916,15 +943,38 @@ public class HttpClientStreamHandle {
                 }
             }
         }
-        auto ct = resp.headers."content-type";
-        # a header sent more than once arrives as a list; the last value is used
-        if (ct.typeCode() == NT_LIST) {
-            ct = ct.last();
-        }
+        *string ct = getResponseContentType(resp);
         # expose the bare MIME type so downstream consumers don't each re-strip parameters
-        resp.content_type = ct.typeCode() == NT_STRING ? mime_get_base_type(ct) : NOTHING;
+        resp.content_type = ct ? mime_get_base_type(ct) : NOTHING;
+        return decode_text ? decodeResponseText(resp, assumed_encoding) : resp;
+    }
+
+    #! Converts a binary text response body to a string in its character encoding
+    /** The body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
+        "decode_http_body()"): a text body becomes a string in its character encoding, without any byte order mark,
+        and any other body stays binary.  A character encoding sent as the content encoding of the body is its
+        charset, as with @ref Qore::HTTPClient "HTTPClient".
+
+        @param resp the response, whose body has no content encoding left to decompress; see
+        @ref normalizeResponseBody()
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+        @return the response with the body decoded
+
+        @par Example:
+        @code{.py}
+# keep the octets of the resource and decode the text as well
+stream.setDecodeText(False);
+hash<auto> resp = stream.request("GET", "/doc.xml");
+binary octets = resp.body;
+data text = HttpClientStreamHandle::decodeResponseText(resp).body;
+        @endcode
+
+        @since HttpClientIo 1.0
+    */
+    static hash<auto> decodeResponseText(hash<auto> resp, string assumed_encoding = "ISO-8859-1") {
         if (resp.body.typeCode() == NT_BINARY && resp.body) {
-            *string body_ct = ct.typeCode() == NT_STRING ? ct : NOTHING;
+            *string body_ct = getResponseContentType(resp);
             # a character encoding misused as a content encoding is the charset of the body, as with HTTPClient
             *string charset = getCharsetContentCoding(resp.headers."content-encoding");
             if (charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
@@ -933,6 +983,16 @@ public class HttpClientStreamHandle {
             resp.body = decode_http_body(body_ct, resp.body, assumed_encoding);
         }
         return resp;
+    }
+
+    #! Internal: returns the Content-Type of a response; a header sent more than once arrives as a list, and the
+    #! last value is used
+    private static *string getResponseContentType(hash<auto> resp) {
+        auto ct = resp.headers."content-type";
+        if (ct.typeCode() == NT_LIST) {
+            ct = ct.last();
+        }
+        return ct.typeCode() == NT_STRING ? ct : NOTHING;
     }
 
     #! Internal: returns a character encoding sent as the first coding of a Content-Encoding value, if any
@@ -1344,15 +1404,17 @@ class DecodingResponseFuture inherits Future<auto> {
         Future real_future;
         int max_size;
         string assumed_encoding;
+        bool decode_text;
         Mutex m();
         bool decoded;
         auto rv;
     }
 
-    constructor(Future real_future, int max_size, string assumed_encoding) {
+    constructor(Future real_future, int max_size, string assumed_encoding, bool decode_text = True) {
         self.real_future = real_future;
         self.max_size = max_size;
         self.assumed_encoding = assumed_encoding;
+        self.decode_text = decode_text;
     }
 
     #! Blocks until the response is available, then decodes and returns it
@@ -1363,7 +1425,7 @@ class DecodingResponseFuture inherits Future<auto> {
         AutoLock al(m);
         if (!decoded) {
             rv = resp.typeCode() == NT_HASH
-                ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size, assumed_encoding)
+                ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size, assumed_encoding, decode_text)
                 : resp;
             decoded = True;
         }

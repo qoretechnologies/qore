@@ -243,12 +243,15 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an HTTP call
     */
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
-        hash<auto> resp = request(scheme, location, opts, "GET");
+        # the data of a binary file are the octets received
+        hash<auto> resp = request(scheme, location, opts, "GET", NOTHING, False);
         return FileResourcePollOperation::getBinaryOutput(resp.body);
     }
 
     #! Retrieves an I/O poller to retrieve a binary file from the given location
-    /** The poller's output is the response body; error responses are returned like any other response
+    /** The poller's output is the response body: the octets received, after any content encoding is decoded; a
+        text body is not converted, so any byte order mark is kept.  Error responses are returned like any other
+        response
 
         @param scheme the scheme being used
         @param location the location string without the scheme
@@ -259,11 +262,14 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
         hash<HttpIoRequestInfo> info = getRequestInfo(scheme, location, opts, "GET");
+        info.decode_text = False;
         return new HttpIoBodyPollOperation(new HttpIoRequestPollOperation(getManager(info), info));
     }
 
     #! Retrieves a resource and its metadata from the given location
-    /** The data is the response body after any content decoding; the information includes the effective URL,
+    /** The data is the octets of the response body after any content encoding is decoded: a text body is not
+        converted, so any byte order mark is kept, and its content type in the information tells how to decode it;
+        the information includes the effective URL,
         the final response headers, and the redirects followed.  An HTTP error status raises the same
         \c HTTP-CLIENT-RECEIVE-ERROR exception as the other read methods, unless the \c error_passthru option (or
         the bound client's setting) is enabled.
@@ -279,7 +285,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         @since FileLocationHandler 3.0
     */
     private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
-        hash<auto> resp = request(scheme, location, opts, getReadMethod(opts));
+        hash<auto> resp = request(scheme, location, opts, getReadMethod(opts), NOTHING, False);
         return FileLocationHandlerHttp::getIoResourceResult(getResourceRequestedLocation(scheme, location), resp);
     }
 
@@ -298,6 +304,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
             string location, *hash<auto> opts) {
         hash<HttpIoRequestInfo> info = getRequestInfo(scheme, location, opts, getReadMethod(opts));
+        info.decode_text = False;
         *string requested_location = getResourceRequestedLocation(scheme, location);
         bool error_passthru = info.error_passthru;
         return new FileResourcePollOperation(new HttpIoRequestPollOperation(getManager(info), info),
@@ -610,9 +617,13 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     }
 
     #! Makes a request and returns the response; the response status is checked unless errors are passed through
+    /** @param decode_text if @ref False, the response body is the octets of the resource: binary data after its
+        content encoding is decoded, including any byte order mark of text
+    */
     private hash<auto> request(string scheme, string location, *hash<auto> opts, string default_method,
-            *data body) {
+            *data body, bool decode_text = True) {
         hash<HttpIoRequestInfo> info = getRequestInfo(scheme, location, opts, default_method, body);
+        info.decode_text = decode_text;
         object mgr = getManager(info);
         on_exit {
             if (!bound_mgr) {
@@ -702,6 +713,10 @@ hashdecl HttpIoRequestInfo {
     bool redirect_passthru = False;
     #! If content encodings are not decoded
     bool encoding_passthru = False;
+    #! If a text response body is decoded to a string; if @ref False, the body is the octets of the resource
+    /** @since FileLocationHandler 3.0
+    */
+    bool decode_text = True;
     #! The encoding assumed for text response bodies whose encoding is not determined otherwise
     string assume_encoding = "ISO-8859-1";
     #! The maximum number of redirects to follow
@@ -1515,7 +1530,7 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
             } else {
                 hash<auto> decoded = call_static_method("HttpClientIo::HttpClientStreamHandle",
                     "normalizeResponseBody", {"headers": response.headers ?? {}, "body": body}, 0,
-                    info.assume_encoding);
+                    info.assume_encoding, info.decode_text);
                 rv.body = decoded.body;
             }
         }

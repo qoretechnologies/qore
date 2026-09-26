@@ -782,6 +782,13 @@ public:
     */
     DLLLOCAL void setHttpAssumedEncoding(const QoreEncoding* enc);
 
+    //! Sets whether whole text HTTP/2 client response bodies are decoded to strings
+    /** Can be called from any thread; client sessions on this socket read the value when a response is complete.
+
+        @param decode if false, bodies are returned as received
+    */
+    DLLLOCAL void setHttpDecodeBody(bool decode);
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
 

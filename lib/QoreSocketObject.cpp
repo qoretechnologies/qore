@@ -6313,6 +6313,10 @@ void QoreSocketObject::setHttpAssumedEncoding(const QoreEncoding* enc) {
     priv->socket->priv->http_assumed_encoding.store(enc, std::memory_order_relaxed);
 }
 
+void QoreSocketObject::setHttpDecodeBody(bool decode) {
+    priv->socket->priv->http_decode_body.store(decode, std::memory_order_relaxed);
+}
+
 void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,

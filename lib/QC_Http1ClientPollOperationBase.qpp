@@ -2397,6 +2397,11 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
         return QoreValue();
     }
 
+    // the owner decodes the body itself, or needs its octets
+    if (!decode_body.load(std::memory_order_relaxed)) {
+        return response_body->refSelf();
+    }
+
     // Don't charset-convert compressed bodies - caller handles decompression first
     QoreValue ce_val = response_headers ? response_headers->getKeyValue("content-encoding") : QoreValue();
     if (ce_val.getType() == NT_STRING) {
@@ -3005,6 +3010,20 @@ nothing Http1ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flag
 */
 nothing Http1ClientPollOperationBase::setAssumedEncoding(string encoding) [flags=NAMED_ARGS] {
     priv->setAssumedEncoding(QEM.findCreate(encoding));
+}
+
+//! Sets whether a whole text response body is decoded to a string
+/** By default a response body that is text is decoded by the rules documented for
+    @ref Qore::get_http_body_encoding() "get_http_body_encoding()" to a string in its character encoding, without
+    any byte order mark.  If decoding is disabled, the body is returned as binary data as received, so an owner that
+    decodes bodies itself, or that needs the octets of a body, gets them unchanged; a streamed body is never decoded.
+
+    @param decode @ref False to return response bodies as received
+
+    @since %Qore 3.0
+*/
+nothing Http1ClientPollOperationBase::setDecodeBody(bool decode) [flags=NAMED_ARGS] {
+    priv->setDecodeBody(decode);
 }
 
 //! Sets the connect-phase timeout for this connection.

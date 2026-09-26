@@ -765,6 +765,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
+        @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
+        decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
+        a string; see @ref HttpClientStreamHandle::setDecodeText()
 
         @return a hash with "stream" (HttpClientStreamHandle, for cancellation) and
         "future" (Future, resolves to the response hash)
@@ -777,7 +780,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body) {
+            *hash<auto> headers, *data body, bool decode_text = True) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -806,6 +809,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
+                stream.setDecodeText(decode_text);
                 hash<auto> result = stream.submitAsync(method, path, headers, body);
                 # Wrap the Future so Set-Cookie extraction happens when
                 # the caller resolves it — no extra threads
@@ -869,6 +873,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
+        @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
+        decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
+        a string; see @ref HttpClientStreamHandle::setDecodeText()
 
         @return a @ref HttpCancellableFuture that resolves to the raw response hash and
         supports cancel()
@@ -880,7 +887,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body) {
+            *hash<auto> headers, *data body, bool decode_text = True) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -909,6 +916,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
+                stream.setDecodeText(decode_text);
                 hash<auto> result = stream.submitAsync(method, path, headers, body);
                 Future raw_future = result.future;
                 # Wrap with cookie extraction if needed
@@ -962,6 +970,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param headers request headers (optional)
         @param body request body (optional)
         @param timeout_ms request timeout (optional)
+        @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
+        decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
+        a string; see @ref HttpClientStreamHandle::setDecodeText()
 
         @return the response hash
 
@@ -990,7 +1001,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         scheme other than \c http or \c https, or names a UNIX domain socket and the request is not on one
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
-            *data body, *timeout timeout_ms) {
+            *data body, *timeout timeout_ms, bool decode_text = True) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -1023,7 +1034,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
             }
 
-            hash<auto> resp = requestIntern(url, method, path, req_headers, body, timeout_ms);
+            hash<auto> resp = requestIntern(url, method, path, req_headers, body, timeout_ms, decode_text);
             string request_url = cur_origin + (path =~ /^\// ? path : "/" + path);
 
             # Process Set-Cookie before checking redirect
@@ -1221,7 +1232,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Performs a single HTTP request with connection retry (no redirect following)
     private hash<auto> requestIntern(string url, string method, string path,
-            *hash<auto> headers, *data body, *timeout timeout_ms) {
+            *hash<auto> headers, *data body, *timeout timeout_ms, bool decode_text) {
         int retries = 0;
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
@@ -1293,6 +1304,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     method, path, stream.wasConnectionReused(), timeout_retried,
                     effective_timeout,
                     (budget_deadline - now_us()).durationMilliseconds());
+                stream.setDecodeText(decode_text);
                 hash<auto> resp = stream.request(method, path, headers, body,
                     effective_timeout);
                 checkAltSvc(url, resp);
@@ -3233,12 +3245,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 }
             }
 
-            # text response bodies are decoded by the rules shared by all HTTP clients; HTTP/3 bodies are decoded
-            # by the stream handle
+            # response bodies are returned as received, as HTTP/3 bodies are: the stream handle decodes text by the
+            # rules shared by all HTTP clients, unless the request needs the octets of the body (see
+            # HttpClientStreamHandle::setDecodeText())
             if (op instanceof Http1ClientPollOperation) {
-                cast<Http1ClientPollOperation>(op).setAssumedEncoding(opts.assume_encoding);
+                cast<Http1ClientPollOperation>(op).setDecodeBody(False);
             } else if (op instanceof Http2ClientPollOperation) {
-                cast<Http2ClientPollOperation>(op).setAssumedEncoding(opts.assume_encoding);
+                cast<Http2ClientPollOperation>(op).setDecodeBody(False);
             }
         }
 

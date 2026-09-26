@@ -1767,8 +1767,9 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         signRequest(method, path, prepared.serialized_body, \hdr, path_is_encoded);
 
         # Make HTTP request via multiplexed connection manager
+        # the body is received as octets for response_body_raw; buildResponse() decodes text
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
-            prepared.serialized_body);
+            prepared.serialized_body, NOTHING, False);
 
         if (assume_content_type.val() && !raw.headers."content-type".val()) {
             log(LoggerLevel::DEBUG, "missing content-type from response; assuming %y", assume_content_type);

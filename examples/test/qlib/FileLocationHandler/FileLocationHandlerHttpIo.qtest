@@ -62,6 +62,8 @@ class HttpIoTestHandler inherits AbstractHttpRequestHandler {
         Queue blocked();
         #! A large body, sent in chunks
         const LargeSize = 1024 * 1024 + 17;
+        #! An XML document in UTF-16LE with a byte order mark
+        const Utf16BomXml = <fffe> + binary("<r>é</r>".toString("UTF-16LE"));
     }
 
     private {
@@ -110,6 +112,19 @@ class HttpIoTestHandler inherits AbstractHttpRequestHandler {
                 return makeResponse({"Content-Type": "text/plain"}, 200, <efbbbfc3a4c3b6c3bc>);
             case "/latin2":
                 return makeResponse({"Content-Type": "text/plain;charset=iso-8859-2"}, 200, <b1>);
+            case "/utf16-bom-xml":
+                return makeResponse({"Content-Type": "application/xml"}, 200, Utf16BomXml);
+            # a charset parameter that does not match the byte order mark
+            case "/utf16-bom-latin1":
+                return makeResponse({"Content-Type": "application/xml; charset=ISO-8859-1"}, 200, Utf16BomXml);
+            case "/utf16-bom-text":
+                return makeResponse({"Content-Type": "text/plain"}, 200, Utf16BomXml);
+            case "/utf8-bom-gzip": {
+                hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "text/plain",
+                    "Content-Encoding": "gzip"}, 200, gzip(<efbbbfc3a4c3b6c3bc>));
+                rv.no_content_encoding = True;
+                return rv;
+            }
             case "/html-meta":
                 return makeResponse({"Content-Type": "text/html"}, 200,
                     binary("<meta charset=\"windows-1252\">") + <80>);
@@ -169,6 +184,7 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
 
     constructor() : Test("FileLocationHandler HttpClientIo test", "1.0") {
         addTestCase("text and binary reads", \readTest());
+        addTestCase("octets of text resources", \octetsTest());
         addTestCase("writes", \writeTest());
         addTestCase("write redirects", \writeRedirectTest());
         addTestCase("streaming reads", \streamReadTest());
@@ -226,6 +242,42 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         handler.clear();
         assertEq("DELETE /echo/del", FileLocationHandler::getTextFileFromLocation(url + "/echo/del{method=delete}"));
         assertEq("DELETE", handler.getRequests()[0].method);
+    }
+
+    # the binary and resource APIs return the octets received, whatever the content type: text is not decoded, so
+    # a byte order mark is kept; the text API decodes it
+    octetsTest() {
+        hash<string, binary> octets = {
+            "/utf16-bom-xml": HttpIoTestHandler::Utf16BomXml,
+            "/utf16-bom-latin1": HttpIoTestHandler::Utf16BomXml,
+            "/utf16-bom-text": HttpIoTestHandler::Utf16BomXml,
+            "/utf8-bom": <efbbbfc3a4c3b6c3bc>,
+            # a content encoding is decoded
+            "/utf8-bom-gzip": <efbbbfc3a4c3b6c3bc>,
+        };
+        foreach hash<auto> i in (octets.pairIterator()) {
+            string path = i.key;
+            binary expected = i.value;
+            assertEq(expected, FileLocationHandler::getBinaryFileFromLocation(url + path), path);
+            hash<FileResourceResult> r = FileLocationHandler::getResourceFromLocation(url + path);
+            assertEq(expected, r.data, path + " resource");
+            r = runPoller(FileLocationHandler::getResourcePollerForLocation(url + path));
+            assertEq(expected, r.data, path + " resource poller");
+            assertEq(expected, runPoller(FileLocationHandler::getIoPollerForLocation(url + path)), path + " poller");
+            # a REST location's resource data are the octets received as well
+            r = FileLocationHandler::getResourceFromLocation(rest_url + path);
+            assertEq(expected, r.data, path + " REST resource");
+            r = runPoller(FileLocationHandler::getResourcePollerForLocation(rest_url + path));
+            assertEq(expected, r.data, path + " REST resource poller");
+        }
+        # the content type in the resource information tells how to decode the octets
+        hash<FileResourceResult> r = FileLocationHandler::getResourceFromLocation(url + "/utf16-bom-latin1");
+        assertEq("application/xml; charset=ISO-8859-1", r.info.http.headers."content-type"[0]);
+        # the text API decodes by the byte order mark, which takes precedence over the charset parameter
+        string text = FileLocationHandler::getTextFileFromLocation(url + "/utf16-bom-latin1");
+        assertEq("UTF-16LE", text.encoding());
+        assertEq("<r>é</r>", convert_encoding(text, "UTF-8"));
+        assertEq("äöü", FileLocationHandler::getTextFileFromLocation(url + "/utf8-bom-gzip"));
     }
 
     writeTest() {
@@ -371,22 +423,23 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
     }
 
     pollTest() {
-        # the legacy poller returns the body, decoded unless encoding_passthru is set
+        # the legacy poller returns the octets of the body, with its content encoding decoded unless encoding_passthru
+        # is set
         binary large = HttpIoTestHandler::getLargeBody();
         auto output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/gzip"));
         assertEq(large, output);
         output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/gzip{encoding_passthru=true}"));
         assertEq(gzip(large), output);
         output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/to-text"));
-        assertEq("text body", output);
+        assertEq(binary("text body"), output);
         # a HEAD request
         hash<FileResourceResult> r = runPoller(FileLocationHandler::getResourcePollerForLocation(url
             + "/large{method=head}"));
         assertEq(binary(), r.data);
         assertEq(200, r.info.http.status_code);
-        # the REST poller
+        # the REST poller returns the octets of the body as well
         output = runPoller(FileLocationHandler::getIoPollerForLocation(rest_url + "/to-text"));
-        assertEq("text body", output);
+        assertEq(binary("text body"), output);
         # no I/O is performed before the poller is driven
         handler.clear();
         AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation(url + "/text");
