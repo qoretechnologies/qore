@@ -73,6 +73,12 @@ module ProviderIndexUtil {
       without the file; earlier versions of this module cannot read an index published without it
     - added @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()", which
       writes a published index, or one app of it, as YAML in the format of the canonical index file
+    - the routing index records the actions declaring an alternative to their app's scheme connection (routing
+      index version 4), returned by the new
+      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetConnectionAlternativeActions() "ProviderIndexUtil::tryGetConnectionAlternativeActions()"
+      without reading any app's metadata;
+      @ref ProviderIndexUtil::ProviderIndexUtil::hasConnectionAlternatives() "ProviderIndexUtil::hasConnectionAlternatives()"
+      reports whether an index published by an earlier version records them; such indexes are still read
     - each metadata cache file is named after the digest of its contents (routing index version 3, metadata cache
       version 5), so that publishing an index never changes a file that the previous index references, and the
       routing index, which is written last, publishes the new index atomically; the files that it no longer

@@ -39,6 +39,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         addTestCase("a canonical index file over the size limit is not read", \canonicalSizeLimitTest());
         addTestCase("an index published by an earlier version is read", \earlierVersionTest());
         addTestCase("a published index is written as YAML on demand", \dumpTest());
+        addTestCase("connection alternatives are read from the routing index", \connectionAlternativeTest());
 
         set_return_value(main());
     }
@@ -142,7 +143,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
 
         # the same index as the canonical index file
         *hash<SerializedDataProviderIndexInfo> info = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
-        assertEq(maps + {"actioninfomap": actions}, info.index);
+        assertEq(maps + {"altmap": {}, "actioninfomap": actions}, info.index);
         assertEq(parse_yaml(ReadOnlyFile::readTextFile(dir + "/qore-data-index.yaml")), info.index);
         assertEq(digest("sha256", ReadOnlyFile::readBinaryFile(dir + "/qore-routing-index.yaml")).toHex(),
             info.sha256);
@@ -157,7 +158,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
                 }
             });
         assertEq(info.sha256, per_app_info.sha256);
-        assertEq(maps - "appinfomap", per_app_info.index, "only the maps are returned");
+        assertEq((maps - "appinfomap") + {"altmap": {}}, per_app_info.index, "only the maps are returned");
         assertEq(info.index{"appinfomap", "actioninfomap"}, streamed);
 
         # an exception raised by the caller's code is passed on
@@ -380,6 +381,67 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         }, 0s, {}, canonical);
     }
 
+    connectionAlternativeTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # one action declares an alternative, one has other metadata, and one app declares none
+        hash<auto> actions = {
+            "QoreTestOrders": {
+                "create-order": {
+                    "app": "QoreTestOrders",
+                    "action": "create-order",
+                    "desc": "creates an order",
+                    "metadata": {
+                        "connection_alternative": {
+                            "option": "webhook",
+                            "provider_class": "QoreTestModule::WebhookDataProvider",
+                            "provider_module": "QoreTestModule",
+                            "required_group": "destination",
+                        },
+                    },
+                },
+                "cancel-order": {
+                    "app": "QoreTestOrders",
+                    "action": "cancel-order",
+                    "desc": "cancels an order",
+                    "metadata": {"alert_channel": "chat"},
+                },
+            },
+            "QoreTestInvoices": {
+                "send-invoice": {"app": "QoreTestInvoices", "action": "send-invoice", "desc": "sends an invoice"},
+            },
+        };
+        writeTestIndex(False, getTestMaps(), actions);
+
+        # the declarations are recorded in the routing index; the metadata cache is not needed to find them
+        hash<auto> routing = readRouting(dir);
+        assertEq(4, routing.version);
+        assertEq({"QoreTestOrders": {"create-order": True}}, routing.altmap);
+%ifndef NoMsgPack
+        map unlink($1), getChunks(dir);
+%endif
+        resetIndexState();
+        assertTrue(ProviderIndexUtil::hasConnectionAlternatives());
+        assertEq({"create-order": True}, ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestOrders"));
+        assertEq({}, ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestInvoices"),
+            "an app declaring none has none");
+        assertEq({}, ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestUnknown"),
+            "an app that is not indexed has none");
+
+        # an index read from its canonical index file finds the declarations in it
+        writeTestIndex(True, getTestMaps(), actions);
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        resetIndexState();
+        assertTrue(ProviderIndexUtil::hasConnectionAlternatives());
+        assertEq({"create-order": True}, ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestOrders"));
+        assertEq({}, ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestInvoices"));
+    }
+
     #! Returns the routing index in the given directory
     private static hash<auto> readRouting(string dir) {
         return parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
@@ -401,7 +463,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq(size, info.size, "the size is the total size of the published files");
 
         hash<auto> routing = readRouting(dir);
-        assertEq(3, routing.version);
+        assertEq(4, routing.version);
         assertFalse(routing.canonical_yaml);
         assertFalse(routing.hasKey("data_sha256"));
         assertFalse(routing.hasKey("data_size"));
@@ -415,7 +477,8 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
             sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestOrders")));
         assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
         assertNothing(ProviderIndexUtil::getIndexReadError());
-        assertEq(getTestMaps() + {"actioninfomap": getTestActions()},
+        # an index published by this version records the actions declaring connection alternatives: none here
+        assertEq(getTestMaps() + {"altmap": {}, "actioninfomap": getTestActions()},
             ProviderIndexUtil::readSerializedDataProviderIndex(dir).index);
         assertEq(ProviderIndexUtil::readSerializedDataProviderIndex(dir).sha256,
             ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).sha256);
@@ -445,11 +508,11 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         binary data = ReadOnlyFile::readBinaryFile(canonical);
         assertEq(data.size(), info.size);
         hash<auto> routing = readRouting(dir);
-        assertEq(3, routing.version);
+        assertEq(4, routing.version);
         assertTrue(routing.canonical_yaml);
         assertEq(digest("sha256", data).toHex(), routing.data_sha256);
         assertEq(data.size(), routing.data_size);
-        assertEq(getTestMaps() + {"actioninfomap": getTestActions()}, parse_yaml(data.toString()));
+        assertEq(getTestMaps() + {"actioninfomap": getTestActions(), "altmap": {}}, parse_yaml(data.toString()));
 
         # the file is written identically every time
         unlink(canonical);
@@ -708,6 +771,9 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
         assertNothing(ProviderIndexUtil::getIndexReadError());
         assertEq(parse_yaml(yaml), parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir)));
+        # a version 2 routing index does not record connection alternatives, which is not the same as having none
+        assertFalse(ProviderIndexUtil::hasConnectionAlternatives());
+        assertNothing(ProviderIndexUtil::tryGetConnectionAlternativeActions("QoreTestOrders"));
 
         # without its canonical index file, the index is read from its compact files
         unlink(dir + DirSep + "qore-data-index.yaml");
@@ -753,7 +819,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
 
         # an index without apps
         writeTestIndex(False, {"factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {}}, {});
-        assertEq({"factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {}},
+        assertEq({"factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {}, "altmap": {}},
             parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir)));
 
         string empty_dir = make_tmp_dir();

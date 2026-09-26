@@ -65,8 +65,9 @@ public const ProviderIndexMaxCanonicalSizeEnvVar = "QORE_PROVIDER_INDEX_MAX_CANO
 */
 public const DefaultMaxCanonicalIndexSize = 128 * 1024 * 1024;
 
-#! Version 3 records whether a canonical index file was published with the routing index
-const RoutingIndexVersion = 3;
+#! Version 3 records whether a canonical index file was published with the routing index; version 4 records the
+#! actions declaring an alternative to their app's scheme connection
+const RoutingIndexVersion = 4;
 #! Version 5 names each metadata cache file after the digest of its contents, so that publishing an index never
 #! changes a file that the previous index references
 const MetadataCacheVersion = 5;
@@ -94,6 +95,17 @@ public hashdecl DataProviderIndexInfo {
 
     #! Scheme to module-name map; readers also accept explicit paths from legacy indexes
     *hash<string, hash<string, bool>> schememap;
+
+    #! App to action map of the actions declaring an alternative to their app's scheme connection
+    /** Each action whose metadata has a \c connection_alternative key is recorded as @ref True; the declaration
+        itself is validated by its consumer.  @ref nothing if the index does not record the declarations, because
+        it was published by an earlier version of this module.
+
+        @see ProviderIndexUtil::tryGetConnectionAlternativeActions()
+
+        @since ProviderIndexUtil 1.2
+    */
+    *hash<string, hash<string, bool>> altmap;
 
     #! App to app info map
     *hash<string, hash<auto>> appinfomap;
@@ -137,7 +149,7 @@ public hashdecl ProviderIndexInfo {
 /** @since ProviderIndexUtil 1.2
 */
 public hashdecl SerializedDataProviderIndexInfo {
-    #! The \c factorymap, \c appmap, \c schememap, \c appinfomap, and \c actioninfomap members of the index
+    #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c appinfomap, and \c actioninfomap members of the index
     /** App and action metadata is in the serialized form stored in the index, as in the YAML written by
         @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"
     */
@@ -194,6 +206,8 @@ hashdecl DataProviderRoutingIndexInfo {
     *hash<string, string> factorymap;
     *hash<string, hash<string, bool>> appmap;
     *hash<string, hash<string, bool>> schememap;
+    # the actions declaring an alternative to their app's scheme connection (version 4)
+    *hash<string, hash<string, bool>> altmap;
 }
 
 #! Integrity metadata for one app-specific metadata cache chunk
@@ -497,6 +511,73 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         return index.actioninfomap{app} ? index.actioninfomap{app}.values() : NOTHING;
     }
 
+    #! Returns the actions of the given app that declare an alternative to its scheme connection
+    /** An action declares an alternative with a \c connection_alternative key in its metadata; the declaration
+        itself is not validated here.  The declarations are recorded in the routing index, so no app's metadata is
+        read and no provider module is loaded.
+
+        @param app the app name
+
+        @return a hash of the declaring actions' names, each with the value @ref True, which is empty if the app
+        declares none or is not indexed; @ref nothing if the index does not record the declarations, because it
+        was published by an earlier version of this module, in which case they can only be found by reading the
+        app's metadata; see @ref hasConnectionAlternatives()
+
+        @par Example:
+        @code{.py}
+*hash<string, bool> actions = ProviderIndexUtil::tryGetConnectionAlternativeActions("Discord");
+if (!exists actions) {
+    # the index predates the declarations: read the app's metadata instead
+}
+        @endcode
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<string, bool> tryGetConnectionAlternativeActions(string app) {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        if (!exists index.altmap) {
+            return NOTHING;
+        }
+        return index.altmap{app} ?? {};
+    }
+
+    #! Returns @ref True if the index records which actions declare an alternative to their app's scheme connection
+    /** @return @ref True if @ref tryGetConnectionAlternativeActions() answers from the index; @ref False if the
+        index was published by an earlier version of this module that does not record the declarations
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool hasConnectionAlternatives() {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        return exists index.altmap;
+    }
+
+    #! Returns @ref True if the given action declares an alternative to its app's scheme connection
+    /** @param action an action in serialized, indexed, or registered form
+    */
+    static private bool declaresConnectionAlternative(*hash<auto> action) {
+        return exists action.metadata.connection_alternative;
+    }
+
+    #! Returns the app to action map of the actions declaring an alternative to their app's scheme connection
+    /** @param actioninfomap the app to action map of all actions
+    */
+    static private hash<string, hash<string, bool>> getConnectionAlternativeMap(*hash<auto> actioninfomap) {
+        hash<string, hash<string, bool>> rv = {};
+        foreach hash<auto> app in (actioninfomap.pairIterator()) {
+            foreach hash<auto> action in (app.value.pairIterator()) {
+                if (declaresConnectionAlternative(action.value)) {
+                    rv{app.key}{action.key} = True;
+                }
+            }
+        }
+        return rv;
+    }
+
     #! Returns the given indexed action
     /** @param app the app name
         @param action the action name
@@ -632,6 +713,17 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         index.top_actioninfomap{action.app + "/" + action.action} = action;
         remove raw_actioninfomap{action.app}{action.action};
         action_metadata_initialized{action.app} = True;
+        # an index that does not record the declarations is not completed by one action
+        if (exists index.altmap) {
+            if (declaresConnectionAlternative(action)) {
+                index.altmap{action.app}{action.action} = True;
+            } else if (index.altmap{action.app}) {
+                remove index.altmap{action.app}{action.action};
+                if (!index.altmap{action.app}) {
+                    remove index.altmap{action.app};
+                }
+            }
+        }
     }
 
     #! Removes the given app and all its actions from the cache
@@ -645,6 +737,7 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         }
         map remove index.top_actioninfomap{app + "/" + $1}, keys (remove index.actioninfomap{app});
         remove raw_actioninfomap{app};
+        remove index.altmap{app};
         return True;
     }
 
@@ -1138,6 +1231,7 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
             "factorymap": {},
             "appmap": {},
             "schememap": {},
+            "altmap": {},
             "appinfomap": {},
             "actioninfomap": {},
             "top_actioninfomap": {},
@@ -1274,10 +1368,18 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 
         bool actions_written;
+        # the actions declaring an alternative to their app's scheme connection, recorded in the routing index so
+        # that a consumer can find them without reading the metadata of every app
+        hash<string, hash<string, bool>> altmap = {};
         foreach string app in (sort(keys app_set)) {
             *hash<auto> actions;
             if (action_app_set{app}) {
                 actions = sortIndexMap(get_app_actions(app), False);
+                foreach hash<auto> action in (actions.pairIterator()) {
+                    if (declaresConnectionAlternative(action.value)) {
+                        altmap{app}{action.key} = True;
+                    }
+                }
             }
             if (canonical && exists actions) {
                 writeCanonicalAppActions(write, app, actions, !actions_written);
@@ -1310,6 +1412,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             if (!actions_written && action_apps) {
                 write("actioninfomap: {}\n");
             }
+            # found while the actions were written, so it follows them
+            writeCanonicalMaps(write, {"altmap": altmap}, ("altmap",));
             # ensure that the data is on disk before the file is renamed over the target
             f.sync();
             f.close();
@@ -1337,6 +1441,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 
         # the routing index is written last: replacing it publishes the new index
+        maps.altmap = altmap;
         int routing_size;
         try {
             if (canonical) {
@@ -1442,6 +1547,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
 %else
         hash<DataProviderIndexInfo> app_index = createEmptyDataProviderIndex();
+        # the connection alternatives of all apps are recorded in the routing index
+        remove app_index.altmap;
         if (exists app_info) {
             app_index.appinfomap{app} = app_info;
         }
@@ -1740,6 +1847,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 actions_written = True;
             }
         }
+        # the complete index records its connection alternatives after its actions, like the canonical index
+        # file; a routing index published before version 4 does not record them
+        if (!exists app && compact.routing.version >= 4) {
+            writeCanonicalMaps(write, {"altmap": compact.routing.altmap}, ("altmap",));
+        }
         if (f) {
             f.close();
         }
@@ -1807,6 +1919,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     "appmap": compact.routing.appmap ?? {},
                     "schememap": compact.routing.schememap ?? {},
                 };
+                # a routing index published before version 4 does not record the declarations
+                if (compact.routing.version >= 4) {
+                    rv.index.altmap = compact.routing.altmap ?? {};
+                }
                 if (!per_app) {
                     rv.index += {
                         "appinfomap": appinfomap,
@@ -1946,7 +2062,12 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             raw_metadata_deferred = True;
             return rv;
         }
-        return readCanonicalDataProviderIndex();
+        rv = readCanonicalDataProviderIndex();
+        # the canonical index file holds every action, so the declarations are found in it
+        if (rv && !exists rv.altmap) {
+            rv.altmap = getConnectionAlternativeMap(rv.actioninfomap);
+        }
+        return rv;
     }
 
     #! Writes the compact routing sidecar for a data provider index
@@ -1961,6 +2082,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             *int data_size) {
         hash<auto> sidecar = getRoutingIndexPayload(h) + {
             "version": RoutingIndexVersion,
+            "altmap": h.altmap ?? {},
         };
         if (data_sha256) {
             sidecar.data_sha256 = data_sha256;
@@ -2006,6 +2128,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "factorymap": routing.factorymap ?? {},
             "appmap": routing.appmap ?? {},
             "schememap": routing.schememap ?? {},
+            # a routing index published before version 4 does not record the declarations
+            "altmap": routing.version >= 4 ? (routing.altmap ?? {}) : NOTHING,
             "appinfomap": {},
             "actioninfomap": {},
             "top_actioninfomap": {},
@@ -2123,6 +2247,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         }
         if (exists h.metadata_cache_sha256) {
             rv.metadata_cache_sha256 = h.metadata_cache_sha256;
+        }
+        if (exists h.altmap) {
+            rv.altmap = h.altmap;
         }
         return rv;
     }

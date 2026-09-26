@@ -244,6 +244,27 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
             "the cached app preserves its explicit presentation source locale");
         assertEq(action, ProviderIndexUtil::tryGetActionMetadata(app, action).action,
             "the registered action is visible in the cache");
+
+        # a cached action declaring an alternative to its app's scheme connection is found without its metadata
+        string alt_action = "recovery-alternative";
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "path": "/" + alt_action,
+            "action": alt_action,
+            "display_name": "Recovery Alternative",
+            "short_desc": "Recovery alternative",
+            "desc": "Recovery alternative",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "metadata": {"connection_alternative": {"option": "webhook"}},
+        });
+        DataProviderActionCatalog::cacheAllRegisteredApps();
+        assertEq({alt_action: True}, ProviderIndexUtil::tryGetConnectionAlternativeActions(app),
+            "a cached declaring action is recorded");
+
+        # removing the app removes its declarations
+        assertTrue(ProviderIndexUtil::removeCachedApp(app));
+        assertEq({}, ProviderIndexUtil::tryGetConnectionAlternativeActions(app));
     }
 }
 
