@@ -195,7 +195,9 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <chrono>
 #include <deque>
+#include <map>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -12292,6 +12294,65 @@ static QoreCondition& get_aot_shadow_init_cond() {
 */
 static constexpr int64 AOT_SHADOW_INIT_WAIT_TIMEOUT_MS = 120000;
 
+//! The thread running each module initialization claimed in a Program (qore_program_private::initializing_aot_modules)
+/** Guarded by get_aot_module_state_lock(); an entry exists exactly while the claim does.  A caller that needs the
+    initialization to be complete when it returns - the import of the module into the Program, or the load of the
+    module itself - waits for another thread's claim to be released; a claim held by the calling thread is its own
+    nested re-entry, which must not wait for itself.
+*/
+static std::map<std::pair<const qore_program_private*, std::string>, int> aot_module_init_owners;
+
+//! Signaled whenever a module initialization claim is released; used with get_aot_module_state_lock()
+static QoreCondition& get_aot_module_init_claim_cond() {
+    static QoreCondition cond;
+    return cond;
+}
+
+//! How long a caller that needs a module's initialization in a Program waits for another thread running it
+/** Bounded for the same reason as the shadow wait: the caller holds the target Program's parse lock.
+*/
+static constexpr int64 AOT_MODULE_INIT_OWNER_WAIT_TIMEOUT_MS = AOT_SHADOW_INIT_WAIT_TIMEOUT_MS;
+
+//! Claims a module's initialization in a Program for the calling thread; called with get_aot_module_state_lock() held
+static void aotClaimModuleInitIntern(qore_program_private* target_pp, const std::string& mod_name) {
+    target_pp->initializing_aot_modules.insert(mod_name);
+    aot_module_init_owners[std::make_pair(target_pp, mod_name)] = q_gettid();
+}
+
+//! Releases a module initialization claim and wakes its waiters; called with get_aot_module_state_lock() held
+static void aotReleaseModuleInitIntern(qore_program_private* target_pp, const std::string& mod_name) {
+    target_pp->initializing_aot_modules.erase(mod_name);
+    aot_module_init_owners.erase(std::make_pair(target_pp, mod_name));
+    get_aot_module_init_claim_cond().broadcast();
+}
+
+//! Returns the thread running a claimed module initialization in a Program, or 0; state lock held
+static int aotModuleInitOwnerIntern(const qore_program_private* target_pp, const std::string& mod_name) {
+    auto i = aot_module_init_owners.find(std::make_pair(target_pp, mod_name));
+    return i == aot_module_init_owners.end() ? 0 : i->second;
+}
+
+//! Test hook: the module whose initialization, once claimed by an import, waits for another thread's import
+/** Set with \c QORE_AOT_TEST_INIT_CLAIM_BARRIER; the regression test of module initialization ownership uses it to
+    make an importer of the module whose Program is being loaded into reach the point where it used to run the
+    Program's pending module initializations exactly while the loading thread holds a freshly published claim.
+*/
+static const char* aotTestInitClaimBarrierModule() {
+    static const char* mod = getenv("QORE_AOT_TEST_INIT_CLAIM_BARRIER");
+    return mod && *mod ? mod : nullptr;
+}
+
+//! Test hook state: how often imports passed the pending-initialization point of each module Program
+/** Guarded by get_aot_module_state_lock(); maintained only while the hook is enabled.
+*/
+static std::map<const qore_program_private*, uint64_t> aot_test_foreign_init_passes;
+
+//! Test hook: signaled when an import passes the pending-initialization point of a module Program
+static QoreCondition& get_aot_test_foreign_init_pass_cond() {
+    static QoreCondition cond;
+    return cond;
+}
+
 //! Extract dependency module names from source \%requires directives
 /** Parses the source to find all \%requires directives and extracts the module names.
     Skips "qore" since it's always available.
@@ -12399,7 +12460,14 @@ struct AOTModuleInitRunResult {
     bool hard_error = false;
     //! set when the attempt gave up waiting for another thread to populate the module's shared shadow Program
     bool shadow_wait_timeout = false;
+    //! set when the attempt gave up waiting for another thread running the module's initialization in the Program
+    bool owner_wait_timeout = false;
     std::string error;
+
+    //! true if the attempt gave up a bounded wait while the caller holds the target Program's parse lock
+    DLLLOCAL bool waitTimedOut() const {
+        return shadow_wait_timeout || owner_wait_timeout;
+    }
 };
 
 static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
@@ -12493,9 +12561,14 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
 /** @param allow_shadow_wait whether this call may wait for another thread to populate the module's shared shadow
     Program; the wait runs with the target Program's parse lock held, so a caller that has already waited once for
     this module passes false rather than holding that lock for a second timeout
+    @param publish_merged true when the caller has just merged the module into the Program and needs its
+    initialization to be complete on return: the module is recorded as merged and its initialization claimed in the
+    same critical section, so no other thread can see the module merged but unclaimed and run its initialization in
+    this caller's place, and an initialization another thread is already running is waited for instead of being
+    reported as done; false for the retry fixpoint, which skips a module whose initialization another call runs
 */
 static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_name,
-        QoreProgram* tpgm, ExceptionSink& xsink, bool allow_shadow_wait = true) {
+        QoreProgram* tpgm, ExceptionSink& xsink, bool allow_shadow_wait = true, bool publish_merged = false) {
     AOTModuleInitRunResult result;
     if (mod_name.empty() || !tpgm) {
         return result;
@@ -12545,6 +12618,11 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         }
     } shadow_finalizer{mod_name, write_shadow};
 
+    // test hook: the number of passes of imports through this Program's pending-initialization point when the
+    // claim below was taken; see aotTestInitClaimBarrierModule()
+    bool test_claim_barrier = false;
+    uint64_t test_passes_at_claim = 0;
+
     {
         AutoLocker aot_state_al(get_aot_module_state_lock());
         auto it = aot_module_map.find(mod_name);
@@ -12557,19 +12635,73 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                     ? it->second.metadata->size() : 0,
                 it != aot_module_map.end() ? it->second.num_funcs : 0);
         }
-        if (it == aot_module_map.end()
-                || !it->second.init_descriptors || it->second.init_descriptors->empty()
-                || (!it->second.init_reader && !it->second.metadata)
-                || target_pp->merged_aot_modules.find(mod_name)
-                    == target_pp->merged_aot_modules.end()
-                || target_pp->initialized_aot_modules.find(mod_name)
-                    != target_pp->initialized_aot_modules.end()
-                || target_pp->initializing_aot_modules.find(mod_name)
-                    != target_pp->initializing_aot_modules.end()) {
-            return result;
+        // Publishing the module as merged and claiming its initialization happen in this one critical section.
+        // Published on its own, the module was visible to the retry fixpoint of any other thread (every import of a
+        // module runs one on the module's Program) as merged and not yet claimed, so that thread ran the
+        // initialization and the caller's own attempt found it claimed and returned at once: load_module() returned
+        // while another thread was still initializing the module it loaded.
+        if (publish_merged && it != aot_module_map.end()) {
+            target_pp->merged_aot_modules.insert(mod_name);
+        }
+        // the deadline of the wait for another thread's claim below, set when the first wait starts
+        std::chrono::steady_clock::time_point owner_wait_deadline;
+        bool owner_waited = false;
+        while (true) {
+            if (it == aot_module_map.end()
+                    || !it->second.init_descriptors || it->second.init_descriptors->empty()
+                    || (!it->second.init_reader && !it->second.metadata)
+                    || target_pp->merged_aot_modules.find(mod_name)
+                        == target_pp->merged_aot_modules.end()
+                    || target_pp->initialized_aot_modules.find(mod_name)
+                        != target_pp->initialized_aot_modules.end()) {
+                return result;
+            }
+            if (target_pp->initializing_aot_modules.find(mod_name) == target_pp->initializing_aot_modules.end()) {
+                break;
+            }
+            // The initialization is claimed.  The retry fixpoint leaves it to the claimant, and so does a nested
+            // re-entry of the claimant itself, which must not wait for its own claim.  A caller that needs the
+            // initialization complete waits for another thread's claim to be released; the wait is bounded like
+            // the shadow wait, because this thread holds the target Program's parse lock.
+            int owner = aotModuleInitOwnerIntern(target_pp, mod_name);
+            if (!publish_merged || !owner || owner == q_gettid()) {
+                return result;
+            }
+            int64 remaining_ms = AOT_MODULE_INIT_OWNER_WAIT_TIMEOUT_MS;
+            if (!owner_waited) {
+                owner_waited = true;
+                owner_wait_deadline = std::chrono::steady_clock::now()
+                    + std::chrono::milliseconds(AOT_MODULE_INIT_OWNER_WAIT_TIMEOUT_MS);
+            } else {
+                remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    owner_wait_deadline - std::chrono::steady_clock::now()).count();
+            }
+            int wait_rc = remaining_ms > 0
+                ? get_aot_module_init_claim_cond().waitWithInterrupt(get_aot_module_state_lock(), remaining_ms,
+                    &xsink)
+                : QORE_COND_RESULT_TIMEOUT;
+            if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
+                result.attempted = true;
+                result.success = false;
+                return result;
+            }
+            if (wait_rc == QORE_COND_RESULT_TIMEOUT) {
+                result.attempted = true;
+                result.success = false;
+                result.owner_wait_timeout = true;
+                result.error = "timed out waiting for thread " + std::to_string(owner) + " to initialize module '"
+                    + mod_name + "' in the target Program; leaving this initialization to that thread";
+                return result;
+            }
+            // the module state may have changed while the lock was released
+            it = aot_module_map.find(mod_name);
         }
 
-        target_pp->initializing_aot_modules.insert(mod_name);
+        aotClaimModuleInitIntern(target_pp, mod_name);
+        if (publish_merged && aotTestInitClaimBarrierModule() && mod_name == aotTestInitClaimBarrierModule()) {
+            test_claim_barrier = true;
+            test_passes_at_claim = aot_test_foreign_init_passes[target_pp];
+        }
         init_funcs = it->second.funcs;
         init_num_funcs = it->second.num_funcs;
         init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
@@ -12612,7 +12744,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                 if (!allow_shadow_wait) {
                     // an earlier attempt in this call already gave up waiting for this population while holding
                     // this Program's parse lock; waiting again would hold it for a second full timeout
-                    target_pp->initializing_aot_modules.erase(mod_name);
+                    aotReleaseModuleInitIntern(target_pp, mod_name);
                     result.attempted = true;
                     result.success = false;
                     result.shadow_wait_timeout = true;
@@ -12623,13 +12755,13 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                 int wait_rc = get_aot_shadow_init_cond().waitWithInterrupt(
                     get_aot_module_state_lock(), AOT_SHADOW_INIT_WAIT_TIMEOUT_MS, &xsink);
                 if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
-                    target_pp->initializing_aot_modules.erase(mod_name);
+                    aotReleaseModuleInitIntern(target_pp, mod_name);
                     result.attempted = true;
                     result.success = false;
                     return result;
                 }
                 if (wait_rc == QORE_COND_RESULT_TIMEOUT) {
-                    target_pp->initializing_aot_modules.erase(mod_name);
+                    aotReleaseModuleInitIntern(target_pp, mod_name);
                     result.attempted = true;
                     result.success = false;
                     result.shadow_wait_timeout = true;
@@ -12668,7 +12800,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                 return;
             }
             AutoLocker al(get_aot_module_state_lock());
-            target_pp->initializing_aot_modules.erase(mod_name);
+            aotReleaseModuleInitIntern(target_pp, mod_name);
         }
     } init_marker_finalizer{target_pp, mod_name, init_marker_active};
 
@@ -12680,7 +12812,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
 
     auto finish = [&](bool success, bool hard_error = false, const std::string& error = std::string()) {
         AutoLocker aot_state_al(get_aot_module_state_lock());
-        target_pp->initializing_aot_modules.erase(mod_name);
+        aotReleaseModuleInitIntern(target_pp, mod_name);
         if (success) {
             target_pp->initialized_aot_modules.insert(mod_name);
         } else {
@@ -12715,7 +12847,45 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         return finish(false, true, "missing module program");
     }
     if (init_ctx_pgm != tpgm) {
-        retryPendingAOTModuleInitsForProgram(init_ctx_pgm, xsink);
+        // Complete the module Program's own pending initializations only when this thread owns that Program's
+        // parse lock.  Module code runs in the module's Program, so a load_module() call there merges other
+        // modules into it while the Program's parse lock is held by the loading thread, which runs and completes
+        // their initializations itself.  An import that ran them from here would execute another module's
+        // initialization in a Program it does not own, alongside the thread that does, and could take the place
+        // of that thread's own attempt.  A constant left pending in the module Program is still recovered on its
+        // first read (qore_aot_run_pending_constant_init()).
+        if (qore_program_private::get(*init_ctx_pgm)->parsingLocked()) {
+            retryPendingAOTModuleInitsForProgram(init_ctx_pgm, xsink);
+            if (xsink) {
+                return finish(false);
+            }
+        }
+        if (aotTestInitClaimBarrierModule()) {
+            // test hook: record that an import passed the point where it used to run the module Program's pending
+            // initializations; see aotTestInitClaimBarrierModule()
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            ++aot_test_foreign_init_passes[qore_program_private::get(*init_ctx_pgm)];
+            get_aot_test_foreign_init_pass_cond().broadcast();
+        }
+    }
+
+    if (test_claim_barrier) {
+        // test hook: hold the claim until an import of a module whose Program this is has passed that point
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(AOT_MODULE_INIT_OWNER_WAIT_TIMEOUT_MS);
+        bool passed = true;
+        while (aot_test_foreign_init_passes[target_pp] == test_passes_at_claim) {
+            int64 remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (remaining_ms <= 0 || get_aot_test_foreign_init_pass_cond().waitWithInterrupt(
+                    get_aot_module_state_lock(), remaining_ms, &xsink) != QORE_COND_RESULT_SUCCESS) {
+                passed = false;
+                break;
+            }
+        }
+        fprintf(stderr, "[aot-test] init claim barrier module=%s: %s\n", mod_name.c_str(),
+            passed ? "passed" : "not passed");
         if (xsink) {
             return finish(false);
         }
@@ -13951,17 +14121,9 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     // belong to the importing Program. Every merge then runs a short
     // cross-module fixpoint for constants that were waiting on another module.
     if (mod_name) {
-        qore_program_private* target_pp = qore_program_private::get(*tpgm);
-        {
-            AutoLocker aot_state_al(get_aot_module_state_lock());
-            auto it = aot_module_map.find(mod_name);
-            if (it != aot_module_map.end()) {
-                target_pp->merged_aot_modules.insert(mod_name);
-            }
-        }
-
+        // records the module as merged into tpgm and claims its initialization there in one step
         AOTModuleInitRunResult init_result =
-            runAOTModuleInitForProgram(mod_name, tpgm, xsink);
+            runAOTModuleInitForProgram(mod_name, tpgm, xsink, true, true);
         if (xsink) {
             if (!external_xsink) {
                 xsink.handleExceptions();
@@ -13973,9 +14135,9 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 + (mod_name ? mod_name : "(unknown)") + "': " + init_result.error);
             return;
         }
-        // a retry that follows an attempt that gave up waiting for another thread's shadow population must not
-        // wait for it again: this call still holds the target Program's parse lock
-        retryPendingAOTModuleInitsForProgram(tpgm, xsink, !init_result.shadow_wait_timeout);
+        // a retry that follows an attempt that gave up waiting for another thread must not wait again: this call
+        // still holds the target Program's parse lock
+        retryPendingAOTModuleInitsForProgram(tpgm, xsink, !init_result.waitTimedOut());
         if (xsink) {
             if (!external_xsink) {
                 xsink.handleExceptions();
@@ -14092,10 +14254,10 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
             return 0;
         }
         pgm = it->second.pgm;
-        qore_program_private::get(*pgm)->merged_aot_modules.insert(name);
     }
 
-    AOTModuleInitRunResult result = runAOTModuleInitForProgram(name, pgm, xsink);
+    // records the module as merged into its own Program and claims its initialization there in one step
+    AOTModuleInitRunResult result = runAOTModuleInitForProgram(name, pgm, xsink, true, true);
     if (xsink) {
         return -1;
     }
@@ -14105,7 +14267,7 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
         return -1;
     }
     // see the same call in qore_aot_module_ns_init_impl()
-    retryPendingAOTModuleInitsForProgram(pgm, xsink, !result.shadow_wait_timeout);
+    retryPendingAOTModuleInitsForProgram(pgm, xsink, !result.waitTimedOut());
     return xsink ? -1 : 0;
 }
 

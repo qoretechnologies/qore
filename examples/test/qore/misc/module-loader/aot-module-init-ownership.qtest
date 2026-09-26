@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class AotModuleInitOwnershipTest
+
+#! A module loaded by module code is initialized by the loading thread before load_module() returns
+/** Code in an AOT module runs in the module's own Program, so a \c load_module() call there merges another module
+    into the Program that every import of the module reads, and each of those imports ran the pending module
+    initializations of that Program.  The loading thread recorded the loaded module as merged and only then, after
+    releasing the AOT module state lock, claimed its initialization; an import in between found the module merged but
+    unclaimed and ran its initialization, and the loading thread's own attempt then found it claimed and returned at
+    once.  \c load_module() returned while another thread was still initializing the module it loaded, and that
+    thread ran another module's initializers in a Program it did not own.
+
+    The test compiles two modules with qcc: \c InitRaceHost, whose code loads \c InitRaceDep, and \c InitRaceDep,
+    whose constant records the thread that ran its initializer.  A child process imports \c InitRaceHost into new
+    Programs in several threads while its main thread calls the loading method.  The
+    \c QORE_AOT_TEST_INIT_CLAIM_BARRIER hook holds the loading thread's claim on \c InitRaceDep's initialization until
+    an import has passed the point where imports ran the pending initializations, so the interleaving that let an
+    import take over the initialization happens in every run; the child reports whether it did.
+*/
+class AotModuleInitOwnershipTest inherits QUnit::Test {
+    public {
+        #! the number of threads importing the host module into new Programs
+        const ImportThreads = 4;
+
+        #! the number of times the race is run, each in a new process
+        const Rounds = 3;
+
+        #! the line the test hook prints when an import passed while the loading thread held its claim
+        const BarrierPassed = "[aot-test] init claim barrier module=InitRaceDep: passed";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOT module initialization ownership test", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("the loading thread initializes the module it loads", \loaderInitializesTest());
+        set_return_value(main());
+    }
+
+    loaderInitializesTest() {
+        TmpDir tmp("qore-aot-module-init-ownership-");
+        writeFixtures(tmp.path);
+        foreach string mod_name in (("InitRaceDep", "InitRaceHost")) {
+            string src = tmp.path + DirSep + mod_name + ".qm";
+            string qmod = tmp.path + DirSep + mod_name + ".qmod";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module "
+                "--strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, tmp.path, qcc_bin, qmod, src));
+            if (!is_file(qmod)) {
+                testSkip(sprintf("qcc could not compile %s: %s", mod_name, out));
+            }
+            # the child must load the compiled module, not its source
+            unlink(src);
+        }
+
+        for (int round = 1; round <= Rounds; ++round) {
+            string out = backquote(sprintf("QORE_AOT_TEST_INIT_CLAIM_BARRIER=InitRaceDep LD_LIBRARY_PATH=%s "
+                "QORE_MODULE_DIR=%s %s %s %d 2>&1; echo \"rc=$?\"", libqore_dir, tmp.path, qore_bin,
+                tmp.path + DirSep + "race.q", ImportThreads));
+            *list<*string> rc = (out =~ x/rc=([0-9]+)\s*$/);
+            assertEq("0", rc[0], sprintf("round %d: the child exits normally: %s", round, out));
+            # the interleaving is only forced when the hook saw an import pass during the claim
+            assertTrue(out.find(BarrierPassed) >= 0, sprintf("round %d: an import passed while the loading thread "
+                "held its claim: %s", round, out));
+            *list<*string> tids = (out =~ x/loader=([0-9]+) init=([0-9]+) imports=([0-9]+)/);
+            assertEq(3, tids.size(), sprintf("round %d: the child completes: %s", round, out));
+            assertTrue(tids[2].toInt() > 0, sprintf("round %d: modules were imported meanwhile: %s", round, out));
+            assertEq(tids[0], tids[1], sprintf("round %d: the thread that loaded InitRaceDep initialized it: %s",
+                round, out));
+        }
+    }
+
+    private writeFixtures(string dir) {
+        # the constant is initialized at runtime, by the thread that runs the module's initialization
+        write(dir, "InitRaceDep.qm", "%modern\n"
+            "module InitRaceDep { version = \"1.0\"; desc = \"dep\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace InitRaceDep {\n"
+            "    const InitTid = gettid();\n"
+            "    public int sub getInitTid() { return InitTid; }\n"
+            "}\n");
+        # the host has a runtime-initialized constant too, so every import of it runs its initialization
+        write(dir, "InitRaceHost.qm", "%modern\n"
+            "module InitRaceHost { version = \"1.0\"; desc = \"host\"; author = \"Qore\"; "
+                "url = \"https://qore.org\"; }\n"
+            "public namespace InitRaceHost {\n"
+            "    const HostTid = gettid();\n"
+            "    public int sub getHostTid() { return HostTid; }\n"
+            "    # a static method runs in this module's Program, as ProviderIndexUtil::tryLoadModule() does\n"
+            "    public class Loader {\n"
+            "        public static int load() {\n"
+            "            load_module(\"InitRaceDep\");\n"
+            "            return call_function(\"InitRaceDep::getInitTid\");\n"
+            "        }\n"
+            "    }\n"
+            "}\n");
+        write(dir, "race.q", "%modern\n"
+            "%requires InitRaceHost\n"
+            "int threads = ARGV[0].toInt();\n"
+            "Queue first_import();\n"
+            "Counter running();\n"
+            "bool done = False;\n"
+            "int imports = 0;\n"
+            "for (int t = 0; t < threads; ++t) {\n"
+            "    running.inc();\n"
+            "    background sub () {\n"
+            "        on_exit running.dec();\n"
+            "        bool first = True;\n"
+            "        while (!done) {\n"
+            "            Program p(PO_NEW_STYLE);\n"
+            "            p.loadModule(\"InitRaceHost\");\n"
+            "            ++imports;\n"
+            "            if (first) {\n"
+            "                first = False;\n"
+            "                first_import.push(True);\n"
+            "            }\n"
+            "        }\n"
+            "    }();\n"
+            "}\n"
+            "# the imports are running before the host module loads its dependency\n"
+            "first_import.get();\n"
+            "int init_tid;\n"
+            "{\n"
+            "    on_exit {\n"
+            "        done = True;\n"
+            "        running.waitForZero();\n"
+            "    }\n"
+            "    init_tid = InitRaceHost::Loader::load();\n"
+            "}\n"
+            "printf(\"loader=%d init=%d imports=%d\\n\", gettid(), init_tid, imports);\n");
+    }
+
+    private write(string dir, string name, string text) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(text);
+        f.close();
+    }
+}
