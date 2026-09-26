@@ -17,6 +17,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires HttpClientIo
+%requires Mime
 
 %exec-class HttpServerAfterSendTest
 
