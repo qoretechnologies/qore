@@ -447,6 +447,10 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     exits, however it exits, so a waiter starts as soon as the holder finishes and a killed builder
     blocks nothing.
 
+    In the generated CMake rules, every rule that consumes an object's stamp directly is ordered after
+    the group coordinator, so concurrent object compilation cannot change the dependency graph while
+    the coordinator plans a rebuild or adopts an existing object tree.
+
     @subsection aot_inspection Inspecting AOT Artifacts
 
     Use \c qcc \c --dump-info to inspect AOT metadata in executables, \c .qmod

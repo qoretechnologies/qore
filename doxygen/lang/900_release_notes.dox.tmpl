@@ -120,6 +120,8 @@
     - new @ref Qore::ParseOptions "ParseOptions" container supporting more than 64 option bits
 
     <i>Networking and I/O:</i>
+    - the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController") is now %Qore's
+      primary I/O implementation; synchronous I/O is generally implemented as calls through the controller
     - <b><a href="https://datatracker.ietf.org/doc/html/rfc9113">HTTP/2</a> and
       <a href="https://datatracker.ietf.org/doc/html/rfc9114">HTTP/3</a> support</b> with end-to-end
       asynchronous I/O across HTTP/1.x, HTTP/2, and HTTP/3
@@ -504,20 +506,6 @@ val = "string";      # OK
     files for build instructions.
     @endparblock
 
-    @par Implicit Copy Calls in Compiled Code
-    @parblock
-    Implicit \c copy() calls retain their copy-constructor identity during parsing. @ref exec_mode_ir "IR" and native
-    execution now preserve object state and copy-hook exceptions instead of dispatching a copy
-    constructor as an ordinary method, which could raise a spurious error or crash.
-    @endparblock
-
-    @par Parallel AOT Object Build Ordering
-    @parblock
-    CMake object rules now order direct object-stamp consumers after the group coordinator.
-    This prevents concurrent object compilation from changing the dependency graph while the
-    coordinator plans a rebuild or adopts an existing object tree.
-    @endparblock
-
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
 \if QORE_LANG_FINAL
@@ -655,60 +643,18 @@ val = "string";      # OK
     @parblock
     %Qore now uses one shared IR pipeline for the @ref exec_mode_ir "IR interpreter", the
     <a href="https://llvm.org/">LLVM</a> @ref exec_mode_jit "JIT", @ref exec_mode_tiered "tiered"
-    execution, and @ref exec_mode_aot "AOT" compilation.  @ref modern "%modern" code defaults to
-    @ref exec_mode_tiered "tiered", which validates IR lowerability at parse commit, starts quickly with
-    cached IR, and promotes hot function variants to JIT; legacy non-modern code defaults to AST
-    execution for compatibility.
+    execution (the default for @ref modern "%modern" code), and @ref exec_mode_aot "AOT" compilation;
+    legacy non-modern code defaults to @ref exec_mode_ast "AST" execution.  Modes can be selected
+    programmatically with @ref Qore::ExecMode "ExecMode" and
+    @ref Qore::Program::setExecMode() "Program::setExecMode()".
 
-    The new @ref qcc_tool "qcc" compiler provides the AOT workflow: script executables, binary user
-    modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>),
-    dependency files, and artifact inspection.  Standard user modules are built and installed as
-    AOT-compiled <tt>.qmod</tt> artifacts by default (disable with \c -DQORE_BUILD_AOT_MODULES=OFF);
-    module lookup prefers compiled artifacts over the corresponding source modules, which remain
-    installed for documentation and development.  \c qcc can parallelize LLVM backend codegen and acts
-    as a GNU make jobserver client so parallel builds share one job budget; see
-    @ref qcc_parallel_codegen "Parallel Backend Codegen and the GNU make Jobserver".
+    The new @ref qcc_tool "qcc" compiler builds executables, binary user modules (<tt>.qmod</tt>),
+    relocatable objects (<tt>.qo</tt>), and archives (<tt>.qoa</tt>) with
+    @ref qcc_parallel_codegen "parallel codegen" and @ref aot_builds "incremental object builds";
+    standard user modules are installed as @ref aot_modules "AOT-compiled modules" by default.
 
-    Execution modes can also be selected programmatically with the new @ref Qore::ExecMode "ExecMode"
-    enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
-    @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
-
-    JIT native code generation defaults to optimization level 3, matching the @ref qcc_tool "qcc" AOT
-    compiler, so a function generates the same code whether it is compiled by the JIT or ahead of time;
-    the @ref jit_optimization_level "JIT optimization level" is configurable per %Program and
-    process-wide.
-
-    Setting \c QORE_VERIFY_MODULE_SIGNATURES makes a damaged binary module a reported
-    \c LOAD-MODULE-ERROR rather than a fatal one; it is off by default because the check hashes the
-    whole module file.  On macOS/Apple Silicon the kernel terminates a process that maps a page whose
-    code signature no longer validates, so without it a damaged <tt>.qmod</tt> kills the loading
-    process with no diagnostic at all.
-
-    Object builds are incremental and no longer poll for locks.  Compiling a source against preloaded
-    <tt>.qo</tt> declaration shells now publishes the same declarations as a whole-group parse, and a
-    rebuild covers only what actually consumes a changed declaration: measured on an 875-source
-    application, appending one comment to a source with a 13-component consumer closure went from 23
-    compiler invocations and 5m05 to one invocation and 1m46, with the following build a no-op.  See
-    @ref aot_builds "Incremental and Parallel Object Builds".
-
-    Type and value fidelity across the execution modes:
-    - generic hash-field maps retain their actual result element type in @ref exec_mode_ir "IR",
-      @ref exec_mode_jit "JIT" and @ref exec_mode_aot "AOT" execution, and common type inference retains
-      optional types in either operand order and across repeated @ref nothing "NOTHING" values
-    - @ref exec_mode_jit "JIT" execution preserves each recursive call's own reference-backed and
-      closure-captured local variables, including tree traversals, exception cleanup, and escaped references;
-      lexical instantiation metadata also keeps captured top-level loop counters advancing correctly
-    - binding a @ref lvalue_references "reference" argument applies the reference's type restriction to the
-      variable, and when that leaves the value untouched no recursive-reference scan is made, since the set
-      of reachable objects cannot have changed
-    - character indexing and C++ substring extraction from @ref string_views "string views" read the parent
-      buffer
-    - \c QORE_PCRE2_NO_JIT=1 disables regex JIT for memory-checking runs using the installed PCRE2 library;
-      normal execution keeps JIT enabled (see @ref environment_variables "environment variables")
-
-    LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
-    complete mode semantics, @ref qcc_tool "qcc" options, artifact types, source-stripping behavior, and
-    debugging notes.
+    LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for details,
+    and @ref environment_variables "environment variables" for related runtime settings.
     @endparblock
 
     @par New Required Libraries and Async Networking Stack
@@ -1291,7 +1237,7 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       \c *string single-index behavior
     - @ref <string>::iterator() "<string>::iterator()" and
       @ref Qore::StringIterator "StringIterator" now provide lazy char iteration over strings;
-      <tt>iterate string</tt> uses this iterator and yields @ref char values
+      @ref streaming_iterate_operator "iterate" over a string uses this iterator and yields @ref char values
     - Added @ref negative-offsets "%negative-offsets" for Python-style from-end list, string,
       binary, and buffer indexes and slice endpoints; this option is implied by @ref modern "%modern",
       and @ref no-negative-offsets "%no-negative-offsets" restores legacy negative-index behavior

@@ -900,5 +900,9 @@ sub test() {
     To explicitly generate a copy of an object, the \c copy() constructor must be called. This is a special method that exists implicitly for every class even if it is not explicitly defined (like \c constructor() and \c destructor() methods). The implicit behavior of the \c copy() constructor is to create a new object with new members that are copies of the original members (except objects are created as copies of references to the object). Then, if any \c copy() method exists, it will be executed in the new object, passing a copy of a reference to the old object as the first argument to the \c copy() method.
 
     @note In a class hierarchy copy() methods are called in the same order as constructor() methods.\n\n
-    Not all built-in classes can be copied. Classes not supporting copying will throw an exception when the \c copy() methods are called. See the documentation for each class for more information.
+    An implicit \c copy() call is always dispatched as the copy constructor described above, never as an
+    ordinary method call, in every @ref execution_modes "execution mode"; object state and exceptions raised by
+    \c copy() methods are therefore identical in @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT", and
+    @ref exec_mode_aot "AOT" execution.\n\n
+        Not all built-in classes can be copied. Classes not supporting copying will throw an exception when the \c copy() methods are called. See the documentation for each class for more information.
 */
