@@ -1778,12 +1778,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # hold a (bound, non-listening) TCP socket: macOS drops the SYN instead
         # of sending RST, which turns the fast-fail into a ~8s SYN-retransmit
         # timeout.
-        Socket tmp();
-        tmp.bind("127.0.0.1:0");
-        int bad_port = tmp.getSocketInfo().port;
-        delete tmp;
-        Socket udp_hold();
-        udp_hold.bindINET("127.0.0.1", string(bad_port), False, AF_INET, SOCK_DGRAM);
+        # another process may already use the same port number for UDP, in which case another port is chosen
+        const int MaxPortAttempts = 20;
+        int bad_port;
+        Socket udp_hold;
+        for (int attempt = 1; ; ++attempt) {
+            Socket tmp();
+            tmp.bind("127.0.0.1:0");
+            bad_port = tmp.getSocketInfo().port;
+            delete tmp;
+            udp_hold = new Socket();
+            try {
+                udp_hold.bindINET("127.0.0.1", string(bad_port), False, AF_INET, SOCK_DGRAM);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
         on_exit delete udp_hold;
         string refused = "https://127.0.0.1:" + bad_port;
 
@@ -3627,15 +3640,42 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         the request stalled for the whole budget.
     */
     testHappyEyeballsBlackhole() {
-        # IPv6 loopback listener with a backlog of 0 whose accept queue we fill
-        Socket v6();
-        try {
-            v6.bind("[::1]:0", True);
-            v6.listen(0);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip("no IPv6 loopback on this host: " + ex.desc);
+        # working HTTP listener on the IPv4 address of the port that the IPv6 blackhole uses
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete server;
+        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+
+        # IPv6 loopback listener with a backlog of 0 whose accept queue we fill; the port is chosen by the IPv6
+        # bind, and another process may already use the same port number on the IPv4 address, in which case
+        # another port is chosen
+        const int MaxPortAttempts = 20;
+        Socket v6;
+        int port;
+        for (int attempt = 1; ; ++attempt) {
+            v6 = new Socket();
+            try {
+                v6.bind("[::1]:0", True);
+                v6.listen(0);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip("no IPv6 loopback on this host: " + ex.desc);
+            }
+            port = v6.getSocketInfo().port;
+            try {
+                server.addListener(<HttpListenerOptionInfo>{
+                    "node": "127.0.0.1",
+                    "service": port,
+                });
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
         }
-        int port = v6.getSocketInfo().port;
+        server.waitForAsyncIo();
 
         Socket filler();
         try {
@@ -3660,19 +3700,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         if (addrs.size() < 2 || addrs[0].family != AF_INET6) {
             testSkip("localhost is not dual-stack on this host");
         }
-
-        # working HTTP listener on the IPv4 address of the same port
-        HttpServer server(<HttpServerOptionInfo>{
-            "logger": mLogger,
-            "debug": True,
-        });
-        on_exit delete server;
-        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
-        server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": port,
-        });
-        server.waitForAsyncIo();
 
         HttpClientIo::HttpClientConnectionManager mgr(
                 <HttpClientIo::HttpClientConnectionManagerOptions>{
