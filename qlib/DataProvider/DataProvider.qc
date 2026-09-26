@@ -1558,6 +1558,118 @@ if (errors) {
         return info;
     }
 
+    #! Returns data provider info with its types described by plain data
+    /** The types of options, expressions, events, and messages are replaced by their descriptions, as in actions
+        from the data provider index, so the info can be serialized and restored with @ref restoreIndexedInfo()
+        in a process that has not loaded the modules that define the types
+
+        @param info the data provider info with type objects
+
+        @return the info with type descriptions
+
+        @par Example:
+        @code{.py}
+hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(provider.getInfo());
+string json = make_json(indexed);
+        @endcode
+
+        @since %DataProvider 3.8
+    */
+    static hash<IndexedDataProviderInfo> getIndexedInfo(hash<DataProviderInfo> info) {
+        hash<auto> rv = getBaseInfo(info);
+        foreach string key in (DataProviderInfoOptionMembers) {
+            rv{key} = exists info{key} ? (map {
+                $1.key: cast<hash<IndexedDataProviderOptionInfo>>(getMembersExcept($1.value, "type") + {
+                    "type_info": (map $1.getInfo(), $1.value.type),
+                }),
+            }, info{key}.pairIterator()) : NOTHING;
+        }
+        rv.expressions = exists info.expressions ? (map {
+            $1.key: cast<hash<IndexedDataProviderExpressionInfo>>(
+                getMembersExcept($1.value, ("args", "return_type")) + {
+                "args": (map <IndexedDataProviderSignatureTypeInfo>{
+                    "type_info": $1.type.getInfo(),
+                    "type_code": $1.type_code,
+                }, $1.value.args),
+                "return_type_info": $1.value.return_type.getInfo(),
+            }),
+        }, info.expressions.pairIterator()) : NOTHING;
+        foreach string key in ("events", "messages") {
+            rv{key} = exists info{key} ? (map {
+                $1.key: <IndexedDataProviderMessageInfo>{
+                    "desc": $1.value.desc,
+                    "type_info": $1.value.type.getInfo(),
+                },
+            }, info{key}.pairIterator()) : NOTHING;
+        }
+        return cast<hash<IndexedDataProviderInfo>>(rv);
+    }
+
+    #! Returns data provider info with type objects from info with its types described by plain data
+    /** Each type is created from its description with
+        @ref AbstractDataProviderType::get(hash<DataTypeInfo>) "AbstractDataProviderType::get()"; it has the
+        described structure and constraints but not any custom behavior of the original type's class.  No provider
+        module is loaded.
+
+        @param info the data provider info with type descriptions, as in an action from the data provider index
+
+        @return the info with type objects
+
+        @par Example:
+        @code{.py}
+*hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("OpenSearch", "search-index");
+if (action.data_provider_info) {
+    hash<DataProviderInfo> info = DataProvider::restoreIndexedInfo(action.data_provider_info);
+}
+        @endcode
+
+        @throw TYPE-ARG-ERROR a type description has only a type path, and the path is not registered in this
+        process
+        @throw TYPE-ERROR a type description names a base type that cannot be restored
+
+        @since %DataProvider 3.8
+    */
+    static hash<DataProviderInfo> restoreIndexedInfo(hash<IndexedDataProviderInfo> info) {
+        hash<auto> rv = getBaseInfo(info);
+        foreach string key in (DataProviderInfoOptionMembers) {
+            rv{key} = exists info{key} ? (map {
+                $1.key: cast<hash<DataProviderOptionInfo>>(getMembersExcept($1.value, "type_info") + {
+                    "type": (map AbstractDataProviderType::get($1), $1.value.type_info),
+                }),
+            }, info{key}.pairIterator()) : NOTHING;
+        }
+        rv.expressions = exists info.expressions ? (map {
+            $1.key: cast<hash<DataProviderExpressionInfo>>(
+                getMembersExcept($1.value, ("args", "return_type_info")) + {
+                "args": (map <DataProviderSignatureTypeInfo>{
+                    "type": AbstractDataProviderType::get($1.type_info),
+                    "type_code": $1.type_code,
+                }, $1.value.args),
+                "return_type": AbstractDataProviderType::get($1.value.return_type_info),
+            }),
+        }, info.expressions.pairIterator()) : NOTHING;
+        foreach string key in ("events", "messages") {
+            rv{key} = exists info{key} ? (map {
+                $1.key: <DataProviderMessageInfo>{
+                    "desc": $1.value.desc,
+                    "type": AbstractDataProviderType::get($1.value.type_info),
+                },
+            }, info{key}.pairIterator()) : NOTHING;
+        }
+        return cast<hash<DataProviderInfo>>(rv);
+    }
+
+    #! Returns the members of data provider info that do not hold types
+    private static hash<auto> getBaseInfo(hash<DataProviderBaseInfo> info) {
+        return getMembersExcept(info, DataProviderInfoOptionMembers + ("expressions", "events", "messages"));
+    }
+
+    #! Returns a typed hash's members, except the given ones, as an untyped hash
+    private static hash<auto> getMembersExcept(hash<auto> h, softlist<string> except) {
+        hash<string, bool> skip = map {$1: True}, except;
+        return map {$1.key: $1.value}, h.pairIterator(), !skip{$1.key};
+    }
+
     #! Sets the flag that allows for automatic configuration from environment variables
     /** Must be called before any requests for types or factories are made, or an exception is raised
 

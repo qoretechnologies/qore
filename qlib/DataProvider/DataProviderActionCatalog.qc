@@ -565,9 +565,6 @@ public hashdecl DataProviderActionBaseInfo {
     #! Does the action support dynamic options?
     bool has_dynamic_options;
 
-    #! Data provider static info, useful for record-based data providers
-    *hash<DataProviderInfo> data_provider_info;
-
     #! Describes acceptable input data types for the action
     hash<string, bool> input_data_types;
 
@@ -604,6 +601,9 @@ public hashdecl DataProviderActionInfo inherits DataProviderActionBaseInfo {
     #! Options that can be provided without a data provider
     *hash<string, hash<ActionOptionInfo>> options;
 
+    #! Data provider static info, useful for record-based data providers
+    *hash<DataProviderInfo> data_provider_info;
+
     #! Output type for the action
     *AbstractDataProviderType output_type;
 
@@ -615,8 +615,9 @@ public hashdecl DataProviderActionInfo inherits DataProviderActionBaseInfo {
 }
 
 #! DataProvider action definition from the data provider index
-/** Option types are described by plain data, and output types are not indexed, so reading an indexed action never
-    requires the provider module that implements it; the registered action is available from
+/** The types of options and of the data provider info are described by plain data, and output types are not indexed,
+    so an indexed action can be serialized, and reading it never requires the provider module that implements it;
+    the registered action is available from
     @ref DataProviderActionCatalog::getAppAction() "DataProviderActionCatalog::getAppAction()".
 
     @since %DataProvider 3.8
@@ -624,6 +625,11 @@ public hashdecl DataProviderActionInfo inherits DataProviderActionBaseInfo {
 public hashdecl DataProviderIndexedActionInfo inherits DataProviderActionBaseInfo {
     #! Options that can be provided without a data provider
     *hash<string, hash<IndexedActionOptionInfo>> options;
+
+    #! Data provider static info, useful for record-based data providers, with types described by plain data
+    /** @see @ref DataProvider::DataProvider::restoreIndexedInfo() "DataProvider::restoreIndexedInfo()"
+    */
+    *hash<IndexedDataProviderInfo> data_provider_info;
 }
 
 /** @defgroup DataProviderFileReadModes Data Provider File API Read Modes

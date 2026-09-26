@@ -1032,19 +1032,29 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(True, exists result, "index read back successfully");
         assertEq(True, exists result.actioninfomap."Qore", "Qore app actions exist");
 
-        # Verify filter-records expressions have proper AbstractDataProviderType return_type
+        # Verify filter-records expressions describe their return types, and that the types are restored from them
         *hash<auto> filter = result.actioninfomap."Qore"."filter-records";
         assertEq(True, exists filter, "filter-records action exists");
         assertEq(True, exists filter.data_provider_info.expressions, "filter-records has expressions");
 
         int exp_count;
         foreach hash<auto> exp in (filter.data_provider_info.expressions.iterator()) {
-            assertEq(True, exp.return_type instanceof AbstractDataProviderType,
-                sprintf("expression %y return_type is AbstractDataProviderType (got %s)",
-                    exp.name, exp.return_type.type()));
+            assertEq("hash<DataTypeInfo>", exp.return_type_info.fullType(),
+                sprintf("expression %y return type is described", exp.name));
             ++exp_count;
         }
         assertEq(True, exp_count > 0, "at least one expression checked");
+        hash<DataProviderInfo> restored = DataProvider::restoreIndexedInfo(filter.data_provider_info);
+        hash<string, hash<DataProviderExpressionInfo>> registered
+            = DataProviderActionCatalog::getAppAction("Qore", "filter-records").data_provider_info.expressions;
+        assertEq(keys registered, keys restored.expressions, "all expressions are restored");
+        foreach hash<auto> exp in (restored.expressions.pairIterator()) {
+            assertEq(True, exp.value.return_type instanceof AbstractDataProviderType,
+                sprintf("expression %y return_type is restored as AbstractDataProviderType (got %s)",
+                    exp.key, exp.value.return_type.type()));
+            assertEq(registered{exp.key}.return_type.getBaseTypeName(), exp.value.return_type.getBaseTypeName(),
+                sprintf("expression %y has the return type it was registered with", exp.key));
+        }
 
         # Verify specific standard expressions are present
         assertEq(True, exists filter.data_provider_info.expressions."&&",

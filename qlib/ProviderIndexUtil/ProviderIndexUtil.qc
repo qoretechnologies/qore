@@ -185,8 +185,14 @@ hashdecl MetadataDeserializeContext {
     TypedHash dp_sig_info_th;
     TypedHash dp_arg_info_th;
     hash<auto> type_map;
+    # the descriptions of the types in type_map
+    hash<auto> type_info_map;
     hash<auto> shape_map;
     *hash<auto> ui_view_map;
+    # DataProvider::getIndexedInfo(), which converts the data provider info of a registered action
+    code get_indexed_dp_info;
+    # DataProvider::DataProviderInfoOptionMembers
+    list<string> dp_option_members;
 }
 
 #! Versioned routing sidecar for a data provider index
@@ -483,7 +489,9 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
 
     #! Returns the indexed actions of the given app
     /** Reading indexed actions never loads the provider modules that implement them: option types are described by
-        plain data in each option's \c type_info, and output types are not indexed.
+        plain data in each option's \c type_info, the types in the data provider info are described by plain data
+        too (\c DataProvider::IndexedDataProviderInfo), and output types are not indexed, so an indexed action has
+        no objects and can be serialized.
 
         @param app the app name
 
@@ -498,9 +506,11 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         @note An action whose metadata cannot be read is logged and omitted
 
         @note A type object can be created from an option's \c type_info with
-        \c DataProvider::AbstractDataProviderType::get(); it has the described structure and constraints but not
-        any custom behavior of the original type's class.  The exact types are available from the registered
-        action with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.
+        \c DataProvider::AbstractDataProviderType::get(), and the data provider info with type objects with
+        \c DataProvider::DataProvider::restoreIndexedInfo(); a restored type has the described structure and
+        constraints but not any custom behavior of the original type's class.  The exact types are available from
+        the registered action with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's
+        modules.
 
         @see tryGetActionMetadata()
 
@@ -2480,6 +2490,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         load_module("DataProvider");
         load_module("MapperUtil");
 
+        hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
+        StaticMethod get_indexed_dp_info = Class::forName("DataProvider::DataProvider")
+            .findStaticMethod("getIndexedInfo").method;
         return <MetadataDeserializeContext>{
             "app_info_th": TypedHash::forName("DataProvider::DataProviderAppInfo"),
             "conn_opt_th": TypedHash::forName("ConnectionProvider::ConnectionOptionInfo"),
@@ -2490,16 +2503,19 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "type_opt_info_th": TypedHash::forName("DataProvider::DataProviderTypeOptionInfo"),
             "constraint_info_th": TypedHash::forName("DataProvider::DataTypeConstraintInfo"),
             "path_vars_th": TypedHash::forName("DataProvider::DataProviderPathVarInfo"),
-            "dp_info_th": TypedHash::forName("DataProvider::DataProviderInfo"),
-            "dp_opt_info_th": TypedHash::forName("DataProvider::DataProviderOptionInfo"),
-            "dp_exp_info_th": TypedHash::forName("DataProvider::DataProviderExpressionInfo"),
+            "dp_info_th": TypedHash::forName("DataProvider::IndexedDataProviderInfo"),
+            "dp_opt_info_th": TypedHash::forName("DataProvider::IndexedDataProviderOptionInfo"),
+            "dp_exp_info_th": TypedHash::forName("DataProvider::IndexedDataProviderExpressionInfo"),
             "mapper_key_info_th": TypedHash::forName("Mapper::MapperRuntimeKeyInfo"),
-            "dp_msg_info_th": TypedHash::forName("DataProvider::DataProviderMessageInfo"),
-            "dp_sig_info_th": TypedHash::forName("DataProvider::DataProviderSignatureTypeInfo"),
+            "dp_msg_info_th": TypedHash::forName("DataProvider::IndexedDataProviderMessageInfo"),
+            "dp_sig_info_th": TypedHash::forName("DataProvider::IndexedDataProviderSignatureTypeInfo"),
             "dp_arg_info_th": TypedHash::forName("DataProvider::DataProviderArgInfo"),
-            "type_map": Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue(),
+            "type_map": type_map,
+            "type_info_map": (map {$1.key: $1.value.getInfo()}, type_map.pairIterator()),
             "shape_map": getDataProviderShapeMap(),
             "ui_view_map": Constant::forName("DataProvider::UiOptionViewMap").getValue(),
+            "get_indexed_dp_info": hash<auto> sub (hash<auto> info) { return get_indexed_dp_info.call(info); },
+            "dp_option_members": Constant::forName("DataProvider::DataProviderInfoOptionMembers").getValue(),
         };
     }
 
@@ -2578,11 +2594,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     "default_view": indexed ? ctx.ui_view_map{$1.value.default_view} : $1.value.default_view,
                 }
             }, action.options.pairIterator()) : NOTHING),
-            "data_provider_info": (action.data_provider_info && indexed
-                ? deserializeDataProviderInfo(action.data_provider_info, ctx.dp_info_th,
-                    ctx.dp_opt_info_th, ctx.dp_exp_info_th, ctx.mapper_key_info_th, ctx.dp_msg_info_th,
-                    ctx.dp_sig_info_th, ctx.dp_arg_info_th, ctx.type_map, ctx.shape_map)
-                : action.data_provider_info),
+            "data_provider_info": (action.data_provider_info
+                ? (indexed
+                    ? deserializeDataProviderInfo(action.data_provider_info, ctx)
+                    : ctx.get_indexed_dp_info(action.data_provider_info))
+                : NOTHING),
         });
     }
 
@@ -2654,27 +2670,28 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         });
     }
 
-    #! Deserialize data provider info
-    static private *hash<auto> deserializeDataProviderInfo(*hash<auto> info, TypedHash dp_info_th,
-            TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
-            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map,
-            hash<auto> shape_map) {
-        if (!info) {
-            return;
-        }
+    #! Returns the data provider info of an indexed action, with its types described by plain data
+    /** The index holds the base type name of each type, which is described by the corresponding type in
+        \c DataProvider::AbstractDataProviderTypeMap
+
+        @param info the data provider info as stored in the index
+        @param ctx the prepared deserialization context
+
+        @return a \c DataProvider::IndexedDataProviderInfo hash
+    */
+    static private hash<auto> deserializeDataProviderInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
         hash<auto> rv;
         foreach hash<auto> i in (info.pairIterator()) {
             if (i.key == "bulk_read_shapes" || i.key == "bulk_create_shapes" || i.key == "bulk_upsert_shapes") {
-                rv{i.key} = map deserializeDataProviderShape($1, shape_map), i.value;
+                rv{i.key} = map deserializeDataProviderShape($1, ctx.shape_map), i.value;
             } else {
                 rv{i.key} = i.value;
             }
         }
-        foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
-            "add_field", "update_field", "delete_field", "send_message") {
-            key += "_options";
+        foreach string key in (ctx.dp_option_members) {
             if (rv{key}) {
-                rv{key} = dp_opt_info_th.doCastValuesWithOverrides(rv{key}, map {
+                rv{key} = ctx.dp_opt_info_th.doCastValuesWithOverrides(
+                    (map {$1.key: $1.value - "type"}, rv{key}.pairIterator()), map {
                     $1.key: {
                         "allowed_values": (exists $1.value.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
@@ -2682,30 +2699,48 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                         "element_allowed_values": (exists $1.value.element_allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
                             : NOTHING),
-                        "type": (map type_map{$1} ?? type_map."auto", $1.value.type),
+                        "type_info": (map getTypeInfoForName($1, ctx), $1.value.type),
                     },
                 }, rv{key}.pairIterator());
             }
         }
-        return dp_info_th.doCastWithOverrides(rv, {
-            "expressions": (exists rv.expressions ? dp_exp_info_th.doCastValuesWithOverrides(
-                rv.expressions, map {
+        return ctx.dp_info_th.doCastWithOverrides(rv, {
+            "expressions": (exists rv.expressions ? ctx.dp_exp_info_th.doCastValuesWithOverrides(
+                (map {$1.key: $1.value - "return_type"}, rv.expressions.pairIterator()), map {
                 $1.key: {
-                    "args": (exists $1.value.args ? map dp_sig_info_th.doCastWithOverrides($1, {
-                        "type": type_map{$1.type} ?? type_map."auto",
+                    "args": (exists $1.value.args ? map ctx.dp_sig_info_th.doCastWithOverrides($1 - "type", {
+                        "type_info": getTypeInfoForName($1.type, ctx),
                     }), $1.value.args : NOTHING),
-                    "arg_info": (exists $1.value.arg_info ? map dp_arg_info_th.doCastWithOverrides($1, {
+                    "arg_info": (exists $1.value.arg_info ? map ctx.dp_arg_info_th.doCastWithOverrides($1, {
                         "allowed_values": (exists $1.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.allowed_values
                             : NOTHING),
                     }), $1.value.arg_info : NOTHING),
-                    "return_type": type_map{$1.value.return_type} ?? type_map."auto",
+                    "return_type_info": getTypeInfoForName($1.value.return_type, ctx),
                 }
             }, rv.expressions.pairIterator()) : NOTHING),
-            "events": (exists rv.events ? dp_msg_info_th.doCastValues(rv.events) : NOTHING),
-            "mapper_keys": (exists rv.mapper_keys ? mapper_key_info_th.doCastValues(rv.mapper_keys) : NOTHING),
-            "messages": (exists rv.messages ? dp_msg_info_th.doCastValues(rv.messages) : NOTHING),
-        });
+            "events": (exists rv.events ? deserializeDataProviderMessages(rv.events, ctx) : NOTHING),
+            "messages": (exists rv.messages ? deserializeDataProviderMessages(rv.messages, ctx) : NOTHING),
+        } + (exists rv.mapper_keys
+            ? {"mapper_keys": ctx.mapper_key_info_th.doCastValues(rv.mapper_keys)}
+            # the member has a default value
+            : {}));
+    }
+
+    #! Returns indexed event or message info, with the types described by plain data
+    static private hash<auto> deserializeDataProviderMessages(hash<auto> messages,
+            hash<MetadataDeserializeContext> ctx) {
+        return map {
+            $1.key: ctx.dp_msg_info_th.doCast({
+                "desc": $1.value.desc,
+                "type_info": getTypeInfoForName($1.value.type, ctx),
+            }),
+        }, messages.pairIterator();
+    }
+
+    #! Returns the description of the type with the given base type name from the index
+    static private hash<auto> getTypeInfoForName(*string name, hash<MetadataDeserializeContext> ctx) {
+        return ctx.type_info_map{name} ?? ctx.type_info_map."auto";
     }
 
     #! Returns the map used to deserialize data provider shapes from the provider index

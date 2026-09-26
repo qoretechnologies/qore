@@ -1448,7 +1448,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @since DataProvider 3.8
     */
     private static *Type getValueTypeFromInfo(hash<DataTypeInfo> info) {
-        list<string> returned = select info.types_returned, $1 != "nothing" && $1 != "null";
+        # a description need not have any accepted or returned types
+        list<string> returned = info.types_returned
+            ? (select info.types_returned, $1 != "nothing" && $1 != "null")
+            : ();
         if (returned.size() != 1 || !DataTypeMap{returned[0]}) {
             return;
         }

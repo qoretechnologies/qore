@@ -4548,6 +4548,10 @@ public class DataProviderTest inherits QUnit::Test {
         assertThrows("TYPE-ARG-ERROR", ".*no structure.*", sub () {
             AbstractDataProviderType::get(<DataTypeInfo>{"path": unregistered});
         });
+        # a name that is not a Qore type name, with no structure to restore from, is not restored either
+        assertThrows("TYPE-ERROR", "No match for type.*", sub () {
+            AbstractDataProviderType::get(<DataTypeInfo>{"name": "unknown-type", "path": unregistered});
+        });
     }
 
     typeCacheTest() {

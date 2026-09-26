@@ -122,8 +122,10 @@ module ProviderIndexUtil {
     - added @ref ProviderIndexUtil::ProviderIndexUtil::hasMessagePack() "ProviderIndexUtil::hasMessagePack()",
       which reports if the compact index files can be written and read, and index workers used
     - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each
-      option's type is described by plain data in \c type_info; reading them never loads the provider modules
-      that implement an app, and output types are not indexed
+      option's type is described by plain data in \c type_info, as are the types in the action's
+      \c DataProvider::IndexedDataProviderInfo data provider info; an indexed action has no objects, so it can be
+      serialized, reading it never loads the provider modules that implement an app, and output types are not
+      indexed
     - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
       and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()";
       they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which returned

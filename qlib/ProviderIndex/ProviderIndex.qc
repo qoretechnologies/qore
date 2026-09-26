@@ -556,9 +556,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
                 rv{i.key} = i.value;
             }
         }
-        foreach string key in ("constructor", "create", "upsert", "search", "request", "child_create", "child_delete",
-            "add_field", "update_field", "delete_field", "send_message") {
-            key += "_options";
+        foreach string key in (DataProviderInfoOptionMembers) {
             if (rv{key}) {
                 rv{key} = getSerializableDataProviderOptions(rv{key});
             }
@@ -572,6 +570,14 @@ public class ProviderIndex inherits ProviderIndexUtil {
                     "return_type": $1.value.return_type.getBaseTypeName(),
                 }
             }, info.expressions.pairIterator();
+        }
+        foreach string key in ("events", "messages") {
+            if (info{key}) {
+                rv{key} = map {$1.key: {
+                    "desc": $1.value.desc,
+                    "type": $1.value.type.getBaseTypeName(),
+                }}, info{key}.pairIterator();
+            }
         }
         return rv;
     }

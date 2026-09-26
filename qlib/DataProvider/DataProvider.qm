@@ -1369,6 +1369,18 @@ fetch
       whose option types are described by plain data; the fields shared with registered actions are in the new
       @ref DataProvider::DataProviderActionBaseInfo "DataProviderActionBaseInfo" and
       @ref DataProvider::ActionOptionBaseInfo "ActionOptionBaseInfo" hashdecls
+    - added @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo", the data provider info of an action
+      from the data provider index, in which the types of options, expressions, events, and messages are described
+      by plain data, so an indexed action has no objects and can be serialized;
+      @ref DataProvider::DataProvider::getIndexedInfo() "DataProvider::getIndexedInfo()" and
+      @ref DataProvider::DataProvider::restoreIndexedInfo() "DataProvider::restoreIndexedInfo()" convert between it
+      and @ref DataProvider::DataProviderInfo "DataProviderInfo", whose members without types are in the new
+      @ref DataProvider::DataProviderBaseInfo "DataProviderBaseInfo" hashdecl, as are those of options and
+      expressions in @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo" and
+      @ref DataProvider::DataProviderExpressionBaseInfo "DataProviderExpressionBaseInfo";
+      @ref DataProvider::DataProviderInfoOptionMembers "DataProviderInfoOptionMembers" lists the option info members
+    - a type description with neither a restorable name nor any returned types fails to restore with
+      \c TYPE-ERROR instead of an internal runtime type error
     - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
       restores types from their descriptions more faithfully: class-backed named types in unions, hash types
       without fields, options of "or nothing" types, and the descriptions of union types are restored, an

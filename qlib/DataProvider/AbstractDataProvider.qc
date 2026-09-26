@@ -156,11 +156,16 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
     *bool input_field_names;
 }
 
-#! Data provider option info
-public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
-    #! The option value type or types
-    softlist<AbstractDataProviderType> type;
+#! Data provider option info shared by data providers and the data provider index
+/** @see
+    - @ref DataProvider::DataProviderOptionInfo "DataProviderOptionInfo" for the option info of a data provider,
+      with type objects
+    - @ref DataProvider::IndexedDataProviderOptionInfo "IndexedDataProviderOptionInfo" for the option info of an
+      action from the data provider index, with type descriptions
 
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderOptionBaseInfo inherits BaseOptionInfo {
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
         string that is used to mark membership in the group by different options
@@ -187,6 +192,26 @@ public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! A tag allowing the default value for the option to be returned dynamically
     *string default_ref_data;
 
+}
+
+#! Data provider option info
+/** @see @ref DataProvider::IndexedDataProviderOptionInfo "IndexedDataProviderOptionInfo" for the plain data form in
+    actions from the data provider index
+*/
+public hashdecl DataProviderOptionInfo inherits DataProviderOptionBaseInfo {
+    #! The option value type or types
+    softlist<AbstractDataProviderType> type;
+}
+
+#! Data provider option info from the data provider index
+/** The option's types are described by plain data; a type object can be created from each description with
+    @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
+
+    @since %DataProvider 3.8
+*/
+public hashdecl IndexedDataProviderOptionInfo inherits DataProviderOptionBaseInfo {
+    #! Descriptions of the option value type or types
+    softlist<hash<DataTypeInfo>> type_info;
 }
 
 #! Data provider summary info
@@ -366,6 +391,19 @@ public hashdecl DataProviderMessageInfo {
     AbstractDataProviderType type;
 }
 
+#! Data provider message and event info from the data provider index
+/** @since %DataProvider 3.8
+*/
+public hashdecl IndexedDataProviderMessageInfo {
+    #! The description of the message or event
+    /** Markdown is supported
+    */
+    string desc;
+
+    #! Description of the data type of the message or event
+    hash<DataTypeInfo> type_info;
+}
+
 /** @defgroup dataprovider_message_support Output Message Support
 
     These constants describe the data provider's support for output messages, if any, and the relationship to observed
@@ -473,6 +511,17 @@ public const LogicDescMap = map {$1.value: $1.key.toInt()}, LogicCodeMap.pairIte
 public hashdecl DataProviderSignatureTypeInfo {
     #! Argument types
     AbstractDataProviderType type;
+
+    #! The signature type code
+    int type_code = ST_Any;
+}
+
+#! Data provider signature argument info from the data provider index
+/** @since %DataProvider 3.8
+*/
+public hashdecl IndexedDataProviderSignatureTypeInfo {
+    #! Description of the argument type
+    hash<DataTypeInfo> type_info;
 
     #! The signature type code
     int type_code = ST_Any;
@@ -745,8 +794,16 @@ public hashdecl DataProviderArgInfo {
     *string label_after;
 }
 
-#! Data provider signature info
-public hashdecl DataProviderExpressionInfo {
+#! Data provider expression info shared by data providers and the data provider index
+/** @see
+    - @ref DataProvider::DataProviderExpressionInfo "DataProviderExpressionInfo" for the expression info of a data
+      provider, with type objects
+    - @ref DataProvider::IndexedDataProviderExpressionInfo "IndexedDataProviderExpressionInfo" for the expression
+      info of an action from the data provider index, with type descriptions
+
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderExpressionBaseInfo {
     #! The type of expression; see @ref dataprovider_expression_type_codes
     int type;
 
@@ -799,14 +856,8 @@ public hashdecl DataProviderExpressionInfo {
     */
     *string render_template;
 
-    #! Argument types
-    softlist<hash<DataProviderSignatureTypeInfo>> args;
-
     #! Argument info
     *softlist<hash<DataProviderArgInfo>> arg_info;
-
-    #! The return type
-    AbstractDataProviderType return_type;
 
     #! The last argument can be repeated indefinitely
     bool varargs = False;
@@ -839,6 +890,26 @@ public hashdecl DataProviderExpressionInfo {
         @since DataProvider 3.3
     */
     *bool return_type_first_arg;
+}
+
+#! Data provider expression info
+public hashdecl DataProviderExpressionInfo inherits DataProviderExpressionBaseInfo {
+    #! Argument types
+    softlist<hash<DataProviderSignatureTypeInfo>> args;
+
+    #! The return type
+    AbstractDataProviderType return_type;
+}
+
+#! Data provider expression info from the data provider index
+/** @since %DataProvider 3.8
+*/
+public hashdecl IndexedDataProviderExpressionInfo inherits DataProviderExpressionBaseInfo {
+    #! Argument types, described by plain data
+    softlist<hash<IndexedDataProviderSignatureTypeInfo>> args;
+
+    #! Description of the return type
+    hash<DataTypeInfo> return_type_info;
 }
 
 #! Range specification for DPQL slice accessors
@@ -897,8 +968,15 @@ public hashdecl DataProviderExpression {
     softlist<auto> args;
 }
 
-#! Data provider info
-public hashdecl DataProviderInfo {
+#! Data provider info shared by data providers and the data provider index
+/** @see
+    - @ref DataProvider::DataProviderInfo "DataProviderInfo" for the info of a data provider, with type objects
+    - @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo" for the data provider info of an action
+      from the data provider index, with type descriptions
+
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderBaseInfo {
     #! Data provider name
     /** @note this is a dynamic attribute; it differs for different data providers of the same type
     */
@@ -1134,11 +1212,6 @@ public hashdecl DataProviderInfo {
     */
     *string schema_type;
 
-    #! Constructor options supported by the data provider for the constructor variant taking a hash
-    /** @note this is a static attribute; it is the same for all data providers of the same type
-    */
-    *hash<string, hash<DataProviderOptionInfo>> constructor_options;
-
     #! Required constructor option combinations
     /** If set it indicates that there are multiple possibilities for the set of required options for the data
         provider's hash constructor (if any); the format of this string is the required option names separated by
@@ -1147,6 +1220,62 @@ public hashdecl DataProviderInfo {
         ignored
     */
     *string required_constructor_options;
+
+    #! Supported search logic capabilities
+    /** This is a bitfield of capabilities; see @ref logic_capability_codes for more info
+    */
+    int search_logic_capabilities = LC_All;
+
+    #! A hash of mapper key information
+    /** @note
+        - this is a static attribute; it is the same for all data providers of the same type
+        - the \a handler keys are not returned as they are only valid at runtime
+    */
+    hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys = Mapper::MapperKeyInfo;
+
+    #! Connection event for event-based connection-capable data providers
+    /** @since DataProvider 3.0
+    */
+    *string connection_event;
+
+    #! Disconnection event for event-based connection-capable data providers
+    /** @since DataProvider 3.0
+    */
+    *string disconnection_event;
+
+    #! A list of child data providers in this data provider
+    /** @note this is a dynamic attribute; it differs for different data providers of the same type
+    */
+    *list<string> children;
+
+    #! Any optional provider-specific information
+    *hash<auto> info;
+
+    #! Does the data provider support being used as a pipeline processor?
+    /** @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processor = False;
+
+    #! Processor capability bitfield (DPC_* constants)
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
+
+    #! Can any child data providers support being used as pipeline processors?
+    /** @since %DataProvider 3.3
+    */
+    bool children_can_support_pipeline_processors = False;
+}
+
+#! Data provider info
+/** @see @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo" for the plain data form in actions from
+    the data provider index
+*/
+public hashdecl DataProviderInfo inherits DataProviderBaseInfo {
+    #! Constructor options supported by the data provider for the constructor variant taking a hash
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+    */
+    *hash<string, hash<DataProviderOptionInfo>> constructor_options;
 
     #! Create options supported by the data provider
     /** @note this is a static attribute; it is the same for all data providers of the same type
@@ -1210,6 +1339,11 @@ public hashdecl DataProviderInfo {
     */
     *hash<string, hash<DataProviderOptionInfo>> send_message_options;
 
+    #! Pipeline processor options, if applicable
+    /** @since %DataProvider 3.3
+    */
+    *hash<string, hash<DataProviderOptionInfo>> pipeline_processor_options;
+
     #! Expressions (operators and functions) supported by the data provider
     /** @note this is a static attribute; it is the same for all data providers of the same type
 
@@ -1230,57 +1364,124 @@ public hashdecl DataProviderInfo {
         @since DataProvider 2.5
     */
     *hash<string, hash<DataProviderMessageInfo>> messages;
+}
 
-    #! Supported search logic capabilities
-    /** This is a bitfield of capabilities; see @ref logic_capability_codes for more info
+#! Data provider info from the data provider index
+/** The types of options, expressions, events, and messages are described by plain data, so the info can be
+    serialized, and reading it never requires the provider module that defines a type.
+    @ref DataProvider::DataProvider::restoreIndexedInfo() "DataProvider::restoreIndexedInfo()" creates the
+    @ref DataProvider::DataProviderInfo "DataProviderInfo" form with type objects, and
+    @ref DataProvider::DataProvider::getIndexedInfo() "DataProvider::getIndexedInfo()" creates this form from it.
+
+    @since %DataProvider 3.8
+*/
+public hashdecl IndexedDataProviderInfo inherits DataProviderBaseInfo {
+    #! Constructor options supported by the data provider for the constructor variant taking a hash
+    /** @note this is a static attribute; it is the same for all data providers of the same type
     */
-    int search_logic_capabilities = LC_All;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> constructor_options;
 
-    #! A hash of mapper key information
-    /** @note
-        - this is a static attribute; it is the same for all data providers of the same type
-        - the \a handler keys are not returned as they are only valid at runtime
+    #! Create options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
     */
-    hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys = Mapper::MapperKeyInfo;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> create_options;
 
-    #! Connection event for event-based connection-capable data providers
-    /** @since DataProvider 3.0
+    #! Upsert options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
     */
-    *string connection_event;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> upsert_options;
 
-    #! Disconnection event for event-based connection-capable data providers
-    /** @since DataProvider 3.0
+    #! Search options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
     */
-    *string disconnection_event;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> search_options;
 
-    #! A list of child data providers in this data provider
-    /** @note this is a dynamic attribute; it differs for different data providers of the same type
+    #! Request options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
     */
-    *list<string> children;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> request_options;
 
-    #! Any optional provider-specific information
-    *hash<auto> info;
+    #! Child creation options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
 
-    #! Does the data provider support being used as a pipeline processor?
-    /** @since %DataProvider 3.3
+        @since DataProvider 2.0
     */
-    bool supports_pipeline_processor = False;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> child_create_options;
 
-    #! Processor capability bitfield (DPC_* constants)
-    /** @since %DataProvider 3.3
+    #! Child deletion options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.0
     */
-    int processor_capabilities = 0;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> child_delete_options;
+
+    #! Add field options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.0
+    */
+    *hash<string, hash<IndexedDataProviderOptionInfo>> add_field_options;
+
+    #! Update field options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.0
+    */
+    *hash<string, hash<IndexedDataProviderOptionInfo>> update_field_options;
+
+    #! Delete field options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.0
+    */
+    *hash<string, hash<IndexedDataProviderOptionInfo>> delete_field_options;
+
+    #! Send message options supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.5
+    */
+    *hash<string, hash<IndexedDataProviderOptionInfo>> send_message_options;
 
     #! Pipeline processor options, if applicable
     /** @since %DataProvider 3.3
     */
-    *hash<string, hash<DataProviderOptionInfo>> pipeline_processor_options;
+    *hash<string, hash<IndexedDataProviderOptionInfo>> pipeline_processor_options;
 
-    #! Can any child data providers support being used as pipeline processors?
-    /** @since %DataProvider 3.3
+    #! Expressions (operators and functions) supported by the data provider
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.3
     */
-    bool children_can_support_pipeline_processors = False;
+    *hash<string, hash<IndexedDataProviderExpressionInfo>> expressions;
+
+    #! hash of observable events and event types
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.5
+    */
+    *hash<string, hash<IndexedDataProviderMessageInfo>> events;
+
+    #! List of output message IDs and message types
+    /** @note this is a static attribute; it is the same for all data providers of the same type
+
+        @since DataProvider 2.5
+    */
+    *hash<string, hash<IndexedDataProviderMessageInfo>> messages;
 }
+
+#! The members of @ref DataProvider::DataProviderInfo "DataProviderInfo" that hold option info
+/** Each holds a hash of @ref DataProvider::DataProviderOptionInfo "DataProviderOptionInfo" hashes, or of
+    @ref DataProvider::IndexedDataProviderOptionInfo "IndexedDataProviderOptionInfo" hashes in
+    @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo"
+
+    @since %DataProvider 3.8
+*/
+public const DataProviderInfoOptionMembers = (
+    "constructor_options", "create_options", "upsert_options", "search_options", "request_options",
+    "child_create_options", "child_delete_options", "add_field_options", "update_field_options",
+    "delete_field_options", "send_message_options", "pipeline_processor_options",
+);
 
 #! Data provider connection info
 public hashdecl DataProviderConnectionInfo {

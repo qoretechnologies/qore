@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires json
+
+%exec-class IndexedDataProviderInfoTest
+
+#! Tests the data provider info form with types described by plain data
+public class IndexedDataProviderInfoTest inherits QUnit::Test {
+    constructor() : Test("IndexedDataProviderInfo test", "1.0") {
+        addTestCase("types are described by plain data", \indexedForm());
+        addTestCase("types are restored from their descriptions", \restoredForm());
+        addTestCase("a round trip keeps the info", \roundTrip());
+        addTestCase("empty and unset members are kept", \emptyAndUnsetMembers());
+        addTestCase("a type that cannot be described without its provider is not restored", \unrestorableType());
+        set_return_value(main());
+    }
+
+    #! Returns data provider info with every kind of type-bearing member
+    private static hash<DataProviderInfo> getInfo() {
+        HashDataType record("QoreTestRecord");
+        record.addQoreFields({
+            "id": {"name": "id", "type": AbstractDataProviderTypeMap."int"},
+            "name": {"name": "name", "type": AbstractDataProviderTypeMap."*string"},
+        });
+        return <DataProviderInfo>{
+            "name": "test",
+            "display_name": "Test",
+            "type": "QoreTestDataProvider",
+            "supports_read": True,
+            "search_options": {
+                "limit": <DataProviderOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "the maximum number of records",
+                    "desc": "the maximum number of records",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required_groups": "paging",
+                },
+                "key": <DataProviderOptionInfo>{
+                    "display_name": "Key",
+                    "short_desc": "the key",
+                    "desc": "the key",
+                    "type": (AbstractDataProviderTypeMap."string", AbstractDataProviderTypeMap."int"),
+                },
+            },
+            "pipeline_processor_options": {
+                "record": <DataProviderOptionInfo>{
+                    "display_name": "Record",
+                    "short_desc": "a record",
+                    "desc": "a record",
+                    "type": record,
+                },
+            },
+            "expressions": DataProviderGenericExpressions{"==", "&&"},
+            "events": {
+                "changed": <DataProviderMessageInfo>{
+                    "desc": "a record changed",
+                    "type": record,
+                },
+            },
+            "messages": {
+                "send": <DataProviderMessageInfo>{
+                    "desc": "sends a record",
+                    "type": record,
+                },
+            },
+        };
+    }
+
+    #! Returns the value with any identity keys removed
+    /** A type object's \c unique_key identifies the object; a restored type is a new object with the same
+        structure
+    */
+    private static auto withoutIdentity(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                return map {$1.key: withoutIdentity($1.value)}, v.pairIterator(), $1.key != "unique_key";
+            case NT_LIST:
+                return map withoutIdentity($1), v;
+        }
+        return v;
+    }
+
+    indexedForm() {
+        hash<DataProviderInfo> info = getInfo();
+        hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(info);
+
+        # the info can be serialized; it has no objects
+        hash<auto> parsed = parse_json(make_json(indexed));
+        assertEq("Test", parsed.display_name);
+
+        assertEq("hash<IndexedDataProviderOptionInfo>", indexed.search_options.limit.fullType());
+        assertFalse(indexed.search_options.limit.hasKey("type"));
+        assertEq("hash<DataTypeInfo>", indexed.search_options.limit.type_info[0].fullType());
+        assertEq(info.search_options.limit.type[0].getInfo(), indexed.search_options.limit.type_info[0]);
+        assertEq("paging", indexed.search_options.limit.required_groups[0]);
+        assertEq(("string", "int"), (map $1.name, indexed.search_options.key.type_info));
+        assertEq("QoreTestRecord", indexed.pipeline_processor_options.record.type_info[0].name);
+        assertEq(("id", "name"), keys indexed.pipeline_processor_options.record.type_info[0].fields);
+
+        hash<IndexedDataProviderExpressionInfo> eq = indexed.expressions."==";
+        assertEq("hash<IndexedDataProviderExpressionInfo>", eq.fullType());
+        assertEq(DataProviderGenericExpressions."==".symbol, eq.symbol);
+        assertEq(DataProviderGenericExpressions."==".args.size(), eq.args.size());
+        assertEq("hash<IndexedDataProviderSignatureTypeInfo>", eq.args[0].fullType());
+        assertEq(DataProviderGenericExpressions."==".args[0].type_code, eq.args[0].type_code);
+        assertEq(DataProviderGenericExpressions."==".args[0].type.getName(), eq.args[0].type_info.name);
+        assertEq(DataProviderGenericExpressions."==".return_type.getName(), eq.return_type_info.name);
+        assertFalse(eq.hasKey("return_type"));
+
+        assertEq("hash<IndexedDataProviderMessageInfo>", indexed.events.changed.fullType());
+        assertEq("a record changed", indexed.events.changed.desc);
+        assertEq("QoreTestRecord", indexed.events.changed.type_info.name);
+        assertEq("QoreTestRecord", indexed.messages.send.type_info.name);
+    }
+
+    restoredForm() {
+        hash<DataProviderInfo> info = getInfo();
+        hash<DataProviderInfo> restored = DataProvider::restoreIndexedInfo(DataProvider::getIndexedInfo(info));
+
+        assertEq("hash<DataProviderOptionInfo>", restored.search_options.limit.fullType());
+        AbstractDataProviderType limit = restored.search_options.limit.type[0];
+        assertEq("int", limit.getName());
+        assertEq(5, limit.acceptsValue(5));
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { limit.acceptsValue("x"); });
+        assertEq(("string", "int"), (map $1.getName(), restored.search_options.key.type));
+
+        # a restored hash type has the described fields
+        AbstractDataProviderType record = restored.pipeline_processor_options.record.type[0];
+        assertEq({"id": 1}, record.acceptsValue({"id": 1}));
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { record.acceptsValue({"id": "x"}); });
+
+        hash<DataProviderExpressionInfo> eq = restored.expressions."==";
+        assertEq("hash<DataProviderExpressionInfo>", eq.fullType());
+        assertEq(DataProviderGenericExpressions."==".return_type.getName(), eq.return_type.getName());
+        assertEq((map $1.type.getName(), DataProviderGenericExpressions."==".args), (map $1.type.getName(), eq.args));
+
+        assertEq("QoreTestRecord", restored.events.changed.type.getName());
+        assertEq("QoreTestRecord", restored.messages.send.type.getName());
+    }
+
+    roundTrip() {
+        hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(getInfo());
+        hash<IndexedDataProviderInfo> again = DataProvider::getIndexedInfo(DataProvider::restoreIndexedInfo(indexed));
+        assertEq(withoutIdentity(indexed), withoutIdentity(again));
+    }
+
+    emptyAndUnsetMembers() {
+        hash<DataProviderInfo> info = <DataProviderInfo>{
+            "name": "test",
+            "display_name": "Test",
+            "type": "QoreTestDataProvider",
+            "search_options": {},
+        };
+        hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(info);
+        # an empty hash means that there are no options, which is different from unset
+        assertEq({}, indexed.search_options);
+        assertEq(NOTHING, indexed.create_options);
+        assertEq(NOTHING, indexed.expressions);
+        assertEq(NOTHING, indexed.events);
+
+        hash<DataProviderInfo> restored = DataProvider::restoreIndexedInfo(indexed);
+        assertEq({}, restored.search_options);
+        assertEq(NOTHING, restored.create_options);
+        assertEq(NOTHING, restored.messages);
+        # the members without types are kept
+        assertEq("QoreTestDataProvider", restored.type);
+        assertEq(info.mapper_keys, restored.mapper_keys);
+    }
+
+    unrestorableType() {
+        hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(getInfo());
+        # a description with nothing but an unregistered type path
+        indexed.search_options.limit.type_info[0] = <DataTypeInfo>{"path": "qore-test/unregistered/type"};
+        assertThrows("TYPE-ARG-ERROR", \DataProvider::restoreIndexedInfo(), indexed);
+
+        # a name that is not a Qore type name, with no structure
+        indexed.search_options.limit.type_info[0] = <DataTypeInfo>{
+            "name": "QoreTestUnregistered",
+            "path": "qore-test/unregistered/type",
+        };
+        assertThrows("TYPE-ERROR", \DataProvider::restoreIndexedInfo(), indexed);
+    }
+}

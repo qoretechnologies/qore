@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndexUtil
+%requires json
 
 %try-module yaml
 %define NoYaml
@@ -40,6 +41,7 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         addTestCase("indexed actions describe option types with plain data", \currentFormat());
         addTestCase("primitive type names from earlier indexes are described", \legacyFormat());
         addTestCase("serialized types from development versions are not restored", \serializedFormat());
+        addTestCase("indexed data provider info describes types with plain data", \dataProviderInfo());
         addTestCase("a removed app has no actions", \removedAppHasNoActions());
         addTestCase("a registered action is cached as an indexed action", \registeredActionIsIndexed());
         addTestCase("reading the index returns indexed actions", \readIndex());
@@ -102,6 +104,32 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                         },
                     },
                     "metadata": ConnectionAlternative,
+                    # as written by ProviderIndex: each type by its base type name
+                    "data_provider_info": {
+                        "name": "send",
+                        "display_name": "Send",
+                        "type": "QoreTestDataProvider",
+                        "supports_read": True,
+                        "search_options": {
+                            "limit": {
+                                "display_name": "Limit",
+                                "short_desc": "the maximum number of records",
+                                "desc": "the maximum number of records",
+                                "type": ("int",),
+                            },
+                        },
+                        "create_options": {},
+                        "expressions": {
+                            "==": DataProviderGenericExpressions."==" + {
+                                "args": (map $1 + {"type": $1.type.getBaseTypeName()},
+                                    DataProviderGenericExpressions."==".args),
+                                "return_type": DataProviderGenericExpressions."==".return_type.getBaseTypeName(),
+                            },
+                        },
+                        "events": {
+                            "changed": {"desc": "a record changed", "type": "hash"},
+                        },
+                    },
                 },
             },
             LegacyApp: {
@@ -189,6 +217,41 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq("auto", action.options.webhook.type_info.name);
     }
 
+    dataProviderInfo() {
+        checkModules();
+
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "send");
+        # an indexed action has no objects, so it can be serialized
+        assertEq(action.action, parse_json(make_json(action)).action);
+
+        hash<IndexedDataProviderInfo> info = action.data_provider_info;
+        assertEq("hash<IndexedDataProviderInfo>", info.fullType());
+        assertEq("QoreTestDataProvider", info.type);
+        assertEq("hash<IndexedDataProviderOptionInfo>", info.search_options.limit.fullType());
+        assertEq("hash<DataTypeInfo>", info.search_options.limit.type_info[0].fullType());
+        assertEq("int", info.search_options.limit.type_info[0].name);
+        assertEq({}, info.create_options);
+        assertEq(NOTHING, info.upsert_options);
+
+        hash<IndexedDataProviderExpressionInfo> eq = info.expressions."==";
+        assertEq("hash<IndexedDataProviderExpressionInfo>", eq.fullType());
+        assertEq(DataProviderGenericExpressions."==".symbol, eq.symbol);
+        assertEq("hash<IndexedDataProviderSignatureTypeInfo>", eq.args[0].fullType());
+        assertEq(DataProviderGenericExpressions."==".args[0].type_code, eq.args[0].type_code);
+        assertEq("hash<DataTypeInfo>", eq.return_type_info.fullType());
+        assertEq("bool", eq.return_type_info.base_type);
+
+        assertEq("hash<IndexedDataProviderMessageInfo>", info.events.changed.fullType());
+        assertEq("hash", info.events.changed.type_info.base_type);
+
+        # the info with type objects is restored without any provider module
+        hash<DataProviderInfo> restored = DataProvider::restoreIndexedInfo(info);
+        assertEq("int", restored.search_options.limit.type[0].getName());
+        assertEq(5, restored.search_options.limit.type[0].acceptsValue(5));
+        assertEq("bool", restored.expressions."==".return_type.getBaseTypeName());
+        assertEq("hash", restored.events.changed.type.getBaseTypeName());
+    }
+
     removedAppHasNoActions() {
         checkModules();
 
@@ -225,12 +288,34 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
             "output_type": output,
             "input_data_types": {},
             "output_data_type": DPAD_NORMAL,
+            "data_provider_info": <DataProviderInfo>{
+                "name": "registered",
+                "display_name": "Registered",
+                "type": "QoreTestDataProvider",
+                "search_options": {
+                    "record": <DataProviderOptionInfo>{
+                        "display_name": "Record",
+                        "short_desc": "a record",
+                        "desc": "a record",
+                        "type": getOptionType(),
+                    },
+                },
+                "expressions": DataProviderGenericExpressions{"==",},
+            },
         });
         hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(CachedApp, "registered");
         assertEq("hash<DataProviderIndexedActionInfo>", action.fullType());
         assertFalse(action.hasKey("output_type"));
         assertEq("QoreTestIndexedType", action.options.webhook.type_info.name);
         assertEq(action, ProviderIndexUtil::searchCachedActionSubstr("a registered action")[0]);
+
+        # the registered action's data provider info is cached with its types described by plain data
+        assertEq("hash<IndexedDataProviderInfo>", action.data_provider_info.fullType());
+        assertEq("QoreTestIndexedType", action.data_provider_info.search_options.record.type_info[0].name);
+        assertEq(("value", "count"), keys action.data_provider_info.search_options.record.type_info[0].fields);
+        assertEq(DataProviderGenericExpressions."==".return_type.getInfo().name,
+            action.data_provider_info.expressions."==".return_type_info.name);
+        assertEq(action.action, parse_json(make_json(action)).action);
     }
 
     readIndex() {
