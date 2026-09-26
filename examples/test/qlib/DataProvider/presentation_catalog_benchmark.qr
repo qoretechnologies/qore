@@ -29,6 +29,7 @@
 %requires FsUtil
 %requires Util
 %requires i18n
+%requires json
 
 %exec-class PresentationCatalogBenchmark
 
@@ -90,6 +91,7 @@ class PresentationCatalogBenchmark {
         report(cold, (
             run("catalogs, no index", False),
             run("catalogs, shared discovery index", True),
+            run("per-domain builder", True, True),
             compose("composition only, one parse", False),
             compose("composition only, two parses", True),
         ));
@@ -163,7 +165,10 @@ class PresentationCatalogBenchmark {
     }
 
     #! Builds every (domain, locale) catalog once and returns the cost of doing so
-    private hash<auto> run(string label, bool use_index) {
+    /** @param per_domain builds all locales of each domain with
+        DataProviderPresentationCatalog::buildDomainCatalogs(), which parses the files the locales share once
+    */
+    private hash<auto> run(string label, bool use_index, bool per_domain = False) {
         hash<auto> discovery_opts = {"search_path": (root,)};
         *I18n::CatalogDiscoveryIndex discovery_index = use_index ? new I18n::CatalogDiscoveryIndex() : NOTHING;
         int parses_before = I18n::get_catalog_file_parse_count();
@@ -171,8 +176,10 @@ class PresentationCatalogBenchmark {
         int catalogs = 0;
         int projections = 0;
         foreach string domain in (domains) {
-            foreach string locale in (locales) {
-                DataProviderPresentationCatalog catalog(domain, locale, discovery_opts, discovery_index);
+            list<DataProviderPresentationCatalog> domain_catalogs = per_domain
+                ? DataProviderPresentationCatalog::buildDomainCatalogs(domain, locales, discovery_opts, discovery_index)
+                : (map new DataProviderPresentationCatalog(domain, $1, discovery_opts, discovery_index), locales);
+            foreach DataProviderPresentationCatalog catalog in (domain_catalogs) {
                 ++catalogs;
                 if (catalog.projectAction(app, action).display_name.val()) {
                     ++projections;
@@ -242,9 +249,14 @@ class PresentationCatalogBenchmark {
                 "again; the elapsed saving is small on a warm local page cache and larger on cold, container, or "
                 "network storage)\n");
         }
-        if (results[3].elapsed_ms > 0) {
+        if (results[1].elapsed_ms > 0) {
+            printf("per-domain builder: %.1f%% of the elapsed time of separately built catalogs with the same index, "
+                "%d file parse(s) instead of %d\n", results[2].elapsed_ms * 100.0 / results[1].elapsed_ms,
+                results[2].parses, results[1].parses);
+        }
+        if (results[4].elapsed_ms > 0) {
             printf("parsing each file once: %.1f%% of the elapsed time of the previous double-parse composition\n",
-                results[2].elapsed_ms * 100.0 / results[3].elapsed_ms);
+                results[3].elapsed_ms * 100.0 / results[4].elapsed_ms);
         }
     }
 

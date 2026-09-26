@@ -1500,9 +1500,13 @@ fetch
     - fixed provider catalog composition when the same module owner is installed in multiple catalog search roots;
       the highest-precedence installation is now used instead of treating stale shadowed copies as independent
       contributions
-    - provider presentation catalogs read and parse each discovered catalog file exactly once; collision validation
-      and catalog construction previously parsed every file twice, which doubled the CPU and I/O cost of building
-      presentation catalogs for many domains and locales
+    - provider presentation catalogs read and parse each discovered catalog file exactly once, and owner-fragment
+      collisions are detected by \c I18n::MessageCatalog while it composes the catalog instead of in a separate pass
+      over every message; the new static method
+      @ref DataProvider::DataProviderPresentationCatalog::buildDomainCatalogs() "buildDomainCatalogs()" builds the
+      catalogs for several locales of one domain while parsing the files they share, such as \c root.json, only once,
+      and @ref DataProvider::DataProviderPresentationCatalog::forEachDomainCatalog() "forEachDomainCatalog()" does
+      the same while holding only one catalog at a time
     - @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" accepts an optional
       \c I18n::CatalogDiscoveryIndex so that an operation building catalogs for many domains and locales reads
       each catalog directory once instead of once per catalog; multilingual embedding population uses one index for

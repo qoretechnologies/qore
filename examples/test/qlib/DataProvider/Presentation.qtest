@@ -82,6 +82,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \catalogParseCountTest());
         addTestCase("a discovery index is reused across catalogs",
             \catalogDiscoveryIndexTest());
+        addTestCase("domain catalogs share parsed catalog files",
+            \domainCatalogBuilderTest());
+        addTestCase("catalog conflicts name the conflicting files",
+            \catalogConflictReportTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("source catalogs recursively cover nested option types",
@@ -771,6 +775,241 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "the population still discovers every installed locale");
         assertTrue(document.embedding_text.find("メッセージを送信") >= 0,
             "the population still projects translated presentation");
+    }
+
+    domainCatalogBuilderTest() {
+        string root = make_tmp_dir("data-provider-presentation-builder-");
+        on_exit remove_tree(root);
+        string domain_dir = root + DirSep + Domain;
+        mkdir(domain_dir);
+        mkdir(domain_dir + DirSep + "ja");
+        string display_id = DataProviderPresentation::actionMessageId(App,
+            Action, "display_name");
+        string desc_id = DataProviderPresentation::actionMessageId(App,
+            Action, "desc");
+        writeJson(domain_dir + DirSep + "root.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "Odeslat zprávu"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "メッセージを送信"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "ja" + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                desc_id: {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "メッセージを送信します。"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "pt.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"pt": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "Enviar mensagem"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "pt-BR.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"pt-BR": {"messages": {
+                desc_id: {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "Envia a mensagem."},
+            }}},
+        });
+
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        # sk has no catalog, ja is requested twice, and pt_BR is not canonical
+        list<string> locales = ("root", "ja", "pt", "pt_BR", "sk", "ja");
+        list<string> canonical = ("root", "ja", "pt", "pt-BR", "sk", "ja");
+
+        list<DataProviderPresentationCatalog> direct = ();
+        int before = I18n::get_catalog_file_parse_count();
+        foreach string locale in (locales) {
+            direct += new DataProviderPresentationCatalog(Domain, locale,
+                discovery_opts);
+        }
+        int direct_parses = I18n::get_catalog_file_parse_count() - before;
+
+        before = I18n::get_catalog_file_parse_count();
+        list<DataProviderPresentationCatalog> built =
+            DataProviderPresentationCatalog::buildDomainCatalogs(Domain,
+                locales, discovery_opts);
+        int built_parses = I18n::get_catalog_file_parse_count() - before;
+
+        assertEq(5, built_parses, "each of the five catalog files is parsed "
+            "once although root.json, pt.json, and the ja files are shared");
+        assertEq(13, direct_parses, "building each catalog separately parses "
+            "the shared files again for every locale");
+        assertEq(canonical, (map $1.getLocale(), built),
+            "one catalog per requested locale in request order");
+        foreach DataProviderPresentationCatalog catalog in (built) {
+            assertEq(direct[$#].projectAction(app(), action()),
+                catalog.projectAction(app(), action()),
+                sprintf("the %y catalog projects the same presentation as its "
+                    "separately built catalog", canonical[$#]));
+        }
+        assertEq("メッセージを送信", built[1].projectAction(app(),
+            action()).display_name, "the direct locale catalog is composed");
+        assertEq("メッセージを送信します。", built[1].projectAction(app(),
+            action()).desc, "owner fragments are composed");
+        hash<auto> pt_br = built[3].projectAction(app(), action());
+        assertEq("Enviar mensagem", pt_br.display_name,
+            "a regional catalog falls back to its shared base-language file");
+        assertEq("Envia a mensagem.", pt_br.desc,
+            "a regional catalog composes its own file");
+
+        # the streaming form hands over the same catalogs in request order with
+        # the same single parse of every file
+        list<string> streamed_locales = ();
+        list<hash<auto>> streamed_projections = ();
+        before = I18n::get_catalog_file_parse_count();
+        DataProviderPresentationCatalog::forEachDomainCatalog(Domain, locales,
+            sub (DataProviderPresentationCatalog catalog) {
+                streamed_locales += catalog.getLocale();
+                streamed_projections += catalog.projectAction(app(), action());
+            }, discovery_opts);
+        assertEq(5, I18n::get_catalog_file_parse_count() - before,
+            "streaming parses each catalog file once");
+        assertEq(canonical, streamed_locales,
+            "streaming visits the requested locales in order");
+        assertEq((map $1.projectAction(app(), action()), built),
+            streamed_projections,
+            "streamed catalogs project the same presentation");
+
+        # an exception thrown by the consumer stops the build
+        int consumed = 0;
+        assertThrows("CONSUMER-ERROR", sub () {
+            DataProviderPresentationCatalog::forEachDomainCatalog(Domain,
+                locales, sub (DataProviderPresentationCatalog catalog) {
+                    if (++consumed == 2) {
+                        throw "CONSUMER-ERROR", catalog.getLocale();
+                    }
+                }, discovery_opts);
+        }, NOTHING, "a consumer exception is propagated");
+        assertEq(2, consumed, "no catalog is built after the consumer fails");
+
+        # a caller-supplied index serves every discovery of the call
+        I18n::CatalogDiscoveryIndex discovery_index();
+        DataProviderPresentationCatalog::buildDomainCatalogs(Domain, locales,
+            discovery_opts, discovery_index);
+        int scans = discovery_index.getDirectoryScanCount();
+        assertGt(0, scans, "the build read catalog directories");
+        DataProviderPresentationCatalog::buildDomainCatalogs(Domain, locales,
+            discovery_opts, discovery_index);
+        assertEq(scans, discovery_index.getDirectoryScanCount(),
+            "a repeated build through the same index reads no directory "
+                "again");
+
+        assertEq((), DataProviderPresentationCatalog::buildDomainCatalogs(
+            Domain, (), discovery_opts), "no locales build no catalogs");
+        assertThrows("I18N-LOCALE-ERROR",
+            \DataProviderPresentationCatalog::buildDomainCatalogs(),
+            (Domain, ("ja", "not a locale!"), discovery_opts),
+            "an invalid locale is rejected");
+    }
+
+    catalogConflictReportTest() {
+        string root = make_tmp_dir("data-provider-presentation-conflict-");
+        on_exit remove_tree(root);
+        string domain_dir = root + DirSep + Domain;
+        string ja_dir = domain_dir + DirSep + "ja";
+        mkdir(domain_dir);
+        mkdir(ja_dir);
+        string id = DataProviderPresentation::actionMessageId(App, Action,
+            "display_name");
+        writeJson(domain_dir + DirSep + "root.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "Odeslat zprávu"},
+            }}},
+        });
+        string owner_one = ja_dir + DirSep + "OwnerOne.json";
+        string owner_two = ja_dir + DirSep + "OwnerTwo.json";
+        writeJson(owner_one, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "メッセージを送信"},
+            }}},
+        });
+        writeJson(owner_two, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                id: {"source": "Odeslat zprávu", "message": "別の翻訳"},
+            }}},
+        });
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        string desc = sprintf("provider catalog files %y and %y conflict for "
+            "locale %y message id %y", owner_one, owner_two, "ja", id);
+        hash<auto> arg = {
+            "locale": "ja",
+            "id": id,
+            "files": (owner_one, owner_two),
+        };
+
+        *hash<ExceptionInfo> ex = catchException(sub () {
+            DataProviderPresentationCatalog catalog(Domain, "ja",
+                discovery_opts);
+        });
+        assertEq("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", ex.err);
+        assertEq(desc, ex.desc);
+        assertEq(arg, ex.arg);
+
+        ex = catchException(sub () {
+            DataProviderPresentationCatalog::buildDomainCatalogs(Domain,
+                ("root", "ja"), discovery_opts);
+        });
+        assertEq("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", ex.err,
+            "the domain builder rejects the same conflict");
+        assertEq(desc, ex.desc);
+        assertEq(arg, ex.arg);
+
+        # root and ja define the same id for different locales, which is not a
+        # conflict
+        unlink(owner_two);
+        list<DataProviderPresentationCatalog> catalogs =
+            DataProviderPresentationCatalog::buildDomainCatalogs(Domain,
+                ("root", "ja"), discovery_opts);
+        assertEq("メッセージを送信",
+            catalogs[1].projectAction(app(), action()).display_name);
+
+        # one file can collide with itself through locale keys that name the
+        # same locale
+        string direct = domain_dir + DirSep + "pt-BR.json";
+        writeJson(direct, {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {
+                "pt_BR": {"messages": {
+                    id: {"source": "Odeslat zprávu", "message": "Enviar"},
+                }},
+                "pt-BR": {"messages": {
+                    id: {"source": "Odeslat zprávu", "message": "Mandar"},
+                }},
+            },
+        });
+        ex = catchException(sub () {
+            DataProviderPresentationCatalog catalog(Domain, "pt-BR",
+                discovery_opts);
+        });
+        assertEq("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", ex.err);
+        assertEq(sprintf("provider catalog file %y defines locale %y message "
+            "id %y more than once with different content", direct, "pt-BR",
+            id), ex.desc);
+        assertEq({"locale": "pt-BR", "id": id, "files": (direct, direct)},
+            ex.arg);
+    }
+
+    private *hash<ExceptionInfo> catchException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
     }
 
     sourceCatalogTest() {

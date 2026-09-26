@@ -32,6 +32,8 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog bidi isolation", \messageCatalogBidiIsolationTest());
         addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
+        addTestCase("message catalog disjoint layers", \messageCatalogDisjointLayersTest());
+        addTestCase("message catalog disjoint layer files", \messageCatalogDisjointLayerFilesTest());
         addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
         addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
         addTestCase("catalog file parse counter", \catalogFileParseCountTest());
@@ -618,6 +620,131 @@ class I18nTest inherits QUnit::Test {
         I18n::MessageCatalog catalog((base, override));
         assertEq("Cau", catalog.t("Hello", "cs"));
         assertEq("Hello", catalog.t("Hello", "de"));
+    }
+
+    messageCatalogDisjointLayersTest() {
+        hash<auto> plural_entry = {
+            "plural_source": "{count} files",
+            "forms": {"one": "{count} soubor", "few": "{count} soubory", "other": "{count} souboru"},
+        };
+        hash<auto> base = catalogLayer("cs", {"Hello": "Ahoj", "1 file": plural_entry});
+        hash<string, bool> disjoint = {"disjoint_layers": True};
+
+        # identical definitions compose; the string form equals the equivalent metadata hash
+        I18n::MessageCatalog identical((base, catalogLayer("cs", {
+            "Hello": {"message": "Ahoj", "state": "translated"},
+            "1 file": plural_entry,
+            "Bye": "Nashle",
+        })), disjoint);
+        assertEq("Ahoj", identical.t("Hello", "cs"));
+        assertEq("Nashle", identical.t("Bye", "cs"), "disjoint ids from both layers are present");
+        assertEq("2 soubory", identical.tn(2, "1 file", "{count} files", "cs"));
+
+        # the same id in different locales never conflicts
+        I18n::MessageCatalog locales((catalogLayer("root", {"Hello": "Hello"}), base), disjoint);
+        assertEq("Hello", locales.t("Hello", "root"));
+        assertEq("Ahoj", locales.t("Hello", "cs"));
+
+        # a different message is rejected with a structured argument
+        *hash<ExceptionInfo> ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base, catalogLayer("cs", {"Hello": "Cau"})), disjoint);
+        });
+        assertEq("I18N-CATALOG-CONFLICT", ex.err);
+        assertEq({"locale": "cs", "id": "Hello", "layers": (0, 1)}, ex.arg);
+        assertEq("catalog layers #0 and #1 conflict for locale 'cs' message id 'Hello'", ex.desc);
+
+        # a different state or plural form is a different message
+        ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base, catalogLayer("cs", {
+                "Hello": {"message": "Ahoj", "state": "fuzzy"},
+            })), disjoint);
+        });
+        assertEq("I18N-CATALOG-CONFLICT", ex.err, "a different state conflicts");
+        ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base, catalogLayer("cs", {
+                "1 file": plural_entry + {"forms": plural_entry.forms + {"other": "{count} dokumentu"}},
+            })), disjoint);
+        });
+        assertEq("I18N-CATALOG-CONFLICT", ex.err, "a different plural form conflicts");
+        assertEq({"locale": "cs", "id": "1 file", "layers": (0, 1)}, ex.arg);
+        ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base, catalogLayer("cs", {
+                "Hello": {"source": "Hi", "message": "Ahoj"},
+            })), disjoint);
+        });
+        assertEq("I18N-CATALOG-CONFLICT", ex.err, "a different source conflicts");
+
+        # a conflict is reported against the most recent layer that defined the id
+        ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base, base, catalogLayer("cs", {"Hello": "Cau"})), disjoint);
+        });
+        assertEq((1, 2), ex.arg.layers);
+
+        # within one catalog, locale keys that normalize to the same locale are layers of themselves
+        hash<auto> aliased = {
+            "schema_version": 1,
+            "locales": {
+                "pt_BR": {"messages": {"Hello": "Oi"}},
+                "pt-BR": {"messages": {"Hello": "Ola"}},
+            },
+        };
+        ex = catchException(sub () {
+            I18n::MessageCatalog conflict(aliased, disjoint);
+        });
+        assertEq({"locale": "pt-BR", "id": "Hello", "layers": (0, 0)}, ex.arg);
+
+        # without the option, or with it disabled, the later layer wins as before
+        hash<auto> override = catalogLayer("cs", {"Hello": "Cau"});
+        assertEq("Cau", new I18n::MessageCatalog((base, override)).t("Hello", "cs"));
+        assertEq("Cau", new I18n::MessageCatalog((base, override), {"disjoint_layers": False}).t("Hello", "cs"));
+        assertEq("Cau", new I18n::MessageCatalog((base, override), {"literal_messages": True}).t("Hello", "cs"));
+        assertEq("Ola", new I18n::MessageCatalog(aliased).t("Hello", "pt-BR"));
+    }
+
+    messageCatalogDisjointLayerFilesTest() {
+        TmpFile base("qore-i18n-disjoint-", ".json");
+        base.file.write(createCatalogJson("Ahoj"));
+        base.file.close();
+        TmpFile same("qore-i18n-disjoint-", ".json");
+        same.file.write(createCatalogJson("Ahoj"));
+        same.file.close();
+        TmpFile other("qore-i18n-disjoint-", ".json");
+        other.file.write(createCatalogJson("Cau"));
+        other.file.close();
+
+        I18n::MessageCatalog identical((base.path, same.path), {"disjoint_layers": True});
+        assertEq("Ahoj, Eva", identical.t("Hello, {name}", "cs", {"name": "Eva"}));
+
+        # file layers are named by path in the description
+        *hash<ExceptionInfo> ex = catchException(sub () {
+            I18n::MessageCatalog conflict((base.path, same.path, other.path), {"disjoint_layers": True});
+        });
+        assertEq("I18N-CATALOG-CONFLICT", ex.err);
+        assertEq({"locale": "cs", "id": "Hello, {name}", "layers": (1, 2)}, ex.arg);
+        assertEq(sprintf("catalog layers '%s' and '%s' conflict for locale 'cs' message id 'Hello, {name}'",
+            same.path, other.path), ex.desc);
+
+        # a single file composes with itself only through aliased locale keys
+        I18n::MessageCatalog single(base.path, {"disjoint_layers": True});
+        assertEq("Ahoj, Eva", single.t("Hello, {name}", "cs", {"name": "Eva"}));
+
+        I18n::MessageCatalog layered((base.path, other.path), {"disjoint_layers": False});
+        assertEq("Cau, Eva", layered.t("Hello, {name}", "cs", {"name": "Eva"}));
+    }
+
+    private hash<auto> catalogLayer(string locale, hash<auto> messages) {
+        return {
+            "schema_version": 1,
+            "locales": {locale: {"messages": messages}},
+        };
+    }
+
+    private *hash<ExceptionInfo> catchException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
     }
 
     messageCatalogJsonFileLoadingTest() {

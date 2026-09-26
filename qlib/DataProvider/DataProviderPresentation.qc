@@ -1082,7 +1082,7 @@ public class DataProviderPresentationCatalog {
         direct locale catalog and the last @c owner.json fragment for each
         locale.  Distinct owner filenames remain independent contributions and
         are still checked for collisions by
-        @ref validateComposableCatalogFiles().
+        @ref composeCatalog().
 
         The nested @c domain/locale.json and flat @c domain.locale.json layouts
         are alternative representations of the same direct locale layer.
@@ -1127,59 +1127,77 @@ public class DataProviderPresentationCatalog {
             name.length() - prefix.length() - 5);
     }
 
-    #! Rejects order-dependent message collisions across provider catalog files
+    #! Composes provider catalog layers, rejecting order-dependent message collisions
     /** Generic native catalogs intentionally use later-file precedence. Source-
         owned provider fragments have a stricter contract: independently owned
         contributions to one app domain must be disjoint or exactly identical.
         This check keeps catalog search-path and filename order from selecting
         user-facing provider presentation.
 
-        Malformed native catalogs are left to [I18n::MessageCatalog](../../i18n/html/index.html), which
-        remains the schema and placeholder-validation authority.
+        The check is performed by
+        [I18n::MessageCatalog](../../i18n/html/index.html) while it composes
+        the layers (its @c disjoint_layers option), which also remains the
+        schema and placeholder-validation authority. Layers for different
+        locales, such as @c root.json and @c ja.json, cannot collide, so the
+        check costs no separate pass over the messages.
 
-        @param files discovered catalog file paths in load order
+        @param files effective catalog file paths in load order
         @param native_catalogs the parsed catalog for each entry of \a files,
-            in the same order; validation and catalog construction share one
-            parse of every file
+            in the same order
+
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if two files define the
+            same locale and message id differently
     */
-    private static validateComposableCatalogFiles(list<string> files,
+    private static I18n::MessageCatalog composeCatalog(list<string> files,
             list<hash<auto>> native_catalogs) {
-        hash<string, hash<auto>> messages_by_locale = {};
-        hash<string, hash<string, string>> paths_by_locale = {};
-        foreach string path in (files) {
-            hash<auto> native_catalog = native_catalogs[$#];
-            if (native_catalog.locales.typeCode() != NT_HASH) {
-                continue;
-            }
-            foreach hash<auto> locale_entry in (
-                    native_catalog.locales.pairIterator()) {
-                if (locale_entry.value.typeCode() != NT_HASH
-                        || locale_entry.value.messages.typeCode() != NT_HASH) {
-                    continue;
-                }
-                string catalog_locale = locale_entry.key;
-                if (!exists messages_by_locale{catalog_locale}) {
-                    messages_by_locale{catalog_locale} = {};
-                    paths_by_locale{catalog_locale} = {};
-                }
-                foreach hash<auto> message_entry in (
-                        locale_entry.value.messages.pairIterator()) {
-                    string message_id = message_entry.key;
-                    if (exists messages_by_locale{catalog_locale}{message_id}
-                            && messages_by_locale{catalog_locale}{message_id}
-                                != message_entry.value) {
-                        throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
-                            sprintf("provider catalog files %y and %y conflict "
-                                "for locale %y message id %y",
-                                paths_by_locale{catalog_locale}{message_id},
-                                path, catalog_locale, message_id);
-                    }
-                    messages_by_locale{catalog_locale}{message_id} =
-                        message_entry.value;
-                    paths_by_locale{catalog_locale}{message_id} = path;
-                }
-            }
+        if (!files) {
+            return new I18n::MessageCatalog({
+                "schema_version": I18n::get_catalog_schema_version(),
+                "locales": {"root": {"messages": {}}},
+            }, {"literal_messages": True});
         }
+        try {
+            return new I18n::MessageCatalog(native_catalogs, {
+                "literal_messages": True,
+                "disjoint_layers": True,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "I18N-CATALOG-CONFLICT") {
+                rethrow;
+            }
+            string first = files[ex.arg.layers[0]];
+            string second = files[ex.arg.layers[1]];
+            string desc = first == second
+                ? sprintf("provider catalog file %y defines locale %y "
+                    "message id %y more than once with different content",
+                    first, ex.arg.locale, ex.arg.id)
+                : sprintf("provider catalog files %y and %y conflict for "
+                    "locale %y message id %y", first, second, ex.arg.locale,
+                    ex.arg.id);
+            throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", desc, {
+                "locale": ex.arg.locale,
+                "id": ex.arg.id,
+                "files": (first, second),
+            };
+        }
+    }
+
+    #! Returns the canonical form of a requested projection locale
+    private static string canonicalRequestedLocale(string requested_locale) {
+        return requested_locale == DataProviderPresentation::RootLocale
+            ? requested_locale : I18n::canonicalize_locale(requested_locale);
+    }
+
+    #! Returns the effective catalog files for one domain and canonical locale
+    private static list<string> discoverEffectiveCatalogFiles(string domain,
+            string locale, *hash<auto> discovery_opts,
+            *I18n::CatalogDiscoveryIndex discovery_index) {
+        list<string> files = discovery_index
+            ? discovery_index.discover(domain, locale, discovery_opts)
+            : I18n::discover_catalog_files(domain, locale, discovery_opts);
+        return files
+            ? selectEffectiveComposableCatalogFiles(domain, files)
+            : files;
     }
 
     #! Creates a projection catalog
@@ -1207,33 +1225,158 @@ public class DataProviderPresentationCatalog {
             index first read each directory, so it must be created for one
             operation and discarded with it; see
             \c I18n::CatalogDiscoveryIndex.
+
+        @note To build catalogs for several locales of one domain, use
+            @ref buildDomainCatalogs(), which parses the files the locales
+            share, such as @c root.json, only once.
     */
     constructor(string domain, string requested_locale,
             *hash<auto> discovery_opts = NOTHING,
             *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
-        locale = requested_locale == DataProviderPresentation::RootLocale
-            ? requested_locale : I18n::canonicalize_locale(requested_locale);
-        list<string> files = discovery_index
-            ? discovery_index.discover(domain, locale, discovery_opts)
-            : I18n::discover_catalog_files(domain, locale, discovery_opts);
-        if (files) {
-            files = selectEffectiveComposableCatalogFiles(domain, files);
-            # Parse each effective file exactly once. Collision validation and
-            # catalog composition consume the same parsed native catalogs;
-            # letting I18n::MessageCatalog re-read the files would double both
-            # the file I/O and the JSON parsing for every catalog built.
+        locale = canonicalRequestedLocale(requested_locale);
+        list<string> files = discoverEffectiveCatalogFiles(domain, locale,
+            discovery_opts, discovery_index);
+        list<hash<auto>> native_catalogs = ();
+        foreach string path in (files) {
+            native_catalogs += I18n::load_native_catalog(path);
+        }
+        catalog = composeCatalog(files, native_catalogs);
+    }
+
+    #! Creates a projection catalog from an already composed message catalog
+    private:internal constructor(string locale, I18n::MessageCatalog catalog) {
+        self.locale = locale;
+        self.catalog = catalog;
+    }
+
+    #! Creates the projection catalogs for several locales of one domain
+    /** The result is the same as constructing one
+        DataProviderPresentationCatalog per locale, but every catalog file is
+        parsed at most once for the call: the catalogs of all locales of a
+        domain share its @c root.json, and regional locales such as @c pt-BR
+        also share their base-language file. A parsed file is released as soon
+        as the last catalog that uses it has been built, and nothing but the
+        returned catalogs is retained after the call.
+
+        @param domain native i18n catalog domain
+        @param requested_locales requested BCP 47 locales or \c root for
+            producer-source presentation
+        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_index optional discovery index reused by every catalog
+            built for one operation; if not given, one is created for this
+            call
+
+        @return one catalog for each entry of \a requested_locales, in the
+            same order
+
+        @throw I18N-CATALOG-ERROR if catalog discovery or parsing fails
+        @throw I18N-LOCALE-ERROR if a requested locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if discovered owner
+            fragments conflict for the same locale and message id
+
+        @par Example
+        @code{.py}
+        list<DataProviderPresentationCatalog> catalogs =
+            DataProviderPresentationCatalog::buildDomainCatalogs("data-provider.UW9yZQ",
+                DataProviderPresentation::discoverCatalogLocales("data-provider.UW9yZQ"));
+        @endcode
+
+        @note All returned catalogs are held at once; a caller that uses each
+            catalog only briefly, for example to validate a domain, holds one
+            at a time with @ref forEachDomainCatalog()
+
+        @since %DataProvider 3.7
+    */
+    static list<DataProviderPresentationCatalog> buildDomainCatalogs(
+            string domain, list<string> requested_locales,
+            *hash<auto> discovery_opts = NOTHING,
+            *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
+        list<DataProviderPresentationCatalog> rv = ();
+        forEachDomainCatalog(domain, requested_locales,
+            sub (DataProviderPresentationCatalog catalog) {
+                rv += catalog;
+            }, discovery_opts, discovery_index);
+        return rv;
+    }
+
+    #! Builds the projection catalogs for several locales of one domain one at a time
+    /** Each catalog is built exactly as by @ref buildDomainCatalogs(), with
+        every catalog file parsed at most once for the call, but is passed to
+        \a consumer as soon as it is built instead of being collected. A
+        catalog that \a consumer does not retain is released before the next
+        one is built, so at most the shared parsed files and one catalog are
+        held at a time.
+
+        @param domain native i18n catalog domain
+        @param requested_locales requested BCP 47 locales or \c root for
+            producer-source presentation
+        @param consumer called with each catalog in the order of
+            \a requested_locales; an exception it throws stops the build and
+            is propagated
+        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_index optional discovery index reused by every catalog
+            built for one operation; if not given, one is created for this
+            call
+
+        @throw I18N-CATALOG-ERROR if catalog discovery or parsing fails
+        @throw I18N-LOCALE-ERROR if a requested locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-ERROR if discovered owner
+            fragments conflict for the same locale and message id
+
+        @par Example
+        Rejecting conflicting provider catalogs of every installed locale
+        without holding all of them at once:
+        @code{.py}
+        string domain = "data-provider.UW9yZQ";
+        DataProviderPresentationCatalog::forEachDomainCatalog(domain,
+            DataProviderPresentation::discoverCatalogLocales(domain),
+            sub (DataProviderPresentationCatalog catalog) {
+                printf("%s: valid\n", catalog.getLocale());
+            });
+        @endcode
+
+        @since %DataProvider 3.7
+    */
+    static forEachDomainCatalog(string domain, list<string> requested_locales,
+            code<nothing(DataProviderPresentationCatalog)> consumer,
+            *hash<auto> discovery_opts = NOTHING,
+            *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
+        if (!discovery_index) {
+            discovery_index = new I18n::CatalogDiscoveryIndex();
+        }
+
+        # Discover every locale first so that each file's remaining uses are
+        # known before any of them is parsed.
+        list<string> locales = ();
+        list<list<string>> files_by_locale = ();
+        hash<string, int> remaining_uses = {};
+        foreach string requested_locale in (requested_locales) {
+            string locale = canonicalRequestedLocale(requested_locale);
+            list<string> files = discoverEffectiveCatalogFiles(domain, locale,
+                discovery_opts, discovery_index);
+            locales += locale;
+            files_by_locale += (files,);
+            foreach string path in (files) {
+                remaining_uses{path} = (remaining_uses{path} ?? 0) + 1;
+            }
+        }
+
+        hash<string, hash<auto>> parsed = {};
+        foreach string locale in (locales) {
+            list<string> files = files_by_locale[$#];
             list<hash<auto>> native_catalogs = ();
             foreach string path in (files) {
-                native_catalogs += I18n::load_native_catalog(path);
+                hash<auto> native_catalog = parsed{path}
+                    ?? I18n::load_native_catalog(path);
+                native_catalogs += native_catalog;
+                if (--remaining_uses{path}) {
+                    parsed{path} = native_catalog;
+                } else {
+                    remove parsed{path};
+                }
             }
-            validateComposableCatalogFiles(files, native_catalogs);
-            catalog = new I18n::MessageCatalog(native_catalogs,
-                {"literal_messages": True});
-        } else {
-            catalog = new I18n::MessageCatalog({
-                "schema_version": I18n::get_catalog_schema_version(),
-                "locales": {"root": {"messages": {}}},
-            }, {"literal_messages": True});
+            consumer(new DataProviderPresentationCatalog(locale,
+                composeCatalog(files, native_catalogs)));
         }
     }
 
@@ -1740,20 +1883,19 @@ public class DataProviderPresentationEmbeddingCatalog {
         }
         list<DataProviderPresentationCatalog> catalogs = ();
         # Every locale of one domain resolves against the same catalog
-        # directories; an index scoped to this population reads each of them
-        # once instead of once per locale. It is discarded on return, so a
-        # later population sees catalogs installed in the meantime.
-        I18n::CatalogDiscoveryIndex discovery_index();
-        foreach string locale in (
-                DataProviderPresentation::discoverCatalogLocales(domain,
-                    discovery_opts)) {
-            DataProviderPresentationCatalog catalog(domain, locale,
-                discovery_opts, discovery_index);
+        # directories and shares its root catalog; building them together
+        # reads each directory and parses each file once. Nothing is retained
+        # after the call, so a later population sees catalogs installed in the
+        # meantime.
+        foreach DataProviderPresentationCatalog catalog in (
+                DataProviderPresentationCatalog::buildDomainCatalogs(domain,
+                    DataProviderPresentation::discoverCatalogLocales(domain,
+                        discovery_opts), discovery_opts)) {
             # Root source text is already present in the canonical provider
             # metadata and must not be duplicated in the embedding document.
-            # Construct its catalog anyway so owner-fragment conflicts fail
+            # Its catalog is built anyway so owner-fragment conflicts fail
             # population instead of remaining dependent on a later request.
-            if (locale != DataProviderPresentation::RootLocale) {
+            if (catalog.getLocale() != DataProviderPresentation::RootLocale) {
                 catalogs += catalog;
             }
         }

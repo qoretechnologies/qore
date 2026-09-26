@@ -98,6 +98,31 @@ list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
 I18n::MessageCatalog billing_catalog(files);
     @endcode
 
+    @subsection i18ncatalogslayers Layered Catalogs
+
+    A catalog built from several files or native catalog hashes composes them as layers in the given order, and by
+    default a later layer overrides an earlier one per whole message id. That is the right policy for an override
+    directory, but not for independently owned fragments of one domain, where the winner would otherwise depend on
+    search-path and filename order. Pass \c {"disjoint_layers": True} to require instead that layers contributing to
+    the same locale are disjoint or define each shared message id identically. A message id that a later layer
+    defines again with a different message, source, plural form, or state raises \c I18N-CATALOG-CONFLICT, whose
+    \c arg hash gives the \c locale, the message \c id, and the zero-based load-order indexes of both \c layers.
+    Entries are compared as parsed, so the string form of a message and the equivalent metadata hash are identical.
+    The check is part of composition and adds no separate pass over the messages; layers for different locales, such
+    as \c root.json and \c cs.json, can never conflict.
+
+    @code{.py}
+try {
+    I18n::MessageCatalog catalog(files, {"disjoint_layers": True});
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "I18N-CATALOG-CONFLICT") {
+        printf("%s and %s disagree on %y in %s\n", files[ex.arg.layers[0]], files[ex.arg.layers[1]], ex.arg.id,
+            ex.arg.locale);
+    }
+    rethrow;
+}
+    @endcode
+
     Applications do not need a source-code locale allowlist. \c I18n::discover_catalog_locales() enumerates the
     canonical locale identities that actually have direct, flat, or fragment catalogs for a domain. It ignores
     incidental files, invalid or noncanonical locale names, and empty fragment directories:

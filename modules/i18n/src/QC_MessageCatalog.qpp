@@ -54,6 +54,8 @@ struct I18nCatalogMessage {
     std::unordered_map<std::string, std::string> plural_forms;
     std::string state = "translated";
     std::set<std::string> placeholders;
+    //! index of the catalog layer that supplied the message; used only to report layer conflicts
+    unsigned layer = 0;
     bool plural = false;
 };
 
@@ -484,15 +486,35 @@ static int64 i18n_catalog_get_max_file_len_option(const QoreHashNode* opts, Exce
     return max_file_len;
 }
 
+// returns true if two parsed entries present the same message; placeholders are derived from the compared text
+// and are not compared separately
+static bool i18n_catalog_same_message(const I18nCatalogMessage& a, const I18nCatalogMessage& b) {
+    return a.plural == b.plural
+        && a.source == b.source
+        && a.message == b.message
+        && a.plural_source == b.plural_source
+        && a.plural_forms == b.plural_forms
+        && a.state == b.state;
+}
+
 } // namespace
 
 class QoreMessageCatalog : public AbstractPrivateData {
 public:
-    DLLLOCAL explicit QoreMessageCatalog(bool use_unreviewed = false, bool literal_messages = false)
-            : use_unreviewed(use_unreviewed), literal_messages(literal_messages) {
+    DLLLOCAL explicit QoreMessageCatalog(bool use_unreviewed = false, bool literal_messages = false,
+            bool disjoint_layers = false)
+            : use_unreviewed(use_unreviewed), literal_messages(literal_messages), disjoint_layers(disjoint_layers) {
     }
 
-    DLLLOCAL void loadCatalog(const QoreHashNode* catalog, ExceptionSink* xsink) {
+    //! Loads one catalog layer; later layers override earlier layers per message id
+    /** @param catalog the native catalog hash
+        @param xsink Qore-language exception sink
+        @param name the file the layer was read from, if any; used only in conflict errors
+    */
+    DLLLOCAL void loadCatalog(const QoreHashNode* catalog, ExceptionSink* xsink, const char* name = nullptr) {
+        unsigned layer = static_cast<unsigned>(layer_names.size());
+        layer_names.emplace_back(name ? name : "");
+
         QoreValue schema = catalog->getKeyValue("schema_version");
         if (schema.isNullOrNothing() || schema.getAsBigInt() != I18N_CATALOG_SCHEMA_VERSION) {
             xsink->raiseException("I18N-CATALOG-ERROR",
@@ -525,7 +547,8 @@ public:
             if (!i18n_catalog_check_locale_length(locale_name, xsink, "catalog locale")) {
                 return;
             }
-            loadLocale(i18n_catalog_normalize_locale(locale_name), locale_value.get<const QoreHashNode>(), xsink);
+            loadLocale(i18n_catalog_normalize_locale(locale_name), locale_value.get<const QoreHashNode>(), layer,
+                xsink);
             if (*xsink) {
                 return;
             }
@@ -537,7 +560,11 @@ public:
         if (*xsink) {
             return;
         }
-        loadCatalog(*catalog, xsink);
+        TempEncodingHelper name(path, QCS_UTF8, xsink);
+        if (*xsink) {
+            return;
+        }
+        loadCatalog(*catalog, xsink, name->c_str());
     }
 
     DLLLOCAL QoreStringNode* translate(const QoreStringNode* id_arg, const QoreStringNode* source_arg,
@@ -816,8 +843,13 @@ private:
     I18nLocaleMap locales;
     bool use_unreviewed = false;
     bool literal_messages = false;
+    //! if true, a message id supplied again with a different message raises I18N-CATALOG-CONFLICT
+    bool disjoint_layers = false;
+    //! source file of each loaded layer, or an empty string for a layer loaded from a hash
+    std::vector<std::string> layer_names;
 
-    DLLLOCAL void loadLocale(const std::string& locale, const QoreHashNode* locale_hash, ExceptionSink* xsink) {
+    DLLLOCAL void loadLocale(const std::string& locale, const QoreHashNode* locale_hash, unsigned layer,
+            ExceptionSink* xsink) {
         QoreValue messages_value = locale_hash->getKeyValue("messages");
         if (messages_value.getType() != NT_HASH) {
             xsink->raiseException("I18N-CATALOG-ERROR", "catalog locale '%s' must contain a messages hash",
@@ -846,8 +878,40 @@ private:
             if (!parseMessageEntry(id, mi.get(), msg, xsink)) {
                 return;
             }
-            target[id] = std::move(msg);
+            msg.layer = layer;
+            auto i = target.try_emplace(id);
+            if (!i.second && disjoint_layers && !i18n_catalog_same_message(i.first->second, msg)) {
+                raiseLayerConflict(locale, id, i.first->second.layer, layer, xsink);
+                return;
+            }
+            i.first->second = std::move(msg);
         }
+    }
+
+    DLLLOCAL std::string getLayerLabel(unsigned layer) const {
+        const std::string& name = layer_names[layer];
+        if (!name.empty()) {
+            return "'" + name + "'";
+        }
+        return "#" + std::to_string(layer);
+    }
+
+    DLLLOCAL void raiseLayerConflict(const std::string& locale, const std::string& id, unsigned previous,
+            unsigned layer, ExceptionSink* xsink) const {
+        ReferenceHolder<QoreListNode> layers(new QoreListNode(bigIntTypeInfo), xsink);
+        layers->push(static_cast<int64>(previous), xsink);
+        layers->push(static_cast<int64>(layer), xsink);
+        ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+        arg->setKeyValue("locale", new QoreStringNode(locale, QCS_UTF8), xsink);
+        arg->setKeyValue("id", new QoreStringNode(id, QCS_UTF8), xsink);
+        arg->setKeyValue("layers", layers.release(), xsink);
+        if (*xsink) {
+            return;
+        }
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("catalog layers %s and %s conflict for locale '%s' message id '%s'",
+            getLayerLabel(previous).c_str(), getLayerLabel(layer).c_str(), locale.c_str(), id.c_str());
+        xsink->raiseExceptionArg("I18N-CATALOG-CONFLICT", arg.release(), desc);
     }
 
     DLLLOCAL bool parseMessageEntry(const std::string& id, QoreValue value, I18nCatalogMessage& msg,
@@ -1225,14 +1289,21 @@ MessageCatalog::constructor(hash<auto> native_catalog) {
 //! Creates a message catalog from one native catalog hash with options.
 /** @param native_catalog schema-versioned native catalog hash
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
-        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
+        \c "disjoint_layers" rejects a message id that is defined again with different content, which within one
+        catalog can only happen when two locale keys normalize to the same locale
 
     @throw I18N-CATALOG-ERROR if the catalog schema or placeholders are invalid
+    @throw I18N-CATALOG-CONFLICT if \c "disjoint_layers" is set and a message id is defined again with different
+        content; the exception \c arg is a hash with \c locale, \c id, and \c layers (the zero-based indexes of the
+        two layers in load order)
 */
 MessageCatalog::constructor(hash<auto> native_catalog, *hash<auto> opts) {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
     bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
+    bool disjoint_layers = opts && opts->getKeyValue("disjoint_layers").getAsBool();
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages,
+        disjoint_layers));
     holder->loadCatalog(native_catalog, xsink);
     if (*xsink) {
         return;
@@ -1260,21 +1331,28 @@ MessageCatalog::constructor(string path) [dom=FILESYSTEM] {
 /** @param path path to a UTF-8 native catalog JSON file
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
         \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
-        \c "max_file_len" sets the maximum accepted file size in bytes
+        \c "max_file_len" sets the maximum accepted file size in bytes;
+        \c "disjoint_layers" rejects a message id that is defined again with different content, which within one
+        catalog can only happen when two locale keys normalize to the same locale
 
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if the file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if the catalog schema, placeholders, or options are invalid
+    @throw I18N-CATALOG-CONFLICT if \c "disjoint_layers" is set and a message id is defined again with different
+        content; the exception \c arg is a hash with \c locale, \c id, and \c layers (the zero-based indexes of the
+        two layers in load order)
 */
 MessageCatalog::constructor(string path, *hash<auto> opts) [dom=FILESYSTEM] {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
     bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
+    bool disjoint_layers = opts && opts->getKeyValue("disjoint_layers").getAsBool();
     int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
     if (*xsink) {
         return;
     }
 
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages,
+        disjoint_layers));
     holder->loadCatalogFile(path, max_file_len, xsink);
     if (*xsink) {
         return;
@@ -1336,21 +1414,28 @@ MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
     @param paths list of UTF-8 native catalog JSON file paths
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
         \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
-        \c "max_file_len" sets the maximum accepted file size in bytes for each file
+        \c "max_file_len" sets the maximum accepted file size in bytes for each file;
+        \c "disjoint_layers" rejects a message id that a later layer defines again with different content instead of
+        letting the later layer override it; see @ref i18ncatalogslayers
 
     @throw FILE-READ-ERROR if a file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if a file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if any catalog schema, placeholders, or options are invalid
+    @throw I18N-CATALOG-CONFLICT if \c "disjoint_layers" is set and a message id is defined again with different
+        content; the exception \c arg is a hash with \c locale, \c id, and \c layers (the zero-based indexes of the
+        two layers in load order); the description names both files
 */
 MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTEM] {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
     bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
+    bool disjoint_layers = opts && opts->getKeyValue("disjoint_layers").getAsBool();
     int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
     if (*xsink) {
         return;
     }
 
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages,
+        disjoint_layers));
     for (size_t i = 0; i < paths->size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
             return;
@@ -1371,14 +1456,21 @@ MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTE
 
     @param native_catalogs list of schema-versioned native catalog hashes
     @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
-        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation
+        \c "literal_messages" treats braces in non-plural messages as literal text and disables interpolation;
+        \c "disjoint_layers" rejects a message id that a later layer defines again with different content instead of
+        letting the later layer override it; see @ref i18ncatalogslayers
 
     @throw I18N-CATALOG-ERROR if any catalog schema or placeholders are invalid
+    @throw I18N-CATALOG-CONFLICT if \c "disjoint_layers" is set and a message id is defined again with different
+        content; the exception \c arg is a hash with \c locale, \c id, and \c layers (the zero-based indexes of the
+        two layers in load order)
 */
 MessageCatalog::constructor(list<hash<auto>> native_catalogs, *hash<auto> opts) {
     bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
     bool literal_messages = opts && opts->getKeyValue("literal_messages").getAsBool();
-    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages));
+    bool disjoint_layers = opts && opts->getKeyValue("disjoint_layers").getAsBool();
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed, literal_messages,
+        disjoint_layers));
     for (size_t i = 0; i < native_catalogs->size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog layers")) {
             return;
