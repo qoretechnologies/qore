@@ -2268,6 +2268,33 @@ message(STATUS \"Atomically installed: \${_qore_qmod_dst}\")
 " ${_qore_qmod_component_args})
 ENDFUNCTION (QORE_INSTALL_QMOD_ATOMIC)
 
+# Returns the resource subdirectories of a split-dir user module
+#
+# A module that reads data relative to get_script_dir() finds it in these subdirectories, so they are installed
+# beside the module's sources and made available beside its AOT .qmod as well.  A resource subdirectory is any
+# subdirectory of the module's directory that holds no Qore sources (*.qm, *.qc), except those with their own
+# rules: jar/ (Java archives, see QORE_USER_MODULE_AOT_RULES) and i18n/ (message catalogs, installed into the
+# catalog tree by QORE_INSTALL_USER_MODULE_CATALOGS); hidden directories are skipped.
+#
+# Param #1: the name of the variable receiving the list of subdirectory names
+# Param #2: the module's source directory
+FUNCTION (QORE_USER_MODULE_RESOURCE_DIRS _out _source_root)
+    set(_rv "")
+    # CONFIGURE_DEPENDS so that adding a resource directory re-runs configure, like the module's source glob
+    file(GLOB _children LIST_DIRECTORIES true CONFIGURE_DEPENDS RELATIVE "${_source_root}" "${_source_root}/*")
+    foreach(_child ${_children})
+        if (NOT IS_DIRECTORY "${_source_root}/${_child}" OR _child STREQUAL "jar" OR _child STREQUAL "i18n"
+                OR _child MATCHES "^\\.")
+            continue()
+        endif()
+        file(GLOB_RECURSE _child_sources "${_source_root}/${_child}/*.qm" "${_source_root}/${_child}/*.qc")
+        if (NOT _child_sources)
+            list(APPEND _rv "${_child}")
+        endif()
+    endforeach()
+    set(${_out} "${_rv}" PARENT_SCOPE)
+ENDFUNCTION (QORE_USER_MODULE_RESOURCE_DIRS)
+
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
 # Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
@@ -2425,7 +2452,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     set(_qmod_resource_srcs "")
     set(_qmod_jar_srcs "")
     set(_qmod_jar_stage_commands "")
+    set(_qmod_resource_dirs "")
     if (${_is_dir})
+        QORE_USER_MODULE_RESOURCE_DIRS(_qmod_resource_dirs "${_source_root}")
         file(GLOB _qmod_resource_srcs CONFIGURE_DEPENDS
             "${_source_root}/*.svg"
             "${_source_root}/*.yaml"
@@ -2495,6 +2524,35 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 VERBATIM
             )
             list(APPEND _qmod_resource_copies ${_res_out})
+        endforeach()
+        # Resource subdirectories (see QORE_USER_MODULE_RESOURCE_DIRS) are linked beside the qmod, so
+        # get_script_dir()-relative data such as schemas is found without copying it; they are copied where
+        # symbolic links are not available, with the directory's files as dependencies so changes are copied
+        # again.  A stamp is the output, since a directory or a link to one is no reliable make target.
+        foreach(_res_dir ${_qmod_resource_dirs})
+            set(_res_dir_stamp ${_qmod_out_dir}/.${_res_dir}.resource-dir.stamp)
+            if (WIN32)
+                file(GLOB_RECURSE _res_dir_files CONFIGURE_DEPENDS "${_source_root}/${_res_dir}/*")
+                set(_res_dir_stage_command
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${_source_root}/${_res_dir}
+                        ${_qmod_out_dir}/${_res_dir})
+            else()
+                set(_res_dir_files "")
+                set(_res_dir_stage_command
+                    COMMAND ${CMAKE_COMMAND} -E create_symlink ${_source_root}/${_res_dir}
+                        ${_qmod_out_dir}/${_res_dir})
+            endif()
+            add_custom_command(
+                OUTPUT ${_res_dir_stamp}
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+                COMMAND ${CMAKE_COMMAND} -E rm -rf ${_qmod_out_dir}/${_res_dir}
+                ${_res_dir_stage_command}
+                COMMAND ${CMAKE_COMMAND} -E touch ${_res_dir_stamp}
+                DEPENDS ${_res_dir_files}
+                COMMENT "Stage ${_name} resource directory ${_res_dir}"
+                VERBATIM
+            )
+            list(APPEND _qmod_resource_copies ${_res_dir_stamp})
         endforeach()
     else()
         # Optionally drop a symlink at qlib/<name>.qmod pointing at the
@@ -2625,6 +2683,36 @@ endif()"
                 DESTINATION ${_qmod_install_dir}/${_name}/jar
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT}
                 FILES_MATCHING PATTERN "*.jar")
+        endif()
+        # Resource subdirectories are made available beside the AOT .qmod like jar/: a relative link to the copy
+        # installed beside the .qm sources, so large data is not duplicated.  If that copy is not installed (a
+        # packaging that installs only the qmod component), the directory is copied from the source tree instead.
+        # When the qmods are installed beside the sources, the source install already put them there.
+        if (NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            foreach(_res_dir ${_qmod_resource_dirs})
+                if (WIN32)
+                    install(DIRECTORY ${_source_root}/${_res_dir}
+                        DESTINATION ${_qmod_install_dir}/${_name}
+                        COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+                else()
+                    file(RELATIVE_PATH _qmod_res_rel
+                        "${_qmod_install_dir}/${_name}"
+                        "${QORE_USER_MODULES_DIR}/${_name}/${_res_dir}")
+                    install(CODE
+"set(_src_res_dir \"\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}/${_res_dir}\")
+set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_install_dir}/${_name}\")
+file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
+file(REMOVE_RECURSE \"\${_aot_mod_dir}/${_res_dir}\")
+if (EXISTS \"\${_src_res_dir}\")
+    file(CREATE_LINK \"${_qmod_res_rel}\" \"\${_aot_mod_dir}/${_res_dir}\" SYMBOLIC)
+    message(STATUS \"AOT resource dir symlink: \${_aot_mod_dir}/${_res_dir} -> ${_qmod_res_rel}\")
+else()
+    file(COPY \"${_source_root}/${_res_dir}\" DESTINATION \"\${_aot_mod_dir}\")
+    message(STATUS \"AOT resource dir copy: \${_aot_mod_dir}/${_res_dir}\")
+endif()"
+                        COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+                endif()
+            endforeach()
         endif()
     else()
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
@@ -3080,6 +3168,16 @@ MACRO (QORE_USER_MODULE _module_file)
     install(FILES ${_mod_targets}
         DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
         COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+    # resource subdirectories read relative to get_script_dir() are installed beside the sources; the AOT rules
+    # link them beside the qmod as well
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_USER_MODULE_RESOURCE_DIRS(_mod_resource_dirs ${CMAKE_SOURCE_DIR}/qlib/${f})
+        foreach(_mod_resource_dir ${_mod_resource_dirs})
+            install(DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f}/${_mod_resource_dir}
+                DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
+                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+        endforeach()
+    endif()
     QORE_INSTALL_USER_MODULE_CATALOGS(${f})
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 1)
@@ -3424,6 +3522,16 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     install(FILES ${_mod_targets}
         DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
         COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+    # resource subdirectories read relative to get_script_dir() are installed beside the sources; the AOT rules
+    # link them beside the qmod as well
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_USER_MODULE_RESOURCE_DIRS(_mod_resource_dirs ${CMAKE_SOURCE_DIR}/qlib/${f})
+        foreach(_mod_resource_dir ${_mod_resource_dirs})
+            install(DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f}/${_mod_resource_dir}
+                DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
+                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+        endforeach()
+    endif()
     QORE_INSTALL_USER_MODULE_CATALOGS(${f})
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 1)

@@ -321,6 +321,21 @@ External user-module documentation includes generated headers for `.qm` and `.qc
 sources. Packaged SVG, YAML, JSON and protocol resources are installed alongside
 the module, but are not Qdx source inputs and do not produce `.dox.h` files.
 
+A split-dir module's **resource subdirectories** - every subdirectory of
+`qlib/<Module>/` that contains no `.qm`/`.qc` sources, except `jar/` and `i18n/`,
+which have their own rules - hold data the module reads relative to
+`get_script_dir()` (for example `schemas/`).  `QORE_USER_MODULE_RESOURCE_DIRS()`
+in `cmake/QoreMacros.cmake` selects them, and the user-module macros:
+
+- install each one beside the module's sources in `QORE_USER_MODULES_DIR/<Module>/`;
+- link it beside the AOT `.qmod` in the build tree (`qlib-qmod/<Module>/`), or copy
+  it on Windows, so `get_script_dir()` resolves as it does for the sources;
+- at install time, make it available beside the installed `.qmod` as a relative
+  symbolic link to the copy installed beside the sources, like `jar/`, or copy it
+  when that copy is not installed (a qmod-only component install) or on Windows.
+
+A module therefore needs no install rule of its own for such data.
+
 #### Relative-path gotcha in `TAGFILES`
 
 The binary module's HTML output is at `${CMAKE_BINARY_DIR}/docs/${binary}/html/`
