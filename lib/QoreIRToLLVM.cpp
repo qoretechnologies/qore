@@ -3523,6 +3523,77 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
     reg_builder.CreateStore(alloca_ptr, gep);
 }
 
+void QoreIRToLLVM::finalizeInvokeCleanupArray() {
+    llvm::AllocaInst* array = invoke_cleanup_array;
+    invoke_cleanup_array = nullptr;
+    if (!array) {
+        return;
+    }
+
+    // The array is only read through the qore_rt_cleanup_run_allocas() calls
+    // emitted by emitInvokeCleanup(); every other user is a registration GEP
+    // whose only users are the stores written by registerInvokeCleanupAlloca().
+    // Anything else keeps the array alive.
+    std::vector<llvm::Instruction*> dead;
+    bool read = false;
+    size_t scanned = 0;
+    for (llvm::User* user : array->users()) {
+        if (++scanned % 100 == 0
+                && qore_check_cancel(nullptr, "JIT invoke cleanup array finalization")) {
+            // the array is left at its estimated capacity, which is correct but oversized
+            return;
+        }
+        auto* gep = llvm::dyn_cast<llvm::GetElementPtrInst>(user);
+        if (!gep) {
+            read = true;
+            break;
+        }
+        for (llvm::User* gep_user : gep->users()) {
+            auto* store = llvm::dyn_cast<llvm::StoreInst>(gep_user);
+            if (!store || store->getPointerOperand() != gep) {
+                read = true;
+                break;
+            }
+            dead.push_back(store);
+        }
+        if (read) {
+            break;
+        }
+        dead.push_back(gep);
+    }
+
+    if (!read) {
+        // Every exit used the inline cleanup: the array and its registration
+        // stores are dead.  Erase them here, since optnone functions would
+        // otherwise keep the whole allocation in the frame.  This loop is not
+        // cancellable: stopping part way would leave GEPs of an erased array;
+        // it is bounded by the scan above and does constant work per element.
+        for (llvm::Instruction* inst : dead) {
+            inst->eraseFromParent();
+        }
+        assert(array->use_empty());
+        array->eraseFromParent();
+        return;
+    }
+
+    // The array escapes into the runtime helper, so LLVM cannot shrink it;
+    // size it to the slots actually registered instead of the capacity
+    // estimate, which is several times larger and dominates the frame size of
+    // large functions (exhausting the stack in deep recursion).
+    assert(invoke_cleanup_array_count <= invoke_cleanup_array_capacity);
+    if (!invoke_cleanup_array_count
+            || invoke_cleanup_array_count == invoke_cleanup_array_capacity) {
+        return;
+    }
+    llvm::IRBuilder<> ab(array);
+    llvm::AllocaInst* exact = ab.CreateAlloca(ptr_type,
+            llvm::ConstantInt::get(i32_type, invoke_cleanup_array_count));
+    exact->setAlignment(array->getAlign());
+    exact->takeName(array);
+    array->replaceAllUsesWith(exact);
+    array->eraseFromParent();
+}
+
 void QoreIRToLLVM::registerPersistentCleanupAlloca(llvm::Value* alloca_ptr) {
     persistent_cleanup_allocas.insert(alloca_ptr);
     registerInvokeCleanupAlloca(alloca_ptr);
@@ -12112,6 +12183,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             return false;
         }
     }
+
+    // All exits (and therefore every emitInvokeCleanup() call) are emitted.
+    finalizeInvokeCleanupArray();
 
     // Emit llvm.lifetime.start/end annotations for entry-block allocas.
     // Must run after all terminators are in place (we walk ret/resume sites).

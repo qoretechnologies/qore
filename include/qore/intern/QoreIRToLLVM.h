@@ -1141,9 +1141,16 @@ private:
     void registerInvokeCleanupAlloca(llvm::Value* alloca_ptr);
     void registerPersistentCleanupAlloca(llvm::Value* alloca_ptr);
 
+    //! Sizes the invoke cleanup pointer array to the slots actually registered
+    /** Erases the array and its registration stores when no exit reads it.  Must be called
+        after every emitInvokeCleanup() call for the function has been emitted.
+    */
+    void finalizeInvokeCleanupArray();
+
     // Conservative upper bound for the cleanup pointer array.  Overflow falls
     // back to the expanded cleanup path, so the estimate only affects whether
-    // the compact helper path is available.
+    // the compact helper path is available; finalizeInvokeCleanupArray() sizes
+    // the emitted array to the slots actually used.
     unsigned estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const;
 
     //! @return true if @p variant is the exact variant this function is being lowered from

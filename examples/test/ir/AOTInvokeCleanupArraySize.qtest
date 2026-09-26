@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTInvokeCleanupArraySizeTest
+
+#! Regression test for the oversized AOT/JIT invoke cleanup pointer array
+/** Background: large compiled functions record the addresses of their
+    invoke-result cleanup slots in an entry-block pointer array
+    (`%cleanup_slots`) so every exit can release them with one
+    qore_rt_cleanup_run_allocas() call.  The array was allocated with a
+    capacity estimate 8-11 times larger than the slots actually registered;
+    because its address escapes into the runtime helper LLVM could not shrink
+    it, so it dominated the native frame size and exhausted the thread stack
+    in deep recursion (module-xml WSDL serialization of a 128-level structure
+    failed with STACK-LIMIT-EXCEEDED at level ~84).  Functions whose exits all
+    used the inline cleanup kept the unused array in optnone frames.
+
+    This test checks the lowered LLVM IR (dumped before optimization, so the
+    result does not depend on LLVM removing anything) and the runtime behavior
+    of the compiled code, including exceptions raised with only part of the
+    cleanup slots written. */
+class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
+    public {
+        #! number of string temporaries in the large probe function (>= 32 cleanup slots)
+        const BigTemps = 40;
+        #! number of string temporaries in the small probe function (< 32 cleanup slots)
+        const SmallTemps = 3;
+        #! recursion depth for the runtime checks
+        const Depth = 200;
+    }
+
+    private {
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTInvokeCleanupArraySizeTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("helper-path cleanup array is sized to its registered slots",
+            \testHelperPathArraySize());
+        addTestCase("inline-path functions emit no cleanup array", \testInlinePathNoArray());
+        addTestCase("deep recursion through a helper-path frame", \testDeepRecursion());
+        addTestCase("exceptions release partially written cleanup slots", \testExceptionCleanup());
+
+        set_return_value(main());
+    }
+
+    #! returns Qore source for a recursive function with @p temps string temporaries
+    /** Each temporary is an invoke result registered as a cleanup slot.  When
+        @p throw_at is reached the function throws after writing only the first
+        half of its temporaries.
+    */
+    private static string makeFunction(string name, int temps) {
+        string body;
+        for (int i = 0; i < temps; ++i) {
+            if (i == temps / 2) {
+                body += sprintf("    if (depth == throw_at) {\n"
+                    "        throw \"PROBE-ERROR\", sprintf(\"depth %%d\", depth);\n"
+                    "    }\n");
+            }
+            body += sprintf("    string s%d = sprintf(\"%%s-%d\", a);\n    r += s%d.size();\n", i, i, i);
+        }
+        return sprintf("int sub %s(string a, int depth, int throw_at) {\n"
+            "    int r = 0;\n"
+            "%s"
+            "    if (depth > 0) {\n"
+            "        r += %s(a, depth - 1, throw_at);\n"
+            "    }\n"
+            "    return r;\n"
+            "}\n", name, body, name);
+    }
+
+    #! expected return value of a probe function called with a one-character string
+    private static int expected(int temps, int depth) {
+        int per_level = 0;
+        for (int i = 0; i < temps; ++i) {
+            # "x-<i>"
+            per_level += 2 + string(i).size();
+        }
+        return per_level * (depth + 1);
+    }
+
+    #! compiles @p main_code with the probe functions and returns the pre-optimization IR dump
+    /** @param bin the output binary path
+        @param main_code top-level code appended after the probe functions
+    */
+    private string compile(string bin, string main_code) {
+        TmpFile src("aot_cleanup_array_", ".q");
+        src.file.write("%modern\n"
+            + makeFunction("big_cleanup_probe", BigTemps)
+            + makeFunction("small_cleanup_probe", SmallTemps)
+            + main_code);
+        src.file.close();
+
+        TmpFile ir("aot_cleanup_array_ir_", ".ll");
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -o %s %s 2>%s", env, qcc_bin, bin,
+            src.path, ir.path));
+        if (!is_file(bin)) {
+            testSkip(sprintf("AOT compile unavailable in this environment: %s%s", out, ReadOnlyFile::readTextFile(ir.path)));
+        }
+        return ReadOnlyFile::readTextFile(ir.path);
+    }
+
+    #! returns a hash of function name -> body for every function defined in @p ir
+    private static hash<string, string> splitFunctions(string ir) {
+        hash<string, string> rv;
+        *string name;
+        string body;
+        foreach string line in (ir.split("\n")) {
+            if (!name) {
+                *string fn = (line =~ x/^define [^@]*@([^(]+)\(/)[0];
+                if (fn) {
+                    name = fn;
+                    body = "";
+                }
+                continue;
+            }
+            if (line == "}") {
+                rv{name} = body;
+                remove name;
+                continue;
+            }
+            body += line + "\n";
+        }
+        return rv;
+    }
+
+    #! returns the bodies of all IR functions whose names start with @p prefix
+    private static list<string> getBodies(hash<string, string> fns, string prefix) {
+        return map $1.value, fns.pairIterator(), $1.key.substr(0, prefix.size()) == prefix;
+    }
+
+    testHelperPathArraySize() {
+        TmpDir tmp("qore-aot-cleanup-array-");
+        string ir = compile(tmp.path + "/probe", "printf(\"%d\\n\", big_cleanup_probe(\"x\", 1, -1));\n");
+        list<string> bodies = getBodies(splitFunctions(ir), "big_cleanup_probe");
+        assertGt(0, bodies.size(), "big_cleanup_probe was lowered");
+
+        foreach string body in (bodies) {
+            *list<*string> alloc = body =~ x/%cleanup_slots = alloca ptr, i32 ([0-9]+)/;
+            assertTrue(exists alloc, "helper-path function allocates a cleanup array");
+            int size = alloc[0].toInt();
+            assertGe(BigTemps, size, "cleanup array holds at least one slot per temporary");
+
+            # every registration writes a distinct index below the array size
+            list<string> idx = body =~ x/getelementptr ptr, ptr %cleanup_slots, i32 ([0-9]+)/g;
+            assertEq(size, idx.size(), "one registration per array element");
+            assertEq(size, (map {$1: True}, idx).size(), "registration indexes are distinct");
+            assertEq(size - 1, max(map $1.toInt(), idx), "highest registration index is the last element");
+
+            # an exit lowered mid-body releases the slots registered before it, so every runtime cleanup
+            # call stays within the array, and the final exits cover all of it
+            list<int> counts = map $1.toInt(),
+                (body =~ x/qore_rt_cleanup_run_allocas\(ptr %cleanup_slots, i32 ([0-9]+)/g);
+            assertGt(0, counts.size(), "exits release the array through the runtime helper");
+            assertEq(size, max(counts), "the final exits release the whole array");
+        }
+    }
+
+    testInlinePathNoArray() {
+        TmpDir tmp("qore-aot-cleanup-array-");
+        string ir = compile(tmp.path + "/probe", "printf(\"%d\\n\", small_cleanup_probe(\"x\", 1, -1));\n");
+        hash<string, string> fns = splitFunctions(ir);
+        list<string> bodies = getBodies(fns, "small_cleanup_probe");
+        assertGt(0, bodies.size(), "small_cleanup_probe was lowered");
+
+        foreach string body in (bodies) {
+            assertEq(-1, body.find("cleanup_slots = alloca"), "inline-path function has no cleanup array");
+            assertEq(-1, body.find("%cleanup_slots"), "no cleanup array registration remains");
+            assertEq(-1, body.find("qore_rt_cleanup_run_allocas(ptr %cleanup_slots"),
+                "inline-path function does not call the runtime helper for invoke cleanup");
+        }
+        # the large function in the same module still uses the array
+        assertGt(0, (select getBodies(fns, "big_cleanup_probe"), $1.find("%cleanup_slots = alloca") != -1).size(),
+            "the large function in the same module keeps its cleanup array");
+    }
+
+    testDeepRecursion() {
+        TmpDir tmp("qore-aot-cleanup-array-");
+        string bin = tmp.path + "/probe";
+        compile(bin, sprintf("printf(\"%%d %%d\\n\", big_cleanup_probe(\"x\", %d, -1), "
+            "small_cleanup_probe(\"x\", %d, -1));\n", Depth, Depth));
+        string out = backquote(sprintf("%s %s 2>&1", env, bin));
+        trim out;
+        assertEq(sprintf("%d %d", expected(BigTemps, Depth), expected(SmallTemps, Depth)), out);
+    }
+
+    testExceptionCleanup() {
+        TmpDir tmp("qore-aot-cleanup-array-");
+        string bin = tmp.path + "/probe";
+        # throw from the innermost level and from a level in the middle of the recursion
+        compile(bin, sprintf("foreach int throw_at in ((0, %d)) {\n"
+            "    try {\n"
+            "        big_cleanup_probe(\"x\", %d, throw_at);\n"
+            "        printf(\"no exception\\n\");\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n"
+            "    }\n"
+            "    try {\n"
+            "        small_cleanup_probe(\"x\", %d, throw_at);\n"
+            "        printf(\"no exception\\n\");\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n"
+            "    }\n"
+            "}\n"
+            "printf(\"%%d\\n\", big_cleanup_probe(\"x\", 2, -1));\n", Depth / 2, Depth, Depth));
+        string out = backquote(sprintf("%s %s 2>&1", env, bin));
+        trim out;
+        assertEq(sprintf("PROBE-ERROR: depth 0\nPROBE-ERROR: depth 0\n"
+            "PROBE-ERROR: depth %d\nPROBE-ERROR: depth %d\n%d", Depth / 2, Depth / 2, expected(BigTemps, 2)), out);
+    }
+}
