@@ -727,6 +727,10 @@ if (NOT CARES_FOUND_SYSTEM)
     FetchContent_Declare(cares
         URL "https://github.com/c-ares/c-ares/releases/download/v${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz"
         URL_HASH SHA256=c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78
+        # c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the
+        # qid just freed, so that the lookup never completes; lib/QoreSocket.cpp also recovers from it with
+        # a system c-ares
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchCaresLostQuery.cmake
         EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(cares)

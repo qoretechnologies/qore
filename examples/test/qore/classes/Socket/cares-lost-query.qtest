@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class CaresLostQueryTest
+
+#! A c-ares lookup whose query c-ares lost is started again instead of waiting forever
+/** c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the id of the
+    query that completed (ares_getaddrinfo() moving on to the next search domain, for example); the lookup then
+    never completes.  Every c-ares lookup recognizes that state - an unfinished lookup with active queries but no
+    timeout - and starts again on a new channel, and fails after it lost its query more often than it restarts.
+
+    The defect itself happens for about one query in 65536, so the debug hook dbg_cares_lose_query() makes the next
+    checks find the query lost; the test only runs against a debug build.  Only lookups that wait for a DNS answer
+    are checked for a lost query, so the lookups are of names in the reserved "invalid" domain and of a
+    documentation address: if the host has no DNS server to ask and a lookup ends without waiting, the case is
+    skipped.
+*/
+class CaresLostQueryTest inherits QUnit::Test {
+    private {
+        #! the number of times a lookup starts again before it fails
+        const MaxRestarts = 3;
+
+        #! a name that no DNS server resolves (RFC 6761)
+        const InvalidName = "qore-cares-lost-query.invalid";
+
+        #! an address from the documentation range (RFC 5737), with no reverse mapping
+        const DocAddress = "192.0.2.1";
+    }
+
+    constructor() : QUnit::Test("c-ares lost query", "1.0", \ARGV) {
+        addTestCase("getaddrinfo() recovers from a lost query", \getaddrinfoRecovers());
+        addTestCase("getaddrinfo() fails after too many lost queries", \getaddrinfoGivesUp());
+        addTestCase("gethostbyaddr_long() recovers from a lost query", \gethostbyaddrRecovers());
+        addTestCase("gethostbyaddr_long() fails after too many lost queries", \gethostbyaddrGivesUp());
+        addTestCase("getnameinfo_async() recovers from a lost query", \getnameinfoRecovers());
+        addTestCase("getnameinfo_async() fails after too many lost queries", \getnameinfoGivesUp());
+        set_return_value(main());
+    }
+
+    getaddrinfoRecovers() {
+        checkRecovery("getaddrinfo()", \lookupAddrInfo());
+    }
+
+    getaddrinfoGivesUp() {
+        checkGiveUp("getaddrinfo()", \lookupAddrInfo(), "QOREADDRINFO-GETINFO-ERROR");
+    }
+
+    gethostbyaddrRecovers() {
+        checkRecovery("gethostbyaddr_long()", \lookupHostByAddr());
+    }
+
+    gethostbyaddrGivesUp() {
+        checkGiveUp("gethostbyaddr_long()", \lookupHostByAddr(), "GETHOSTBYADDR-ERROR");
+    }
+
+    getnameinfoRecovers() {
+        checkRecovery("getnameinfo_async()", \lookupNameInfo());
+    }
+
+    getnameinfoGivesUp() {
+        checkGiveUp("getnameinfo_async()", \lookupNameInfo(), "QOREADDRINFO-GETNAMEINFO-ERROR");
+    }
+
+    #! Returns the lookup's result, or the code of the exception it raised
+    private static string lookupAddrInfo() {
+        try {
+            return sprintf("%y", sort(map $1.address, getaddrinfo(InvalidName, NOTHING, AF_INET)));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns the lookup's result, or the code of the exception it raised
+    /** gethostbyaddr() returns @ref nothing for any failed lookup; gethostbyaddr_long() raises its error.
+    */
+    private static string lookupHostByAddr() {
+        try {
+            return sprintf("%y", gethostbyaddr_long(DocAddress));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns the lookup's result, or the code of the exception it raised
+    private static string lookupNameInfo() {
+        try {
+            return sprintf("%y", getnameinfo_async(DocAddress, AF_INET, 80).get(120s));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Makes the next \a count checks for a lost query find it lost, and returns the lookup's result
+    /** @return the lookup's result, or @ref nothing if it did not check for a lost query as often as requested
+    */
+    private *string lookupLosing(int count, code lookup) {
+        call_function("dbg_cares_lose_query", count);
+        string rv = lookup();
+        return call_function("dbg_cares_lose_query", 0) ? NOTHING : rv;
+    }
+
+    #! A lookup that lost its query once gives the result it gives without losing it
+    private checkRecovery(string label, code lookup) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug hook that loses a query is only in debug builds");
+        }
+        string expected = lookup();
+        *string recovered = lookupLosing(1, lookup);
+        if (!exists recovered) {
+            testSkip(label + " ended without waiting for a DNS answer");
+        }
+        assertEq(expected, recovered, label + " started again and gave the result it gives without the loss");
+    }
+
+    #! A lookup that loses its query more often than it restarts fails
+    private checkGiveUp(string label, code lookup, string err) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug hook that loses a query is only in debug builds");
+        }
+        *string result = lookupLosing(MaxRestarts + 1, lookup);
+        if (!exists result) {
+            testSkip(label + " ended without waiting for a DNS answer");
+        }
+        assertEq(err, result, label + " fails after losing its query " + (MaxRestarts + 1) + " times");
+    }
+}

@@ -68,6 +68,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/ql_debug.h"
 
 #include <ares.h>
 
@@ -6203,6 +6204,40 @@ static int qore_cares_library_init(ExceptionSink* xsink) {
     return 0;
 }
 
+#ifdef DEBUG
+std::atomic<int> qore_dbg_cares_lost_query_count{0};
+#endif
+
+//! The number of times a lookup is started again after c-ares lost its query before it fails
+static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
+
+//! Returns true if an unfinished lookup on the channel can never complete, because c-ares lost its query
+/** c-ares keeps every query it has sent on its timeout list until the query is answered or ended, so an unfinished
+    lookup whose channel has active queries but no timeout has lost a query: nothing will ever send it again, answer
+    it, or end it, and the lookup would wait forever.
+
+    c-ares 1.34.7 and 1.34.8 lose a query when a completion callback started from ares_flush_requeue() starts a new
+    query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
+    of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
+    id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  The bundled
+    c-ares build is patched (cmake/PatchCaresLostQuery.cmake), but a system library can have the defect.
+
+    @param channel the channel of an unfinished lookup, after its events were processed
+*/
+static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
+#ifdef DEBUG
+    // a lookup made to lose its query by dbg_cares_lose_query()
+    for (int n = qore_dbg_cares_lost_query_count.load(); n > 0;) {
+        if (qore_dbg_cares_lost_query_count.compare_exchange_weak(n, n - 1)) {
+            return true;
+        }
+    }
+#endif
+    struct timeval tv;
+    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+}
+
 QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type,
         int protocol, int flags)
         : host(std::move(host)), service(std::move(service)), has_host(true), has_service(true), family(family),
@@ -6242,7 +6277,35 @@ int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
     if (*xsink) {
         return -1;
     }
+    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
+    // cannot help is ended by the restart limit
+    while (!done && qore_cares_channel_lost_query(channel)) {
+        if (restart(xsink)) {
+            return -1;
+        }
+    }
     return done ? (status == ARES_SUCCESS ? 0 : -1) : 1;
+}
+
+int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
+    if (++lost_query_restarts > QORE_CARES_MAX_LOST_QUERY_RESTARTS) {
+        done = true;
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_getaddrinfo(node: '%s', service: '%s', "
+            "address_family: %d='%s') error: the resolver lost the lookup's query %u times",
+            has_host ? host.c_str() : "", has_service ? service.c_str() : "", family, q_af_to_str(family),
+            QORE_CARES_MAX_LOST_QUERY_RESTARTS);
+        return -1;
+    }
+    // ares_destroy() ends the lost query with ARES_EDESTRUCTION, which is not the lookup's result
+    restarting = true;
+    ares_destroy(channel);
+    restarting = false;
+    channel = nullptr;
+    // the destroyed channel's sockets are closed; the new channel reports its own
+    fd_events.clear();
+    started = false;
+    status = ARES_SUCCESS;
+    return start(xsink);
 }
 
 void QoreCaresAddrInfoResolver::getExtraFds(std::vector<std::pair<int, int>>& fds) const {
@@ -6381,6 +6444,12 @@ void QoreCaresAddrInfoResolver::updateFd(ares_socket_t socket_fd, int readable, 
 }
 
 void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* res) {
+    if (restarting) {
+        if (res) {
+            ares_freeaddrinfo(res);
+        }
+        return;
+    }
     status = new_status;
     result = res;
     if (status == ARES_SUCCESS && result) {
@@ -6816,6 +6885,13 @@ public:
         }
 
         process();
+        // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
+        // cannot help is ended by the restart limit
+        while (!done && qore_cares_channel_lost_query(channel)) {
+            if (restart(xsink)) {
+                return -1;
+            }
+        }
         return done ? 0 : 1;
     }
 
@@ -6881,6 +6957,28 @@ private:
         return 0;
     }
 
+    //! Destroys the channel and starts the lookup again on a new one after c-ares lost its query
+    DLLLOCAL int restart(ExceptionSink* xsink) {
+        if (++lost_query_restarts > QORE_CARES_MAX_LOST_QUERY_RESTARTS) {
+            done = true;
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "the resolver lost the reverse lookup's query %u times",
+                QORE_CARES_MAX_LOST_QUERY_RESTARTS);
+            return -1;
+        }
+        // ares_destroy() ends the lost query with ARES_EDESTRUCTION, which is not the lookup's result
+        restarting = true;
+        ares_destroy(channel);
+        restarting = false;
+        channel = nullptr;
+        // the destroyed channel's sockets are closed; the new channel reports its own
+        fd_events.clear();
+        started = false;
+        // start() sets up the result again
+        info = SocketResolvedHostByAddrInfo();
+        info.family = addr.ss_family;
+        return start(xsink);
+    }
+
     DLLLOCAL void process() {
         std::vector<std::pair<int, int>> fds;
         getExtraFds(fds);
@@ -6900,6 +6998,9 @@ private:
     }
 
     DLLLOCAL void complete(int new_status, struct hostent* he) {
+        if (restarting) {
+            return;
+        }
         info.status = new_status;
         if (info.status == ARES_SUCCESS && he) {
             info.family = he->h_addrtype;
@@ -6957,6 +7058,10 @@ private:
     ares_channel_t* channel = nullptr;
     std::unordered_map<int, int> fd_events;
     SocketResolvedHostByAddrInfo info;
+    //! the number of times the lookup was started again after c-ares lost its query
+    unsigned lost_query_restarts = 0;
+    //! set while the channel is destroyed for a restart, whose ARES_EDESTRUCTION result is not the lookup's
+    bool restarting = false;
     bool started = false;
     bool done = false;
 };
@@ -7325,7 +7430,33 @@ int QoreCaresNameInfoResolver::continuePoll(ExceptionSink* xsink) {
     }
 
     process();
+    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
+    // cannot help is ended by the restart limit
+    while (!done && qore_cares_channel_lost_query(channel)) {
+        if (restart(xsink)) {
+            return -1;
+        }
+    }
     return done ? 0 : 1;
+}
+
+int QoreCaresNameInfoResolver::restart(ExceptionSink* xsink) {
+    if (++lost_query_restarts > QORE_CARES_MAX_LOST_QUERY_RESTARTS) {
+        done = true;
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "the resolver lost the lookup's query %u times",
+            QORE_CARES_MAX_LOST_QUERY_RESTARTS);
+        return -1;
+    }
+    // ares_destroy() ends the lost query with ARES_EDESTRUCTION, which is not the lookup's result
+    restarting = true;
+    ares_destroy(channel);
+    restarting = false;
+    channel = nullptr;
+    // the destroyed channel's sockets are closed; the new channel reports its own
+    fd_events.clear();
+    started = false;
+    status = ARES_SUCCESS;
+    return start(xsink);
 }
 
 void QoreCaresNameInfoResolver::getExtraFds(std::vector<std::pair<int, int>>& fds) const {
@@ -7418,6 +7549,9 @@ void QoreCaresNameInfoResolver::updateFd(ares_socket_t socket_fd, int readable, 
 }
 
 void QoreCaresNameInfoResolver::complete(int new_status, char* node) {
+    if (restarting) {
+        return;
+    }
     status = new_status;
     if (status == ARES_SUCCESS && node && *node) {
         hostname = node;

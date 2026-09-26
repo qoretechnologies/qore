@@ -669,7 +669,10 @@ val = "string";      # OK
     faster builds and distro security updates, but is not required.
 
     The c-ares minimum includes the fixes for CVE-2026-33630, CVE-2026-69184 and CVE-2026-69186,
-    with callback API compatibility restored in 1.34.8. The source-build dependencies also include
+    with callback API compatibility restored in 1.34.8. c-ares 1.34.7 and 1.34.8 can lose a query when a lookup's
+    next query (for the next search domain, for example) is given the id of the query that just completed, so that
+    the lookup never completes (c-ares issue 1280): the statically linked c-ares is patched, and a lookup with a
+    system c-ares that lost its query is started again. The source-build dependencies also include
     Apache Arrow/Parquet 25.0.1, tree-sitter 0.26.13 and jemalloc 5.4.0 (musl targets).
     The bundled jsoncons headers are updated to 1.9.0 while preserving schema stack/cancellation
     checks, and xxHash is updated to 0.8.4 with unchanged XXH32/XXH64 cache and AOT checksums.

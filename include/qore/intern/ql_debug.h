@@ -63,6 +63,9 @@ DLLLOCAL int64 qore_get_flag_violations();
 //! concurrently with the store; set by dbg_hold_constant_store()
 typedef void (*qore_dbg_constant_store_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_constant_store_hook_t> qore_dbg_constant_store_hook;
+
+//! the number of times the next c-ares lookups report their query as lost; set by dbg_cares_lose_query()
+DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
 #endif
 
 #endif

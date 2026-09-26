@@ -5165,6 +5165,25 @@ static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeCo
     qore_dbg_constant_store_hook.store(dbg_hold_constant_store_hook);
     return QoreValue();
 }
+
+//! makes the next c-ares lookups find that c-ares lost their query
+/** Each time an unfinished c-ares lookup (a name, reverse or name-info lookup) checks whether c-ares lost its
+    query, it finds it lost while the count is positive, and the count is decremented; the lookup then recovers
+    by starting again on a new channel, and fails once it lost its query more often than it restarts.  Tests use
+    it to make the recovery from the defect of c-ares 1.34.7 and 1.34.8 deterministic.
+
+    @param count the number of checks that find the query lost; 0 disarms the hook
+
+    @return the number of checks that were still to find the query lost from the previous call
+*/
+static QoreValue f_dbg_cares_lose_query(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    if (count < 0 || count > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid count %lld", count);
+        return QoreValue();
+    }
+    return static_cast<int64>(qore_dbg_cares_lost_query_count.exchange(static_cast<int>(count)));
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -5222,6 +5241,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

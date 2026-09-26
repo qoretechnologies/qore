@@ -405,6 +405,8 @@ public:
 
 private:
     DLLLOCAL int start(ExceptionSink* xsink);
+    //! Destroys the channel and starts the lookup again on a new one after c-ares lost its query
+    DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process(ExceptionSink* xsink);
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
     DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
@@ -426,8 +428,12 @@ private:
     std::vector<SocketResolvedAddrInfo> addrs;
     std::unordered_map<int, int> fd_events;
     int status = ARES_SUCCESS;
+    //! the number of times the lookup was started again after c-ares lost its query
+    unsigned lost_query_restarts = 0;
     bool started = false;
     bool done = false;
+    //! set while the channel is destroyed for a restart, whose ARES_EDESTRUCTION result is not the lookup's
+    bool restarting = false;
 };
 
 class QoreCaresNameInfoResolver {
@@ -447,6 +453,8 @@ public:
 
 private:
     DLLLOCAL int start(ExceptionSink* xsink);
+    //! Destroys the channel and starts the lookup again on a new one after c-ares lost its query
+    DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process();
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
     DLLLOCAL void complete(int new_status, char* node);
@@ -461,8 +469,12 @@ private:
     std::unordered_map<int, int> fd_events;
     std::string hostname;
     int status = ARES_SUCCESS;
+    //! the number of times the lookup was started again after c-ares lost its query
+    unsigned lost_query_restarts = 0;
     bool started = false;
     bool done = false;
+    //! set while the channel is destroyed for a restart, whose ARES_EDESTRUCTION result is not the lookup's
+    bool restarting = false;
 };
 
 //! Happy Eyeballs (RFC 8305) connection racing poll state for async I/O
