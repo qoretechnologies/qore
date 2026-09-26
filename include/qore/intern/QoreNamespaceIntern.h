@@ -64,6 +64,7 @@ struct TypedefEntry {
     QoreParseTypeInfo* parseTypeInfo = nullptr;  //!< parse-time type info (before resolution)
     const QoreTypeInfo* typeInfo = nullptr;      //!< resolved type info (after resolution)
     bool pub = false;                            //!< is this typedef public?
+    bool mod_imported = false;                   //!< copied in by importing a module; never exported again
     std::string from_module;                     //!< module that defined this typedef
 
     //! Constructor for parse-time type info only
@@ -81,7 +82,15 @@ struct TypedefEntry {
 
     DLLLOCAL TypedefEntry(const TypedefEntry& old)
             : loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
-              typeInfo(old.typeInfo), pub(old.pub), from_module(old.from_module) {
+              typeInfo(old.typeInfo), pub(old.pub), mod_imported(old.mod_imported), from_module(old.from_module) {
+    }
+
+    //! Returns true if the typedef is exported when the Program it belongs to is imported as a module
+    /** A public typedef the Program received by importing another module is not: a module exports only its own
+        declarations and the modules it reexports.
+    */
+    DLLLOCAL bool isUserPublic() const {
+        return pub && !mod_imported;
     }
 
     DLLLOCAL ~TypedefEntry() {
@@ -768,6 +777,21 @@ public:
 
     DLLLOCAL static bool isUserPublic(const QoreNamespace& ns) {
         return ns.priv->pub && !ns.priv->builtin;
+    }
+
+    //! Returns true if importing the namespace's Program as a module would export anything from the namespace
+    /** Only the namespace's own exportable declarations count, and those of its subnamespaces; declarations the
+        Program received by importing modules are not exported again.
+    */
+    DLLLOCAL bool hasUserExports() const;
+
+    //! Returns true if a subnamespace is exported when this namespace's Program is imported as a module
+    /** A namespace created only to hold declarations imported from modules has nothing of its own to export, so
+        it is not exported either.  Namespaces the Program declared itself are always exported when public, so
+        the check walks only imported namespaces.
+    */
+    DLLLOCAL static bool isExportedNamespace(const QoreNamespace& ns) {
+        return isUserPublic(ns) && (!ns.priv->imported || ns.priv->hasUserExports());
     }
 
 private:

@@ -252,6 +252,21 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Modules Export Only Their Own Declarations and Reexported Modules
+    @parblock
+    Constants, enums and their members, and typedefs that a module received from another module it imported with a
+    plain @ref requires "%requires", or loaded at runtime with @ref Qore::load_module() "load_module()" from its own
+    code, were passed on to every @ref Qore::Program "Program" importing the module, although classes, functions,
+    hashdecls, and global variables were not.  They are no longer exported, as documented for
+    @ref qore_modules "user modules": a @ref Qore::Program "Program" using such a declaration must require the module
+    declaring it, unless a module it requires reexports it with <tt>%requires(reexport)</tt>.  Because a module
+    could load another at runtime, which declarations leaked depended on load order; an unqualified constant could
+    resolve to the leaked declaration instead of the importer's own, and loading a module from its source could
+    behave differently from loading it compiled as an AOT module.  A namespace that a module only received from
+    imported modules is no longer exported either, so it no longer clashes with a class of the same name in the
+    importing @ref Qore::Program "Program".
+    @endparblock
+
     @par HttpServer Labels Responses Without a Content-Type by Their Data
     @parblock
     A response body without a \c Content-Type is sent by @ref httpserverintro "HttpServer" as \c text/html in the

@@ -173,7 +173,8 @@ public:
         external_stub_dependent : 1, // initializer references an external stub constant
         rt_in_init : 1, // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
         aot_parse_shell_value_set : 1, // a preloaded `.qo` shell supplied a compile-time value (see below)
-        runtime_dependent : 1 // builtin whose value depends on the running library; see setRuntimeDependent()
+        runtime_dependent : 1, // builtin whose value depends on the running library; see setRuntimeDependent()
+        mod_imported : 1 // copied into this Program by importing a module; never exported again
         ;
 
     //! deferred AOT initializer for an unpopulated shell, or nullptr; owned by the AOT runtime
@@ -411,8 +412,17 @@ public:
         return pub;
     }
 
+    //! Returns true if the constant is exported when the Program it belongs to is imported as a module
+    /** A public constant the Program received by importing another module is not: a module exports only its own
+        declarations and the modules it reexports.
+    */
     DLLLOCAL bool isUserPublic() const {
-        return pub && !builtin;
+        return pub && !builtin && !mod_imported;
+    }
+
+    //! Marks the constant as copied into its Program by importing a module
+    DLLLOCAL void setModuleImported() {
+        mod_imported = true;
     }
 
     DLLLOCAL bool isSystem() const {

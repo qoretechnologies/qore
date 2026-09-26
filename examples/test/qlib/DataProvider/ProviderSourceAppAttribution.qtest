@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class ProviderSourceAppAttributionTest
+
+#! Provider modules loaded from source register their actions under their own app
+/** A REST provider registered before the generic API call builder exists makes DataProvider load
+    RestClientDataProvider at runtime.  Provider modules loaded from their .qm sources afterwards must still
+    attribute every action to their own app; an unqualified app-name constant in a module's init closure
+    previously resolved to RestClientDataProvider::AppName ("GenericRest") in that case, while the AOT-compiled
+    modules were unaffected, so only source loads moved every action to the generic REST app.
+*/
+class ProviderSourceAppAttributionTest inherits QUnit::Test {
+    private {
+        #! module name -> app name
+        const Modules = {
+            "BflDataProvider": "BlackForestLabs",
+            "GoogleDocumentAiDataProvider": "GoogleDocumentAi",
+            "StabilityAiDataProvider": "StabilityAi",
+        };
+
+        const GenericRestApp = "GenericRest";
+    }
+
+    constructor() : Test("provider source app attribution", "1.0") {
+        addTestCase("source-loaded provider actions keep their own app", \sourceLoadedAttributionTest());
+        set_return_value(main());
+    }
+
+    sourceLoadedAttributionTest() {
+        # registering a REST app first loads RestClientDataProvider from DataProvider code at runtime
+        load_module("AftershipDataProvider");
+        assertTrue(exists get_module_hash().RestClientDataProvider,
+            "a REST provider registration loads the generic API call builder module");
+        int generic_actions = DataProviderActionCatalog::getActions(GenericRestApp).size();
+
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        foreach hash<auto> entry in (Modules.pairIterator()) {
+            # loading the module directory uses the .qm/.qc sources, not the AOT .qmod
+            load_module(qlib + DirSep + entry.key);
+            assertTrue(get_module_hash(){entry.key}.filename.endsWith(".qm"),
+                sprintf("%s is loaded from source", entry.key));
+            assertGt(2, DataProviderActionCatalog::getActions(entry.value).size(),
+                sprintf("%s registers its generated actions under app %y", entry.key, entry.value));
+        }
+        assertEq(generic_actions, DataProviderActionCatalog::getActions(GenericRestApp).size(),
+            "no provider action is attributed to the generic REST app");
+    }
+}

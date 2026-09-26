@@ -40,12 +40,18 @@ module StabilityAiDataProvider {
         DataProviderActionCatalog::registerDiscoveryInventoryProvider("StabilityAiDataProvider",
             list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
                 list<hash<DataProviderDiscoveryExpectedIdentityInfo>> result = (
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName},
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "generate-image"},
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "make-api-call"},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": StabilityAiDataProvider::AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": StabilityAiDataProvider::AppName, "action": "generate-image",
+                    },
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": StabilityAiDataProvider::AppName, "action": "make-api-call",
+                    },
                 );
                 foreach string action in ((keys StabilityAiApi::Operations) + (keys StabilityAiWaitDataProvider::Jobs)) {
-                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": action};
+                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": StabilityAiDataProvider::AppName, "action": action,
+                    };
                 }
                 return result;
             });
@@ -74,13 +80,14 @@ module StabilityAiDataProvider {
         });
 
         StabilityAiGenerateImageDataProvider::initializeTypes();
-        foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet().getActionInfoList(AppName)) {
+        foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet()
+                .getActionInfoList(StabilityAiDataProvider::AppName)) {
             if (action.metadata.kind != "json") { action.output_type = StabilityAiOperation::MediaType; }
             DataProviderActionCatalog::registerAction(action);
         }
         foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": AppName, "action": job.key, "path": "/" + job.key,
+                "app": StabilityAiDataProvider::AppName, "action": job.key, "path": "/" + job.key,
                 "display_name": job.value[1], "short_desc": job.value[2],
                 "desc": "Waits for an existing job and returns verified media. The timeout includes every status request. "
                     "Timeout errors preserve the job ID and last status. Waiting never resubmits or cancels a job.",

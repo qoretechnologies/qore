@@ -110,7 +110,10 @@ void EnumList::mergeUserPublic(const EnumList& old, qore_ns_private* ns) {
             continue;
         }
         QoreEnumDecl* ed = new QoreEnumDecl(*i.second);
-        qore_enum_decl_private::get(*ed)->setNamespace(ns);
+        qore_enum_decl_private* p = qore_enum_decl_private::get(*ed);
+        p->setNamespace(ns);
+        // the importing Program uses the enum but does not export it in turn
+        p->setModuleImported();
         addInternal(ed);
     }
 }

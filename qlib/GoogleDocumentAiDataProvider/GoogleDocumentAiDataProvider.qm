@@ -81,7 +81,8 @@ module GoogleDocumentAiDataProvider {
         });
 
         foreach RestSchemaActionSet set in (GoogleDocumentAiSchema::getActionSets()) {
-            foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(AppName)) {
+            foreach hash<DataProviderActionInfo> action in (set
+                    .getActionInfoList(GoogleDocumentAiDataProvider::AppName)) {
                 if (action.metadata.internal) { continue; }
                 action.options -= ("project_id", "location");
                 if (set.getOperationEx(action.action).getMethod().upr() == "PATCH") { action.options -= "name"; }
@@ -116,7 +117,7 @@ module GoogleDocumentAiDataProvider {
             "output_type": GoogleDocumentAiProcessDocumentDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
+            "app": GoogleDocumentAiDataProvider::AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
             "display_name": "Wait for Operation", "short_desc": "Wait for a job and return its complete final outcome",
             "desc": "Polls an existing operation until it finishes. Returns its name, metadata, result, or service "
                 "error, including per-document batch outcomes. A timeout preserves the operation name and last "

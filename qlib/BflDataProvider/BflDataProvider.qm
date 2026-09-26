@@ -39,12 +39,18 @@ module BflDataProvider {
         DataProviderActionCatalog::registerDiscoveryInventoryProvider("BflDataProvider",
             list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
                 list<hash<DataProviderDiscoveryExpectedIdentityInfo>> result = (
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName},
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "generate-image"},
-                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "make-api-call"},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": BflDataProvider::AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": BflDataProvider::AppName, "action": "generate-image",
+                    },
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": BflDataProvider::AppName, "action": "make-api-call",
+                    },
                 );
                 foreach string action in ((keys BflApi::Operations) + (keys BflJobDataProvider::Helpers)) {
-                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": action};
+                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": BflDataProvider::AppName, "action": action,
+                    };
                 }
                 return result;
             });
@@ -74,12 +80,13 @@ module BflDataProvider {
         });
 
         BflGenerateImageDataProvider::initializeTypes();
-        foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet().getActionInfoList(AppName)) {
+        foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet()
+                .getActionInfoList(BflDataProvider::AppName)) {
             DataProviderActionCatalog::registerAction(action);
         }
         foreach hash<auto> helper in (BflJobDataProvider::Helpers.pairIterator()) {
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": AppName, "action": helper.key, "path": "/" + helper.key,
+                "app": BflDataProvider::AppName, "action": helper.key, "path": "/" + helper.key,
                 "display_name": helper.value[0], "short_desc": helper.value[1],
                 "desc": helper.value[1] + (helper.key == "generate-video"
                     ? "\n\nChoose the video mode and its required inputs. This action consumes credits. "

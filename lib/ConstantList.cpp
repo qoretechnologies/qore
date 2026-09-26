@@ -161,7 +161,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
-        rt_in_init(false), aot_parse_shell_value_set(false), runtime_dependent(false),
+        rt_in_init(false), aot_parse_shell_value_set(false), runtime_dependent(false), mod_imported(false),
         // a constant created already initialized -- every builtin -- is finished now; one that still has to
         // be initialized is stamped when ConstantEntryInitHelper retires
         init_seq(n_init ? qore_next_constant_init_seq() : 0),
@@ -194,6 +194,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         // resolves constant initializers the same way
         aot_parse_shell_value_set(old.aot_parse_shell_value_set),
         runtime_dependent(old.runtime_dependent),
+        mod_imported(old.mod_imported),
         // an unpopulated AOT shell keeps its deferred initializer in the copy, so the importing Program can run
         // it from its own entry
         aot_pending_init(old.aot_pending_init),
@@ -1034,6 +1035,8 @@ void ConstantList::mergeUserPublic(const ConstantList& src) {
         }
 
         ConstantEntry* n = new ConstantEntry(*i->second);
+        // the importing Program uses the constant but does not export it in turn
+        n->setModuleImported();
         cnemap.append(cnemap_t::value_type(n->getName(), n));
     }
 }

@@ -3758,7 +3758,12 @@ void qore_ns_private::addEnumMemberConstants(const qore_enum_decl_private& enum_
         if (constant.inList(member->getName())) {
             continue;
         }
-        constant.add(member->getName(), QoreValue::makeEnum(member), enum_priv.getTypeInfo(), Public, loc);
+        cnemap_t::iterator i = constant.add(member->getName(), QoreValue::makeEnum(member), enum_priv.getTypeInfo(),
+            Public, loc);
+        // the members of an enum a module imported are not exported with the module either
+        if (enum_priv.isModuleImported()) {
+            i->second->setModuleImported();
+        }
     }
 }
 
@@ -3999,7 +4004,7 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
     // check subnamespaces
     for (nsmap_t::const_iterator i = mns.nsl.nsmap.begin(), e = mns.nsl.nsmap.end(); i != e; ++i) {
-        if (!qore_ns_private::isUserPublic(*i->second))
+        if (!qore_ns_private::isExportedNamespace(*i->second))
             continue;
         // see if a subnamespace with the same name exists
         const QoreNamespace* cns = nsl.find(i->first);
@@ -4027,6 +4032,68 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
             continue;
         }
     }
+}
+
+bool qore_ns_private::hasUserExports() const {
+    // a large namespace can hold many imported declarations and nothing exportable; when the check is cancelled,
+    // the namespace is reported as exporting something, so the calling merge loop reaches its own cancellation check
+    size_t count = 0;
+    auto cancelled = [&count]() -> bool {
+        return ++count > 1 && !(count % 100) && qore_check_cancel(nullptr, "namespace export scan");
+    };
+    {
+        ConstConstantListIterator i(constant);
+        while (i.next()) {
+            if (i.isUserPublic() || cancelled()) {
+                return true;
+            }
+        }
+    }
+    {
+        ConstClassListIterator i(classList);
+        while (i.next()) {
+            if (i.isUserPublic() || cancelled()) {
+                return true;
+            }
+        }
+    }
+    {
+        ConstHashDeclListIterator i(hashDeclList);
+        while (i.next()) {
+            if (i.isUserPublic() || cancelled()) {
+                return true;
+            }
+        }
+    }
+    {
+        ConstEnumListIterator i(enumList);
+        while (i.next()) {
+            if (i.isUserPublic() || cancelled()) {
+                return true;
+            }
+        }
+    }
+    for (const auto& i : func_list) {
+        if (i.second->isUserPublic() || cancelled()) {
+            return true;
+        }
+    }
+    for (const auto& i : var_list.vmap) {
+        if (i.second->isPublic() || cancelled()) {
+            return true;
+        }
+    }
+    for (const auto& i : typedefMap) {
+        if (i.second->isUserPublic() || cancelled()) {
+            return true;
+        }
+    }
+    for (const auto& i : nsl.nsmap) {
+        if (isExportedNamespace(*i.second) || cancelled()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
@@ -4060,7 +4127,7 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
 
     // merge in source typedefs (with conflict checking)
     for (const auto& i : mns.typedefMap) {
-        if (!i.second->pub) {
+        if (!i.second->isUserPublic()) {
             continue;
         }
         // skip if typedef already exists
@@ -4079,7 +4146,10 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
         if (enumList.find(i.first.c_str())) {
             continue;
         }
-        typedefMap[i.first] = new TypedefEntry(*i.second);
+        TypedefEntry* td = new TypedefEntry(*i.second);
+        // the importing Program uses the typedef but does not export it in turn
+        td->mod_imported = true;
+        typedefMap[i.first] = td;
     }
 
     // Create namespaces for enum member access (e.g., EnumName::MemberName)
@@ -4170,7 +4240,7 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
 
     // add sub namespaces
     for (nsmap_t::const_iterator i = mns.nsl.nsmap.begin(), e = mns.nsl.nsmap.end(); i != e; ++i) {
-        if (!qore_ns_private::isUserPublic(*i->second)) {
+        if (!qore_ns_private::isExportedNamespace(*i->second)) {
             //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p (%p) '%s::' skipping %p (%p) '%s::' "
             //    "pub: %d builtin: %d\n", this, ns, name.c_str(), i->second->priv, i->second, i->second->getName(),
             //    i->second->priv->pub, i->second->priv->builtin);

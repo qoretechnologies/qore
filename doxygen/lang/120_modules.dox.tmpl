@@ -1348,6 +1348,14 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     If a user module imports other modules with the <tt>%requires(reexport)</tt> form of the @ref requires "%requires"
     parse directive, then any loaded definitions will also be loaded into the importing @ref Qore::Program "Program".
 
+    A module exports nothing else: declarations its @ref Qore::Program "Program" receives from the modules it imports
+    with a plain @ref requires "%requires", or loads at runtime with @ref Qore::load_module() "load_module()" from the
+    module's own code, are available to the module but are never passed on to the @ref Qore::Program "Programs"
+    importing it.  This applies to every kind of declaration, including @ref constants "constants", enums and their
+    members, and typedefs; a namespace that the module only received from imported modules is not exported either.
+    A @ref Qore::Program "Program" that uses a declaration from a module must therefore require that module itself,
+    unless another module it requires reexports it.
+
     Note that global variables exported from a module's @ref Qore::Program "Program" object are exported as
     references; each global variable declared in a module is unique, and they reside in the module's
     @ref Qore::Program "Program" object.

@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ModuleExportIsolationTest
+
+#! A module exports only its own public declarations and the modules it reexports
+/** Declarations a module's Program receives by importing another module, whether with a plain \c %%requires or with
+    \c load_module() at runtime, must not be passed on to Programs that import the module.  Constants, enums, enum
+    members, and typedefs used to be passed on, so a later import could resolve them and an unqualified constant could
+    resolve to the leaked declaration instead of the importer's own.
+
+    Every scenario runs in a child process against the fixture modules, first as source and then compiled with qcc,
+    and both builds must give the same results.
+*/
+class ModuleExportIsolationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! expected probe results
+        const Expected = {
+            # runtime load_module() inside a module does not export the loaded module
+            "runtime-const": "PARSE-EXCEPTION",
+            "runtime-enum": "PARSE-EXCEPTION",
+            "runtime-typedef": "PARSE-EXCEPTION",
+            "runtime-class": "PARSE-EXCEPTION",
+            # an unqualified constant resolves to the importer's own declaration
+            "runtime-unqualified": "mine",
+            # an importer can declare a class with the name of a namespace the module only imported
+            "runtime-class-clash": "ok",
+            # a plain %requires does not export the required module
+            "parse-const": "PARSE-EXCEPTION",
+            "parse-enum": "PARSE-EXCEPTION",
+            "parse-typedef": "PARSE-EXCEPTION",
+            "parse-unqualified": "mine",
+            "parse-class-clash": "ok",
+            # the module still uses what it imported
+            "parse-host-use": "dep:1",
+            # %requires(reexport) exports the required module
+            "reexport-const": "dep",
+            "reexport-enum": "1",
+            "reexport-typedef": "7",
+            # two modules reexporting the same module can be imported together
+            "reexport-diamond": "dep",
+            # a module's own declarations in an imported namespace it extends are exported
+            "extend-own": "own",
+            "extend-dep": "PARSE-EXCEPTION",
+            # a module loaded by the main program is inherited by a child Program
+            "main-inherit": "dep",
+        };
+    }
+
+    constructor() : QUnit::Test("module export isolation test", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("source modules export only their own declarations", \sourceTest());
+        addTestCase("AOT modules export only their own declarations", \aotTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-module-export-isolation-src-");
+        writeFixtures(tmp.path);
+        checkProbe(runProbe(tmp.path), "source");
+    }
+
+    aotTest() {
+        TmpDir tmp("qore-module-export-isolation-aot-");
+        writeFixtures(tmp.path);
+        # compile dependencies before their dependents so each is imported as AOT
+        foreach string mod_name in (("RtLeakDep", "RtLeakHost", "PtLeakHost", "RxLeakHost", "RxLeakHost2",
+                "ExtLeakHost")) {
+            string src = tmp.path + DirSep + mod_name + ".qm";
+            string qmod = tmp.path + DirSep + mod_name + ".qmod";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module "
+                "--strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, tmp.path, qcc_bin, qmod, src));
+            if (!is_file(qmod)) {
+                testSkip(sprintf("qcc could not compile %s: %s", mod_name, out));
+            }
+            # the probe must load the compiled module, not its source
+            unlink(src);
+        }
+        checkProbe(runProbe(tmp.path), "AOT");
+    }
+
+    private checkProbe(string out, string mode) {
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        # one comparison reports every scenario that differs, not only the first one
+        assertEq(Expected, results, sprintf("%s probe output:\n%s", mode, out));
+    }
+
+    private string runProbe(string dir) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir, dir, qore_bin,
+            dir + DirSep + "probe.q"));
+    }
+
+    private writeFixtures(string dir) {
+        write(dir, "RtLeakDep.qm", "%modern\n"
+            "module RtLeakDep { version = \"1.0\"; desc = \"dep\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace RtLeakDep {\n"
+            "    public const AppName = \"dep\";\n"
+            "    public enum E { A = 1, }\n"
+            "    public typedef T = int;\n"
+            "    public class C {}\n"
+            "}\n");
+        # loads the dependency at runtime into its own Program
+        write(dir, "RtLeakHost.qm", "%modern\n"
+            "module RtLeakHost { version = \"1.0\"; desc = \"host\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace RtLeakHost {\n"
+            "    # a static method runs in this module's Program, as DataProvider's catalog methods do\n"
+            "    public class Loader { public static load() { load_module(\"RtLeakDep\"); } }\n"
+            "}\n");
+        # imports the dependency at parse time without reexporting it, and uses it
+        write(dir, "PtLeakHost.qm", "%modern\n"
+            "%requires RtLeakDep\n"
+            "module PtLeakHost { version = \"1.0\"; desc = \"host\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace PtLeakHost {\n"
+            "    public string sub use() { RtLeakDep::T v = RtLeakDep::E::A; return RtLeakDep::AppName + \":\" + v; }\n"
+            "}\n");
+        foreach string host in (("RxLeakHost", "RxLeakHost2")) {
+            write(dir, host + ".qm", "%modern\n"
+                "%requires(reexport) RtLeakDep\n"
+                "module " + host + " { version = \"1.0\"; desc = \"host\"; author = \"Qore\"; "
+                    "url = \"https://qore.org\"; }\n"
+                "public namespace " + host + " {}\n");
+        }
+        # extends the namespace of a module it imports without reexporting it
+        write(dir, "ExtLeakHost.qm", "%modern\n"
+            "%requires RtLeakDep\n"
+            "module ExtLeakHost { version = \"1.0\"; desc = \"host\"; author = \"Qore\"; url = \"https://qore.org\"; }\n"
+            "public namespace RtLeakDep {\n"
+            "    public const Own = \"own\";\n"
+            "}\n");
+        write(dir, "probe.q", ProbeSource);
+    }
+
+    private write(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+    }
+
+    const ProbeSource = "%new-style\n"
+        "%require-types\n"
+        "%strict-args\n"
+        "# returns the value of get() in a new Program parsed from src, or the parse exception code\n"
+        "string sub probe(string src) {\n"
+        "    Program p(PO_NEW_STYLE | PO_NO_USER_API);\n"
+        "    try {\n"
+        "        p.parse(src, \"probe\");\n"
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err;\n"
+        "    }\n"
+        "    return p.callFunction(\"get\").toString();\n"
+        "}\n"
+        "sub result(string key, string value) { printf(\"%s=%s\\n\", key, value); }\n"
+        "\n"
+        "# runtime load_module() inside a module\n"
+        "{\n"
+        "    Program loader(PO_NEW_STYLE | PO_NO_USER_API);\n"
+        "    loader.parse(\"%requires RtLeakHost\\nsub run() { RtLeakHost::Loader::load(); }\", \"loader\");\n"
+        "    loader.callFunction(\"run\");\n"
+        "}\n"
+        "result(\"runtime-const\", probe(\"%requires RtLeakHost\\nauto sub get() { return RtLeakDep::AppName; }\"));\n"
+        "result(\"runtime-enum\", probe(\"%requires RtLeakHost\\nauto sub get() { return RtLeakDep::E::A; }\"));\n"
+        "result(\"runtime-typedef\", probe(\"%requires RtLeakHost\\n"
+            "auto sub get() { RtLeakDep::T v = 1; return v; }\"));\n"
+        "result(\"runtime-class\", probe(\"%requires RtLeakHost\\n"
+            "auto sub get() { return new RtLeakDep::C(); }\"));\n"
+        "result(\"runtime-unqualified\", probe(\"%requires RtLeakHost\\n"
+            "namespace X { const AppName = \\\"mine\\\"; }\\nauto sub get() { return AppName; }\"));\n"
+        "result(\"runtime-class-clash\", probe(\"class RtLeakDep {}\\n%requires RtLeakHost\\n"
+            "auto sub get() { return \\\"ok\\\"; }\"));\n"
+        "\n"
+        "# plain %requires inside a module\n"
+        "result(\"parse-const\", probe(\"%requires PtLeakHost\\nauto sub get() { return RtLeakDep::AppName; }\"));\n"
+        "result(\"parse-enum\", probe(\"%requires PtLeakHost\\nauto sub get() { return RtLeakDep::E::A; }\"));\n"
+        "result(\"parse-typedef\", probe(\"%requires PtLeakHost\\n"
+            "auto sub get() { RtLeakDep::T v = 1; return v; }\"));\n"
+        "result(\"parse-unqualified\", probe(\"%requires PtLeakHost\\n"
+            "namespace X { const AppName = \\\"mine\\\"; }\\nauto sub get() { return AppName; }\"));\n"
+        "result(\"parse-class-clash\", probe(\"class RtLeakDep {}\\n%requires PtLeakHost\\n"
+            "auto sub get() { return \\\"ok\\\"; }\"));\n"
+        "result(\"parse-host-use\", probe(\"%requires PtLeakHost\\nauto sub get() { return PtLeakHost::use(); }\"));\n"
+        "\n"
+        "# %requires(reexport)\n"
+        "result(\"reexport-const\", probe(\"%requires RxLeakHost\\nauto sub get() { return RtLeakDep::AppName; }\"));\n"
+        "result(\"reexport-enum\", probe(\"%requires RxLeakHost\\nauto sub get() { return RtLeakDep::E::A; }\"));\n"
+        "result(\"reexport-typedef\", probe(\"%requires RxLeakHost\\n"
+            "auto sub get() { RtLeakDep::T v = 7; return v; }\"));\n"
+        "result(\"reexport-diamond\", probe(\"%requires RxLeakHost\\n%requires RxLeakHost2\\n"
+            "auto sub get() { return RtLeakDep::AppName; }\"));\n"
+        "\n"
+        "# a module's own declarations in a namespace it imported\n"
+        "result(\"extend-own\", probe(\"%requires ExtLeakHost\\nauto sub get() { return RtLeakDep::Own; }\"));\n"
+        "result(\"extend-dep\", probe(\"%requires ExtLeakHost\\nauto sub get() { return RtLeakDep::AppName; }\"));\n"
+        "\n"
+        "# a module loaded by the main program is inherited by child Programs\n"
+        "load_module(\"RtLeakDep\");\n"
+        "{\n"
+        "    Program child(PO_NEW_STYLE);\n"
+        "    child.parse(\"auto sub get() { return RtLeakDep::AppName; }\", \"child\");\n"
+        "    result(\"main-inherit\", child.callFunction(\"get\").toString());\n"
+        "}\n";
+}

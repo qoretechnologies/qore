@@ -126,8 +126,22 @@ public:
         return pub;
     }
 
+    //! Returns true if the enum is exported when the Program it belongs to is imported as a module
+    /** A public enum the Program received by importing another module is not: a module exports only its own
+        declarations and the modules it reexports.
+    */
     DLLLOCAL bool isUserPublic() const {
-        return pub && !sys;
+        return pub && !sys && !mod_imported;
+    }
+
+    //! Marks the enum as copied into its Program by importing a module
+    DLLLOCAL void setModuleImported() {
+        mod_imported = true;
+    }
+
+    //! Returns true if the enum was copied into its Program by importing a module
+    DLLLOCAL bool isModuleImported() const {
+        return mod_imported;
     }
 
     DLLLOCAL void setPublic() {
@@ -266,6 +280,8 @@ protected:
 
     bool pub = false;
     bool sys = false;
+    //! copied into this Program by importing a module; never exported again
+    bool mod_imported = false;
 
     bool parse_init_done = false;
 
