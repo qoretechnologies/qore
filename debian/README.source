@@ -26,11 +26,11 @@ requirements. Before building, provide distribution-specific backports of:
   tree-sitter >= 0.26.13
 
 The OpenSSL backend also needs OpenSSL >= 3.5. LLVM >= 18, Eigen >= 3.4,
-Arrow/Parquet, and the other development packages in debian/control must be
-available for the target release. In particular, older Ubuntu LTS releases need
-more backports than the newest LTS. Do not replace the distribution's OpenSSL
-packages casually: older LTS support needs a separately reviewed dependency
-backport strategy and clean installation/upgrade testing.
+ONNX Runtime >= 1.23.2, Arrow/Parquet, and the other development packages in
+debian/control must be available for the target release. In particular, older
+Ubuntu LTS releases need more backports than the newest LTS. Do not replace the
+distribution's OpenSSL packages casually: older LTS support needs a separately
+reviewed dependency backport strategy and clean installation/upgrade testing.
 
 Normal upstream CMake builds retain FetchContent fallbacks. Debian package
 builds instead set QORE_REQUIRE_SYSTEM_DEPENDENCIES=ON and
@@ -93,7 +93,12 @@ hardening, including noopt. Installed CMake-built ELF objects omit RUNPATH;
 chrpath removes qcc's build-directory RUNPATH from AOT modules before stripping.
 The source tree is not populated with generated qmod symlinks. Optional MongoDB,
 OCR, and Linux io_uring dependencies are declared to keep package contents stable
-between clean builders. ONNX Runtime integration is explicitly disabled.
+between clean builders. ONNX Runtime is required for the packaged ml module;
+QORE_REQUIRE_ONNXRUNTIME=ON prevents a build from silently omitting inference
+support. Ubuntu 26.04 provides libonnxruntime-dev; releases without a suitable
+package need a backport. Runtime dependencies are generated from the linked
+library. CPU inference is included; GPU execution providers require separate
+platform-specific qualification.
 
 Package boundaries and ABI
 --------------------------

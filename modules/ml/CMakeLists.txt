@@ -29,24 +29,35 @@ endif()
 
 # ONNX Runtime is optional
 option(QORE_WITH_ONNXRUNTIME "Build the ml module with ONNX Runtime support when available" ON)
+option(QORE_REQUIRE_ONNXRUNTIME "Fail configuration if ONNX Runtime support cannot be enabled" OFF)
 set(HAVE_ONNXRUNTIME FALSE)
 find_package(PkgConfig QUIET)
+set(_onnxruntime_hints)
+if (NOT QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+    list(APPEND _onnxruntime_hints /opt/onnxruntime)
+endif()
 if (QORE_WITH_ONNXRUNTIME AND PkgConfig_FOUND)
-    # Also check /opt/onnxruntime for pkg-config files
-    set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/onnxruntime/lib/pkgconfig")
+    # Developer installations may live in /opt; package builds use their declared search paths.
+    set(_onnxruntime_pkg_config_path "$ENV{PKG_CONFIG_PATH}")
+    if (_onnxruntime_hints)
+        set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/onnxruntime/lib/pkgconfig")
+    endif()
     pkg_check_modules(ONNXRUNTIME QUIET libonnxruntime)
+    set(ENV{PKG_CONFIG_PATH} "${_onnxruntime_pkg_config_path}")
 endif()
 if (QORE_WITH_ONNXRUNTIME AND NOT ONNXRUNTIME_FOUND)
     find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime
-                 HINTS /opt/onnxruntime/lib)
+                 HINTS ${_onnxruntime_hints} PATH_SUFFIXES lib)
     find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
-              PATH_SUFFIXES onnxruntime
-              HINTS /opt/onnxruntime/include)
+              HINTS ${_onnxruntime_hints} PATH_SUFFIXES include include/onnxruntime onnxruntime)
     if (ONNXRUNTIME_LIBRARY AND ONNXRUNTIME_INCLUDE_DIR)
         set(ONNXRUNTIME_FOUND TRUE)
         set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARY})
         set(ONNXRUNTIME_INCLUDE_DIRS ${ONNXRUNTIME_INCLUDE_DIR})
     endif()
+endif()
+if (QORE_REQUIRE_ONNXRUNTIME AND (NOT QORE_WITH_ONNXRUNTIME OR NOT ONNXRUNTIME_FOUND))
+    message(FATAL_ERROR "ONNX Runtime support is required; enable QORE_WITH_ONNXRUNTIME and install its development package")
 endif()
 
 # Start of hacks to simulate installed QoreConfig.cmake
@@ -170,13 +181,13 @@ set(ML_CPP_SRC
 )
 
 # Conditional ONNX Runtime support
-if (ONNXRUNTIME_FOUND)
+if (QORE_WITH_ONNXRUNTIME AND ONNXRUNTIME_FOUND)
     message(STATUS "ONNX Runtime found - building with ONNX model support")
     add_definitions(-DHAVE_ONNXRUNTIME)
     set(HAVE_ONNXRUNTIME TRUE)
     list(APPEND ML_CPP_SRC src/OnnxModel.cpp src/OnnxContentIdentity.cpp)
 else()
-    message(STATUS "ONNX Runtime not found - OnnxModel class will throw MISSING-FEATURE-ERROR")
+    message(STATUS "Building without ONNX Runtime support - OnnxModel class will throw MISSING-FEATURE-ERROR")
 endif()
 
 # Optional CUDA runtime, used only to copy ONNX CUDA device-output buffers back to

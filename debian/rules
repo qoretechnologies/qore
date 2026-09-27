@@ -47,7 +47,8 @@ override_dh_auto_configure:
 		-DQORE_AOT_LINK_SOURCE_MODULES=OFF \
 		-DQORE_AOT_MODULE_OPT_LEVEL=$(if $(filter noopt,$(DEB_BUILD_OPTIONS)),0,3) \
 		-DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=$(if $(build_docs),OFF,ON) \
-		-DQORE_WITH_ONNXRUNTIME=OFF \
+		-DQORE_WITH_ONNXRUNTIME=ON \
+		-DQORE_REQUIRE_ONNXRUNTIME=ON \
 		-DSINGLE_COMPILATION_UNIT=1
 
 override_dh_auto_build:

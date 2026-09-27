@@ -4,11 +4,38 @@ set -eu
 
 # Run outside the checkout, with only installed modules on the search path.
 unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
+# Only copy the model fixture; all executable code comes from installed packages.
+cp "$test_dir/../../modules/ml/test/data/test_linear.onnx" .
 qore --version
 for module in astparser avro dataframe i18n json krb5 linenoise ml mongodb ocr protobuf reflection sshutil tokenizer; do
     qore -l "$module" -e 'exit(0);'
 done
+cat > onnx.q <<'EOF'
+%modern
+%requires ml
+if (!ML::ml_get_capabilities().has_onnx) {
+    throw "PACKAGE-TEST-ERROR", "ONNX Runtime support is missing";
+}
+ML::OnnxModel model("test_linear.onnx");
+hash<auto> result = model.run({"X": ((-1.0,), (0.0,), (2.0,))});
+list<float> expected = (-1.0, 1.0, 5.0);
+if (result.Y.size() != expected.size()) {
+    throw "PACKAGE-TEST-ERROR", "ONNX inference output size mismatch";
+}
+for (int i = 0; i < expected.size(); ++i) {
+    if (abs(result.Y[i] - expected[i]) > 1e-5) {
+        throw "PACKAGE-TEST-ERROR", "ONNX inference produced an incorrect result";
+    }
+}
+ML::OnnxSessionPool pool("test_linear.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()}, {"max_sessions": 2});
+if (abs(pool.run({"X": ((4.0,),)}).Y[0] - 9.0) > 1e-5) {
+    throw "PACKAGE-TEST-ERROR", "ONNX session pool produced an incorrect result";
+}
+EOF
+qore onnx.q
 cat > runtime.q <<'EOF'
 %modern
 %requires Util
