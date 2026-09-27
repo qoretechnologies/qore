@@ -269,8 +269,24 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
             handler.slow_release.push(True);
             assertEq(binary("late"), readAll(stream), msg);
 
-            # a cancelled stream returns no more data
+            # a cancelled stream is not taken for a complete one
             stream = mgr.openStream(i.value + "/file");
+            stream.cancel();
+            assertThrows("HTTPCLIENT-CANCELLED", \stream.read(), NOTHING, msg);
+            assertThrows("HTTPCLIENT-CANCELLED", \stream.read(), NOTHING, msg);
+            # a stream cancelled while a thread waits for data
+            stream = mgr.openStream(i.value + "/slow");
+            assertEq(binary("early"), stream.read(30s), msg);
+            # the second chunk is only released after the read, so the stream is cancelled before or while the reader
+            # waits for it, with the same result
+            background sub () {
+                stream.cancel();
+            }();
+            assertThrows("HTTPCLIENT-CANCELLED", \stream.read(), 30s, msg);
+            handler.slow_release.push(True);
+            # a stream that was read completely is not affected
+            stream = mgr.openStream(i.value + "/file");
+            readAll(stream);
             stream.cancel();
             assertEq(NOTHING, stream.read(), msg);
             # the manager can still be used

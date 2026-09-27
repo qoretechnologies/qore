@@ -605,10 +605,10 @@ public namespace HttpClientIo {
         */
         *string proxy_url;
 
-        #! HTTP/3-only: client certificate for mutual TLS (mTLS)
+        #! client certificate for mutual TLS (mTLS) over HTTP/1.1, HTTP/2, and HTTP/3
         *SSLCertificate client_cert;
 
-        #! HTTP/3-only: client private key for mutual TLS (mTLS)
+        #! private key of the client certificate for mutual TLS (mTLS)
         *SSLPrivateKey client_pk;
 
         #! Enable automatic cookie handling (default: True)

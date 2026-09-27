@@ -98,6 +98,9 @@ public class HttpClientResponseStream {
         #! True once read() has returned the end of the body
         bool done = False;
 
+        #! True if the stream was cancelled before the end of the body
+        bool cancelled = False;
+
         #! the decompressor, if the body is decoded
         *HttpBodyDecompressor decoder;
 
@@ -234,6 +237,7 @@ public class HttpClientResponseStream {
 
         @throw HTTPCLIENT-TIMEOUT no data was received within the timeout; the stream can still be read
         @throw HTTPCLIENT-RECEIVE-ERROR the body could not be received completely
+        @throw HTTPCLIENT-CANCELLED the stream was cancelled with @ref cancel() before the end of the body
         @throw DECOMPRESSION-ERROR or a codec-specific error if the body cannot be decompressed or was truncated
     */
     *binary read(*timeout timeout_ms) {
@@ -247,7 +251,9 @@ public class HttpClientResponseStream {
     }
 
     #! Stops receiving the body; the rest of the body is discarded
-    /** Can be called from any thread, for example to interrupt a thread blocked in @ref read()
+    /** Can be called from any thread, for example to interrupt a thread blocked in @ref read(); unless the end of
+        the body was received already, @ref read() then raises \c HTTPCLIENT-CANCELLED, so a cancelled body is never
+        taken for a complete one
     */
     cancel() {
         {
@@ -257,6 +263,7 @@ public class HttpClientResponseStream {
             }
             ended = True;
             done = True;
+            cancelled = True;
         }
         sh.cancel();
     }
@@ -266,6 +273,7 @@ public class HttpClientResponseStream {
         {
             AutoLock al(m);
             if (done) {
+                checkCancelledIntern();
                 return;
             }
             if (pending) {
@@ -276,6 +284,10 @@ public class HttpClientResponseStream {
             }
         }
         auto d = sh.readData(timeout_ms);
+        {
+            AutoLock al(m);
+            checkCancelledIntern();
+        }
         if (!exists d) {
             throw "HTTPCLIENT-TIMEOUT", sprintf("no response data received from %y within %d ms", effective_url,
                 timeout_ms);
@@ -301,6 +313,15 @@ public class HttpClientResponseStream {
         binary chunk = d.typeCode() == NT_BINARY ? d : binary(d);
         received += chunk.size();
         return decodeChunk(chunk);
+    }
+
+    #! Throws an exception if the stream was cancelled
+    /** @note called with the lock held
+    */
+    private checkCancelledIntern() {
+        if (cancelled) {
+            throw "HTTPCLIENT-CANCELLED", sprintf("the response body from %y was cancelled", effective_url);
+        }
     }
 
     #! Returns a decoded chunk
