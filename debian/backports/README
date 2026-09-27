@@ -1,0 +1,146 @@
+Qore dependency backports for Ubuntu 26.04
+========================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+The testing PPA is:
+
+  https://launchpad.net/~qore-packagers/+archive/ubuntu/qore-testing
+  dput destination: ppa:qore-packagers/qore-testing
+
+These recipes initially target Ubuntu 26.04 (resolute). They are not Debian,
+Ubuntu 24.04, or Ubuntu 22.04 qualification results. Build each distribution
+separately and resolve its dependencies before adding another target here.
+
+Sources and package scope
+-------------------------
+
+sources.json pins upstream archives and existing Debian/Ubuntu packaging by
+HTTPS URL and SHA-256 digest. It records the changelog date, target distribution,
+maintainer, and PPA versions. The preparation tool additionally verifies the
+c-ares, nghttp2, nghttp3, and ngtcp2 upstream signatures using keys shipped in
+the pinned Debian packaging. The tree-sitter GitHub tag archive is pinned by
+SHA-256; it does not have a release archive signature in this recipe.
+
+  c-ares 1.34.8: Debian library packaging, plus both Qore DNS query fixes.
+  nghttp2 1.70.0: Debian library, application, and documentation packages.
+  nghttp3 1.18.0: Debian library packaging updated from 1.17.0.
+  ngtcp2 1.25.0: Debian packaging updated from 1.24.0, including both OpenSSL
+    and GnuTLS crypto backends.
+  qore-tree-sitter 0.26.13: C runtime and development packages only, retaining
+    Debian's SONAME-qualified library package and symbol history.
+
+qore-tree-sitter is deliberately a separate source package. It produces
+libtree-sitter0.26 and libtree-sitter-dev, without backporting Rust crates or the
+tree-sitter CLI. Qore builds its committed generated parser directly. It does
+not need the generator installed to build astparser. The C runtime has an
+offline C API/linking smoke test and an installed-package test; this does not
+replace upstream's full Rust/parser regression suite.
+
+c-ares patch maintenance
+------------------------
+
+The source preparer generates debian/patches/qore-lost-query.patch using
+cmake/PatchCaresLostQuery.cmake from this Qore checkout. This is the same
+patcher used by the ordinary FetchContent build. Both changes are required:
+
+  * A second detach must not remove a different query which reused its ID.
+  * The send path must compare the query identity, rather than just checking
+    whether that query ID is present, to avoid accessing a freed query.
+
+The generated patch is added to Debian's quilt series and included in the
+source upload. It is applied by dpkg-source, without CMake downloading or
+patching libraries during the Qore package build. A changed upstream source
+that no longer matches the patcher fails preparation and requires review.
+
+When updating c-ares, check whether upstream includes BOTH fixes before
+removing the patch. Also increment the PPA revision when modifying a published
+patch. Keep the system-library backport and FetchContent fixes synchronized.
+
+Preparing unsigned source uploads
+--------------------------------
+
+Use the distribution's /usr/bin/python3 (3.11 or newer, with tarfile's data
+extraction filter), dpkg-dev, cmake, gpg and gpgv. On Ubuntu, install these with
+APT. Generated archives and extracted sources must live outside the checkout:
+
+  tools/prepare-debian-backports.py \
+    --output /path/to/new-source-workspace \
+    --cache /path/to/download-cache
+
+Pass source package names after the options to prepare a subset. The tool
+refuses existing package workspaces. After populating the download cache,
+--offline repeats preparation without network access in another new workspace.
+
+Only the pristine SOURCE preparation uses dpkg-buildpackage -d -nc; native
+Build-Depends need not be installed to assemble an upload. Binary builds must
+resolve Build-Depends and run their tests. The source uploads include the orig
+tarballs (-sa), upstream signatures where available, .dsc, .debian.tar.xz,
+source .buildinfo and source .changes. They are unsigned.
+
+The source versions sort above the required upstream version and below the
+corresponding future official Debian revision. Do not reuse a version after
+Launchpad has accepted it; increment its Qore revision in sources.json.
+
+Clean local binary builds
+-------------------------
+
+The helper uses rootless Podman with an Ubuntu 26.04 image. It installs tools
+and declared build dependencies in a fresh container, then builds and tests
+as an unprivileged build user from the .dsc with the network disabled. It does
+not install backports into the development host or change the host's APT sources.
+
+  podman pull docker.io/library/ubuntu:26.04
+  tools/build-debian-backport.sh \
+    /path/to/new-source-workspace/c-ares /path/to/new-c-ares-results
+
+Repeat for nghttp2, nghttp3, ngtcp2 and qore-tree-sitter. Each results directory
+must be new. Results include binaries, build metadata, logs, the base image's
+identity and the exact build-dependency inventory. The provisioned build image
+is retained locally for diagnosis; its ID is recorded in build-image.txt.
+QORE_BACKPORT_IMAGE may select a previously pulled Ubuntu 26.04 base image by
+digest. No image is pushed to a registry.
+
+Lintian errors in source or binary packages fail the build helper. Review
+warnings as well: inherited nghttp2 packaging includes a metapackage with no
+payload and Sphinx JavaScript
+copies in its documentation. Ubuntu 26.04's Lintian also reports the newer
+Standards-Version and backport revision conventions in some source packages.
+Passing this helper is not a claim of full
+autopkgtest, installation/upgrade, multi-architecture, or reproducibility
+qualification. The equivalent official builder is sbuild:
+
+  sbuild --chroot-mode=schroot -d resolute --arch=amd64 -A /path/to/package.dsc
+
+Before uploading, verify the resulting source package with:
+
+  lintian --fail-on error /path/to/package_source.changes
+
+Signing and uploading
+---------------------
+
+Source preparation and local builds do not contact Launchpad to publish
+anything. Review the source changes, build results and PPA target first.
+Transfer each source upload's complete set of files to the host holding the
+registered signing key. Keep the private key on that host. For each reviewed
+source .changes file, on that host:
+
+  debsign -k FULL_PRIMARY_FINGERPRINT /path/to/package_source.changes
+  dput ppa:qore-packagers/qore-testing /path/to/package_source.changes
+
+Use the SOURCE .changes files from the preparation workspace, not the binary
+.changes files from the build results. Each uploader signs with their own
+registered key and must have upload rights to the team's PPA. Check the PPA's
+enabled architectures against the architectures actually qualified locally.
+Local validation initially uses native amd64.
+
+Wait for all dependency binaries to build and publish for resolute before
+uploading Qore. Qore's Build-Depends can then be resolved from the same PPA.
+The separately packaged YAML module is still needed for qore-debug-tools.
+
+Useful references
+-----------------
+
+  https://ubuntu.com/docs/launchpad/user/how-to/packaging/build-deb-packages-in-launchpad/
+  https://ubuntu.com/project/docs/contributors/building/build-packages-locally/
+  https://www.debian.org/doc/debian-policy/ch-source.html#embedded-code-copies

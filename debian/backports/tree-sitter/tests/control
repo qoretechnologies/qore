@@ -1,0 +1,3 @@
+Tests: runtime
+Depends: @, build-essential, pkgconf
+Restrictions: allow-stderr

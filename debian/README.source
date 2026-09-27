@@ -10,6 +10,11 @@ distribution service. Debian needs its own builder and archive.
 Dependency availability
 -----------------------
 
+The qore-packagers team's testing PPA is
+https://launchpad.net/~qore-packagers/+archive/ubuntu/qore-testing.
+Pinned Ubuntu 26.04 dependency source recipes, the c-ares patch maintenance
+procedure, and local build/sign/upload instructions are in debian/backports/README.
+
 Qore 3.0 currently needs dependencies newer than those in the standard stable/LTS
 archives. The Build-Depends versions deliberately match the upstream CMake
 requirements. Before building, provide distribution-specific backports of:

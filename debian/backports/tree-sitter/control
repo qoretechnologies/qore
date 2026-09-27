@@ -1,0 +1,30 @@
+Source: qore-tree-sitter
+Section: libs
+Priority: optional
+Maintainer: David Nichols <david@qore.org>
+Build-Depends: debhelper-compat (= 13), pkgconf
+Rules-Requires-Root: no
+Standards-Version: 4.7.4
+Homepage: https://tree-sitter.github.io/tree-sitter/
+Vcs-Git: https://github.com/qorelanguage/qore.git
+Vcs-Browser: https://github.com/qorelanguage/qore/tree/develop/debian/backports
+
+Package: libtree-sitter0.26
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: incremental parsing library for programming tools
+ Tree-sitter builds concrete syntax trees and efficiently updates them as
+ source files are edited. This package contains the C runtime library.
+ .
+ This Qore backport does not include the Rust bindings or parser generator.
+
+Package: libtree-sitter-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libtree-sitter0.26 (= ${binary:Version}), ${misc:Depends}
+Description: incremental parsing library development files
+ Tree-sitter builds concrete syntax trees and efficiently updates them as
+ source files are edited. This package contains headers, static libraries,
+ and pkg-config metadata for developing against the C runtime.

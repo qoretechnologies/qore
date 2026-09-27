@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+set -eu
+pkg-config --atleast-version=0.26.13 tree-sitter
+cc -Wall -Wextra -Werror debian/tests/runtime.c $(pkg-config --cflags --libs tree-sitter) \
+    -o "$AUTOPKGTEST_TMP/tree-sitter-runtime"
+"$AUTOPKGTEST_TMP/tree-sitter-runtime"

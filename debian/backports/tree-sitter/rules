@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# Copyright 2026 Qore Technologies, s.r.o.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@ --buildsystem=makefile
+
+override_dh_auto_build:
+	dh_auto_build -- PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) CFLAGS='$(CFLAGS) $(CPPFLAGS)'
+
+# Upstream's Rust/CLI suite fetches external grammar fixtures. This source
+# package builds the C runtime only and checks its linkable C API offline.
+override_dh_auto_test:
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -Ilib/include debian/tests/runtime.c -L. \
+		-Wl,-rpath,'$$ORIGIN/..' -l:libtree-sitter.so -o debian/runtime-test
+	ln -sf libtree-sitter.so libtree-sitter.so.0.26
+	./debian/runtime-test
+
+override_dh_auto_install:
+	dh_auto_install -- PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH)
+	# Preserve the SONAME-qualified link and omit upstream's unversioned ABI-0 link.
+	ln -sf libtree-sitter.so.0.26 debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libtree-sitter.so
+	rm debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libtree-sitter.so.0
