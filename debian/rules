@@ -72,6 +72,12 @@ endif
 
 override_dh_auto_install:
 	dh_auto_install
+	# The compiler fingerprint is architecture-dependent data. Keep it out of
+	# /usr/bin, where dh_fixperms treats every file as an executable command.
+	mv debian/tmp/usr/bin/qcc-format.stamp \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore/qcc-format.stamp
+	sed -i 's|/usr/bin/qcc-format.stamp|/usr/lib/$(DEB_HOST_MULTIARCH)/qore/qcc-format.stamp|' \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qore/QoreConfig.cmake
 	# Installed scripts must use the packaged interpreter regardless of PATH.
 	for script in debian/tmp/usr/bin/* debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qore/*; do \
 		if LC_ALL=C grep -Iq '^#!/usr/bin/env qore$$' "$$script"; then \

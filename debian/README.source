@@ -121,7 +121,9 @@ not marked Multi-Arch: same; shared data and AOT output have not been qualified
 for simultaneous installations of multiple architectures.
 
 libqore-dev contains qcc, qpp, CMake/pkg-config integration, the compiler format
-stamp, AOT linker configuration, and the API metadata generator. It depends on
+stamp, AOT linker configuration, and the API metadata generator. The format
+stamp is data under the multiarch libdir's qore directory; QoreConfig.cmake
+exports its installed path through QORE_QCC_FORMAT_STAMP. It depends on
 the interpreter, C++ compiler, public OpenSSL headers, and the LLVM development
 package matching the build, including the public LLVM plugin API headers.
 

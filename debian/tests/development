@@ -4,7 +4,10 @@ set -eu
 unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_INCLUDE_DIRS QORE_LIBDIR QORE_AOT_LINK_CONF LD_LIBRARY_PATH
 cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
 
-test -s /usr/bin/qcc-format.stamp
+format_stamp="$(pkg-config --variable=libdir qore)/qore/qcc-format.stamp"
+test -s "$format_stamp"
+test ! -x "$format_stamp"
+test ! -e /usr/bin/qcc-format.stamp
 test -s "$(pkg-config --variable=libdir qore)/qore/aot-link.conf"
 status=0
 qdx -h > qdx-help.txt 2>&1 || status=$?

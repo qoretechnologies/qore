@@ -1,0 +1,4 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# These Qore scripts use the interpreter supplied by our required qore package.
+libqore-dev: unusual-interpreter /usr/bin/qore [usr/bin/*]
+libqore-dev: unusual-interpreter /usr/bin/qore [usr/lib/*/cmake/Qore/*]

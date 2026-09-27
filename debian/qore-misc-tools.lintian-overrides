@@ -1,0 +1,3 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# These Qore scripts use the interpreter supplied by our required qore package.
+qore-misc-tools: unusual-interpreter /usr/bin/qore [usr/bin/*]

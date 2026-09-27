@@ -1,6 +1,6 @@
 usr/bin/qpp
 usr/bin/qcc
-usr/bin/qcc-format.stamp
+usr/lib/*/qore/qcc-format.stamp
 usr/bin/qdx
 usr/bin/qjar
 usr/bin/qore-extract-qm-metadata
