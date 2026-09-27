@@ -61,6 +61,18 @@ public hashdecl TerminalProgressOptions {
 
     #! the time in milliseconds without progress after which a transfer is shown as stalled
     int stall_ms = 5000;
+
+    #! @ref True "True" to show a total line below the transfers of an interactive display
+    /** the total line shows the number of transfers active and finished, the amount done, and the combined speed
+    */
+    bool total_line = False;
+
+    #! @ref True "True" to report the progress to the terminal with \c OSC \c 9;4 sequences
+    /** terminals that support them (such as Windows Terminal, ConEmu, and Ghostty) show the progress in the tab or
+        the taskbar, and other terminals ignore them; used only by an interactive display, and by default when the
+        display is interactive
+    */
+    *bool taskbar;
 }
 
 #! The state of a transfer displayed by TerminalProgress
@@ -87,6 +99,39 @@ hashdecl TerminalProgressTransferInfo {
     *int next_pct_line;
     #! the time the last progress line was written
     int last_line;
+    #! additional information shown when there is room, such as the protocol
+    *string info;
+    #! a status shown instead of the estimated time remaining, such as a retry
+    *string status;
+    #! the speed in bytes per second in each of the last seconds, oldest first
+    list<float> history = ();
+    #! the time and the amount done at the start of the current history interval
+    int hist_time;
+    int hist_done;
+}
+
+#! A field of the line for a transfer in an interactive display
+hashdecl TerminalProgressField {
+    #! the visible text
+    string text;
+    #! colors the text
+    code<string(string)> color;
+    #! the minimum width of the field, so the field keeps its width while its value changes
+    int min_width = 0;
+    #! True if the text is aligned to the right of the field
+    bool right = False;
+}
+
+#! The layout of the lines of an interactive display, which is shared by all lines so that their fields line up
+hashdecl TerminalProgressLayout {
+    #! the width of the label column
+    int label_width;
+    #! the width of the bar, 0 if there is no bar
+    int bar_width;
+    #! the fields shown, in order
+    list<string> fields = ();
+    #! the width of each field shown
+    hash<string, int> widths = {};
 }
 
 #! Displays the progress of one or more transfers, such as downloads
@@ -126,6 +171,27 @@ public class TerminalProgress {
 
         #! Unicode block characters for the fractional part of a bar, in 1/8 steps
         const UnicodeBarParts = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉");
+
+        #! Unicode block characters for the speed history, from the lowest to the highest speed
+        const SparkChars = ("▁", "▂", "▃", "▄", "▅", "▆", "▇", "█");
+
+        #! the number of seconds of speed history shown
+        const HistorySize = 12;
+
+        #! the minimum width of a bar
+        const MinBarWidth = 10;
+
+        #! the maximum width of a bar
+        const MaxBarWidth = 60;
+
+        #! the minimum width of the speed, such as \c "1023.9 KiB/s" or \c "stalled 12.5s"
+        const SpeedWidth = 12;
+
+        #! the width of the estimated time remaining, up to \c "ETA 99:59:59"
+        const EtaWidth = 12;
+
+        #! the longest estimated time remaining shown, in seconds; a longer one is shown as \c ">99h"
+        const MaxEtaSecs = 100 * 3600 - 1;
     }
 
     private:internal {
@@ -139,6 +205,15 @@ public class TerminalProgress {
         #! id -> transfer; in the order the transfers were added
         hash<string, hash<TerminalProgressTransferInfo>> transfers;
         int next_id = 1;
+
+        #! the number of transfers finished and the amount they did, for the total line
+        int finished_count = 0;
+        int finished_done = 0;
+
+        #! True if OSC 9;4 progress is reported
+        bool taskbar;
+        #! the last OSC 9;4 sequence written
+        *string last_taskbar;
 
         #! the number of lines of an interactive display currently drawn
         int lines_drawn = 0;
@@ -156,6 +231,7 @@ public class TerminalProgress {
         output = self.opts.output ?? stderr;
         interactive = self.opts.interactive ?? TerminalProgress::isTty(output);
         unicode = self.opts.unicode ?? TerminalProgress::isUtf8Locale();
+        taskbar = interactive && (self.opts.taskbar ?? True);
         color = new TerminalColor(False);
         color.enabled = interactive && (self.opts.color ?? !TerminalColor::isColorDisabled());
     }
@@ -187,6 +263,8 @@ public class TerminalProgress {
             "progress_time": now,
             "next_pct_line": TerminalProgress::getNextPctLine(done, total),
             "last_line": now,
+            "hist_time": now,
+            "hist_done": done,
         };
         drawIntern(now, True);
         return id;
@@ -218,6 +296,20 @@ public class TerminalProgress {
             }
             t.sample_time = now;
             t.sample_done = done;
+        }
+        # the speed history for the sparkline
+        int hdt = now - t.hist_time;
+        if (hdt >= 1000000) {
+            # the average speed is recorded for each second that passed, so the history keeps its time scale
+            float rate = (done - t.hist_done) * 1000000.0 / hdt;
+            for (int i = min(HistorySize, hdt / 1000000); i; --i) {
+                t.history += rate;
+            }
+            if (t.history.size() > HistorySize) {
+                splice t.history, 0, t.history.size() - HistorySize;
+            }
+            t.hist_time = now;
+            t.hist_done = done;
         }
         transfers{id} = t;
         if (interactive) {
@@ -255,6 +347,38 @@ public class TerminalProgress {
         drawIntern(getMicros(), True);
     }
 
+    #! Sets or clears additional information about a transfer that is shown when the line has room
+    /** @param id the ID of the transfer
+        @param info the information, such as the protocol (\c "h3"), or @ref NOTHING to clear it
+
+        @throw TERMINALPROGRESS-ERROR unknown transfer ID
+    */
+    setInfo(int id, *string info) {
+        AutoLock al(m);
+        getTransferIntern(id);
+        transfers{id}.info = info;
+        drawIntern(getMicros(), True);
+    }
+
+    #! Sets or clears the status of a transfer, which is shown instead of the estimated time remaining
+    /** A transfer with a status is shown in the warning color
+
+        @param id the ID of the transfer
+        @param status the status, such as \c "retry 2/5 in 4s", or @ref NOTHING to clear it
+
+        @throw TERMINALPROGRESS-ERROR unknown transfer ID
+    */
+    setStatus(int id, *string status) {
+        AutoLock al(m);
+        getTransferIntern(id);
+        transfers{id}.status = status;
+        if (interactive) {
+            drawIntern(getMicros(), True);
+        } else if (status) {
+            writeOutput(sprintf("%s: %s\n", transfers{id}.label, status));
+        }
+    }
+
     #! Removes a transfer from the display and writes a message in its place
     /** @param id the ID of the transfer
         @param message the message to write; no message is written if not given
@@ -263,7 +387,9 @@ public class TerminalProgress {
     */
     finish(int id, *string message) {
         AutoLock al(m);
-        getTransferIntern(id);
+        hash<TerminalProgressTransferInfo> t = getTransferIntern(id);
+        ++finished_count;
+        finished_done += t.done;
         remove transfers{id};
         writeLineIntern(message);
     }
@@ -287,7 +413,8 @@ public class TerminalProgress {
         AutoLock al(m);
         hash<TerminalProgressTransferInfo> t = getTransferIntern(id);
         int elapsed = getMicros() - t.start;
-        string rv = sprintf("%s in %s", TerminalProgress::formatBytes(t.done), TerminalProgress::formatElapsed(elapsed));
+        string rv = sprintf("%s in %s", TerminalProgress::formatBytes(t.done),
+            TerminalProgress::formatElapsed(elapsed));
         int transferred = t.done - t.start_done;
         if (elapsed > 0 && transferred > 0) {
             rv += sprintf(" (%s/s)", TerminalProgress::formatBytes(transferred * 1000000 / elapsed));
@@ -308,9 +435,18 @@ public class TerminalProgress {
         }
         closed = True;
         transfers = {};
+        string str;
         if (interactive && lines_drawn) {
-            writeOutput(sprintf("\033[%dF\033[J", lines_drawn));
+            str = sprintf("\033[%dF\033[J", lines_drawn);
             lines_drawn = 0;
+        }
+        # the progress reported to the terminal is removed
+        if (last_taskbar && last_taskbar != "\033]9;4;0;0\a") {
+            str += "\033]9;4;0;0\a";
+        }
+        remove last_taskbar;
+        if (str) {
+            writeOutput(str);
         }
     }
 
@@ -436,15 +572,29 @@ public class TerminalProgress {
         last_redraw = now;
         int cols = getColumnsIntern();
         string str = lines_drawn ? sprintf("\033[%dF", lines_drawn) : "";
+        int lines = 0;
+        list<hash<TerminalProgressTransferInfo>> tl = ();
+        list<hash<string, hash<TerminalProgressField>>> fields = ();
         foreach hash<TerminalProgressTransferInfo> t in (transfers.iterator()) {
-            # the last column is left free, so a full line never wraps
-            str += renderLineIntern(t, now, cols - 1) + "\033[K\n";
+            tl += t;
+            fields += getFieldsIntern(t, now);
+        }
+        # the last column is left free, so a full line never wraps
+        hash<TerminalProgressLayout> layout = getLayoutIntern(tl, fields, cols - 1);
+        foreach hash<TerminalProgressTransferInfo> t in (tl) {
+            str += renderLineIntern(t, fields[$#], layout, now) + "\033[K\n";
+            ++lines;
+        }
+        if (opts.total_line && (transfers.size() + finished_count) > 1) {
+            str += renderTotalLineIntern(now, cols - 1) + "\033[K\n";
+            ++lines;
         }
         # clears lines of transfers that are no longer displayed
-        if (lines_drawn > transfers.size()) {
+        if (lines_drawn > lines) {
             str += "\033[J";
         }
-        lines_drawn = transfers.size();
+        lines_drawn = lines;
+        str += getTaskbarIntern(now);
         writeOutput(str);
     }
 
@@ -497,39 +647,284 @@ public class TerminalProgress {
         if (!t.rate || (now - t.progress_time) >= opts.stall_ms * 1000) {
             return "--:--";
         }
-        return TerminalProgress::formatDuration(((t.total - t.done) / t.rate * 1000000.0).toInt());
+        float secs = (t.total - t.done) / t.rate;
+        if (secs > MaxEtaSecs) {
+            return ">99h";
+        }
+        return TerminalProgress::formatDuration((secs * 1000000.0).toInt());
+    }
+
+    #! Returns the fields of the line for a transfer in an interactive display
+    /** @return field name -> (visible text, color method, minimum width, right-aligned)
+    */
+    private hash<string, hash<TerminalProgressField>> getFieldsIntern(hash<TerminalProgressTransferInfo> t,
+            int now) {
+        bool stalled = (now - t.progress_time) >= opts.stall_ms * 1000 && t.done != t.total;
+        hash<string, hash<TerminalProgressField>> f = {};
+        if (t.total) {
+            f.pct = TerminalProgress::field(sprintf("%d%%", min(100, t.done * 100 / t.total)), \color.bold(), 4,
+                True);
+            f.sizes = TerminalProgress::field(TerminalProgress::formatSizes(t.done, t.total), \color.value(),
+                TerminalProgress::formatSizes(t.total, t.total).length(), True);
+        } else {
+            # the widest amount in any unit, such as "1023.9 MiB", is 10 characters
+            f.sizes = TerminalProgress::field(TerminalProgress::formatBytes(t.done), \color.value(), 10, True);
+        }
+        if (stalled) {
+            f.speed = TerminalProgress::field(sprintf("stalled %s",
+                TerminalProgress::formatElapsed(now - t.progress_time)), \color.yellow(), SpeedWidth, True);
+        } else {
+            f.speed = TerminalProgress::field(getSpeedIntern(t, now), \color.green(), SpeedWidth, True);
+        }
+        if (unicode) {
+            # the space is reserved before there is a history, so the bar does not change width
+            f.spark = TerminalProgress::field(t.history.size() > 1 ? TerminalProgress::renderSparkline(t.history) : "",
+                \color.cyan(), HistorySize);
+        }
+        if (t.info) {
+            f.info = TerminalProgress::field(t.info, \color.dim());
+        }
+        if (t.status) {
+            f.eta = TerminalProgress::field(t.status, \color.yellow(), EtaWidth);
+        } else if (*string eta = getEtaIntern(t, now)) {
+            f.eta = TerminalProgress::field("ETA " + eta, \color.dim(), EtaWidth);
+        }
+        return f;
+    }
+
+    #! Returns a field of a line
+    private static hash<TerminalProgressField> field(string text, code<string(string)> color, int min_width = 0,
+            bool right = False) {
+        return <TerminalProgressField>{
+            "text": text,
+            "color": color,
+            "min_width": min_width,
+            "right": right,
+        };
+    }
+
+    #! Returns the layout shared by the lines of an interactive display
+    /** Each field has the width of its widest value on any line, but at least its minimum width, so the fields
+        line up and the bar keeps its width while values change; fields that do not fit are left out on all lines in
+        order of importance: the info and the speed history; then the fields only get the width of their values, and
+        finally the sizes and the bar are left out
+
+        @param tl the transfers displayed
+        @param fields the fields of each line, as returned by getFieldsIntern()
+        @param width the width available
+    */
+    private hash<TerminalProgressLayout> getLayoutIntern(list<hash<TerminalProgressTransferInfo>> tl,
+            list<hash<string, hash<TerminalProgressField>>> fields, int width) {
+        hash<TerminalProgressLayout> layout();
+        int label_len = 0;
+        foreach hash<TerminalProgressTransferInfo> t in (tl) {
+            label_len = max(label_len, t.label.length());
+        }
+        # the widths of the fields with their minimum widths, and the widths of their values
+        hash<string, int> widths = {};
+        hash<string, int> natural = {};
+        foreach hash<string, hash<TerminalProgressField>> f in (fields) {
+            foreach hash<auto> i in (f.pairIterator()) {
+                hash<TerminalProgressField> field = i.value;
+                natural{i.key} = max(natural{i.key} ?? 0, field.text.length());
+                widths{i.key} = max(widths{i.key} ?? 0, field.min_width, natural{i.key});
+            }
+        }
+        # the order of the fields on the line
+        list<string> order = ("pct", "sizes", "speed", "spark", "info", "eta");
+        # what is given up, in order, when there is no room: the info, the speed history, the alignment of the
+        # fields, the sizes, and the bar
+        list<string> steps = ("info", "spark", "compact", "sizes", "bar");
+
+        int min_label = min(label_len, 12);
+        bool bar = True;
+        # returns the width of the line with the given bar width
+        code<int(int)> line_width = int sub (int bar_width) {
+            int w = min_label;
+            if (bar_width) {
+                w += bar_width + 3;
+            }
+            foreach string k in (order) {
+                if (exists widths{k}) {
+                    w += widths{k} + 1;
+                }
+            }
+            return w;
+        };
+        while (steps && line_width(bar ? MinBarWidth : 0) > width) {
+            string step = shift steps;
+            switch (step) {
+                case "compact":
+                    # the fields only get the width of their values, so they no longer line up while values change
+                    foreach string k in (keys widths) {
+                        widths{k} = natural{k};
+                    }
+                    break;
+                case "bar":
+                    bar = False;
+                    break;
+                default:
+                    remove widths{step};
+                    break;
+            }
+        }
+        # the label gets the space left, up to its length and a fraction of the width
+        int rest = width - line_width(bar ? MinBarWidth : 0) + min_label;
+        layout.label_width = max(0, min(label_len, rest, max(min_label, (width * MaxLabelFraction).toInt())));
+        layout.bar_width = bar ? min(MaxBarWidth, MinBarWidth + rest - layout.label_width) : 0;
+        foreach string k in (order) {
+            if (exists widths{k}) {
+                layout.fields += k;
+                layout.widths{k} = widths{k};
+            }
+        }
+        return layout;
     }
 
     #! Returns the line for a transfer in an interactive display
-    private string renderLineIntern(hash<TerminalProgressTransferInfo> t, int now, int width) {
-        # the fields after the bar
-        string right;
-        if (t.total) {
-            right = sprintf("%3d%% %s/%s", min(100, t.done * 100 / t.total), TerminalProgress::formatBytes(t.done),
-                TerminalProgress::formatBytes(t.total));
-        } else {
-            right = TerminalProgress::formatBytes(t.done);
-        }
-        right += " " + getSpeedIntern(t, now);
-        if (*string eta = getEtaIntern(t, now)) {
-            right += " ETA " + eta;
-        }
+    /** @param t the transfer
+        @param f the fields of the line, as returned by getFieldsIntern()
+        @param layout the layout shared by the lines of the display
+        @param now the current time
+    */
+    private string renderLineIntern(hash<TerminalProgressTransferInfo> t, hash<string, hash<TerminalProgressField>> f,
+            hash<TerminalProgressLayout> layout, int now) {
+        bool stalled = (now - t.progress_time) >= opts.stall_ms * 1000 && t.done != t.total;
+        bool complete = t.total && t.done >= t.total;
 
-        # the label takes the space that is left, up to a fraction of the width
-        int label_width = min(t.label.length(), max(8, (width * MaxLabelFraction).toInt()));
-        int bar_width = width - label_width - right.length() - 4;
-        if (bar_width < 5) {
-            # no bar; the label takes what is left
-            label_width = max(0, width - right.length() - 1);
-            bar_width = 0;
+        string label = TerminalProgress::truncateMiddle(t.label, layout.label_width, unicode);
+        string str = color.bold(label) + strmul(" ", layout.label_width - label.length());
+        if (layout.bar_width) {
+            code<string(string)> bar_color = stalled || t.status
+                ? \color.yellow()
+                : (complete ? \color.green() : \color.cyan());
+            str += " " + color.dim(unicode ? "▕" : "[")
+                + bar_color(renderBarIntern(t, now, layout.bar_width))
+                + color.dim(unicode ? "▏" : "]");
         }
-        string label = TerminalProgress::truncateMiddle(t.label, label_width, unicode);
-        string str = label + strmul(" ", label_width - label.length());
-        if (bar_width) {
-            str += " " + color.dim("[") + color.cyan(renderBarIntern(t, now, bar_width)) + color.dim("]");
+        int last = layout.fields.size() - 1;
+        foreach string k in (layout.fields) {
+            # a field can be missing on this line, such as the info
+            string text = f{k}.text ?? "";
+            bool right = f{k}.right ?? False;
+            # a left-aligned value at the end of the line needs no padding
+            if (!right && $# == last) {
+                if (text) {
+                    str += " " + f{k}.color(text);
+                }
+                break;
+            }
+            string pad = strmul(" ", layout.widths{k} - text.length());
+            if (text) {
+                text = f{k}.color(text);
+            }
+            str += " " + (right ? pad + text : text + pad);
         }
-        str += " " + right;
         return str;
+    }
+
+    #! Returns the total line of an interactive display
+    private string renderTotalLineIntern(int now, int width) {
+        int done = finished_done;
+        float rate = 0.0;
+        foreach hash<TerminalProgressTransferInfo> t in (transfers.iterator()) {
+            done += t.done;
+            if (t.rate && (now - t.progress_time) < opts.stall_ms * 1000) {
+                rate += t.rate;
+            }
+        }
+        list<string> fields = (
+            color.bold("total"),
+            sprintf("%s active", color.number(string(transfers.size()))),
+            sprintf("%s done", color.number(string(finished_count))),
+            color.value(TerminalProgress::formatBytes(done)),
+        );
+        if (rate > 0) {
+            fields += color.green(TerminalProgress::formatBytes(rate) + "/s");
+        }
+        string str = fields.join(color.dim(" · "));
+        # the line is shortened if the terminal is too narrow for it
+        if (TerminalColor::visibleLength(str) > width) {
+            str = color.bold("total") + " " + color.value(TerminalProgress::formatBytes(done));
+        }
+        return str;
+    }
+
+    #! Returns the OSC 9;4 sequence that reports the progress to the terminal, if it changed
+    private string getTaskbarIntern(int now) {
+        if (!taskbar) {
+            return "";
+        }
+        int done = 0;
+        int total = 0;
+        bool known = True;
+        bool stalled = False;
+        foreach hash<TerminalProgressTransferInfo> t in (transfers.iterator()) {
+            if (!t.total) {
+                known = False;
+            } else {
+                done += min(t.done, t.total);
+                total += t.total;
+            }
+            if ((now - t.progress_time) >= opts.stall_ms * 1000 || t.status) {
+                stalled = True;
+            }
+        }
+        string seq;
+        if (!transfers) {
+            seq = "\033]9;4;0;0\a";
+        } else if (!known || !total) {
+            # the progress is not known
+            seq = "\033]9;4;3;0\a";
+        } else {
+            # state 4 is the warning state
+            seq = sprintf("\033]9;4;%d;%d\a", stalled ? 4 : 1, done * 100 / total);
+        }
+        if (seq == last_taskbar) {
+            return "";
+        }
+        last_taskbar = seq;
+        return seq;
+    }
+
+    #! Returns the done and total sizes in a compact form, such as \c "3.4/5.9 GiB"
+    /** @param done the amount done
+        @param total the total size
+
+        @return the formatted sizes; both are given in the unit of the total, so the text only gets longer when the
+        amount done gets more digits
+    */
+    static string formatSizes(int done, int total) {
+        if (total < 1024) {
+            return sprintf("%d/%d B", done, total);
+        }
+        float div = 1.0;
+        foreach string unit in ("KiB", "MiB", "GiB", "TiB") {
+            div *= 1024.0;
+            if (total / div < 1024.0) {
+                return sprintf("%.1f/%.1f %s", done / div, total / div, unit);
+            }
+        }
+        div *= 1024.0;
+        return sprintf("%.1f/%.1f PiB", done / div, total / div);
+    }
+
+    #! Returns a sparkline of the given values
+    /** @param values the values, oldest first
+
+        @return one Unicode block character per value, scaled to the largest value
+    */
+    static string renderSparkline(list<float> values) {
+        float max_val = 0.0;
+        foreach float v in (values) {
+            max_val = max(max_val, v);
+        }
+        string rv;
+        foreach float v in (values) {
+            int idx = max_val > 0 ? min(7, (v * 8 / max_val).toInt()) : 0;
+            rv += SparkChars[idx];
+        }
+        return rv;
     }
 
     #! Returns the bar for a transfer

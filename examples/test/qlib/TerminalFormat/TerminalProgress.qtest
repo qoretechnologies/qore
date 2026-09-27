@@ -48,6 +48,10 @@ public class TerminalProgressTest inherits QUnit::Test {
         addTestCase("interactive bars", \interactiveTest());
         addTestCase("unknown total", \unknownTotalTest());
         addTestCase("speed and stall", \speedTest());
+        addTestCase("layout", \layoutTest());
+        addTestCase("aligned layout", \alignTest());
+        addTestCase("total line", \totalLineTest());
+        addTestCase("terminal progress sequences", \taskbarTest());
         addTestCase("multiple transfers", \multiTest());
         addTestCase("narrow display", \narrowTest());
         addTestCase("colors", \colorTest());
@@ -64,6 +68,19 @@ public class TerminalProgressTest inherits QUnit::Test {
         assertEq("2.0 GiB", TerminalProgress::formatBytes(2 * 1024 * 1024 * 1024));
         assertEq("1.0 TiB", TerminalProgress::formatBytes(1024 * 1024 * 1024 * 1024));
         assertEq("3.0 PiB", TerminalProgress::formatBytes(3 * 1024 * 1024 * 1024 * 1024 * 1024));
+
+        # both sizes are given in the unit of the total
+        assertEq("0/1000 B", TerminalProgress::formatSizes(0, 1000));
+        assertEq("0.0/5.9 GiB", TerminalProgress::formatSizes(0, 6335000000));
+        assertEq("3.0/5.9 GiB", TerminalProgress::formatSizes(3 * 1024 * 1024 * 1024, 6335000000));
+        assertEq("0.5/2.0 KiB", TerminalProgress::formatSizes(512, 2048));
+        assertEq("1.0/2.0 PiB", TerminalProgress::formatSizes(1024 * 1024 * 1024 * 1024 * 1024,
+            2 * 1024 * 1024 * 1024 * 1024 * 1024));
+
+        # no speed is shown at the lowest level
+        assertEq("▁▁", TerminalProgress::renderSparkline((0.0, 0.0)));
+        assertEq("▂█", TerminalProgress::renderSparkline((1.0, 8.0)));
+        assertEq("▁▆█", TerminalProgress::renderSparkline((0.0, 5.0, 8.0)));
 
         assertEq("0:00", TerminalProgress::formatDuration(0));
         assertEq("0:05", TerminalProgress::formatDuration(5000000));
@@ -116,13 +133,13 @@ public class TerminalProgressTest inherits QUnit::Test {
 
     interactiveTest() {
         TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 80, "unicode": False,
-            "color": False});
+            "color": False, "taskbar": False});
         assertTrue(p.isInteractive());
         int id = p.add("file.bin", 1000);
         string out = p.take();
         # the first draw does not move the cursor up
         assertEq(-1, out.find("\033[1F"));
-        assertTrue(out =~ /^file.bin +\[> +\]   0% 0 B\/1000 B -- ETA --:--\033\[K\n$/, out);
+        assertTrue(out =~ /^file.bin \[> +\] +0% +0\/1000 B +-- ETA --:--\033\[K\n$/, out);
 
         # updates within the redraw interval are not drawn
         p.update(id, 100);
@@ -132,10 +149,10 @@ public class TerminalProgressTest inherits QUnit::Test {
         out = p.take();
         # the display is redrawn in place
         assertTrue(out =~ /^\033\[1F/, out);
-        assertTrue(out =~ /\[=+> +\]  50% 500 B\/1000 B/, out);
+        assertTrue(out =~ /\[=+> +\] +50% +500\/1000 B/, out);
         # a line fits the display without wrapping
         string line = (out =~ x/^\033\[1F(.*)\033\[K\n$/)[0];
-        assertEq(79, line.length());
+        assertTrue(line.length() <= 79, line);
 
         # a message is written above the bars
         p.log("redirected");
@@ -147,7 +164,7 @@ public class TerminalProgressTest inherits QUnit::Test {
         p.advance(100ms);
         p.update(id, 1000);
         out = p.take();
-        assertTrue(out =~ /\[=+\] 100% 1000 B\/1000 B/, out);
+        assertTrue(out =~ /\[=+\] 100% 1000\/1000 B/, out);
         assertFalse(out =~ /ETA/);
 
         p.finish(id, "done");
@@ -166,15 +183,15 @@ public class TerminalProgressTest inherits QUnit::Test {
 
     unknownTotalTest() {
         TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 60, "unicode": True,
-            "color": False});
+            "color": False, "taskbar": False});
         int id = p.add("stream", NOTHING);
         string out = p.take();
-        assertTrue(out =~ /\[ *███ *\] 0 B --\033/, out);
+        assertTrue(out =~ /▕ *███ *▏ +0 B +--\033/, out);
         assertFalse(out =~ /%/);
 
         # a total that becomes known is shown
         p.setTotal(id, 2048);
-        assertTrue(p.take() =~ /  0% 0 B\/2.0 KiB/);
+        assertTrue(p.take() =~ / +0% +0\.0\/2\.0 KiB/);
         p.setLabel(id, "renamed");
         assertTrue(p.take() =~ /^\033\[1Frenamed /);
 
@@ -183,6 +200,156 @@ public class TerminalProgressTest inherits QUnit::Test {
         l.advance(1s);
         l.update(id, 4096);
         assertRegex("^stream: 4.0 KiB ", l.take());
+    }
+
+    #! the speed history, info, status, and stalled marker
+    layoutTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 120, "unicode": True,
+            "color": False, "taskbar": False});
+        int id = p.add("image.iso", 100 * 1024 * 1024);
+        p.setInfo(id, "h3");
+        # a speed that doubles every second
+        int done = 0;
+        for (int i = 0; i < 5; ++i) {
+            p.advance(1s);
+            done += 1024 * 1024 * (1 << i);
+            p.update(id, done);
+        }
+        string line = (p.take().split("\n")[-1] =~ x/^\033\[1F(.*)\033\[K$/)[0];
+        # the name, the bar, the percentage, the sizes, the speed, the history, the info, and the ETA
+        assertRegex("^image\\.iso ▕█+[▏▎▍▌▋▊▉ ]* *▏  31% +31\\.0/100\\.0 MiB +\\S+ MiB/s [▁▂▃▄▅▆▇█]{5} +h3 "
+            "ETA \\d+:\\d\\d$", line);
+        # the history rises
+        string spark = (line =~ x/ ([▁▂▃▄▅▆▇█]{5}) /)[0];
+        assertEq("█", spark.substr(4, 1));
+        assertEq("▁", spark.substr(0, 1));
+
+        # an update after several seconds records the average speed for each second
+        TestProgress g(<TerminalProgressOptions>{"interactive": True, "columns": 120, "unicode": True,
+            "color": False, "taskbar": False});
+        int gid = g.add("gap", 100 * 1024 * 1024);
+        g.advance(1s);
+        g.update(gid, 8 * 1024 * 1024);
+        g.advance(3s);
+        g.update(gid, 11 * 1024 * 1024);
+        assertRegex(" 11% .* █▂▂▂ ", g.take().split("\n")[-1]);
+
+        # a status replaces the ETA
+        p.setStatus(id, "retry 2/5 in 4s");
+        line = p.take();
+        assertRegex(" retry 2/5 in 4s\033\\[K\n$", line);
+        assertFalse(line =~ /ETA/);
+        p.setStatus(id);
+        assertRegex(" ETA \\d+:\\d\\d\033\\[K\n$", p.take());
+
+        # no progress for longer than stall_ms
+        p.advance(6s);
+        p.update(id, done);
+        assertRegex(" stalled 6\\.0s ", p.take());
+
+        # on a narrow display the info, the history, and the sizes are left out, then the bar
+        TestProgress n(<TerminalProgressOptions>{"interactive": True, "columns": 60, "unicode": True,
+            "color": False, "taskbar": False});
+        id = n.add("image.iso", 100 * 1024 * 1024);
+        n.setInfo(id, "h3");
+        n.take();
+        n.advance(1s);
+        n.update(id, 1024 * 1024);
+        n.advance(1s);
+        n.update(id, 2 * 1024 * 1024);
+        line = n.take();
+        assertFalse(line =~ /h3/, line);
+        assertTrue(line =~ /▕/, line);
+        n = new TestProgress(<TerminalProgressOptions>{"interactive": True, "columns": 34, "unicode": True,
+            "color": False, "taskbar": False});
+        id = n.add("image.iso", 100 * 1024 * 1024);
+        line = n.take();
+        assertFalse(line =~ /▕/, line);
+        assertRegex("^image\\.iso +0% --", line);
+    }
+
+    #! the bar keeps its width as values change, and the fields of all lines line up
+    alignTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 110, "unicode": True,
+            "color": False, "taskbar": False});
+        int a = p.add("ubuntu-26.04-desktop-amd64.iso", 6335000000);
+        p.setInfo(a, "h3");
+        int b = p.add("SHA256SUMS", 1200);
+        p.take();
+        *int bar_end;
+        int done = 0;
+        foreach int mib in (1, 60, 900, 3, 90) {
+            p.advance(1s);
+            done += mib * 1024 * 1024;
+            p.update(a, done);
+            p.update(b, 600);
+            list<string> lines = map ($1 =~ x/^(?:\033\[\dF)?(.*)\033\[K$/)[0], p.take().split("\n"),
+                $1 =~ /\033\[K$/;
+            list<string> frame = lines.size() > 2 ? lines[lines.size() - 2..] : lines;
+            assertEq(2, frame.size());
+            # the bars of both lines start and end in the same columns
+            assertEq(frame[0].find("▕"), frame[1].find("▕"), frame.join("\n"));
+            assertEq(frame[0].rfind("▏"), frame[1].rfind("▏"), frame.join("\n"));
+            # the bar keeps its width; the closing bracket is found from the end, as it is also the smallest
+            # partial block
+            if (!exists bar_end) {
+                bar_end = frame[0].rfind("▏");
+            }
+            assertEq(bar_end, frame[0].rfind("▏"), frame[0]);
+            # the percentages line up
+            assertEq(frame[0].find("%"), frame[1].find("%"), frame.join("\n"));
+            foreach string line in (frame) {
+                assertTrue(line.length() <= 109, line);
+            }
+        }
+    }
+
+    totalLineTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 100, "unicode": True,
+            "color": False, "taskbar": False, "total_line": True});
+        int a = p.add("a", 100);
+        # no total line for a single transfer
+        assertEq(1, (p.take() =~ x/(\n)/g).size());
+        int b = p.add("b", 100);
+        string out = p.take();
+        assertRegex("\ntotal · 2 active · 0 done · 0 B\033\\[K\n$", out);
+        p.update(a, 100);
+        p.finish(a, "a done");
+        out = p.take();
+        assertRegex("total · 1 active · 1 done · 100 B", out);
+        p.finish(b);
+    }
+
+    taskbarTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 100, "unicode": True,
+            "color": False});
+        int id = p.add("f", 200);
+        assertRegex("\033\\]9;4;1;0\a$", p.take());
+        p.advance(100ms);
+        p.update(id, 100);
+        assertRegex("\033\\]9;4;1;50\a$", p.take());
+        # the sequence is only written when it changes
+        p.advance(100ms);
+        p.update(id, 101);
+        assertFalse(p.take() =~ /\]9;4/);
+        # a stalled transfer is reported with the warning state
+        p.advance(6s);
+        p.update(id, 101);
+        assertRegex("\033\\]9;4;4;50\a$", p.take());
+        # an unknown size is reported as indeterminate
+        int id2 = p.add("g", NOTHING);
+        assertRegex("\033\\]9;4;3;0\a$", p.take());
+        p.finish(id2);
+        p.finish(id);
+        assertRegex("\033\\]9;4;0;0\a$", p.take());
+        p.close();
+        assertEq("", p.take());
+
+        # a non-interactive display writes no sequences
+        TestProgress l(<TerminalProgressOptions>{"interactive": False, "line_interval_ms": 0});
+        id = l.add("f", 10);
+        l.update(id, 5);
+        assertFalse(l.take() =~ /\033/);
     }
 
     speedTest() {
@@ -220,7 +387,7 @@ public class TerminalProgressTest inherits QUnit::Test {
 
     multiTest() {
         TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 80, "unicode": False,
-            "color": False});
+            "color": False, "taskbar": False});
         int a = p.add("a", 100);
         int b = p.add("b", 100);
         string out = p.take();
@@ -242,12 +409,12 @@ public class TerminalProgressTest inherits QUnit::Test {
 
     narrowTest() {
         TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 40, "unicode": False,
-            "color": False});
+            "color": False, "taskbar": False});
         p.add("a-very-long-file-name-that-does-not-fit.tar.gz", 1000);
         string line = (p.take() =~ x/^(.*)\033\[K\n$/)[0];
         assertTrue(line.length() <= 39, line);
         assertRegex("\\.\\.\\.", line);
-        assertRegex("0 B/1000 B", line);
+        assertRegex(" 0% -- ETA --:--$", line);
     }
 
     colorTest() {
