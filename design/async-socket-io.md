@@ -621,6 +621,15 @@ crediting only the connection window.  `examples/test/qlib/HttpServer/HttpServer
 frames on the wire; `HttpClient`-based tests cannot see the difference, because the client reads the response while
 it is still sending.
 
+DATA the client already sent when it receives the RST_STREAM still arrives on a stream the server has closed.
+nghttp2 consumes it without any callback, and in the server's manual window update mode it credits it only through
+its own consumed-bytes accounting, when the consumed bytes reach half the window.  The server therefore credits all
+received DATA with `nghttp2_session_consume()` (`Http2Session::consumeReceivedData()`), never with WINDOW_UPDATE
+frames submitted directly, which reset that accounting: every reset stream then lost up to half a window of the
+client's connection window, and after a few oversized requests on one connection the next request could not send its
+body.  `HttpServerHttp2StopRequest.qtest` ("the connection window is credited for data on reset streams") sends DATA
+on reset streams within the window it tracks from the server's WINDOW_UPDATE frames.
+
 ## HTTP/3 Server: Responses Before the Complete Request
 
 The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:

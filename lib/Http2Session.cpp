@@ -454,7 +454,10 @@ int Http2Session::init(ExceptionSink* xsink) {
     }
     // On the server, we buffer request DATA frames and want manual WINDOW_UPDATE
     // control so the application can apply backpressure by delaying consumption
-    // (e.g. large-body streaming with an InputStream sink).
+    // (e.g. large-body streaming with an InputStream sink).  Received data is credited with
+    // nghttp2_session_consume() (see consumeReceivedData()), never with WINDOW_UPDATE frames submitted directly: in
+    // manual mode nghttp2 still consumes DATA on locally closed streams itself and credits it only through the same
+    // accounting, which a directly submitted WINDOW_UPDATE resets.
     //
     // On the client, body bytes are delivered synchronously via
     // onDataChunkRecvCallback with no intervening buffer, so manual control
@@ -1030,17 +1033,11 @@ int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::submitWindowUpdate(int32_t stream_id, int32_t increment, ExceptionSink* xsink) {
+int Http2Session::consumeReceivedData(int32_t stream_id, size_t len) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    int rv = nghttp2_submit_window_update(session, NGHTTP2_FLAG_NONE, stream_id, increment);
-    if (rv != 0) {
-        if (xsink) {
-            xsink->raiseException("HTTP2-ERROR", "failed to submit WINDOW_UPDATE: %s",
-                nghttp2_strerror(rv));
-        }
-        return -1;
-    }
-    return 0;
+    return stream_id
+        ? nghttp2_session_consume(session, stream_id, len)
+        : nghttp2_session_consume_connection(session, len);
 }
 
 int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t weight,
@@ -2105,9 +2102,13 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         if (!stream) {
             printd(5, "onDataChunkRecvCallback: server stream %d already cleaned up, "
                 "discarding %zu bytes\n", stream_id, len);
-            // Still need to update flow control window for the consumed data
+            // the connection window is still credited for the discarded data
             if (len) {
-                h2->submitWindowUpdate(0, len, nullptr);
+                int rv = h2->consumeReceivedData(0, len);
+                if (rv) {
+                    printd(5, "onDataChunkRecvCallback: consuming %zu bytes on the connection failed: %s\n", len,
+                        nghttp2_strerror(rv));
+                }
             }
             return 0;
         }
@@ -2166,16 +2167,17 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     }
     // With auto-window-update enabled on the client (see init()), nghttp2 emits
     // WINDOW_UPDATE automatically as the app consumes data via this callback —
-    // we must NOT call submitWindowUpdate on the client branch or we double-credit.
-    // Server is still in manual mode (for backpressure) and must call it.
+    // we must NOT credit data on the client branch or we double-credit.
+    // The server is in manual mode and credits the stream and the connection with nghttp2_session_consume(), which
+    // keeps nghttp2's own accounting of the DATA it consumes itself (DATA on a stream the server has reset, such as
+    // the rest of a body after the server's RST_STREAM(NO_ERROR), and padding): WINDOW_UPDATE frames submitted
+    // directly reset that accounting, and the peer's connection window shrank by up to half a window with every
+    // such stream until the next request could not send its body.
     if (len && h2->is_server) {
-        int rv = h2->submitWindowUpdate(stream_id, len, nullptr);
+        int rv = h2->consumeReceivedData(stream_id, len);
         if (rv) {
-            printd(5, "onDataChunkRecvCallback: submitWindowUpdate stream_id=%d failed\n", stream_id);
-        }
-        rv = h2->submitWindowUpdate(0, len, nullptr);
-        if (rv) {
-            printd(5, "onDataChunkRecvCallback: submitWindowUpdate connection failed\n");
+            printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
+                nghttp2_strerror(rv));
         }
     }
     return 0;

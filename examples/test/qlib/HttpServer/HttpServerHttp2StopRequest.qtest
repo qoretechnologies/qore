@@ -117,6 +117,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         const SETTINGS = 4;
         const PING = 6;
         const GOAWAY = 7;
+        const WINDOW_UPDATE = 8;
 
         const END_STREAM = 0x1;
         const ACK = 0x1;
@@ -143,6 +144,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         addTestCase("a response to a complete request is not followed by RST_STREAM", \completeRequestTest());
         addTestCase("DATA for a cancelled body read is discarded", \cancelledBodyReadTest());
         addTestCase("a bounded body Queue is rejected", \boundedQueueTest());
+        addTestCase("the connection window is credited for data on reset streams", \windowNotLostTest());
         set_return_value(main());
     }
 
@@ -256,6 +258,82 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         list<hash<H2Frame>> stream = getStreamFrames(readResponse(s, 1), 1);
         binary body = foldl $1 + $2, (map $1.payload, stream, $1.type == DATA);
         assertEq("HTTP2-QUEUE-ERROR", body.toString(), "the bounded Queue was rejected");
+    }
+
+    #! DATA that the client sent before it received the RST_STREAM(NO_ERROR) that follows a response is credited
+    /** The server discards it, as the stream is closed, and it must still return it to the client's connection
+        window; each cycle leaves an oversized request's body unfinished and sends some of the rest of it after the
+        response, within the window the client tracks from the server's WINDOW_UPDATE frames, as a client respecting
+        flow control does.  Before the fix, the credit for that DATA was lost, the window shrank with every cycle,
+        and the last request could not send its body.
+    */
+    windowNotLostTest() {
+        Socket s = connect();
+        on_exit s.close();
+
+        # the client's connection-level send window (RFC 9113 section 6.9.2), which it must respect
+        int window = 65535;
+        int sid = 1;
+        for (int i = 0; i < 3; ++i) {
+            sendRequest(s, sid, "/size", False);
+            window -= sendData(s, sid, 2 * ChunkSize, window, False);
+            list<hash<H2Frame>> frames = readResponse(s, sid);
+            assertStopAfterResponse(frames, sid);
+            window += sumConnCredit(frames);
+            # DATA that the client had in flight when the server reset the stream is discarded by the server
+            window -= sendData(s, sid, 30000, window, False);
+            # two PING round trips: every WINDOW_UPDATE the server queued for the DATA above precedes the second ACK
+            window += sumConnCredit(pingRoundTrip(s, "cycle" + i + "-a"));
+            window += sumConnCredit(pingRoundTrip(s, "cycle" + i + "-b"));
+            # nghttp2 returns received bytes once at least half of the window has been used
+            assertGt(65535 / 2, window, sprintf("cycle %d: the discarded DATA is credited", i));
+            sid += 2;
+        }
+        # a request under the limit on the same connection can be sent completely and is answered
+        sendRequest(s, sid, "/size", False);
+        assertEq(BodySizeLimit - 1, sendData(s, sid, BodySizeLimit - 1, window, True), "the body can be sent");
+        list<hash<H2Frame>> stream = getStreamFrames(readResponse(s, sid), sid);
+        assertEq(HEADERS, stream[0].type, "the request is answered");
+    }
+
+    #! Sends up to \a n bytes of DATA on the stream within the client's window; returns the number of bytes sent
+    private int sendData(Socket s, int sid, int n, int window, bool end_stream) {
+        int sent = 0;
+        while (sent < n) {
+            int chunk = min(n - sent, ChunkSize, window - sent);
+            if (chunk <= 0) {
+                break;
+            }
+            sent += chunk;
+            s.send(frame(DATA, (end_stream && sent == n) ? END_STREAM : 0, sid, binary(strmul("d", chunk))));
+        }
+        return sent;
+    }
+
+    #! Sends a PING with the given 8-byte payload and returns the frames received before its ACK
+    private list<hash<H2Frame>> pingRoundTrip(Socket s, string payload) {
+        s.send(frame(PING, 0, 0, binary(payload)));
+        list<hash<H2Frame>> rv = ();
+        while (True) {
+            hash<H2Frame> f = readFrame(s);
+            if (f.type == PING && (f.flags & ACK) && f.payload == binary(payload)) {
+                break;
+            }
+            rv += f;
+        }
+        return rv;
+    }
+
+    #! Returns the sum of the connection window increments in the given frames
+    private static int sumConnCredit(list<hash<H2Frame>> frames) {
+        int rv = 0;
+        foreach hash<H2Frame> f in (frames) {
+            if (f.type == WINDOW_UPDATE && f.sid == 0) {
+                rv += ((get_byte(f.payload, 0) & 0x7f) << 24) | (get_byte(f.payload, 1) << 16)
+                    | (get_byte(f.payload, 2) << 8) | get_byte(f.payload, 3);
+            }
+        }
+        return rv;
     }
 
     #! asserts that the frames of the stream are a complete response followed by RST_STREAM(NO_ERROR)

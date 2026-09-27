@@ -336,8 +336,18 @@ public:
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
-    //! Submit a WINDOW_UPDATE frame
-    DLLLOCAL int submitWindowUpdate(int32_t stream_id, int32_t increment, ExceptionSink* xsink);
+    //! Credits received DATA to the flow control windows of a server session (manual window update mode)
+    /** Uses nghttp2_session_consume(), which also accounts for DATA that nghttp2 consumes itself, such as DATA
+        received on a stream this side has closed or reset, and padding; nghttp2 sends WINDOW_UPDATE frames when the
+        consumed bytes reach half the window.  Crediting with WINDOW_UPDATE frames submitted directly would reset that
+        accounting and lose the credit for those bytes, shrinking the peer's connection window for good.
+
+        @param stream_id the stream the data was received on, or 0 to credit the connection window only
+        @param len the number of bytes received
+
+        @return 0 on success, or an nghttp2 error code
+    */
+    DLLLOCAL int consumeReceivedData(int32_t stream_id, size_t len);
 
     //! Submit a PRIORITY frame to set stream priority
     /** @param stream_id Stream ID to prioritize
