@@ -519,12 +519,16 @@ public class RestSchemaImporter {
 
         @return the parsed document
 
+        @throw YAML-MODULE-MISSING the external yaml module is unavailable
         @throw REST-SCHEMA-IMPORT-ERROR the yaml module cannot parse with the YAML 1.2 core schema (see
         @ref yamlCoreSchemaSupported()), and its default resolution converted a scalar of the document
 
         @since RestSchemaActions 1.0
     */
     static auto parseYamlDocument(string text) {
+%ifdef NoYaml
+        throw "YAML-MODULE-MISSING", "Parsing YAML schemas requires the yaml module";
+%else
         if (RestSchemaImporter::yamlCoreSchemaSupported()) {
             return call_function("parse_yaml", text, YamlParseCoreSchema);
         }
@@ -536,6 +540,7 @@ public class RestSchemaImporter {
                 "so the document would be written back changed", converted);
         }
         return parsed;
+%endif
     }
 
     #! Returns the location and value of the first value a JSON-compatible document cannot contain, if any
@@ -1077,14 +1082,23 @@ public class RestSchemaImporter {
 
         @return the serialized document, with a trailing newline
 
+        @throw YAML-MODULE-MISSING YAML output was requested but the external yaml module is unavailable
+
         @note %Qore hashes preserve insertion order and
         @ref RestSchemaActions::RestSchemaPruner "RestSchemaPruner" emits members in the source document's
         own order, so the same input and selection always produce byte-identical output.
     */
     static string serialize(hash<auto> schema, bool json) {
-        string rv = json
-            ? make_json(schema, JGF_ADD_FORMATTING)
-            : make_yaml(schema, YAML::BlockStyle);
+        string rv;
+        if (json) {
+            rv = make_json(schema, JGF_ADD_FORMATTING);
+        } else {
+%ifdef NoYaml
+            throw "YAML-MODULE-MISSING", "Serializing YAML schemas requires the yaml module";
+%else
+            rv = make_yaml(schema, YAML::BlockStyle);
+%endif
+        }
         if (rv.substr(-1) != "\n") {
             rv += "\n";
         }

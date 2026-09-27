@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestSchemaActions
+%requires json
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class RestSchemaOptionalYamlTest
+
+class RestSchemaOptionalYamlTest inherits QUnit::Test {
+    constructor() : Test("RestSchemaOptionalYamlTest", "1.0") {
+        addTestCase("JSON serialization without external modules", \jsonTest());
+        addTestCase("YAML availability", \yamlTest());
+        set_return_value(main());
+    }
+
+    private jsonTest() {
+        hash<auto> schema = {"openapi": "3.0.0", "paths": {"/records": {"get": {}}}};
+        string text = RestSchemaImporter::serialize(schema, True);
+        assertEq(schema, parse_json(text));
+        assertEq("\n", text.substr(-1));
+    }
+
+    private yamlTest() {
+%ifdef NoYaml
+        assertEq(False, RestSchemaImporter::yamlCoreSchemaSupported());
+        assertThrows("YAML-MODULE-MISSING", sub () {
+            RestSchemaImporter::parseYamlDocument("openapi: 3.0.0\n");
+        });
+        assertThrows("YAML-MODULE-MISSING", sub () {
+            RestSchemaImporter::serialize({"openapi": "3.0.0"}, False);
+        });
+%else
+        hash<auto> schema = {"openapi": "3.0.0"};
+        string text = RestSchemaImporter::serialize(schema, False);
+        assertEq(schema, RestSchemaImporter::parseYamlDocument(text));
+%endif
+    }
+}
