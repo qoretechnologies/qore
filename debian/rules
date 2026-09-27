@@ -63,6 +63,7 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	$(builddir)/modules/linenoise/linenoise-unicode-test
 	QORE_BINARY=$(CURDIR)/$(builddir)/qore \
 		QORE_TEST_QMOD_DIR=$(CURDIR)/$(builddir)/qlib-qmod \
+		PATH=$(CURDIR)/$(builddir):$$PATH \
 		./run_tests.sh -E -d qore
 else
 	:
