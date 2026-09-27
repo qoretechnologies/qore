@@ -947,6 +947,9 @@ public class OperationObject inherits ObjectBase {
         *string channelName;
 
         #! Messages for this operation
+        /** When the operation omits \c messages, this list contains all channel messages in declaration order.
+            An explicit list, including an empty list, overrides this default.
+        */
         list<MessageObject> messages;
 
         #! Operation bindings
@@ -968,6 +971,12 @@ public class OperationObject inherits ObjectBase {
     }
 
     #! Constructor
+    /** @param opId the operation ID
+        @param oh the operation definition
+        @param schema the parent AsyncAPI schema
+
+        @throw INVALID-FIELD-VALUE if the action or a message reference is invalid
+    */
     constructor(string opId, hash<auto> oh, AsyncApi3Schema schema) : ObjectBase(oh) {
         asyncapi = schema;
         string obj_type = "Operation";
@@ -1003,9 +1012,20 @@ public class OperationObject inherits ObjectBase {
         *list<auto> msgList;
         if (optional_field(obj_type, oh, "messages", NT_LIST, \msgList)) {
             foreach auto msgRef in (msgList) {
-                if (msgRef.typeCode() == NT_HASH && msgRef."$ref") {
-                    messages += asyncapi.resolveMessageRef(msgRef."$ref");
+                if (msgRef.typeCode() != NT_HASH || msgRef."$ref".typeCode() != NT_STRING || !msgRef."$ref") {
+                    throw "INVALID-FIELD-VALUE", sprintf("Operation %y: 'messages' entries must be Reference "
+                        "Objects with a non-empty string '$ref'; got: %y", opId, msgRef);
                 }
+                *MessageObject message = asyncapi.resolveMessageRef(msgRef."$ref");
+                if (!message) {
+                    throw "INVALID-FIELD-VALUE", sprintf("Operation %y: cannot resolve message reference %y",
+                        opId, msgRef."$ref");
+                }
+                messages += message;
+            }
+        } else if (!oh.hasKey("messages") && channel) {
+            foreach hash<auto> item in (channel.messages.pairIterator()) {
+                messages += item.value;
             }
         }
     }
@@ -1021,28 +1041,70 @@ public class OperationObject inherits ObjectBase {
     }
 
     #! Validates a message for this operation
+    /** @param msg reference to the payload; updated only after successful validation
+        @param headers reference to the headers; updated only after successful validation
+
+        @throw SCHEMA-VALIDATION-ERROR if the message matches no schema or more than one schema
+
+        @note An operation with no messages leaves the payload and headers unchanged.
+        @see validateMessageAndGetSchema()
+    */
     validateMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        validateMessageAndGetSchema(\msg, \headers);
+    }
+
+    #! Validates a message and returns its unique matching message schema
+    /** @param msg reference to the payload; updated only after successful validation
+        @param headers reference to the headers; updated only after successful validation
+
+        @return the matching message schema, or NOTHING if the operation has no messages
+
+        @throw SCHEMA-VALIDATION-ERROR if the message matches no schema or more than one schema
+
+        @note Each candidate validates its own copy of the payload and headers so conversions made by one
+        candidate cannot affect another candidate or the caller on failure.
+
+        @par Example
+        @code{.py}
+auto order = {"id": 42};
+hash<auto> headers = {};
+*MessageObject message = api.getOperation("receiveOrder").validateMessageAndGetSchema(\order, \headers);
+        @endcode
+    */
+    *MessageObject validateMessageAndGetSchema(reference<auto> msg, reference<hash<auto>> headers) {
         if (!messages) {
             return;
         }
-        # Try to validate against any of the messages
-        bool validated = False;
+        *MessageObject matched;
+        auto matchedMsg;
+        hash<auto> matchedHeaders;
         *hash<ExceptionInfo> lastEx;
         foreach MessageObject msgSchema in (messages) {
+            auto candidateMsg = msg;
+            hash<auto> candidateHeaders = headers;
             try {
-                msgSchema.validatePayload(channelName ?? "", operationId ?? "", \msg);
-                if (headers) {
-                    msgSchema.validateHeaders(channelName ?? "", operationId ?? "", \headers);
+                msgSchema.validatePayload(channelName ?? "", operationId ?? "", \candidateMsg);
+                if (candidateHeaders) {
+                    msgSchema.validateHeaders(channelName ?? "", operationId ?? "", \candidateHeaders);
                 }
-                validated = True;
-                break;
             } catch (hash<ExceptionInfo> ex) {
                 lastEx = ex;
+                continue;
             }
+            if (matched) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Message for channel %y and operation %y matches "
+                    "multiple message schemas; exactly one must match", channelName ?? "", operationId ?? "");
+            }
+            matched = msgSchema;
+            matchedMsg = candidateMsg;
+            matchedHeaders = candidateHeaders;
         }
-        if (!validated && lastEx) {
-            throw lastEx.err, lastEx.desc;
+        if (!matched && lastEx) {
+            throw lastEx.err, lastEx.desc, lastEx.arg;
         }
+        msg = matchedMsg;
+        headers = matchedHeaders;
+        return matched;
     }
 }
 

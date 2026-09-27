@@ -3,13 +3,14 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
 # try importing JSON and YAML modules
 %requires json
 %try-module yaml
 %define NoYaml
 %endtry
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
 %requires FsUtil
@@ -119,6 +120,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         addTestCase("operation navigation test", \operationNavigationTest());
         addTestCase("message type test", \messageTypeTest());
         addTestCase("multi-message union type test", \multiMessageUnionTypeTest());
+        addTestCase("inherited operation message types and validation", \inheritedOperationMessagesTest());
         addTestCase("message send transport test", \messageSendTransportTest());
         addTestCase("receive operation observable transport test", \receiveObservableTransportTest());
         addTestCase("api management endpoint test", \apiManagementEndpointTest());
@@ -413,6 +415,62 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", \restoredType.acceptsValue(), {"id": "bad", "tags": (1,)});
     }
 
+    inheritedOperationMessagesTest() {
+        checkModules();
+%ifndef NoYaml
+        hash<auto> doc = parse_yaml(getMultiMessageSchema());
+        remove doc.operations.publishEvent.messages;
+        remove doc.operations.receiveEvent.messages;
+        CapturingAsyncApiTransport transport();
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": make_json(doc),
+            "transport": transport,
+        });
+        AbstractDataProvider sendOp = provider.getChildProviderPath("events/publishEvent");
+        AbstractDataProviderType requestType = sendOp.getRequestType();
+        assertEq("QoreUnionDataType", requestType.className());
+        hash<DataTypeInfo> info = requestType.getInfo();
+        assertEq(2, info.union_types.size());
+        assertTrue(info.union_types[0].fields.hasKey("tags"));
+        assertTrue(info.union_types[1].fields.hasKey("amount"));
+        assertEq(("Alpha", "Beta"), keys sendOp.getMessageTypes());
+
+        sendOp.sendMessage("Alpha", {"id": "a1", "tags": ("x",)}, NOTHING);
+        sendOp.sendMessage("Beta", {"id": "b1", "amount": 7}, NOTHING);
+        assertEq(2, transport.getSent().size());
+
+        AbstractDataProvider receiveOp = provider.getChildProviderPath("events/receiveEvent");
+        assertEq(("Alpha", "Beta"), keys receiveOp.getEventTypes());
+        QueueObserver observer();
+        cast<DataProvider::Observable>(receiveOp).registerObserver(observer);
+        cast<DataProvider::DelayedObservable>(receiveOp).observersReady();
+        transport.emit({"id": "a1", "tags": ("x",)}, NOTHING);
+        assertEq("Alpha", observer.get(5s).event_id);
+        transport.emit({"id": "b1", "amount": 7}, NOTHING);
+        assertEq("Beta", observer.get(5s).event_id);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \transport.emit(), ({"id": "bad"}, NOTHING));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \transport.emit(),
+            ({"id": "ambiguous", "tags": ("x",), "amount": 7}, NOTHING));
+        cast<DataProvider::DelayedObservable>(receiveOp).stopEvents();
+
+        # A single inherited message exposes its fields directly, without a union wrapper.
+        remove doc.channels.events.messages.Beta;
+        AsyncApiDataProvider::AsyncApiDataProvider singleProvider({"schema": make_json(doc)});
+        AbstractDataProvider singleOp = singleProvider.getChildProviderPath("events/publishEvent");
+        assertEq("HashDataType", singleOp.getRequestType().className());
+        assertEq(("id", "tags"), keys singleOp.getRequestType().getFields());
+        assertEq(("Alpha",), keys singleOp.getMessageTypes());
+
+        # Explicit lists retain their restriction even when the channel has two messages.
+        doc = parse_yaml(getMultiMessageSchema());
+        doc.operations.publishEvent.messages = ({"$ref": "#/channels/events/messages/Alpha"},);
+        AsyncApiDataProvider::AsyncApiDataProvider restrictedProvider({"schema": make_json(doc)});
+        AbstractDataProvider restrictedOp = restrictedProvider.getChildProviderPath("events/publishEvent");
+        assertEq("HashDataType", restrictedOp.getRequestType().className());
+        assertEq(("Alpha",), keys restrictedOp.getMessageTypes());
+%endif
+    }
+
     messageSendTransportTest() {
         checkModules();
 
@@ -469,6 +527,8 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         assertEq("Alpha", event.data.message_id);
 
         assertThrows("SCHEMA-VALIDATION-ERROR", \transport.emit(), ({"id": "bad", "tags": (1,)}, NOTHING));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \transport.emit(),
+            ({"id": "ambiguous", "tags": ("x",), "amount": 7}, NOTHING));
 
         cast<DataProvider::DelayedObservable>(opProvider).stopEvents();
         assertTrue(transport.isUnsubscribed());

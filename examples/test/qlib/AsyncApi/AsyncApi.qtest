@@ -3,13 +3,14 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
 # try importing JSON and YAML modules
 %requires json
 %try-module yaml
 %define NoYaml
 %endtry
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
 %requires FsUtil
@@ -29,6 +30,10 @@ public class AsyncApiTest inherits QUnit::Test {
         testDir = get_script_dir();
         addTestCase("schema parsing test", \schemaParsingTest());
         addTestCase("message validation test", \messageValidationTest());
+        addTestCase("inherited operation messages", \inheritedOperationMessagesTest());
+        addTestCase("operation message ambiguity", \operationMessageAmbiguityTest());
+        addTestCase("operation message candidate isolation", \operationMessageCandidateIsolationTest());
+        addTestCase("invalid operation message references", \invalidOperationMessageReferencesTest());
         addTestCase("ref resolution test", \refResolutionTest());
         addTestCase("channel operations test", \channelOperationsTest());
         addTestCase("validation constraints test", \validationConstraintsTest());
@@ -194,6 +199,142 @@ public class AsyncApiTest inherits QUnit::Test {
             fail("Expected SCHEMA-VALIDATION-ERROR");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+    }
+
+    hash<auto> getOperationMessageDocument() {
+        return {
+            "asyncapi": "3.0.0",
+            "info": {"title": "Orders", "version": "1.0.0"},
+            "channels": {
+                "orders": {
+                    "address": "orders",
+                    "messages": {
+                        "order": {
+                            "name": "Order",
+                            "payload": {
+                                "type": "object",
+                                "required": ("id",),
+                                "properties": {"id": {"type": "integer"}},
+                            },
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendOrder": {"action": "send", "channel": {"$ref": "#/channels/orders"}},
+                "receiveOrder": {"action": "receive", "channel": {"$ref": "#/channels/orders"}},
+            },
+        };
+    }
+
+    inheritedOperationMessagesTest() {
+        hash<auto> doc = getOperationMessageDocument();
+        AsyncApi3Schema schema("orders", doc, NOTHING);
+        OperationObject op = schema.getOperation("sendOrder");
+        assertEq(1, op.messages.size());
+        assertEq(schema.getChannel("orders").messages.order, op.messages[0]);
+
+        auto msg = {"id": 42};
+        hash<auto> headers = {};
+        schema.validateOutgoingMessage("orders", \msg, \headers);
+        schema.validateIncomingMessage("orders", \msg, headers);
+        msg = {"id": "not-an-integer"};
+        assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateOutgoingMessage(),
+            ("orders", \msg, \headers));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateIncomingMessage(), ("orders", \msg, headers));
+
+        doc.channels.orders.messages.cancel = {
+            "name": "Cancel",
+            "payload": {"type": "object", "required": ("reason",),
+                "properties": {"reason": {"type": "string"}}},
+        };
+        schema = new AsyncApi3Schema("orders", doc, NOTHING);
+        op = schema.getOperation("sendOrder");
+        assertEq(("Order", "Cancel"), map $1.name, op.messages);
+        foreach auto valid in (({"id": 42}, {"reason": "duplicate"})) {
+            op.validateMessage(\valid, \headers);
+        }
+        msg = {};
+        assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
+
+        # An explicit subset must not inherit the other channel message.
+        doc.operations.sendOrder.messages = ({"$ref": "#/channels/orders/messages/order"},);
+        schema = new AsyncApi3Schema("orders", doc, NOTHING);
+        op = schema.getOperation("sendOrder");
+        assertEq(1, op.messages.size());
+        msg = {"reason": "duplicate"};
+        assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
+
+        # An explicit empty list retains its existing unconstrained behavior.
+        doc.operations.sendOrder.messages = ();
+        schema = new AsyncApi3Schema("orders", doc, NOTHING);
+        op = schema.getOperation("sendOrder");
+        assertEq(0, op.messages.size());
+        op.validateMessage(\msg, \headers);
+        remove doc.channels.orders.messages;
+        schema = new AsyncApi3Schema("orders", doc, NOTHING);
+        assertEq(0, schema.getOperation("receiveOrder").messages.size());
+        schema.getOperation("receiveOrder").validateMessage(\msg, \headers);
+    }
+
+    operationMessageAmbiguityTest() {
+        hash<auto> doc = getOperationMessageDocument();
+        doc.channels.orders.messages.otherOrder = doc.channels.orders.messages.order;
+        # Exercise explicit lists as well as inheritance.
+        doc.operations.sendOrder.messages = (
+            {"$ref": "#/channels/orders/messages/order"},
+            {"$ref": "#/channels/orders/messages/otherOrder"},
+        );
+        AsyncApi3Schema schema("orders", doc, NOTHING);
+        auto msg = {"id": 42};
+        hash<auto> headers = {};
+        assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateOutgoingMessage(),
+            ("orders", \msg, \headers));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateIncomingMessage(), ("orders", \msg, headers));
+        assertEq({"id": 42}, msg);
+    }
+
+    operationMessageCandidateIsolationTest() {
+        hash<auto> doc = getOperationMessageDocument();
+        doc.channels.orders.messages.order.payload = {
+            "type": "array", "items": {"type": "integer", "maximum": 1},
+        };
+        doc.channels.orders.messages.scalar = {"payload": {"type": "integer"}};
+        AsyncApi3Schema schema("orders", doc, NOTHING);
+        auto msg = 42;
+        hash<auto> headers = {};
+        # The first candidate wraps the scalar in a list, then fails its item constraint.
+        schema.getOperation("sendOrder").validateMessage(\msg, \headers);
+        assertEq(42, msg, "a rejected candidate must not change the next candidate's input");
+
+        # Both candidates now accept the original input, despite producing different values.
+        msg = 1;
+        OperationObject op = schema.getOperation("sendOrder");
+        assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
+        assertEq(1, msg, "ambiguity must not change the caller's input");
+
+        # Preserve a successful conversion even when a later candidate fails.
+        doc.channels.orders.messages.scalar.payload.type = "string";
+        schema = new AsyncApi3Schema("orders", doc, NOTHING);
+        msg = 1;
+        schema.getOperation("sendOrder").validateMessage(\msg, \headers);
+        assertEq((1,), msg);
+        op = schema.getOperation("sendOrder");
+        msg = 42;
+        assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
+        assertEq(42, msg, "a failed validation must not change the caller's input");
+    }
+
+    invalidOperationMessageReferencesTest() {
+        foreach auto entry in (({"payload": {"type": "integer"}}, "order", {},
+                {"$ref": ""}, {"$ref": 42}, {"$ref": "#/channels/orders/messages/missing"})) {
+            hash<auto> doc = getOperationMessageDocument();
+            doc.operations.sendOrder.messages = (entry,);
+            assertThrows("INVALID-FIELD-VALUE", sub() {
+                AsyncApi3Schema schema("orders", doc, NOTHING);
+            });
         }
     }
 

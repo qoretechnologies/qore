@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AsyncApiOperationDataProvider module definition
 
-/** AsyncApiOperationDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** AsyncApiOperationDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -326,23 +326,8 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase, Da
 
     #! Validates an inbound operation message and returns the matched AsyncAPI message name
     private string validateIncomingOperationMessage(reference<auto> msg, reference<hash<auto>> headers) {
-        if (!op.messages) {
-            return operation_id;
-        }
-        *hash<ExceptionInfo> last_ex;
-        foreach AsyncApi::MessageObject msg_schema in (op.messages) {
-            try {
-                msg_schema.validatePayload(channel_name, operation_id, \msg);
-                msg_schema.validateHeaders(channel_name, operation_id, \headers);
-                return msg_schema.name ?? operation_id;
-            } catch (hash<ExceptionInfo> ex) {
-                last_ex = ex;
-            }
-        }
-        if (last_ex) {
-            throw last_ex.err, last_ex.desc, last_ex.arg;
-        }
-        return operation_id;
+        *AsyncApi::MessageObject matched = op.validateMessageAndGetSchema(\msg, \headers);
+        return matched ? matched.name ?? operation_id : operation_id;
     }
 
     #! Builds observable event data while preserving scalar/list payloads

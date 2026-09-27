@@ -2600,9 +2600,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - @ref asyncapiintro "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - added AsyncAPI schema generation support for MQTT and Kafka channel blocks, including protocol bindings
+      - operations that omit \c messages inherit their channel's messages; explicit lists retain their meaning
+      - message validation rejects ambiguous matches and malformed operation message references
 
     - @ref asyncapidataproviderintro "AsyncApiDataProvider" module
       - new module providing a data provider API for AsyncAPI schemas
+      - inherited operation messages now provide request and event types, including unions for multiple payloads;
+        inbound messages use the same validation as the core schema API
 
     - @ref asyncsocketiointro "AsyncSocketIo" module
       - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
