@@ -59,6 +59,7 @@ endif
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_aot_metadata.py
 	dh_auto_build -- linenoise-unicode-test
 	$(builddir)/modules/linenoise/linenoise-unicode-test
 	QORE_BINARY=$(CURDIR)/$(builddir)/qore \
@@ -100,6 +101,11 @@ override_dh_dwz:
 	# AOT-compiled .qmod files contain LLVM DWARF sections that dwz on
 	# current Debian/Ubuntu releases does not understand.
 	dh_dwz -Nqore-stdlib
+
+override_dh_strip:
+	# strip and objcopy discard Qore's EOF trailers. Preserve the dependency,
+	# source-location and optional-module metadata around all dh_strip edits.
+	python3 debian/preserve-aot-metadata.py debian/qore-stdlib dh_strip
 
 override_dh_gencontrol:
 	# The public LLVM plugin headers must match the LLVM used by libqore.

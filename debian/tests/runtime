@@ -61,4 +61,14 @@ for mode in ast ir jit tiered; do
 done
 
 # AOT user modules are native ELF files and belong under the multiarch libdir.
-test -s "$(qore --module-dir)/$(qore --short-version)/Util.qmod"
+module_dir="$(qore --module-dir)/$(qore --short-version)"
+test -s "$module_dir/Util.qmod"
+# ELF stripping must preserve the appended dependency trailer of every AOT
+# module. Native C++ modules have an API suffix and do not carry this metadata.
+for module in "$module_dir"/*.qmod; do
+    case "$module" in *-api-*.qmod) continue ;; esac
+    if [ "$(tail -c 8 "$module" | head -c 4)" != QAMD ]; then
+        echo "Missing AOT dependency metadata: $module" >&2
+        exit 1
+    fi
+done

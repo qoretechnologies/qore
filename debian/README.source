@@ -91,6 +91,10 @@ Cross builds are rejected because the build executes qpp, qore, and qcc.
 The CMake build type is None so dpkg-buildflags controls optimization and
 hardening, including noopt. Installed CMake-built ELF objects omit RUNPATH;
 chrpath removes qcc's build-directory RUNPATH from AOT modules before stripping.
+The dh_strip wrapper preserves Qore's appended dependency, source-location and
+optional-module metadata while keeping normal stripping and dbgsym generation.
+Without the optional-module metadata, installing an external module could leave
+the compiled standard library silently using the branch for its absence.
 The source tree is not populated with generated qmod symlinks. Optional MongoDB,
 OCR, and Linux io_uring dependencies are declared to keep package contents stable
 between clean builders. ONNX Runtime is required for the packaged ml module;
