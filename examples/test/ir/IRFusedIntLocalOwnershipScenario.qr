@@ -8,8 +8,9 @@
 # must hand each heap-boxed result to the local's owner and release the value it replaces.
 #
 # Without arguments it prints the computed values.  With "rss" it repeats each update pattern
-# and prints the resident set growth of a promoted call in kB: every leaked large int is a
-# separate heap node, so a leak grows by megabytes while correct code reuses freed nodes.
+# and prints the smallest resident set growth of three promoted calls in kB: every leaked large int
+# is a separate heap node, so a leak grows by megabytes in every call while correct code reuses freed
+# nodes.
 
 const Big = 1 << 50;
 const Edge = (1 << 47) - 2;
@@ -150,11 +151,21 @@ if (ARGV[0] == "rss") {
     };
     foreach hash<auto> c in (cases.pairIterator()) {
         code f = c.value;
-        # the first call promotes and compiles the function; measure a later call
+        # the first call promotes and compiles the function; measure later calls
         f();
-        int before = rssKb();
-        f();
-        printf("%s: %d\n", c.key, rssKb() - before);
+        # the resident set is that of the process, so it also grows when another thread (such as a background
+        # compiler or cleanup worker) allocates during a call; a leak grows it in every call, so the smallest
+        # growth of several calls is reported
+        *int growth;
+        for (int i = 0; i < 3; ++i) {
+            int before = rssKb();
+            f();
+            int g = rssKb() - before;
+            if (!exists growth || g < growth) {
+                growth = g;
+            }
+        }
+        printf("%s: %d\n", c.key, growth);
     }
     return;
 }
