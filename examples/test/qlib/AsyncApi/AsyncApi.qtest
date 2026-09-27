@@ -239,6 +239,17 @@ public class AsyncApiTest inherits QUnit::Test {
         hash<auto> headers = {};
         schema.validateOutgoingMessage("orders", \msg, \headers);
         schema.validateIncomingMessage("orders", \msg, headers);
+        # headers that are not set, as sent by WebSocketClient::sendData()
+        {
+            hash<auto> unset_headers;
+            auto unset_msg = {"id": 42};
+            schema.validateOutgoingMessage("orders", \unset_msg, \unset_headers);
+            assertEq(NOTHING, unset_headers);
+            assertEq({"id": 42}, unset_msg);
+            unset_msg = {"id": "not-an-integer"};
+            assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateOutgoingMessage(),
+                ("orders", \unset_msg, \unset_headers));
+        }
         msg = {"id": "not-an-integer"};
         assertThrows("SCHEMA-VALIDATION-ERROR", \op.validateMessage(), (\msg, \headers));
         assertThrows("SCHEMA-VALIDATION-ERROR", \schema.validateOutgoingMessage(),

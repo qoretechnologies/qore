@@ -1077,11 +1077,12 @@ hash<auto> headers = {};
         }
         *MessageObject matched;
         auto matchedMsg;
-        hash<auto> matchedHeaders;
+        # the headers can be unset
+        *hash<auto> matchedHeaders;
         *hash<ExceptionInfo> lastEx;
         foreach MessageObject msgSchema in (messages) {
             auto candidateMsg = msg;
-            hash<auto> candidateHeaders = headers;
+            *hash<auto> candidateHeaders = headers;
             try {
                 msgSchema.validatePayload(channelName ?? "", operationId ?? "", \candidateMsg);
                 if (candidateHeaders) {
@@ -1103,7 +1104,9 @@ hash<auto> headers = {};
             throw lastEx.err, lastEx.desc, lastEx.arg;
         }
         msg = matchedMsg;
-        headers = matchedHeaders;
+        if (exists matchedHeaders) {
+            headers = matchedHeaders;
+        }
         return matched;
     }
 }
