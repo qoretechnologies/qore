@@ -111,9 +111,10 @@ libqore20 contains only the SONAME library and is Multi-Arch: same. Debhelper
 generates its ldconfig trigger and versioned shlibs dependency; there is no
 hand-maintained minimum version that can become stale as the C++ API grows.
 Changing the SONAME requires renaming this package and updating its dependents.
-Before publishing 3.0, compare the exported C++ ABI with the previously released
-libqore20; an incompatible change requires a SONAME/package-name bump. Qore's
-binary module API version is separate from the shared-library SONAME.
+Before publishing 3.0, compare the exported C++ ABI with any previously
+distributed libqore20 snapshots; an incompatible change requires a
+SONAME/package-name bump. Qore 2.2.1 used SONAME 12, while this tree uses 20.
+Qore's binary module API version is separate from the shared-library SONAME.
 
 qore-stdlib is Architecture: any: AOT .qmod files are ELF objects installed under
 the multiarch libdir, while Qore sources/resources live under /usr/share. It is

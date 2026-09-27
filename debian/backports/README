@@ -136,7 +136,8 @@ Local validation initially uses native amd64.
 
 Wait for all dependency binaries to build and publish for resolute before
 uploading Qore. Qore's Build-Depends can then be resolved from the same PPA.
-The separately packaged YAML module is still needed for qore-debug-tools.
+YAML and its companion user modules are bundled in qore-stdlib; debugger tools
+do not need a separate qore-yaml-module package.
 
 Useful references
 -----------------
