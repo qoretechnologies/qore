@@ -424,33 +424,32 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
         const typed_hash_decl_private& hd, const char* context, bool& needs_runtime_check, bool strict_check) const {
     int err = 0;
     unsigned possible_matches = 0;
-    for (auto& i : hd.members.member_list) {
-        const HashDeclMemberInfo* m = findMember(i.first);
+    // the members of the source hashdecl include its inherited members, as the target's findMember() does
+    hd.forEachMember([&] (const char* mname, const HashDeclMemberInfo* minfo) -> int {
+        const HashDeclMemberInfo* m = findMember(mname);
         if (!m) {
             if (!strict_check) {
-                continue;
+                return 0;
             }
             parse_error(*loc, "hashdecl '%s' cannot be initialized from %s with hashdecl '%s' due to key '%s' " \
                 "present in hashdecl '%s' but not in the target hashdecl '%s'", name.c_str(), context,
-                hd.name.c_str(), i.first, hd.name.c_str(), name.c_str());
+                hd.name.c_str(), mname, hd.name.c_str(), name.c_str());
             if (!err) {
                 err = -1;
             }
         } else {
             bool may_not_match = false;
-            qore_type_result_e res = QoreTypeInfo::parseAccepts(m->getTypeInfo(), i.second->getTypeInfo(),
+            qore_type_result_e res = QoreTypeInfo::parseAccepts(m->getTypeInfo(), minfo->getTypeInfo(),
                 may_not_match);
-
             if (res && (res == QTI_IDENT || !strict_check || !may_not_match)) {
                 ++possible_matches;
-                continue;
+                return 0;
             }
-
             if ((res == QTI_WILDCARD || res == QTI_AMBIGUOUS || res == QTI_NEAR) && may_not_match) {
                 parse_error(*loc, "hashdecl '%s' initializer value for key '%s' from hashdecl '%s' from %s has " \
                     "incompatible type '%s'; expecting '%s'; types may not be compatible at runtime; use " \
-                    "cast<hash<%s>>() to force a runtime check", name.c_str(), i.first, hd.name.c_str(), context,
-                    QoreTypeInfo::getName(i.second->getTypeInfo()), QoreTypeInfo::getName(m->getTypeInfo()),
+                    "cast<hash<%s>>() to force a runtime check", name.c_str(), mname, hd.name.c_str(), context,
+                    QoreTypeInfo::getName(minfo->getTypeInfo()), QoreTypeInfo::getName(m->getTypeInfo()),
                     name.c_str());
                 if (!err) {
                     err = -1;
@@ -458,15 +457,16 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
             } else {
                 if (strict_check) {
                     parse_error(*loc, "hashdecl '%s' initializer value for key '%s' from hashdecl '%s' from %s has " \
-                        "incompatible type '%s'; expecting '%s'", name.c_str(), i.first, hd.name.c_str(), context,
-                        QoreTypeInfo::getName(i.second->getTypeInfo()), QoreTypeInfo::getName(m->getTypeInfo()));
+                        "incompatible type '%s'; expecting '%s'", name.c_str(), mname, hd.name.c_str(), context,
+                        QoreTypeInfo::getName(minfo->getTypeInfo()), QoreTypeInfo::getName(m->getTypeInfo()));
                     if (!err) {
                         err = -1;
                     }
                 }
             }
         }
-    }
+        return 0;
+    });
     if (!err && !possible_matches) {
         parse_error(*loc, "hashdecl '%s' cannot be assigned from hashdecl '%s' as there are no common keys with " \
             "compatible types", name.c_str(), hd.name.c_str());
@@ -618,16 +618,18 @@ int typed_hash_decl_private::parseCheckComplexHashAssignment(const QoreProgramLo
         return 0;
     }
     int err = 0;
-    for (auto& i : members.member_list) {
-        if (!QoreTypeInfo::parseAccepts(vti, i.second->getTypeInfo())) {
+    // inherited members are values of the hash too
+    forEachMember([&] (const char* mname, const HashDeclMemberInfo* minfo) -> int {
+        if (!QoreTypeInfo::parseAccepts(vti, minfo->getTypeInfo())) {
             parse_error(*loc, "cannot initialize a hash<string, %s> value from hashdecl '%s' due to member '%s' " \
-                "with incompatible type '%s'", QoreTypeInfo::getName(vti), name.c_str(), i.first,
-                QoreTypeInfo::getName(i.second->getTypeInfo()));
+                "with incompatible type '%s'", QoreTypeInfo::getName(vti), name.c_str(), mname,
+                QoreTypeInfo::getName(minfo->getTypeInfo()));
             if (!err) {
                 err = -1;
             }
         }
-    }
+        return 0;
+    });
     return err;
 }
 

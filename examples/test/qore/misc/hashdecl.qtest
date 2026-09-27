@@ -209,6 +209,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("Test HashDecl", \testHashDecl());
         addTestCase("namespaced typed hash literal", \namespacedTypedHashLiteral());
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
+        addTestCase("assignment checks include inherited members", \testInheritedMemberAssignmentChecks());
         addTestCase("complex type defaults", \testComplexTypeDefaults());
         addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
         addTestCase("homogeneous container hashdecl folding", \testHomogeneousContainerHashDeclFolding());
@@ -534,6 +535,39 @@ class HashDeclTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {auto h = <::>{};}", ""));
+        }
+    }
+
+    # parse-time assignment checks consider the members a hashdecl inherits, not only those it declares itself
+    testInheritedMemberAssignmentChecks() {
+        # a slice of a derived hashdecl with only inherited keys is assigned to another hashdecl with those keys, as
+        # data providers derive their summary info from their info
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("hashdecl Summary { string name; *string desc; bool supports_request = False; }
+hashdecl InfoBase { string name; *string desc; bool supports_request = False; int count = 0; }
+hashdecl Info inherits InfoBase { *hash<auto> options; }
+const I = <Info>{\"name\": \"clean\", \"desc\": \"drops objects\", \"supports_request\": True};
+const S = cast<hash<Summary>>(I{\"name\", \"desc\", \"supports_request\",});
+hash<auto> sub t() { return S; }
+hash<auto> sub u() { hash<Info> i = I; hash<Summary> s = cast<hash<Summary>>(i{\"name\",}); return s; }", "t");
+            assertEq({"name": "clean", "desc": "drops objects", "supports_request": True}, p.callFunction("t"));
+            assertEq("hash<Summary>", p.callFunction("t").fullType());
+            assertEq("clean", p.callFunction("u").name);
+        }
+        # an inherited member of an incompatible type is found when assigning to a hash of a value type
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "due to member 'label'", \p.parse(),
+                ("hashdecl B { string label; } hashdecl D inherits B { int n; }
+sub t() { hash<string, int> h(<D>{\"label\": \"x\", \"n\": 1}); }", "t"));
+        }
+        # a derived hashdecl whose members are all compatible is accepted
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("hashdecl B { int a; } hashdecl D inherits B { int n; }
+hash<string, int> sub t() { hash<string, int> h(<D>{\"a\": 1, \"n\": 2}); return h; }", "t");
+            assertEq({"a": 1, "n": 2}, p.callFunction("t"));
         }
     }
 

@@ -263,6 +263,26 @@ public:
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const;
 
+    //! Calls the function for each member, including inherited members, parent members first
+    /** @param f called with the member name and info; returning non-zero stops the iteration
+
+        @return the non-zero value returned by \a f, or 0 if every member was visited
+    */
+    template <typename F>
+    DLLLOCAL int forEachMember(F&& f) const {
+        if (parentHashDecl) {
+            if (int rc = get(*parentHashDecl)->forEachMember(f)) {
+                return rc;
+            }
+        }
+        for (auto& i : members.member_list) {
+            if (int rc = f(i.first, i.second)) {
+                return rc;
+            }
+        }
+        return 0;
+    }
+
     DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
         const HashDeclMemberInfo* mi = members.find(m);
         if (mi) {
