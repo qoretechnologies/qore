@@ -170,6 +170,34 @@ public:
     */
     DLLEXPORT int get(const char* remotepath, OutputStream* os, ExceptionSink* xsink);
 
+    //! gets a file from the remote server starting at the given offset and writes it to the output stream
+    /** the connection must be already established before this function is called or an error will be raised; the
+        transfer is restarted at the offset with the \c REST command, which the server must support
+
+        @param remotepath the path of the file on the remote server
+        @param os the output stream
+        @param offset the offset in bytes in the remote file at which the transfer starts; 0 transfers the whole file
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return 0 for OK, non-zero for error (meaning that an exception has been raised)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int get(const char* remotepath, OutputStream* os, int64 offset, ExceptionSink* xsink);
+
+    //! returns the size in bytes of a file on the remote server
+    /** the connection must be already established before this function is called or an error will be raised; the
+        size is determined with the \c SIZE command in binary mode, which the server must support
+
+        @param remotepath the path of the file on the remote server
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return the size of the file in bytes, or -1 if an exception has been raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int64 size(const char* remotepath, ExceptionSink* xsink);
+
     //! sends a file data io the remote server
     /** the connection must be already established before this function is called or an error will be raised.
 

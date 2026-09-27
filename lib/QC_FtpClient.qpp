@@ -447,6 +447,61 @@ nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] outp
     f->get(remote_path->c_str(), *output_stream, xsink);
 }
 
+//! Gets a file from the FTP server starting at the given offset and writes it to an OutputStream; if any errors occur, an exception is thrown
+/** The transfer is restarted at the given offset with the \c REST command, so the rest of a file that was
+    transferred partially can be retrieved, for example to resume an interrupted download
+
+    @param remote_path The path on the server to the file to get
+    @param output_stream The output stream to write the file to
+    @param offset The offset in bytes in the remote file at which the transfer starts; 0 transfers the whole file
+
+    @par Events:
+    @ref EVENT_FTP_SEND_MESSAGE, @ref EVENT_FTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_PACKET_SENT
+
+    @par Example:
+    @code{.py}
+# resume a download
+int offset = hstat(local_path).size ?? 0;
+ftp.get("file.iso", new FileOutputStream(local_path, True), offset);
+    @endcode
+
+    @throw FTP-RECEIVE-ERROR Incomplete message received on control port
+    @throw FTP-RESTART-ERROR The server does not support restarting the transfer at the given offset
+    @throw FTP-GET-ERROR There was an error retrieving the file, or \a offset is negative
+
+    @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
+
+    @see FtpClient::size()
+    @since %Qore 3.0
+*/
+nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] output_stream, int offset) [flags=NAMED_ARGS] {
+    f->get(remote_path->c_str(), *output_stream, offset, xsink);
+}
+
+//! Returns the size of a file on the FTP server in bytes
+/** The size is determined with the \c SIZE command in binary mode, so it is the number of bytes that a transfer of
+    the file delivers
+
+    @param remote_path The path on the server to the file
+
+    @return the size of the file in bytes
+
+    @par Example:
+    @code{.py}
+int size = ftp.size("file.iso");
+    @endcode
+
+    @throw FTP-SIZE-ERROR The server does not support the \c SIZE command, or the file does not exist
+    @throw FTP-RECEIVE-ERROR Incomplete message received on control port
+
+    @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
+
+    @since %Qore 3.0
+*/
+int FtpClient::size(string remote_path) [flags=NAMED_ARGS] {
+    return f->size(remote_path->c_str(), xsink);
+}
+
 //! Transfers string data to the FTP server and saves it as a file on the remote machine; if any errors occur, an exception is thrown
 /** @param data The file data to save on the remote server
     @param remote_path The path on the remote server for the file to save the data under

@@ -113,6 +113,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         #! if True, EPSV is refused so clients must fall back to PASV
         bool no_epsv;
+        #! refuse REST, as servers that cannot restart transfers do
+        bool no_rest;
 
         const PollInterval = 250ms;
     }
@@ -153,6 +155,11 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
     */
     setNoEpsv(bool v = True) {
         no_epsv = v;
+    }
+
+    #! Refuse REST, so that a client restarting a transfer gets an error
+    setNoRest(bool v = True) {
+        no_rest = v;
     }
 
     *string getLocalDir() {
@@ -306,6 +313,9 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         # port data connection pending
         hash<auto> port_info;
 
+        # the offset given with REST for the next transfer
+        int rest_offset = 0;
+
         while (True) {
             string cmd = ftpGetCommand(ns);
             if (quit || cmd == "")
@@ -396,11 +406,32 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 continue;
             }
 
+            if (cmd =~ /^REST /i) {
+                *string off = (cmd =~ x/^REST ([0-9]+)$/i)[0];
+                if (no_rest) {
+                    ftpSend(ns, 502, "Command not implemented.");
+                } else if (!off) {
+                    ftpSend(ns, 501, "Invalid REST argument.");
+                } else {
+                    rest_offset = off.toInt();
+                    ftpSend(ns, 350, "Restarting at %d.", rest_offset);
+                }
+                continue;
+            }
+
             if (cmd =~ /^RETR .+$/i) {
                 string file = (cmd =~ x/^RETR (.+)$/i)[0];
+                # the restart offset applies to this transfer only
+                int offset = rest_offset;
+                rest_offset = 0;
                 if (!data.isOpen()) {
-                    ftpSend(ns, 425, "Use EPASV first.");
-                    continue;
+                    if (port_info) {
+                        # active mode: connect to the address given with PORT
+                        data.connectINET(port_info.ip, port_info.port, 10s);
+                    } else {
+                        ftpSend(ns, 425, "Use EPASV first.");
+                        continue;
+                    }
                 }
 
                 *string send_path = resolveLocalPath(file);
@@ -433,11 +464,19 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     break;
 
                 if (send_path) {
-                    data.sendFromInputStream(new FileInputStream(send_path));
+                    if (offset) {
+                        data.send(ReadOnlyFile::readBinaryFile(send_path).substr(offset));
+                    } else {
+                        data.sendFromInputStream(new FileInputStream(send_path));
+                    }
                 } else if (!get_empty) {
                     # write a bunch of data and then exit
-                    for (int i = 0; i < 200; ++i)
-                        data.send("testing abcdefghijklmnopqrstuvwxyz 0123456789\n");
+                    if (offset) {
+                        data.send(strmul("testing abcdefghijklmnopqrstuvwxyz 0123456789\n", 200).substr(offset));
+                    } else {
+                        for (int i = 0; i < 200; ++i)
+                            data.send("testing abcdefghijklmnopqrstuvwxyz 0123456789\n");
+                    }
                 }
 
                 data.close();

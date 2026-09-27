@@ -1108,7 +1108,7 @@ struct qore_ftp_private {
     DLLLOCAL int portTransferAsyncBlocking(const char* transfer_cmd, const char* transfer_arg,
             const void* send_data_ptr, size_t send_len, InputStream* send_input_stream,
             OutputStream* recv_output_stream,
-            BinaryNode** recv_output, ExceptionSink* xsink) {
+            BinaryNode** recv_output, ExceptionSink* xsink, int64 restart_offset = 0) {
         // 1. Get local interface address from the async control socket
         ReferenceHolder<QoreHashNode> ctrl_info(getControlSocketInfoUnlocked(xsink, false), xsink);
         if (*xsink) {
@@ -1213,6 +1213,11 @@ struct qore_ftp_private {
                 xsink->raiseException("FTP-CONNECT-ERROR",
                     "PORT command failed: %s", mr ? mr->c_str() : "no response");
             }
+            return -1;
+        }
+
+        // the restart offset must be sent immediately before the transfer command
+        if (restart_offset > 0 && sendRestartAsyncBlocking(restart_offset, xsink)) {
             return -1;
         }
 
@@ -1409,7 +1414,62 @@ struct qore_ftp_private {
     }
 
     //! Async GET: download a file to an OutputStream via async I/O controller
-    DLLLOCAL int getAsyncBlocking(const char* remotepath, OutputStream* output_stream, ExceptionSink* xsink) {
+    //! Sends the REST command for the next transfer command; the server must reply with 350
+    DLLLOCAL int sendRestartAsyncBlocking(int64 offset, ExceptionSink* xsink) {
+        QoreStringMaker arg("%lld", (long long)offset);
+        int code;
+        QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "REST", arg.c_str(), xsink));
+        if (*xsink) {
+            return -1;
+        }
+        if (code != 350) {
+            xsink->raiseException("FTP-RESTART-ERROR", "the server cannot restart the transfer at offset %lld: %s",
+                (long long)offset, resp ? resp->c_str() : "no response");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Returns the size of a remote file with the SIZE command in binary mode, or -1 if an exception was raised
+    DLLLOCAL int64 sizeAsyncBlocking(const char* remotepath, ExceptionSink* xsink) {
+        // the size is the number of octets that a binary mode transfer delivers (RFC 3659 section 4)
+        int code;
+        QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "TYPE", "I", xsink));
+        if (*xsink || (code / 100) != 2) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-ERROR", "TYPE I failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return -1;
+        }
+        resp = sendMsgAsyncBlocking(code, "SIZE", remotepath, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        // the reply is "213 <size>" (RFC 3659); any 2xx code is accepted, as by other SIZE callers; the response
+        // includes the code, and the size is on the final line
+        const char* p = resp ? resp->c_str() : "";
+        if (const char* nl = strrchr(p, '\n')) {
+            p = nl + 1;
+        }
+        if (strlen(p) >= 4 && isdigit(p[0]) && isdigit(p[1]) && isdigit(p[2]) && p[3] == ' ') {
+            p += 4;
+        }
+        while (*p == ' ') {
+            ++p;
+        }
+        char* end = nullptr;
+        errno = 0;
+        long long size = ((code / 100) == 2 && isdigit(*p)) ? strtoll(p, &end, 10) : -1;
+        if (size < 0 || errno || (end && *end && !isspace(*end))) {
+            xsink->raiseException("FTP-SIZE-ERROR", "cannot get the size of '%s': %s", remotepath,
+                resp ? resp->c_str() : "no response");
+            return -1;
+        }
+        return size;
+    }
+
+    DLLLOCAL int getAsyncBlocking(const char* remotepath, OutputStream* output_stream, ExceptionSink* xsink,
+            int64 offset = 0) {
         if (!output_stream->isIoThreadSafe()) {
             xsink->raiseException("FTP-GET-ERROR", "OutputStream is not I/O thread safe");
             return -1;
@@ -1433,7 +1493,7 @@ struct qore_ftp_private {
                 return -1;
             }
             int rc = portTransferAsyncBlocking("RETR", remotepath, nullptr, 0, nullptr, output_stream, nullptr,
-                xsink);
+                xsink, offset);
             return !rc && !*xsink ? stream_guard.reassign() : -1;
         }
 
@@ -1441,6 +1501,12 @@ struct qore_ftp_private {
         std::string dhost;
         int dport;
         if (negotiateDataChannelAsync(dhost, dport, xsink)) {
+            return -1;
+        }
+
+        // the restart offset is sent before the data connection is made, so nothing needs to be cleaned up if the
+        // server rejects it; no other command is sent before RETR
+        if (offset > 0 && sendRestartAsyncBlocking(offset, xsink)) {
             return -1;
         }
 
@@ -2011,6 +2077,33 @@ int QoreFtpClient::get(const char* remotepath, OutputStream *os, ExceptionSink* 
    int rv = priv->getAsyncBlocking(remotepath, os, xsink);
    sl.unlock();
    return rv;
+}
+
+// public locked
+int QoreFtpClient::get(const char* remotepath, OutputStream* os, int64 offset, ExceptionSink* xsink) {
+    if (offset < 0) {
+        xsink->raiseException("FTP-GET-ERROR", "the restart offset cannot be negative; got: %lld", (long long)offset);
+        return -1;
+    }
+
+    SafeLocker sl(priv->m);
+    if (priv->checkConnectedUnlocked(xsink)) {
+        return -1;
+    }
+
+    int rv = priv->getAsyncBlocking(remotepath, os, xsink, offset);
+    sl.unlock();
+    return rv;
+}
+
+// public locked
+int64 QoreFtpClient::size(const char* remotepath, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+    if (priv->checkConnectedUnlocked(xsink)) {
+        return -1;
+    }
+
+    return priv->sizeAsyncBlocking(remotepath, xsink);
 }
 
 // public locked

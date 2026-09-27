@@ -49,6 +49,7 @@ class FtpTest inherits QUnit::Test {
         addTestCase("test PASV", \testPasv());
         addTestCase("FtpClient class test case", \testFtpClient());
         addTestCase("FtpClient simulated server", \testFtpClientSim());
+        addTestCase("FtpClient size and restarted transfers", \testSizeAndRestart());
 
         local_path = createLocalFile();
         on_exit unlink(local_path);
@@ -362,6 +363,54 @@ class FtpTest inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    testSizeAndRestart() {
+        # a file of its own, as other test cases change the shared local file
+        TmpFile tmp_file("ftp-restart-");
+        binary file_data = get_random_bytes(10007);
+        tmp_file.file.write(file_data);
+        string name = basename(tmp_file.path);
+
+        FtpServer serv(0, m_options.verbose, "127.0.0.1");
+        on_exit serv.shutdown();
+        serv.setFs();
+        FtpClient fc(url: "ftp://user:pass@127.0.0.1:" + serv.getPort());
+        fc.connect();
+        on_exit fc.disconnect();
+        fc.put(tmp_file.path, name);
+
+        assertEq(file_data.size(), fc.size(name));
+        assertThrows("FTP-SIZE-ERROR", \fc.size(), "no-such-file");
+
+        # passive and active mode transfers
+        foreach string mode in ("pasv", "port") {
+            if (mode == "port") {
+                fc.setModePORT();
+            } else {
+                fc.setModePASV();
+            }
+            foreach int offset in (0, 1, 1000, file_data.size() - 1, file_data.size()) {
+                BinaryOutputStream os();
+                fc.get(name, os, offset);
+                assertEq(file_data.substr(offset), os.getData(), sprintf("%s offset %d", mode, offset));
+            }
+            # the offset applies to one transfer only
+            BinaryOutputStream os();
+            fc.get(name, os);
+            assertEq(file_data, os.getData(), mode + " after a restarted transfer");
+        }
+        fc.setModeAuto();
+
+        assertThrows("FTP-GET-ERROR", \fc.get(), (name, new BinaryOutputStream(), -1));
+
+        # a server that cannot restart a transfer
+        serv.setNoRest();
+        assertThrows("FTP-RESTART-ERROR", \fc.get(), (name, new BinaryOutputStream(), 10));
+        # the connection can still be used
+        BinaryOutputStream os();
+        fc.get(name, os);
+        assertEq(file_data, os.getData());
     }
 
     testFtpClientSim() {

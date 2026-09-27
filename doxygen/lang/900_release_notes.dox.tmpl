@@ -1735,6 +1735,11 @@ while (*binary chunk = input.read(65536)) {
     certificates that server certificates are verified against instead of the default CA certificates of the
     system, for HTTP/1.1, HTTP/2, and HTTP/3 connections.
 
+    @par FTP File Sizes and Restarted Transfers
+    @ref Qore::FtpClient::size() "FtpClient::size()" returns the size of a remote file, and
+    @ref Qore::FtpClient::get() "FtpClient::get()" with an offset restarts a transfer at the given position, so an
+    interrupted download can be resumed.
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse
