@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class FiletypesTest
 
@@ -18,7 +19,9 @@ class FiletypesTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("skipping because the test is being run on Windows");
 %endif
-        string nonExistantPath = "/abcdefgh/XYZ/X987654321/asde7g1b23m6u7e9s2c0h4g5sd6sf";
+        # Build environments can have a missing or read-only HOME.
+        TmpDir fixture("qore-filetypes-");
+        string nonExistantPath = fixture.path + DirSep + "missing";
 
         # in case /dev/null is a symlink (such as on Solaris)
         string dev = realpath("/dev/null");
@@ -37,11 +40,11 @@ class FiletypesTest inherits QUnit::Test {
         assertEq(False, is_dir(nonExistantPath), "is_dir() false 1");
         assertEq(False, is_dir(""), "is_dir() false 2");
 
-        assertEq(True, is_writeable(ENV.HOME), "is_writable()");
+        assertEq(True, is_writeable(fixture.path), "is_writable()");
         assertEq(False, is_writeable(nonExistantPath), "is_writable() false 1");
         assertEq(False, is_writeable(""), "is_writable() false 2");
 
-        assertEq(True, is_readable(ENV.HOME), "is_readable()");
+        assertEq(True, is_readable(fixture.path), "is_readable()");
         assertEq(False, is_readable(nonExistantPath), "is_readable() false 1");
         assertEq(False, is_readable(""), "is_readable() false 2");
 
