@@ -349,10 +349,9 @@ class FtpTest inherits QUnit::Test {
         try {
             assertNothing(fc.connect());
 
-            # a file of its own, so parallel test runs do not remove each other's file
-            TmpFile read_file("ftptest-read-");
-            string local_read_path = read_file.path;
-            unlink(local_read_path);
+            # a directory of its own, so parallel test runs do not remove each other's file
+            TmpDir read_dir("ftptest-read-");
+            string local_read_path = read_dir.path + DirSep + "ftptest-read";
 
 %ifdef Windows
             path =~ s/\\/\//g;
