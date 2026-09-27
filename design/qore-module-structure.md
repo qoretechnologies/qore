@@ -558,6 +558,14 @@ The effective search path at any point, highest precedence first:
 `ModuleManager` builds this order directly; the per-Program lists live on
 `qore_program_private` as `prepended_module_paths` / `appended_module_paths`.
 
+For AOT modules without an API-version suffix, source fallback uses the first
+matching source in this effective search path, including separated module
+directories. The source does not have to sit beside the `.qmod`: distributions
+install native artifacts under a multiarch library directory and sources under
+the shared-data directory. This also lets an artifact compiled with a different
+set of optional modules fall back to source. Explicit `.qmod` paths continue to
+use only their sibling source, and API-versioned native modules do not fall back.
+
 ### The same order applies at run time
 
 `Program::loadModule()`, `loadApplyToUserModule()` and the `load_module()`

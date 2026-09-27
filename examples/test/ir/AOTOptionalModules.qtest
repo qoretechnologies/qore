@@ -57,6 +57,8 @@ public namespace Uses {
         addTestCase("a stale qmod falls back to its source module", \sourceFallbackTest());
         addTestCase("a stale qmod without a source module is loaded with a warning", \noSourceTest());
         addTestCase("a qmod compiled with the optional module records nothing", \availableAtCompileTest());
+        addTestCase("a stale installed qmod finds source in a later directory", \splitInstallFallbackTest());
+        addTestCase("an installed qmod with a missing dependency finds source", \removedDependencyFallbackTest());
 
         set_return_value(main());
     }
@@ -168,5 +170,42 @@ public namespace Uses {
         assertNeq(-1, deps.find("Opt.qm"), deps);
         # the artifact has no optional-module trailer
         assertFalse(hasOptionalModuleTrailer(), "no optional module request is recorded");
+    }
+
+    splitInstallFallbackTest() {
+        TmpDir tmp = initDirs();
+        installOpt("1.0");
+        compileUses();
+        # Installed AOT modules and their sources live under different prefixes.
+        # Exercise a separated source module, including its component file.
+        string source_dir = tmp_dir + "/share";
+        mkdir(source_dir);
+        mkdir(source_dir + "/Uses");
+        write(source_dir + "/Uses/Uses.qm", UsesSource);
+        write(source_dir + "/Uses/Component.qc",
+            "public namespace Uses { public int sub component() { return 42; } }\n");
+        installOpt("2.0");
+        string out = trim(run(sprintf(
+            "%s QORE_MODULE_DIR=%s:%s:%s %s -ne '%%requires Uses\n"
+            "printf(\"%%s %%d\\n\", Uses::mode(), Uses::component());'",
+            env, artifact_dir, source_dir, opt_dir, qore_bin)));
+        assertEq("with Opt 2.0 42", out.split("\n").last(), out);
+    }
+
+    removedDependencyFallbackTest() {
+        TmpDir tmp = initDirs();
+        installOpt("2.0");
+        compileUses();
+        # Also cover the loader's separated compiled-module lookup path.
+        mkdir(artifact_dir + "/Uses");
+        rename(artifact_dir + "/Uses.qmod", artifact_dir + "/Uses/Uses.qmod");
+        string source_dir = tmp_dir + "/share";
+        mkdir(source_dir);
+        write(source_dir + "/Uses.qm", UsesSource);
+        unlink(opt_dir + "/Opt.qm");
+        string out = trim(run(sprintf(
+            "%s QORE_MODULE_DIR=%s:%s:%s %s -ne '%%requires Uses\nprint(Uses::mode());'",
+            env, artifact_dir, source_dir, opt_dir, qore_bin)));
+        assertEq("without Opt", out.split("\n").last(), out);
     }
 }

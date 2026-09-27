@@ -1625,6 +1625,26 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
     }
 
+    // Installed AOT artifacts and sources can occupy different module directories
+    // (for example /usr/lib/<triplet>/qore-modules and /usr/share/qore-modules).
+    // Locate fallback source in the effective search order before loading a binary,
+    // so optional-dependency checks also know whether source is available.
+    auto find_user_module_source_dir = [&](std::string& source_dir) -> bool {
+        size_t count = 0;
+        for (const std::string* path : search_paths) {
+            if (++count % 100 == 0 && qore_check_cancel(&xsink, "module source lookup")) {
+                return false;
+            }
+            QoreString source_path;
+            bool separated = false;
+            if (qore_find_user_module_source(*path, name, source_path, separated)) {
+                source_dir = *path;
+                return true;
+            }
+        }
+        return false;
+    };
+
     auto load_user_module_source = [&](const std::string& dir, bool& found,
             QoreString* found_source_path = nullptr) -> QoreAbstractModule* {
         QoreString source_path;
@@ -1696,11 +1716,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     break;
                 }
                 // only a binary module without an API suffix falls back to the source module
-                bool source_available = false;
-                if (ai == qore_mod_api_list_len) {
-                    QoreString source_path;
-                    bool separated = false;
-                    source_available = qore_find_user_module_source(dir, name, source_path, separated);
+                std::string source_dir;
+                bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
+                if (xsink) {
+                    return nullptr;
                 }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
@@ -1710,7 +1729,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
                         QoreString source_path;
-                        mi = load_user_module_source(dir, source_found, &source_path);
+                        if (source_available) {
+                            mi = load_user_module_source(source_dir, source_found, &source_path);
+                        }
                         if (source_found) {
                             if (mi && !xsink) {
                                 qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,
@@ -1757,11 +1778,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     break;
                 }
                 // only a binary module without an API suffix falls back to the source module
-                bool source_available = false;
-                if (ai == qore_mod_api_list_len) {
-                    QoreString source_path;
-                    bool separated = false;
-                    source_available = qore_find_user_module_source(dir, name, source_path, separated);
+                std::string source_dir;
+                bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
+                if (xsink) {
+                    return nullptr;
                 }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
@@ -1771,7 +1791,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
                         QoreString source_path;
-                        mi = load_user_module_source(dir, source_found, &source_path);
+                        if (source_available) {
+                            mi = load_user_module_source(source_dir, source_found, &source_path);
+                        }
                         if (source_found) {
                             if (mi && !xsink) {
                                 qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,

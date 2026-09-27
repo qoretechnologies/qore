@@ -3689,6 +3689,11 @@ while (*binary chunk = input.read(65536)) {
       @ref include "%include" ends inside a string, character or regular expression literal, a substitution or
       transliteration, or a block comment: parsing now reports "unexpected end of file in ..." at the literal's start
       in the included file, and the including file is parsed normally after it
+
+    - Fixed AOT user-module source fallback when compiled modules and sources are installed in separate
+      directories, including Debian multiarch layouts; changes in optional module availability can now
+      select the installed source instead of failing to load or keeping unavailable functionality
+
     - Fixed @ref Qore::StringInputStream::getEncoding() "StringInputStream::getEncoding()",
       @ref Qore::StringOutputStream::getEncoding() "StringOutputStream::getEncoding()",
       @ref Qore::FileOutputStream::getEncoding() "FileOutputStream::getEncoding()", and
