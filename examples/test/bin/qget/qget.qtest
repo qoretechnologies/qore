@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires Mime
+
+%include ../../qore/classes/FtpServer.qc
+
+%modern
+%enable-all-warnings
+
+%exec-class QgetTest
+
+#! Runs bin/qget as a separate process against local HTTP and FTP servers
+public class QgetTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int http_port;
+        #! binary body served as application/octet-stream
+        binary blob;
+    }
+
+    constructor() : Test("QgetTest", "1.0") {
+        addTestCase("binary HTTP download", \binaryHttpDownload());
+        addTestCase("text HTTP download", \textHttpDownload());
+        addTestCase("empty HTTP body", \emptyHttpDownload());
+        addTestCase("Content-Disposition file name", \contentDispositionDownload());
+        addTestCase("Content-Disposition path traversal", \contentDispositionTraversal());
+        addTestCase("Content-Disposition with parameters", \contentDispositionParams());
+        addTestCase("Content-Disposition without a usable name", \contentDispositionUnusable());
+        addTestCase("FTP URL without a file name", \ftpMissingFileName());
+        addTestCase("request headers", \requestHeaders());
+        addTestCase("FTP download", \ftpDownload());
+        addTestCase("HTTP error status", \httpErrorStatus());
+        addTestCase("connection error", \connectionError());
+        addTestCase("invalid header", \invalidHeader());
+        addTestCase("unsupported scheme", \unsupportedScheme());
+
+        # not a multiple of any buffer size, and large enough to be read in several packets
+        blob = get_random_bytes(300001);
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_error delete http;
+        http.setDefaultHandler("qget", new QgetTestHandler(blob));
+        http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        on_exit delete http;
+        set_return_value(main());
+    }
+
+    binaryHttpDownload() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/files/blob.tar.gz"));
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/blob.tar.gz"));
+    }
+
+    textHttpDownload() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, "-o out.txt " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/out.txt"));
+        # the name from the URL is not used when an output file is given
+        assertFalse(is_file(tmp.path + "/text.txt"));
+    }
+
+    emptyHttpDownload() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/files/empty.bin"));
+        assertEq(0, result.rc, result.err);
+        hash<StatInfo> info = hstat(tmp.path + "/empty.bin");
+        assertEq("REGULAR", info.type);
+        assertEq(0, info.size);
+    }
+
+    contentDispositionDownload() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/disposition"));
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/named.bin"));
+    }
+
+    contentDispositionTraversal() {
+        TmpDir tmp("qget-test-");
+        string work = tmp.path + "/work";
+        mkdir(work);
+        hash<auto> result = runQget(work, url("/disposition-traversal"));
+        assertEq(0, result.rc, result.err);
+        # the server-supplied name cannot select a file outside the current directory
+        assertFalse(is_file(tmp.path + "/escape.bin"));
+        assertEq(blob, ReadOnlyFile::readBinaryFile(work + "/escape.bin"));
+    }
+
+    contentDispositionParams() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/disposition-params"));
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/params.bin"));
+    }
+
+    contentDispositionUnusable() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/disposition-dots"));
+        assertEq(0, result.rc, result.err);
+        # the name falls back to the last component of the URL path
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/disposition-dots"));
+    }
+
+    ftpMissingFileName() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, "ftp://localhost:1/");
+        assertEq(1, result.rc);
+        assertRegex("missing file name", result.err);
+    }
+
+    requestHeaders() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, "-H 'X-Test: abc' -o hdr.txt " + url("/echo-header"));
+        assertEq(0, result.rc, result.err);
+        assertEq("abc", ReadOnlyFile::readTextFile(tmp.path + "/hdr.txt"));
+    }
+
+    ftpDownload() {
+        FtpServer ftp(0, m_options.verbose);
+        on_exit ftp.shutdown();
+
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, sprintf("ftp://localhost:%d/text", ftp.getPort()));
+        assertEq(0, result.rc, result.err);
+        # the test FTP server sends 9200 bytes for any file name
+        assertEq(9200, hstat(tmp.path + "/text").size);
+    }
+
+    httpErrorStatus() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/missing"));
+        assertEq(1, result.rc);
+        assertRegex("404", result.err);
+        assertFalse(is_file(tmp.path + "/missing"));
+    }
+
+    connectionError() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, sprintf("http://localhost:%d/x", get_free_port()));
+        assertEq(1, result.rc);
+        assertRegex("CONNECT", result.err);
+    }
+
+    invalidHeader() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, "-H no-colon " + url("/files/text.txt"));
+        assertEq(1, result.rc);
+        assertRegex("invalid header", result.err);
+    }
+
+    unsupportedScheme() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, "gopher://localhost/x");
+        assertEq(1, result.rc);
+        assertRegex("Don't know how to handle scheme", result.err);
+    }
+
+    private string url(string path) {
+        return sprintf("http://localhost:%d%s", http_port, path);
+    }
+
+    private static string shellQuote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    #! runs qget in the given directory and returns the exit code and stderr
+    /** the QGET_SCRIPT environment variable can name an alternate qget script to test
+    */
+    private hash<auto> runQget(string dir, string args) {
+        string err_path = dir + "/.stderr";
+        # qget runs in the given directory, so paths the test runner passes relative to the current directory
+        # must be resolved first, or the child would run a different qore binary or libqore
+        string qore = getenv("QORE_BINARY") ?? "qore";
+        if (qore =~ /\//) {
+            qore = normalize_dir(qore);
+        }
+        string env;
+        if (*string ld_path = getenv("LD_LIBRARY_PATH")) {
+            # an empty entry means the current directory
+            env = sprintf("LD_LIBRARY_PATH=%s ", shellQuote((foldl $1 + ":" + $2,
+                map normalize_dir($1), ld_path.split(":")) ?? ""));
+        }
+        string cmd = sprintf("cd %s && %s%s --enable-debug %s %s > /dev/null 2> %s",
+            shellQuote(dir),
+            env ?? "",
+            shellQuote(qore),
+            shellQuote(normalize_dir(getenv("QGET_SCRIPT") ?? get_script_dir() + "/../../../../bin/qget")),
+            args,
+            shellQuote(err_path));
+        int rc = system(cmd);
+        string err = ReadOnlyFile::readTextFile(err_path);
+        if (m_options.verbose) {
+            printf("%s: rc: %d stderr: %s\n", cmd, rc, err);
+        }
+        return {
+            "rc": rc,
+            "err": err,
+        };
+    }
+}
+
+class QgetTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        const Text = "hello from the qget test\n";
+    }
+
+    private {
+        binary blob;
+    }
+
+    constructor(binary blob) {
+        self.blob = blob;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (cx.raw_path) {
+            case "/files/blob.tar.gz":
+                return makeResponse(200, blob, {"Content-Type": MimeTypeOctetStream});
+            case "/files/text.txt":
+                return makeResponse(200, Text, {"Content-Type": MimeTypeText});
+            case "/files/empty.bin":
+                return makeResponse(200, binary(), {"Content-Type": MimeTypeOctetStream});
+            case "/disposition":
+                return makeResponse(200, blob, {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Disposition": "attachment; filename=\"named.bin\"",
+                });
+            case "/disposition-traversal":
+                return makeResponse(200, blob, {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Disposition": "attachment; filename=\"../escape.bin\"",
+                });
+            case "/disposition-params":
+                return makeResponse(200, blob, {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Disposition": "attachment; filename=\"params.bin\"; size=\"300001\"",
+                });
+            case "/disposition-dots":
+                return makeResponse(200, blob, {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Disposition": "attachment; filename=\"..\"",
+                });
+            case "/echo-header":
+                return makeResponse(200, hdr."x-test" ?? "", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}

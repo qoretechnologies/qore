@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file qget example program showing I/O event monitoring
 
-/*  qget Copyright 2011 - 2023 Qore Technologies, s.r.o.
+/*  qget Copyright 2011 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -141,11 +141,12 @@ class QueueCallBack {
 
             # if the verbose flag is set, then show all literal messages
             if (o.verbose) {
-                if (o.verbose > 1)
+                if (o.verbose > 1) {
                     printf("%.9f: ", (clock_getmicros() - start) / 1000000.0);
-                    myprintf("%s %s: %s\n", EVENT_SOURCE_MAP.(e.source), EVENT_MAP.(e.event),
-                        QueueCallBack::getstr(e - ("event", "source")));
-                    continue;
+                }
+                myprintf("%s %s: %s\n", EVENT_SOURCE_MAP.(e.source), EVENT_MAP.(e.event),
+                    QueueCallBack::getstr(e - ("event", "source")));
+                continue;
             }
 
             # otherwise process the event
@@ -194,6 +195,7 @@ class QueueCallBack {
                         body_len = l[0].toInt();
                         in_body = True;
                     }
+                    break;
                 }
 
                 case EVENT_HTTP_CHUNKED_START: {
@@ -260,6 +262,22 @@ class QueueCallBack {
     wait() { counter.waitForZero(); }
 }
 
+#! returns a file name in the current directory derived from a name given by the server or the URL
+/** only the last path component is used, so the name can never select a file outside the current directory;
+    returns NOTHING if no usable name remains
+*/
+*string sub get_safe_file_name(*string name) {
+    if (!name) {
+        return;
+    }
+    # "\\" is a path separator on Windows
+    string fn = basename(replace(name, "\\", "/"));
+    if (fn == "" || fn == "." || fn == "..") {
+        return;
+    }
+    return fn;
+}
+
 sub usage(*bool long) {
     printf("usage: %s [-vh] URL\n", get_script_name());
     if (long) {
@@ -308,7 +326,8 @@ sub main() {
     }
 
     hash<auto> u = parse_url(url);
-    data x;
+    # an empty response body is returned as NOTHING
+    *data x;
     QueueCallBack cb;
     # get start time
     start = clock_getmicros();
@@ -346,16 +365,16 @@ sub main() {
 
                 hash<auto> info;
                 x = hc.get(uri_path ?? u.path ?? "/", hdr, \info);
-                if (exists
-                    (*string filename = (info."response-headers"."content-disposition" =~ x/filename="(.*)"/)[0])) {
-                    fn = filename;
+                *string filename = (info."response-headers"."content-disposition" =~ x/filename="([^"]*)"/)[0];
+                if (*string safe_name = get_safe_file_name(filename)) {
+                    fn = safe_name;
                 }
                 break;
             }
             case "ftps":
             case "ftp": {
-                string file = basename(u.path);
-                if (!exists file) {
+                *string file = get_safe_file_name(u.path);
+                if (!file) {
                     stderr.printf("missing file name in url %y\n", url);
                     exit(1);
                 }
@@ -378,6 +397,7 @@ sub main() {
                 #printf("%n: %n + %n\n", f.pwd(), dir, file);
                 x = f.getAsBinary(file);
                 fn = file;
+                break;
             }
 
             default:
@@ -386,18 +406,19 @@ sub main() {
         }
     } catch (hash<ExceptionInfo> ex) {
         if (o.fullex) {
-            printf("%s\n", get_exception_string(ex));
+            stderr.printf("%s\n", get_exception_string(ex));
         } else {
-            printf("%s: %s\n", ex.err, ex.desc);
+            stderr.printf("%s: %s\n", ex.err, ex.desc);
         }
-        thread_exit;
+        # a failed retrieval must be visible to the caller
+        exit(1);
     }
 
     # get the filename to save
     if (o.output) {
         fn = o.output;
     } else if (!fn.val()) {
-        fn = basename(u.path && u.path != "/" ? u.path : u.host);
+        fn = get_safe_file_name(u.path) ?? get_safe_file_name(u.host) ?? "index.html";
     }
 
     # wait for the event monitoring thread to complete
@@ -417,5 +438,9 @@ sub main() {
     }
 
     f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
-    f.write(x.toBinary());
+    # File::write() accepts both string and binary data; the HTTP client returns binary for non-text
+    # media types
+    if (x) {
+        f.write(x);
+    }
 }

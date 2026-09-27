@@ -3604,6 +3604,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the \c qget script: \c ftp:// and \c ftps:// downloads failed with "Don't know how to handle scheme"
+      after the file had been retrieved, a response with an empty body could not be saved, and a failed retrieval
+      exited with status 0 and reported the error on standard output instead of standard error; the file name from a
+      \c Content-Disposition response header is now reduced to its last path component, so a server can no longer
+      make \c qget write a file outside the current directory
     - Fixed a crash (use-after-free in the scanner) when a file included with
       @ref include "%include" ends inside a string, character or regular expression literal, a substitution or
       transliteration, or a block comment: parsing now reports "unexpected end of file in ..." at the literal's start
