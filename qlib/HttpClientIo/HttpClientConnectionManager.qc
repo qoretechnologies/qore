@@ -1030,154 +1030,281 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         in_flight.inc();
         on_exit in_flight.dec();
 
-        # the origin of the original request is the only one that receives its origin-bound headers
-        hash<UrlInfo> origin_info = parseRequestUrl(url);
-        string origin = getOriginUrl(origin_info);
-        string origin_key = getOriginKey(origin_info);
-        hash<UrlInfo> cur_info = origin_info;
-        string cur_origin = origin;
-        *hash<auto> origin_headers = map {$1.key: $1.value}, headers.pairIterator(), isOriginBoundHeader($1.key);
-        list<hash<HttpRedirectInfo>> redirects();
-
+        hash<auto> rs = newRedirectState(url, method, path, headers, body);
         while (True) {
-            # Inject cookies from jar into request headers
-            hash<auto> req_headers = headers ?? {};
-            if (cookie_jar) {
-                hash<UrlInfo> url_info = parse_url(url);
-                bool is_secure = url_info.protocol == "https";
-                *string cookie_hdr = cookie_jar.getCookieHeader(
-                    url_info.host, path, is_secure);
-                if (cookie_hdr) {
-                    if (req_headers.cookie) {
-                        req_headers.cookie += "; " + cookie_hdr;
-                    } else {
-                        req_headers.cookie = cookie_hdr;
-                    }
-                }
-            }
-
-            hash<auto> resp = requestIntern(url, method, path, req_headers, body, timeout_ms, decode_text);
-            string request_url = cur_origin + (path =~ /^\// ? path : "/" + path);
+            hash<auto> req_headers = getCookieRequestHeaders(rs.url, rs.path, rs.headers);
+            hash<auto> resp = requestIntern(rs.url, rs.method, rs.path, req_headers, rs.body, timeout_ms,
+                decode_text);
+            string request_url = rs.cur_origin + (rs.path =~ /^\// ? rs.path : "/" + rs.path);
 
             # Process Set-Cookie before checking redirect
-            if (cookie_jar && resp.headers) {
-                hash<UrlInfo> url_info = parse_url(url);
-                bool is_secure = url_info.protocol == "https";
-                cookie_jar.processResponseHeaders(
-                    url_info.host, path, is_secure, resp.headers);
-            }
+            processResponseCookies(rs.url, rs.path, resp.headers);
 
             # Follow redirects (RFC 9110 section 15.4)
             if (!opts.redirect_passthru && isFollowedRedirectStatus(resp.status_code)) {
-                if (resp.headers.location.typeCode() == NT_LIST) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect response %d from %y has %d Location headers; "
-                        "expecting one", resp.status_code, request_url, resp.headers.location.size());
-                }
-                if (!resp.headers.location.val()) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("no redirect location given for status code %d from %y",
-                        resp.status_code, request_url);
-                }
-                string location = resp.headers.location;
-                if (redirects.size() >= opts.max_redirects) {
-                    throw "HTTP-REDIRECT-ERROR",
-                        sprintf("maximum redirects (%d) exceeded; redirect %d from %y to %y ignored",
-                            opts.max_redirects, resp.status_code, request_url, location);
-                }
-                log(LoggerLevel::DEBUG, "redirect %d/%d: %d -> %s",
-                    redirects.size() + 1, opts.max_redirects, resp.status_code, location);
-
-                # resolve the location against the URL of the request that received it (RFC 3986 section 5.2)
-                # and remove any fragment, which is never sent
-                string target = resolve_url(request_url, location);
-                target =~ s/#.*//s;
-                *list<*string> parts = (target =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)(.*)$/s);
-                if (!parts) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
-                        location, request_url, resp.status_code);
-                }
-                string scheme = parts[0].lwr();
-                if (scheme != "http" && scheme != "https") {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has unsupported "
-                        "scheme %y", location, request_url, resp.status_code, scheme);
-                }
-                # user information in a redirect location is never used as credentials
-                string authority = parts[1];
-                authority =~ s/^.*@//s;
-                if (!authority.val()) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
-                        location, request_url, resp.status_code);
-                }
-                # the host is sent in the Host header and, through a proxy, in the request line
-                if (authority =~ /[\x00-\x20\x7f"<>\\^`{|}]|%(?![0-9a-fA-F]{2})/) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
-                        "host", location, request_url, resp.status_code);
-                }
-                hash<UrlInfo> next_info = parseRequestUrl(scheme + "://" + authority);
-                if (next_info.host =~ /[\x00-\x20\x7f]/) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
-                        "host", location, request_url, resp.status_code);
-                }
-                # the server chooses the location, so a network server must never be able to send the request (and
-                # a repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and
-                # can be redirected to another socket
-                if (isUnixSocketTarget(next_info) && !isUnixSocketTarget(cur_info)) {
-                    throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
-                        "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
-                        request_url, resp.status_code);
-                }
-                string next_origin = getOriginUrl(next_info);
-                string next_path = encodeRequestTarget(parts[2] ?? "");
-                if (next_path !~ /^\//) {
-                    next_path = "/" + next_path;
-                }
-
-                # RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301
-                # or 302 is changed to GET as all common user agents do; 307 and 308 repeat the request
-                bool drop_body;
-                if (resp.status_code == 303) {
-                    if (method.upr() != "HEAD") {
-                        method = "GET";
-                    }
-                    drop_body = True;
-                } else if ((resp.status_code == 301 || resp.status_code == 302) && method.upr() == "POST") {
-                    method = "GET";
-                    drop_body = True;
-                }
-                if (drop_body) {
-                    remove body;
-                    headers -= (map $1, keys headers, $1 =~ /^(content-|transfer-encoding$)/i);
-                }
-
-                # origin-bound headers are sent only to the origin of the original request
-                headers -= (map $1, keys headers, isOriginBoundHeader($1));
-                if (getOriginKey(next_info) == origin_key && origin_headers) {
-                    headers += origin_headers;
-                }
-
-                redirects += <HttpRedirectInfo>{
-                    "request_url": request_url,
-                    "status_code": resp.status_code,
-                    "status_message": resp.status_message,
-                    "location": location,
-                    "target_url": next_origin + next_path,
-                    "headers": resp.headers ?? {},
-                };
-
-                url = next_origin;
-                cur_origin = next_origin;
-                cur_info = next_info;
-                path = next_path;
+                followRedirect(\rs, request_url, resp.status_code, resp.status_message, resp.headers);
                 continue;
             }
 
             # Expose the effective (post-redirect) URL that produced this response, without user information,
             # so callers can resolve relative references against the final location like a browser
             resp.effective_url = request_url;
-            if (redirects) {
-                resp.redirects = redirects;
+            if (rs.redirects) {
+                resp.redirects = cast<list<hash<HttpRedirectInfo>>>(rs.redirects);
             }
             return resp;
         }
+    }
+
+    #! Sends a request and returns the response with a body that is read as it is received
+    /** Redirects are followed as with @ref request(), unless the \c redirect_passthru option is set; the response
+        status and headers of the final response are available when this method returns, and its body is read with
+        @ref HttpClientResponseStream::read(), so a body of any size can be processed without being held in memory.
+
+        @param url the URL to retrieve; the path and query of the URL are the request target
+        @param headers request headers, if any; for example a \c Range header to retrieve part of a resource
+        @param stream_opts options for the request; see @ref HttpClientOpenStreamOptions
+
+        @return the response stream
+
+        @throw HTTPCLIENT-TIMEOUT the response headers were not received within the timeout
+        @throw HTTPCLIENT-URL-ERROR the URL is invalid
+        @throw HTTP-REDIRECT-ERROR a redirect cannot be followed; see @ref request()
+        @throw HTTPCLIENT-RECEIVE-ERROR the response could not be received
+
+        @par Example:
+        @code{.py}
+HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso", {"Range": "bytes=1000-"});
+        @endcode
+
+        @since HttpClientIo 1.0
+    */
+    HttpClientResponseStream openStream(string url, *hash<auto> headers, *hash<HttpClientOpenStreamOptions> stream_opts) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        in_flight.inc();
+        on_exit in_flight.dec();
+
+        hash<HttpClientOpenStreamOptions> o = stream_opts ?? <HttpClientOpenStreamOptions>{};
+        timeout wait = o.timeout ?? opts.request_timeout;
+        hash<UrlInfo> info = parseRequestUrl(url);
+        string path = encodeRequestTarget((info.path ?? "/") + (exists info.query ? "?" + info.query : ""));
+        if (path !~ /^\//) {
+            path = "/" + path;
+        }
+        hash<auto> rs = newRedirectState(url, o.method, path, headers, o.body);
+        while (True) {
+            hash<auto> req_headers = getCookieRequestHeaders(rs.url, rs.path, rs.headers);
+            HttpClientStreamHandle sh = acquireAndStartStreaming(rs.url, rs.method, rs.path, req_headers, False,
+                rs.body);
+            # the stream is cancelled if the response cannot be returned
+            bool keep = False;
+            on_exit if (!keep) {
+                sh.cancel();
+            }
+
+            # the response headers; body data can arrive with them
+            list<binary> pending = ();
+            bool ended = False;
+            *hash<auto> resp;
+            while (!(resp = sh.getResponse()).status_code) {
+                auto d = sh.readData(wait);
+                if (!exists d) {
+                    throw "HTTPCLIENT-TIMEOUT", sprintf("no response received from %y within %d ms", rs.url + rs.path,
+                        wait);
+                }
+                if (d.typeCode() == NT_HASH) {
+                    if (d.error) {
+                        throw "HTTPCLIENT-RECEIVE-ERROR", sprintf("error receiving the response from %y: %s: %s",
+                            rs.url + rs.path, d.error.err ?? "ERROR", d.error.desc ?? "unknown error"), d.error;
+                    }
+                    if (d.end_stream) {
+                        ended = True;
+                        resp = sh.getResponse();
+                        if (!resp.status_code) {
+                            throw "HTTPCLIENT-RECEIVE-ERROR", sprintf("the response from %y ended without a status "
+                                "code", rs.url + rs.path);
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                pending += d.typeCode() == NT_BINARY ? d : binary(d);
+            }
+            string request_url = rs.cur_origin + rs.path;
+            processResponseCookies(rs.url, rs.path, resp.headers);
+
+            # Follow redirects (RFC 9110 section 15.4); the body of the redirect response is discarded
+            if (!opts.redirect_passthru && isFollowedRedirectStatus(resp.status_code)) {
+                followRedirect(\rs, request_url, resp.status_code, resp.status_message, resp.headers);
+                continue;
+            }
+            keep = True;
+            return new HttpClientResponseStream(sh, resp, request_url,
+                cast<list<hash<HttpRedirectInfo>>>(rs.redirects), pending, ended, o.decode);
+        }
+    }
+
+    #! Returns the state of a request that follows redirects
+    /** @param url the URL of the request
+        @param method the HTTP method
+        @param path the request target
+        @param headers the request headers
+        @param body the request body
+    */
+    private hash<auto> newRedirectState(string url, string method, string path, *hash<auto> headers, *data body) {
+        # the origin of the original request is the only one that receives its origin-bound headers
+        hash<UrlInfo> origin_info = parseRequestUrl(url);
+        return {
+            "url": url,
+            "method": method,
+            "path": path,
+            "headers": headers,
+            "body": body,
+            "origin_key": getOriginKey(origin_info),
+            "cur_info": origin_info,
+            "cur_origin": getOriginUrl(origin_info),
+            "origin_headers": (map {$1.key: $1.value}, headers.pairIterator(), isOriginBoundHeader($1.key)),
+            "redirects": (),
+        };
+    }
+
+    #! Returns the request headers with any cookies for the target from the cookie jar
+    private hash<auto> getCookieRequestHeaders(string url, string path, *hash<auto> headers) {
+        hash<auto> req_headers = headers ?? {};
+        if (cookie_jar) {
+            hash<UrlInfo> url_info = parse_url(url);
+            bool is_secure = url_info.protocol == "https";
+            *string cookie_hdr = cookie_jar.getCookieHeader(url_info.host, path, is_secure);
+            if (cookie_hdr) {
+                if (req_headers.cookie) {
+                    req_headers.cookie += "; " + cookie_hdr;
+                } else {
+                    req_headers.cookie = cookie_hdr;
+                }
+            }
+        }
+        return req_headers;
+    }
+
+    #! Stores cookies set by a response in the cookie jar
+    private processResponseCookies(string url, string path, *hash<auto> resp_headers) {
+        if (cookie_jar && resp_headers) {
+            hash<UrlInfo> url_info = parse_url(url);
+            bool is_secure = url_info.protocol == "https";
+            cookie_jar.processResponseHeaders(url_info.host, path, is_secure, resp_headers);
+        }
+    }
+
+    #! Updates the state of a request to follow a redirect response (RFC 9110 section 15.4)
+    /** @param rs the request state (see newRedirectState())
+        @param request_url the URL of the request that received the redirect
+        @param status_code the status code of the redirect
+        @param status_message the status message of the redirect
+        @param resp_headers the headers of the redirect response
+
+        @throw HTTP-REDIRECT-ERROR the redirect cannot be followed
+    */
+    private followRedirect(reference<hash<auto>> rs, string request_url, int status_code, *string status_message,
+            *hash<auto> resp_headers) {
+        if (resp_headers.location.typeCode() == NT_LIST) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect response %d from %y has %d Location headers; "
+                "expecting one", status_code, request_url, resp_headers.location.size());
+        }
+        if (!resp_headers.location.val()) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("no redirect location given for status code %d from %y",
+                status_code, request_url);
+        }
+        string location = resp_headers.location;
+        if (rs.redirects.size() >= opts.max_redirects) {
+            throw "HTTP-REDIRECT-ERROR",
+                sprintf("maximum redirects (%d) exceeded; redirect %d from %y to %y ignored",
+                    opts.max_redirects, status_code, request_url, location);
+        }
+        log(LoggerLevel::DEBUG, "redirect %d/%d: %d -> %s",
+            rs.redirects.size() + 1, opts.max_redirects, status_code, location);
+
+        # resolve the location against the URL of the request that received it (RFC 3986 section 5.2)
+        # and remove any fragment, which is never sent
+        string target = resolve_url(request_url, location);
+        target =~ s/#.*//s;
+        *list<*string> parts = (target =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)(.*)$/s);
+        if (!parts) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
+                location, request_url, status_code);
+        }
+        string scheme = parts[0].lwr();
+        if (scheme != "http" && scheme != "https") {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has unsupported "
+                "scheme %y", location, request_url, status_code, scheme);
+        }
+        # user information in a redirect location is never used as credentials
+        string authority = parts[1];
+        authority =~ s/^.*@//s;
+        if (!authority.val()) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
+                location, request_url, status_code);
+        }
+        # the host is sent in the Host header and, through a proxy, in the request line
+        if (authority =~ /[\x00-\x20\x7f"<>\\^`{|}]|%(?![0-9a-fA-F]{2})/) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
+                "host", location, request_url, status_code);
+        }
+        hash<UrlInfo> next_info = parseRequestUrl(scheme + "://" + authority);
+        if (next_info.host =~ /[\x00-\x20\x7f]/) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
+                "host", location, request_url, status_code);
+        }
+        # the server chooses the location, so a network server must never be able to send the request (and
+        # a repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and
+        # can be redirected to another socket
+        if (isUnixSocketTarget(next_info) && !isUnixSocketTarget(rs.cur_info)) {
+            throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
+                "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
+                request_url, status_code);
+        }
+        string next_origin = getOriginUrl(next_info);
+        string next_path = encodeRequestTarget(parts[2] ?? "");
+        if (next_path !~ /^\//) {
+            next_path = "/" + next_path;
+        }
+
+        # RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301
+        # or 302 is changed to GET as all common user agents do; 307 and 308 repeat the request
+        bool drop_body;
+        if (status_code == 303) {
+            if (rs.method.upr() != "HEAD") {
+                rs.method = "GET";
+            }
+            drop_body = True;
+        } else if ((status_code == 301 || status_code == 302) && rs.method.upr() == "POST") {
+            rs.method = "GET";
+            drop_body = True;
+        }
+        if (drop_body) {
+            remove rs.body;
+            rs.headers -= (map $1, keys rs.headers, $1 =~ /^(content-|transfer-encoding$)/i);
+        }
+
+        # origin-bound headers are sent only to the origin of the original request
+        rs.headers -= (map $1, keys rs.headers, isOriginBoundHeader($1));
+        if (getOriginKey(next_info) == rs.origin_key && rs.origin_headers) {
+            rs.headers += rs.origin_headers;
+        }
+
+        rs.redirects += <HttpRedirectInfo>{
+            "request_url": request_url,
+            "status_code": status_code,
+            "status_message": status_message,
+            "location": location,
+            "target_url": next_origin + next_path,
+            "headers": resp_headers ?? {},
+        };
+
+        rs.url = next_origin;
+        rs.cur_origin = next_origin;
+        rs.cur_info = next_info;
+        rs.path = next_path;
     }
 
     #! Returns @ref True if the given response status code is a redirect that is followed automatically

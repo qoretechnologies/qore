@@ -1,0 +1,281 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientResponseStreamTest
+
+class StreamTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the body served; larger than any buffer and not a multiple of common chunk sizes
+        const Body = get_random_bytes(1024 * 1024 + 7);
+
+        #! a body that compresses well
+        const TextBody = binary(strmul("stream test data ", 100000));
+
+        #! released by the test to let /slow send its body
+        Queue slow_release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = cx.raw_path;
+        switch (path) {
+            case "/file":
+                return makeResponse(200, Body, {"Content-Type": MimeTypeOctetStream});
+            case "/chunked": {
+                int offset = 0;
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeOctetStream},
+                    "send_callback": *binary sub () {
+                        if (offset >= Body.size()) {
+                            return;
+                        }
+                        binary rv = Body.substr(offset, 65531);
+                        offset += rv.size();
+                        return rv;
+                    },
+                };
+            }
+            case "/gzip":
+            case "/gzip-truncated": {
+                binary encoded = gzip(TextBody);
+                if (path == "/gzip-truncated") {
+                    encoded = encoded.substr(0, encoded.size() / 2);
+                }
+                hash<HttpResponseInfo> rv = makeResponse(200, encoded, {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Encoding": "gzip",
+                });
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/redirect":
+                return makeResponse(302, "", {"Location": "/file"});
+            case "/redirect-abs":
+                return makeResponse(301, "", {"Location": sprintf("%s://%s/redirect", cx.ssl ? "https" : "http",
+                    hdr.host)});
+            case "/redirect-loop":
+                return makeResponse(307, "", {"Location": "/redirect-loop"});
+            case "/range": {
+                *list<*string> m = (hdr.range =~ x/^bytes=([0-9]+)-$/);
+                if (!m) {
+                    return makeResponse(200, Body, {"Content-Type": MimeTypeOctetStream});
+                }
+                int first = m[0].toInt();
+                return makeResponse(206, Body.substr(first), {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Range": sprintf("bytes %d-%d/%d", first, Body.size() - 1, Body.size()),
+                });
+            }
+            case "/empty":
+                return makeResponse(204, "");
+            case "/slow": {
+                # the first chunk is sent with the headers; the second one when the test releases it
+                int calls = 0;
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeOctetStream},
+                    "send_callback": *binary sub () {
+                        switch (++calls) {
+                            case 1: return binary("early");
+                            case 2: slow_release.get(); return binary("late");
+                        }
+                    },
+                };
+            }
+        }
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpClientResponseStreamTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StreamTestHandler handler();
+        #! protocol -> base URL
+        hash<string, string> urls;
+    }
+
+    constructor() : Test("HttpClientResponseStreamTest", "1.0") {
+        addTestCase("bodies", \bodyTest());
+        addTestCase("decoding", \decodeTest());
+        addTestCase("redirects", \redirectTest());
+        addTestCase("ranges and status codes", \rangeTest());
+        addTestCase("timeouts and cancellation", \timeoutTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string certs = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/../../qore/classes/HTTPClient/HttpClientTlsVerify.qtest");
+        SSLCertificate cert((certs =~ x/const GoodCert = "([^"]+)"/)[0]);
+        SSLPrivateKey key((certs =~ x/const GoodKey = "([^"]+)"/)[0]);
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("stream", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("stream", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        int tls_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0, "cert": cert,
+            "key": key}).port;
+        server.waitForAsyncIo();
+        int quic_port = server.addQuicListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "cert": cert,
+            "key": key}).port;
+        server.waitForAsyncIo();
+        urls = {
+            "h1": sprintf("http://127.0.0.1:%d", port),
+            "h2": sprintf("https://127.0.0.1:%d", tls_port),
+            "h3": sprintf("https://127.0.0.1:%d", quic_port),
+        };
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    private HttpClientConnectionManager getManager(string protocol, *hash<auto> opts) {
+        return new HttpClientConnectionManager(cast<hash<HttpClientConnectionManagerOptions>>({
+            "protocol": protocol,
+            "accept_all_certs": True,
+        } + opts));
+    }
+
+    #! reads the whole body of the stream
+    private binary readAll(HttpClientResponseStream stream) {
+        binary rv = binary();
+        while (*binary chunk = stream.read(30s)) {
+            rv += chunk;
+        }
+        # the end of the body is returned again
+        assertEq(NOTHING, stream.read());
+        return rv;
+    }
+
+    bodyTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr = getManager(i.key);
+            on_exit mgr.closeAll();
+            foreach string path in ("/file", "/chunked") {
+                string msg = i.key + " " + path;
+                HttpClientResponseStream stream = mgr.openStream(i.value + path);
+                assertEq(200, stream.getStatusCode(), msg);
+                assertEq(i.key, stream.getProtocol(), msg);
+                assertEq(i.value + path, stream.getEffectiveUrl(), msg);
+                assertEq((), stream.getRedirects(), msg);
+                assertEq(MimeTypeOctetStream, stream.getHeaderValue("Content-Type"), msg);
+                assertEq(StreamTestHandler::Body, readAll(stream), msg);
+                assertEq(StreamTestHandler::Body.size(), stream.getReceivedSize(), msg);
+                assertFalse(stream.isDecoded(), msg);
+            }
+        }
+    }
+
+    decodeTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr = getManager(i.key);
+            on_exit mgr.closeAll();
+            string msg = i.key;
+            HttpClientResponseStream stream = mgr.openStream(i.value + "/gzip");
+            assertTrue(stream.isDecoded(), msg);
+            assertEq(StreamTestHandler::TextBody, readAll(stream), msg);
+            # the size received is the size of the compressed body
+            assertEq(gzip(StreamTestHandler::TextBody).size(), stream.getReceivedSize(), msg);
+            assertEq(stream.getContentLength(), stream.getReceivedSize(), msg);
+
+            # the body as sent
+            stream = mgr.openStream(i.value + "/gzip", NOTHING, <HttpClientOpenStreamOptions>{"decode": False});
+            assertFalse(stream.isDecoded(), msg);
+            assertEq(StreamTestHandler::TextBody, gunzip_to_binary(readAll(stream)), msg);
+
+            # a truncated compressed body is an error
+            stream = mgr.openStream(i.value + "/gzip-truncated");
+            assertThrows("ZLIB-ERROR", \readAll(), stream, msg + " truncated");
+        }
+    }
+
+    redirectTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr = getManager(i.key);
+            on_exit mgr.closeAll();
+            string msg = i.key;
+            HttpClientResponseStream stream = mgr.openStream(i.value + "/redirect-abs");
+            assertEq(200, stream.getStatusCode(), msg);
+            assertEq(i.value + "/file", stream.getEffectiveUrl(), msg);
+            list<hash<HttpRedirectInfo>> redirects = stream.getRedirects();
+            assertEq((301, 302), (map $1.status_code, redirects), msg);
+            assertEq(i.value + "/redirect", redirects[0].target_url, msg);
+            assertEq(StreamTestHandler::Body, readAll(stream), msg);
+
+            assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects", \mgr.openStream(), i.value + "/redirect-loop",
+                msg);
+
+            # redirects are returned with redirect_passthru
+            HttpClientConnectionManager pt = getManager(i.key, {"redirect_passthru": True});
+            on_exit pt.closeAll();
+            stream = pt.openStream(i.value + "/redirect");
+            assertEq(302, stream.getStatusCode(), msg);
+            assertEq("/file", stream.getHeaderValue("location"), msg);
+            readAll(stream);
+        }
+    }
+
+    rangeTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr = getManager(i.key);
+            on_exit mgr.closeAll();
+            string msg = i.key;
+            int first = 500000;
+            HttpClientResponseStream stream = mgr.openStream(i.value + "/range", {"Range": sprintf("bytes=%d-",
+                first)});
+            assertEq(206, stream.getStatusCode(), msg);
+            assertEq(<HttpContentRangeInfo>{"first": first, "last": StreamTestHandler::Body.size() - 1,
+                "total": StreamTestHandler::Body.size()}, stream.getContentRange(), msg);
+            assertEq(StreamTestHandler::Body.substr(first), readAll(stream), msg);
+
+            # no range
+            stream = mgr.openStream(i.value + "/file");
+            assertEq(NOTHING, stream.getContentRange(), msg);
+            stream.cancel();
+
+            stream = mgr.openStream(i.value + "/empty");
+            assertEq(204, stream.getStatusCode(), msg);
+            assertEq(binary(), readAll(stream), msg);
+
+            # error responses are returned with their body
+            stream = mgr.openStream(i.value + "/missing");
+            assertEq(404, stream.getStatusCode(), msg);
+            assertEq(binary("not found"), readAll(stream), msg);
+        }
+    }
+
+    timeoutTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr = getManager(i.key);
+            on_exit mgr.closeAll();
+            string msg = i.key;
+            HttpClientResponseStream stream = mgr.openStream(i.value + "/slow");
+            assertEq(200, stream.getStatusCode(), msg);
+            assertEq(binary("early"), stream.read(30s), msg);
+            assertThrows("HTTPCLIENT-TIMEOUT", \stream.read(), 50ms, msg);
+            # the stream can still be read
+            handler.slow_release.push(True);
+            assertEq(binary("late"), readAll(stream), msg);
+
+            # a cancelled stream returns no more data
+            stream = mgr.openStream(i.value + "/file");
+            stream.cancel();
+            assertEq(NOTHING, stream.read(), msg);
+            # the manager can still be used
+            stream = mgr.openStream(i.value + "/file");
+            assertEq(StreamTestHandler::Body, readAll(stream), msg);
+        }
+    }
+}
