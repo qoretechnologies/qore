@@ -13,9 +13,7 @@
 %requires ConnectionProvider
 %requires ProviderIndexUtil
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class ActionCatalogReentrantSchemeTest
 
@@ -33,15 +31,7 @@ class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private checkYaml() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     indexedSchemeModuleCanRegisterActionsDuringAppRegistration() {
-        checkYaml();
-
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
 

@@ -45,18 +45,9 @@
 %requires HttpServer
 %requires HttpClientIo
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
-%ifdef NoYaml
-# Stub functions when the yaml module is not available; tests skip in this case
-const HaveYaml = False;
-auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
-auto sub parse_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
-%else
 const HaveYaml = True;
-%endif
 
 %exec-class HttpServerInteractiveStreamTest
 

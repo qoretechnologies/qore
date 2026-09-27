@@ -28,8 +28,9 @@ ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{
 }, ENV.QORE_PROVIDER_INDEX_DIR, <ProviderIndexCreateOptions>{
     "load_known_factories": False, "load_environment": False,
     "load_typescript_actions": False, "apps": ("IndexIdentityFixture",),
+    "write_canonical_yaml": True,
 });
-# the published index as it would be written to the canonical index file
-string index_yaml = ProviderIndexUtil::dumpIndexYaml(ENV.QORE_PROVIDER_INDEX_DIR);
+# compare the canonical YAML independently of optional MessagePack support
+string index_yaml = ReadOnlyFile::readTextFile(ENV.QORE_PROVIDER_INDEX_DIR + "/qore-data-index.yaml");
 printf("%s\n", make_json({"index_yaml": index_yaml, "loaded": artifact,
     "unloaded": ProviderIndexUtil::getAllAppModulesToLoad()}));

@@ -18,9 +18,7 @@
 %requires HttpServer
 %requires FsUtil
 
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module xml >= 1.3
 %define NoXml
@@ -262,24 +260,16 @@ public class Main inherits QUnit::Test {
     }
 
     serializationTest() {
-%ifndef NoYaml
         TmpFile tmp();
         tmp.file.write(getSwaggerSchema());
         tmp.file.close();
-%endif
 
         RestClient rest({
             "url": "https://user:pass@localhost:1080/some/path",
             "data": "url",
-%ifndef NoYaml
             "validator": SwaggerLoader::fromUrl("file://" + tmp.path),
-%endif
         }, True);
-%ifndef NoYaml
         assertEq("https://user:pass@localhost:1080", rest.getURL());
-%else
-        assertEq("https://user:pass@localhost:1080/some/path", rest.getURL());
-%endif
         RestClient rest2 = Serializable::deserialize(rest.serialize());
         assertEq(rest.getURL(), rest2.getURL());
         assertEq(rest.getSerialization(), rest2.getSerialization());
@@ -368,10 +358,8 @@ public class Main inherits QUnit::Test {
         ret = rest.get("/api_json");
         testAssertionValue("/api_json", ret.body, VALUE_JSON.output);
 
-%ifndef NoYaml
         ret = rest.get("/api_yaml");
         testAssertionValue("/api_yaml", ret.body, VALUE_YAML.output);
-%endif
     }
 
     methodPutTest() {
@@ -399,11 +387,9 @@ public class Main inherits QUnit::Test {
         ret = rest.put("/api_json", VALUE_JSON.output);
         testAssertionValue("/api_json", ret.body, VALUE_JSON.output);
 
-%ifndef NoYaml
         rest.setSerialization("yaml");
         ret = rest.put("/api_yaml", VALUE_YAML.output);
         testAssertionValue("/api_yaml", ret.body, VALUE_YAML.output);
-%endif
     }
 
     methodPostTest() {
@@ -602,7 +588,6 @@ public class Main inherits QUnit::Test {
             assertTrue(rc.getInfo().up);
         }
 
-%ifndef NoYaml
         {
             RestConnection rc("test", "test", url, {}, {
                 "data": "yaml",
@@ -666,7 +651,6 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
-%endif
 
         {
             string auth_uri = "https://example.com/auth";
@@ -1003,9 +987,7 @@ public class Main inherits QUnit::Test {
     }
 
     static *string getSwaggerSchema() {
-%ifndef NoYaml
         return make_yaml(TestSchema);
-%endif
     }
 }
 

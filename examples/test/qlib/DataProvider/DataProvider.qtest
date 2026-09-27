@@ -14,9 +14,7 @@
 
 %requires reflection
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class DataProviderTest
 
@@ -1160,19 +1158,12 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("softstring", fields.name.getTypeName());
     }
 
-    private checkYaml() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     factoryMapTest() {
         assertEq("CdaDataProvider", DataProvider::DataProvider::FactoryMap.cda);
         assertEq("FhirRestDataProvider", DataProvider::DataProvider::FactoryMap.fhirrest);
     }
 
     expressionTests() {
-        checkYaml();
         hash<DataProviderExpression> exp = <DataProviderExpression>{
             "exp": DP_OP_AND,
             "args": (
@@ -4695,45 +4686,35 @@ public class DataProviderTest inherits QUnit::Test {
             AbstractDataProviderType t = SuperSoftStringDataType;
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
-%ifndef NoYaml
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
-%endif
             t = AbstractDataProviderTypeMap."supersoftstring";
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
-%ifndef NoYaml
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
-%endif
 
             t = AbstractDataProviderTypeMap."string";
             FlexibleTypeHandlingHelper fthh();
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
-%ifndef NoYaml
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
-%endif
         }
 
         {
             AbstractDataProviderType t = SuperSoftStringOrNothingDataType;
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
-%ifndef NoYaml
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
-%endif
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
             t = AbstractDataProviderTypeMap."*supersoftstring";
             assertEq("true", t.acceptsValue(True));
             assertEq("2025-05-21T09:48:57+02:00", t.acceptsValue(2025-05-21T09:48:57+02:00));
-%ifndef NoYaml
             assertEq("{a: 1}", t.acceptsValue({"a": 1}));
             assertEq("[\"a\", 1]", t.acceptsValue(("a", 1)));
-%endif
             assertNothing(t.acceptsValue(NOTHING));
             assertNothing(t.acceptsValue(NULL));
         }

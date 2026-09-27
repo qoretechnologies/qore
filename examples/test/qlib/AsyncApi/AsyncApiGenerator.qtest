@@ -24,13 +24,11 @@
 
 %modern
 
-# try importing JSON and YAML modules
-%requires json
-%try-module yaml
-%define NoYaml
-%endtry
-
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
 %requires Util
 %requires QUnit
 %requires ../../../../qlib/AsyncApi.qm
@@ -79,12 +77,6 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("EventData extension fields", \testEventDataExtensions());
         addTestCase("doxygen ref resolution", \testDoxygenRefResolution());
         set_return_value(main());
-    }
-
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
     }
 
     testParseEventBlockBasic() {
@@ -371,8 +363,6 @@ trailing code";
     }
 
     testGeneratorOutputFormats() {
-        checkModules();
-
         AsyncApi::AsyncApiSchemaGenerator gen({
             "title": "Format Test API",
             "version": "1.0.0",

@@ -3485,7 +3485,6 @@ public const hash<auto> ExtendedExpressionImplementations = {
 #! YAML serialization expression implementations
 /** @since DataProvider 3.3
 */
-%ifndef NoYaml
 public const hash<auto> YamlExpressionImplementations = {
     DP_FUNC_MAKE_YAML: {
         "exp": <DataProviderExpressionInfo>{
@@ -3534,7 +3533,6 @@ public const hash<auto> YamlExpressionImplementations = {
         },
     },
 };
-%endif
 
 # --- Module-conditional expression implementations (JSON) ---
 #! JSON serialization expression implementations

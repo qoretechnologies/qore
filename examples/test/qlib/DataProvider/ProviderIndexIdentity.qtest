@@ -7,9 +7,7 @@
 %requires DataProvider
 %requires ProviderIndex
 %requires json
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 %exec-class ProviderIndexIdentityTest
 
 class ProviderIndexIdentityTest inherits QUnit::Test {
@@ -68,12 +66,6 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
         assertEq(expected, order.getExampleValue(), "nested traversal does not retain caller mutations");
     }
 
-    private checkYaml() {
-%ifdef NoYaml
-        testSkip("yaml is not available");
-%endif
-    }
-
     private string env(string root, string zone = "UTC") {
         string modules = root + ":" + get_script_dir() + "/../../../../qlib"
             + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
@@ -87,11 +79,9 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
         try {
             hash<auto> result = parse_json(out);
             if (result.index_yaml) {
-%ifndef NoYaml
                 # Parse both workers' dates in this process; JSON's local-zone date encoding
                 # is not part of the native YAML index contract.
                 result.index = parse_yaml(result.index_yaml);
-%endif
             }
             return result;
         } catch () {
@@ -100,7 +90,6 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
     }
 
     private identityTest() {
-        checkYaml();
         TmpDir tmp("provider-index-identity-");
         string source = tmp.path + "/IndexIdentityFixture.qm";
         File f();
@@ -140,7 +129,6 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
     }
 
     private unresolvedTest() {
-        checkYaml();
         TmpDir tmp("provider-index-unresolved-");
         ProviderIndexUtil::setEnvironmentVariable(tmp.path);
         hash<DataProviderIndexInfo> original = <DataProviderIndexInfo>{

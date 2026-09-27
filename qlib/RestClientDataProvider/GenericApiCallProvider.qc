@@ -186,11 +186,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
                 if (!ct_present) hdr."Content-Type" = ContentTypeMap.form;
                 break;
             case "yaml":
-%ifndef NoYaml
                 body = exists req.body ? make_yaml(req.body) : NOTHING;
-%else
-                throw "GENERIC-API-CALL-SERIALIZER-ERROR", "YAML serializer not available; install the yaml module";
-%endif
                 if (!ct_present) hdr."Content-Type" = ContentTypeMap.yaml;
                 break;
             case "xml":

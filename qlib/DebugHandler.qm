@@ -27,9 +27,7 @@
 
 %requires WebSocketUtil
 %requires WebSocketHandler
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 %requires HttpServerUtil >= 0.3.11
 %requires DebugUtil
 %requires DebugProgramControl
@@ -215,7 +213,6 @@ public namespace DebugHandler {
         }
     }
 
-%ifndef NoYaml
     #! the main web socket debug handler class implementing internal protocol in YAML format.
     public class WebSocketDebugHandler inherits AbstractWebSocketDebugHandler {
         #! create the object optionally with the given @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator"
@@ -262,7 +259,6 @@ public namespace DebugHandler {
         }
 
     }
-%endif
 
     #! debug program control via @ref AbstractWebSocketDebugHandler
     /**

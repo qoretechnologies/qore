@@ -7,9 +7,7 @@
 %requires FsUtil
 %requires QUnit
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class QdpDpqlTest
 
@@ -24,9 +22,6 @@ public class QdpDpqlTest inherits QUnit::Test {
         csv_path = csv_dir.path + "/data.csv";
         writeCsvFile();
 
-%ifdef NoYaml
-        addTestCase("DPQL tests skipped without yaml module", \skipNoYaml());
-%else
         addTestCase("DPQL search returns matching record", \dpqlSearchMatch());
         addTestCase("DPQL search supports logical expressions", \dpqlSearchLogical());
         addTestCase("DPQL auto-detect without flags", \dpqlSearchAutoDetect());
@@ -42,7 +37,6 @@ public class QdpDpqlTest inherits QUnit::Test {
         addTestCase("DPQL conflicts with legacy expressions", \dpqlLegacyConflict());
         addTestCase("DPQL error output is not duplicated", \dpqlErrorDedup());
         addTestCase("DPQL help output", \dpqlHelp());
-%endif
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -93,12 +87,7 @@ public class QdpDpqlTest inherits QUnit::Test {
     }
 
     private list<auto> parseYaml(string data) {
-%ifdef NoYaml
-        throw "MODULE-ERROR", "yaml module not available";
-        return ();
-%else
         return cast<list>(parse_yaml(data));
-%endif
     }
 
     private list<auto> parseYamlOutput(hash<auto> result) {
@@ -232,7 +221,4 @@ public class QdpDpqlTest inherits QUnit::Test {
         assertTrue(result.out =~ /EXAMPLES/);
     }
 
-    private skipNoYaml() {
-        testSkip("yaml module not available");
-    }
 }

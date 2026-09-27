@@ -26,9 +26,6 @@
 
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
@@ -264,13 +261,6 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
             }
         }
         if (hint == "yaml") {
-%ifdef NoYaml
-            return {
-                "type": "yaml",
-                "text": text,
-                "annotations": annotations,
-            };
-%else
             try {
                 return {
                     "type": "yaml",
@@ -280,7 +270,6 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
                 };
             } catch (hash<ExceptionInfo> ex) {
             }
-%endif
         }
         if (hint == "markdown") {
             return {

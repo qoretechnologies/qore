@@ -71,11 +71,7 @@ public class DataSchemaLoader {
         hash<auto> raw;
 
         if (file_path =~ /\.ysm$/i) {
-%ifndef NoYaml
             raw = DataSchemaLoader::loadYamlFile(file_path);
-%else
-            throw "DATA-SCHEMA-ERROR", "cannot load .ysm file: the yaml module is not available";
-%endif
         } else if (file_path =~ /\.jsm$/i) {
             raw = DataSchemaLoader::loadJsonFile(file_path);
         } else {
@@ -570,7 +566,6 @@ public class DataSchemaLoader {
         return result;
     }
 
-%ifndef NoYaml
     #! Loads a YAML file and returns the parsed hash
     static hash<auto> loadYamlFile(string file_path) {
         string content = ReadOnlyFile::readTextFile(file_path);
@@ -581,7 +576,6 @@ public class DataSchemaLoader {
         }
         return parsed;
     }
-%endif
 
     #! Loads a JSON file and returns the parsed hash
     static hash<auto> loadJsonFile(string file_path) {

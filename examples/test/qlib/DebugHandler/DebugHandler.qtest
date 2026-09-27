@@ -12,13 +12,10 @@
 %requires WebSocketClient
 %requires DebugHandler
 
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class DebugHandlerTest
 
-%ifndef NoYaml
 #! Helper class to collect WebSocket events in a thread-safe way
 class WsEventCollector {
     public {
@@ -96,15 +93,8 @@ class WsEventCollector {
         }
     }
 }
-%endif
 
 public class DebugHandlerTest inherits QUnit::Test {
-%ifdef NoYaml
-    constructor() : Test("DebugHandlerTest", "1.0") {
-        addTestCase("skipped", sub() { testSkip("yaml module not available"); });
-        set_return_value(main());
-    }
-%else
     private {
         HttpServer mServer;
         WebSocketDebugProgramControl dpc;
@@ -334,5 +324,4 @@ public class DebugHandlerTest inherits QUnit::Test {
         # verify handler is still functional after duplicate add
         assertEq(MimeTypeYamlRpc, handler.getContentType());
     }
-%endif
 }

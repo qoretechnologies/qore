@@ -25,7 +25,7 @@
 %modern
 
 %requires qore >= 2.3
-%requires yaml >= 0.7
+%requires yaml
 %requires Mime >= 1.0
 %requires HttpServerUtil
 %requires(reexport) DataProvider

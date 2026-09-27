@@ -1932,7 +1932,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         @return information about the written index
 
-        @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or YAML support is not available, or
+        @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or
         the metadata cache or routing index cannot be written when no canonical index file is written
 
         @par Example:
@@ -1946,9 +1946,6 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     */
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps, *list<string> action_apps,
             code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
-%ifdef NoYaml
-        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot write the data provider index";
-%else
         # verify that the target directory can be written to before writing anything
         getWritableIndexDir();
 
@@ -2136,7 +2133,6 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             "delta": delta,
             "summary": summary,
         };
-%endif
     }
 
     #! Returns the names of the maps written first to the canonical index file, in the order written
@@ -2159,13 +2155,11 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     */
     static private writeCanonicalMaps(code<nothing(string)> write, hash<auto> maps,
             list<string> names = ("factorymap", "appmap", "schememap", "appinfomap")) {
-%ifndef NoYaml
         foreach string key in (names) {
             write(make_yaml({key: ((key == "appinfomap" || key == "factoryinfomap")
                 ? sortIndexMap(maps{key}, False)
                 : maps{key}) ?? {}}, BlockStyle));
         }
-%endif
     }
 
     #! Writes the actions of one app to the \c actioninfomap member of the canonical index file
@@ -2176,7 +2170,6 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         first
     */
     static private writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions, bool first) {
-%ifndef NoYaml
         if (first) {
             write("actioninfomap:\n");
         }
@@ -2184,7 +2177,6 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         # indenting every line leaves their values unchanged
         string yaml = make_yaml({app: actions}, BlockStyle);
         write("  " + replace(yaml.substr(0, -1), "\n", "\n  ") + "\n");
-%endif
     }
 
     #! Returns the given index map with its keys sorted
@@ -2445,7 +2437,7 @@ if (info) {
         @return the YAML, if no @a output_path is given
 
         @throw PROVIDER-INDEX-ERROR the directory holds no published index with a routing index and metadata cache,
-        or the files are inconsistent, or the app is not in the index, or YAML or MessagePack support is not
+        or the files are inconsistent, or the app is not in the index, or MessagePack support is not
         available
 
         @par Example:
@@ -2462,9 +2454,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @since ProviderIndexUtil 1.2
     */
     static *string dumpIndexYaml(*string dir, *string app, *string output_path) {
-%ifdef NoYaml
-        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot write the data provider index as YAML";
-%else
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the data provider metadata";
 %else
@@ -2553,7 +2542,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         }
         return rv;
 %endif
-%endif
     }
 
     #! Reads and verifies a published index from its routing index and metadata cache
@@ -2563,9 +2551,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     */
     static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack,
             *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
-%ifdef NoYaml
-        return;
-%else
 %ifdef NoMsgPack
         return;
 %else
@@ -2652,7 +2637,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 ex.desc);
         }
 %endif
-%endif
     }
 
     #! Reads and verifies the routing index and metadata cache manifest of a published index
@@ -2695,22 +2679,14 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Parses a routing index
     static private *hash<DataProviderRoutingIndexInfo> parseRoutingIndex(binary data) {
-%ifdef NoYaml
-        throw "PROVIDER-INDEX-ERROR", "YAML support is not available; cannot read the data provider routing index";
-%else
         return cast<*hash<DataProviderRoutingIndexInfo>>(parse_yaml(data.toString("UTF-8")));
-%endif
     }
 
     #! Returns @ref True if the routing index has a supported version and matches its checksum
     static private bool checkRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
-%ifdef NoYaml
-        return False;
-%else
         return routing.version >= MinRoutingIndexVersion && routing.version <= RoutingIndexVersion
             && routing.routing_sha256
                 == digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex();
-%endif
     }
 
     #! Returns @ref True if the given metadata cache version can be read
@@ -2852,10 +2828,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             sidecar.metadata_cache_version = MetadataCacheVersion;
             sidecar.metadata_cache_sha256 = cache_sha256;
         }
-%ifndef NoYaml
         sidecar.routing_sha256 =
             digest("sha256", make_yaml(getRoutingIndexChecksumPayload(sidecar), BlockStyle)).toHex();
-%endif
         return writeIndex(sidecar, "routing", 0s, {}).size;
     }
 
@@ -3580,9 +3554,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Writes the index to the configured directory
     static private hash<ProviderIndexInfo> writeIndex(*hash<auto> h, string type, date delta, hash<auto> summary) {
-%ifdef NoYaml
-        throw "PROVIDER-INDEX-ERROR", sprintf("YAML support is not available; cannot write %s provider index", type);
-%else
         string path = getIndexPath(type);
         string yaml = make_yaml(h, BlockStyle);
         writeFileAtomic(path, yaml);
@@ -3592,7 +3563,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "delta": delta,
             "summary": summary,
         };
-%endif
     }
 
     #! Writes the given contents to the given path atomically
@@ -3625,9 +3595,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Reads the index from the configured directory
     static private *hash<auto> readIndex(string type, bool quiet = False) {
-%ifdef NoYaml
-        throw "PROVIDER-INDEX-ERROR", sprintf("YAML support is not available; cannot read %s provider index", type);
-%else
         # Skip silently when the index env var is not configured — this is
         # the default in tests and non-Qorus deployments, not an error.
         # Check the env directly to avoid tryGetIndexDir()'s WARN log.
@@ -3676,7 +3643,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 }
             }
         }
-%endif
     }
 
     #! Returns the index path for the given type

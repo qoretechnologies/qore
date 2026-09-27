@@ -441,7 +441,7 @@ class QoreOnnxToolsTest inherits QUnit::Test {
 
     private static string makeCliCommand(list<string> args) {
         string root = get_script_dir() + "/../../../..";
-        string qore_bin = root + "/build/qore";
+        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string cli = root + "/bin/qore-onnx";
         # qore-onnx requires reflection (and pulls in other binary modules
         # transitively); list every build/modules/<name> dir so CI runners
@@ -462,13 +462,11 @@ class QoreOnnxToolsTest inherits QUnit::Test {
             root + "/build/modules/reflection",
             root + "/build/modules/sshutil",
             root + "/build/modules/tokenizer",
+            root + "/build/modules/yaml",
         ));
-        # Append the parent's QORE_MODULE_DIR so out-of-tree binary modules
-        # the parent runtime can resolve (yaml, json, xml, ...) are also
-        # findable from the subprocess.  Util.qmod has an AOT-serialized
-        # CallDirect to Qore::YAML::parse_yaml (gated by %try-module yaml at
-        # compile time), so the yaml module must be loadable at qmod
-        # deserialization time or the entire Util module-load fails.
+        # Append the parent's QORE_MODULE_DIR for alternate build directories
+        # and external modules. Util.qmod requires the bundled YAML module
+        # when restoring its compiled calls to parse_yaml().
         *string parent_dir = ENV.QORE_MODULE_DIR;
         if (parent_dir.val()) {
             module_path += PathSep + parent_dir;

@@ -29,12 +29,7 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
-%try-module yaml
-%define MissingYaml
-%endtry
-%ifdef MissingYaml
-printf("SKIP: this test requires the external yaml module\n");
-%else
+%requires yaml
 %requires ../../../../qlib/PaddleDataProvider
 %requires ../../../../qlib/PaddleRestClient
 %requires ../../../../qlib/RestClientIo.qm
@@ -1205,5 +1200,3 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         assertEq(("ctm_01h8xce4x86pq3byrwgc7k4qbn", "ctm_01h8xce4x86pq3byrwgc7k4qbp"), (map $1.id, found));
     }
 }
-
-%endif

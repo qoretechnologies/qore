@@ -70,13 +70,12 @@ module RestHandler {
 
     @section restserialization Data Serialization Support
 
-    The @ref RestHandler::RestHandler "RestHandler" class uses any of the following modules if the modules are
-    available when the RestHandler module is initialized:
-    - <a href="../../modules/json/html/index.html#jsonintro">json</a>: provides automatic support for JSON payload
+    The @ref RestHandler::RestHandler "RestHandler" class uses the following serialization modules:
+    - @ref jsonintro "json" (bundled): provides automatic support for JSON payload
       de/serialization
-    - <a href="https://github.com/qoretechnologies/module-xml">xml</a>: provides automatic support for XML-RPC payload
+    - <a href="https://github.com/qoretechnologies/module-xml">xml</a> (optional): provides automatic support for XML-RPC payload
       de/serialization
-    - <a href="https://github.com/qoretechnologies/module-yaml">yaml</a>: provides automatic support for YAML payload
+    - @ref yamlintro "yaml" (bundled): provides automatic support for YAML payload
       de/serialization
 
     URL form encoding is supported as well for message bodies according to

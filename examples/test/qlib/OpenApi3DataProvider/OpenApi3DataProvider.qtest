@@ -3,18 +3,12 @@
 
 %modern
 
-# try importing JSON and YAML modules
-%requires json
-%try-module yaml
-%define NoYaml
-%endtry
-
-%ifdef NoYaml
-# Stub function when yaml module is not available
-auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
-%endif
-
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
+
 %requires Util
 %requires Mime
 %requires QUnit
@@ -129,15 +123,7 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         }
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     phase1SmokeTest() {
-        checkModules();
-
         # Factory must be registered with the DataProvider registry
         AbstractDataProviderFactory factory = DataProvider::getFactoryEx("openapi3");
         assertEq("openapi3", factory.getInfo().name);
@@ -196,8 +182,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase2PathTreeTest() {
-        checkModules();
-
         OpenApi3DataProvider prov({"schema": PetStoreSpec});
         assertEq("Swagger Petstore", prov.getName());
 
@@ -235,8 +219,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase3RequestTypeTest() {
-        checkModules();
-
         OpenApi3DataProvider prov({"schema": PetStoreSpec});
 
         # GET /pets exposes two optional query parameters: tags (array<string>) and limit (int)
@@ -273,8 +255,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase4ResponseTypeTest() {
-        checkModules();
-
         OpenApi3DataProvider prov({"schema": PetStoreSpec});
 
         # GET /pets: 200 response is a list<Pet> → list body, plus a default error response
@@ -334,8 +314,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase5SchemaCompositionTest() {
-        checkModules();
-
         # allOf merge: build an inline schema that composes two sub-schemas.
         # The merged type should expose all fields from all members, plus any
         # locally declared properties.
@@ -521,8 +499,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase6RequestExecutionTest() {
-        checkModules();
-
         string url = sprintf("http://127.0.0.1:%d", m_port);
         OpenApi3DataProvider prov({
             "schema": PetStoreSpec,
@@ -573,8 +549,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         no longer detect transient conditions such as HTTP 429.
     */
     errorArgPreservationTest() {
-        checkModules();
-
         HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelFatal())});
         on_exit http.stop();
         RateLimitHandler handler();
@@ -599,8 +573,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase7NullableTypesTest() {
-        checkModules();
-
         # OpenAPI 3.0 style: explicit "nullable: true"
         hash<auto> schema_30 = {
             "openapi": "3.0.0",
@@ -678,8 +650,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase7MultipartFormDataTest() {
-        checkModules();
-
         # Multipart.openapi3.yaml is the OpenAPI 3 equivalent of Swagger's Multipart fixture
         string multipart_spec = get_script_dir() + "/../OpenApi3/Multipart.openapi3.yaml";
         if (!is_readable(multipart_spec)) {
@@ -692,8 +662,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase7MultiContentTypeTest() {
-        checkModules();
-
         # A response with multiple content types; the data provider picks the
         # first schema with a schema field (currently application/json)
         hash<auto> schema = {
@@ -738,8 +706,6 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
     }
 
     phase7FactoryAndSerializationTest() {
-        checkModules();
-
         # Factory instantiation via DataProvider API
         OpenApi3DataProviderFactory factory();
         hash<DataProviderFactoryInfo> info = factory.getInfo();

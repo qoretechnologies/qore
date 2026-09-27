@@ -180,27 +180,6 @@ public class QoreApiMetadata {
         return envelope.data;
     }
 
-%ifdef NoYaml
-    #! Export metadata as YAML
-    /** @param metadata the NamespaceInfo tree to serialize
-        @return YAML string
-        @throws YAML-NOT-AVAILABLE when yaml module is not available
-    */
-    static string toYaml(hash<NamespaceInfo> metadata) {
-        throw "YAML-NOT-AVAILABLE",
-            "the yaml module is required for YAML export";
-    }
-
-    #! Import metadata from YAML
-    /** @param yaml_str YAML string to parse
-        @return hash following NamespaceInfo structure
-        @throws YAML-NOT-AVAILABLE when yaml module is not available
-    */
-    static hash<auto> fromYaml(string yaml_str) {
-        throw "YAML-NOT-AVAILABLE",
-            "the yaml module is required for YAML import";
-    }
-%else
     #! Export metadata as YAML
     /** @param metadata the NamespaceInfo tree to serialize
         @return YAML string with schema_version and data fields
@@ -224,7 +203,6 @@ public class QoreApiMetadata {
         QoreApiMetadata::checkSchemaVersion(envelope);
         return envelope.data;
     }
-%endif
 
     #! Search for symbols matching a glob pattern
     /** Searches classes, functions, constants, hashdecls, and enums

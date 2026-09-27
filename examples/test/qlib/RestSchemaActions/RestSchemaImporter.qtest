@@ -29,12 +29,7 @@
 %requires ../../../../qlib/FsUtil.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/DataProvider
-%try-module yaml
-%define MissingYaml
-%endtry
-%ifdef MissingYaml
-printf("SKIP: this test requires the external yaml module\n");
-%else
+%requires yaml
 %requires ../../../../qlib/RestSchemaActions
 
 %requires json
@@ -489,27 +484,21 @@ public class TestSchema {
             "        - NO\n        - PT\n    Event:\n      type: object\n      example:\n"
             "        created_at: 2025-03-05T14:59:25.438936Z\n        day: 2025-03-05\n        marker: sqlnull\n"
             "        count: 2\n        ratio: 0.5\n        active: true\n        none: null\n");
-        if (RestSchemaImporter::yamlCoreSchemaSupported()) {
-            hash<RestSchemaSourceInfo> src = RestSchemaImporter::fetch(path);
-            hash<auto> schemas = src.schema.components.schemas;
-            assertEq(("NL", "NO", "PT"), schemas.Country."enum");
-            assertEq({
-                "created_at": "2025-03-05T14:59:25.438936Z",
-                "day": "2025-03-05",
-                "marker": "sqlnull",
-                "count": 2,
-                "ratio": 0.5,
-                "active": True,
-                "none": NOTHING,
-            }, schemas.Event.example);
-            assertNothing(RestSchemaImporter::findConvertedScalar(src.schema));
-        } else {
-            # without core schema parsing, the conversion is detected and the document is rejected
-            assertThrows("REST-SCHEMA-IMPORT-ERROR", "converted this plain scalar", \RestSchemaImporter::fetch(),
-                path);
-        }
+        hash<RestSchemaSourceInfo> src = RestSchemaImporter::fetch(path);
+        hash<auto> schemas = src.schema.components.schemas;
+        assertEq(("NL", "NO", "PT"), schemas.Country."enum");
+        assertEq({
+            "created_at": "2025-03-05T14:59:25.438936Z",
+            "day": "2025-03-05",
+            "marker": "sqlnull",
+            "count": 2,
+            "ratio": 0.5,
+            "active": True,
+            "none": NOTHING,
+        }, schemas.Event.example);
+        assertNothing(RestSchemaImporter::findConvertedScalar(src.schema));
 
-        # the scan behind the fallback finds every kind of converted value
+        # the scalar inspection API finds every kind of extended YAML value
         assertEq("#/a/1: <time: 0 seconds>", RestSchemaImporter::findConvertedScalar({"a": ("x", 0s)}));
         assertRegex("^#/b: 2025-03-05", RestSchemaImporter::findConvertedScalar({"b": 2025-03-05}));
         assertRegex("^#/c: ", RestSchemaImporter::findConvertedScalar({"c": <01>}));
@@ -941,5 +930,3 @@ public class TestSchema {
         assertRegex("1 operation\\(s\\) matched only after normalizing", report);
     }
 }
-
-%endif

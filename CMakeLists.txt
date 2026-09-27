@@ -535,6 +535,7 @@ find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
+find_package(LibYAML REQUIRED)
 
 # LLVM configuration for JIT compilation (required)
 # On macOS, LLVM is typically not in the default search path (MacPorts installs

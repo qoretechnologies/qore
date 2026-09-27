@@ -30,9 +30,7 @@
 # strict argument handling
 # enable all warnings
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module msgpack
 %define NoMsgPack

@@ -15,9 +15,7 @@
 %requires DataProvider
 %requires ProviderIndex
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class ProviderIndexInitializationFailureTest
 
@@ -30,12 +28,6 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         addTestCase("environment provider failures remain visible and retryable",
             \environmentProviderFailureTest());
         set_return_value(main());
-    }
-
-    private checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
     }
 
     private registerTestApp(string app) {
@@ -97,8 +89,6 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
     }
 
     private deferredFailureTest() {
-        checkModules();
-
         string app = "DeferredFailure_" + get_random_string(8);
         registerTestApp(app);
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
@@ -139,8 +129,6 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
     }
 
     private eagerFailureTest() {
-        checkModules();
-
         string app = "EagerFailure_" + get_random_string(8);
         registerTestApp(app);
         on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
@@ -167,8 +155,6 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
     }
 
     private environmentFailureTest() {
-        checkModules();
-
         string env_name = "QORE_DATA_PROVIDERS";
         *string old_value = getenv(env_name);
         auto old_env_value = ENV{env_name};
@@ -222,8 +208,6 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
     }
 
     private environmentProviderFailureTest() {
-        checkModules();
-
         string env_name = "QORE_DATA_PROVIDERS";
         *string old_value = getenv(env_name);
         auto old_env_value = ENV{env_name};

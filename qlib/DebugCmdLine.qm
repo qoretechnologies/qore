@@ -26,9 +26,7 @@
 %requires qore >= 2.0
 %requires(reexport) DebugUtil
 %requires Util
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %modern
 %no-debugging
@@ -391,11 +389,9 @@ public namespace DebugCmdLine {
                                         hash<auto> data.cmd = 'session/get';
                                         hash<auto> sh.session.programs = dcl.doCommand(data, False).result;
                                         if (sh.session.programs) {
-%ifndef NoYaml
                                             File f();
                                             f.open(fn, O_CREAT | O_TRUNC | O_WRONLY);
                                             f.write(make_yaml(sh));
-%endif
                                         }
                                     }
                                 },
@@ -1918,11 +1914,7 @@ public namespace DebugCmdLine {
                 @debug {
                     printfImpl("Load session: %y\n", fn);
                 }
-%ifndef NoYaml
                 *hash<auto> d = parse_yaml(ReadOnlyFile::readTextFile(fn));
-%else
-                *hash<auto> d;
-%endif
                 @debug {
                     printfImpl("Load session data: %y\n", d);
                 }

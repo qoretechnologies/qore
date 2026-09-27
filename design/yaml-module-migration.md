@@ -22,6 +22,13 @@ it in build-tree and documentation module paths. Debian packages declare
 libyaml-dev, ship the native and user modules in qore-stdlib, and replace older
 qore-yaml-module packages. Remote debugger tools use this bundled copy.
 
+LibYAML headers and the library are required during the top-level CMake
+dependency checks. Standard library modules use `%requires yaml`, with no
+missing-module branches or fallbacks. Their tests require YAML as well, so a
+broken bundled module cannot turn its coverage into successful skips. REST
+schema imports directly select `YAML::ParseCoreSchema`; the public
+`yamlCoreSchemaSupported()` compatibility method always returns `True`.
+
 qore-test-base and Qorus remove YAML from external module build/bootstrap
 lists, retain LibYAML development packages, and resolve documentation tags from
 Qore's documentation. Runtime load lists retain the name yaml. The two-pass

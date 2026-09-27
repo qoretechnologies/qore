@@ -9,9 +9,7 @@
 
 %requires QUnit
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -373,14 +371,12 @@ class DataProviderExpressionsTest inherits QUnit::Test {
     }
 
     serializationTests() {
-%ifndef NoYaml
         {
             string yaml = eval_expr("make_yaml", ({"key": "value"}));
             assertTrue(yaml.val());
             hash<auto> parsed = eval_expr("parse_yaml", (yaml));
             assertEq("value", parsed.key);
         }
-%endif
 
         {
             string json = eval_expr("make_json", ({"key": "value"}));
@@ -398,8 +394,6 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         }
 %endif
 
-%ifdef NoYaml
-%endif
     }
 
     fieldReferenceTests() {

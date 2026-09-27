@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires ProviderIndex
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module process >= 2.1
 %define NoProcess
@@ -45,9 +43,6 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
     }
 
     private checkModules(*bool workers) {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
 %ifdef NoProcess
         if (workers) {
             testSkip("no process module 2.1 or later");

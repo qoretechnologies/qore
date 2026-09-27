@@ -36,9 +36,7 @@
 
 %requires Schema
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -394,16 +392,10 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         #! Returns the schema data as a YAML string
         /** @return a YAML string representation of the schema data
 
-            @throw SCHEMA-REVERSE-ERROR if the yaml module is not available
-
             @since SchemaReverse 1.2
         */
         string toYaml() {
-%ifndef NoYaml
             return make_yaml(toQore(), BlockStyle);
-%else
-            throw "SCHEMA-REVERSE-ERROR", "the yaml module is required for YAML output but is not available";
-%endif
         }
 
         #! Returns the schema data as a JSON string
@@ -1032,16 +1024,10 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
 
             @return a YAML string representation of the schema
 
-            @throw SCHEMA-REVERSE-ERROR if the yaml module is not available
-
             @since SchemaReverse 1.2
         */
         string toYaml(*hash<auto> filter) {
-%ifndef NoYaml
             return make_yaml(toQore(filter), BlockStyle);
-%else
-            throw "SCHEMA-REVERSE-ERROR", "the yaml module is required for YAML output but is not available";
-%endif
         }
 
         #! Returns the schema as a JSON string in the data-schema format

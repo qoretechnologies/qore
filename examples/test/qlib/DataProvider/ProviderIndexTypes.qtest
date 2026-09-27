@@ -8,9 +8,7 @@
 %requires DataProvider
 %requires ProviderIndex >= 1.2
 %requires IndexIdentityFixture
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 %exec-class ProviderIndexTypesTest
 
 class ProviderIndexTypesTest inherits QUnit::Test {
@@ -24,18 +22,12 @@ class ProviderIndexTypesTest inherits QUnit::Test {
             \failureTest());
         set_return_value(main());
     }
-    private checkYaml() {
-%ifdef NoYaml
-        testSkip("yaml is not available");
-%endif
-    }
     private hash<auto> publish() {
         return ProviderIndex::ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, directory,
             <ProviderIndexCreateOptions>{"load_known_factories": False, "load_environment": False,
                 "load_typescript_actions": False, "apps": ("IndexIdentityFixture",)});
     }
     private roundTripTest() {
-        checkYaml();
         HashDataType input("IndexNestedInput");
         input.addQoreFields({
             "value": {"name": "value", "type": AbstractDataProviderTypeMap."string"},
@@ -79,7 +71,6 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         }
     }
     private failureTest() {
-        checkYaml();
         auto previous = publish();
         string original = File::readTextFile(previous.path);
         auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;

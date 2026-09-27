@@ -40,9 +40,7 @@
 %requires(reexport) ProviderIndexUtil
 %requires i18n
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -59,9 +57,7 @@ module DataProvider {
     init = sub () {
         # register module-conditional expression implementations
         hash<auto> extra;
-%ifndef NoYaml
         extra += YamlExpressionImplementations;
-%endif
         extra += JsonExpressionImplementations;
 %ifndef NoXml
         extra += XmlExpressionImplementations;

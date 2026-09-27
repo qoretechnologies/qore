@@ -41,9 +41,7 @@
 %requires OpenApi3 >= 1.0
 %requires(reexport) Logger
 
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module xml >= 1.3
 %define NoXml
@@ -898,9 +896,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         const hash<auto> DataSerializationSupport = {
             "json": MimeTypeJson,
-%ifndef NoYaml
             "yaml": MimeTypeYaml,
-%endif
 %ifndef NoXml
             "xml": MimeTypeXml,
             "rawxml": MimeTypeXmlApp,
@@ -910,12 +906,10 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             "bin": MimeTypeOctetStream,
         } + (SupportsCbor ? {"cbor": MimeTypeCbor} : {});
 
-%ifndef NoYaml
         const hash<auto> DeserializeYaml = {
             "code": "yaml",
             "in": \parse_yaml(),
         };
-%endif
 %ifndef NoXml
         const hash<auto> DeserializeXml = {
             "code": "xml",
@@ -938,9 +932,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         #! Accept header list
         const list<auto> AcceptList = (
-%ifndef NoYaml
             MimeTypeYaml, MimeTypeYamlRpc,
-%endif
 %ifndef NoXml
             MimeTypeXml, MimeTypeXmlApp,
 %endif
@@ -995,9 +987,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const hash<string, bool> DataSerializationOptions = {
             "auto": True,
             "json": True,
-%ifndef NoYaml
             "yaml": True,
-%endif
 %ifndef NoXml
             "rawxml": True,
             "xml": True,

@@ -24,9 +24,7 @@
 
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class FileLocationHandlerTest
 
@@ -125,9 +123,7 @@ public class FileLocationHandlerTest inherits QUnit::Test {
 %ifndef NoXml
             "xml": True,
 %endif
-%ifndef NoYaml
             "yaml": True,
-%endif
         };
     }
 

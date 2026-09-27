@@ -3,13 +3,11 @@
 
 %modern
 
-# try importing JSON and YAML modules
-%requires json
-%try-module yaml
-%define NoYaml
-%endtry
-
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
 %requires Util
 %requires Mime
 %requires QUnit
@@ -27,11 +25,7 @@ string sub my_make_json(any v) {
 }
 
 string sub my_make_yaml(any v) {
-%ifndef NoYaml
     return make_yaml(v);
-%else
-    return "";
-%endif
 }
 
 class HttpTestServer {
@@ -402,15 +396,7 @@ public class SwaggerTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     testSemanticStringFormats() {
-        checkModules();
-
         SwaggerSchema schema("", ValidSwaggerSchema);
         foreach string fmt in (("email", "uri", "uuid", "hostname", "ipv4", "ipv6", "phone")) {
             auto t = schema.getType("p", "string", fmt);
@@ -429,8 +415,6 @@ public class SwaggerTest inherits QUnit::Test {
         parameter was converted and worked, which is why this went unnoticed - only the arrays failed.
     */
     testArrayQueryParamElementTypes() {
-        checkModules();
-
         hash<auto> soh = ValidSwaggerSchema + {
             "paths": {
                 "/preview": {
@@ -472,8 +456,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testTypeForReference() {
-        checkModules();
-
         # build a schema with a reusable schema reference in "definitions"
         hash<auto> soh = ValidSwaggerSchema + {
             "definitions": {
@@ -513,8 +495,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testFiles() {
-        checkModules();
-
         {
             Swagger::SwaggerSchema so;
             string basePath = normalize_dir(dirname(get_script_path())) + DirSep;
@@ -580,8 +560,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testSwaggerSchema() {
-        checkModules();
-
         assertThrows("INVALID-FIELD-TYPE", loadjson, '{"swagger": true}');
         assertThrows("REQUIRED-FIELD-MISSING", loadjson, '{}', "missing swagger field");
         assertThrows("REQUIRED-FIELD-MISSING", loadjson, '{"swagger": 2.0}', "missing info field");
@@ -1075,8 +1053,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testInfoObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash info;
 
@@ -1105,8 +1081,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testContactObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash info;
 
@@ -1121,8 +1095,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testLicenseObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash info;
 
@@ -1139,8 +1111,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testPathsObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash p;
 
@@ -1151,8 +1121,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testPathItemObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash p;
 
@@ -1193,8 +1161,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testOperationObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash r = {"200": {"description": "a"}};
         hash p;
@@ -1304,8 +1270,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testExternalDocumentationObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash extDocs;
 
@@ -1322,8 +1286,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testParameterObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash p;
 
@@ -1476,8 +1438,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testItemsObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash paramBase = {"name": "a", "in": "query", "type": "array"};
         hash p;
@@ -1579,8 +1539,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testResponsesObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash p;
 
@@ -1596,8 +1554,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testResponseObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash r;
 
@@ -1617,8 +1573,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testHeaderObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash r;
 
@@ -1725,8 +1679,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testTagObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash tag;
 
@@ -1747,8 +1699,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testSchemaObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash s;
 
@@ -1984,8 +1934,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testXmlObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash s;
 
@@ -2028,8 +1976,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testSecuritySchemeObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash sd;
 
@@ -2114,8 +2060,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testScopesObject() {
-        checkModules();
-
         hash base = ValidSwaggerSchema;
         hash sdbase = {"type": "oauth2", "flow": "password", "tokenUrl": "a"};
         hash sd;
@@ -2129,8 +2073,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testValidation() {
-        checkModules();
-
         testValidation(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.yaml"));
         testValidation(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.json"));
 
@@ -3046,8 +2988,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testExamples() {
-        checkModules();
-
         testExamples(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.yaml"));
         testExamples(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.json"));
     }
@@ -3087,8 +3027,6 @@ public class SwaggerTest inherits QUnit::Test {
     }
 
     testRealMessages() {
-        checkModules();
-
         testRealMessages(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.yaml"));
         testRealMessages(Swagger::SwaggerLoader::fromFile(get_script_dir() + DirSep + "PetStore.swagger.json"));
     }

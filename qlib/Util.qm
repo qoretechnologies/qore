@@ -32,9 +32,7 @@
 
 # enable all warnings
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -1149,9 +1147,7 @@ binary sub get_binary_file_data(string loc) {
 
 auto sub process_placeholder(string type, string value) {
     switch (type) {
-%ifndef NoYaml
         case "yaml": return parse_yaml(get_string_file_data(value));
-%endif
         case "json": return parse_json(get_string_file_data(value));
         case "bin": return get_binary_file_data(value);
         case "base64": return make_base64_string(get_binary_file_data(value));
@@ -1424,14 +1420,12 @@ bool sub parse_to_qore_value_yaml_candidate(string arg) {
 }
 
 string sub parse_to_qore_value_with_yaml_error(string arg, *hash<ExceptionInfo> qore_ex,
-        *hash<ExceptionInfo> yaml_ex, bool yaml_missing) {
+        *hash<ExceptionInfo> yaml_ex) {
     string desc = sprintf("Could not parse command-line value %y as a Qore value or YAML.", arg);
     if (qore_ex) {
         desc += sprintf(" Qore parser: %s: %s.", qore_ex.err, qore_ex.desc);
     }
-    if (yaml_missing) {
-        desc += " YAML parsing requires the yaml module, which is unavailable.";
-    } else if (yaml_ex) {
+    if (yaml_ex) {
         desc += sprintf(" YAML parser: %s: %s.", yaml_ex.err, yaml_ex.desc);
     }
     desc += " Examples: YAML 'name: test\\nenabled: true', JSON '{\"name\":\"test\"}', "
@@ -1459,37 +1453,25 @@ public auto sub parse_to_qore_value_with_yaml(string arg) {
     bool yaml_candidate = parse_to_qore_value_yaml_candidate(arg);
 
     if (yaml_candidate) {
-%ifndef NoYaml
         *hash<ExceptionInfo> yaml_ex;
         try {
             return parse_yaml(arg);
         } catch (hash<ExceptionInfo> ex) {
             yaml_ex = ex;
         }
-        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, NOTHING, yaml_ex, False);
-%else
-        try {
-            return parse_to_qore_value(arg);
-        } catch (hash<ExceptionInfo> qore_ex) {
-            throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, NOTHING, True);
-        }
-%endif
+        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, NOTHING, yaml_ex);
     }
 
     try {
         return parse_to_qore_value(arg);
     } catch (hash<ExceptionInfo> qore_ex) {
-%ifndef NoYaml
         *hash<ExceptionInfo> yaml_ex;
         try {
             return parse_yaml(arg);
         } catch (hash<ExceptionInfo> ex) {
             yaml_ex = ex;
         }
-        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, yaml_ex, False);
-%else
-        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, NOTHING, True);
-%endif
+        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, yaml_ex);
     }
 }
 

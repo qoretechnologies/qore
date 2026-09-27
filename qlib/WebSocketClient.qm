@@ -41,9 +41,7 @@
 %requires HttpClientIo
 %requires AsyncApi >= 1.0
 
-%try-module yaml >= 0.7.3
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -3652,9 +3650,7 @@ public class WebSocketClientWithSerialization inherits WebSocketClient, DataProv
         const DataSerializationSupport = {
             "json": True,
             "none": True,
-%ifndef NoYaml
             "yaml": True,
-%endif
         };
     }
 
@@ -3879,10 +3875,8 @@ class MyObserver inherits Observer {
         switch (serialization) {
             case "json":
                 return make_json(value);
-%ifndef NoYaml
             case "yaml":
                 return make_yaml(value);
-%endif
             case "none":
                 switch (value.typeCode()) {
                     case NT_STRING:
@@ -3902,10 +3896,8 @@ class MyObserver inherits Observer {
         switch (serialization) {
             case "json":
                 return parse_json(buf);
-%ifndef NoYaml
             case "yaml":
                 return parse_yaml(buf);
-%endif
             case "none":
                 return buf;
         }
@@ -4119,12 +4111,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
                             "value": "none",
                             "desc": "no serialization is used",
                         },
-%ifndef NoYaml
                         <AllowedValueInfo>{
                             "value": "yaml",
                             "desc": "use only YAML serialization",
                         },
-%endif
                     ),
                     "default_value": "none",
                 },
@@ -4408,9 +4398,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "data serialization to use:\n"
                     " - `json`: JSON serialization (default)\n"
-%ifndef NoYaml
                     " - `yaml`: YAML serialization\n"
-%endif
                     " - `none`: no serialization; raw messages\n",
                 "default_value":
                     "json"
@@ -4420,12 +4408,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                         "value": "json",
                         "desc": "Use JSON serialization",
                     },
-%ifndef NoYaml
                     <AllowedValueInfo>{
                         "value": "yaml",
                         "desc": "Use YAML serialization",
                     },
-%endif
                     <AllowedValueInfo>{
                         "value": "none",
                         "desc": "Use no data serialization",

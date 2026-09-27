@@ -3,13 +3,10 @@
 
 %modern
 
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-
-# try importing JSON and YAML modules
 %requires json
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires Util
 %requires QUnit
@@ -127,15 +124,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     dataProviderCreationTest() {
-        checkModules();
-
         # Test creation from schema file path
         hash<auto> opts = {
             "schema": testDir + "/ChatApi.asyncapi.yaml",
@@ -155,8 +144,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     inlineYamlSchemaMarkersTest() {
-        checkModules();
-
         hash<auto> opts = {
             "schema": "%YAML 1.2\n---\n"
                 + File::readTextFile(testDir + "/ChatApi.asyncapi.yaml"),
@@ -167,8 +154,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     channelNavigationTest() {
-        checkModules();
-
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": testDir + "/ChatApi.asyncapi.yaml",
         });
@@ -192,8 +177,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     apiManagementEndpointTest() {
-        checkModules();
-
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": testDir + "/ChatApi.asyncapi.yaml",
         });
@@ -246,8 +229,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     operationNavigationTest() {
-        checkModules();
-
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": testDir + "/ChatApi.asyncapi.yaml",
         });
@@ -282,8 +263,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     messageTypeTest() {
-        checkModules();
-
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": testDir + "/ChatApi.asyncapi.yaml",
         });
@@ -381,8 +360,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     multiMessageUnionTypeTest() {
-        checkModules();
-
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": getMultiMessageSchema(),
         });
@@ -416,8 +393,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     inheritedOperationMessagesTest() {
-        checkModules();
-%ifndef NoYaml
         hash<auto> doc = parse_yaml(getMultiMessageSchema());
         remove doc.operations.publishEvent.messages;
         remove doc.operations.receiveEvent.messages;
@@ -468,12 +443,9 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         AbstractDataProvider restrictedOp = restrictedProvider.getChildProviderPath("events/publishEvent");
         assertEq("HashDataType", restrictedOp.getRequestType().className());
         assertEq(("Alpha",), keys restrictedOp.getMessageTypes());
-%endif
     }
 
     messageSendTransportTest() {
-        checkModules();
-
         CapturingAsyncApiTransport transport();
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": getMultiMessageSchema(),
@@ -497,8 +469,6 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     }
 
     receiveObservableTransportTest() {
-        checkModules();
-
         CapturingAsyncApiTransport transport();
         AsyncApiDataProvider::AsyncApiDataProvider provider({
             "schema": getMultiMessageSchema(),

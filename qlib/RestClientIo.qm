@@ -36,9 +36,7 @@
 %requires Mime >= 1.7
 %requires FileLocationHandler
 
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module xml >= 1.3
 %define NoXml
@@ -640,9 +638,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             ;
 
             const list<auto> AcceptList = (
-%ifndef NoYaml
                 MimeTypeYaml, MimeTypeYamlRpc,
-%endif
 %ifndef NoXml
                 MimeTypeXml, MimeTypeXmlApp,
 %endif

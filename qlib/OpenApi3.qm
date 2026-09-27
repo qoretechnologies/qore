@@ -30,9 +30,7 @@
 # try importing JSON and YAML modules
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module xml
 %define NoXml
@@ -420,7 +418,6 @@ public const ValidNumberFormatsHash = map {$1: True}, ValidNumberFormats;
 #! A hash of valid string type formats
 public const ValidStringFormatsHash = map {$1: True}, ValidStringFormats;
 
-%ifndef NoYaml
 #! Yaml serialization
 const YamlSerialization = {
     "serialize": \make_yaml(),
@@ -428,7 +425,6 @@ const YamlSerialization = {
     "deserialize": \parse_yaml(),
     "module": "yaml",
 };
-%endif
 
 const JsonSerialization = {
     "serialize": \make_json(),
@@ -442,13 +438,11 @@ public const MimeDataTypes =
     # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
     (foldl $1 + $2, (map {$1: JsonSerialization}, keys MimeTypesJson)) +
 {
-%ifndef NoYaml
     # issue #3699: more YAML MIME types must be supported
     MimeTypeYaml: YamlSerialization,
     MimeTypeYamlRpc: YamlSerialization,
     "text/yaml": YamlSerialization,
     "text/x-yaml": YamlSerialization,
-%endif
 %ifndef NoXml
     MimeTypeXmlApp: {
         "serialize": \make_xml(),
@@ -586,7 +580,6 @@ public class OpenApi3Loader {
         - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with JSON module unavailable
-        @throws YAML-MODULE-MISSING trying to parse a YAML %OpenApi3 specification with YAML module unavailable
     */
     static OpenApi3Schema fromString(string openapi3Specification, *bool json, *hash<auto> opts) {
         string ser;
@@ -613,7 +606,6 @@ public class OpenApi3Loader {
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
-        @throws YAML-MODULE-MISSING trying to parse a YAML %OpenApi3 specification with the yaml module unavailable
         @throws XML-MODULE-MISSING trying to parse an XML %OpenApi3 specification with the xml module unavailable
     */
     static OpenApi3Schema fromFile(string filepath, *hash<auto> opts) {
@@ -638,7 +630,6 @@ public class OpenApi3Loader {
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
-        @throws YAML-MODULE-MISSING trying to parse a YAML %OpenApi3 specification with the yaml module unavailable
         @throws XML-MODULE-MISSING trying to parse an XML %OpenApi3 specification with the xml module unavailable
     */
     static OpenApi3Schema fromUrl(string url, *bool json, *hash<auto> opts) {
@@ -662,7 +653,6 @@ public class OpenApi3Loader {
 
         @throws EMPTY-SCHEMA-FILE schema file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
-        @throws YAML-MODULE-MISSING trying to parse a YAML schema specification with the yaml module unavailable
         @throws XML-MODULE-MISSING trying to parse an XML schema specification with the xml module unavailable
     */
     static hash<auto> parseSchemaContent(string filepath, string str) {
@@ -693,12 +683,8 @@ public class OpenApi3Loader {
                 break;
             }
             case "yaml": {
-%ifdef NoYaml
-                throw "YAML-MODULE-MISSING", "Trying to parse a YAML schema, but the yaml module is unavailable";
-%else
                 rv = parse_yaml(str);
                 break;
-%endif
             }
             case "xml": {
 %ifdef NoXml
@@ -8249,11 +8235,7 @@ public class OpenApi3SchemaGenerator {
 
     #! Generate YAML output
     string toYaml() {
-%ifdef NoYaml
-        throw "YAML-NOT-AVAILABLE", "YAML module is not available";
-%else
         return make_yaml(generate(), BlockStyle);
-%endif
     }
 
     #! Generate JSON output

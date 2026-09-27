@@ -37,9 +37,7 @@
 
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 module OpenAiDataProvider {
     version = "1.7";

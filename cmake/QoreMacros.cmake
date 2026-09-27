@@ -2475,7 +2475,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # ${QORE_AOT_PROBE_STAMP} (see root CMakeLists.txt).  ${QCC_FORMAT_STAMP}
     # tracks files that change qmod wire format or qcc compile semantics --
     # not every libqore source edit.  ${QORE_AOT_PROBE_STAMP} tracks which
-    # external binary modules (json, yaml, xml, ...) were loadable at
+    # external binary modules (xml, uuid, msgpack, ...) were loadable at
     # cmake configure time; the .qm sources use %try-module / %ifdef
     # No<Name> to branch on availability, and that decision is baked
     # into the AOT-compiled .qmod, so re-AOT must fire when the probe

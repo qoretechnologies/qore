@@ -615,15 +615,10 @@ public namespace CsvUtil {
         }
 
         #! Serializes a complex value to a string
-        /** Uses YAML serialization when the yaml module is available; otherwise
-            falls back to \c sprintf("%y").
+        /** Uses the bundled YAML serializer for hashes, lists, and other complex values.
         */
         private static string serializeValue(auto v) {
-%ifndef NoCsvYaml
             return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---\\s*", "");
-%else
-            return sprintf("%y", v);
-%endif
         }
 
     } # AbstractCsvWriter class

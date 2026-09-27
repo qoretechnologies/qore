@@ -26,7 +26,7 @@
 %requires qore >= 2.3
 
 # requires the binary yaml module
-%requires yaml >= 0.7
+%requires yaml
 
 # need mime definitions
 %requires Mime >= 1.0

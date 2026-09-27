@@ -131,12 +131,10 @@ public class SuperSoftStringDataType inherits AbstractDataProviderType {
             case NT_DATE:
                 return value.format("IF");
 
-%ifndef NoYaml
             case NT_HASH:
             case NT_LIST:
                 # strip YAML header (e.g., "%YAML 1.2\n--- " or "%YAML 1.2\n---\n") for inline values
                 return regex_subst(trim(make_yaml(value)), "^%YAML [0-9.]+\\n---\\s*", "");
-%endif
 
             default:
                 throw "RUNTIME-TYPE-ERROR", sprintf("This data type does not accept values of type %y (%y)",

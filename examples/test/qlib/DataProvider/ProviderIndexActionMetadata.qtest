@@ -12,9 +12,7 @@
 %requires ProviderIndexUtil
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class ProviderIndexActionMetadataTest
 
@@ -46,7 +44,6 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         addTestCase("a registered action is cached as an indexed action", \registeredActionIsIndexed());
         addTestCase("reading the index returns indexed actions", \readIndex());
 
-%ifndef NoYaml
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
 
@@ -63,15 +60,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
 
         ProviderIndexUtil::setEnvironmentVariable(dir);
         writeIndex();
-%endif
 
         set_return_value(main());
-    }
-
-    private checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
     }
 
     #! Returns the option type used by the test actions
@@ -174,8 +164,6 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     currentFormat() {
-        checkModules();
-
         *list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp(CurrentApp);
         assertEq(1, actions.size());
         hash<auto> action = actions[0];
@@ -202,24 +190,18 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     legacyFormat() {
-        checkModules();
-
         hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(LegacyApp, "send");
         assertEq("string", action.options.subject.type_info.name);
         assertEq("hash<DataTypeInfo>", action.options.subject.type_info.fullType());
     }
 
     serializedFormat() {
-        checkModules();
-
         hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(SerializedApp, "send");
         assertFalse(action.hasKey("output_type"));
         assertEq("auto", action.options.webhook.type_info.name);
     }
 
     dataProviderInfo() {
-        checkModules();
-
         hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "send");
         # an indexed action has no objects, so it can be serialized
         assertEq(action.action, parse_json(make_json(action)).action);
@@ -253,8 +235,6 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     removedAppHasNoActions() {
-        checkModules();
-
         assertEq(1, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp).size());
         assertTrue(ProviderIndexUtil::removeCachedApp(RemovedApp));
         assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
@@ -266,8 +246,6 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     registeredActionIsIndexed() {
-        checkModules();
-
         HashDataType output("QoreTestOutput");
         ProviderIndexUtil::addActionToCache(<DataProviderActionInfo>{
             "app": CachedApp,
@@ -319,8 +297,6 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     readIndex() {
-        checkModules();
-
         hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
         assertEq("hash<DataProviderIndexedActionInfo>", index.actioninfomap{CurrentApp}.send.fullType());
         assertEq("QoreTestIndexedType", index.actioninfomap{CurrentApp}.send.options.webhook.type_info.name);

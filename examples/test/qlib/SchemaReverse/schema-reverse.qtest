@@ -10,9 +10,7 @@
 %requires Schema
 %requires SchemaReverse
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 
@@ -148,9 +146,6 @@ class Main inherits QUnit::Test {
     }
 
     testSchemaReverseToYaml() {
-%ifdef NoYaml
-        testSkip("yaml module not available");
-%else
         if (!m_ds) {
             testSkip("no DB connection");
         }
@@ -174,7 +169,6 @@ class Main inherits QUnit::Test {
         auto parsed_table = parse_yaml(table_yaml);
         assertEq("hash", parsed_table.type(), "parsed table YAML is a hash");
         assertTrue(parsed_table.hasKey("columns"), "table YAML has columns");
-%endif
     }
 
     testSchemaReverseToJson() {

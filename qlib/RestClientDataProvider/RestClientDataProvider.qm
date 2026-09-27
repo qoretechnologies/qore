@@ -38,9 +38,7 @@
 # optional serializers used by the framework-injected GenericApiCallProvider's body_type handling;
 # the auto/json/etc. branches gracefully degrade if a serializer is unavailable
 %requires json
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 %try-module xml >= 1.3
 %define NoXml
 %endtry

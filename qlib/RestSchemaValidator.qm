@@ -45,9 +45,7 @@
 # supports reflection for dynamic schema loading
 %requires reflection
 
-%try-module yaml >= 0.5
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module xml >= 1.3
 %define NoXml
@@ -2581,11 +2579,9 @@ public namespace RestSchemaValidator {
                 (foldl $1 + $2, (map {$1: \make_json()}, keys MimeTypesJson)) +
                 (SupportsCbor ? {MimeTypeCbor: get_call_reference("make_cbor")} : {}) +
             {
-%ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
                 MimeTypeYaml: \make_yaml(),
                 "text/x-yaml": \make_yaml(),
-%endif
 %ifndef NoXml
                 MimeTypeXml: \make_xmlrpc_value(),
                 MimeTypeXmlApp: string sub (auto v) {
@@ -2608,11 +2604,7 @@ public namespace RestSchemaValidator {
                             return s;
                         default:
                             # issue #3547: send as a YAML-serialized string if possible to catch unserializable data
-%ifndef NoYaml
                             return make_yaml(s);
-%else
-                            throw "TEXT-SERIALIZATION-ERROR", sprintf("cannot serialize type %y without YAML support", s.type());
-%endif
                     }
                 },
                 MimeTypeOctetStream: binary sub (auto s) {
@@ -2623,23 +2615,17 @@ public namespace RestSchemaValidator {
                             return s;
                         default:
                             # issue #3547: send as a YAML-serialized string if possible to catch unserializable data
-%ifndef NoYaml
                             return binary(make_yaml(s));
-%else
-                            throw "BINARY-SERIALIZATION-ERROR", sprintf("cannot serialize type %y without YAML support", s.type());
-%endif
                     }
                 },
             };
 
             const DataSerializationSupportList = keys DataSerializationSupport;
 
-%ifndef NoYaml
             const DeserializeYaml = (
                 "code": "yaml",
                 "in": \parse_yaml(),
             );
-%endif
 %ifndef NoXml
             const DeserializeXml = (
                 "code": "xml",
@@ -2671,11 +2657,9 @@ public namespace RestSchemaValidator {
                 (foldl $1 + $2, (map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson)) +
                 (SupportsCbor ? {MimeTypeCbor: {"code": "cbor", "in": get_call_reference("parse_cbor")}} : {}) +
             {
-%ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,
                 MimeTypeYaml: DeserializeYaml,
                 "text/x-yaml": DeserializeYaml,
-%endif
 %ifndef NoXml
                 MimeTypeXml: DeserializeXml,
                 MimeTypeXmlApp: DeserializeXml,
@@ -3170,7 +3154,6 @@ public namespace RestSchemaValidator {
             @return the loaded schema object
 
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with JSON module unavailable
-            @throws YAML-MODULE-MISSING trying to parse a YAML schema with YAML module unavailable
             @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
         */
         static AbstractRestSchemaValidator fromString(string schemaSource, *bool json, *hash<auto> opts) {
@@ -3194,7 +3177,6 @@ public namespace RestSchemaValidator {
 
             @throws EMPTY-SCHEMA-FILE schema file is empty
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
-            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
             @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
             @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
         */
@@ -3219,7 +3201,6 @@ public namespace RestSchemaValidator {
 
             @throws EMPTY-SCHEMA-FILE schema file is empty
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
-            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
             @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
             @throws UNKNOWN-SCHEMA-TYPE unable to detect schema type from parsed content
         */
@@ -3266,7 +3247,6 @@ public namespace RestSchemaValidator {
             @return the parsed schema as a hash
 
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with json module unavailable
-            @throws YAML-MODULE-MISSING trying to parse a YAML schema with yaml module unavailable
             @throws XML-MODULE-MISSING trying to parse an XML schema with xml module unavailable
         */
         static hash<auto> parseSchemaSource(string str, string ser) {
@@ -3277,12 +3257,8 @@ public namespace RestSchemaValidator {
                     break;
                 }
                 case "yaml": {
-%ifdef NoYaml
-                    throw "YAML-MODULE-MISSING", "Trying to parse a YAML schema, but the yaml module is unavailable";
-%else
                     rv = parse_yaml(str);
                     break;
-%endif
                 }
                 case "xml": {
 %ifdef NoXml
@@ -3308,7 +3284,6 @@ public namespace RestSchemaValidator {
 
             @throws EMPTY-SCHEMA-FILE schema file is empty
             @throws JSON-MODULE-MISSING trying to parse a JSON schema with the json module unavailable
-            @throws YAML-MODULE-MISSING trying to parse a YAML schema with the yaml module unavailable
             @throws XML-MODULE-MISSING trying to parse an XML schema with the xml module unavailable
         */
         static hash<auto> parseSchemaContent(string filepath, string str) {

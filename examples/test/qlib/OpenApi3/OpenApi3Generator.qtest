@@ -24,13 +24,11 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
 %requires Mime
@@ -600,9 +598,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
     }
 
     testGeneratorYaml() {
-%ifdef NoYaml
-        testSkip("YAML module not available");
-%else
         OpenApi3::OpenApi3SchemaGenerator gen({
             "title": "YAML Test API",
             "version": "1.0.0",
@@ -618,7 +613,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         assertTrue(yaml =~ /openapi:/);
         assertTrue(yaml =~ /title: "YAML Test API"/ || yaml =~ /title: YAML Test API/);
         assertTrue(yaml =~ /\/test:/ || yaml =~ /\/test/);
-%endif
     }
 
     testGeneratorJson() {
@@ -644,9 +638,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
     }
 
     testRoundTrip() {
-%ifdef NoYaml
-        testSkip("YAML module not available");
-%else
         # Parse source content
         list<hash<OpenApi3::RestMethodInfo>> methods = OpenApi3::OpenApi3SchemaTokenizer::parseSourceContent(SampleSourceContent);
 
@@ -692,7 +683,6 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         string yaml = gen.toYaml();
         OpenApi3::OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(yaml);
         assertEq("Round Trip Test", schema.info.title);
-%endif
     }
 
     testEmptySchemaBlock() {
@@ -1245,9 +1235,6 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
     }
 
     testExtendedTagsInGenerator() {
-%ifdef NoYaml
-        testSkip("no yaml module available");
-%endif
         OpenApi3::OpenApi3SchemaGenerator gen({
             "title": "Test API",
             "version": "1.0.0",

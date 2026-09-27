@@ -7,16 +7,14 @@
 %requires QUnit
 %requires RestSchemaActions
 %requires json
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
-%exec-class RestSchemaOptionalYamlTest
+%exec-class RestSchemaYamlTest
 
-class RestSchemaOptionalYamlTest inherits QUnit::Test {
-    constructor() : Test("RestSchemaOptionalYamlTest", "1.0") {
+class RestSchemaYamlTest inherits QUnit::Test {
+    constructor() : Test("RestSchemaYamlTest", "1.0") {
         addTestCase("JSON serialization without external modules", \jsonTest());
-        addTestCase("YAML availability", \yamlTest());
+        addTestCase("Bundled YAML serialization", \yamlTest());
         set_return_value(main());
     }
 
@@ -28,18 +26,9 @@ class RestSchemaOptionalYamlTest inherits QUnit::Test {
     }
 
     private yamlTest() {
-%ifdef NoYaml
-        assertEq(False, RestSchemaImporter::yamlCoreSchemaSupported());
-        assertThrows("YAML-MODULE-MISSING", sub () {
-            RestSchemaImporter::parseYamlDocument("openapi: 3.0.0\n");
-        });
-        assertThrows("YAML-MODULE-MISSING", sub () {
-            RestSchemaImporter::serialize({"openapi": "3.0.0"}, False);
-        });
-%else
+        assertTrue(RestSchemaImporter::yamlCoreSchemaSupported());
         hash<auto> schema = {"openapi": "3.0.0"};
         string text = RestSchemaImporter::serialize(schema, False);
         assertEq(schema, RestSchemaImporter::parseYamlDocument(text));
-%endif
     }
 }

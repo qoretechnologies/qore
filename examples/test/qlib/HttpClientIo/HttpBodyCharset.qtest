@@ -40,9 +40,7 @@
 %requires RestClient
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %exec-class HttpBodyCharsetTest
 
@@ -591,7 +589,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
             }
         }
-%ifndef NoYaml
         # YAML is deserialized from its actual encoding, including one given by a byte order mark
         foreach string name in ("yaml", "yaml-bom") {
             foreach string variant in (Variants) {
@@ -599,7 +596,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
             }
         }
-%endif
     }
 
     restClientTest() {
@@ -626,9 +622,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"}) {
             RestClientIo rest({"url": i.url, "protocol": i.protocol, "ssl_verify_mode": SSL_VERIFY_NONE});
             list<string> names = getRestCases() + ("json", "json-charset");
-%ifndef NoYaml
             names += ("yaml", "yaml-bom");
-%endif
             foreach string name in (names) {
                 hash<CharsetCase> c = TestHandler::Cases{name};
                 foreach string variant in (Variants) {

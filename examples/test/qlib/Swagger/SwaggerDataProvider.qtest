@@ -3,18 +3,12 @@
 
 %modern
 
-# try importing JSON and YAML modules
-%requires json
-%try-module yaml
-%define NoYaml
-%endtry
-
-%ifdef NoYaml
-# Stub function when yaml module is not available
-auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
-%endif
-
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
+
 %requires Util
 %requires Mime
 %requires QUnit
@@ -49,14 +43,7 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     compatTest() {
-        checkModules();
         hash<auto> schema = {
             "swagger": "2.0",
             "info": {
@@ -123,8 +110,6 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
         callers can no longer detect transient conditions such as HTTP 429.
     */
     errorArgPreservationTest() {
-        checkModules();
-
         Logger logger("test", m_options.verbose > 2
             ? LoggerLevel::getLevelInfo() : LoggerLevel::getLevelFatal());
         if (m_options.verbose > 2) {
@@ -161,8 +146,6 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
     }
 
     testSwaggerDataProvider() {
-        checkModules();
-
         bool set = AbstractDataProvider::setDynamicValueCallbacks(
             bool sub (auto uri_path) { return uri_path =~ /\$/; },
             auto sub (auto uri_path) { uri_path =~ s/\$id/1/; return uri_path; });

@@ -13,9 +13,7 @@
 %requires ../../../../qlib/SchemaReverse.qmod
 %requires ../../../../qlib/Schema/Schema.qmod
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./SqlUtilTestBase.qm

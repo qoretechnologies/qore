@@ -35,9 +35,7 @@
 %requires FileLocationHandler
 
 %requires json
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 module RestSchemaActions {
     version = "1.0";
@@ -56,8 +54,7 @@ module RestSchemaActions {
     The %RestSchemaActions module provides the reusable machinery for turning an explicitly selected
     set of operations in a REST schema into data provider application actions.
 
-    JSON schemas work without external modules. Importing or exporting YAML requires the separately
-    installed \c yaml module; YAML operations report \c YAML-MODULE-MISSING when it is unavailable.
+    JSON and YAML schemas use the bundled \c json and \c yaml modules.
 
     It exists because a schema describes a **transport contract**, and an application action is a
     **product decision**.  A schema says which parameters an operation takes; it does not say which

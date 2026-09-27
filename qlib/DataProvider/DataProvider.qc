@@ -2229,16 +2229,12 @@ if (action.data_provider_info) {
                 return "";
             }
         }
-%ifndef NoYaml
         # return any template references as-is
         if (v.typeCode() == NT_STRING && (v =~ /^\$[a-z][-a-z]+:({.*}|[a-zA-Z0-9_\.]+|'.*')$/)) {
             return v;
         }
         # strip YAML header (e.g., "%YAML 1.2\n--- " or "%YAML 1.2\n---\n") for inline rendering
         return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---\\s*", "");
-%else
-        throw "MISSING-YAML", "Missing YAML module";
-%endif
     }
 
     #! Renders the expression from the template

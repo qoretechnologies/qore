@@ -763,9 +763,9 @@ Current usages to migrate:
   do not need the `%try-module` pattern. That covers the user modules under `qlib/`
   (`HttpServer`, `Mime`, `Logger`, `HttpServerUtil`, `DataProvider`, `ConnectionProvider`,
   `QUnit`, …) **and** the binary modules built from this repo under `modules/` — notably
-  `json`, which is built here and hard-required by ~100 in-tree modules and their tests.
+  `json` and `yaml`, which are built here and required by standard library modules and their tests.
 - Only use `%try-module` for binary modules from other repos (e.g., `xml` from module-xml,
-  `yaml` from module-yaml, `sqlite3`, `uuid`) that may not be installed.
+  `sqlite3`, `uuid`) that may not be installed.
 
 ## Checklist
 

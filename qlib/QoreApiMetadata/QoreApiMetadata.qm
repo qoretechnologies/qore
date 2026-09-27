@@ -32,9 +32,7 @@
 
 %requires json
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 module QoreApiMetadata {
     version = "1.0";

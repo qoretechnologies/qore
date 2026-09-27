@@ -11,9 +11,7 @@
 %requires DataProvider
 %requires ProviderIndexUtil
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module msgpack
 %define NoMsgPack
@@ -45,9 +43,6 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
     }
 
     private checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
 %ifdef NoMsgPack
         testSkip("no msgpack module");
 %endif

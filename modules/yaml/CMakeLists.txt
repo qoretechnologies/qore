@@ -1,8 +1,6 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
-find_package(LibYAML REQUIRED)
-
 if (NOT QORE_MODULES_DIR)
     set(QORE_MODULES_DIR ${MODULE_DIR})
 endif()

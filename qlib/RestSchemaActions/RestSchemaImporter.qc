@@ -321,10 +321,8 @@ public class RestSchemaImporter {
         const NormalizationMarker = "x-qore-normalized";
 
         #! The value of the yaml module's \c YAML::ParseCoreSchema parse option
-        /** Used by value so that this module loads with a yaml module that does not provide the option;
-            @ref yamlCoreSchemaSupported() verifies its meaning before it is used
-        */
-        const YamlParseCoreSchema = 1;
+        /** Alias for the bundled YAML parser's core schema option. */
+        const YamlParseCoreSchema = YAML::ParseCoreSchema;
 
         #! The provenance fields this class can supply
         /** Used by @ref updateProvenanceSource() to decide which members of an application's provenance
@@ -512,35 +510,18 @@ public class RestSchemaImporter {
     /** A vendor document is JSON-compatible YAML.  Parsed with the yaml module's default resolution, a plain
         scalar that looks like a Qore date or duration becomes one, so an example timestamp would be written back
         in the local time zone and Paddle's country code \c PT as \c P0D.  The document is therefore parsed with
-        the YAML 1.2 core schema; a yaml module that cannot do that parses it with its default resolution, and the
-        document is rejected if that produced any value that a JSON-compatible document cannot contain.
+        the YAML 1.2 core schema supplied by the bundled yaml module.
 
         @param text the YAML document
 
         @return the parsed document
 
-        @throw YAML-MODULE-MISSING the external yaml module is unavailable
-        @throw REST-SCHEMA-IMPORT-ERROR the yaml module cannot parse with the YAML 1.2 core schema (see
-        @ref yamlCoreSchemaSupported()), and its default resolution converted a scalar of the document
+        @throw YAML-PARSER-ERROR the document is not valid YAML
 
         @since RestSchemaActions 1.0
     */
     static auto parseYamlDocument(string text) {
-%ifdef NoYaml
-        throw "YAML-MODULE-MISSING", "Parsing YAML schemas requires the yaml module";
-%else
-        if (RestSchemaImporter::yamlCoreSchemaSupported()) {
-            return call_function("parse_yaml", text, YamlParseCoreSchema);
-        }
-        auto parsed = parse_yaml(text);
-        *string converted = RestSchemaImporter::findConvertedScalar(parsed);
-        if (converted) {
-            throw "REST-SCHEMA-IMPORT-ERROR", sprintf("%s; the yaml module converted this plain scalar and cannot "
-                "parse the document with the YAML 1.2 core schema (YAML::ParseCoreSchema, yaml 1.3 or later), "
-                "so the document would be written back changed", converted);
-        }
-        return parsed;
-%endif
+        return parse_yaml(text, YamlParseCoreSchema);
     }
 
     #! Returns the location and value of the first value a JSON-compatible document cannot contain, if any
@@ -578,18 +559,12 @@ public class RestSchemaImporter {
         }
     }
 
-    #! Returns @ref True if the yaml module can parse a document with the YAML 1.2 core schema
-    /** The option is used by value rather than by name, so that this module loads with a yaml module that does
-        not provide it; this method verifies that the option has its meaning: a plain timestamp stays a string
+    #! Returns @ref True because the bundled yaml module supports the YAML 1.2 core schema
+    /** Retained for compatibility with callers checking core schema support.
+        @return @ref True
     */
     static bool yamlCoreSchemaSupported() {
-        try {
-            return call_function("parse_yaml", "v: 2025-03-05T14:59:25Z", YamlParseCoreSchema).v
-                === "2025-03-05T14:59:25Z";
-        } catch (hash<ExceptionInfo> ex) {
-            # no parse_yaml(string, int) variant, or the option has another meaning
-            return False;
-        }
+        return True;
     }
 
     static hash<RestSchemaSourceInfo> fetch(string source) {
@@ -1082,8 +1057,6 @@ public class RestSchemaImporter {
 
         @return the serialized document, with a trailing newline
 
-        @throw YAML-MODULE-MISSING YAML output was requested but the external yaml module is unavailable
-
         @note %Qore hashes preserve insertion order and
         @ref RestSchemaActions::RestSchemaPruner "RestSchemaPruner" emits members in the source document's
         own order, so the same input and selection always produce byte-identical output.
@@ -1093,11 +1066,7 @@ public class RestSchemaImporter {
         if (json) {
             rv = make_json(schema, JGF_ADD_FORMATTING);
         } else {
-%ifdef NoYaml
-            throw "YAML-MODULE-MISSING", "Serializing YAML schemas requires the yaml module";
-%else
             rv = make_yaml(schema, YAML::BlockStyle);
-%endif
         }
         if (rv.substr(-1) != "\n") {
             rv += "\n";

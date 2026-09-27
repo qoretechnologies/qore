@@ -3,13 +3,10 @@
 
 %modern
 
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-
-# try importing JSON and YAML modules
 %requires json
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires Util
 %requires QUnit
@@ -41,12 +38,6 @@ public class AsyncApiTest inherits QUnit::Test {
         addTestCase("external dependency classification", \externalDependencyClassificationTest());
         addTestCase("public schemas test", \publicSchemasTest());
         set_return_value(main());
-    }
-
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
     }
 
     #! Returns True if the supplied exception comes from an unavailable network.
@@ -146,8 +137,6 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     schemaParsingTest() {
-        checkModules();
-
         # Test loading from YAML file
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
         assertEq("Chat API", schema.info.title);
@@ -166,8 +155,6 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     messageValidationTest() {
-        checkModules();
-
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
 
         # Test valid outgoing message
@@ -350,8 +337,6 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     refResolutionTest() {
-        checkModules();
-
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
 
         # Test channel lookup
@@ -381,8 +366,6 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     channelOperationsTest() {
-        checkModules();
-
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
 
         # Test getChannelOperationHash
@@ -412,8 +395,6 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     validationConstraintsTest() {
-        checkModules();
-
         AsyncApi::AsyncApi3Schema schema = AsyncApi::AsyncApi3Loader::fromFile(testDir + "/ChatApi.asyncapi.yaml");
 
         # Test string length validation
@@ -466,8 +447,6 @@ public class AsyncApiTest inherits QUnit::Test {
 
     #! Test parsing of @example JSON blocks in event and message schemas
     exampleParsingTest() {
-        checkModules();
-
         # Test @example parsing in event schema
         hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock('
 @EVENT WORKFLOW_STATUS_CHANGED
@@ -620,8 +599,6 @@ public class AsyncApiTest inherits QUnit::Test {
 
     #! Test parsing of public, known-good AsyncAPI 3.0 schemas from GitHub
     publicSchemasTest() {
-        checkModules();
-
         string baseUrl = AsyncApiTest::getPublicSchemaBaseUrl();
 
         # Official AsyncAPI example schemas from the spec repository

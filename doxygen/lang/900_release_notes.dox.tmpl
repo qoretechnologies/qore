@@ -727,17 +727,20 @@ val = "string";      # OK
       built-in module for dynamic Protocol Buffer schema loading, encoding, and decoding
     - <b>Kerberos 5 / GSSAPI</b>: provides the @ref krb5intro "krb5" built-in module
       for <a href="https://web.mit.edu/kerberos/">Kerberos</a> credential, keytab, <a href="https://datatracker.ietf.org/doc/html/rfc2743">GSSAPI</a>, <a href="https://datatracker.ietf.org/doc/html/rfc4178">SPNEGO</a>, and <a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP Negotiate</a> primitives
+    - <b>LibYAML</b>: provides the bundled @ref yamlintro "yaml" module for parsing and serialization,
+      YAML 1.2 core schema resolution, and streaming APIs. CMake requires the LibYAML headers and library;
+      standard library modules use \c "%requires yaml" and YAML support is always available.
 
     Systems that previously built %Qore without these libraries will need to install the
     development packages:
     - <b>Debian/Ubuntu:</b> \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev, \c libeigen3-dev,
-      \c libicu-dev, \c libprotobuf-dev, \c libkrb5-dev
+      \c libicu-dev, \c libprotobuf-dev, \c libkrb5-dev, \c libyaml-dev
     - <b>RHEL/Fedora:</b> \c brotli-devel, \c libzstd-devel, \c lz4-devel, \c eigen3-devel,
-      \c libicu-devel, \c protobuf-devel, \c krb5-devel
+      \c libicu-devel, \c protobuf-devel, \c krb5-devel, \c libyaml-devel
     - <b>Alpine:</b> \c brotli-dev, \c zstd-dev, \c lz4-dev, \c eigen-dev, \c protobuf-dev,
-      \c icu-dev, \c icu-data-full, \c krb5-dev
-    - <b>macOS (Homebrew):</b> \c eigen, \c icu4c, \c protobuf, \c krb5
-    - <b>macOS (MacPorts):</b> \c eigen3, \c icu, \c protobuf3-cpp, \c kerberos5
+      \c icu-dev, \c icu-data-full, \c krb5-dev, \c yaml-dev
+    - <b>macOS (Homebrew):</b> \c eigen, \c icu4c, \c protobuf, \c krb5, \c libyaml
+    - <b>macOS (MacPorts):</b> \c eigen3, \c icu, \c protobuf3-cpp, \c kerberos5, \c libyaml
 
     The corresponding async-stack development packages (\c nghttp2, \c ngtcp2, \c ngtcp2_crypto_ossl,
     \c nghttp3, \c c-ares) are optional; see the \c BUILDING file for per-platform package names and
@@ -2618,6 +2621,8 @@ while (*binary chunk = input.read(65536)) {
         YAML parsing, serialization, YAML 1.2 core schema resolution, and streaming APIs are always available
       - all twelve companion modules ship with %Qore, including Connect RPC, DataStream, YAML-RPC,
         YAML schema validation, custom tag handling, and YAML document data providers
+      - standard library modules require the bundled YAML module unconditionally; optional-module checks,
+        missing-YAML fallbacks, and YAML-dependent test skips have been removed
 
     @subsection qore_3_0_0_new_user_modules New User Modules
     - @ref a2aclientintro "A2aClient" module

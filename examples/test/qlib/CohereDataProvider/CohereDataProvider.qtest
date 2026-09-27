@@ -12,12 +12,7 @@
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/DataProvider
-%try-module yaml
-%define MissingYaml
-%endtry
-%ifdef MissingYaml
-printf("SKIP: this test requires the external yaml module\n");
-%else
+%requires yaml
 %requires ../../../../qlib/RestSchemaActions
 %requires ../../../../qlib/CohereDataProvider
 
@@ -647,5 +642,3 @@ public class CohereDataProviderTest inherits QUnit::Test {
             "Cohere returned non-empty embedding vector");
     }
 }
-
-%endif

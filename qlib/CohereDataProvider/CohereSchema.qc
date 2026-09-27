@@ -110,7 +110,6 @@ public class CohereSchema {
     #! Returns the parsed vendored schema, parsing it on first use
     /** @return the shared schema
         @throw EMPTY-SCHEMA-FILE the vendored resource is empty
-        @throw YAML-MODULE-MISSING the YAML parser is unavailable
     */
     static OpenApi3::OpenApi3Schema getSchema() {
         AutoLock al(lck);

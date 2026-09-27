@@ -37,9 +37,7 @@
 # don't use "$" signs for variables and class members, assume local variable scope
 %modern
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %requires json
 

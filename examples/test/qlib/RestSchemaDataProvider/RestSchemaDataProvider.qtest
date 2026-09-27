@@ -3,13 +3,11 @@
 
 %modern
 
-# try importing JSON and YAML modules
-%requires json
-%try-module yaml
-%define NoYaml
-%endtry
-
+# Load the bundled JSON and YAML modules
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
 %requires Util
 %requires Mime
 %requires QUnit
@@ -53,15 +51,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     testSwaggerSchema() {
-        checkModules();
-
         bool set = AbstractDataProvider::setDynamicValueCallbacks(
             bool sub (auto uri_path) { return uri_path =~ /\$/; },
             auto sub (auto uri_path) { uri_path =~ s/\$id/1/; return uri_path; });
@@ -128,8 +118,6 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
     }
 
     testOpenApi3Schema() {
-        checkModules();
-
         hash<auto> opts = {
             "schema": get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml",
         };
@@ -168,8 +156,6 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
     # with a "%YAML 1.2" version directive and/or a "---" document-start marker, in flow style; such a
     # document was previously misclassified as a filesystem path and failed to open (qorus#327 follow-up).
     testInlineSchemaContentDetection() {
-        checkModules();
-
         # 1. "%YAML 1.2" directive + "---" marker + flow style (the exact shape make_yaml() emits by
         #    default, and the shape that triggered the original failure)
         {
@@ -209,8 +195,6 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
     }
 
     testOpenApi3SchemaComposition() {
-        checkModules();
-
         # Test allOf - value must match all schemas
         {
             string schema_yaml = "openapi: '3.0.0'
@@ -478,8 +462,6 @@ paths:
     }
 
     testOpenApi3TypeValidation() {
-        checkModules();
-
         # Test basic type validation with simple schema
         {
             string schema_yaml = "openapi: '3.0.0'
@@ -949,8 +931,6 @@ paths:
     }
 
     testInlineYamlSchemaMarkers() {
-        checkModules();
-
         string openapi_schema = '%YAML 1.2
 --- {openapi: "3.0.3", info: {title: "YAML Marker OpenAPI", version: "1.0.0"}, paths: {/ping: {get: {operationId: "ping", responses: {200: {description: "ok"}}}}}}
 ';
@@ -969,8 +949,6 @@ paths:
     }
 
     testOpenApi31Features() {
-        checkModules();
-
         # Test OpenAPI 3.1 schema with nullable types (type array syntax)
         {
             string schemaStr = '{
@@ -1050,8 +1028,6 @@ paths:
     }
 
     testAbstractValidatorQueryDateOptions() {
-        checkModules();
-
         AbstractRestSchemaValidator null_validator = new NullRestSchemaValidator();
         assertEq(NOTHING, null_validator.getUtcDates());
         assertEq(NOTHING, null_validator.getQueryDateFormat());
@@ -1094,8 +1070,6 @@ paths:
     }
 
     testOverlappingSwaggerPaths() {
-        checkModules();
-
         string schema = '{
             "swagger": "2.0",
             "info": {"title": "AOT Reference Test", "version": "1"},
@@ -1132,8 +1106,6 @@ paths:
         no longer detect transient conditions such as HTTP 429.
     */
     testErrorArgPreservation() {
-        checkModules();
-
         HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelFatal())});
         on_exit http.stop();
         RateLimitHandler handler();
@@ -1160,8 +1132,6 @@ paths:
     }
 
     testFactory() {
-        checkModules();
-
         RestSchemaDataProviderFactory factory();
         hash<DataProviderFactoryInfo> info = factory.getInfo();
         assertEq("restschema", info.name);
