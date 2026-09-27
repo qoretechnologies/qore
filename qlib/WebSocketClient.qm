@@ -3728,7 +3728,7 @@ class MyObserver inherits Observer {
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     sendData(auto value) {
-        hash<auto> headers;
+        hash<auto> headers = {};
         validateOutgoingMessage(\value, \headers);
         send(serializeData(value));
     }

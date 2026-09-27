@@ -2463,6 +2463,8 @@ while (*binary chunk = input.read(65536)) {
         \c truncation, \c max_chunks_per_doc, and \c return_documents to Voyage
 
     - @ref websocketclientintro "WebSocketClient" module
+      - serialized outgoing messages initialize the headers hash before AsyncAPI validation, avoiding a
+        runtime type error for messages sent without headers
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
