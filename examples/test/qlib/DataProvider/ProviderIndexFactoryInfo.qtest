@@ -1,0 +1,895 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module process >= 2.1
+%define NoProcess
+%endtry
+
+%exec-class ProviderIndexFactoryInfoTest
+
+#! Tests the data provider factory info recorded in the data provider index
+public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
+    private {
+        # the Qore interpreter that runs the reader processes
+        string qore_bin;
+
+        # environment variables changed by the tests and their original values
+        hash<string, auto> saved_env;
+
+        # the directory of the in-tree modules
+        string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    constructor() : Test("ProviderIndex factory info test", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore_bin.find(DirSep) >= 0) {
+            qore_bin = normalize_dir(qore_bin);
+        }
+
+        addTestCase("the factory info is recorded in the metadata cache", \writeTest());
+        addTestCase("the factory info is read without loading any module", \readTest());
+        addTestCase("the known factories are listed from the index", \listKnownFactoriesTest());
+        addTestCase("an index without factory info is detected", \notRecordedTest());
+        addTestCase("an index published with metadata cache version 5 is read", \version5Test());
+        addTestCase("the factory info is in the canonical index file and its YAML", \canonicalTest());
+        addTestCase("corrupt factory info is reported and not used", \integrityTest());
+        addTestCase("listing apps does not read the factory info", \appsDoNotReadFactoryInfoTest());
+        addTestCase("a factory info file that is no longer referenced is removed", \staleFileRemovedTest());
+        addTestCase("the info without type information matches the factory's", \withoutTypeInfoTest());
+        addTestCase("a worker build records the factory info without loading the module", \workerBuildTest());
+        addTestCase("an index build records the info of every registered factory", \buildTest());
+        addTestCase("a reader process lists the factories without loading their modules", \readerProcessTest());
+        addTestCase("a reader process loads a factory's module for an index without factory info",
+            \readerProcessFallbackTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules(*bool process) {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+        if (process) {
+%ifdef NoJson
+            testSkip("no json module");
+%endif
+        }
+    }
+
+    #! Sets a process environment variable until restoreEnv() is called; child processes inherit it
+    private setEnv(string var, *string value) {
+        if (!saved_env.hasKey(var)) {
+            saved_env{var} = getenv(var);
+        }
+        if (exists value) {
+            setenv(var, value);
+            ENV{var} = value;
+        } else {
+            unsetenv(var);
+            remove ENV{var};
+        }
+    }
+
+    #! Restores the environment variables changed by setEnv(), and the index state of this process
+    private restoreEnv() {
+        foreach hash<auto> i in (saved_env.pairIterator()) {
+            if (exists i.value) {
+                setenv(i.key, i.value);
+                ENV{i.key} = i.value;
+            } else {
+                unsetenv(i.key);
+                remove ENV{i.key};
+            }
+        }
+        saved_env = {};
+        resetIndexState();
+    }
+
+    #! Uses the given index directory until restoreEnv() is called
+    private useIndexDir(string dir) {
+        setEnv(ProviderIndexEnvVar, dir);
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+    }
+
+    #! Discards the index state of this process, so that the next lookup reads the published index
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    #! Returns the info of a factory in the index, as getInfoAsData() returns it with type information
+    private static hash<auto> getTestFactoryInfo(string desc = "orders") {
+        return {
+            "name": "qoretest",
+            "desc": desc,
+            "api_management": False,
+            "provider_info": {
+                "type": "QoreTestProvider",
+                "constructor_options": {
+                    "url": {
+                        "type": ("string",),
+                        "type_info": ({"name": "string", "unique_key": "1"},),
+                        "desc": "the order service URL",
+                        "required": True,
+                    },
+                },
+                "expressions": {
+                    "qoretest-eq": {
+                        "args": ({"type_code": "VALUE", "type": "string"},),
+                        "return_type": "bool",
+                        "arg_type_info": ({"type_code": "VALUE", "type": {"name": "string"}},),
+                        "return_type_info": {"name": "bool"},
+                        "desc": "equality",
+                    },
+                },
+                "events": {
+                    "created": {
+                        "desc": "an order was created",
+                        "type": "hash",
+                        "type_info": {"name": "hash"},
+                    },
+                },
+            },
+        };
+    }
+
+    #! Returns the maps of a test index with factory info
+    private static hash<auto> getTestMaps(*hash<auto> factoryinfomap) {
+        hash<auto> rv = {
+            "factorymap": {"qoretest": "QoreTestFactoryModule", "qoretest-noinfo": "QoreTestNoInfoModule"},
+            "appmap": {"QoreTestOrders": {"QoreTestModule": True}},
+            "schememap": {},
+            "appinfomap": {"QoreTestOrders": {"name": "QoreTestOrders", "desc": "orders"}},
+        };
+        if (exists factoryinfomap) {
+            rv.factoryinfomap = factoryinfomap;
+        }
+        return rv;
+    }
+
+    #! Writes a test index to the configured directory
+    private static hash<ProviderIndexInfo> writeTestIndex(*bool canonical, hash<auto> maps) {
+        hash<auto> actions = {
+            "QoreTestOrders": {
+                "create-order": {"app": "QoreTestOrders", "action": "create-order", "desc": "creates an order"},
+            },
+        };
+        return ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
+            return actions{app};
+        }, 0s, {}, canonical);
+    }
+
+    #! Returns the routing index in the given index directory
+    private static hash<auto> readRouting(string dir) {
+        return parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+    }
+
+    #! Returns the metadata cache manifest in the given index directory
+    private hash<auto> readManifest(string dir) {
+%ifndef NoMsgPack
+        list<string> manifests = glob(dir + DirSep + "qore-data-index-manifest-*.msgpack");
+        assertEq(1, manifests.size(), "one manifest");
+        return msgpack_unpack(ReadOnlyFile::readBinaryFile(manifests[0]), MSGPACK_QORE_MODE);
+%else
+        return {};
+%endif
+    }
+
+    #! Returns the path of the factory info file of the index in the given directory
+    private string getFactoryInfoPath(string dir) {
+        hash<auto> manifest = readManifest(dir);
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.factories.sha256);
+    }
+
+    #! Writes a file
+    private static writeFile(string path, data contents) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
+    }
+
+    #! Returns the given value without the unique keys of its type descriptions, which identify objects by address
+    private static auto removeUniqueKeys(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                return map {$1.key: removeUniqueKeys($1.value)}, value.pairIterator(), $1.key != "unique_key";
+            case NT_LIST:
+                return map removeUniqueKeys($1), value;
+        }
+        return value;
+    }
+
+    #! Writes a provider module registering one factory, and a registration module for QORE_DATA_PROVIDERS
+    /** @param dir the directory to write the modules to
+        @param name the name of the provider module
+        @param factory the name of the factory
+
+        @return the path of the registration module
+    */
+    private static string writeFactoryFixture(string dir, string name, string factory) {
+        string provider = sprintf("%s%s%s.qm", dir, DirSep, name);
+        writeFile(provider, sprintf("%%modern
+%%requires DataProvider
+module %s {
+    version = \"1.0\"; desc = \"factory info fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+    init = sub () {
+        DataProvider::registerFactory(new %s::Factory());
+    };
+}
+public namespace %s {
+public class Provider inherits AbstractDataProvider {
+    public {
+        static hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
+            \"type\": \"%sProvider\",
+            \"constructor_options\": {
+                \"url\": <DataProviderOptionInfo>{
+                    \"type\": AbstractDataProviderType::get(StringType),
+                    \"desc\": \"the order service URL\",
+                    \"required\": True,
+                },
+                \"limit\": <DataProviderOptionInfo>{
+                    \"type\": AbstractDataProviderType::get(IntOrNothingType),
+                    \"desc\": \"the maximum number of orders\",
+                },
+            },
+        };
+    }
+    constructor(*hash<auto> options) {
+    }
+    string getName() {
+        return %y;
+    }
+    *string getDesc() {
+        return \"orders\";
+    }
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+public class Factory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class(\"%s::Provider\");
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            \"name\": %y,
+            \"desc\": \"the order service data provider factory\",
+        };
+    }
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return Provider::ProviderInfo;
+    }
+    private Class getClassImpl() {
+        return cls;
+    }
+}
+}
+", name, name, name, name, factory, name, factory));
+
+        string registration = sprintf("%s%s%sRegistration.qm", dir, DirSep, name);
+        writeFile(registration, sprintf("%%modern
+module %sRegistration {
+    version = \"1.0\"; desc = \"factory info fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+}
+public hash<string, string> sub get_data_provider_map() {
+    return {%y: %y};
+}
+", name, factory, provider));
+        return registration;
+    }
+
+    #! Returns the options of a build that indexes only the providers registered by QORE_DATA_PROVIDERS
+    private static hash<ProviderIndexCreateOptions> getBuildOptions(int workers = 0) {
+        return <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_typescript_actions": False,
+            "workers": workers,
+        };
+    }
+
+    #! Runs a reader process for the given index and returns what it found
+    /** @param index_dir the index directory
+        @param module_dir the directory of the fixture modules
+        @param factory the factory to get the info of
+        @param mod the module of the factory
+    */
+    private hash<auto> runReader(string index_dir, string module_dir, string factory, string mod) {
+%ifdef NoJson
+        return {};
+%else
+        string script = module_dir + DirSep + "reader.q";
+        writeFile(script, "%modern
+%requires DataProvider
+%requires json
+string factory = ARGV[0];
+string mod = ARGV[1];
+list<string> known = DataProvider::listKnownFactories();
+bool loaded_by_listing = exists get_module_hash(){mod};
+bool has_info = ProviderIndexUtil::hasIndexedFactoryInfo();
+*hash<auto> info = DataProvider::tryGetFactoryInfoAsData(factory, True);
+*hash<auto> data_info = DataProvider::tryGetFactoryInfoAsData(factory);
+printf(\"%s\\n\", make_json({
+    \"known\": known,
+    \"loaded_by_listing\": loaded_by_listing,
+    \"has_info\": has_info,
+    \"info\": info,
+    \"data_info\": data_info,
+    \"loaded\": exists get_module_hash(){mod},
+    \"registered\": inlist(factory, DataProvider::listFactories()),
+    \"indexed\": ProviderIndexUtil::getIndexedFactories(),
+    \"index_error\": ProviderIndexUtil::getIndexReadError(),
+}));
+");
+        string cmd = sprintf("env QORE_MODULE_DIR=%s %s=%s QORE_DATA_PROVIDERS= %s %s %s %s 2>&1",
+            quote(module_dir + PathSep + qlib_dir + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "")),
+            ProviderIndexEnvVar, quote(index_dir), quote(qore_bin), quote(script), quote(factory), quote(mod));
+        string out = backquote(cmd);
+        try {
+            return parse_json(out);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "READER-ERROR", out;
+        }
+%endif
+    }
+
+    #! Returns a quoted shell argument
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    writeTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        hash<auto> factory_info = getTestFactoryInfo();
+        writeTestIndex(False, getTestMaps({"qoretest": factory_info}));
+
+        # the routing index stays compact: it holds no factory info
+        hash<auto> routing = readRouting(dir);
+        assertFalse(routing.hasKey("factoryinfomap"), "no factory info in the routing index");
+        assertEq(6, routing.metadata_cache_version);
+        assertEq({"qoretest": "QoreTestFactoryModule", "qoretest-noinfo": "QoreTestNoInfoModule"},
+            routing.factorymap);
+
+        # the manifest references the factory info file with its size and digest
+        hash<auto> manifest = readManifest(dir);
+        assertEq(6, manifest.version);
+        string path = getFactoryInfoPath(dir);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        assertEq(data.size(), manifest.factories.size);
+        assertEq(digest("sha256", data).toHex(), manifest.factories.sha256);
+%ifndef NoMsgPack
+        assertEq({"qoretest": factory_info}, msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE));
+%endif
+
+        # a published index is read with its factory info
+        hash<auto> index = ProviderIndexUtil::readSerializedDataProviderIndex(dir).index;
+        assertEq({"qoretest": factory_info}, index.factoryinfomap);
+        assertEq({"qoretest": factory_info}, ProviderIndexUtil::readDataProviderIndex().factoryinfomap);
+        # the factory info is not per-app metadata, so it is returned with the maps when apps are read one at a time
+        index = ProviderIndexUtil::readSerializedDataProviderIndex(dir, sub (string app, *hash<auto> info,
+                *hash<auto> actions) {}).index;
+        assertEq({"qoretest": factory_info}, index.factoryinfomap);
+        # the size of the index includes the factory info file
+        int size = ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).size;
+        assertTrue(size > data.size());
+
+        # the same index is always written identically
+        string sha256 = ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).sha256;
+        writeTestIndex(False, getTestMaps({"qoretest": factory_info}));
+        assertEq(sha256, ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).sha256);
+    }
+
+    readTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        hash<auto> factory_info = getTestFactoryInfo();
+        writeTestIndex(False, getTestMaps({"qoretest": factory_info}));
+
+        assertTrue(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertEq(("qoretest", "qoretest-noinfo"), ProviderIndexUtil::getIndexedFactories());
+        assertEq(factory_info, ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+        assertNothing(ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest-noinfo"), "a factory without info");
+        assertNothing(ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest-unknown"), "an unknown factory");
+        assertEq({"qoretest": factory_info}, ProviderIndexUtil::getIndexedFactoryInfoMap());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the factory is not registered, and its module does not exist: the info comes from the index
+        assertEq(factory_info, DataProvider::tryGetFactoryInfoAsData("qoretest", True));
+        hash<auto> data_info = DataProvider::tryGetFactoryInfoAsData("qoretest");
+        assertEq(("string",), data_info.provider_info.constructor_options.url.type);
+        assertFalse(data_info.provider_info.constructor_options.url.hasKey("type_info"),
+            "no type information is returned unless requested");
+        assertEq("the order service URL", data_info.provider_info.constructor_options.url.desc);
+        assertFalse(data_info.provider_info.expressions."qoretest-eq".hasKey("arg_type_info"));
+        assertFalse(data_info.provider_info.expressions."qoretest-eq".hasKey("return_type_info"));
+        assertEq("bool", data_info.provider_info.expressions."qoretest-eq".return_type);
+        assertFalse(data_info.provider_info.events.created.hasKey("type_info"));
+        assertEq("hash", data_info.provider_info.events.created.type);
+        assertEq("orders", data_info.desc);
+        assertFalse(inlist("qoretest", DataProvider::listFactories()), "the factory is not registered");
+
+        # a factory that has no info and cannot be loaded
+        assertNothing(DataProvider::tryGetFactoryInfoAsData("qoretest-noinfo"));
+
+        # in build mode, the index is not read
+        ProviderIndexUtil::setBuildMode(True);
+        on_exit ProviderIndexUtil::setBuildMode(False);
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertNothing(ProviderIndexUtil::getIndexedFactories());
+        assertNothing(ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+        ProviderIndexUtil::setBuildMode(False);
+        assertTrue(ProviderIndexUtil::hasIndexedFactoryInfo(), "the index is read again after build mode");
+    }
+
+    listKnownFactoriesTest() {
+        checkModules();
+
+        on_exit restoreEnv();
+
+        # without an index, the registered and the built-in known factories are listed
+        string empty_dir = make_tmp_dir();
+        on_exit remove_tree(empty_dir);
+        useIndexDir(empty_dir);
+        list<string> expected = sort(keys ((map {$1: True}, DataProvider::listFactories())
+            + (map {$1: True}, keys DataProvider::FactoryMap)));
+        assertEq(expected, DataProvider::listKnownFactories());
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo());
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        useIndexDir(dir);
+
+        # an index that records factory info lists the factories with info, not the factories without info
+        writeTestIndex(False, getTestMaps({"qoretest": getTestFactoryInfo()}));
+        resetIndexState();
+        list<string> known = DataProvider::listKnownFactories();
+        assertTrue(inlist("qoretest", known));
+        assertFalse(inlist("qoretest-noinfo", known), "a factory mapped without info is not available");
+        # the built-in known factories are not in this index, so they are listed, since they may be installed
+        map assertTrue(inlist($1, known), $1), keys DataProvider::FactoryMap;
+        map assertTrue(inlist($1, known), $1), DataProvider::listFactories();
+        assertEq(sort(known), known, "sorted");
+        assertEq(known.size(), (map {$1: True}, known).size(), "no duplicates");
+
+        # a built-in known factory in an index recording factory info is listed only if it has info
+        string builtin = (keys DataProvider::FactoryMap)[0];
+        hash<auto> maps = getTestMaps({"qoretest": getTestFactoryInfo()});
+        maps.factorymap{builtin} = DataProvider::FactoryMap{builtin};
+        writeTestIndex(False, maps);
+        resetIndexState();
+        if (!inlist(builtin, DataProvider::listFactories())) {
+            assertFalse(inlist(builtin, DataProvider::listKnownFactories()), builtin);
+        }
+
+        # an index recording no factory info at all
+        writeTestIndex(False, getTestMaps({}));
+        resetIndexState();
+        assertTrue(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertEq({}, ProviderIndexUtil::getIndexedFactoryInfoMap());
+        known = DataProvider::listKnownFactories();
+        assertFalse(inlist("qoretest", known));
+        assertFalse(inlist("qoretest-noinfo", known));
+
+        # an index that does not record factory info lists every indexed factory
+        writeTestIndex(False, getTestMaps());
+        resetIndexState();
+        known = DataProvider::listKnownFactories();
+        assertTrue(inlist("qoretest", known));
+        assertTrue(inlist("qoretest-noinfo", known));
+        map assertTrue(inlist($1, known), $1), keys DataProvider::FactoryMap;
+    }
+
+    notRecordedTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        # a writer that does not provide factory info publishes an index that does not record it
+        writeTestIndex(False, getTestMaps());
+        hash<auto> manifest = readManifest(dir);
+        assertEq(6, manifest.version);
+        assertFalse(manifest.hasKey("factories"), "the manifest does not reference factory info");
+        assertFalse(ProviderIndexUtil::readSerializedDataProviderIndex(dir).index.hasKey("factoryinfomap"));
+        assertNothing(ProviderIndexUtil::readDataProviderIndex().factoryinfomap);
+
+        # not recorded (NOTHING) is not the same as recorded without any factory ({})
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertNothing(ProviderIndexUtil::getIndexedFactoryInfoMap());
+        assertNothing(ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+        assertEq(("qoretest", "qoretest-noinfo"), ProviderIndexUtil::getIndexedFactories());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the info can then only come from the factory's module, which does not exist here
+        assertNothing(DataProvider::tryGetFactoryInfoAsData("qoretest"));
+    }
+
+    version5Test() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        # an index as published before factory info was recorded: a version 4 routing index and a version 5
+        # metadata cache, whose files are named after their contents
+        hash<auto> maps = getTestMaps();
+        hash<auto> chunks = {};
+        foreach string app in (keys maps.appinfomap) {
+            binary data = compress(msgpack_pack({
+                "factorymap": {}, "appmap": {}, "schememap": {},
+                "appinfomap": {app: maps.appinfomap{app}},
+                "actioninfomap": {},
+                "top_actioninfomap": {},
+            }, MSGPACK_QORE_MODE));
+            string sha256 = digest("sha256", data).toHex();
+            writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256), data);
+            chunks{app} = {"size": data.size(), "sha256": sha256, "info": maps.appinfomap{app}};
+        }
+        binary manifest = msgpack_pack({"version": 5, "apps": chunks}, MSGPACK_QORE_MODE);
+        string manifest_sha256 = digest("sha256", manifest).toHex();
+        writeFile(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256), manifest);
+        # the members in the order of the routing index checksum
+        hash<auto> routing = maps{"factorymap", "appmap", "schememap"} + {
+            "version": 4,
+            "canonical_yaml": False,
+            "metadata_cache_version": 5,
+            "metadata_cache_sha256": manifest_sha256,
+            "altmap": {},
+        };
+        routing.routing_sha256 = digest("sha256", make_yaml(routing, BlockStyle)).toHex();
+        writeFile(dir + DirSep + "qore-routing-index.yaml", make_yaml(routing, BlockStyle));
+
+        assertEq("QoreTestOrders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").name, "the index is read");
+        assertEq(("qoretest", "qoretest-noinfo"), ProviderIndexUtil::getIndexedFactories());
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo(), "a version 5 index does not record factory info");
+        assertNothing(ProviderIndexUtil::getIndexedFactoryInfoMap());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        hash<auto> index = ProviderIndexUtil::readSerializedDataProviderIndex(dir).index;
+        assertEq(maps.factorymap, index.factorymap);
+        assertFalse(index.hasKey("factoryinfomap"));
+        # the indexed factories without info are listed, since they may be available
+        list<string> known = DataProvider::listKnownFactories();
+        assertTrue(inlist("qoretest", known));
+        assertTrue(inlist("qoretest-noinfo", known));
+%endif
+    }
+
+    canonicalTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        hash<auto> factory_info = getTestFactoryInfo();
+        writeTestIndex(True, getTestMaps({"qoretest": factory_info}));
+        string canonical = ReadOnlyFile::readTextFile(dir + DirSep + "qore-data-index.yaml");
+        hash<auto> yaml = parse_yaml(canonical);
+        assertEq({"qoretest": factory_info}, yaml.factoryinfomap);
+        # the YAML of a published index is the canonical index file
+        assertEq(canonical, ProviderIndexUtil::dumpIndexYaml(dir));
+        # the YAML of one app has no factory info
+        assertFalse(parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir, "QoreTestOrders")).hasKey("factoryinfomap"));
+
+        # an index read from its canonical index file only
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        resetIndexState();
+        assertTrue(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertEq(factory_info, ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+
+        # a canonical index file without factory info does not record it
+        writeTestIndex(True, getTestMaps());
+        assertFalse(parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-data-index.yaml"))
+            .hasKey("factoryinfomap"));
+        assertFalse(parse_yaml(ProviderIndexUtil::dumpIndexYaml(dir)).hasKey("factoryinfomap"));
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        resetIndexState();
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo());
+    }
+
+    integrityTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        hash<auto> factory_info = getTestFactoryInfo();
+        writeTestIndex(False, getTestMaps({"qoretest": factory_info}));
+        string path = getFactoryInfoPath(dir);
+        writeFile(path, <deadbeef>);
+        resetIndexState();
+
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo(), "corrupt factory info is not used");
+        assertNothing(ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+        assertRegex("factory info", ProviderIndexUtil::getIndexReadError());
+        assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir), "the index is inconsistent");
+        assertThrows("PROVIDER-INDEX-ERROR", "corrupt", \ProviderIndexUtil::dumpIndexYaml(), dir);
+        # the apps are unaffected
+        assertEq("QoreTestOrders", ProviderIndexUtil::tryGetAppInfo("QoreTestOrders").name);
+
+        # a canonical index file published with the index holds the same info
+        writeTestIndex(True, getTestMaps({"qoretest": factory_info}));
+        writeFile(getFactoryInfoPath(dir), <deadbeef>);
+        resetIndexState();
+        assertTrue(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertEq(factory_info, ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest"));
+        assertEq({"qoretest": factory_info}, ProviderIndexUtil::readDataProviderIndex().factoryinfomap);
+
+        # a missing factory info file
+        writeTestIndex(False, getTestMaps({"qoretest": factory_info}));
+        unlink(getFactoryInfoPath(dir));
+        resetIndexState();
+        assertFalse(ProviderIndexUtil::hasIndexedFactoryInfo());
+        assertRegex("cannot read the data provider factory info", ProviderIndexUtil::getIndexReadError());
+    }
+
+    appsDoNotReadFactoryInfoTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        writeTestIndex(False, getTestMaps({"qoretest": getTestFactoryInfo()}));
+        unlink(getFactoryInfoPath(dir));
+        resetIndexState();
+        assertEq(("QoreTestOrders",), map $1.name, ProviderIndexUtil::getCachedApps());
+        assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError(), "the factory info file is not read");
+    }
+
+    staleFileRemovedTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        writeTestIndex(False, getTestMaps({"qoretest": getTestFactoryInfo()}));
+        string old_path = getFactoryInfoPath(dir);
+        writeTestIndex(False, getTestMaps({"qoretest": getTestFactoryInfo("invoices")}));
+        string new_path = getFactoryInfoPath(dir);
+        assertTrue(old_path != new_path, "the file is named after its contents");
+        assertFalse(is_file(old_path), "the file of the previous index is removed");
+        assertTrue(is_file(new_path));
+        resetIndexState();
+        assertEq("invoices", ProviderIndexUtil::tryGetIndexedFactoryInfo("qoretest").desc);
+
+        # an index without factory info references no factory info file
+        writeTestIndex(False, getTestMaps());
+        assertFalse(is_file(new_path));
+    }
+
+    withoutTypeInfoTest() {
+        checkModules();
+
+        # factories whose info has options, and one with several types in an option
+        DataProvider::getFactoryEx("swagger");
+        DataProvider::getFactoryEx("restclient");
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        useIndexDir(dir);
+
+        # the info of every registered factory is published under a name that is not registered, so that it is
+        # read from the index
+        hash<string, string> names = map {"qoretest-copy-" + $1: $1}, DataProvider::listFactories();
+        hash<auto> maps = getTestMaps(map {$1.key: DataProvider::getFactory($1.value).getInfoAsData(True)},
+            names.pairIterator());
+        maps.factorymap = map {$1: "QoreTestFactoryModule"}, keys names;
+        writeTestIndex(False, maps);
+        resetIndexState();
+
+        assertTrue(names.size() >= 2);
+        foreach hash<auto> i in (names.pairIterator()) {
+            assertEq(DataProvider::getFactory(i.value).getInfoAsData(),
+                DataProvider::tryGetFactoryInfoAsData(i.key), i.value);
+            assertEq(removeUniqueKeys(DataProvider::getFactory(i.value).getInfoAsData(True)),
+                removeUniqueKeys(DataProvider::tryGetFactoryInfoAsData(i.key, True)), i.value);
+            # a registered factory's info is its own
+            assertEq(DataProvider::getFactory(i.value).getInfoAsData(),
+                DataProvider::tryGetFactoryInfoAsData(i.value), i.value);
+        }
+    }
+
+    workerBuildTest() {
+        checkModules();
+%ifdef NoProcess
+        testSkip("no process module 2.1 or later");
+%endif
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("no MessagePack support");
+        }
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        string registration = writeFactoryFixture(dir, "ProviderIndexFactoryWorkerFixture", "qoretest-worker");
+        setEnv("QORE_DATA_PROVIDERS", registration);
+
+        # the calling process loads no provider module
+        string worker_dir = dir + DirSep + "worker-index";
+        setEnv(ProviderIndexEnvVar, worker_dir);
+        hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, worker_dir, getBuildOptions(1));
+        assertTrue(info.summary.qualification.complete);
+        assertFalse(exists get_module_hash().ProviderIndexFactoryWorkerFixture, "the module is not loaded");
+        hash<auto> index = ProviderIndexUtil::readSerializedDataProviderIndex(worker_dir).index;
+        assertEq("ProviderIndexFactoryWorkerFixture", index.factorymap."qoretest-worker");
+        assertEq("the order service data provider factory", index.factoryinfomap."qoretest-worker".desc);
+        assertEq(("string",), index.factoryinfomap."qoretest-worker".provider_info.constructor_options.url.type);
+        # the worker records the info of the known factories registered in it too; every factory with info is in
+        # the index
+        map assertTrue(exists index.factorymap{$1}, $1), keys index.factoryinfomap;
+
+        # a single-process build writes the same info; the unique keys do not depend on the process
+        string single_dir = dir + DirSep + "single-index";
+        ProviderIndex::createDataProviderIndex(NOTHING, single_dir, getBuildOptions());
+        assertTrue(exists get_module_hash().ProviderIndexFactoryWorkerFixture);
+        assertEq(index.factoryinfomap."qoretest-worker",
+            ProviderIndexUtil::readSerializedDataProviderIndex(single_dir).index.factoryinfomap."qoretest-worker");
+    }
+
+    buildTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        string registration = writeFactoryFixture(dir, "ProviderIndexFactoryBuildFixture", "qoretest-build");
+        setEnv("QORE_DATA_PROVIDERS", registration);
+
+        string index_dir = dir + DirSep + "index";
+        setEnv(ProviderIndexEnvVar, index_dir);
+        hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, index_dir, getBuildOptions());
+        assertTrue(info.summary.qualification.complete);
+
+        hash<auto> index = ProviderIndexUtil::readSerializedDataProviderIndex(index_dir).index;
+        assertEq("ProviderIndexFactoryBuildFixture", index.factorymap."qoretest-build");
+        # the info is that of the factory, with type information, with process-independent unique keys
+        assertEq(removeUniqueKeys(DataProvider::getFactory("qoretest-build").getInfoAsData(True)),
+            removeUniqueKeys(index.factoryinfomap."qoretest-build"));
+        list<string> unique_keys = getUniqueKeys(index.factoryinfomap."qoretest-build");
+        assertTrue(unique_keys.size() > 0);
+        map assertRegex("^[0-9]+$", $1), unique_keys;
+
+        # every factory in the index that is registered has info, and every factory with info is in the index
+        hash<string, bool> registered = map {$1: True}, DataProvider::listFactories();
+        assertEq(sort(select keys index.factorymap, registered{$1}), sort(keys index.factoryinfomap));
+    }
+
+    #! Returns the unique keys in the given value
+    private static list<string> getUniqueKeys(auto value) {
+        list<string> rv = ();
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach hash<auto> i in (value.pairIterator()) {
+                    if (i.key == "unique_key") {
+                        rv += i.value;
+                    } else {
+                        rv += getUniqueKeys(i.value);
+                    }
+                }
+                break;
+            case NT_LIST:
+                map rv += getUniqueKeys($1), value;
+                break;
+        }
+        return rv;
+    }
+
+    readerProcessTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        string registration = writeFactoryFixture(dir, "ProviderIndexFactoryReaderFixture", "qoretest-reader");
+        setEnv("QORE_DATA_PROVIDERS", registration);
+
+        string index_dir = dir + DirSep + "index";
+        setEnv(ProviderIndexEnvVar, index_dir);
+        ProviderIndex::createDataProviderIndex(NOTHING, index_dir, getBuildOptions());
+        hash<auto> index = ProviderIndexUtil::readSerializedDataProviderIndex(index_dir).index;
+
+        hash<auto> result = runReader(index_dir, dir, "qoretest-reader", "ProviderIndexFactoryReaderFixture");
+        assertNothing(result.index_error);
+        assertTrue(result.has_info);
+        assertEq(keys index.factorymap, result.indexed);
+        assertTrue(inlist("qoretest-reader", result.known), "the factory is listed");
+        assertFalse(result.loaded_by_listing, "listing does not load the factory's module");
+        assertFalse(result.loaded, "getting the factory's info does not load its module");
+        assertFalse(result.registered, "the factory is not registered in the reader");
+        # the reader lists the factories with info, and none that the index maps without info
+        map assertTrue(inlist($1, result.known), $1), keys index.factoryinfomap;
+        map assertFalse(inlist($1, result.known), $1), keys index.factorymap, !exists index.factoryinfomap{$1}
+            && !inlist($1, DataProvider::listFactories());
+        assertEq("the order service data provider factory", result.info.desc);
+        # JSON converts the info's values to JSON types
+        hash<auto> expected = DataProvider::getFactory("qoretest-reader").getInfoAsData();
+        assertEq(expected.provider_info.constructor_options.url.type,
+            result.data_info.provider_info.constructor_options.url.type);
+        assertEq(expected.provider_info.constructor_options.limit.type,
+            result.data_info.provider_info.constructor_options.limit.type);
+        assertFalse(result.data_info.provider_info.constructor_options.url.hasKey("type_info"));
+        assertEq(index.factoryinfomap."qoretest-reader".provider_info.constructor_options.url.type_info[0].name,
+            result.info.provider_info.constructor_options.url.type_info[0].name);
+    }
+
+    readerProcessFallbackTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        writeFactoryFixture(dir, "ProviderIndexFactoryFallbackFixture", "qoretest-fallback");
+
+        # an index that does not record factory info, as published by an earlier version
+        string index_dir = dir + DirSep + "index";
+        mkdir(index_dir);
+        useIndexDir(index_dir);
+        writeTestIndex(False, getTestMaps() + {
+            "factorymap": {"qoretest-fallback": "ProviderIndexFactoryFallbackFixture"},
+        });
+        resetIndexState();
+
+        hash<auto> result = runReader(index_dir, dir, "qoretest-fallback", "ProviderIndexFactoryFallbackFixture");
+        assertNothing(result.index_error);
+        assertFalse(result.has_info);
+        assertTrue(inlist("qoretest-fallback", result.known), "the indexed factory is listed");
+        assertFalse(result.loaded_by_listing, "listing does not load the factory's module");
+        # the info can only come from the factory, so its module is loaded on demand
+        assertTrue(result.loaded);
+        assertTrue(result.registered);
+        assertEq("the order service data provider factory", result.info.desc);
+        assertEq(("string",), result.data_info.provider_info.constructor_options.url.type);
+        # the built-in known factories are listed, since the index does not say which are available
+        map assertTrue(inlist($1, result.known), $1), keys DataProvider::FactoryMap;
+    }
+}

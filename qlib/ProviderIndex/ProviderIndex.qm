@@ -63,6 +63,12 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_2 ProviderIndex v1.2
+    - the info of every data provider factory in the index that is registered while the index is built is
+      published in the index, so that the factories can be listed with their info without loading their modules
+      (see @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()"); it is read
+      as static metadata, and the unique keys of its type descriptions are replaced, so that the same index is
+      always written identically; with worker processes, the info of a factory registered by several workers must
+      be identical, and factory info that is not plain data blocks publication
     - an index can be built with worker processes
       (@ref ProviderIndex::ProviderIndexCreateOptions::workers "ProviderIndexCreateOptions::workers"): each worker
       loads a batch of the provider modules and writes the metadata of their apps, and the calling process merges,

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ProviderIndex.qc module for indexing data providers
 
-/*  ProviderIndex.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ProviderIndex.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -284,6 +284,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
         }
         DataProviderActionCatalog::getAllActions();
 
+        # Reading factory info can resolve types, so it is read during the warm-up, like the apps and actions; the
+        # factorymap keys are complete here, only their module names are resolved below
+        hash<string, hash<auto>> factory_info = getSerializableFactoryInfo(keys index.factorymap, discovery);
+
         # Deferred initialization can load another producer or add exact identities to an existing producer's
         # inventory. Collect only after that intentional warm-up, otherwise the build invalidates its own inventory
         # snapshot. Changes during collection or after this point must still reject publication; do not retry or
@@ -304,6 +308,9 @@ public class ProviderIndex inherits ProviderIndexUtil {
                 index{section}{key} = map {moduleDependency($1, module_names): True}, keys index{section}{key};
             }
         }
+        # every factory registered here has its info in the index, so that listing factories never loads their
+        # modules; seeded info takes precedence, like the seeded module of a factory
+        index.factoryinfomap = factory_info + (index.factoryinfomap ?? {});
 
         # Dependencies are module identities; physical registration paths remain in the live catalog.
         foreach hash<DataProviderAppInfo> app in (apps) {
@@ -397,6 +404,49 @@ public class ProviderIndex inherits ProviderIndexUtil {
             } catch (hash<ExceptionInfo> ex) {
                 DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-metadata",
                     app + "/" + action.action, ex.err, ex.desc, ex.arg, app, action.action);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the serializable info of the given data provider factories that are registered
+    /** The info is that returned by
+        @ref DataProvider::AbstractDataProviderFactory::getInfoAsData() "AbstractDataProviderFactory::getInfoAsData()"
+        with type information, read as static metadata (see
+        @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper"), with the unique keys
+        of its type descriptions replaced, so that the same index is always written identically.
+
+        @param factories the names of the factories in the index
+        @param discovery the open discovery generation; info that is not plain data is reported as a failure
+
+        @return the info of each registered factory, keyed by factory name; a factory that is not registered has
+        no info
+    */
+    private static hash<string, hash<auto>> getSerializableFactoryInfo(*list<string> factories,
+            DataProviderDiscoverySession discovery) {
+        hash<string, bool> registered = map {$1: True}, DataProvider::listFactories();
+        hash<string, hash<auto>> rv = {};
+        # the index is static metadata, so dynamic type and default value callbacks must not run
+        DataProviderStaticMetadataHelper static_metadata();
+        foreach string name in (factories) {
+            # a factory that is not registered is never loaded here, which would change the registry
+            if (!registered{name}) {
+                continue;
+            }
+            try {
+                # registered, so it is returned without loading a module
+                *AbstractDataProviderFactory factory = DataProvider::getFactory(name);
+                if (!factory) {
+                    continue;
+                }
+                # unique keys identify objects by address, so they are replaced to make builds reproducible
+                hash<string, string> key_map;
+                hash<auto> info = replaceUniqueKeys(factory.getInfoAsData(True), \key_map);
+                checkPlainData(info, "");
+                rv{name} = info;
+            } catch (hash<ExceptionInfo> ex) {
+                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "factory", "serialize-factory-info",
+                    name, ex.err, ex.desc, ex.arg);
             }
         }
         return rv;
@@ -848,6 +898,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         }
         return {
             "factorymap": index.factorymap - keys DataProvider::FactoryMap,
+            # the info of the known factories too, since the calling process does not load them
+            "factoryinfomap": index.factoryinfomap ?? {},
             "appmap": index.appmap ?? {},
             "schememap": index.schememap ?? {},
             "appinfomap": index.appinfomap ?? {},
@@ -956,8 +1008,11 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<string, bool> type_info_mismatch_keys = {};
         list<hash<auto>> worker_summary = ();
 
-        # merged state: factories registered by workers, app info, action digests, and the fragments of each app
+        # merged state: factories registered by workers, their info and its digest, app info, action digests, and the
+        # fragments of each app
         hash<string, hash<auto>> worker_factories = {};
+        hash<string, hash<auto>> worker_factory_info = {};
+        hash<string, hash<auto>> worker_factory_info_sha256 = {};
         hash<string, hash<auto>> appinfomap = {};
         hash<string, string> app_info_sha256 = {};
         hash<string, hash<string, string>> action_sha256 = {};
@@ -1037,6 +1092,19 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     continue;
                 }
                 worker_factories{i.key} = {"module": i.value, "worker": batch.id};
+            }
+            foreach hash<auto> i in (result.factoryinfomap.pairIterator()) {
+                string sha256 = digest("sha256", packIndexData(i.value)).toHex();
+                if (*hash<auto> other = worker_factory_info_sha256{i.key}) {
+                    if (other.sha256 != sha256) {
+                        conflict("factory", i.key, sprintf("data provider factory %y is described differently by "
+                            "worker %s and by worker %s; first difference: %s", i.key, other.worker, batch.id,
+                            getTypeInfoDifference(worker_factory_info{i.key}, i.value, "")));
+                    }
+                    continue;
+                }
+                worker_factory_info_sha256{i.key} = {"sha256": sha256, "worker": batch.id};
+                worker_factory_info{i.key} = i.value;
             }
             foreach hash<auto> i in (result.appmap.pairIterator()) {
                 if (!seeded_apps{i.key}) {
@@ -1140,9 +1208,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 failures.size()), report;
         }
 
-        # write the index one app at a time from the worker fragments
+        # write the index one app at a time from the worker fragments; every factory registered by a worker has its
+        # info in the index, and seeded info takes precedence, like the seeded module of a factory
         hash<auto> maps = {
             "factorymap": index.factorymap,
+            "factoryinfomap": (map {$1.key: $1.value}, worker_factory_info.pairIterator(),
+                exists index.factorymap{$1.key}) + (index.factoryinfomap ?? {}),
             "appmap": index.appmap ?? {},
             "schememap": index.schememap ?? {},
             "appinfomap": (index.appinfomap ?? {}) + appinfomap,

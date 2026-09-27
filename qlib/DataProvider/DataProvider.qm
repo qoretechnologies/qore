@@ -1354,6 +1354,12 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns
+      the factories registered, in the data provider index, or known to the module, without loading any module, and
+      @ref DataProvider::DataProvider::tryGetFactoryInfoAsData() "DataProvider::tryGetFactoryInfoAsData()", which
+      returns a factory's info from the registered factory or from the index, and only otherwise loads the factory's
+      module; @ref DataProvider::DataProvider::listFactories() "DataProvider::listFactories()" still returns only the
+      registered factories, which with a data provider index are only those whose modules have been loaded
     - omit generated examples that violate type constraints, omit optional fields without examples from object
       examples, and try later union alternatives when an example does not satisfy the union
     - stopping a watch data provider cancels its polling thread, which ends a blocking operation in it, such as an

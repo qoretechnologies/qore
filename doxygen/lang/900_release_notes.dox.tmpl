@@ -319,6 +319,15 @@
     (@ref ProviderIndexUtil::ProviderIndexMaxCanonicalSizeEnvVar "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES") is no
     longer read; this is reported as a \c PROVIDER-INDEX-TOO-LARGE error by
     @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()".
+
+    A data provider index now records the info of its data provider factories (metadata cache version 6), so the
+    complete list of factories and their info is available without loading their modules, with
+    @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()" and
+    @ref DataProvider::DataProvider::tryGetFactoryInfoAsData() "DataProvider::tryGetFactoryInfoAsData()";
+    @ref DataProvider::DataProvider::listFactories() "DataProvider::listFactories()" still returns only the factories
+    whose modules have been loaded.  Indexes published by earlier versions are still read, and factory modules are
+    then loaded to get their info; earlier versions of the @ref providerindexutilintro "ProviderIndexUtil" module
+    cannot read an index published by this version, so rebuild the index after upgrading.
     @endparblock
 
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6

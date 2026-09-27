@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ProviderIndexUtil.qm module for indexing data providers
 
-/*  ProviderIndexUtil.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  ProviderIndexUtil.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,6 +62,16 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - the index records the info of its data provider factories (metadata cache version 6), in a file of the
+      metadata cache that its manifest references, so that the factories can be listed with their info without
+      loading their modules; see
+      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexedFactoryInfo() "ProviderIndexUtil::tryGetIndexedFactoryInfo()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactoryInfoMap() "ProviderIndexUtil::getIndexedFactoryInfoMap()",
+      and @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactories() "ProviderIndexUtil::getIndexedFactories()";
+      @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFactoryInfo() "ProviderIndexUtil::hasIndexedFactoryInfo()"
+      reports whether an index records it; indexes published by earlier versions, which do not, are still read,
+      and the routing index and the metadata cache manifest do not grow with the factory info; earlier versions of
+      this module cannot read an index published by this version
     - the routing index and the metadata cache are the published index; the canonical index file
       (\c qore-data-index.yaml), a YAML copy of the complete index that can be hundreds of megabytes, is only
       written if requested with the new \c write_canonical_yaml argument of

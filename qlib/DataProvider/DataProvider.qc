@@ -821,10 +821,140 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
     }
 
     #! Returns a list of registered data provider factories
+    /** @return the names of the factories registered in the current process, in no particular order
+
+        @note A factory whose module has not been loaded is not registered; with a data provider index, factory
+        modules are loaded on demand, so this list is not the list of the factories available;
+        @ref listKnownFactories() returns that list without loading any module
+
+        @see listKnownFactories()
+    */
     static *list<string> listFactories() {
         factory_cache_lock.enter();
         on_exit factory_cache_lock.exit();
         return keys factory_cache;
+    }
+
+    #! Returns the names of all data provider factories known in the current process, without loading any module
+    /** Data provider factory modules are loaded on demand, so the factories registered in the process
+        (@ref listFactories()) are generally only some of the factories available; this returns the factories that
+        are registered, in the data provider index, or in @ref FactoryMap, the built-in map of known factories.
+
+        If the index records the info of its factories (see
+        @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFactoryInfo() "ProviderIndexUtil::hasIndexedFactoryInfo()"),
+        an indexed factory is only returned if it has info in the index, since every factory registered when the
+        index was built has info in it: a factory that the index maps to a module without info, as with a known
+        factory whose module registered none, is not available.  A known factory that is not in the index at all is
+        returned in any case, since its module may have been installed after the index was built.
+
+        @return the sorted names of the known data provider factories; the info of each can be retrieved without
+        loading its module when the index records it with @ref tryGetFactoryInfoAsData()
+
+        @par Example:
+        @code{.py}
+# the info of every available factory
+list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData($1),
+    DataProvider::listKnownFactories()), exists $1;
+        @endcode
+
+        @note Without an index recording factory info, a returned factory may not be available, as when the module
+        of a known factory is not installed; @ref tryGetFactoryInfoAsData() then returns @ref nothing for it
+
+        @since DataProvider 3.8
+    */
+    static list<string> listKnownFactories() {
+        hash<string, bool> names = (map {$1: True}, DataProvider::listFactories()) ?? {};
+        *list<string> indexed = ProviderIndexUtil::getIndexedFactories();
+        *hash<string, hash<auto>> factory_info = ProviderIndexUtil::getIndexedFactoryInfoMap();
+        if (exists factory_info) {
+            # every factory registered when the index was built has info in it
+            map names{$1} = True, keys factory_info;
+            hash<string, bool> indexed_set = (map {$1: True}, indexed) ?? {};
+            map names{$1} = True, keys FactoryMap, !indexed_set{$1};
+        } else {
+            # the index does not record factory info, or there is no index
+            map names{$1} = True, indexed;
+            map names{$1} = True, keys FactoryMap;
+        }
+        return sort(keys names);
+    }
+
+    #! Returns the info of the given data provider factory as data, loading its module only if necessary
+    /** The info is taken from the registered factory, if the factory is registered in the current process;
+        otherwise from the data provider index, if the index records it (see
+        @ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexedFactoryInfo() "ProviderIndexUtil::tryGetIndexedFactoryInfo()"),
+        in which case no module is loaded; otherwise the factory's module is loaded on demand, as with
+        @ref getFactory().
+
+        @param name the factory name
+        @param with_type_info if @ref True then more type information is returned, as with
+        @ref AbstractDataProviderFactory::getInfoAsData()
+
+        @return the info as returned by @ref AbstractDataProviderFactory::getInfoAsData(), or @ref nothing if the
+        factory is unknown or its module cannot be loaded
+
+        @par Example:
+        @code{.py}
+*hash<auto> info = DataProvider::tryGetFactoryInfoAsData("swagger");
+        @endcode
+
+        @note The unique keys in the type descriptions of info from the index are not those of the types in the
+        current process; they identify the same type consistently within the info of one factory
+
+        @see listKnownFactories()
+
+        @since DataProvider 3.8
+    */
+    static *hash<auto> tryGetFactoryInfoAsData(string name, *bool with_type_info) {
+        DataProvider::checkRequest();
+        *AbstractDataProviderFactory factory;
+        {
+            factory_cache_lock.enter();
+            on_exit factory_cache_lock.exit();
+            factory = factory_cache{name};
+        }
+        if (factory) {
+            return factory.getInfoAsData(with_type_info);
+        }
+        if (*hash<auto> info = ProviderIndexUtil::tryGetIndexedFactoryInfo(name)) {
+            # the index holds the info with type information
+            return with_type_info ? info : DataProvider::getFactoryInfoWithoutTypeInfo(info);
+        }
+        factory = DataProvider::getFactory(name);
+        if (factory) {
+            return factory.getInfoAsData(with_type_info);
+        }
+    }
+
+    #! Returns factory info as data without the type information added by getInfoAsData() with type information
+    /** @param info the info as returned by @ref AbstractDataProviderFactory::getInfoAsData() with type information
+
+        @return the info as returned by @ref AbstractDataProviderFactory::getInfoAsData() without type information
+    */
+    private static hash<auto> getFactoryInfoWithoutTypeInfo(hash<auto> info) {
+        if (info.provider_info.typeCode() != NT_HASH) {
+            return info;
+        }
+        hash<auto> provider_info = info.provider_info;
+        # the members converted by getInfoAsData()
+        foreach hash<auto> i in (info.provider_info.pairIterator()) {
+            if (i.value.typeCode() != NT_HASH) {
+                continue;
+            }
+            if (i.key =~ /_options/ || i.key == "events" || i.key == "messages") {
+                provider_info{i.key} = map {
+                    $1.key: $1.value.typeCode() == NT_HASH ? $1.value - "type_info" : $1.value,
+                }, i.value.pairIterator();
+            } else if (i.key == "expressions") {
+                provider_info{i.key} = map {
+                    $1.key: $1.value.typeCode() == NT_HASH
+                        ? $1.value - ("arg_type_info", "return_type_info")
+                        : $1.value,
+                }, i.value.pairIterator();
+            }
+        }
+        info.provider_info = provider_info;
+        return info;
     }
 
     #! Returns the data provider cache

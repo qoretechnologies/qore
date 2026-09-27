@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ProviderIndexUtil.qc module for indexing data providers
 
-/*  ProviderIndexUtil.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ProviderIndexUtil.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,8 +69,9 @@ public const DefaultMaxCanonicalIndexSize = 128 * 1024 * 1024;
 #! actions declaring an alternative to their app's scheme connection
 const RoutingIndexVersion = 4;
 #! Version 5 names each metadata cache file after the digest of its contents, so that publishing an index never
-#! changes a file that the previous index references
-const MetadataCacheVersion = 5;
+#! changes a file that the previous index references; version 6 records the info of the indexed data provider
+#! factories in a file of its own that the manifest references
+const MetadataCacheVersion = 6;
 #! The earliest routing index and metadata cache versions that are read; they name the metadata cache files after
 #! their apps
 const MinRoutingIndexVersion = 2;
@@ -106,6 +107,21 @@ public hashdecl DataProviderIndexInfo {
         @since ProviderIndexUtil 1.2
     */
     *hash<string, hash<string, bool>> altmap;
+
+    #! Factory to factory info map
+    /** The info of each indexed data provider factory as returned by
+        \c DataProvider::AbstractDataProviderFactory::getInfoAsData() with type information, which is plain data;
+        the unique keys in its type descriptions do not depend on the process that built the index.
+
+        Every factory in \c factorymap that was registered when the index was built has an entry; a factory in
+        \c factorymap without one registered none.  @ref nothing if the index does not record factory info, because
+        it was published by an earlier version of this module, or its writer did not provide it.
+
+        @see ProviderIndexUtil::tryGetIndexedFactoryInfo()
+
+        @since ProviderIndexUtil 1.2
+    */
+    *hash<string, hash<auto>> factoryinfomap;
 
     #! App to app info map
     *hash<string, hash<auto>> appinfomap;
@@ -149,9 +165,10 @@ public hashdecl ProviderIndexInfo {
 /** @since ProviderIndexUtil 1.2
 */
 public hashdecl SerializedDataProviderIndexInfo {
-    #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c appinfomap, and \c actioninfomap members of the index
+    #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c factoryinfomap, \c appinfomap, and \c actioninfomap members of the index
     /** App and action metadata is in the serialized form stored in the index, as in the YAML written by
-        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"
+        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"; \c altmap and
+        \c factoryinfomap are only present if the index records them
     */
     *hash<auto> index;
 
@@ -228,6 +245,10 @@ hashdecl DataProviderMetadataCacheChunkInfo {
 hashdecl DataProviderMetadataCacheManifest {
     int version;
     hash<string, DataProviderMetadataCacheChunkInfo> apps;
+    # the size and digest of the file holding the info of the indexed factories (version 6), with the members of
+    # DataProviderMetadataCacheChunkInfo; not set if the index does not record it; a nested hashdecl member is not
+    # converted when the unpacked manifest is cast
+    *hash<auto> factories;
 }
 
 #! A published index's routing index and metadata cache manifest, verified
@@ -303,6 +324,10 @@ public class ProviderIndexUtil {
         static *int metadata_cache_version;
         static *hash<DataProviderMetadataCacheManifest> metadata_cache_manifest;
         static bool metadata_cache_manifest_checked;
+
+        #! Set when the factory info of the index has been read, or found not to be recorded; the info is then in
+        #! \c index.factoryinfomap
+        static bool factory_info_checked;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -419,6 +444,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         remove metadata_cache_version;
         remove metadata_cache_manifest;
         metadata_cache_manifest_checked = False;
+        factory_info_checked = False;
         apps_loaded = False;
     }
 
@@ -564,6 +590,120 @@ if (!exists actions) {
         m.lock();
         on_exit m.unlock();
         return exists index.altmap;
+    }
+
+    #! Returns the names of the data provider factories in the index
+    /** The names are read from the routing index, so no factory info is read and no provider module is loaded.
+
+        @return the sorted names of the factories that the index maps to a module; @ref nothing if no index is
+        published or the process is in index build mode
+
+        @note A factory is only in the index if it was known when the index was built; a factory in the index is
+        not necessarily registered in the current process, since its module is loaded on demand
+
+        @see tryGetIndexedFactoryInfo()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *list<string> getIndexedFactories() {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        return index.factorymap ? sort(keys index.factorymap) : NOTHING;
+    }
+
+    #! Returns the info of the given data provider factory from the index
+    /** The info is read from the metadata cache when the info of any factory is first requested, and then kept in
+        memory; no provider module is loaded.
+
+        @param factory the factory name
+
+        @return the factory info as returned by \c DataProvider::AbstractDataProviderFactory::getInfoAsData() with
+        type information; @ref nothing if the factory has no info in the index, or if the index does not record
+        factory info, because it was published by an earlier version of this module, in which case the factory's
+        module must be loaded to get its info; see @ref hasIndexedFactoryInfo()
+
+        @par Example:
+        @code{.py}
+*hash<auto> info = ProviderIndexUtil::tryGetIndexedFactoryInfo("swagger");
+if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
+    # the index predates factory info: load the factory instead
+    info = DataProvider::getFactoryEx("swagger").getInfoAsData(True);
+}
+        @endcode
+
+        @note \c DataProvider::DataProvider::tryGetFactoryInfoAsData() returns the info of a factory from the
+        registered factory, from the index, or by loading the factory's module, in that order
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<auto> tryGetIndexedFactoryInfo(string factory) {
+        return getFactoryInfoMap(){factory};
+    }
+
+    #! Returns the info of all data provider factories with info in the index
+    /** @return the info of each factory with info in the index, keyed by factory name, as returned by
+        \c DataProvider::AbstractDataProviderFactory::getInfoAsData() with type information; @ref nothing if the
+        index does not record factory info; see @ref hasIndexedFactoryInfo()
+
+        @par Example:
+        @code{.py}
+*hash<string, hash<auto>> factories = ProviderIndexUtil::getIndexedFactoryInfoMap();
+        @endcode
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<string, hash<auto>> getIndexedFactoryInfoMap() {
+        return getFactoryInfoMap();
+    }
+
+    #! Returns @ref True if the index records the info of its data provider factories
+    /** @return @ref True if @ref tryGetIndexedFactoryInfo() answers from the index; @ref False if no index is
+        published, the process is in index build mode, or the index was published by an earlier version of this
+        module, or its factory info cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool hasIndexedFactoryInfo() {
+        return exists getFactoryInfoMap();
+    }
+
+    #! Returns the factory info of the index, reading it on first use
+    static private *hash<string, hash<auto>> getFactoryInfoMap() {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        if (!factory_info_checked) {
+            # an index read from its canonical index file has its factory info already; an index read from its
+            # routing index has it in its metadata cache
+            if (metadata_cache_sha256 && !exists index.factoryinfomap) {
+                index.factoryinfomap = readProcessFactoryInfo();
+            }
+            factory_info_checked = True;
+        }
+        return index.factoryinfomap;
+    }
+
+    #! Reads the factory info of the process's index from its metadata cache; must be called with the lock held
+    /** @return the factory info, or @ref nothing if the index does not record it; if it cannot be read from the
+        metadata cache, it is read from any canonical index file, and the error is reported by
+        @ref getIndexReadError()
+    */
+    static private *hash<string, hash<auto>> readProcessFactoryInfo() {
+        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
+        if (manifest) {
+            if (!manifest.factories) {
+                return;
+            }
+            # an index that records factory info can have none, which is not the same as not recording it
+            *hash<string, hash<auto>> rv = readFactoryInfoChunk(manifest.factories, manifest.version);
+            if (exists rv) {
+                return rv;
+            }
+        }
+        # the metadata cache cannot be read; a canonical index file published with the index holds the same info
+        return readCanonicalDataProviderIndex().factoryinfomap;
     }
 
     #! Returns @ref True if the given action declares an alternative to its app's scheme connection
@@ -1302,7 +1442,9 @@ if (!exists actions) {
         any canonical index file left by an earlier index is removed.  The same YAML can be produced from a
         published index with @ref dumpIndexYaml().
 
-        @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index
+        @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index, and
+        optionally its \c factoryinfomap member; if \c factoryinfomap is not given, the index does not record factory
+        info, and readers load the factory modules to get it
         @param action_apps the apps that have actions
         @param get_app_actions returns the actions of the given app, keyed by action name, in the serialized form
         stored in the index
@@ -1374,7 +1516,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
             f = new File();
             f.open2(path: tmp_path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: IndexFileMode);
-            writeCanonicalMaps(write, maps);
+            writeCanonicalMaps(write, maps, getCanonicalMapNames(exists maps.factoryinfomap));
         }
 
         bool actions_written;
@@ -1431,14 +1573,39 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             remove tmp_path;
         }
 
+        # the info of the indexed factories, if the index records it
+        *hash<DataProviderMetadataCacheChunkInfo> factories;
+%ifndef NoMsgPack
+        if (write_cache && exists maps.factoryinfomap) {
+            try {
+                binary data = packFactoryInfoChunk(maps.factoryinfomap);
+                string sha256 = digest("sha256", data).toHex();
+                writeFileAtomic(getMetadataCacheChunkPath("", sha256, MetadataCacheVersion), data);
+                factories = <DataProviderMetadataCacheChunkInfo>{
+                    "size": data.size(),
+                    "sha256": sha256,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                if (!canonical) {
+                    rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider factory info: %s: %s",
+                        ex.err, ex.desc);
+                }
+                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                    get_exception_string(ex));
+                write_cache = False;
+            }
+        }
+%endif
+
         *string cache_sha256;
         int cache_size = 0;
         if (write_cache) {
             try {
-                binary manifest = packMetadataCacheManifest(chunks);
+                binary manifest = packMetadataCacheManifest(chunks, factories);
                 cache_sha256 = digest("sha256", manifest).toHex();
                 writeFileAtomic(getMetadataCachePath(cache_sha256), manifest);
-                cache_size = manifest.size() + ((foldl $1 + $2, (map $1.size, chunks.iterator())) ?? 0);
+                cache_size = manifest.size() + ((foldl $1 + $2, (map $1.size, chunks.iterator())) ?? 0)
+                    + (factories.size ?? 0);
             } catch (hash<ExceptionInfo> ex) {
                 if (!canonical) {
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata cache "
@@ -1476,7 +1643,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             };
         }
 
-        removeUnreferencedIndexFiles(cache_sha256 ? chunks : NOTHING, cache_sha256, canonical);
+        removeUnreferencedIndexFiles(cache_sha256 ? chunks : NOTHING, cache_sha256, canonical,
+            cache_sha256 ? factories.sha256 : NOTHING);
 
         return <ProviderIndexInfo>{
             "path": canonical ? path : getIndexPath("routing"),
@@ -1485,6 +1653,18 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             "summary": summary,
         };
 %endif
+    }
+
+    #! Returns the names of the maps written first to the canonical index file, in the order written
+    /** @param factory_info @ref True if the index records factory info
+    */
+    static private list<string> getCanonicalMapNames(bool factory_info) {
+        list<string> rv = ("factorymap", "appmap", "schememap", "appinfomap");
+        # an index that does not record factory info has no factoryinfomap member, as in earlier versions
+        if (factory_info) {
+            rv += "factoryinfomap";
+        }
+        return rv;
     }
 
     #! Writes the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the canonical index file
@@ -1497,8 +1677,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             list<string> names = ("factorymap", "appmap", "schememap", "appinfomap")) {
 %ifndef NoYaml
         foreach string key in (names) {
-            write(make_yaml({key: (key == "appinfomap" ? sortIndexMap(maps{key}, False) : maps{key}) ?? {}},
-                BlockStyle));
+            write(make_yaml({key: ((key == "appinfomap" || key == "factoryinfomap")
+                ? sortIndexMap(maps{key}, False)
+                : maps{key}) ?? {}}, BlockStyle));
         }
 %endif
     }
@@ -1623,14 +1804,21 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
     #! Packs the metadata cache manifest
     /** @param chunks the chunks written
+        @param factories the size and digest of the factory info file, if the index records factory info
 
         @return the packed manifest
     */
-    static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks) {
-        return packIndexData(<DataProviderMetadataCacheManifest>{
+    static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks,
+            *hash<DataProviderMetadataCacheChunkInfo> factories) {
+        hash<DataProviderMetadataCacheManifest> manifest = <DataProviderMetadataCacheManifest>{
             "version": MetadataCacheVersion,
             "apps": chunks,
-        });
+        };
+        # a manifest without the member does not record factory info
+        if (factories) {
+            manifest.factories = factories;
+        }
+        return packIndexData(manifest);
     }
 
     #! Removes the index files that the routing index just written does not reference
@@ -1649,6 +1837,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @param chunks the chunks that the manifest references, if a metadata cache was written
         @param manifest_sha256 the digest of the manifest, if a metadata cache was written
         @param canonical @ref True if a canonical index file was written with the routing index
+        @param factories_sha256 the digest of the factory info file that the manifest references, if any
 
         @par Example
         Uninstalling a provider module and rebuilding the index removes that app's chunk, so the index directory
@@ -1658,7 +1847,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         the index itself is already published at this point.
     */
     static private removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
-            *string manifest_sha256, bool canonical) {
+            *string manifest_sha256, bool canonical, *string factories_sha256) {
         *string dir = tryGetIndexDir();
         if (!dir.val()) {
             return;
@@ -1667,6 +1856,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             MetadataCacheVersion)): True}, chunks.pairIterator()) ?? {};
         if (manifest_sha256) {
             keep{basename(getMetadataCachePath(manifest_sha256))} = True;
+        }
+        if (factories_sha256) {
+            keep{basename(getMetadataCacheChunkPath("", factories_sha256, MetadataCacheVersion))} = True;
         }
         try {
             Dir d();
@@ -1709,8 +1901,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
         @param dir the index directory
         @param per_app optional code called with each app's name, info, and actions, in app name order, as each
-        app's metadata is read; the index then holds only its \c factorymap, \c appmap, and \c schememap
-        members, so the metadata of only one app is in memory at a time
+        app's metadata is read; the index then holds only its \c factorymap, \c appmap, \c schememap, and any
+        \c altmap and \c factoryinfomap members, so the metadata of only one app is in memory at a time
 
         @return the index, or @ref nothing if the directory holds no routing index with a metadata cache, or if the
         files are inconsistent; if the index was published with a canonical index file, the caller can then read it
@@ -1835,12 +2027,22 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             }, ("appmap", "appinfomap"));
         } else {
             dump_apps = sort(keys apps);
-            writeCanonicalMaps(write, {
+            hash<auto> maps = {
                 "factorymap": routing.factorymap,
                 "appmap": routing.appmap,
                 "schememap": routing.schememap,
                 "appinfomap": (map {$1.key: $1.value.info}, apps.pairIterator(), exists $1.value.info),
-            });
+            };
+            if (compact.manifest.factories) {
+                *hash<string, hash<auto>> factoryinfomap = readFactoryInfoChunk(compact.manifest.factories,
+                    compact.manifest.version, dir);
+                if (!exists factoryinfomap) {
+                    throw "PROVIDER-INDEX-ERROR", sprintf("the data provider factory info in the data provider index "
+                        "in %y is corrupt", dir);
+                }
+                maps.factoryinfomap = factoryinfomap;
+            }
+            writeCanonicalMaps(write, maps, getCanonicalMapNames(exists maps.factoryinfomap));
         }
         bool actions_written;
         foreach string chunk_app in (dump_apps) {
@@ -1892,6 +2094,18 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             }
 
             int size = compact.size;
+            *hash<string, hash<auto>> factoryinfomap;
+            if (*hash<auto> factories = compact.manifest.factories) {
+                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath("", factories.sha256,
+                    compact.manifest.version, dir));
+                if (data.size() != factories.size || digest("sha256", data).toHex() != factories.sha256) {
+                    return;
+                }
+                size += data.size();
+                if (unpack) {
+                    factoryinfomap = unpackFactoryInfoChunk(data);
+                }
+            }
             hash<auto> appinfomap = {};
             hash<auto> actioninfomap = {};
             foreach string app in (sort(keys compact.manifest.apps)) {
@@ -1932,6 +2146,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 # a routing index published before version 4 does not record the declarations
                 if (compact.routing.version >= 4) {
                     rv.index.altmap = compact.routing.altmap ?? {};
+                }
+                # an index that does not record factory info has no member
+                if (exists factoryinfomap) {
+                    rv.index.factoryinfomap = factoryinfomap;
                 }
                 if (!per_app) {
                     rv.index += {
@@ -2039,6 +2257,12 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 readMetadataCacheManifestFile(routing.metadata_cache_sha256, routing.metadata_cache_version)) {
             cache = readMetadataCacheChunks(manifest, NOTHING, True, \failed);
             cache += getRoutingIndexPayload(routing);
+            if (manifest.factories) {
+                cache.factoryinfomap = readFactoryInfoChunk(manifest.factories, manifest.version);
+                if (!exists cache.factoryinfomap) {
+                    failed = True;
+                }
+            }
         } else {
             failed = True;
         }
@@ -2447,6 +2671,62 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the metadata of app %y from %y: %s: %s",
                 app, path ?? "<unknown>", ex.err, ex.desc));
         }
+    }
+
+    #! Reads and validates the factory info file of a metadata cache
+    /** @param info the file's size and digest from the manifest
+        @param version the metadata cache version
+        @param dir the index directory; if not given, the configured index directory
+
+        @return the factory info, or @ref nothing if it cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+    */
+    static private *hash<string, hash<auto>> readFactoryInfoChunk(hash<auto> info, int version, *string dir) {
+        *string path;
+        try {
+            path = getMetadataCacheChunkPath("", info.sha256, version, dir);
+            binary data = ReadOnlyFile::readBinaryFile(path);
+            if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the data provider factory info in %y does not "
+                    "match the size and digest recorded in the metadata cache manifest", path));
+                return;
+            }
+            return unpackFactoryInfoChunk(data);
+        } catch (hash<ExceptionInfo> ex) {
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the data provider factory info from %y: "
+                "%s: %s", path ?? "<unknown>", ex.err, ex.desc));
+        }
+    }
+
+    #! Packs the factory info of an index into a metadata cache file
+    /** @param factoryinfomap the factory info, keyed by factory name
+
+        @return the compressed file contents
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+    */
+    static private binary packFactoryInfoChunk(hash<auto> factoryinfomap) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
+        # type descriptions repeat many keys and values, so the file compresses by about 10 times
+        return compress(msgpack_pack(sortIndexMap(factoryinfomap, False), MSGPACK_QORE_MODE));
+%endif
+    }
+
+    #! Unpacks the factory info file of a metadata cache
+    /** @param data the compressed file contents
+
+        @return the factory info, keyed by factory name
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+    */
+    static private hash<string, hash<auto>> unpackFactoryInfoChunk(binary data) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
+%else
+        return cast<hash<string, hash<auto>>>(msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE) ?? {});
+%endif
     }
 
     #! Reconstructs typed app and action metadata in a serialized data provider index
