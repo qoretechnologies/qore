@@ -2,48 +2,215 @@
 .\"
 .\" Copyright (C) 2011 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QGET 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH QGET 1 "2026 September 27" "Qore 3.0" "Qore Programming Language"
 .SH NAME
-qget \- download files from URLs with I/O event monitoring
+qget \- download files from http, https, ftp, and ftps URLs
 .SH SYNOPSIS
 .B qget
 [\fIoptions\fP]
-\fIURL\fP
+\fIURL\fP...
+.br
+.B qget
+[\fIoptions\fP]
+\fIconnection\fP[\fI/path\fP]
 .SH DESCRIPTION
-\fBqget\fR downloads content from URLs, displaying socket-level I/O events
-such as DNS resolution, connection, TLS negotiation, HTTP headers, data
-transfer, and redirects.
-It serves as both a practical download tool and an example of Qore's
-event monitoring capabilities.
+\fBqget\fR downloads resources from \fBhttp\fR, \fBhttps\fR, \fBftp\fR, and
+\fBftps\fR URLs, or from named connections of the Qore connection providers
+(see \fBQORE_CONNECTION_PROVIDERS\fR), and saves them to files named after the
+last component of the URL path.
+HTTP/1.1, HTTP/2, and HTTP/3 are negotiated automatically.
+.PP
+Data is written to a \fIfile\fB.part\fR file that is renamed when the download
+is complete, so an incomplete file never has the final name; the data received
+by a download that is interrupted, times out, or fails on the network is kept
+in the \fB.part\fR file.
+HTTP error responses fail a download, and redirects are followed.
+.PP
+On a terminal, each download is shown on a line of its own with a progress bar,
+the percentage and sizes, the current speed, a graph of the speed in the last
+seconds, the protocol, and the estimated time remaining, as far as the width
+of the terminal allows; a download without progress is shown as stalled.
+Terminals that support \fBOSC 9;4\fR sequences also show the progress in the
+tab or the taskbar.
+When the output is not a terminal, progress lines are written at intervals.
+Progress and messages are written to standard error.
+.PP
+Pressing Ctrl-C cancels the download in progress and keeps the data received
+in the \fB.part\fR file; pressing it again exits immediately.
 .SH OPTIONS
+.SS Output
 .TP
-.BR \-e ", " \-\-full\-exceptions
-Show full exception information on errors.
+.BR \-o ", " \-O ", " \-\-output =\fIfile\fP
+Write the data to \fIfile\fP; \fB\-\fR writes to standard output.
+Can only be given for a single URL, except for \fB\-\fR.
 .TP
-.BR \-H ", " \-\-header =\fIname:value\fP
-Add a custom HTTP header (repeatable).
+.BR \-\-directory\-prefix =\fIdir\fP
+Save files in \fIdir\fP, which is created if it does not exist.
 .TP
-.BR \-o ", " \-\-output\-file =\fIfile\fP
-Save downloaded content to \fIfile\fP instead of stdout.
+.B \-\-no\-clobber
+Fail with exit code 10 if the file exists instead of overwriting it.
 .TP
-.BR \-P ", " \-\-proxy =\fIURL\fP
-Use the specified HTTP proxy.
+.B \-\-no\-part
+Write directly to the file instead of a \fB.part\fR file.
+.TP
+.B \-\-content\-disposition
+Use the file name given by the server in a \fBContent-Disposition\fR header;
+only its last path component is used.
+.SS Request
+.TP
+.BR \-H ", " \-\-header =\fI"name: value"\fP
+Add a request header (repeatable).
+.TP
+.BR \-A ", " \-\-user\-agent =\fIagent\fP
+Set the \fBUser-Agent\fR header.
+.TP
+.BR \-u ", " \-\-user =\fIuser:password\fP
+Credentials for HTTP Basic authentication or for FTP.
+.TP
+.B \-\-compressed
+Request a compressed response and decompress it.
+.TP
+.BR \-\-max\-redirs =\fIn\fP
+Follow at most \fIn\fP redirects (default 20); with 0 a redirect fails the
+download.
+.TP
+.B \-\-fail\-with\-body
+Save the body of an HTTP error response; the download still fails.
+.TP
+.BR \-\-http1.1 ", " \-\-http2 ", " \-\-http3
+Use the given HTTP version.
+.SS Connection
+.TP
+.BR \-x ", " \-\-proxy =\fIurl\fP
+Use the given HTTP proxy.
+By default, the proxy is taken from the \fBhttp_proxy\fR, \fBhttps_proxy\fR,
+and \fBno_proxy\fR environment variables.
+.TP
+.B \-\-no\-proxy
+Ignore the proxy environment variables.
+.TP
+.BR \-k ", " \-\-insecure
+Do not verify server certificates.
+.TP
+.BR \-\-cacert =\fIfile\fP
+Verify server certificates with the CA certificates in \fIfile\fP.
+.TP
+.BR \-\-capath =\fIdir\fP
+Verify server certificates with the CA certificates in \fIdir\fP.
+.TP
+.BR \-E ", " \-\-cert =\fIfile\fP
+Client certificate in PEM format.
+.TP
+.BR \-\-key =\fIfile\fP
+Private key of the client certificate in PEM format; the certificate file is
+used if not given.
+.TP
+.BR \-\-connect\-timeout =\fIseconds\fP
+Maximum time to establish a connection (default 30).
+.TP
+.BR \-\-read\-timeout =\fIseconds\fP
+Maximum time to wait for data (default 120).
+.TP
+.BR \-m ", " \-\-max\-time =\fIseconds\fP
+Maximum time for each download.
+.TP
+.BR \-T ", " \-\-timeout =\fIseconds\fP
+Set the connect and read timeouts.
+.SS Display
+.TP
+.BR \-q ", " \-\-quiet
+Show no progress or messages other than errors; \fB\-qq\fR shows no errors
+either.
+.TP
+.BR \-s ", " \-\-silent
+Same as \fB\-qq\fR.
 .TP
 .BR \-v ", " \-\-verbose
-Show socket events during the transfer.
-Repeat for timestamps.
+Show the protocol, status, content type, and size of each response.
+.TP
+.B \-\-no\-color
+Do not use colors; colors are also not used when the \fBNO_COLOR\fR
+environment variable is set or standard error is not a terminal.
+.TP
+.B \-\-full\-exceptions
+Show full exception information on errors.
+.TP
+.BR \-V ", " \-\-version
+Show the version and exit.
 .TP
 .BR \-h ", " \-\-help
 Show help text and exit.
+.SS Deprecated options
+.TP
+.BR \-P " \fIurl\fP"
+Same as \fB\-\-proxy\fR; will be removed.
+.TP
+.B \-e
+Same as \fB\-\-full\-exceptions\fR; will be removed.
+.SH EXIT STATUS
+.TP
+.B 0
+All downloads succeeded.
+.TP
+.B 1
+Another error.
+.TP
+.B 2
+Invalid arguments or URL.
+.TP
+.B 3
+A file could not be written.
+.TP
+.B 4
+Network error.
+.TP
+.B 5
+TLS error, such as a certificate that could not be verified.
+.TP
+.B 6
+Authentication error.
+.TP
+.B 7
+Protocol error, such as too many redirects.
+.TP
+.B 8
+The server returned an error response.
+.TP
+.B 10
+The file exists and \fB\-\-no\-clobber\fR was given.
+.TP
+.B 11
+A time limit was exceeded.
+.TP
+.B 130
+Interrupted with Ctrl-C.
+.PP
+When several URLs are downloaded, the lowest exit code of the downloads that
+failed is returned.
+.SH ENVIRONMENT
+.TP
+.BR http_proxy ", " https_proxy ", " no_proxy
+The proxy for HTTP and HTTPS URLs, and hosts that are reached directly.
+.TP
+.B QORE_CONNECTION_PROVIDERS
+The connection provider modules that resolve connection names.
+.TP
+.B NO_COLOR
+Disables colors when set.
 .SH EXAMPLES
-Download a file with event output:
+Download a file:
 .RS
-.B qget \-v http://example.com/file.tar.gz \-o file.tar.gz
+.B qget https://example.com/file.iso
 .RE
 .PP
-Download through a proxy:
+Download several files to a directory:
 .RS
-.B qget \-P http://proxy:8080 http://example.com/data
+.B qget \-\-directory\-prefix=downloads https://example.com/a.tar.gz https://example.com/b.tar.gz
+.RE
+.PP
+Write a file to standard output through a proxy:
+.RS
+.B qget \-x http://proxy:8080 \-o \- https://example.com/data.json
 .RE
 .SH SEE ALSO
 .BR qore (1),

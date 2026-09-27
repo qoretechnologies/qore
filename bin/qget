@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# @file qget example program showing I/O event monitoring
+# @file qget downloads files from http, https, ftp, and ftps URLs
 
 /*  qget Copyright 2011 - 2026 Qore Technologies, s.r.o.
 
@@ -23,424 +23,534 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# This script is meant to demonstrate Qore's event support.  Currently only
-# socket events are supported (from the Socket, FtpClient, and HTTPClient
-# classes).  It is not intended to be a replacement for "wget", which is a much
-# better and more complete program (with undoubtably better socket handling).
-#
-# basically Qore provides very high-level access to socket functions.  The
-# event mechanism allows the program to be informed about the details of
-# socket-level actions, however without actually having control over them.
-#
-# it would be possible to duplicate the functionality in this script using just
-# functionality from the Socket class without using qore events, but would
-# require on the order of 2 or more levels of magnitude more code to be
-# written.
-#
-# one glaring weakness of the design of this script is that it reads all the
-# data into memory and then saves the data to a file; support for pipelining
-# I/O tasks will be added to the next release of qore so that data read from
-# any I/O source (in this case the network) can be streamed directly to another
-# I/O handler, which in this case will be a file writer, so the file can be
-# written as it is being read.
-##
-# However, for now this script can just demonstrate Qore's socket event support
-#
-# another weakness is that this script does not try to determine the size of
-# the terminal window and format the output accordingly; it uses a fixed output
-# size
+%requires qore >= 3.0
 
-# ensure we have the minimum version of qore we need
-%requires qore >= 1.0
-
-%require-our
 %modern
 
-%requires ConnectionProvider
+%requires Util
+%requires TerminalFormat
+%requires UrlDownloader
 
-our hash o; # global variable for options
-our int start; # global variable for start time
+%exec-class QgetApp
 
-const Cstr = "*************************************************";
-const Bstr = "-------------------------------------------------";
-
-const Opts = {
-    "fullex"   : "e,full-exceptions",
-    "headers"  : "H,header=s@",
-    "help"     : "h,help",
-    "output"   : "o,output-file=s",
-    "proxy"    : "P,proxy=s",
-    "verbose"  : "v,verbose:i+",
-};
-
-# run the "main" function
-main();
-
-# display the output and flush output buffers
-sub myprintf(string fmt) {
-    vprintf(fmt, argv);
-    flush();
-}
-
-# QueueCallBack class
-#
-# this class provides callback-like functionality for socket events.
-# Qore provides only a Queue to post callback events on; using a real callback
-# function from within Qore internal socket code would be too susceptible to
-# deadlocks, therefore the event queue mechanism is supported.  The result of
-# this is that socket events must be processed in a separate thread; this class
-# provides that functionality.  The class uses the "listen()" method, running
-# in a background thread, to process the events.  The "listen()" method waits
-# for an "EVENT_DELETED" event to stop listening and exit the thread.
-
-class QueueCallBack {
+#! Shows the events of a download in the progress display
+class QgetListener inherits UrlDownloadListener {
     private {
-        Queue queue();
-        Counter counter(1);
-
-        bool lookup = False;
-        int ignore = 0;
-        int total_read = 0;
-        int body_len = 0;
-        bool in_body = False;
-        int stime = 0;
-        int utime = 0;
-        string units;
-        float bps;
+        QgetApp app;
+        #! the URL downloaded
+        string url;
+        #! the ID of the transfer in the progress display, once the download has started
+        *int id;
     }
 
-    public {}
-
-    constructor(object o, string url) {
-        myprintf("retrieving %s\n", url);
-        o.setEventQueue(queue);
-        background listen();
+    constructor(QgetApp app, string url) {
+        self.app = app;
+        self.url = url;
     }
 
-    # static function returning a string with key=value format for a hash
-    static string getstr(hash<auto> h) {
-        # we create the string by mapping our string format function on a list
-        # of the hash keys.  this is more efficient than iterating the keys with
-        # a "foreach" statement, for example
-        return foldl $1 + $2, (map sprintf("%s=%y ", $1.key, $1.value), h.pairIterator());
+    redirected(hash<HttpRedirectInfo> info) {
+        app.info(sprintf("%s %s %s", QgetApp::color.dim(sprintf("↪ %d", info.status_code)),
+            QgetApp::color.dim("→"), QgetApp::color.dim(info.target_url)));
     }
 
-    listen() {
-    	while (True) {
-            # get a message from the event queue; a hash is returned with at
-            # least the following keys: "event" with the event code, and
-            # "source" with the event source identifier
-
-            hash<auto> e = queue.get();
-
-            # if the source object is deleted, then stop listening for events
-            if (e.event == EVENT_DELETED) {
-                counter.dec();
-                return;
-            }
-
-            # if the verbose flag is set, then show all literal messages
-            if (o.verbose) {
-                if (o.verbose > 1) {
-                    printf("%.9f: ", (clock_getmicros() - start) / 1000000.0);
-                }
-                myprintf("%s %s: %s\n", EVENT_SOURCE_MAP.(e.source), EVENT_MAP.(e.event),
-                    QueueCallBack::getstr(e - ("event", "source")));
-                continue;
-            }
-
-            # otherwise process the event
-            # note that the brackets after the case statements are only there
-            # to ensure that emacs formats the text properly while editing;
-            # they are not necessary for execution
-
-            switch (e.event) {
-                case EVENT_HOSTNAME_LOOKUP: {
-                    if (!lookup)
-                        myprintf("resolving %s: ", e.name);
-                    break;
-                }
-
-                case EVENT_HOSTNAME_RESOLVED: {
-                    if (!lookup) {
-                        myprintf("%s\n", e.address, e);
-                        lookup = True;
-                    }
-                    break;
-                }
-
-                case EVENT_HTTP_CHUNKED_DATA_RECEIVED:
-                case EVENT_PACKET_READ: {
-                    if (in_body && e.id != ignore) {
-                        total_read += e.read;
-                        update_total();
-                    }
-                    break;
-                }
-
-                case EVENT_HTTP_CONTENT_LENGTH: {
-                    myprintf("content length: %d", e.len);
-                    body_len = e.len;
-                    in_body = True;
-                    break;
-                }
-
-                case EVENT_FTP_MESSAGE_RECEIVED: {
-                    # ignore reads on FTP control channel
-                    if (!ignore)
-                        ignore = e.id;
-                    if ((e."code" / 100) == 1) {
-                        #printf("%s\n", e.message);
-                        list<string> l = (e.message =~ x/opening.*connection for.*\(([0-9]*) byte/i);
-                        body_len = l[0].toInt();
-                        in_body = True;
-                    }
-                    break;
-                }
-
-                case EVENT_HTTP_CHUNKED_START: {
-                    in_body = True;
-                    break;
-                }
-
-                case EVENT_HTTP_CHUNKED_END: {
-                    in_body = False;
-                    break;
-                }
-
-                case EVENT_HTTP_REDIRECT: {
-                    printf("redirected to %s", e.location);
-                    if (exists e.status_message)
-                        printf(" (%s)", e.status_message);
-                    myprintf("\n");
-                    flush();
-                    break;
-                }
-            }
+    started(hash<UrlDownloadStartInfo> info) {
+        if (app.verbose) {
+            app.info(sprintf("%s %s%s%s", QgetApp::color.dim(info.protocol),
+                QgetApp::color.number(string(info.status_code)),
+                info.content_type ? " " + QgetApp::color.dim(info.content_type) : "",
+                exists info.total ? " " + QgetApp::color.dim(TerminalProgress::formatBytes(info.total)) : ""));
+        }
+        if (*TerminalProgress progress = app.progress) {
+            string label = info.file ? basename(info.file) : (UrlDownloader::getFileNameFromUrl(url) ?? url);
+            id = progress.add(label, info.total);
+            progress.setInfo(id, info.protocol);
         }
     }
 
-    # display a running total of the download
-    update_total() {
-        int now = clock_getmillis();
-        if (!stime) {
-            stime = now;
-            utime = now;
-            units = "n/a";
+    progress(int done, *int total) {
+        if (exists id) {
+            app.progress.update(id, done);
+        }
+    }
+
+    #! Removes the transfer from the progress display and writes the given message, if any
+    finish(*string message) {
+        if (exists id) {
+            app.progress.finish(id, message);
+            remove id;
+        } else if (!message) {
+            return;
+        } else if (app.progress) {
+            app.progress.log(message);
         } else {
-            if (!bps || now - utime > 250 || total_read == body_len) {
-                utime = now;
-                if (int diff = now - stime) {
-                    bps = 1000 * total_read / float(diff);
+            stderr.print(message + "\n");
+        }
+    }
 
-                    if (bps > 1024 * 1024 * 1024) {
-                        units = "GB/s";
-                        bps /= 1024 * 1024 * 1024;
-                    } else if (bps > 1024 * 1024) {
-                        units = "MB/s";
-                        bps /= 1024 * 1024;
-                    } else if (bps > 1024) {
-                        units = "KB/s";
-                        bps /= 1024;
-                    } else {
-                        units = "B/s";
-                    }
-                }
+    #! Returns a summary of the transfer, if it started
+    *string getSummary() {
+        if (exists id) {
+            return app.progress.getSummary(id);
+        }
+    }
+}
+
+public class QgetApp {
+    public {
+        #! the colors of the output on stderr
+        static TerminalColor color;
+
+        #! the progress display, if progress is shown
+        *TerminalProgress progress;
+
+        #! the level of verbosity
+        int verbose = 0;
+
+        #! the level of quiet: 1 shows no progress or information, 2 shows no errors either
+        int quiet = 0;
+    }
+
+    private {
+        const Version = "2.0.0";
+
+        const Opts = {
+            "output": "o,output=s",
+            "output_document": "O,output-document=s",
+            "dir": "directory-prefix=s",
+            "no_clobber": "no-clobber",
+            "no_part": "no-part",
+            "content_disposition": "content-disposition",
+            "headers": "H,header=s@",
+            "user_agent": "A,user-agent=s",
+            "user": "u,user=s",
+            "proxy": "x,proxy=s",
+            "old_proxy": "P=s",
+            "no_proxy": "no-proxy",
+            "http11": "http1.1",
+            "http2": "http2",
+            "http3": "http3",
+            "insecure": "k,insecure",
+            "cacert": "cacert=s",
+            "capath": "capath=s",
+            "cert": "E,cert=s",
+            "key": "key=s",
+            "max_redirs": "max-redirs=i",
+            "max_redirect": "max-redirect=i",
+            "compressed": "compressed",
+            "connect_timeout": "connect-timeout=s",
+            "read_timeout": "read-timeout=s",
+            "max_time": "m,max-time=s",
+            "timeout": "T,timeout=s",
+            "fail_with_body": "fail-with-body",
+            "quiet": "q,quiet:i+",
+            "silent": "s,silent",
+            "verbose": "v,verbose:i+",
+            "full_exceptions": "full-exceptions",
+            "old_full_exceptions": "e",
+            "nocolor": "no-color",
+            "help": "h,help",
+            "version": "V,version",
+        };
+
+        #! the exit code for each download error
+        const ExitCodes = {
+            "DOWNLOAD-ERROR": 1,
+            "DOWNLOAD-URL-ERROR": 2,
+            "DOWNLOAD-IO-ERROR": 3,
+            "DOWNLOAD-NETWORK-ERROR": 4,
+            "DOWNLOAD-TLS-ERROR": 5,
+            "DOWNLOAD-AUTH-ERROR": 6,
+            "DOWNLOAD-PROTOCOL-ERROR": 7,
+            "DOWNLOAD-SERVER-ERROR": 8,
+            "DOWNLOAD-FILE-EXISTS": 10,
+            "DOWNLOAD-TIMEOUT": 11,
+            "DOWNLOAD-CANCELLED": 130,
+        };
+
+        #! the exit code for invalid arguments
+        const UsageError = 2;
+
+        #! the interval at which the progress display is refreshed, so a download without progress is shown as
+        #! stalled
+        const RefreshInterval = 250ms;
+
+        hash<auto> opts;
+
+        #! the downloader
+        UrlDownloader dl;
+
+        #! set when the downloads are done, to stop refreshing the progress display
+        Mutex refresh_lock();
+        Condition refresh_cond();
+        bool refresh_done = False;
+        Counter refresh_counter();
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        try {
+            opts = getopt.parse2(\ARGV);
+        } catch (hash<ExceptionInfo> ex) {
+            color = new TerminalColor(True, stderr);
+            error(ex.desc);
+            exit(UsageError);
+        }
+
+        color = new TerminalColor(!opts.nocolor, stderr);
+        quiet = opts.silent ? 2 : (opts.quiet ?? 0);
+        verbose = opts.verbose ?? 0;
+
+        if (opts.version) {
+            printf("qget %s\n", Version);
+            exit(0);
+        }
+        if (opts.help) {
+            QgetApp::usage(new TerminalColor(!opts.nocolor));
+            exit(0);
+        }
+
+        # deprecated options
+        if (exists opts.old_proxy) {
+            warning("-P is deprecated for --proxy and will be removed; use -x or --proxy");
+            if (!exists opts.proxy) {
+                opts.proxy = opts.old_proxy;
             }
         }
-
-        if (body_len) {
-            float nh = total_read * 50 / float(body_len);
-            myprintf("\r%3d% %s%s %f %s (%d/%d)    ", total_read * 100 / float(body_len), substr(Cstr, 0, nh),
-                substr(Bstr, nh), bps, units, total_read, body_len);
-        } else {
-            myprintf("\r%d bytes %f %s     ", total_read, bps, units);
+        if (opts.old_full_exceptions) {
+            warning("-e is deprecated for --full-exceptions and will be removed; use --full-exceptions");
+            opts.full_exceptions = True;
         }
-        flush();
+
+        list<string> urls = ARGV;
+        # the former syntax for a connection name with a separate path: "qget name /path"
+        if (urls.size() == 2 && urls[0] !~ /:\/\// && urls[0] !~ /\// && urls[1] =~ /^\//) {
+            urls = (urls[0] + urls[1],);
+        }
+        if (!urls) {
+            error("no URL given; try 'qget --help'");
+            exit(UsageError);
+        }
+
+        hash<UrlDownloadOptions> dopts;
+        try {
+            dopts = getDownloadOptions(urls.size());
+        } catch (hash<ExceptionInfo> ex) {
+            error(ex.desc);
+            exit(UsageError);
+        }
+        try {
+            dl = new UrlDownloader(dopts);
+        } catch (hash<ExceptionInfo> ex) {
+            error(ex.desc);
+            exit(ExitCodes{ex.err} ?? UsageError);
+        }
+
+        if (!quiet) {
+            progress = new TerminalProgress(<TerminalProgressOptions>{
+                "color": color.enabled,
+                "total_line": urls.size() > 1,
+            });
+        }
+
+        # Ctrl-C cancels the download in progress and keeps the data received; a second one exits immediately
+        set_signal_handler(SIGINT, sub (softint sig) {
+            if (dl.isCancelled()) {
+                exit(ExitCodes."DOWNLOAD-CANCELLED");
+            }
+            dl.cancel();
+        });
+
+        startRefresh();
+        int rc = 0;
+        try {
+            rc = run(urls);
+        } catch (hash<ExceptionInfo> ex) {
+            error(opts.full_exceptions ? get_exception_string(ex) : sprintf("%s: %s", ex.err, ex.desc));
+            rc = 1;
+        }
+        stopRefresh();
+        if (progress) {
+            progress.close();
+        }
+        remove_signal_handler(SIGINT);
+        exit(rc);
     }
 
-    wait() { counter.waitForZero(); }
-}
-
-#! returns a file name in the current directory derived from a name given by the server or the URL
-/** only the last path component is used, so the name can never select a file outside the current directory;
-    returns NOTHING if no usable name remains
-*/
-*string sub get_safe_file_name(*string name) {
-    if (!name) {
-        return;
-    }
-    # "\\" is a path separator on Windows
-    string fn = basename(replace(name, "\\", "/"));
-    if (fn == "" || fn == "." || fn == "..") {
-        return;
-    }
-    return fn;
-}
-
-sub usage(*bool long) {
-    printf("usage: %s [-vh] URL\n", get_script_name());
-    if (long) {
-        printf(" -e,--full-exceptions    show full exception info\n");
-        printf(" -H,--header=ARG         add headers to any HTTP/S requests\n");
-        printf(" -o,--output-file=ARG    save the output to the given file name\n");
-        printf(" -P,--proxy=ARG          any HTTP proxy to use for HTTP requests\n");
-    	printf(" -v,--verbose            show socket events\n");
-    	printf(" -h,--help               this help text\n");
-    }
-    exit(1);
-}
-
-sub main() {
-    GetOpt g(Opts);
-
-    try {
-    	o = g.parse2(\ARGV);
-    } catch (hash<ExceptionInfo> ex) {
-        printf("option error: %s\n", ex.desc);
-        exit(1);
+    #! Writes an informational message unless quiet
+    info(string msg) {
+        if (quiet) {
+            return;
+        }
+        if (progress) {
+            progress.log(msg);
+        } else {
+            stderr.print(msg + "\n");
+        }
     }
 
-    if (o.help)
-    	usage(True);
+    #! Writes a warning unless quiet
+    warning(string msg) {
+        if (quiet) {
+            return;
+        }
+        stderr.print(sprintf("%s %s\n", color.yellow("qget:"), color.yellow(msg)));
+    }
 
-    *string url = shift ARGV;
-    if (!exists url)
-    	usage();
+    #! Writes an error unless silent
+    error(string msg) {
+        if (quiet > 1) {
+            return;
+        }
+        string str = sprintf("%s %s", color.red("qget:"), msg);
+        if (progress) {
+            progress.log(str);
+        } else {
+            stderr.print(str + "\n");
+        }
+    }
 
-    AbstractConnection conn;
-    string uri_path;
-    {
-        string orig_url = url;
-        if (url !~ /^[^:\/]+:\/\/.+/) {
+    #! Downloads the URLs and returns the exit code
+    /** the exit code of the first error with the lowest exit code, as with wget; a cancellation stops the
+        downloads
+    */
+    private int run(list<string> urls) {
+        int rc = 0;
+        int start = clock_getmicros();
+        int ok = 0;
+        int failed = 0;
+        int bytes = 0;
+        on_exit if (urls.size() > 1 && !quiet) {
+            string time = TerminalProgress::formatElapsed(clock_getmicros() - start);
+            if (failed) {
+                info(sprintf("%s %s", color.red("✘"), color.bold(sprintf("%d of %d downloads failed", failed,
+                    ok + failed))));
+            } else {
+                info(sprintf("%s %s %s", color.green("✔"), color.bold(sprintf("%d downloads", ok)),
+                    color.dim(sprintf("%s in %s", TerminalProgress::formatBytes(bytes), time))));
+            }
+        }
+        *StdoutOutputStream out = opts.output == "-" || opts.output_document == "-" ? new StdoutOutputStream() : NOTHING;
+        foreach string url in (urls) {
+            QgetListener listener(self, url);
             try {
-                conn = get_connection(url);
+                hash<UrlDownloadResult> res = dl.download(url, listener, out);
+                ++ok;
+                bytes += res.size;
+                string summary = listener.getSummary() ?? sprintf("%s", TerminalProgress::formatBytes(res.size));
+                listener.finish(quiet
+                    ? NOTHING
+                    : sprintf("%s %s %s", color.green("✔"), res.file ? color.bold(res.file) : color.bold(url),
+                        color.dim(summary)));
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("Can't find any connection %y: %s\n", url, ex.desc);
-                exit(1);
+                ++failed;
+                int code = ExitCodes{ex.err} ?? 1;
+                string msg = sprintf("%s %s", color.red("✘"), ex.desc);
+                if (ex.arg.part_file) {
+                    msg += color.dim(sprintf("; the data received is kept in %s", ex.arg.part_file));
+                }
+                if (opts.full_exceptions && ex.arg.cause) {
+                    msg += "\n" + get_exception_string(ex.arg.cause);
+                }
+                listener.finish(quiet > 1 ? NOTHING : msg);
+                if (!rc || code < rc) {
+                    rc = code;
+                }
+                if (ex.err == "DOWNLOAD-CANCELLED") {
+                    return code;
+                }
             }
-            url = conn.getRealUrl(conn.url, conn.getConnectionSchemeInfo(), "");
-            uri_path = shift ARGV ?? "/";
-            printf("Using connection: %y (%s) %y\n", orig_url, url, uri_path);
         }
+        return rc;
     }
 
-    hash<auto> u = parse_url(url);
-    # an empty response body is returned as NOTHING
-    *data x;
-    QueueCallBack cb;
-    # get start time
-    start = clock_getmicros();
-    string fn;
-    try {
-        switch (u.protocol) {
-            case NOTHING:
-            case "https":
-            case "http": {
-                hash<auto> opts += {"url": url};
-                HTTPClient hc;
-                if (conn) {
-                    hc = conn.get(False);
-                } else {
-                    hc = new HTTPClient(opts);
-                }
-
-                if (o.proxy) {
-                    hc.setProxyURL(o.proxy);
-                }
-                hash<auto> hdr;
-                hdr.Accept = "*/*";
-                foreach string h in (o.headers) {
-                    (*string k, *string v) = (h =~ x/([^:]+):(.+)$/);
-                    trim k;
-                    trim v;
-                    if (!k || !v) {
-                        stderr.printf("invalid header %y; expecting \"key: value\" format\n", h);
-                        exit(1);
-                    }
-                    hdr{k} = v;
-                }
-
-                cb = new QueueCallBack(hc, url);
-
-                hash<auto> info;
-                x = hc.get(uri_path ?? u.path ?? "/", hdr, \info);
-                *string filename = (info."response-headers"."content-disposition" =~ x/filename="([^"]*)"/)[0];
-                if (*string safe_name = get_safe_file_name(filename)) {
-                    fn = safe_name;
-                }
-                break;
+    #! Returns the download options for the command-line options
+    private hash<UrlDownloadOptions> getDownloadOptions(int url_count) {
+        hash<UrlDownloadOptions> rv();
+        *string output = opts.output ?? opts.output_document;
+        if (output) {
+            if (output != "-" && url_count > 1) {
+                throw "QGET-ERROR", "an output file can only be given for a single URL";
             }
-            case "ftps":
-            case "ftp": {
-                *string file = get_safe_file_name(u.path);
-                if (!file) {
-                    stderr.printf("missing file name in url %y\n", url);
-                    exit(1);
-                }
-
-                FtpClient f;
-                if (conn) {
-                    f = conn.get();
-                } else {
-                    f = new FtpClient(url);
-                }
-                cb = new QueueCallBack(f, url);
-                f.connect();
-
-                string dir = dirname(u.path);
-                if (exists dir) {
-                    #printf("dir=%n\n", dir);
-                    f.cwd(dir);
-                }
-
-                #printf("%n: %n + %n\n", f.pwd(), dir, file);
-                x = f.getAsBinary(file);
-                fn = file;
-                break;
-            }
-
-            default:
-                stderr.printf("Don't know how to handle scheme %y\n", u.protocol);
-                exit(1);
+            rv.output = output;
         }
-    } catch (hash<ExceptionInfo> ex) {
-        if (o.fullex) {
-            stderr.printf("%s\n", get_exception_string(ex));
+        if (opts.dir) {
+            rv.output_dir = opts.dir;
+        }
+        if (opts.no_clobber) {
+            rv.clobber = False;
+        }
+        if (opts.no_part) {
+            rv.part_file = False;
+        }
+        if (opts.content_disposition) {
+            rv.content_disposition = True;
+        }
+        foreach string h in (opts.headers) {
+            *list<*string> m = (h =~ x/^([^:]+):\s*(.*)$/s);
+            if (!m || !m[0].val()) {
+                throw "QGET-ERROR", sprintf("invalid header %y; expecting \"name: value\"", h);
+            }
+            string name = m[0];
+            rv.headers{trim(name)} = m[1] ?? "";
+        }
+        if (opts.user_agent) {
+            rv.user_agent = opts.user_agent;
         } else {
-            stderr.printf("%s: %s\n", ex.err, ex.desc);
+            rv.user_agent = "qget/" + Version;
         }
-        # a failed retrieval must be visible to the caller
-        exit(1);
+        if (opts.user) {
+            rv.user = opts.user;
+        }
+        if (opts.proxy) {
+            rv.proxy = opts.proxy;
+        }
+        if (opts.no_proxy) {
+            rv.env_proxy = False;
+        }
+        int versions = (opts.http11 ? 1 : 0) + (opts.http2 ? 1 : 0) + (opts.http3 ? 1 : 0);
+        if (versions > 1) {
+            throw "QGET-ERROR", "only one of --http1.1, --http2, and --http3 can be given";
+        }
+        if (opts.http11) {
+            rv.http_version = "1.1";
+        } else if (opts.http2) {
+            rv.http_version = "2";
+        } else if (opts.http3) {
+            rv.http_version = "3";
+        }
+        if (opts.insecure) {
+            rv.verify = False;
+        }
+        if (opts.cacert) {
+            rv.ca_file = opts.cacert;
+        }
+        if (opts.capath) {
+            rv.ca_path = opts.capath;
+        }
+        if (opts.cert) {
+            rv.client_cert = opts.cert;
+        }
+        if (opts.key) {
+            rv.client_key = opts.key;
+        }
+        if (exists opts.max_redirs || exists opts.max_redirect) {
+            rv.max_redirects = opts.max_redirs ?? opts.max_redirect;
+        }
+        if (opts.compressed) {
+            rv.compressed = True;
+        }
+        if (exists opts.timeout) {
+            timeout t = QgetApp::getSeconds("--timeout", opts.timeout);
+            rv.connect_timeout = t;
+            rv.read_timeout = t;
+        }
+        if (exists opts.connect_timeout) {
+            rv.connect_timeout = QgetApp::getSeconds("--connect-timeout", opts.connect_timeout);
+        }
+        if (exists opts.read_timeout) {
+            rv.read_timeout = QgetApp::getSeconds("--read-timeout", opts.read_timeout);
+        }
+        if (exists opts.max_time) {
+            rv.max_time = QgetApp::getSeconds("--max-time", opts.max_time);
+        }
+        if (opts.fail_with_body) {
+            rv.keep_error_body = True;
+        }
+        return rv;
     }
 
-    # get the filename to save
-    if (o.output) {
-        fn = o.output;
-    } else if (!fn.val()) {
-        fn = get_safe_file_name(u.path) ?? get_safe_file_name(u.host) ?? "index.html";
+    #! Returns a time in seconds given on the command line as a timeout
+    private static timeout getSeconds(string opt, string val) {
+        if (val !~ /^[0-9]+(\.[0-9]*)?$/ || val.toFloat() <= 0) {
+            throw "QGET-ERROR", sprintf("invalid value %y for %s; expecting a positive number of seconds", val, opt);
+        }
+        return (val.toFloat() * 1000).toInt();
     }
 
-    # wait for the event monitoring thread to complete
-    cb.wait();
-
-    if (!o.verbose) {
-	    print("\n");
+    #! Starts refreshing the progress display, so a download without progress is shown as stalled
+    private startRefresh() {
+        if (!progress || !progress.isInteractive()) {
+            return;
+        }
+        refresh_counter.inc();
+        background sub () {
+            on_exit refresh_counter.dec();
+            AutoLock al(refresh_lock);
+            while (!refresh_done) {
+                # a timed wait: the display shows how long a transfer has been without progress
+                refresh_cond.wait(refresh_lock, RefreshInterval);
+                if (!refresh_done) {
+                    progress.refresh();
+                }
+            }
+        }();
     }
-    myprintf("done, saving %y (%d bytes)\n", fn, x.size());
 
-    # save the file read
-    File f();
-
-    # show file events if verbose is set
-    if (o.verbose) {
-    	cb = new QueueCallBack(f, fn);
+    #! Stops refreshing the progress display
+    private stopRefresh() {
+        {
+            AutoLock al(refresh_lock);
+            refresh_done = True;
+            refresh_cond.signal();
+        }
+        refresh_counter.waitForZero();
     }
 
-    f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
-    # File::write() accepts both string and binary data; the HTTP client returns binary for non-text
-    # media types
-    if (x) {
-        f.write(x);
+    private static printHelpLine(TerminalColor c, string opt, string desc, int width = 30) {
+        printf("  %s %s\n", TerminalColor::padRight(c.key(opt), width), desc);
+    }
+
+    static usage(TerminalColor c) {
+        printf("%s - download files from http, https, ftp, and ftps URLs\n\n", c.bold("qget"));
+        printf("%s\n", c.bold("USAGE"));
+        printf("  qget [options] URL...\n");
+        printf("  qget [options] connection[/path]\n\n");
+
+        printf("%s\n", c.bold("OUTPUT"));
+        printHelpLine(c, "-o, -O, --output=FILE", "write to FILE; \"-\" writes to stdout");
+        printHelpLine(c, "--directory-prefix=DIR", "save files in DIR");
+        printHelpLine(c, "--no-clobber", "fail if a file exists instead of overwriting it");
+        printHelpLine(c, "--no-part", "write directly to the file instead of a .part file");
+        printHelpLine(c, "--content-disposition", "use the file name given by the server");
+        printf("\n");
+
+        printf("%s\n", c.bold("REQUEST"));
+        printHelpLine(c, "-H, --header=\"NAME: VALUE\"", "add a request header (repeatable)");
+        printHelpLine(c, "-A, --user-agent=AGENT", "set the User-Agent header");
+        printHelpLine(c, "-u, --user=USER:PASSWORD", "credentials for Basic authentication or FTP");
+        printHelpLine(c, "--compressed", "request a compressed response and decompress it");
+        printHelpLine(c, "--max-redirs=N", "follow at most N redirects (default 20; 0: none)");
+        printHelpLine(c, "--fail-with-body", "save the body of an HTTP error response");
+        printHelpLine(c, "--http1.1, --http2, --http3", "use the given HTTP version");
+        printf("\n");
+
+        printf("%s\n", c.bold("CONNECTION"));
+        printHelpLine(c, "-x, --proxy=URL", "use the given HTTP proxy");
+        printHelpLine(c, "--no-proxy", "ignore the proxy environment variables");
+        printHelpLine(c, "-k, --insecure", "do not verify server certificates");
+        printHelpLine(c, "--cacert=FILE", "verify server certificates with the CAs in FILE");
+        printHelpLine(c, "--capath=DIR", "verify server certificates with the CAs in DIR");
+        printHelpLine(c, "-E, --cert=FILE", "client certificate (PEM)");
+        printHelpLine(c, "--key=FILE", "private key of the client certificate (PEM)");
+        printHelpLine(c, "--connect-timeout=SECS", "maximum time to connect (default 30)");
+        printHelpLine(c, "--read-timeout=SECS", "maximum time to wait for data (default 120)");
+        printHelpLine(c, "-m, --max-time=SECS", "maximum time for each download");
+        printHelpLine(c, "-T, --timeout=SECS", "set the connect and read timeouts");
+        printf("\n");
+
+        printf("%s\n", c.bold("DISPLAY"));
+        printHelpLine(c, "-q, --quiet", "no progress; -qq: no errors either");
+        printHelpLine(c, "-s, --silent", "same as -qq");
+        printHelpLine(c, "-v, --verbose", "show the protocol, status, and content type");
+        printHelpLine(c, "--no-color", "do not use colors (also with NO_COLOR set)");
+        printHelpLine(c, "--full-exceptions", "show full exception information");
+        printHelpLine(c, "-V, --version", "show the version");
+        printHelpLine(c, "-h, --help", "show this help");
+        printf("\n");
+
+        printf("%s\n", c.bold("EXIT CODES"));
+        printf("  0 success, 1 other error, 2 invalid arguments, 3 file error, 4 network error, 5 TLS error,\n"
+            "  6 authentication error, 7 protocol error, 8 server error, 10 file exists, 11 timeout,\n"
+            "  130 interrupted\n");
     }
 }

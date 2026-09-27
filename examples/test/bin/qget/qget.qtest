@@ -2,6 +2,12 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright 2026 Qore Technologies, s.r.o.
 
+%modern
+%enable-all-warnings
+
+%include ../../qore/classes/FtpServer.qc
+%include ../../qore/classes/TestConnectProxy.qc
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires FsUtil
@@ -11,11 +17,6 @@
 %requires HttpServer
 %requires Mime
 
-%include ../../qore/classes/FtpServer.qc
-
-%modern
-%enable-all-warnings
-
 %exec-class QgetTest
 
 #! Runs bin/qget as a separate process against local HTTP and FTP servers
@@ -23,25 +24,29 @@ public class QgetTest inherits QUnit::Test {
     private {
         HttpServer http;
         int http_port;
+        QgetTestHandler handler;
         #! binary body served as application/octet-stream
         binary blob;
     }
 
     constructor() : Test("QgetTest", "1.0") {
         addTestCase("binary HTTP download", \binaryHttpDownload());
-        addTestCase("text HTTP download", \textHttpDownload());
+        addTestCase("output options", \outputOptions());
         addTestCase("empty HTTP body", \emptyHttpDownload());
-        addTestCase("Content-Disposition file name", \contentDispositionDownload());
-        addTestCase("Content-Disposition path traversal", \contentDispositionTraversal());
-        addTestCase("Content-Disposition with parameters", \contentDispositionParams());
-        addTestCase("Content-Disposition without a usable name", \contentDispositionUnusable());
-        addTestCase("FTP URL without a file name", \ftpMissingFileName());
-        addTestCase("request headers", \requestHeaders());
+        addTestCase("Content-Disposition file names", \contentDisposition());
+        addTestCase("request options", \requestOptions());
         addTestCase("FTP download", \ftpDownload());
-        addTestCase("HTTP error status", \httpErrorStatus());
-        addTestCase("connection error", \connectionError());
-        addTestCase("invalid header", \invalidHeader());
-        addTestCase("unsupported scheme", \unsupportedScheme());
+        addTestCase("HTTP error responses", \httpErrors());
+        addTestCase("redirects", \redirects());
+        addTestCase("connection errors", \connectionErrors());
+        addTestCase("invalid arguments", \invalidArguments());
+        addTestCase("no-clobber", \noClobber());
+        addTestCase("timeouts", \timeouts());
+        addTestCase("quiet levels and colors", \quietAndColors());
+        addTestCase("multiple URLs", \multipleUrls());
+        addTestCase("deprecated options", \deprecatedOptions());
+        addTestCase("named connections", \namedConnections());
+        addTestCase("interrupt", \interrupt());
 
         # not a multiple of any buffer size, and large enough to be read in several packets
         blob = get_random_bytes(300001);
@@ -49,8 +54,9 @@ public class QgetTest inherits QUnit::Test {
         Logger logger("test", LoggerLevel::getLevelInfo());
         http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         on_error delete http;
-        http.setDefaultHandler("qget", new QgetTestHandler(blob));
-        http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        handler = new QgetTestHandler(blob);
+        http.setDefaultHandler("qget", handler);
+        http_port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         on_exit delete http;
         set_return_value(main());
@@ -61,15 +67,38 @@ public class QgetTest inherits QUnit::Test {
         hash<auto> result = runQget(tmp.path, url("/files/blob.tar.gz"));
         assertEq(0, result.rc, result.err);
         assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/blob.tar.gz"));
+        # no partial file is left
+        assertFalse(is_file(tmp.path + "/blob.tar.gz.part"));
+        # a summary line
+        assertRegex("✔ blob\\.tar\\.gz 293\\.0 KiB in ", result.err);
     }
 
-    textHttpDownload() {
+    outputOptions() {
         TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, "-o out.txt " + url("/files/text.txt"));
-        assertEq(0, result.rc, result.err);
-        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/out.txt"));
+        foreach string opt in ("-o", "-O", "--output=") {
+            hash<auto> result = runQget(tmp.path, (opt =~ /=$/ ? opt : opt + " ") + "out.txt "
+                + url("/files/text.txt"));
+            assertEq(0, result.rc, opt + ": " + result.err);
+            assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/out.txt"), opt);
+            unlink(tmp.path + "/out.txt");
+        }
         # the name from the URL is not used when an output file is given
         assertFalse(is_file(tmp.path + "/text.txt"));
+
+        # to stdout
+        hash<auto> result = runQget(tmp.path, "-o - " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, result.out);
+
+        # a directory prefix that does not exist is created
+        result = runQget(tmp.path, "--directory-prefix=sub/dir " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/sub/dir/text.txt"));
+
+        # without a part file
+        result = runQget(tmp.path, "--no-part -o direct.bin " + url("/files/blob.tar.gz"));
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/direct.bin"));
     }
 
     emptyHttpDownload() {
@@ -81,132 +110,356 @@ public class QgetTest inherits QUnit::Test {
         assertEq(0, info.size);
     }
 
-    contentDispositionDownload() {
+    contentDisposition() {
+        # the name from the URL is used by default
         TmpDir tmp("qget-test-");
         hash<auto> result = runQget(tmp.path, url("/disposition"));
         assertEq(0, result.rc, result.err);
-        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/named.bin"));
-    }
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/disposition"));
 
-    contentDispositionTraversal() {
-        TmpDir tmp("qget-test-");
+        # the name from the server with the option
+        result = runQget(tmp.path, "--content-disposition " + url("/disposition"));
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/named.bin"));
+
+        # a server-supplied name cannot select a file outside the current directory
         string work = tmp.path + "/work";
         mkdir(work);
-        hash<auto> result = runQget(work, url("/disposition-traversal"));
+        result = runQget(work, "--content-disposition " + url("/disposition-traversal"));
         assertEq(0, result.rc, result.err);
-        # the server-supplied name cannot select a file outside the current directory
         assertFalse(is_file(tmp.path + "/escape.bin"));
         assertEq(blob, ReadOnlyFile::readBinaryFile(work + "/escape.bin"));
-    }
 
-    contentDispositionParams() {
-        TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, url("/disposition-params"));
+        # parameters after the file name
+        result = runQget(tmp.path, "--content-disposition " + url("/disposition-params"));
         assertEq(0, result.rc, result.err);
         assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/params.bin"));
-    }
 
-    contentDispositionUnusable() {
-        TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, url("/disposition-dots"));
+        # a name without a usable last component falls back to the name from the URL
+        result = runQget(tmp.path, "--content-disposition " + url("/disposition-dots"));
         assertEq(0, result.rc, result.err);
-        # the name falls back to the last component of the URL path
         assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/disposition-dots"));
     }
 
-    ftpMissingFileName() {
-        TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, "ftp://localhost:1/");
-        assertEq(1, result.rc);
-        assertRegex("missing file name", result.err);
-    }
-
-    requestHeaders() {
+    requestOptions() {
         TmpDir tmp("qget-test-");
         hash<auto> result = runQget(tmp.path, "-H 'X-Test: abc' -o hdr.txt " + url("/echo-header"));
         assertEq(0, result.rc, result.err);
-        assertEq("abc", ReadOnlyFile::readTextFile(tmp.path + "/hdr.txt"));
+        assertEq("x=abc|ua=qget/2.0.0|ae=", ReadOnlyFile::readTextFile(tmp.path + "/hdr.txt"));
+
+        result = runQget(tmp.path, "-A agent/1 --compressed -o hdr.txt " + url("/echo-header"));
+        assertEq(0, result.rc, result.err);
+        assertRegex("^x=\\|ua=agent/1\\|ae=gzip", ReadOnlyFile::readTextFile(tmp.path + "/hdr.txt"));
+
+        # authentication
+        result = runQget(tmp.path, "-o auth.txt " + url("/auth"));
+        assertEq(6, result.rc, result.err);
+        result = runQget(tmp.path, "-u u:p -o auth.txt " + url("/auth"));
+        assertEq(0, result.rc, result.err);
+        assertEq("secret", ReadOnlyFile::readTextFile(tmp.path + "/auth.txt"));
+
+        # HTTP versions: only HTTP/1.1 is served here
+        result = runQget(tmp.path, "--http1.1 -o v.txt " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        result = runQget(tmp.path, "-v -o v.txt " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertRegex("h1 200 text/plain", result.err);
     }
 
     ftpDownload() {
-        FtpServer ftp(0, m_options.verbose);
+        FtpServer ftp(0, m_options.verbose, "127.0.0.1");
         on_exit ftp.shutdown();
 
         TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, sprintf("ftp://localhost:%d/text", ftp.getPort()));
+        hash<auto> result = runQget(tmp.path, sprintf("ftp://127.0.0.1:%d/text", ftp.getPort()));
         assertEq(0, result.rc, result.err);
         # the test FTP server sends 9200 bytes for any file name
         assertEq(9200, hstat(tmp.path + "/text").size);
+
+        # a URL without a file name
+        result = runQget(tmp.path, sprintf("ftp://127.0.0.1:%d/", ftp.getPort()));
+        assertEq(2, result.rc);
+        assertRegex("does not name a file", result.err);
     }
 
-    httpErrorStatus() {
+    httpErrors() {
         TmpDir tmp("qget-test-");
         hash<auto> result = runQget(tmp.path, url("/missing"));
-        assertEq(1, result.rc);
-        assertRegex("404", result.err);
+        assertEq(8, result.rc);
+        assertRegex("✘ .*HTTP 404", result.err);
         assertFalse(is_file(tmp.path + "/missing"));
+
+        # the body of the error response is saved with --fail-with-body
+        result = runQget(tmp.path, "--fail-with-body " + url("/missing"));
+        assertEq(8, result.rc);
+        assertEq("not found", ReadOnlyFile::readTextFile(tmp.path + "/missing"));
     }
 
-    connectionError() {
+    redirects() {
         TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, sprintf("http://localhost:%d/x", get_free_port()));
-        assertEq(1, result.rc);
-        assertRegex("CONNECT", result.err);
+        hash<auto> result = runQget(tmp.path, url("/redirect"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/redirect"));
+        assertRegex("↪ 302 → http://127\\.0\\.0\\.1:[0-9]+/files/text\\.txt", result.err);
+
+        # redirects are not followed with --max-redirs=0
+        result = runQget(tmp.path, "--max-redirs=0 -o r.txt " + url("/redirect"));
+        assertEq(7, result.rc, result.err);
+        assertFalse(is_file(tmp.path + "/r.txt"));
     }
 
-    invalidHeader() {
+    connectionErrors() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, sprintf("http://127.0.0.1:%d/x", get_free_port()));
+        assertEq(4, result.rc);
+        assertRegex("✘ ", result.err);
+    }
+
+    invalidArguments() {
         TmpDir tmp("qget-test-");
         hash<auto> result = runQget(tmp.path, "-H no-colon " + url("/files/text.txt"));
-        assertEq(1, result.rc);
+        assertEq(2, result.rc);
         assertRegex("invalid header", result.err);
+
+        result = runQget(tmp.path, "gopher://localhost/x");
+        assertEq(2, result.rc);
+        assertRegex("unsupported URL scheme", result.err);
+
+        result = runQget(tmp.path, "");
+        assertEq(2, result.rc);
+        assertRegex("no URL given", result.err);
+
+        result = runQget(tmp.path, "--no-such-option " + url("/files/text.txt"));
+        assertEq(2, result.rc);
+
+        result = runQget(tmp.path, "--http2 --http3 " + url("/files/text.txt"));
+        assertEq(2, result.rc);
+        assertRegex("only one of", result.err);
+
+        result = runQget(tmp.path, "--max-time=x " + url("/files/text.txt"));
+        assertEq(2, result.rc);
+        assertRegex("invalid value", result.err);
+
+        # an output file for several URLs
+        result = runQget(tmp.path, "-o x " + url("/files/text.txt") + " " + url("/files/blob.tar.gz"));
+        assertEq(2, result.rc);
+
+        result = runQget(tmp.path, "--version");
+        assertEq(0, result.rc);
+        assertEq("qget 2.0.0\n", result.out);
+
+        result = runQget(tmp.path, "--help");
+        assertEq(0, result.rc);
+        assertRegex("USAGE", result.out);
+        assertRegex("--content-disposition", result.out);
     }
 
-    unsupportedScheme() {
+    noClobber() {
         TmpDir tmp("qget-test-");
-        hash<auto> result = runQget(tmp.path, "gopher://localhost/x");
-        assertEq(1, result.rc);
-        assertRegex("Don't know how to handle scheme", result.err);
+        File f();
+        f.open2(tmp.path + "/text.txt", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("existing");
+        f.close();
+        hash<auto> result = runQget(tmp.path, "--no-clobber " + url("/files/text.txt"));
+        assertEq(10, result.rc, result.err);
+        assertEq("existing", ReadOnlyFile::readTextFile(tmp.path + "/text.txt"));
+        # overwritten by default
+        result = runQget(tmp.path, url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/text.txt"));
+    }
+
+    timeouts() {
+        TmpDir tmp("qget-test-");
+        on_exit handler.slow_release.push(True);
+        hash<auto> result = runQget(tmp.path, "--read-timeout=0.3 " + url("/slow"));
+        assertEq(11, result.rc, result.err);
+        # the server reached the second part of the body
+        assertEq(True, handler.slow_reached.get(30s));
+        # the data received is kept
+        assertRegex("kept in slow\\.part", result.err);
+        assertEq("early", ReadOnlyFile::readTextFile(tmp.path + "/slow.part"));
+        assertFalse(is_file(tmp.path + "/slow"));
+    }
+
+    quietAndColors() {
+        TmpDir tmp("qget-test-");
+        # no progress or summary with -q
+        hash<auto> result = runQget(tmp.path, "-q " + url("/files/text.txt"));
+        assertEq(0, result.rc, result.err);
+        assertEq("", result.err);
+        # but errors
+        result = runQget(tmp.path, "-q " + url("/missing"));
+        assertEq(8, result.rc);
+        assertRegex("HTTP 404", result.err);
+        # no errors either with -qq or -s
+        foreach string opt in ("-qq", "-s") {
+            result = runQget(tmp.path, opt + " " + url("/missing"));
+            assertEq(8, result.rc, opt);
+            assertEq("", result.err, opt);
+        }
+        # no colors or cursor movements when stderr is not a terminal
+        result = runQget(tmp.path, url("/files/blob.tar.gz"));
+        assertEq(0, result.rc, result.err);
+        assertEq(-1, result.err.find("\033"));
+    }
+
+    multipleUrls() {
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, url("/files/text.txt") + " " + url("/files/blob.tar.gz"));
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/text.txt"));
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/blob.tar.gz"));
+        assertRegex("✔ 2 downloads", result.err);
+
+        # a failure does not stop the other downloads; the lowest exit code is returned
+        result = runQget(tmp.path, url("/missing") + " " + sprintf("http://127.0.0.1:%d/x", get_free_port()) + " "
+            + url("/files/empty.bin"));
+        assertEq(4, result.rc, result.err);
+        assertTrue(is_file(tmp.path + "/empty.bin"));
+        assertRegex("✘ 2 of 3 downloads failed", result.err);
+    }
+
+    deprecatedOptions() {
+        TestConnectProxy proxy();
+        on_exit proxy.shutdown();
+        TmpDir tmp("qget-test-");
+        hash<auto> result = runQget(tmp.path, sprintf("-P http://127.0.0.1:%d -o p.txt %s", proxy.getPort(),
+            url("/files/text.txt")));
+        assertEq(0, result.rc, result.err);
+        assertRegex("-P is deprecated", result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/p.txt"));
+        assertRegex("^GET http://127\\.0\\.0\\.1:[0-9]+/files/text\\.txt ", proxy.getRequests()[0].line);
+
+        result = runQget(tmp.path, "-e " + url("/missing"));
+        assertEq(8, result.rc);
+        assertRegex("-e is deprecated", result.err);
+    }
+
+    namedConnections() {
+        TmpDir tmp("qget-test-");
+        string provider = tmp.path + "/QgetTestConnections.qm";
+        File f();
+        f.open2(provider, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern
+%%requires ConnectionProvider
+module QgetTestConnections {
+    version = \"1.0\";
+    desc = \"test connections\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+public namespace QgetTestConnections {
+public ConnectionProvider::AbstractConnection sub get_mod_connection(string str) {
+    if (str == \"test-server\") {
+        return new HttpConnection(\"test-server\", \"test\", %y);
+    }
+    throw \"CONNECTION-ERROR\", sprintf(\"unknown connection %%y\", str);
+}
+public *hash<auto> sub get_mod_connections() {
+}
+}
+", url("/")));
+        f.close();
+        string env = "QORE_CONNECTION_PROVIDERS=" + shellQuote(provider) + " ";
+
+        hash<auto> result = runQget(tmp.path, "test-server/files/text.txt", env);
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/text.txt"));
+        unlink(tmp.path + "/text.txt");
+
+        # the former syntax with a separate path
+        result = runQget(tmp.path, "test-server /files/text.txt", env);
+        assertEq(0, result.rc, result.err);
+        assertEq(QgetTestHandler::Text, ReadOnlyFile::readTextFile(tmp.path + "/text.txt"));
+
+        result = runQget(tmp.path, "no-such-connection/x", env);
+        assertEq(2, result.rc);
+    }
+
+    #! Ctrl-C cancels the download
+    interrupt() {
+        TmpDir tmp("qget-test-");
+        on_exit handler.slow_release.push(True);
+
+        # qget is started by a shell script that writes the process ID and then runs qget in its place
+        string script = tmp.path + "/run.sh";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("echo $$ > %s\nexec %s\n", shellQuote(tmp.path + "/pid"),
+            getQgetCommand(tmp.path, url("/slow"))));
+        f.close();
+
+        Counter done(1);
+        int rc;
+        background sub () {
+            on_exit done.dec();
+            rc = system("sh " + shellQuote(script));
+        }();
+
+        # the request has been received and the first part of the body sent
+        assertEq(True, handler.slow_reached.get(30s));
+        string pid = trim(ReadOnlyFile::readTextFile(tmp.path + "/pid"));
+        assertRegex("^[0-9]+$", pid);
+        assertEq(0, kill(pid.toInt(), SIGINT));
+        done.waitForZero();
+        string err = ReadOnlyFile::readTextFile(tmp.path + "/.stderr");
+        assertEq(130, rc, err);
+        assertRegex("cancelled", err);
+        assertFalse(is_file(tmp.path + "/slow"));
     }
 
     private string url(string path) {
-        return sprintf("http://localhost:%d%s", http_port, path);
+        return sprintf("http://127.0.0.1:%d%s", http_port, path);
     }
 
     private static string shellQuote(string val) {
         return "'" + replace(val, "'", "'\\''") + "'";
     }
 
-    #! runs qget in the given directory and returns the exit code and stderr
+    #! returns the command that runs qget in the given directory with stdout and stderr redirected to files
     /** the QGET_SCRIPT environment variable can name an alternate qget script to test
     */
-    private hash<auto> runQget(string dir, string args) {
-        string err_path = dir + "/.stderr";
+    private string getQgetCommand(string dir, string args, *string extra_env) {
         # qget runs in the given directory, so paths the test runner passes relative to the current directory
         # must be resolved first, or the child would run a different qore binary or libqore
         string qore = getenv("QORE_BINARY") ?? "qore";
         if (qore =~ /\//) {
             qore = normalize_dir(qore);
         }
-        string env;
+        string env = extra_env ?? "";
         if (*string ld_path = getenv("LD_LIBRARY_PATH")) {
             # an empty entry means the current directory
-            env = sprintf("LD_LIBRARY_PATH=%s ", shellQuote((foldl $1 + ":" + $2,
+            env += sprintf("LD_LIBRARY_PATH=%s ", shellQuote((foldl $1 + ":" + $2,
                 map normalize_dir($1), ld_path.split(":")) ?? ""));
         }
-        string cmd = sprintf("cd %s && %s%s --enable-debug %s %s > /dev/null 2> %s",
-            shellQuote(dir),
-            env ?? "",
+        # the modules of this source tree are used
+        list<string> module_dirs = (normalize_dir(get_script_dir() + "/../../../../qlib"),);
+        if (*string mod_dir = getenv("QORE_MODULE_DIR")) {
+            module_dirs += map normalize_dir($1), mod_dir.split(":");
+        }
+        env += sprintf("QORE_MODULE_DIR=%s ", shellQuote(module_dirs.join(":")));
+        return sprintf("env %s%s --enable-debug %s %s > %s 2> %s",
+            env,
             shellQuote(qore),
             shellQuote(normalize_dir(getenv("QGET_SCRIPT") ?? get_script_dir() + "/../../../../bin/qget")),
             args,
-            shellQuote(err_path));
+            shellQuote(dir + "/.stdout"),
+            shellQuote(dir + "/.stderr"));
+    }
+
+    #! runs qget in the given directory and returns the exit code, stdout, and stderr
+    private hash<auto> runQget(string dir, string args, *string extra_env) {
+        string cmd = sprintf("cd %s && %s", shellQuote(dir), getQgetCommand(dir, args, extra_env));
         int rc = system(cmd);
-        string err = ReadOnlyFile::readTextFile(err_path);
+        string out = ReadOnlyFile::readTextFile(dir + "/.stdout");
+        string err = ReadOnlyFile::readTextFile(dir + "/.stderr");
         if (m_options.verbose) {
             printf("%s: rc: %d stderr: %s\n", cmd, rc, err);
         }
         return {
             "rc": rc,
+            "out": out,
             "err": err,
         };
     }
@@ -215,6 +468,12 @@ public class QgetTest inherits QUnit::Test {
 class QgetTestHandler inherits AbstractHttpRequestHandler {
     public {
         const Text = "hello from the qget test\n";
+
+        #! receives a message when /slow has sent the first part of its body
+        Queue slow_reached();
+
+        #! released by the test to let /slow send the rest of its body
+        Queue slow_release();
     }
 
     private {
@@ -254,7 +513,36 @@ class QgetTestHandler inherits AbstractHttpRequestHandler {
                     "Content-Disposition": "attachment; filename=\"..\"",
                 });
             case "/echo-header":
-                return makeResponse(200, hdr."x-test" ?? "", {"Content-Type": MimeTypeText});
+                return makeResponse(200, sprintf("x=%s|ua=%s|ae=%s", hdr."x-test" ?? "", hdr."user-agent" ?? "",
+                    hdr."accept-encoding" ?? ""), {"Content-Type": MimeTypeText});
+            case "/auth":
+                if (hdr.authorization == "Basic " + make_base64_string("u:p")) {
+                    return makeResponse(200, "secret", {"Content-Type": MimeTypeText});
+                }
+                return makeResponse(401, "unauthorized", {
+                    "Content-Type": MimeTypeText,
+                    "WWW-Authenticate": "Basic realm=\"test\"",
+                });
+            case "/redirect":
+                return makeResponse(302, "", {"Location": "/files/text.txt"});
+            case "/slow": {
+                # the first chunk is sent with the headers; the second one when the test releases it
+                int calls = 0;
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeOctetStream},
+                    "send_callback": *binary sub () {
+                        switch (++calls) {
+                            case 1:
+                                return binary("early");
+                            case 2:
+                                slow_reached.push(True);
+                                slow_release.get();
+                                return binary("late");
+                        }
+                    },
+                };
+            }
         }
         return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
     }

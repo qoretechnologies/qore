@@ -660,6 +660,21 @@ val = "string";      # OK
       <tt>ReferenceHolder&lt;QoreHttpClientObject&gt; client(new QoreHttpClientObject, xsink);</tt>
     @endparblock
 
+    @par qget Command-Line Changes
+    @parblock
+    \c qget was rewritten (see the new features); its options follow \c wget for download options and \c curl for
+    request and TLS options:
+    - the file name given by a server in a \c Content-Disposition header is only used with
+      \c --content-disposition
+    - HTTP error responses fail a download, and errors are reported with distinct exit codes: 2 for invalid
+      arguments, 3 for file errors, 4 for network errors, 5 for TLS errors, 6 for authentication errors, 7 for
+      protocol errors, 8 for error responses, 10 for an existing file with \c --no-clobber, 11 for timeouts, and
+      130 for an interrupted download
+    - \c -P for the proxy is deprecated for \c -x and \c --proxy, and \c -e is deprecated for
+      \c --full-exceptions; both will be removed
+    - \c -v shows the protocol, status, and content type of the response instead of socket events
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
@@ -1748,6 +1763,18 @@ while (*binary chunk = input.read(65536)) {
     @ref Qore::FtpClient::size() "FtpClient::size()" returns the size of a remote file, and
     @ref Qore::FtpClient::get() "FtpClient::get()" with an offset restarts a transfer at the given position, so an
     interrupted download can be resumed.
+
+    @par FTP Transfers to Any Output Stream
+    @ref Qore::FtpClient::get() "FtpClient::get()" writes a transfer to an output stream of any class, including a
+    class implemented in %Qore, which is written in the calling thread; a transfer that fails, for example because
+    the output stream raises an exception, closes the control connection, so the next operation makes a new one
+    instead of reading the reply of the aborted transfer.
+
+    @par qget Rewritten on Async I/O
+    \c qget was rewritten on the new @ref urldownloaderintro "UrlDownloader" module: downloads over HTTP/1.1,
+    HTTP/2, HTTP/3, FTP, and FTPS are streamed to \c .part files, with a colorized progress display with a speed
+    graph, redirects, proxies (also from the environment), TLS options (\c --cacert, \c --capath, \c -E, \c -k),
+    time limits, several URLs at once, and Ctrl-C handling that keeps the data received; see \c qget \c --help.
 
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
@@ -3571,6 +3598,10 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref unstructuredrestclientintro "UnstructuredRestClient" module
       - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning and platform APIs
+
+    - @ref urldownloaderintro "UrlDownloader" module
+      - new module for downloading \c http, \c https, \c ftp, and \c ftps URLs to files with progress reporting,
+        classified errors, time limits, \c .part files, and cancellation; it is the engine of \c qget
 
     - @ref vertexaidataproviderintro "VertexAiDataProvider" module
       - new module providing a data provider API for Google Vertex AI
