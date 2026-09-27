@@ -70,6 +70,7 @@ file(WRITE "${{CMAKE_BINARY_DIR}}/tags.txt" "${{lines}}\\n")
                 registration = "qlib/Fixture" if separated else "qlib/Fixture.qm"
                 (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
 project(ModuleDocInputs NONE)
+set(QORE_MODULE_DIR_FOR_DOCS "${{CMAKE_SOURCE_DIR}}/qlib:${{CMAKE_BINARY_DIR}}/modules")
 include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
 set(QORE_BUILD_AOT_MODULES OFF)
 set(DOXYGEN_FOUND TRUE)
@@ -81,7 +82,7 @@ add_custom_target(docs)
 add_custom_target(docs-module)
 qore_external_user_module("{registration}" "")
 ''')
-                build = root / "build-debug"
+                build = root / "build~snapshot"
                 result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
@@ -89,6 +90,9 @@ qore_external_user_module("{registration}" "")
                 inputs = (build / "doxygen/Doxyfile.Fixture").read_text().removeprefix("INPUT = ").split()
                 self.assertEqual([str(build / "doxygen/qlib/Fixture" / (name + ".dox.h"))
                                   for name in sources], inputs)
+                result = subprocess.run([CMAKE, "--build", str(build), "--target", "docs"],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_directory_resources(self):
         for registration in ('qore_user_module("qlib/Fixture")',

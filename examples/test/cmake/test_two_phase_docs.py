@@ -7,6 +7,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -18,14 +19,23 @@ CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 class TwoPhaseDocsTest(unittest.TestCase):
     def configure(self, root, enabled=True, missing_target=False, text="@literal@ ${literal}"):
         source = root / "source with spaces"
-        build = root / "build-debug"
+        build = root / "build~snapshot with spaces"
         source.mkdir(exist_ok=True)
+        module_path = f"{source}/qlib:{build}/modules"
+        (source / "check-env.py").write_text(f'''import os
+from pathlib import Path
+assert os.environ["QORE_MODULE_DIR"] == {module_path!r}
+assert os.environ["QORE_DOC_DEFINES"] == "QORE_QDX_RUN,Unix"
+Path({str(build / "qdx-environment-ok")!r}).touch()
+''')
         (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
 project(DocHelper NONE)
+set(QORE_MODULE_DIR_FOR_DOCS "{module_path}")
+set(QORE_DOC_DEFINES "QORE_QDX_RUN,Unix")
 include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
 set(DOXYGEN_FOUND {"TRUE" if enabled else "FALSE"})
 set(DOXYGEN_EXECUTABLE "${{CMAKE_COMMAND}}" -E echo)
-set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E echo)
+set(QORE_QDX_COMMAND "{sys.executable}" "${{CMAKE_SOURCE_DIR}}/check-env.py")
 add_custom_target(docs)
 add_custom_target(docs-First COMMAND "${{CMAKE_COMMAND}}" -E touch first-built)
 {"" if missing_target else 'add_custom_target(docs-Second COMMAND "${CMAKE_COMMAND}" -E touch second-built)'}
@@ -60,6 +70,7 @@ qore_binary_module_two_phase_docs(xml "First;Second")
                 self.assertNotIn("Warning", result.stderr)
                 self.assertTrue((build / "first-built").is_file())
                 self.assertTrue((build / "second-built").is_file())
+                self.assertTrue((build / "qdx-environment-ok").is_file())
 
     def test_disabled_documentation(self):
         with tempfile.TemporaryDirectory(prefix="qore-doc-helper-") as directory:
