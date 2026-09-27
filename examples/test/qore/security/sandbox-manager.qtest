@@ -2093,8 +2093,8 @@ nothing sub noop() {}
     }
 
     testDataProviderLogoInitialization() {
-        string data_provider = normalize_dir(get_script_dir()
-            + "/../../../../qlib/DataProvider/DataProvider.qmod");
+        string qmod_dir = getenv("QORE_TEST_QMOD_DIR") ?? (get_script_dir() + "/../../../../qlib");
+        string data_provider = normalize_dir(qmod_dir + "/DataProvider/DataProvider.qmod");
         assertTrue(is_file(data_provider), "local DataProvider qmod is available for the sandbox regression");
 
         SandboxManager sm = SandboxManager::createLockdown();

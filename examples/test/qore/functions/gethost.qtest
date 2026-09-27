@@ -12,6 +12,7 @@ public class GetHostTest inherits QUnit::Test {
     constructor() : Test("GetHostBy*Test", "1.0") {
         addTestCase("gethostbyname test", \gethostbynameTest());
         addTestCase("gethostbyaddr test", \gethostbyaddrTest());
+        addTestCase("public reverse DNS", \publicReverseDnsTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -38,6 +39,21 @@ public class GetHostTest inherits QUnit::Test {
     }
 
     gethostbyaddrTest() {
+        # The loopback entry exercises reverse lookup without requiring network access.
+        *string name = gethostbyaddr("127.0.0.1");
+        assertTrue(exists name && strlen(name) > 0);
+        *hash result = gethostbyaddr_long("127.0.0.1");
+        assertEq(name, result.name);
+        assertTrue(result.hasKey("aliases"));
+        assertEq("ipv4", result.typename);
+        assertEq(2, result.type);
+        assertEq(4, result.len);
+    }
+
+    publicReverseDnsTest() {
+        if (!gethostbyaddr("8.8.8.8")) {
+            testSkip("Public reverse DNS unavailable in this environment");
+        }
         assertTrue(gethostbyaddr("8.8.8.8") =~ /google/);
         *hash result = gethostbyaddr_long("8.8.8.8");
         assertTrue(result.name =~ /google/);
