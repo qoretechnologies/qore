@@ -1444,7 +1444,8 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index, and
         optionally its \c factoryinfomap member; if \c factoryinfomap is not given, the index does not record factory
-        info, and readers load the factory modules to get it
+        info, and readers load the factory modules to get it; the info of a factory that is not in \c factorymap is
+        not written, so an index read with @ref readSerializedDataProviderIndex() can be updated and written again
         @param action_apps the apps that have actions
         @param get_app_actions returns the actions of the given app, keyed by action name, in the serialized form
         stored in the index
@@ -1487,6 +1488,12 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             if (exists maps{key}) {
                 maps{key} = sortIndexMap(maps{key}, True);
             }
+        }
+        # the factory info is kept consistent with the factorymap, so that a caller that updates an index read
+        # before, removing factories from its factorymap, never publishes the info of a factory that is not in it
+        if (exists maps.factoryinfomap) {
+            maps.factoryinfomap = (map {$1.key: $1.value}, maps.factoryinfomap.pairIterator(),
+                exists maps.factorymap{$1.key}) ?? {};
         }
 
         hash<string, bool> app_set = (map {$1: True}, keys maps.appinfomap) ?? {};

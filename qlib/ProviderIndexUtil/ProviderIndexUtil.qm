@@ -62,16 +62,6 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
-    - the index records the info of its data provider factories (metadata cache version 6), in a file of the
-      metadata cache that its manifest references, so that the factories can be listed with their info without
-      loading their modules; see
-      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexedFactoryInfo() "ProviderIndexUtil::tryGetIndexedFactoryInfo()",
-      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactoryInfoMap() "ProviderIndexUtil::getIndexedFactoryInfoMap()",
-      and @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactories() "ProviderIndexUtil::getIndexedFactories()";
-      @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFactoryInfo() "ProviderIndexUtil::hasIndexedFactoryInfo()"
-      reports whether an index records it; indexes published by earlier versions, which do not, are still read,
-      and the routing index and the metadata cache manifest do not grow with the factory info; earlier versions of
-      this module cannot read an index published by this version
     - the routing index and the metadata cache are the published index; the canonical index file
       (\c qore-data-index.yaml), a YAML copy of the complete index that can be hundreds of megabytes, is only
       written if requested with the new \c write_canonical_yaml argument of
@@ -89,10 +79,22 @@ module ProviderIndexUtil {
       without reading any app's metadata;
       @ref ProviderIndexUtil::ProviderIndexUtil::hasConnectionAlternatives() "ProviderIndexUtil::hasConnectionAlternatives()"
       reports whether an index published by an earlier version records them; such indexes are still read
-    - each metadata cache file is named after the digest of its contents (routing index version 3, metadata cache
-      version 5), so that publishing an index never changes a file that the previous index references, and the
-      routing index, which is written last, publishes the new index atomically; the files that it no longer
-      references are then removed; indexes written with metadata cache version 4 are still read
+    - the metadata cache is written in format version 6 (routing index version 4): each metadata cache file is
+      named after the digest of its contents, so that publishing an index never changes a file that the previous
+      index references, and the routing index, which is written last, publishes the new index atomically; the files
+      that it no longer references are then removed; the info of the indexed data provider factories is in a file
+      of its own that the manifest references with its size and digest, and that only the factory APIs read
+      (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexedFactoryInfo() "ProviderIndexUtil::tryGetIndexedFactoryInfo()"
+      and @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactoryInfoMap() "ProviderIndexUtil::getIndexedFactoryInfoMap()";
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactories() "ProviderIndexUtil::getIndexedFactories()"
+      returns the indexed factories from the routing index, and
+      @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFactoryInfo() "ProviderIndexUtil::hasIndexedFactoryInfo()"
+      reports whether an index records their info), so the factories can be listed with their info without loading
+      their modules, while the routing index and the manifest do not grow with it; factory info that cannot be read
+      is reported by @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()",
+      and the factory modules are then loaded to get it; indexes written with metadata cache versions 4 and 5 are
+      still read, without factory info; earlier versions of this module cannot read an index written in format 6,
+      and an index must be recreated after upgrading to record the factory info
     - errors reading the routing index or the metadata cache are reported by
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()";
       the canonical index file is only read if there is one, and an app whose metadata cannot be read is
