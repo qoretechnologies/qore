@@ -81,6 +81,7 @@ public class ThreadCancelTest inherits QUnit::Test {
         addTestCase("cancel timed Queue::pop", \testCancelTimedQueuePop());
         addTestCase("cancel file lock", \testCancelFileLock());
         addTestCase("cancel after thread exits", \testCancelAfterThreadExits());
+        addTestCase("cancel during the analysis of a first call", \testCancelFirstCallAnalysis());
 
         set_return_value(main());
     }
@@ -223,6 +224,46 @@ public class ThreadCancelTest inherits QUnit::Test {
     #------------------------------------------------------------------
     # Cancel loop tests
     #------------------------------------------------------------------
+
+    #! A cancellation that is first seen while the IR interpreter analyzes a function at its first call is raised
+    /** The analysis checks for cancellation every 100 operands without an exception sink; it must fail with the
+        THREAD-CANCELLED exception, not with an IR execution error
+    */
+    testCancelFirstCallAnalysis() {
+        # a new function with enough operands for the analysis to check for cancellation
+        string src = "%modern\nint sub big_function(int x) {\n    int y = 0;\n";
+        for (int i = 0; i < 80; ++i) {
+            src += sprintf("    x = x * 3 + %d; y = y + x - %d;\n", i, i);
+        }
+        src += "    return x + y;\n}\n";
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(src, "first-call-analysis");
+
+        RWLock rwl();
+        rwl.writeLock();
+        Counter started(1);
+        Counter done(1);
+        *hash<ExceptionInfo> err;
+        int tid = background sub () {
+            on_exit done.dec();
+            started.dec();
+            try {
+                # RWLock waits are not cancellation points, so the first one is in the analysis of big_function()
+                rwl.readLock();
+                on_exit rwl.readUnlock();
+                pgm.callFunction("big_function", 1);
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+                err = ex;
+            }
+        }();
+        started.waitForZero();
+        assertTrue(cancel_thread(tid, "first call"));
+        rwl.writeUnlock();
+        done.waitForZero();
+        assertEq("THREAD-CANCELLED", err.err, err.desc);
+        assertRegex("IR interpreter analysis", err.desc);
+    }
 
     testCancelWhileLoop() {
         hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {

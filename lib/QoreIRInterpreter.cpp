@@ -1672,6 +1672,22 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     }
 }
 
+//! Raises the cancellation that stopped an IR analysis without an exception sink
+/** qore_ir_visit_value_operands() and the other analysis helpers check for cancellation without an exception sink
+    and only report it; the caller raises it here, so an interpreter analysis stopped by a cancellation fails with the
+    exception of the cancellation instead of failing without one.
+
+    @return false, so the caller can return the result directly
+*/
+static bool raiseInterpreterAnalysisCancel(ExceptionSink* xsink) {
+    if (!qore_check_cancel(xsink, "IR interpreter analysis")) {
+        // the request can be dropped by another thread after the analysis stopped; the analysis is incomplete in
+        // any case
+        xsink->raiseException("THREAD-CANCELLED", "IR interpreter analysis: the analysis was cancelled");
+    }
+    return false;
+}
+
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
         ExceptionSink* xsink) {
@@ -1689,7 +1705,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
             }, &inst_count, "IR interpreter analysis")) {
-                return false;
+                return raiseInterpreterAnalysisCancel(xsink);
             }
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
@@ -1713,7 +1729,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
                 }, &inst_count, "IR interpreter analysis")) {
-                    return false;
+                    return raiseInterpreterAnalysisCancel(xsink);
                 }
             }
         }
@@ -1821,7 +1837,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             };
             if (!qore_ir_visit_value_operands(*inst_ptr, countOperand, &inst_count,
                     "IR interpreter analysis")) {
-                return false;
+                return raiseInterpreterAnalysisCancel(xsink);
             }
         }
     }
