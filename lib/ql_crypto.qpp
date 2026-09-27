@@ -421,7 +421,7 @@ static QoreValue apply_transformation(SimpleRefHolder<Transform>& t, SimpleRefHo
     return rv.release();
 }
 
-static const EVP_MD* q_get_digest(const QoreString& digest, ExceptionSink* xsink) {
+const EVP_MD* q_get_digest(const QoreString& digest, ExceptionSink* xsink) {
     const EVP_MD* md = q_lookup_digest(digest.c_str());
     if (!md) {
         xsink->raiseException("DIGEST-ERROR", "unknown digest '%s'; check DigestMap for supported digests",

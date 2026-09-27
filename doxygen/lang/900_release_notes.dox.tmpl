@@ -1718,6 +1718,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endcode
     @endparblock
 
+    @par Incremental Message Digests
+    The new @ref Qore::Digest "Digest" class calculates a message digest from data added in parts, such as data
+    read from a stream or received from the network, without holding the data in memory; intermediate digests can
+    be retrieved and calculations copied.
+    @code{.py}
+Digest sha("sha256");
+while (*binary chunk = input.read(65536)) {
+    sha.update(chunk);
+}
+    @endcode
+
     @par Private Certificate Authorities for TLS Clients
     @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()" and the new \c ssl_ca_file and
     \c ssl_ca_path options of @ref Qore::HTTPClient::constructor() "HTTPClient::constructor()" set the CA

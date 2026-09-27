@@ -307,4 +307,7 @@ public:
 DLLLOCAL void digest_cache_cleanup();
 #endif
 
+//! Returns the digest algorithm with the given name; raises DIGEST-ERROR and returns nullptr if it is unknown
+DLLLOCAL const EVP_MD* q_get_digest(const QoreString& digest, ExceptionSink* xsink);
+
 #endif // _QORE_QL_CRYPTO_H

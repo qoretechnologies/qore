@@ -1,0 +1,262 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_Digest.qpp Digest class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/ql_crypto.h"
+
+#include <string>
+
+// The private data of a Digest object: a message digest calculation in progress
+class QoreDigest : public AbstractPrivateData {
+public:
+    // Starts a digest calculation; raises an exception if it cannot be started
+    DLLLOCAL QoreDigest(const EVP_MD* md, const char* name, ExceptionSink* xsink)
+            : md(md), name(name), ctx(EVP_MD_CTX_create()) {
+        if (!ctx) {
+            xsink->outOfMemory();
+            return;
+        }
+        if (!EVP_DigestInit_ex(ctx, md, nullptr)) {
+            xsink->raiseException("DIGEST-CALCULATION-ERROR", "error initializing digest '%s'", name);
+        }
+    }
+
+    // Copies a digest calculation in progress; raises an exception if it cannot be copied
+    DLLLOCAL QoreDigest(const QoreDigest& old, ExceptionSink* xsink)
+            : md(old.md), name(old.name), ctx(EVP_MD_CTX_create()) {
+        if (!ctx) {
+            xsink->outOfMemory();
+            return;
+        }
+        AutoLocker al(old.m);
+        if (!EVP_MD_CTX_copy_ex(ctx, old.ctx)) {
+            xsink->raiseException("DIGEST-CALCULATION-ERROR", "error copying digest '%s'", name.c_str());
+        }
+    }
+
+    DLLLOCAL virtual ~QoreDigest() {
+        if (ctx) {
+            EVP_MD_CTX_destroy(ctx);
+        }
+    }
+
+    // Adds data to the calculation
+    DLLLOCAL int update(const void* data, size_t len, ExceptionSink* xsink) {
+        AutoLocker al(m);
+        if (len && !EVP_DigestUpdate(ctx, data, len)) {
+            xsink->raiseException("DIGEST-CALCULATION-ERROR", "error calculating digest '%s'", name.c_str());
+            return -1;
+        }
+        return 0;
+    }
+
+    // Returns the digest of the data added so far; the calculation can be continued afterwards
+    DLLLOCAL BinaryNode* getDigest(ExceptionSink* xsink) const {
+        // the digest is finalized on a copy of the state
+        EVP_MD_CTX* tmp = EVP_MD_CTX_create();
+        if (!tmp) {
+            xsink->outOfMemory();
+            return nullptr;
+        }
+        unsigned char md_value[EVP_MAX_MD_SIZE];
+        unsigned int md_len = 0;
+        bool ok;
+        {
+            AutoLocker al(m);
+            ok = EVP_MD_CTX_copy_ex(tmp, ctx) && EVP_DigestFinal_ex(tmp, md_value, &md_len);
+        }
+        EVP_MD_CTX_destroy(tmp);
+        if (!ok) {
+            xsink->raiseException("DIGEST-CALCULATION-ERROR", "error calculating digest '%s'", name.c_str());
+            return nullptr;
+        }
+        BinaryNode* rv = new BinaryNode;
+        rv->append(md_value, md_len);
+        return rv;
+    }
+
+    // Discards the data added so far
+    DLLLOCAL int reset(ExceptionSink* xsink) {
+        AutoLocker al(m);
+        if (!EVP_DigestInit_ex(ctx, md, nullptr)) {
+            xsink->raiseException("DIGEST-CALCULATION-ERROR", "error initializing digest '%s'", name.c_str());
+            return -1;
+        }
+        return 0;
+    }
+
+    // Returns the name of the digest algorithm as given when the object was created
+    DLLLOCAL const std::string& getName() const {
+        return name;
+    }
+
+    // Returns the size of the digest in bytes
+    DLLLOCAL int getSize() const {
+        return EVP_MD_size(md);
+    }
+
+private:
+    const EVP_MD* md;
+    std::string name;
+    EVP_MD_CTX* ctx;
+    mutable QoreThreadLock m;
+};
+
+//! Calculates a message digest from data that is added in parts
+/** A digest can be calculated from data that is not available at once, such as data read from a stream or received
+    from the network, without holding the data in memory.  The result is the same as the result of
+    @ref Qore::digest() "digest()" for the concatenation of all the data added.
+
+    @par Example:
+    @code{.py}
+Digest sha("sha256");
+while (*binary chunk = input.read(65536)) {
+    sha.update(chunk);
+}
+printf("%s\n", sha.getDigest().toHex());
+    @endcode
+
+    Objects of this class can be used from several threads.
+
+    @see
+    - @ref Qore::digest() "digest()"
+    - @ref Qore::DigestMap "DigestMap" for the supported digests
+
+    @since %Qore 3.0
+*/
+qclass Digest [arg=QoreDigest* d; ns=Qore; flags=final];
+
+//! Creates the object and starts a digest calculation
+/** @param digest the digest algorithm to use; for supported digests, see @ref Qore::DigestMap "DigestMap"
+
+    @par Example:
+    @code{.py}
+Digest sha("sha256");
+    @endcode
+
+    @throw DIGEST-ERROR unknown digest
+    @throw DIGEST-CALCULATION-ERROR error initializing the digest (should not normally happen)
+*/
+Digest::constructor(string digest) {
+    const EVP_MD* md = q_get_digest(*digest, xsink);
+    if (!md) {
+        return;
+    }
+    ReferenceHolder<QoreDigest> dh(new QoreDigest(md, digest->c_str(), xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_DIGEST, dh.release());
+}
+
+//! Creates a copy of the object with the same data added so far; the copies can then be continued independently
+/** @par Example:
+    @code{.py}
+Digest copy = sha.copy();
+    @endcode
+
+    @throw DIGEST-CALCULATION-ERROR error copying the digest (should not normally happen)
+*/
+Digest::copy() {
+    ReferenceHolder<QoreDigest> dh(new QoreDigest(*d, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_DIGEST, dh.release());
+}
+
+//! Adds data to the digest calculation
+/** @param data the data to add; the trailing null character is not included when a string is given
+
+    @par Example:
+    @code{.py}
+sha.update(chunk);
+    @endcode
+
+    @throw DIGEST-CALCULATION-ERROR error calculating the digest (should not normally happen)
+*/
+nothing Digest::update(data data) {
+    const char* ptr;
+    size_t len;
+    q_get_data(data, ptr, len);
+    d->update(ptr, len, xsink);
+}
+
+//! Returns the digest of the data added so far
+/** More data can be added afterwards, and the digest of all the data added is returned by the next call
+
+    @return the digest of the data added so far
+
+    @par Example:
+    @code{.py}
+binary bin = sha.getDigest();
+    @endcode
+
+    @throw DIGEST-CALCULATION-ERROR error calculating the digest (should not normally happen)
+*/
+binary Digest::getDigest() [flags=RET_VALUE_ONLY] {
+    return d->getDigest(xsink);
+}
+
+//! Discards the data added so far, so a new digest can be calculated
+/** @par Example:
+    @code{.py}
+sha.reset();
+    @endcode
+
+    @throw DIGEST-CALCULATION-ERROR error initializing the digest (should not normally happen)
+*/
+nothing Digest::reset() {
+    d->reset(xsink);
+}
+
+//! Returns the name of the digest algorithm as given when the object was created
+/** @return the name of the digest algorithm as given when the object was created
+
+    @par Example:
+    @code{.py}
+string alg = sha.getAlgorithm();
+    @endcode
+*/
+string Digest::getAlgorithm() [flags=CONSTANT] {
+    return new QoreStringNode(d->getName());
+}
+
+//! Returns the size of the digest in bytes
+/** @return the size of the digest in bytes, such as 32 for \c "sha256"
+
+    @par Example:
+    @code{.py}
+int size = sha.getSize();
+    @endcode
+*/
+int Digest::getSize() [flags=CONSTANT] {
+    return d->getSize();
+}

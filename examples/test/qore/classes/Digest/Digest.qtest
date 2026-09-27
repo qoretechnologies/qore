@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DigestTest
+
+public class DigestTest inherits QUnit::Test {
+    constructor() : Test("DigestTest", "1.0") {
+        addTestCase("incremental digests", \incrementalTest());
+        addTestCase("intermediate digests and copies", \copyTest());
+        addTestCase("reset", \resetTest());
+        addTestCase("threads", \threadTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    incrementalTest() {
+        binary data = get_random_bytes(100003);
+        foreach string alg in ("md5", "sha1", "sha256", "sha512", "sha3-256") {
+            Digest d(alg);
+            assertEq(alg, d.getAlgorithm());
+            assertEq(digest(alg, binary()).size(), d.getSize(), alg);
+            # data added in parts of different sizes gives the digest of all of it
+            int offset = 0;
+            int size = 1;
+            while (offset < data.size()) {
+                d.update(data.substr(offset, size));
+                offset += size;
+                size = size * 3 + 7;
+            }
+            assertEq(digest(alg, data), d.getDigest(), alg);
+        }
+
+        # strings are added without a trailing null, as with digest()
+        Digest d("sha256");
+        d.update("abc");
+        d.update("déf");
+        assertEq(digest("sha256", "abcdéf"), d.getDigest());
+
+        # no data
+        assertEq(digest("sha256", ""), new Digest("sha256").getDigest());
+        # empty parts
+        d = new Digest("sha256");
+        d.update("");
+        d.update(binary());
+        assertEq(digest("sha256", ""), d.getDigest());
+    }
+
+    copyTest() {
+        Digest d("sha256");
+        d.update("part 1");
+        # an intermediate digest does not end the calculation
+        assertEq(digest("sha256", "part 1"), d.getDigest());
+        assertEq(digest("sha256", "part 1"), d.getDigest());
+
+        Digest c = d.copy();
+        d.update(" part 2");
+        c.update(" other");
+        assertEq(digest("sha256", "part 1 part 2"), d.getDigest());
+        assertEq(digest("sha256", "part 1 other"), c.getDigest());
+        assertEq("sha256", c.getAlgorithm());
+    }
+
+    resetTest() {
+        Digest d("sha1");
+        d.update("discarded");
+        d.reset();
+        d.update("kept");
+        assertEq(digest("sha1", "kept"), d.getDigest());
+    }
+
+    threadTest() {
+        # updates from several threads are serialized; the result is independent of the order for equal parts
+        Digest d("sha256");
+        Counter c();
+        for (int i = 0; i < 8; ++i) {
+            c.inc();
+            background sub () {
+                on_exit c.dec();
+                for (int j = 0; j < 100; ++j) {
+                    d.update("x");
+                }
+            }();
+        }
+        c.waitForZero();
+        assertEq(digest("sha256", strmul("x", 800)), d.getDigest());
+    }
+
+    errorTest() {
+        assertThrows("DIGEST-ERROR", sub () { Digest d("no-such-digest"); });
+    }
+}

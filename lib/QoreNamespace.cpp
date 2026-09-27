@@ -190,6 +190,7 @@ DLLLOCAL QoreClass* initBinaryOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initFileOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamPipeClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initDigestClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamWriterClass(QoreNamespace& ns);
@@ -1478,6 +1479,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initStdoutOutputStreamClass(qns));
     qns.addSystemClass(initStderrOutputStreamClass(qns));
     qns.addSystemClass(initStreamPipeClass(qns));
+    qns.addSystemClass(initDigestClass(qns));
     qns.addSystemClass(initStreamWriterClass(qns));
     qns.addSystemClass(initStreamReaderClass(qns));
     qns.addSystemClass(initBufferedStreamReaderClass(qns));
