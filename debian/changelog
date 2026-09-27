@@ -11,6 +11,9 @@ qore (3.0.0-1) unstable; urgency=medium
   * Honor dpkg build flags, remove AOT build-directory RUNPATHs, and generate
     shared-library metadata with debhelper.
   * Add installed-package tests and document stable/LTS dependency backports.
+  * Isolate build-time Qore module lookup from installed optional modules and
+    cover qdx processing in the installed development-package test.
+  * Find AOT fallback sources across the installed module search path.
   * Use LLVM's maintained Unicode conversion routines in linenoise instead of
     the legacy ConvertUTF sources rejected by Lintian.
 

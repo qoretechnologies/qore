@@ -90,6 +90,10 @@ option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
        OFF)
 
+option(QORE_BUILD_WITH_EXTERNAL_MODULES
+       "Allow installed Qore modules to provide optional features in build outputs"
+       ON)
+
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
        OFF)
@@ -197,6 +201,9 @@ if (DEFINED ENV{QORE_DOC_DEFINES})
     endif ()
 endif ()
 set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+    list(APPEND QORE_DOCS_ENV "QORE_MODULE_DIR_ONLY=1")
+endif()
 set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
 set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
@@ -3387,33 +3394,45 @@ set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/dataframe
     ${CMAKE_BINARY_DIR}/modules/protobuf)
 string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
-set(QORE_BUILD_EXTERNAL_MODULE_DIRS
-    ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
-    ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
-    /usr/local/share/qore-modules
-    /usr/local/lib/qore-modules
-    /usr/share/qore-modules
-    /usr/lib/qore-modules)
-if(CMAKE_LIBRARY_ARCHITECTURE)
-    list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-        /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
-        /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
+set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
+if (QORE_BUILD_WITH_EXTERNAL_MODULES)
+    set(QORE_BUILD_EXTERNAL_MODULE_DIRS
+        ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
+        ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
+        /usr/local/share/qore-modules
+        /usr/local/lib/qore-modules
+        /usr/share/qore-modules
+        /usr/lib/qore-modules)
+    if(CMAKE_LIBRARY_ARCHITECTURE)
+        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
+            /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
+            /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
+    endif()
+    if(APPLE)
+        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
+            /opt/local/share/qore-modules
+            /opt/local/lib/qore-modules
+            /opt/homebrew/share/qore-modules
+            /opt/homebrew/lib/qore-modules)
+    endif()
+    list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 endif()
-if(APPLE)
-    list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-        /opt/local/share/qore-modules
-        /opt/local/lib/qore-modules
-        /opt/homebrew/share/qore-modules
-        /opt/homebrew/lib/qore-modules)
-endif()
-list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
 set(QORE_BUILD_MODULE_DIRS_STR
-    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib:${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
+    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
+if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
+    string(APPEND QORE_BUILD_MODULE_DIRS_STR ":${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
+endif()
 set(QORE_QM_METADATA_ENV
     "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
     "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
+if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+    # QORE_MODULE_DIR normally augments the runtime's installed search paths.
+    # Package builds must also omit those defaults: a successful %try-module
+    # becomes a hard dependency of the resulting AOT artifact.
+    list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
+endif()
 set(QORE_AOT_BINARY_MODULE_TARGETS)
 foreach(_qore_build_module astparser avro json reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
@@ -3446,7 +3465,11 @@ find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 # when the probe set actually changes.
 set(_qore_aot_probe_modules yaml xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
-if(_qore_exe)
+if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+    foreach(_pm ${_qore_aot_probe_modules})
+        string(APPEND _qore_aot_probe_content "${_pm}=disabled\n")
+    endforeach()
+elseif(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
         execute_process(
             COMMAND ${_qore_exe} -l ${_pm} -ne

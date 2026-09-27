@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 set -eu
-unset QORE_MODULE_DIR QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
 cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
 check_help() {
     tool=$1

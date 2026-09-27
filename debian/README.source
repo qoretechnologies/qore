@@ -33,6 +33,12 @@ FETCHCONTENT_FULLY_DISCONNECTED=ON: required debian/rules targets must not acces
 the network (Debian Policy 4.9). Installing libraries manually in /usr/local is
 not a substitute for packaged Build-Depends and will be ignored.
 
+Package builds also set QORE_BUILD_WITH_EXTERNAL_MODULES=OFF and isolate Qore's
+module search paths. Otherwise an optional module installed on the builder
+(for example YAML) can become an undeclared hard dependency of the AOT-compiled
+standard library. The option covers compilation, metadata extraction, and
+documentation; ordinary upstream builds keep optional module discovery enabled.
+
 If a distributor chooses to bundle fallback sources instead of supplying
 backports, those sources must be included in the source package before upload,
 with checksums, their full license notices, and all transitive build inputs.

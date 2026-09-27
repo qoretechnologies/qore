@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 set -eu
-unset QORE_MODULE_DIR QORE_INCLUDE_DIR QORE_INCLUDE_DIRS QORE_LIBDIR QORE_AOT_LINK_CONF LD_LIBRARY_PATH
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_INCLUDE_DIRS QORE_LIBDIR QORE_AOT_LINK_CONF LD_LIBRARY_PATH
 cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
 
 test -s /usr/bin/qcc-format.stamp
@@ -62,7 +62,11 @@ public int sub package_smoke_answer() {
 }
 EOF
 qore-extract-qm-metadata PackageSmoke.qm metadata.json
-qore -l json -e 'parse_json(ReadOnlyFile::readTextFile("metadata.json"));'
+qore -l json -e 'if (!parse_json(ReadOnlyFile::readTextFile("metadata.json"))) { exit(1); }'
+# Exercise qdx's parser and formatter as well as its startup path.
+qdx PackageSmoke.qm PackageSmoke.dox.h
+test -s PackageSmoke.dox.h
+grep -q package_smoke_answer PackageSmoke.dox.h
 qcc -m -o PackageSmoke.qmod PackageSmoke.qm
 # The compiled module must work without its source file.
 mv PackageSmoke.qm PackageSmoke.qm.source

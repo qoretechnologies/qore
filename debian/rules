@@ -18,6 +18,9 @@ unexport QORE_INCLUDE_DIR
 unexport QORE_INCLUDE_DIRS
 unexport QORE_LIBDIR
 unexport QORE_MODULE_DIR
+# Tests, documentation, metadata extraction and qcc must see only the module
+# paths supplied by this build, not optional modules from an older installation.
+export QORE_MODULE_DIR_ONLY = 1
 
 # Documentation is generated only for builds that include qore-doc.
 build_docs = $(if $(filter nodoc,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)),,$(filter qore-doc,$(shell dh_listpackages)))
@@ -40,6 +43,7 @@ override_dh_auto_configure:
 		-DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so \
 		-DFETCHCONTENT_FULLY_DISCONNECTED=ON \
 		-DQORE_REQUIRE_SYSTEM_DEPENDENCIES=ON \
+		-DQORE_BUILD_WITH_EXTERNAL_MODULES=OFF \
 		-DQORE_AOT_LINK_SOURCE_MODULES=OFF \
 		-DQORE_AOT_MODULE_OPT_LEVEL=$(if $(filter noopt,$(DEB_BUILD_OPTIONS)),0,3) \
 		-DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=$(if $(build_docs),OFF,ON) \

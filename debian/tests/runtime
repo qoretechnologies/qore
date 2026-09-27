@@ -3,20 +3,23 @@
 set -eu
 
 # Run outside the checkout, with only installed modules on the search path.
-unset QORE_MODULE_DIR QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
 cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
 qore --version
 for module in astparser avro dataframe i18n json krb5 linenoise ml mongodb ocr protobuf reflection sshutil tokenizer; do
     qore -l "$module" -e 'exit(0);'
 done
+cat > runtime.q <<'EOF'
+%modern
+%requires Util
+%requires json
+hash<auto> value = parse_json("{\"answer\":42}");
+if (value.answer != 42) {
+    throw "PACKAGE-TEST-ERROR", "JSON round trip failed";
+}
+EOF
 for mode in ast ir jit tiered; do
-    qore --exec-mode="$mode" -l Util -l json -e '
-        %modern
-        hash<auto> value = parse_json("{\"answer\":42}");
-        if (value.answer != 42) {
-            throw "PACKAGE-TEST-ERROR", "JSON round trip failed";
-        }
-    '
+    qore --exec-mode="$mode" runtime.q
 done
 
 # AOT user modules are native ELF files and belong under the multiarch libdir.
