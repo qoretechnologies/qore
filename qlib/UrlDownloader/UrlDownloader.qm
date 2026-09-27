@@ -1,0 +1,320 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file UrlDownloader.qm module for downloading URLs to files with progress reporting
+
+/*  UrlDownloader.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%modern
+
+%requires Util
+%requires Mime
+%requires HttpClientIo
+%requires ConnectionProvider
+
+module UrlDownloader {
+    version = "1.0";
+    desc = "user module for downloading URLs to files with progress reporting";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage UrlDownloader Module
+
+    @tableofcontents
+
+    @section urldownloaderintro Introduction to the UrlDownloader Module
+
+    The %UrlDownloader module downloads resources from \c http, \c https, \c ftp, and \c ftps URLs to files or to
+    an output stream, without holding them in memory.  It is the engine of the \c qget program and can be used by
+    any program that needs to download files:
+    - HTTP/1.1, HTTP/2, and HTTP/3 through @ref HttpClientIo::HttpClientConnectionManager
+      "HttpClientConnectionManager", with connections reused between downloads from the same server
+    - redirects are followed up to a configurable limit
+    - data is written to a temporary \c .part file that is renamed when the download is complete, so an incomplete
+      file never has the final name
+    - an existing file is not overwritten unless allowed
+    - the file name can be taken from a \c Content-Disposition header; any directory in it is ignored, so a server
+      cannot select where a file is written
+    - HTTP error responses fail the download by default
+    - connect, read, and total time limits
+    - TLS verification with custom CA certificates, and client certificates
+    - proxies, also from the \c http_proxy, \c https_proxy, and \c no_proxy environment variables
+    - progress reporting through a @ref UrlDownloader::UrlDownloadListener "UrlDownloadListener"
+    - a download can be cancelled from another thread, for example from a signal handler
+
+    Errors are raised with the error codes in @ref UrlDownloader::UrlDownloadErrors "UrlDownloadErrors", which
+    classify the cause of a failure (network, TLS, timeout, HTTP error response, ...), so a program can react to
+    them or map them to exit codes.
+
+    @section urldownloaderusage Usage
+
+    @code{.py}
+%requires UrlDownloader
+
+UrlDownloader dl(<UrlDownloadOptions>{"output_dir": "/tmp", "max_time": 10m});
+try {
+    hash<UrlDownloadResult> res = dl.download("https://example.com/files/data.csv");
+    printf("saved %s (%d bytes)\n", res.file, res.size);
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "DOWNLOAD-SERVER-ERROR") {
+        printf("the server returned %d\n", ex.arg.status_code);
+    }
+    rethrow;
+}
+    @endcode
+
+    @section urldownloader_relnotes Release Notes
+
+    @subsection urldownloader_v1_0 UrlDownloader v1.0
+    - initial release
+*/
+
+#! Main namespace for the UrlDownloader module
+public namespace UrlDownloader {
+#! Options for UrlDownloader
+public hashdecl UrlDownloadOptions {
+    #! the file to write, or \c "-" to write to the output stream given to UrlDownloader::download()
+    /** if not set, the file name is taken from the URL (or from a \c Content-Disposition header if
+        \c content_disposition is set) and the file is written to \c output_dir
+    */
+    *string output;
+
+    #! the directory where files with a name from the URL or from the server are written
+    /** the directory is created with any missing parent directories if it does not exist
+    */
+    *string output_dir;
+
+    #! @ref True "True" to overwrite an existing file, @ref False "False" to fail with \c DOWNLOAD-FILE-EXISTS
+    bool clobber = True;
+
+    #! @ref True "True" to write data to a \c .part file that is renamed when the download is complete
+    bool part_file = True;
+
+    #! @ref True "True" to take the file name from the \c Content-Disposition header of the response, if any
+    /** only the last path component of the name is used, so the name can never select a file outside of the
+        output directory
+    */
+    bool content_disposition = False;
+
+    #! additional request headers
+    *hash<string, string> headers;
+
+    #! the \c User-Agent request header
+    string user_agent = "Qore-UrlDownloader/1.0";
+
+    #! a user name and password as \c "user:password" for Basic authentication or for FTP
+    /** credentials in the URL are used if this is not set
+    */
+    *string user;
+
+    #! the URL of an HTTP proxy
+    *string proxy;
+
+    #! @ref True "True" to use a proxy from the environment (\c http_proxy, \c https_proxy, \c no_proxy) if
+    #! \c proxy is not set
+    bool env_proxy = True;
+
+    #! the HTTP version: \c "1.1", \c "2", or \c "3"; negotiated if not set
+    *string http_version;
+
+    #! @ref False "False" to accept any server certificate
+    bool verify = True;
+
+    #! a PEM file with the CA certificates that server certificates are verified against
+    *string ca_file;
+
+    #! a directory with the CA certificates that server certificates are verified against
+    *string ca_path;
+
+    #! a PEM file with the client certificate for TLS client authentication
+    *string client_cert;
+
+    #! a PEM file with the private key of the client certificate; the certificate file is used if not set
+    *string client_key;
+
+    #! the maximum number of redirects followed; with 0 a redirect fails the download
+    int max_redirects = 20;
+
+    #! @ref True "True" to request a compressed response body and decompress it
+    /** if @ref False "False", no compression is requested and a body is saved as received
+    */
+    bool compressed = False;
+
+    #! the maximum time to establish a connection
+    timeout connect_timeout = 30s;
+
+    #! the maximum time to wait for data
+    timeout read_timeout = 120s;
+
+    #! the maximum time for a download; no limit if not set
+    *timeout max_time;
+
+    #! @ref True "True" to fail a download with an HTTP error response (status code 400 or greater)
+    bool fail_on_error = True;
+
+    #! @ref True "True" to save the body of an HTTP error response when the download fails
+    /** the body is saved like the body of a successful response, and the download fails after it is saved
+    */
+    bool keep_error_body = False;
+}
+
+#! Information about a download that has started, given to UrlDownloadListener::started()
+public hashdecl UrlDownloadStartInfo {
+    #! the URL requested
+    string url;
+
+    #! the URL of the response, after any redirects, without user information
+    string effective_url;
+
+    #! the file written, or @ref NOTHING if the data is written to an output stream
+    *string file;
+
+    #! the size of the data, if known
+    /** for a compressed response body that is decompressed, this is the size of the compressed body
+    */
+    *int total;
+
+    #! the HTTP status code, or the FTP reply code \c 226 for FTP
+    int status_code;
+
+    #! the protocol: \c "h1", \c "h2", \c "h3", \c "ftp", or \c "ftps"
+    string protocol;
+
+    #! the content type of the response, if known
+    *string content_type;
+}
+
+#! The result of a download
+public hashdecl UrlDownloadResult {
+    #! the URL requested
+    string url;
+
+    #! the URL of the response, after any redirects, without user information
+    *string effective_url;
+
+    #! the file written, or @ref NOTHING if the data was written to an output stream or not written
+    *string file;
+
+    #! the \c .part file that holds the data received by a download that failed, if it was kept
+    *string part_file;
+
+    #! the number of bytes written
+    int size = 0;
+
+    #! the size of the data, if known
+    *int total;
+
+    #! the number of bytes received from the server
+    /** for a compressed response body that is decompressed, this is the size of the compressed body
+    */
+    int received = 0;
+
+    #! the HTTP status code, if a response was received
+    *int status_code;
+
+    #! the status message of the HTTP response, if any
+    *string status_message;
+
+    #! the protocol, if a connection was made: \c "h1", \c "h2", \c "h3", \c "ftp", or \c "ftps"
+    *string protocol;
+
+    #! the content type of the response, if known
+    *string content_type;
+
+    #! the redirects followed
+    list<hash<HttpRedirectInfo>> redirects = ();
+
+    #! the duration of the download in microseconds
+    int elapsed_us = 0;
+
+    #! @ref True "True" if the download is complete
+    bool complete = False;
+
+    #! the exception that caused a download to fail, as raised by the network client or file system
+    *hash<ExceptionInfo> cause;
+}
+
+#! The error codes raised by UrlDownloader::download(); the exception argument is a @ref UrlDownloadResult hash
+/** The original exception is available in the \c cause key of the exception argument
+*/
+public const UrlDownloadErrors = {
+    #! the URL is invalid or its scheme is not supported
+    "DOWNLOAD-URL-ERROR": True,
+    #! the output file or directory cannot be written
+    "DOWNLOAD-IO-ERROR": True,
+    #! a connection cannot be made, or it failed during the download
+    "DOWNLOAD-NETWORK-ERROR": True,
+    #! TLS negotiation or certificate verification failed
+    "DOWNLOAD-TLS-ERROR": True,
+    #! the server rejected the credentials, or credentials are required (HTTP 401 or 407)
+    "DOWNLOAD-AUTH-ERROR": True,
+    #! the server violated the protocol, or a redirect could not be followed
+    "DOWNLOAD-PROTOCOL-ERROR": True,
+    #! the server returned an error response: HTTP 400 or greater other than 401 and 407, or an FTP error reply
+    "DOWNLOAD-SERVER-ERROR": True,
+    #! the output file exists and the \c clobber option is @ref False "False"
+    "DOWNLOAD-FILE-EXISTS": True,
+    #! a time limit was exceeded
+    "DOWNLOAD-TIMEOUT": True,
+    #! the download was cancelled with UrlDownloader::cancel()
+    "DOWNLOAD-CANCELLED": True,
+    #! another error
+    "DOWNLOAD-ERROR": True,
+};
+
+#! Returns the download error code for an exception raised by a network client
+/** @param ex the exception
+
+    @return one of the error codes in @ref UrlDownloadErrors
+*/
+public string sub get_download_error_code(hash<ExceptionInfo> ex) {
+    string err = ex.err;
+    if (UrlDownloadErrors{err}) {
+        return err;
+    }
+    if (err == "THREAD-CANCELLED" || err =~ /-CANCELLED$/) {
+        return "DOWNLOAD-CANCELLED";
+    }
+    if (err =~ /TIMEOUT/ || ex.desc =~ /timed? ?out/i) {
+        return "DOWNLOAD-TIMEOUT";
+    }
+    if (err =~ /SSL|TLS|CERT/ || ex.desc =~ /certificate|SSL|TLS handshake/i) {
+        return "DOWNLOAD-TLS-ERROR";
+    }
+    if (err =~ /LOGIN|AUTH/) {
+        return "DOWNLOAD-AUTH-ERROR";
+    }
+    if (err =~ /URL|SCHEME|PROTOCOL-UNSUPPORTED/) {
+        return "DOWNLOAD-URL-ERROR";
+    }
+    if (err =~ /REDIRECT|PARSE|PROTOCOL|DECOMPRESS|ZLIB|BROTLI|ZSTD|BZIP|LZ4|INVALID-RESPONSE/) {
+        return "DOWNLOAD-PROTOCOL-ERROR";
+    }
+    if (err =~ /CONNECT|RESOLV|LOOKUP|ADDRESS|HOSTNAME|NETWORK|SOCKET|RECEIVE|SEND|CLOSED|PROXY|QUIC/
+            || err =~ /HTTP[23]?-?CLIENT|FTP/) {
+        return "DOWNLOAD-NETWORK-ERROR";
+    }
+    return "DOWNLOAD-ERROR";
+}
+}

@@ -1,0 +1,768 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%include ../../qore/classes/FtpServer.qc
+%include ../../qore/classes/TestConnectProxy.qc
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires UrlDownloader
+
+%exec-class UrlDownloaderTest
+
+class DownloadTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! a body larger than any buffer
+        const Body = get_random_bytes(1024 * 1024 + 7);
+
+        #! a body that compresses well
+        const TextBody = binary(strmul("download test data ", 50000));
+
+        #! released by the test to let /slow send the rest of its body
+        Queue slow_release();
+
+        #! receives a message when /hold is reached
+        Queue hold_reached();
+
+        #! released by the test to let /hold respond
+        Queue hold_release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = cx.raw_path;
+        switch (path) {
+            case "/file":
+                return makeResponse(200, Body, {"Content-Type": MimeTypeOctetStream});
+            case "/dir/":
+                return makeResponse(200, "index", {"Content-Type": MimeTypeText});
+            case "/chunked": {
+                int offset = 0;
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeOctetStream},
+                    "send_callback": *binary sub () {
+                        if (offset >= Body.size()) {
+                            return;
+                        }
+                        binary rv = Body.substr(offset, 65531);
+                        offset += rv.size();
+                        return rv;
+                    },
+                };
+            }
+            case "/gzip": {
+                hash<HttpResponseInfo> rv = makeResponse(200, gzip(TextBody), {
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Encoding": "gzip",
+                });
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/cd":
+                return makeResponse(200, "attachment", {
+                    "Content-Type": MimeTypeText,
+                    "Content-Disposition": "attachment; filename=\"../../evil.txt\"",
+                });
+            case "/echo":
+                return makeResponse(200, sprintf("ae=%s|ua=%s|x=%s", hdr."accept-encoding" ?? "",
+                    hdr."user-agent" ?? "", hdr."x-test" ?? ""), {"Content-Type": MimeTypeText});
+            case "/redirect":
+                return makeResponse(302, "", {"Location": "/file"});
+            case "/redirect-loop":
+                return makeResponse(307, "", {"Location": "/redirect-loop"});
+            case "/auth":
+                if (hdr.authorization == "Basic " + make_base64_string("u:p")) {
+                    return makeResponse(200, "secret", {"Content-Type": MimeTypeText});
+                }
+                return makeResponse(401, "unauthorized", {
+                    "Content-Type": MimeTypeText,
+                    "WWW-Authenticate": "Basic realm=\"test\"",
+                });
+            case "/slow": {
+                # the first chunk is sent with the headers; the second one when the test releases it
+                int calls = 0;
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeOctetStream},
+                    "send_callback": *binary sub () {
+                        switch (++calls) {
+                            case 1: return binary("early");
+                            case 2: slow_release.get(); return binary("late");
+                        }
+                    },
+                };
+            }
+            case "/hold":
+                hold_reached.push(True);
+                hold_release.get();
+                return makeResponse(200, "held", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! records the events of a download
+class TestListener inherits UrlDownloadListener {
+    public {
+        list<hash<HttpRedirectInfo>> redirects = ();
+        *hash<UrlDownloadStartInfo> start_info;
+        int progress_calls = 0;
+        int last_done = 0;
+        *int last_total;
+        #! receives a message when the download starts, if set
+        *Queue started_queue;
+        #! receives a message when data has been written for the first time, if set
+        *Queue progress_queue;
+    }
+
+    redirected(hash<HttpRedirectInfo> info) {
+        redirects += info;
+    }
+
+    started(hash<UrlDownloadStartInfo> info) {
+        start_info = info;
+        if (started_queue) {
+            started_queue.push(True);
+        }
+    }
+
+    progress(int done, *int total) {
+        if (!progress_calls && progress_queue) {
+            progress_queue.push(True);
+        }
+        ++progress_calls;
+        # the progress never goes back
+        if (done < last_done) {
+            throw "TEST-ERROR", sprintf("progress went back from %d to %d", last_done, done);
+        }
+        last_done = done;
+        last_total = total;
+    }
+}
+
+public class UrlDownloaderTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        DownloadTestHandler handler();
+        #! protocol -> base URL
+        hash<string, string> urls;
+        #! the base URL of the TLS listener
+        string tls_url;
+        #! the CA certificate file for the TLS listener
+        TmpFile ca_file;
+        #! the certificates of the TLS test
+        string certs;
+    }
+
+    constructor() : Test("UrlDownloaderTest", "1.0") {
+        addTestCase("file names", \fileNameTest());
+        addTestCase("downloads", \downloadTest());
+        addTestCase("output options", \outputTest());
+        addTestCase("redirects", \redirectTest());
+        addTestCase("error responses", \errorResponseTest());
+        addTestCase("request options and compression", \requestTest());
+        addTestCase("timeouts", \timeoutTest());
+        addTestCase("cancellation", \cancelTest());
+        addTestCase("TLS verification", \tlsTest());
+        addTestCase("FTP", \ftpTest());
+        addTestCase("proxies", \proxyTest());
+        addTestCase("named connections", \connectionTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        certs = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/../../qore/classes/HTTPClient/HttpClientTlsVerify.qtest");
+        SSLCertificate cert((certs =~ x/const GoodCert = "([^"]+)"/)[0]);
+        SSLPrivateKey key((certs =~ x/const GoodKey = "([^"]+)"/)[0]);
+        ca_file = new TmpFile("urldl-ca-", ".pem");
+        ca_file.file.write((certs =~ x/const CaCert = "([^"]+)"/)[0]);
+        ca_file.file.close();
+
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("dl", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("dl", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        int tls_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0, "cert": cert,
+            "key": key}).port;
+        server.waitForAsyncIo();
+        int quic_port = server.addQuicListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "cert": cert,
+            "key": key}).port;
+        server.waitForAsyncIo();
+        urls = {
+            "1.1": sprintf("http://127.0.0.1:%d", port),
+            "2": sprintf("https://127.0.0.1:%d", tls_port),
+            "3": sprintf("https://127.0.0.1:%d", quic_port),
+        };
+        tls_url = urls."2";
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    #! returns a downloader for the given HTTP version that accepts the test certificate
+    private UrlDownloader getDownloader(string version, *hash<auto> opts) {
+        return new UrlDownloader(cast<hash<UrlDownloadOptions>>({
+            "http_version": version,
+            "ca_file": ca_file.path,
+            "env_proxy": False,
+        } + opts));
+    }
+
+    fileNameTest() {
+        assertEq("file.iso", UrlDownloader::getFileNameFromUrl("https://example.com/dir/file.iso"));
+        assertEq("file.iso", UrlDownloader::getFileNameFromUrl("https://example.com/file.iso?x=1#y"));
+        assertEq("a b.txt", UrlDownloader::getFileNameFromUrl("http://example.com/a%20b.txt"));
+        # an encoded directory separator does not select a directory
+        assertEq("b", UrlDownloader::getFileNameFromUrl("http://example.com/a%2Fb"));
+        assertEq("x", UrlDownloader::getFileNameFromUrl("http://example.com/..%2F..%2Fx"));
+        assertEq(NOTHING, UrlDownloader::getFileNameFromUrl("http://example.com/%2e%2e"));
+        assertEq(NOTHING, UrlDownloader::getFileNameFromUrl("http://example.com/dir/"));
+        assertEq(NOTHING, UrlDownloader::getFileNameFromUrl("http://example.com"));
+
+        assertEq("passwd", UrlDownloader::getSafeFileName("../../etc/passwd"));
+        assertEq("x.txt", UrlDownloader::getSafeFileName("..\\..\\x.txt"));
+        assertEq(NOTHING, UrlDownloader::getSafeFileName(".."));
+        assertEq(NOTHING, UrlDownloader::getSafeFileName("a/"));
+        assertEq(NOTHING, UrlDownloader::getSafeFileName("a\nb"));
+        assertEq(NOTHING, UrlDownloader::getSafeFileName(""));
+        assertEq(NOTHING, UrlDownloader::getSafeFileName());
+
+        assertEq("h1", UrlDownloader::getProtocol("1.1"));
+        assertEq("h2", UrlDownloader::getProtocol("2"));
+        assertEq("h3", UrlDownloader::getProtocol("3"));
+        assertEq(NOTHING, UrlDownloader::getProtocol("1.0"));
+    }
+
+    downloadTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            TmpDir dir("urldl-");
+            UrlDownloader dl = getDownloader(i.key, {"output_dir": dir.path});
+            foreach string path in ("/file", "/chunked") {
+                string msg = sprintf("HTTP/%s %s", i.key, path);
+                TestListener listener();
+                hash<UrlDownloadResult> res = dl.download(i.value + path, listener);
+                string file = dir.path + DirSep + path.substr(1);
+                assertEq(file, res.file, msg);
+                assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(file), msg);
+                # no partial file is left
+                assertFalse(is_file(file + ".part"), msg);
+                assertTrue(res.complete, msg);
+                assertEq(200, res.status_code, msg);
+                assertEq(UrlDownloader::getProtocol(i.key), res.protocol, msg);
+                assertEq(i.value + path, res.effective_url, msg);
+                assertEq(DownloadTestHandler::Body.size(), res.size, msg);
+                assertEq(DownloadTestHandler::Body.size(), res.received, msg);
+                assertEq(path == "/file" ? DownloadTestHandler::Body.size() : NOTHING, res.total, msg);
+                assertEq(MimeTypeOctetStream, res.content_type, msg);
+                assertGt(0, res.elapsed_us, msg);
+
+                # the events
+                assertEq(file, listener.start_info.file, msg);
+                assertEq(res.total, listener.start_info.total, msg);
+                assertEq(res.protocol, listener.start_info.protocol, msg);
+                assertGt(0, listener.progress_calls, msg);
+                assertEq(res.size, listener.last_done, msg);
+                assertEq(res.total, listener.last_total, msg);
+            }
+        }
+    }
+
+    outputTest() {
+        string url = urls."1.1";
+        TmpDir dir("urldl-out-");
+
+        # a named output file
+        string out = dir.path + DirSep + "named.bin";
+        UrlDownloader dl = getDownloader("1.1", {"output": out});
+        assertEq(out, dl.download(url + "/file").file);
+        assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(out));
+        # an existing file is overwritten by default
+        dl = getDownloader("1.1", {"output": out});
+        dl.download(url + "/dir/");
+        assertEq("index", ReadOnlyFile::readTextFile(out));
+
+        # an existing file is not overwritten when clobber is False, and nothing is requested
+        dl = getDownloader("1.1", {"output": out, "clobber": False});
+        assertThrows("DOWNLOAD-FILE-EXISTS", \dl.download(), url + "/file");
+        assertEq("index", ReadOnlyFile::readTextFile(out));
+        # also for a name from the URL
+        dl = getDownloader("1.1", {"output_dir": dir.path, "clobber": False});
+        dl.download(url + "/file");
+        assertThrows("DOWNLOAD-FILE-EXISTS", \dl.download(), url + "/file");
+        assertFalse(is_file(dir.path + DirSep + "file.part"));
+
+        # a URL without a file name
+        dl = getDownloader("1.1", {"output_dir": dir.path});
+        assertEq(dir.path + DirSep + UrlDownloader::DefaultFileName, dl.download(url + "/dir/").file);
+
+        # the data is written to the final file directly without a part file
+        out = dir.path + DirSep + "direct.bin";
+        TestListener listener();
+        listener.started_queue = new Queue();
+        dl = getDownloader("1.1", {"output": out, "part_file": False});
+        dl.download(url + "/file", listener);
+        assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(out));
+
+        # the file name from Content-Disposition, without its directories
+        dl = getDownloader("1.1", {"output_dir": dir.path, "content_disposition": True});
+        hash<UrlDownloadResult> res = dl.download(url + "/cd");
+        assertEq(dir.path + DirSep + "evil.txt", res.file);
+        assertEq("attachment", ReadOnlyFile::readTextFile(res.file));
+        # the name from the URL without the option
+        dl = getDownloader("1.1", {"output_dir": dir.path});
+        assertEq(dir.path + DirSep + "cd", dl.download(url + "/cd").file);
+
+        # the data is written to a stream
+        BinaryOutputStream os();
+        dl = getDownloader("1.1", {"output": "-"});
+        res = dl.download(url + "/file", NOTHING, os);
+        assertEq(NOTHING, res.file);
+        assertEq(DownloadTestHandler::Body, os.getData());
+        assertThrows("DOWNLOAD-ERROR", "no output stream", \dl.download(), url + "/file");
+    }
+
+    redirectTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            string msg = "HTTP/" + i.key;
+            TmpDir dir("urldl-redir-");
+            UrlDownloader dl = getDownloader(i.key, {"output_dir": dir.path});
+            TestListener listener();
+            hash<UrlDownloadResult> res = dl.download(i.value + "/redirect", listener);
+            # the file is named after the URL requested
+            assertEq(dir.path + DirSep + "redirect", res.file, msg);
+            assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(res.file), msg);
+            assertEq(i.value + "/file", res.effective_url, msg);
+            assertEq((302,), (map $1.status_code, res.redirects), msg);
+            assertEq((302,), (map $1.status_code, listener.redirects), msg);
+            assertEq(i.value + "/file", listener.start_info.effective_url, msg);
+
+            # no redirects allowed
+            dl = getDownloader(i.key, {"output_dir": dir.path, "max_redirects": 0});
+            assertThrows("DOWNLOAD-PROTOCOL-ERROR", \dl.download(), i.value + "/redirect", msg);
+            dl = getDownloader(i.key, {"output_dir": dir.path});
+            assertThrows("DOWNLOAD-PROTOCOL-ERROR", \dl.download(), i.value + "/redirect-loop", msg);
+            assertFalse(is_file(dir.path + DirSep + "redirect-loop"), msg);
+        }
+    }
+
+    errorResponseTest() {
+        string url = urls."1.1";
+        TmpDir dir("urldl-err-");
+        UrlDownloader dl = getDownloader("1.1", {"output_dir": dir.path});
+        try {
+            dl.download(url + "/missing");
+            assertTrue(False, "an error response did not fail the download");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-SERVER-ERROR", ex.err);
+            assertRegex("HTTP 404", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertFalse(ex.arg.complete);
+            assertEq(NOTHING, ex.arg.file);
+        }
+        # no file is written
+        assertEq(NOTHING, glob(dir.path + DirSep + "*"));
+
+        # the body of an error response is saved when requested, and the download still fails
+        dl = getDownloader("1.1", {"output_dir": dir.path, "keep_error_body": True});
+        try {
+            dl.download(url + "/missing");
+            assertTrue(False, "an error response did not fail the download");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-SERVER-ERROR", ex.err);
+            assertEq(dir.path + DirSep + "missing", ex.arg.file);
+            assertEq("not found", ReadOnlyFile::readTextFile(ex.arg.file));
+        }
+        assertFalse(is_file(dir.path + DirSep + "missing.part"));
+
+        # an error response is saved like any response when errors do not fail downloads
+        string out = dir.path + DirSep + "nofail.txt";
+        dl = getDownloader("1.1", {"output": out, "fail_on_error": False});
+        hash<UrlDownloadResult> res = dl.download(url + "/missing");
+        assertEq(404, res.status_code);
+        assertTrue(res.complete);
+        assertEq("not found", ReadOnlyFile::readTextFile(out));
+
+        # authentication
+        dl = getDownloader("1.1", {"output": out});
+        assertThrows("DOWNLOAD-AUTH-ERROR", \dl.download(), url + "/auth");
+        dl = getDownloader("1.1", {"output": out, "user": "u:p"});
+        dl.download(url + "/auth");
+        assertEq("secret", ReadOnlyFile::readTextFile(out));
+        # credentials in the URL
+        dl = getDownloader("1.1", {"output": out});
+        dl.download(regex_subst(url, "://", "://u:p@") + "/auth");
+        assertEq("secret", ReadOnlyFile::readTextFile(out));
+    }
+
+    requestTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            string msg = "HTTP/" + i.key;
+            TmpDir dir("urldl-req-");
+            string out = dir.path + DirSep + "out";
+
+            # the default request headers
+            UrlDownloader dl = getDownloader(i.key, {"output": out});
+            dl.download(i.value + "/echo");
+            assertEq("ae=|ua=Qore-UrlDownloader/1.0|x=", ReadOnlyFile::readTextFile(out), msg);
+
+            # custom headers and compression
+            dl = getDownloader(i.key, {"output": out, "compressed": True, "user_agent": "test-agent",
+                "headers": {"X-Test": "value"}});
+            dl.download(i.value + "/echo");
+            assertEq("ae=" + UrlDownloader::AcceptEncoding + "|ua=test-agent|x=value",
+                ReadOnlyFile::readTextFile(out), msg);
+
+            # a compressed body is decompressed with the compressed option
+            hash<UrlDownloadResult> res = dl.download(i.value + "/gzip");
+            assertEq(DownloadTestHandler::TextBody, ReadOnlyFile::readBinaryFile(out), msg);
+            assertEq(DownloadTestHandler::TextBody.size(), res.size, msg);
+            # the size received is the size of the compressed body
+            assertEq(gzip(DownloadTestHandler::TextBody).size(), res.received, msg);
+            assertEq(res.total, res.received, msg);
+
+            # and saved as received without it
+            dl = getDownloader(i.key, {"output": out});
+            dl.download(i.value + "/gzip");
+            assertEq(DownloadTestHandler::TextBody, gunzip_to_binary(ReadOnlyFile::readBinaryFile(out)), msg);
+        }
+    }
+
+    timeoutTest() {
+        string url = urls."1.1";
+        TmpDir dir("urldl-to-");
+        string out = dir.path + DirSep + "slow";
+
+        # each request of /slow waits for a release; the requests are released however the test ends
+        on_exit {
+            handler.slow_release.push(True);
+            handler.slow_release.push(True);
+        }
+
+        # no data within the read timeout; the data received is kept in the part file
+        UrlDownloader dl = getDownloader("1.1", {"output": out, "read_timeout": 300ms});
+        try {
+            dl.download(url + "/slow");
+            assertTrue(False, "the download did not time out");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-TIMEOUT", ex.err);
+            assertEq(out + ".part", ex.arg.part_file);
+            assertEq(NOTHING, ex.arg.file);
+            assertEq("early", ReadOnlyFile::readTextFile(ex.arg.part_file));
+        }
+        assertFalse(is_file(out));
+
+        # the total time
+        dl = getDownloader("1.1", {"output": out, "max_time": 300ms});
+        assertThrows("DOWNLOAD-TIMEOUT", \dl.download(), url + "/slow");
+    }
+
+    cancelTest() {
+        string url = urls."1.1";
+        TmpDir dir("urldl-cancel-");
+        string out = dir.path + DirSep + "slow";
+
+        # the blocked requests are released however the test ends
+        on_exit {
+            handler.slow_release.push(True);
+            handler.hold_release.push(True);
+        }
+
+        # cancelled while the body is received, after data has been written
+        UrlDownloader dl = getDownloader("1.1", {"output": out});
+        TestListener listener();
+        listener.progress_queue = new Queue();
+        background sub () {
+            listener.progress_queue.get();
+            dl.cancel();
+        }();
+        try {
+            dl.download(url + "/slow", listener);
+            assertTrue(False, "the download was not cancelled");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-CANCELLED", ex.err);
+            assertEq(out + ".part", ex.arg.part_file);
+            assertEq("early", ReadOnlyFile::readTextFile(ex.arg.part_file));
+            assertFalse(ex.arg.complete);
+        }
+        # the thread is not left cancelled
+        assertFalse(thread_cancelled());
+        assertTrue(dl.isCancelled());
+        # further downloads are cancelled
+        assertThrows("DOWNLOAD-CANCELLED", \dl.download(), url + "/file");
+
+        # cancelled while waiting for the response
+        dl = getDownloader("1.1", {"output": out});
+        background sub () {
+            handler.hold_reached.get();
+            dl.cancel();
+        }();
+        assertThrows("DOWNLOAD-CANCELLED", \dl.download(), url + "/hold");
+        assertFalse(thread_cancelled());
+
+        # a blocking operation in this thread is not interrupted after the cancellation
+        Queue q();
+        q.push(1);
+        assertEq(1, q.get(1s));
+    }
+
+    tlsTest() {
+        TmpDir dir("urldl-tls-");
+        string out = dir.path + DirSep + "out";
+        foreach string version in ("1.1", "2", "3") {
+            string url = version == "3" ? urls."3" : tls_url;
+            string msg = "HTTP/" + version;
+            # the test CA is not trusted by default
+            UrlDownloader dl(<UrlDownloadOptions>{"output": out, "http_version": version, "env_proxy": False});
+            assertThrows("DOWNLOAD-TLS-ERROR", \dl.download(), url + "/dir/", msg);
+            # the certificate is accepted with the CA
+            dl = getDownloader(version, {"output": out});
+            dl.download(url + "/dir/");
+            assertEq("index", ReadOnlyFile::readTextFile(out), msg);
+            # or without verification
+            dl = new UrlDownloader(<UrlDownloadOptions>{"output": out, "http_version": version, "verify": False,
+                "env_proxy": False});
+            dl.download(url + "/dir/");
+            assertEq("index", ReadOnlyFile::readTextFile(out), msg);
+        }
+    }
+
+    ftpTest() {
+        TmpFile src("urldl-ftp-");
+        binary data = get_random_bytes(3 * 1024 * 1024 + 11);
+        src.file.write(data);
+        string name = basename(src.path);
+
+        FtpServer serv(0, 0, "127.0.0.1");
+        on_exit serv.shutdown();
+        serv.setFs();
+        string base = "ftp://user:pass@127.0.0.1:" + serv.getPort();
+        {
+            FtpClient fc(base);
+            fc.connect();
+            fc.put(src.path, name);
+            fc.disconnect();
+        }
+
+        TmpDir dir("urldl-ftp-out-");
+        UrlDownloader dl(<UrlDownloadOptions>{"output_dir": dir.path});
+        TestListener listener();
+        hash<UrlDownloadResult> res = dl.download(base + "/" + name, listener);
+        assertEq(dir.path + DirSep + name, res.file);
+        assertEq(data, ReadOnlyFile::readBinaryFile(res.file));
+        assertEq("ftp", res.protocol);
+        assertEq(data.size(), res.total);
+        assertEq(data.size(), res.size);
+        assertEq(data.size(), listener.last_done);
+        assertEq(data.size(), listener.start_info.total);
+        assertGt(1, listener.progress_calls);
+
+        # a file that does not exist
+        try {
+            dl.download(base + "/no-such-file");
+            assertTrue(False, "a missing file was downloaded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-SERVER-ERROR", ex.err);
+            assertEq(550, ex.arg.status_code);
+        }
+        assertFalse(is_file(dir.path + DirSep + "no-such-file"));
+        assertFalse(is_file(dir.path + DirSep + "no-such-file.part"));
+
+        # a URL without a file
+        assertThrows("DOWNLOAD-URL-ERROR", \dl.download(), base + "/");
+
+        # to a stream
+        BinaryOutputStream os();
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output": "-"});
+        dl.download(base + "/" + name, NOTHING, os);
+        assertEq(data, os.getData());
+    }
+
+    proxyTest() {
+        TestConnectProxy proxy();
+        on_exit proxy.shutdown();
+        string proxy_url = sprintf("http://127.0.0.1:%d", proxy.getPort());
+        TmpDir dir("urldl-proxy-");
+        string out = dir.path + DirSep + "out";
+
+        # a plain HTTP request and a tunnel for HTTPS
+        UrlDownloader dl = getDownloader("1.1", {"output": out, "proxy": proxy_url});
+        dl.download(urls."1.1" + "/dir/");
+        assertEq("index", ReadOnlyFile::readTextFile(out));
+        dl.download(tls_url + "/dir/");
+        assertEq("index", ReadOnlyFile::readTextFile(out));
+        list<string> lines = map $1.line, proxy.getRequests();
+        assertRegex("^GET http://127\\.0\\.0\\.1:[0-9]+/dir/ ", lines[0]);
+        assertRegex("^CONNECT 127\\.0\\.0\\.1:[0-9]+ ", lines[1]);
+
+        # a proxy from the environment
+        *string orig = getenv("http_proxy");
+        *string orig_no = getenv("no_proxy");
+        on_exit {
+            if (exists orig) {
+                setenv("http_proxy", orig);
+            } else {
+                unsetenv("http_proxy");
+            }
+            if (exists orig_no) {
+                setenv("no_proxy", orig_no);
+            } else {
+                unsetenv("no_proxy");
+            }
+        }
+        setenv("http_proxy", proxy_url);
+        unsetenv("no_proxy");
+        int count = proxy.getRequests().size();
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output": out, "http_version": "1.1"});
+        dl.download(urls."1.1" + "/dir/");
+        assertEq(count + 1, proxy.getRequests().size());
+        # not with env_proxy = False
+        dl = getDownloader("1.1", {"output": out});
+        dl.download(urls."1.1" + "/dir/");
+        assertEq(count + 1, proxy.getRequests().size());
+    }
+
+    #! a connection name is resolved with the connection providers of the QORE_CONNECTION_PROVIDERS environment
+    #! variable
+    /** the variable is read from the environment of the process when the ConnectionProvider module is loaded, so the
+        download is made by a new process
+    */
+    connectionTest() {
+        TmpDir dir("urldl-conn-");
+        string provider_path = dir.path + DirSep + "TestUrlDownloaderConnections.qm";
+        writeFile(provider_path, sprintf("%%modern
+%%requires ConnectionProvider
+module TestUrlDownloaderConnections {
+    version = \"1.0\";
+    desc = \"test connections\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+public namespace TestUrlDownloaderConnections {
+public ConnectionProvider::AbstractConnection sub get_mod_connection(string str) {
+    if (str == \"test-server\") {
+        return new HttpConnection(\"test-server\", \"test\", %y);
+    }
+    throw \"CONNECTION-ERROR\", sprintf(\"unknown connection %%y\", str);
+}
+public *hash<auto> sub get_mod_connections() {
+}
+}
+", urls."1.1" + "/"));
+
+        string script_path = dir.path + DirSep + "download.q";
+        writeFile(script_path, sprintf("%%modern
+%%prepend-module-path %s
+%%requires UrlDownloader
+UrlDownloader dl(<UrlDownloadOptions>{\"output_dir\": %y, \"env_proxy\": False});
+print(dl.download(\"test-server/file\").file);
+try {
+    dl.download(\"no-such-connection/file\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"\\n%%s\", ex.err);
+}
+", normalize_dir(get_script_dir() + "/../../../../qlib"), dir.path));
+
+        string qore = getenv("QORE_BINARY") ?? "qore";
+        if (qore =~ /\//) {
+            qore = normalize_dir(qore);
+        }
+        string env = sprintf("QORE_CONNECTION_PROVIDERS=%s ", UrlDownloaderTest::shellQuote(provider_path));
+        if (*string ld_path = getenv("LD_LIBRARY_PATH")) {
+            # an empty entry means the current directory
+            env += sprintf("LD_LIBRARY_PATH=%s ", UrlDownloaderTest::shellQuote((foldl $1 + ":" + $2,
+                map normalize_dir($1), ld_path.split(":")) ?? ""));
+        }
+        string out = backquote(sprintf("%s%s %s 2>&1", env, UrlDownloaderTest::shellQuote(qore),
+            UrlDownloaderTest::shellQuote(script_path)));
+        assertEq(dir.path + DirSep + "file\nDOWNLOAD-URL-ERROR", out);
+        assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(dir.path + DirSep + "file"));
+    }
+
+    private static writeFile(string path, string str) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(str);
+        f.close();
+    }
+
+    private static string shellQuote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    errorTest() {
+        TmpDir dir("urldl-errors-");
+        UrlDownloader dl = getDownloader("1.1", {"output_dir": dir.path});
+        assertThrows("DOWNLOAD-URL-ERROR", "unsupported URL scheme", \dl.download(), "gopher://127.0.0.1/x");
+        assertThrows("DOWNLOAD-URL-ERROR", "no host", \dl.download(), "http:///x");
+        assertThrows("DOWNLOAD-URL-ERROR", \dl.download(), "not a url");
+
+        # nothing is listening on the port
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        int port = s.getSocketInfo().port;
+        s.close();
+        try {
+            dl.download(sprintf("http://127.0.0.1:%d/x", port));
+            assertTrue(False, "a download without a server succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DOWNLOAD-NETWORK-ERROR", ex.err);
+            # the original exception
+            assertEq(NT_HASH, ex.arg.cause.typeCode());
+            assertNeq("DOWNLOAD-NETWORK-ERROR", ex.arg.cause.err);
+        }
+
+        # an output directory that does not exist is created
+        string new_dir = dir.path + DirSep + "new" + DirSep + "dir";
+        dl = getDownloader("1.1", {"output_dir": new_dir});
+        assertEq(new_dir + DirSep + "file", dl.download(urls."1.1" + "/file").file);
+        # but not below a file
+        string file_path = dir.path + DirSep + "a-file";
+        writeFile(file_path, "x");
+        dl = getDownloader("1.1", {"output_dir": file_path + DirSep + "dir"});
+        assertThrows("DOWNLOAD-IO-ERROR", "cannot create the output directory", \dl.download(), urls."1.1" + "/file");
+        # a file that cannot be written
+        dl = getDownloader("1.1", {"output": file_path + DirSep + "out"});
+        assertThrows("DOWNLOAD-IO-ERROR", \dl.download(), urls."1.1" + "/file");
+
+        # invalid options
+        assertThrows("DOWNLOAD-ERROR", "HTTP version", sub () {
+            new UrlDownloader(<UrlDownloadOptions>{"http_version": "1.0"});
+        });
+        assertThrows("DOWNLOAD-ERROR", "redirects", sub () {
+            new UrlDownloader(<UrlDownloadOptions>{"max_redirects": -1});
+        });
+        assertThrows("DOWNLOAD-ERROR", "client certificate", sub () {
+            new UrlDownloader(<UrlDownloadOptions>{"client_key": "key.pem"});
+        });
+        assertThrows("DOWNLOAD-IO-ERROR", "client certificate", sub () {
+            new UrlDownloader(<UrlDownloadOptions>{"client_cert": dir.path + DirSep + "no-such-cert.pem"});
+        });
+
+        # error classification
+        assertEq("DOWNLOAD-CANCELLED", get_download_error_code(<ExceptionInfo>{"err": "THREAD-CANCELLED",
+            "desc": ""}));
+        assertEq("DOWNLOAD-CANCELLED", get_download_error_code(<ExceptionInfo>{"err": "HTTPCLIENT-CANCELLED",
+            "desc": ""}));
+        assertEq("DOWNLOAD-TIMEOUT", get_download_error_code(<ExceptionInfo>{"err": "HTTPCLIENT-TIMEOUT",
+            "desc": ""}));
+        assertEq("DOWNLOAD-TLS-ERROR", get_download_error_code(<ExceptionInfo>{"err": "SOCKET-SSL-ERROR",
+            "desc": ""}));
+        assertEq("DOWNLOAD-NETWORK-ERROR", get_download_error_code(<ExceptionInfo>{"err": "SOCKET-CONNECT-ERROR",
+            "desc": "connection refused"}));
+        assertEq("DOWNLOAD-IO-ERROR", get_download_error_code(<ExceptionInfo>{"err": "DOWNLOAD-IO-ERROR",
+            "desc": ""}));
+        assertEq("DOWNLOAD-ERROR", get_download_error_code(<ExceptionInfo>{"err": "OTHER-ERROR", "desc": ""}));
+    }
+}
