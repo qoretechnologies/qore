@@ -89,9 +89,6 @@ public:
     //! creates the QoreHttpClientObject object
     DLLEXPORT QoreHttpClientObject();
 
-    //! destroys the object and frees all associated memory
-    DLLEXPORT virtual ~QoreHttpClientObject();
-
     //! Starts a socket connect poll operation
     /** @since %Qore 1.12
     */
@@ -1059,6 +1056,13 @@ public:
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
 protected:
+    //! destroys the object and frees all associated memory
+    /** protected because the object is reference-counted and must be allocated on the heap: asynchronous I/O
+        operations keep their own references and can release them after the owner's scope has exited; destroy the
+        object with deref()
+    */
+    DLLEXPORT virtual ~QoreHttpClientObject();
+
     DLLEXPORT void lock();
     DLLEXPORT void unlock();
 

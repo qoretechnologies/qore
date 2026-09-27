@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2018 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -68,12 +68,6 @@ public:
             connect(xsink);
     }
 
-    DLLLOCAL virtual ~JsonRpcClient() {
-        ExceptionSink xsink;
-        last_id.discard(&xsink);
-        xsink.clear();
-    }
-
     DLLLOCAL QoreValue call(QoreStringNode* msg, QoreHashNode* info, ExceptionSink* xsink);
 
     DLLLOCAL void getVersion(QoreString& str) const {
@@ -107,6 +101,14 @@ public:
         if (id) {
             last_id = id;
         }
+    }
+
+protected:
+    // reference-counted: destroyed with deref()
+    DLLLOCAL virtual ~JsonRpcClient() {
+        ExceptionSink xsink;
+        last_id.discard(&xsink);
+        xsink.clear();
     }
 
 private:

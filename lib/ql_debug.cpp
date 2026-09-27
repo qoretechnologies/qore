@@ -3692,20 +3692,20 @@ static void ut_httpclient_conn_mgr_get(UnitTestCounters& c) {
     });
 
     // Create HTTPClient and enable conn_mgr dispatch
-    QoreHttpClientObject client;
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, &xsink);
     QoreString url_str;
     url_str.sprintf("http://127.0.0.1:%d/", server_port);
-    client.setURL(url_str.c_str(), &xsink);
+    client->setURL(url_str.c_str(), &xsink);
     UT_ASSERT(c, !xsink, "setURL succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    client.setUseConnectionManager(true);
-    UT_ASSERT(c, client.getUseConnectionManager(), "conn_mgr enabled");
+    client->setUseConnectionManager(true);
+    UT_ASSERT(c, client->getUseConnectionManager(), "conn_mgr enabled");
 
     QoreHashNode* info = new QoreHashNode(autoTypeInfo);
     ReferenceHolder<QoreHashNode> info_holder(info, &xsink);
     ReferenceHolder<QoreHashNode> response(
-        client.send("GET", "/", nullptr, nullptr, 0, true, info, &xsink), &xsink);
+        client->send("GET", "/", nullptr, nullptr, 0, true, info, &xsink), &xsink);
     UT_ASSERT(c, !xsink, "GET via conn_mgr succeeds");
     if (xsink) {
         QoreStringValueHelper err(xsink.getExceptionErr());
@@ -3777,18 +3777,18 @@ static void ut_httpclient_conn_mgr_post(UnitTestCounters& c) {
         send(cfd, resp, strlen(resp), 0);
     });
 
-    QoreHttpClientObject client;
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, &xsink);
     QoreString url_str;
     url_str.sprintf("http://127.0.0.1:%d/", server_port);
-    client.setURL(url_str.c_str(), &xsink);
+    client->setURL(url_str.c_str(), &xsink);
     UT_ASSERT(c, !xsink, "setURL succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    client.setUseConnectionManager(true);
+    client->setUseConnectionManager(true);
 
     SimpleRefHolder<QoreStringNode> body_str(new QoreStringNode("test-body"));
     ReferenceHolder<QoreHashNode> response(
-        client.send("POST", "/data", nullptr, **body_str, true, nullptr, &xsink), &xsink);
+        client->send("POST", "/data", nullptr, **body_str, true, nullptr, &xsink), &xsink);
     UT_ASSERT(c, !xsink, "POST via conn_mgr succeeds");
     if (xsink) {
         QoreStringValueHelper err(xsink.getExceptionErr());
@@ -3834,18 +3834,18 @@ static void ut_httpclient_conn_mgr_error_passthru(UnitTestCounters& c) {
         send(cfd, resp, strlen(resp), 0);
     });
 
-    QoreHttpClientObject client;
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, &xsink);
     QoreString url_str;
     url_str.sprintf("http://127.0.0.1:%d/", server_port);
-    client.setURL(url_str.c_str(), &xsink);
+    client->setURL(url_str.c_str(), &xsink);
     UT_ASSERT(c, !xsink, "setURL succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    client.setUseConnectionManager(true);
+    client->setUseConnectionManager(true);
 
     // Without error_passthru, 404 should raise an exception
     ReferenceHolder<QoreHashNode> response(
-        client.send("GET", "/missing", nullptr, nullptr, 0, true, nullptr, &xsink), &xsink);
+        client->send("GET", "/missing", nullptr, nullptr, 0, true, nullptr, &xsink), &xsink);
     UT_ASSERT(c, (bool)xsink, "404 raises HTTP-CLIENT-RECEIVE-ERROR");
     if (xsink) {
         QoreStringValueHelper err(xsink.getExceptionErr());

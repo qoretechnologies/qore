@@ -638,6 +638,19 @@ val = "string";      # OK
       specifiers are unchanged
     @endparblock
 
+    @par C++ API: HTTP Client Objects Must Be Allocated on the Heap
+    @parblock
+    The destructors of the \c QoreHttpClientObject and \c QoreHTTPClient C++ classes are now protected, as the
+    \c QoreSocketObject destructor already was, so a binary module that declares one of these objects on the stack no
+    longer compiles.  These objects are reference-counted: asynchronous I/O operations keep their own references to
+    the socket and can release them on an I/O thread after the owner's scope has exited, so a stack-allocated object
+    could be dereferenced after its stack frame was gone and crash the process.
+
+    <b>Workarounds:</b>
+    - Allocate the object on the heap and release it with \c deref(), for example with
+      <tt>ReferenceHolder&lt;QoreHttpClientObject&gt; client(new QoreHttpClientObject, xsink);</tt>
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
