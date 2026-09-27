@@ -21,9 +21,13 @@ endif()
 
 project(qore-language)
 
+# Give the files extracted from a dependency's source tarball the extraction time, not the archive's
+# timestamps, so that updating a dependency to a new version rebuilds all of its objects in an existing
+# build directory; with archive timestamps, sources older than the objects built from the previous
+# version are not recompiled, and the library mixes objects from both versions
 set(QORE_FETCHCONTENT_URL_OPTIONS)
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
-    list(APPEND QORE_FETCHCONTENT_URL_OPTIONS DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    list(APPEND QORE_FETCHCONTENT_URL_OPTIONS DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
 endif()
 
 set(QORE_FETCHCONTENT_EXCLUDE_FROM_ALL)
@@ -727,6 +731,7 @@ if (NOT CARES_FOUND_SYSTEM)
     FetchContent_Declare(cares
         URL "https://github.com/c-ares/c-ares/releases/download/v${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz"
         URL_HASH SHA256=c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
         # c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the
         # qid just freed, so that the lookup never completes; lib/QoreSocket.cpp also recovers from it with
         # a system c-ares
@@ -1027,6 +1032,7 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     ExternalProject_Add(jemalloc_ext
         URL ${QORE_JEMALLOC_URL}
         URL_HASH SHA256=200776fac271093e7c2f21edd6d62657ecd2be578d9328633f2a86bfa6ef4f1d
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
         PREFIX ${QORE_JEMALLOC_PREFIX}
         CONFIGURE_COMMAND <SOURCE_DIR>/configure
             --prefix=${QORE_JEMALLOC_PREFIX}
