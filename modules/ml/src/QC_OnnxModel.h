@@ -818,6 +818,7 @@ public:
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreHashNode* getContentIdentity(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) const { return nullptr; }
     DLLLOCAL bool isLoaded() const { return false; }
@@ -879,6 +880,7 @@ public:
     DLLLOCAL QoreHashNode* getPoolStats(ExceptionSink*) const { return nullptr; }
     DLLLOCAL void resetPoolStats() {}
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* getContentIdentity(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) { return nullptr; }
 };
