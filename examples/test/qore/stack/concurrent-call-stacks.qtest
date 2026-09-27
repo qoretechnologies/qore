@@ -223,7 +223,8 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
     #! Returns a description of what is wrong with a caller thread's stack, or nothing if it is well formed
     /** A location read after it was destroyed would show up as a frame with a garbled type or function name, or
         with a user function that the caller threads never run.  A thread that is starting or exiting has only its
-        new-thread frame on the stack, and builtin frames (the counters, the lock) can have any name.
+        new-thread frame on the stack, and builtin frames (the counters, the lock) can have any name and can have the
+        builtin location without source lines.
     */
     private static *string checkCallerStack(list<hash<CallStackInfo>> stack) {
         if (!stack) {
@@ -233,8 +234,13 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
             if (frame.function.empty()) {
                 return sprintf("frame %d has no function name", $#);
             }
-            if (frame.line < 0 || frame.endline < frame.line) {
-                return sprintf("frame %d (%s) has line range %d-%d", $#, frame.function, frame.line, frame.endline);
+            # a builtin frame called without a source location, such as a destructor called when a local
+            # variable goes out of scope, has the builtin location "<builtin>" with lines -1-(-1)
+            bool builtin_location = frame.type == "builtin" && frame.file == "<builtin>" && frame.line == -1
+                && frame.endline == -1;
+            if (!builtin_location && (frame.line < 0 || frame.endline < frame.line)) {
+                return sprintf("frame %d (%s) at %s has line range %d-%d", $#, frame.function, frame.file,
+                    frame.line, frame.endline);
             }
             switch (frame.type) {
                 case "user":
