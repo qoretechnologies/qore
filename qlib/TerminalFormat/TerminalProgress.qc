@@ -402,6 +402,24 @@ public class TerminalProgress {
         writeLineIntern(message);
     }
 
+    #! Redraws an interactive display, so the fields that depend on the time are current
+    /** A display is redrawn when progress is reported; call this method at intervals to show a transfer without
+        progress as stalled, with the time without progress.  The display is not redrawn more often than the
+        \c redraw_interval_ms option allows; a non-interactive display is not affected
+
+        @par Example:
+        @code{.py}
+# redraws the display twice a second until the transfers are done
+while (!done.waitForZero(500ms)) {
+    progress.refresh();
+}
+        @endcode
+    */
+    refresh() {
+        AutoLock al(m);
+        drawIntern(getMicros());
+    }
+
     #! Returns a summary of a transfer: the amount done, the elapsed time, and the average speed
     /** @param id the ID of the transfer
 

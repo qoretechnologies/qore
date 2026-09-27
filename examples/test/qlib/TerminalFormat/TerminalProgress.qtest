@@ -247,6 +247,22 @@ public class TerminalProgressTest inherits QUnit::Test {
         p.update(id, done);
         assertRegex(" stalled 6\\.0s ", p.take());
 
+        # a refresh shows the time without progress without an update
+        p.advance(2s);
+        p.refresh();
+        assertRegex(" stalled 8\\.0s ", p.take());
+        # not more often than the redraw interval
+        p.advance(10ms);
+        p.refresh();
+        assertEq("", p.take());
+        # a non-interactive display is not affected
+        TestProgress l(<TerminalProgressOptions>{"interactive": False});
+        l.add("x", 10);
+        l.take();
+        l.advance(1s);
+        l.refresh();
+        assertEq("", l.take());
+
         # on a narrow display the info, the history, and the sizes are left out, then the bar
         TestProgress n(<TerminalProgressOptions>{"interactive": True, "columns": 60, "unicode": True,
             "color": False, "taskbar": False});
