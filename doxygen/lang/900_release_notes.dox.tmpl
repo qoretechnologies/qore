@@ -210,7 +210,7 @@
     - new builtin modules: @ref avrointro "avro", @ref dataframeintro "dataframe",
       @ref i18nintro "i18n", @ref jsonintro "json", @ref krb5intro "krb5",
       @ref linenoiseintro "linenoise", @ref mlintro "ml", @ref mongodbintro "mongodb",
-      @ref ocrintro "ocr", @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
+      @ref ocrintro "ocr", @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer", @ref yamlintro "yaml"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
@@ -2613,6 +2613,12 @@ while (*binary chunk = input.read(65536)) {
       - truncation/padding strategies, batch encoding, byte-level offset mapping, word_ids for NER
         alignment, and sliding-window overflow for long documents
 
+    - @ref yamlintro "yaml" module
+      - previously supplied by the external module-yaml repository, now built and installed with %Qore;
+        YAML parsing, serialization, YAML 1.2 core schema resolution, and streaming APIs are always available
+      - all twelve companion modules ship with %Qore, including Connect RPC, DataStream, YAML-RPC,
+        YAML schema validation, custom tag handling, and YAML document data providers
+
     @subsection qore_3_0_0_new_user_modules New User Modules
     - @ref a2aclientintro "A2aClient" module
       - new module providing a client API for connecting to
@@ -2837,6 +2843,12 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a REST client for the <a href="https://www.atlassian.com/software/confluence">Confluence</a>
         Cloud v2 API, authenticating with an API token or through OAuth2
 
+    - @ref connectintro "Connect" module
+      - migrated from module-yaml; connect streaming RPC with YAML, JSON, CBOR, and protocol adapters
+
+    - @ref connectdataproviderintro "ConnectDataProvider" module
+      - migrated from module-yaml; data provider and connection APIs for Connect RPC services
+
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider" module
       - new module providing a data provider API for <a href="https://www.constantcontact.com/">Constant Contact</a> email marketing
 
@@ -2854,6 +2866,18 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref dataprovidermlintro "DataProviderML" module
       - new module providing data pipeline processors wrapping the ml binary module
+
+    - @ref datastreamclientintro "DataStreamClient" module
+      - migrated from module-yaml; synchronous clients for HTTP data streaming
+
+    - @ref datastreamclientiointro "DataStreamClientIo" module
+      - migrated from module-yaml; asynchronous clients for HTTP data streaming
+
+    - @ref datastreamrequesthandlerintro "DataStreamRequestHandler" module
+      - migrated from module-yaml; server-side handling of HTTP data streams
+
+    - @ref datastreamutilintro "DataStreamUtil" module
+      - migrated from module-yaml; framing, serialization, and protocol negotiation for data streams
 
     - @ref deeldataproviderintro "DeelDataProvider" module
       - new module providing a data provider API for <a href="https://www.deel.com/">Deel</a> global workforce management
@@ -3651,6 +3675,24 @@ while (*binary chunk = input.read(65536)) {
     - @ref xerorestclientintro "XeroRestClient" module
       - new module providing a REST client for the <a href="https://www.xero.com">Xero</a> API, resolving the
         tenant and sending it on every request
+
+    - @ref yamldocumentdataproviderintro "YamlDocumentDataProvider" module
+      - migrated from module-yaml; data provider APIs for reading and writing YAML documents
+
+    - @ref yamlrpcclientintro "YamlRpcClient" module
+      - migrated from module-yaml; synchronous YAML-RPC clients
+
+    - @ref yamlrpcclientiointro "YamlRpcClientIo" module
+      - migrated from module-yaml; asynchronous YAML-RPC clients and connections
+
+    - @ref yamlrpchandlerintro "YamlRpcHandler" module
+      - migrated from module-yaml; server-side YAML-RPC request handling
+
+    - @ref yamlschemaintro "YamlSchema" module
+      - migrated from module-yaml; yAML schema validation
+
+    - @ref yamltaghandlerintro "YamlTagHandler" module
+      - migrated from module-yaml; custom YAML tag resolution
 
     - @ref zohobooksdataproviderintro "ZohoBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.zoho.com/books/">Zoho Books</a> accounting and invoicing

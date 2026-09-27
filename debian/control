@@ -28,6 +28,7 @@ Build-Depends: debhelper-compat (= 13),
                libicu-dev,
                libeigen3-dev (>= 3.4),
                libonnxruntime-dev (>= 1.23.2),
+               libyaml-dev,
                libutf8proc-dev,
                libprotobuf-dev,
                protobuf-compiler,
@@ -84,9 +85,12 @@ Recommends: qore (= ${binary:Version})
 Suggests: tesseract-ocr-eng
 # the json binary module and its 16 user modules were delivered separately as
 # qore-json-module up to and including json 1.12; they ship with Qore as of 3.0
-Provides: qore-json-module
-Replaces: qore-json-module (<< 1.13)
-Breaks: qore-json-module (<< 1.13)
+Provides: qore-json-module (= ${binary:Version}),
+          qore-yaml-module (= ${binary:Version})
+Replaces: qore-json-module (<< 1.13),
+          qore-yaml-module (<< 3.0.0~)
+Breaks: qore-json-module (<< 1.13),
+        qore-yaml-module (<< 3.0.0~)
 Description: standard library modules for Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
@@ -155,7 +159,6 @@ Description: miscellaneous user tools written in Qore
 Package: qore-debug-tools
 Architecture: all
 Depends: qore (>= ${source:Version}),
-         qore-yaml-module (>= 0.5),
          ${misc:Depends}
 Breaks: qore (<< 3.0.0-1~)
 Replaces: qore (<< 3.0.0-1~)

@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires yaml
+%requires QUnit
+%requires YamlTagHandler
+
+%exec-class YamlTagHandlerTest
+
+# Simple test handler for testing
+class TestIntHandler inherits YamlTagHandler::AbstractYamlTagHandler {
+    string getTagPrefix() {
+        return "!testint";
+    }
+
+    auto parseScalar(string tag, string value) {
+        return value.toInt() * 2;  # Double the value for testing
+    }
+
+    bool canEmit(auto value) {
+        return value.typeCode() == NT_INT && value > 1000;
+    }
+
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) {
+        return <YamlTagEmitInfo>{
+            "tag": "!testint",
+            "value": string(value / 2),  # Half the value for testing
+        };
+    }
+}
+
+# Test handler for dates
+class TestDateHandler inherits YamlTagHandler::AbstractYamlTagHandler {
+    string getTagPrefix() {
+        return "!testdate";
+    }
+
+    auto parseScalar(string tag, string value) {
+        return date(value);
+    }
+
+    bool canEmit(auto value) {
+        return False;  # Don't auto-emit
+    }
+
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) {
+        return <YamlTagEmitInfo>{
+            "tag": "!testdate",
+            "value": format_date("YYYY-MM-DD", value),
+        };
+    }
+}
+
+class YamlTagHandlerTest inherits QUnit::Test {
+    constructor() : Test("YamlTagHandlerTest", "1.0") {
+        addTestCase("hashdecl", \testHashdecl());
+        addTestCase("handler registration", \testHandlerRegistration());
+        addTestCase("handler lookup", \testHandlerLookup());
+        addTestCase("parse scalar", \testParseScalar());
+        addTestCase("emit info", \testEmitInfo());
+        addTestCase("can emit", \testCanEmit());
+        addTestCase("global registry", \testGlobalRegistry());
+        addTestCase("unregister", \testUnregister());
+        addTestCase("duplicate registration", \testDuplicateRegistration());
+        addTestCase("prefix matching", \testPrefixMatching());
+        set_return_value(main());
+    }
+
+    testHashdecl() {
+        hash<YamlTagEmitInfo> info = <YamlTagEmitInfo>{
+            "tag": "!test",
+            "value": "hello",
+            "style": "plain",
+        };
+
+        assertEq("!test", info.tag);
+        assertEq("hello", info.value);
+        assertEq("plain", info.style);
+    }
+
+    testHandlerRegistration() {
+        YamlTagHandlerRegistry registry();
+
+        TestIntHandler handler();
+        registry.register(handler);
+
+        assertTrue(registry.isRegistered("!testint"), "handler should be registered");
+        assertEq(("!testint",), registry.getRegisteredPrefixes(), "should list registered prefix");
+    }
+
+    testHandlerLookup() {
+        YamlTagHandlerRegistry registry();
+
+        TestIntHandler intHandler();
+        TestDateHandler dateHandler();
+
+        registry.register(intHandler);
+        registry.register(dateHandler);
+
+        auto found = registry.findHandler("!testint");
+        assertTrue(exists found, "should find int handler");
+        assertEq("!testint", found.getTagPrefix());
+
+        found = registry.findHandler("!testdate");
+        assertTrue(exists found, "should find date handler");
+        assertEq("!testdate", found.getTagPrefix());
+
+        found = registry.findHandler("!unknown");
+        assertFalse(exists found, "should not find unknown handler");
+    }
+
+    testParseScalar() {
+        TestIntHandler handler();
+
+        # Handler doubles the value
+        auto result = handler.parseScalar("!testint", "42");
+        assertEq(84, result, "parseScalar should double the value");
+    }
+
+    testEmitInfo() {
+        TestIntHandler handler();
+
+        # Handler halves the value for emit
+        hash<YamlTagEmitInfo> info = handler.getEmitInfo(100);
+        assertEq("!testint", info.tag);
+        assertEq("50", info.value);
+    }
+
+    testCanEmit() {
+        TestIntHandler handler();
+
+        # Handler only emits for int > 1000
+        assertTrue(handler.canEmit(2000), "should emit for int > 1000");
+        assertFalse(handler.canEmit(500), "should not emit for int <= 1000");
+        assertFalse(handler.canEmit("string"), "should not emit for string");
+    }
+
+    testGlobalRegistry() {
+        # Clean up any previous registrations
+        list<string> existing = get_yaml_tag_handlers();
+        foreach string prefix in (existing) {
+            if (prefix == "!testglobal") {
+                unregister_yaml_tag_handler(prefix);
+            }
+        }
+
+        # Create a simple inline handler class
+        TestIntHandler handler();
+
+        # Override prefix for this test
+        YamlTagHandlerRegistry testReg();
+
+        # Test that global functions work - just verify it returns a list
+        assertTrue(get_yaml_tag_handlers().typeCode() == NT_LIST, "should return a list");
+    }
+
+    testUnregister() {
+        YamlTagHandlerRegistry registry();
+
+        TestIntHandler handler();
+        registry.register(handler);
+        assertTrue(registry.isRegistered("!testint"));
+
+        registry.unregister("!testint");
+        assertFalse(registry.isRegistered("!testint"));
+
+        # Unregistering again should throw
+        assertThrows("YAML-TAG-ERROR", \registry.unregister(), "!testint");
+    }
+
+    testDuplicateRegistration() {
+        YamlTagHandlerRegistry registry();
+
+        TestIntHandler handler1();
+        TestIntHandler handler2();
+
+        registry.register(handler1);
+
+        # Registering another handler with same prefix should throw
+        assertThrows("YAML-TAG-ERROR", \registry.register(), handler2);
+    }
+
+    testPrefixMatching() {
+        YamlTagHandlerRegistry registry();
+
+        TestIntHandler handler();
+        registry.register(handler);
+
+        # Exact match
+        auto found = registry.findHandler("!testint");
+        assertTrue(exists found, "should find exact match");
+
+        # Prefix match (e.g., !testint:subtype)
+        found = registry.findHandler("!testint:subtype");
+        assertTrue(exists found, "should find prefix match");
+
+        # No match
+        found = registry.findHandler("!other");
+        assertFalse(exists found, "should not find non-matching tag");
+    }
+}

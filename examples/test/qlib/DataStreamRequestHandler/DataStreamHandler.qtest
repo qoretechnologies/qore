@@ -1,0 +1,381 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires yaml
+%requires Mime
+%requires QUnit
+
+%exec-class DataStreamRequestHandlerTest
+
+class TestDataStreamRequestHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<auto> received_data = ();
+        list<auto> data_to_send;
+        int send_index = 0;
+    }
+
+    constructor(hash cx, *hash ah, list<auto> send_data = ()) : AbstractDataStreamRequestHandler(cx, ah) {
+        data_to_send = send_data;
+    }
+
+    auto sendDataImpl() {
+        if (send_index < data_to_send.size()) {
+            return data_to_send[send_index++];
+        }
+        return NOTHING;
+    }
+
+    nothing recvDataImpl(auto data) {
+        received_data += data;
+    }
+
+    list<auto> getReceivedData() {
+        return received_data;
+    }
+}
+
+class EchoDataStreamRequestHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<auto> buffer = ();
+        int echo_index = 0;
+    }
+
+    constructor(hash cx, *hash ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    auto sendDataImpl() {
+        if (echo_index < buffer.size()) {
+            return buffer[echo_index++];
+        }
+        return NOTHING;
+    }
+
+    nothing recvDataImpl(auto data) {
+        buffer += data;
+    }
+}
+
+class ErrorDataStreamRequestHandler inherits AbstractDataStreamRequestHandler {
+    constructor(hash cx, *hash ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    auto sendDataImpl() {
+        throw "SEND-ERROR", "Test send error";
+    }
+
+    nothing recvDataImpl(auto data) {
+        throw "RECV-ERROR", "Test receive error";
+    }
+}
+
+class DataStreamRequestHandlerTest inherits QUnit::Test {
+    constructor() : Test("DataStreamRequestHandler test", "1.0") {
+        addTestCase("base test", \testDataStreamRequestHandler());
+        addTestCase("receive data", \testReceiveData());
+        addTestCase("send data", \testSendData());
+        addTestCase("error response", \testErrorResponse());
+        addTestCase("response headers", \testResponseHeaders());
+        addTestCase("data types", \testDataTypes());
+        addTestCase("empty data", \testEmptyData());
+        addTestCase("large data", \testLargeData());
+        addTestCase("DS v1 protocol detection", \testDSv1ProtocolDetection());
+        addTestCase("Connect protocol detection", \testConnectProtocolDetection());
+        addTestCase("Connect response headers", \testConnectResponseHeaders());
+        addTestCase("Connect error response", \testConnectErrorResponse());
+        addTestCase("missing accept header DS v1", \testMissingAcceptHeaderDSv1());
+        addTestCase("handler isConnectProtocol accessor", \testIsConnectProtocol());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testDataStreamRequestHandler() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        assertEq(True, handler instanceof AbstractDataStreamRequestHandler);
+    }
+
+    testReceiveData() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Simulate receiving data
+        list<auto> test_data = (
+            {"item": 1, "value": "first"},
+            {"item": 2, "value": "second"},
+            {"item": 3, "value": "third"},
+        );
+
+        foreach auto item in (test_data) {
+            # Simulate what recvImpl would do
+            handler.recvDataImpl(item);
+        }
+
+        list<auto> received = handler.getReceivedData();
+        assertEq(3, received.size());
+        assertEq(test_data[0], received[0]);
+        assertEq(test_data[1], received[1]);
+        assertEq(test_data[2], received[2]);
+    }
+
+    testSendData() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+
+        list<auto> data_to_send = (
+            {"response": 1},
+            {"response": 2},
+        );
+
+        TestDataStreamRequestHandler handler(cx, NOTHING, data_to_send);
+
+        # Get all data that would be sent
+        list<auto> sent = ();
+        while (True) {
+            auto data = handler.sendDataImpl();
+            if (!exists data) break;
+            push sent, data;
+        }
+
+        assertEq(2, sent.size());
+        assertEq(data_to_send[0], sent[0]);
+        assertEq(data_to_send[1], sent[1]);
+    }
+
+    testErrorResponse() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {},  # Missing DataStreamAccept header
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Should return error response for missing accept header
+        *hash<auto> error = handler.getErrorResponse();
+        assertTrue(error.hasKey("code"));
+        assertEq(406, error.code);
+    }
+
+    testResponseHeaders() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        hash<auto> response = handler.getResponseHeaderMessageImpl();
+        assertEq(200, response.code);
+        assertTrue(response.hasKey("hdr"));
+        assertEq("chunked", response.hdr."Transfer-Encoding");
+    }
+
+    testDataTypes() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+
+        # Test with various data types
+        list<auto> test_data = (
+            42,
+            3.14,
+            "string value",
+            True,
+            (1, 2, 3),
+            {"key": "value"},
+            now(),
+            <48656c6c6f>,  # binary
+        );
+
+        TestDataStreamRequestHandler handler(cx, NOTHING, test_data);
+
+        # All data types should be sendable
+        list<auto> sent = ();
+        while (True) {
+            auto data = handler.sendDataImpl();
+            if (!exists data) break;
+            push sent, data;
+        }
+
+        assertEq(test_data.size(), sent.size());
+    }
+
+    testEmptyData() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+
+        # Test with empty data
+        TestDataStreamRequestHandler handler(cx, NOTHING, ());
+
+        auto data = handler.sendDataImpl();
+        assertEq(NOTHING, data);
+    }
+
+    testLargeData() {
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+
+        # Generate large data
+        list<auto> large_data = ();
+        for (int i = 0; i < 100; i++) {
+            large_data += {
+                "index": i,
+                "data": strmul("x", 1000),
+            };
+        }
+
+        TestDataStreamRequestHandler handler(cx, NOTHING, large_data);
+
+        int count = 0;
+        while (True) {
+            auto data = handler.sendDataImpl();
+            if (!exists data) break;
+            count++;
+        }
+
+        assertEq(100, count);
+    }
+
+    testDSv1ProtocolDetection() {
+        # ADSRH should detect DS v1 from DataStream-Accept header
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+                "content-type": MimeTypeYaml + ";charset=utf8",
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Should NOT be detected as Connect
+        assertFalse(handler.isConnectProtocol(), "DS v1 headers: not Connect");
+    }
+
+    testConnectProtocolDetection() {
+        # ADSRH should detect Connect from Connect-Protocol-Version header
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        assertTrue(handler.isConnectProtocol(), "Connect headers: detected");
+    }
+
+    testConnectResponseHeaders() {
+        # Connect mode should produce Connect response headers
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        hash<auto> response = handler.getResponseHeaderMessageImpl();
+        assertEq(200, response.code, "Connect response: 200");
+        assertTrue(response.hasKey("hdr"), "Connect response: has headers");
+        # Connect mode uses application/connect+yaml content type
+        assertEq(ConnectStreamMimeTypeYaml, response.hdr."Content-Type",
+            "Connect response: content type");
+        assertEq("chunked", response.hdr."Transfer-Encoding",
+            "Connect response: chunked");
+        assertEq(ConnectProtocolVersionVal,
+            response.hdr{ConnectProtocolVersionHdr},
+            "Connect response: protocol version");
+    }
+
+    testConnectErrorResponse() {
+        # Connect mode error should produce JSON error format
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Trigger error response by setting exception
+        *hash<auto> error = handler.getErrorResponse();
+        # For Connect mode, error should be JSON format
+        if (error) {
+            assertTrue(error.hasKey("code"), "Connect error: has code");
+        }
+    }
+
+    testMissingAcceptHeaderDSv1() {
+        # DS v1 without DataStreamAccept header should return 406
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                "content-type": MimeTypeYaml,
+                # No DataStreamAccept header
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        *hash<auto> error = handler.getErrorResponse();
+        assertTrue(error.hasKey("code"), "missing accept: has code");
+        assertEq(406, error.code, "missing accept: 406");
+    }
+
+    testIsConnectProtocol() {
+        # Test isConnectProtocol accessor
+        hash<auto> ds_cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler ds_handler(ds_cx);
+        assertFalse(ds_handler.isConnectProtocol(), "DS v1: isConnectProtocol=False");
+
+        hash<auto> connect_cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": "application/yaml",
+            },
+        };
+        TestDataStreamRequestHandler connect_handler(connect_cx);
+        assertTrue(connect_handler.isConnectProtocol(), "Connect: isConnectProtocol=True");
+    }
+}

@@ -1,0 +1,715 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlStreamWriterTest
+
+class YamlStreamWriterTest inherits QUnit::Test {
+    constructor() : Test("YamlStreamWriterTest", "1.0") {
+        addTestCase("basic writing", \testBasicWriting());
+        addTestCase("mapping", \testMapping());
+        addTestCase("sequence", \testSequence());
+        addTestCase("nested structures", \testNestedStructures());
+        addTestCase("multiple documents", \testMultipleDocuments());
+        addTestCase("anchors and aliases", \testAnchorsAndAliases());
+        addTestCase("auto write", \testAutoWrite());
+        addTestCase("named argument calls", \testNamedArgumentCalls());
+        addTestCase("flush", \testFlush());
+        addTestCase("document count", \testDocumentCount());
+
+        # Scalar type tests
+        addTestCase("write boolean", \testWriteBoolean());
+        addTestCase("write integer", \testWriteInteger());
+        addTestCase("write float", \testWriteFloat());
+        addTestCase("write null", \testWriteNull());
+        addTestCase("write string", \testWriteString());
+
+        # Options tests
+        addTestCase("block style option", \testBlockStyleOption());
+        addTestCase("explicit start doc option", \testExplicitStartDocOption());
+        addTestCase("explicit end doc option", \testExplicitEndDocOption());
+        addTestCase("indent option", \testIndentOption());
+        addTestCase("width option", \testWidthOption());
+        addTestCase("partial options hash", \testPartialOptionsHash());
+        addTestCase("document scoped anchors", \testDocumentScopedAnchors());
+
+        # Corner cases
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("unicode content", \testUnicodeContent());
+        addTestCase("special characters", \testSpecialCharacters());
+        addTestCase("deeply nested", \testDeeplyNested());
+        addTestCase("large document", \testLargeDocument());
+
+        # Negative tests - state machine errors
+        addTestCase("write when closed", \testWriteWhenClosed());
+        addTestCase("end document without start", \testEndDocumentWithoutStart());
+        addTestCase("end sequence without start", \testEndSequenceWithoutStart());
+        addTestCase("end mapping without start", \testEndMappingWithoutStart());
+        addTestCase("write key outside mapping", \testWriteKeyOutsideMapping());
+        addTestCase("unknown anchor in alias", \testUnknownAnchorInAlias());
+        addTestCase("start document twice", \testStartDocumentTwice());
+
+        set_return_value(main());
+    }
+
+    testBasicWriting() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("key");
+        writer.writeScalar("value");
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq({"key": "value"}, parsed);
+    }
+
+    testMapping() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("name");
+        writer.writeScalar("Alice");
+        writer.writeKey("age");
+        writer.writeScalar(30);
+        writer.writeKey("active");
+        writer.writeScalar(True);
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq("Alice", parsed.name);
+        assertEq(30, parsed.age);
+        assertEq(True, parsed.active);
+    }
+
+    testSequence() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startSequence();
+        writer.writeScalar("item1");
+        writer.writeScalar("item2");
+        writer.writeScalar("item3");
+        writer.endSequence();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq(("item1", "item2", "item3"), parsed);
+    }
+
+    testNestedStructures() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("users");
+        writer.startSequence();
+
+        # First user
+        writer.startMapping();
+        writer.writeKey("name");
+        writer.writeScalar("Alice");
+        writer.writeKey("roles");
+        writer.startSequence();
+        writer.writeScalar("admin");
+        writer.writeScalar("user");
+        writer.endSequence();
+        writer.endMapping();
+
+        # Second user
+        writer.startMapping();
+        writer.writeKey("name");
+        writer.writeScalar("Bob");
+        writer.endMapping();
+
+        writer.endSequence();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq(2, parsed.users.size());
+        assertEq("Alice", parsed.users[0].name);
+        assertEq(("admin", "user"), parsed.users[0].roles);
+        assertEq("Bob", parsed.users[1].name);
+    }
+
+    testMultipleDocuments() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.write({"doc": 1});
+        writer.endDocument();
+
+        writer.startDocument();
+        writer.write({"doc": 2});
+        writer.endDocument();
+
+        writer.startDocument();
+        writer.write({"doc": 3});
+        writer.endDocument();
+
+        writer.close();
+
+        string yaml = sos.getData();
+        list<auto> docs = parse_yaml_documents(yaml);
+        assertEq(3, docs.size());
+        assertEq(1, docs[0].doc);
+        assertEq(2, docs[1].doc);
+        assertEq(3, docs[2].doc);
+    }
+
+    testAnchorsAndAliases() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+
+        # Define anchor on a mapping
+        writer.writeKey("defaults");
+        writer.startMapping("defaults_anchor");
+        writer.writeKey("timeout");
+        writer.writeScalar(30);
+        writer.endMapping();
+
+        # Reference anchor
+        writer.writeKey("service1");
+        writer.startMapping();
+        writer.writeKey("settings");
+        writer.writeAlias("defaults_anchor");
+        writer.endMapping();
+
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq(30, parsed.defaults.timeout);
+        assertEq(30, parsed.service1.settings.timeout);
+    }
+
+    testAutoWrite() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        hash<auto> data = {
+            "name": "Test",
+            "items": (1, 2, 3),
+            "nested": {
+                "key": "value",
+            },
+        };
+
+        writer.startDocument();
+        writer.write(data);
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq(data, parsed);
+    }
+
+    testNamedArgumentCalls() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(stream: sos, options: <YamlStreamWriterOptions>{"indent": 2});
+
+        writer.startDocument();
+        writer.startMapping(anchor: "root");
+        writer.writeKey(key: "name");
+        writer.writeScalar(value: "qore", tag: NOTHING, anchor: "name_anchor");
+        writer.writeKey(key: "copy");
+        writer.writeAlias(anchor: "name_anchor");
+        writer.writeKey(key: "items");
+        writer.startSequence(anchor: NOTHING);
+        writer.write(value: "one");
+        writer.write(value: "two");
+        writer.endSequence();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("qore", parsed.name);
+        assertEq("qore", parsed.copy);
+        assertEq(("one", "two"), parsed.items);
+    }
+
+    testFlush() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("key");
+        writer.writeScalar("value");
+
+        # Flush in the middle
+        writer.flush();
+
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        auto parsed = parse_yaml(yaml);
+        assertEq({"key": "value"}, parsed);
+    }
+
+    testDocumentCount() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        assertEq(0, writer.getDocumentCount());
+
+        writer.startDocument();
+        writer.write({"a": 1});
+        writer.endDocument();
+        assertEq(1, writer.getDocumentCount());
+
+        writer.startDocument();
+        writer.write({"b": 2});
+        writer.endDocument();
+        assertEq(2, writer.getDocumentCount());
+
+        writer.close();
+        assertEq(2, writer.getDocumentCount());
+    }
+
+    # Scalar type tests
+    testWriteBoolean() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("true_val");
+        writer.writeScalar(True);
+        writer.writeKey("false_val");
+        writer.writeScalar(False);
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq(True, parsed.true_val);
+        assertEq(False, parsed.false_val);
+    }
+
+    testWriteInteger() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("positive");
+        writer.writeScalar(42);
+        writer.writeKey("negative");
+        writer.writeScalar(-42);
+        writer.writeKey("zero");
+        writer.writeScalar(0);
+        writer.writeKey("large");
+        writer.writeScalar(9223372036854775807);
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq(42, parsed.positive);
+        assertEq(-42, parsed.negative);
+        assertEq(0, parsed.zero);
+        assertEq(9223372036854775807, parsed.large);
+    }
+
+    testWriteFloat() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("pi");
+        writer.writeScalar(3.14159);
+        writer.writeKey("negative");
+        writer.writeScalar(-2.5);
+        writer.writeKey("zero");
+        writer.writeScalar(0.0);
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertTrue(abs(parsed.pi - 3.14159) < 0.0001);
+        assertTrue(abs(parsed.negative - (-2.5)) < 0.0001);
+    }
+
+    testWriteNull() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("null_val");
+        writer.writeScalar(NOTHING);
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertNothing(parsed.null_val);
+    }
+
+    testWriteString() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("simple");
+        writer.writeScalar("hello");
+        writer.writeKey("with_space");
+        writer.writeScalar("hello world");
+        writer.writeKey("with_quotes");
+        writer.writeScalar("say \"hello\"");
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("hello", parsed.simple);
+        assertEq("hello world", parsed.with_space);
+        assertEq("say \"hello\"", parsed.with_quotes);
+    }
+
+    # Options tests
+    testBlockStyleOption() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"flags": YAML::BlockStyle});
+
+        writer.startDocument();
+        writer.write({"key": (1, 2, 3)});
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        # Block style should have line breaks
+        assertTrue(yaml =~ /\n/);
+    }
+
+    testExplicitStartDocOption() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"flags": YAML::ExplicitStartDoc});
+
+        writer.startDocument();
+        writer.write({"key": "value"});
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        assertTrue(yaml =~ /^---/);
+    }
+
+    testExplicitEndDocOption() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"flags": YAML::ExplicitEndDoc});
+
+        writer.startDocument();
+        writer.write({"key": "value"});
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        assertTrue(yaml =~ /\.\.\./);
+    }
+
+    testIndentOption() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"indent": 4, "flags": YAML::BlockStyle});
+
+        writer.startDocument();
+        writer.write({"outer": {"inner": "value"}});
+        writer.endDocument();
+        writer.close();
+
+        string yaml = sos.getData();
+        # Should have 4-space indentation
+        assertTrue(yaml =~ /    /);
+    }
+
+    testWidthOption() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"width": 40});
+
+        writer.startDocument();
+        writer.write({"key": "This is a very long string that might need to be wrapped depending on the width setting"});
+        writer.endDocument();
+        writer.close();
+
+        # Should produce valid YAML regardless of wrapping
+        auto parsed = parse_yaml(sos.getData());
+        assertTrue(exists parsed.key);
+    }
+
+    testPartialOptionsHash() {
+        # Test that partial options hashes preserve defaults for missing keys
+        # Only specifying flags should not change width (-1) or indent (2) defaults
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"flags": YAML::BlockStyle});
+
+        writer.startDocument();
+        writer.write({"key": "value"});
+        writer.endDocument();
+        writer.close();
+
+        # Should produce valid YAML - if defaults were wrong, this would fail
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("value", parsed.key);
+
+        # Test with only indent specified - should use default width (-1) and flags (0)
+        StringOutputStream sos2();
+        YamlStreamWriter writer2(sos2, <YamlStreamWriterOptions>{"indent": 4});
+
+        writer2.startDocument();
+        writer2.write({"key": "value"});
+        writer2.endDocument();
+        writer2.close();
+
+        parsed = parse_yaml(sos2.getData());
+        assertEq("value", parsed.key);
+    }
+
+    testDocumentScopedAnchors() {
+        # Test that anchors are properly scoped to documents
+        # An anchor defined in document 1 should NOT be available in document 2
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos, <YamlStreamWriterOptions>{"flags": YAML::ExplicitStartDoc});
+
+        # Document 1 - define anchor
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("defaults");
+        writer.startMapping("myanchor");
+        writer.writeKey("timeout");
+        writer.writeScalar(30);
+        writer.endMapping();
+        writer.endMapping();
+        writer.endDocument();
+
+        # Document 2 - trying to use the anchor from document 1 should fail
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("ref");
+
+        # The anchor "myanchor" was defined in document 1, but anchors should be
+        # document-scoped, so it shouldn't be available here
+        assertThrows("YAML-STREAM-EMIT-ERROR", sub () {
+            writer.writeAlias("myanchor");
+        });
+    }
+
+    # Corner cases
+    testEmptyDocument() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq({}, parsed);
+    }
+
+    testUnicodeContent() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("greeting");
+        writer.writeScalar("\u4F60\u597D\u4E16\u754C");
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("\u4F60\u597D\u4E16\u754C", parsed.greeting);
+    }
+
+    testSpecialCharacters() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("newline");
+        writer.writeScalar("line1\nline2");
+        writer.writeKey("tab");
+        writer.writeScalar("col1\tcol2");
+        writer.writeKey("colon");
+        writer.writeScalar("key: value");
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("line1\nline2", parsed.newline);
+        assertEq("col1\tcol2", parsed.tab);
+        assertEq("key: value", parsed.colon);
+    }
+
+    testDeeplyNested() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("a");
+        writer.startMapping();
+        writer.writeKey("b");
+        writer.startMapping();
+        writer.writeKey("c");
+        writer.startMapping();
+        writer.writeKey("d");
+        writer.writeScalar("deep");
+        writer.endMapping();
+        writer.endMapping();
+        writer.endMapping();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("deep", parsed.a.b.c.d);
+    }
+
+    testLargeDocument() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("items");
+        writer.startSequence();
+
+        for (int i = 0; i < 1000; i++) {
+            writer.startMapping();
+            writer.writeKey("id");
+            writer.writeScalar(i);
+            writer.writeKey("name");
+            writer.writeScalar(sprintf("item_%d", i));
+            writer.endMapping();
+        }
+
+        writer.endSequence();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq(1000, parsed.items.size());
+        assertEq(0, parsed.items[0].id);
+        assertEq(999, parsed.items[999].id);
+    }
+
+    # Negative tests - state machine errors
+    testWriteWhenClosed() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.write({"key": "value"});
+        writer.endDocument();
+        writer.close();
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", sub () {
+            writer.startDocument();
+        });
+    }
+
+    testEndDocumentWithoutStart() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", \writer.endDocument());
+    }
+
+    testEndSequenceWithoutStart() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", \writer.endSequence());
+    }
+
+    testEndMappingWithoutStart() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startSequence();
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", \writer.endMapping());
+    }
+
+    testWriteKeyOutsideMapping() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startSequence();
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", sub () {
+            writer.writeKey("key");
+        });
+    }
+
+    testUnknownAnchorInAlias() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+        writer.startMapping();
+        writer.writeKey("ref");
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", sub () {
+            writer.writeAlias("nonexistent_anchor");
+        });
+    }
+
+    testStartDocumentTwice() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+
+        writer.startDocument();
+
+        assertThrows("YAML-STREAM-EMIT-ERROR", \writer.startDocument());
+    }
+}

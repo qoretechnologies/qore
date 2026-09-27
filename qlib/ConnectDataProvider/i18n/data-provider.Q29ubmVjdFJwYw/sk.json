@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Q29ubmVjdFJwYw.desc": {
+          "source": "Provides integration with **Connect RPC** services (DataStream 2.0) for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\nUse this app when you need to:\n- Call remote services using the Connect RPC protocol with automatic service discovery\n- Stream data in real time between systems using server-streaming, client-streaming, or bidirectional patterns\n- Exchange unreliable high-throughput messages via QUIC datagrams\n\n**Supported RPC patterns**:\n- **Unary**: single request/response (like a REST call)\n- **Server-streaming**: one request, multiple responses\n- **Client-streaming**: multiple requests, one response\n- **Bidirectional**: full-duplex message exchange\n- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\nSupports YAML, JSON, and CBOR serialization codecs, per-message compression (`gzip`/`deflate`), and automatic service/method discovery via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+          "message": "Poskytuje integráciu so službami **Connect RPC** (DataStream 2.0) pre vysoko výkonné vzdialené volania procedúr cez HTTP/2 a HTTP/3.\n\nTúto aplikáciu použite, keď potrebujete:\n- Volať vzdialené služby pomocou protokolu Connect RPC s automatickým zisťovaním služieb\n- Streamovať dáta v reálnom čase medzi systémami pomocou vzorov server-streaming, client-streaming alebo obojsmerného streamovania\n- Vymieňať nespoľahlivé správy s vysokou priepustnosťou cez QUIC datagramy\n\n**Podporované vzory RPC**:\n- **Unary**: jedna požiadavka/odpoveď (ako volanie REST)\n- **Server-streaming**: jedna požiadavka, viacero odpovedí\n- **Client-streaming**: viacero požiadaviek, jedna odpoveď\n- **Obojsmerné**: plne duplexná výmena správ\n- **Datagram**: nespoľahlivý štýl fire-and-forget alebo obojsmerný cez QUIC\n\nPodporuje serializačné kodeky YAML, JSON a CBOR, kompresiu jednotlivých správ (`gzip`/`deflate`) a automatické zisťovanie služieb/metód cez reflexný protokol Connect.\n\n[Qore](https://qore.org)"
+        },
+        "app.Q29ubmVjdFJwYw.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "app.Q29ubmVjdFJwYw.short_desc": {
+          "source": "Remote procedure calls over HTTP/2 and HTTP/3",
+          "message": "Vzdialené volania procedúr cez HTTP/2 a HTTP/3"
+        }
+      }
+    }
+  }
+}

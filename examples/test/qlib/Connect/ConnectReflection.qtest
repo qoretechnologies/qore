@@ -1,0 +1,589 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires Connect
+%requires ConnectDataProvider
+%requires QUnit
+
+%requires HttpClientIo
+
+%requires HttpServerAsyncIo
+
+%exec-class ConnectReflectionTest
+
+class ConnectReflectionTest inherits QUnit::Test {
+    private {
+        *HttpServer m_http;
+        int port;
+        string url;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("ConnectReflection test", "1.0") {
+%ifdef NoHttpClientIo
+        printf("SKIP: HttpClientIo module not available\n");
+        return;
+%else
+%ifdef NoHttpServerAsyncIo
+        printf("SKIP: HttpServerAsyncIo module not available\n");
+        return;
+%else
+        addTestCase("type serialization round-trip: scalars", \testTypeScalars());
+        addTestCase("type serialization round-trip: hash types", \testTypeHash());
+        addTestCase("type serialization round-trip: list types", \testTypeLists());
+        addTestCase("type serialization round-trip: nested types", \testTypeNested());
+        addTestCase("type descriptor errors", \testTypeErrors());
+        addTestCase("server reflection: ListServices", \testListServices());
+        addTestCase("server reflection: GetServiceDescriptor", \testGetServiceDescriptor());
+        addTestCase("server reflection: GetMethodDescriptor", \testGetMethodDescriptor());
+        addTestCase("extended registration with types", \testExtendedRegistration());
+        addTestCase("client discovery: listServices", \testClientListServices());
+        addTestCase("client discovery: discoverAll", \testClientDiscoverAll());
+        addTestCase("DataProvider with discovery", \testDataProviderDiscovery());
+        addTestCase("DataProvider fallback without reflection",
+            \testDataProviderFallback());
+        addTestCase("reflection: negative tests", \testReflectionNegative());
+        addTestCase("connection with use_discovery", \testConnectionDiscovery());
+%endif
+%endif
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        m_http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+
+        setupHandlers();
+
+        m_http.waitForAsyncIo();
+
+        hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        port = info.port;
+        url = sprintf("https://localhost:%d", port);
+
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    private setupHandlers() {
+        # Create handler with typed registrations
+        Connect::ConnectHandler handler();
+
+        # Typed unary methods
+        HashDataType req_type("SayHelloRequest");
+        req_type.addField(new QoreDataField("name", "User name",
+            AbstractDataProviderType::get(StringType)));
+        HashDataType resp_type("SayHelloResponse");
+        resp_type.addField(new QoreDataField("message", "Greeting message",
+            AbstractDataProviderType::get(StringType)));
+
+        handler.registerUnary("Greeter", "SayHello",
+            auto sub (auto req, hash<auto> metadata) {
+                return {"message": sprintf("Hello, %s!", req.name)};
+            }, req_type, resp_type);
+
+        # Unary without types
+        handler.registerUnary("Calculator", "Add",
+            auto sub (auto req, hash<auto> metadata) {
+                return {"result": req.a + req.b};
+            });
+
+        # Server-streaming with types
+        HashDataType nums_req("NumbersRequest");
+        nums_req.addField(new QoreDataField("count", "Number of items",
+            AbstractDataProviderType::get(IntType)));
+        HashDataType nums_resp("NumbersResponse");
+        nums_resp.addField(new QoreDataField("index", "Item index",
+            AbstractDataProviderType::get(IntType)));
+        nums_resp.addField(new QoreDataField("value", "Item value",
+            AbstractDataProviderType::get(StringType)));
+
+        handler.registerServerStream("Numbers", "Generate",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                int count = request.count ?? 5;
+                for (int i = 0; i < count; ++i) {
+                    stream.write({"index": i, "value": sprintf("item-%d", i)});
+                }
+            }, nums_req, nums_resp);
+
+        # Bidi-streaming with types
+        HashDataType echo_msg("EchoMessage");
+        echo_msg.addField(new QoreDataField("text", "Message text",
+            AbstractDataProviderType::get(StringType)));
+
+        handler.registerBidiStream("Echo", "BidiEcho",
+            sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                while (*auto msg = stream.read(5s)) {
+                    stream.write({"text": "echo: " + msg.text});
+                }
+            }, echo_msg, echo_msg);
+
+        # Client-streaming
+        handler.registerClientStream("Upload", "Send",
+            auto sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                int count = 0;
+                while (*auto msg = stream.read()) {
+                    ++count;
+                }
+                return {"total": count};
+            });
+
+        m_http.setHandler("connect", "", NOTHING, handler);
+        m_http.setDefaultHandler("connect", handler);
+    }
+
+    #----------------------------------------------------------------------
+    # Type serialization round-trip tests
+    #----------------------------------------------------------------------
+
+    testTypeScalars() {
+        # Test all scalar types round-trip
+        list<string> scalar_types = (
+            "string", "int", "float", "number", "bool", "date", "binary",
+            "softstring", "softint", "softfloat", "softbool", "softdate",
+            "softnumber", "hash", "list", "auto",
+        );
+        for (int i = 0; i < scalar_types.size(); ++i) {
+            AbstractDataProviderType orig = Connect::ConnectTypeHelper::scalarNameToType(
+                scalar_types[i]);
+            hash<auto> desc = Connect::ConnectTypeHelper::typeToDescriptor(orig);
+            assertEq("scalar", desc.kind,
+                sprintf("scalar kind for %s", scalar_types[i]));
+            AbstractDataProviderType restored =
+                Connect::ConnectTypeHelper::descriptorToType(desc);
+            assertEq(orig.getName(), restored.getName(),
+                sprintf("round-trip for %s", scalar_types[i]));
+        }
+    }
+
+    testTypeHash() {
+        # Hash with fields
+        HashDataType ht("TestHash");
+        ht.addField(new QoreDataField("name", "A name",
+            AbstractDataProviderType::get(StringType)));
+        ht.addField(new QoreDataField("age", "An age",
+            AbstractDataProviderType::get(IntType)));
+
+        hash<auto> desc = Connect::ConnectTypeHelper::typeToDescriptor(ht);
+        assertEq("hash", desc.kind);
+        assertEq("TestHash", desc.name);
+        assertEq(True, desc.fields.hasKey("name"));
+        assertEq(True, desc.fields.hasKey("age"));
+        assertEq("scalar", desc.fields.name.type.kind);
+        assertEq("string", desc.fields.name.type.qore_type);
+        assertEq("A name", desc.fields.name.desc);
+
+        # Reconstruct
+        AbstractDataProviderType restored =
+            Connect::ConnectTypeHelper::descriptorToType(desc);
+        assertEq(True, restored instanceof HashDataType);
+        HashDataType rht = cast<HashDataType>(restored);
+        assertEq("TestHash", rht.getName());
+        *hash<auto> fields = rht.getFields();
+        assertEq(True, fields.hasKey("name"));
+        assertEq(True, fields.hasKey("age"));
+    }
+
+    testTypeLists() {
+        # List type
+        ListDataType lt("test_list", AbstractDataProviderType::get(StringType));
+        hash<auto> desc = Connect::ConnectTypeHelper::typeToDescriptor(lt);
+        assertEq("list", desc.kind);
+        assertEq("scalar", desc.element_type.kind);
+        assertEq("string", desc.element_type.qore_type);
+
+        AbstractDataProviderType restored =
+            Connect::ConnectTypeHelper::descriptorToType(desc);
+        assertEq(True, restored instanceof ListDataType);
+
+        # Soft list type
+        SoftListDataType slt("test_softlist", AbstractDataProviderType::get(IntType));
+        desc = Connect::ConnectTypeHelper::typeToDescriptor(slt);
+        assertEq("soft_list", desc.kind);
+        assertEq("scalar", desc.element_type.kind);
+        assertEq("int", desc.element_type.qore_type);
+
+        restored = Connect::ConnectTypeHelper::descriptorToType(desc);
+        assertEq(True, restored instanceof SoftListDataType);
+    }
+
+    testTypeNested() {
+        # Hash with nested hash field
+        HashDataType inner("InnerType");
+        inner.addField(new QoreDataField("value", "A value",
+            AbstractDataProviderType::get(IntType)));
+
+        HashDataType outer("OuterType");
+        outer.addField(new QoreDataField("inner", "Nested field", inner));
+        outer.addField(new QoreDataField("name", "Name",
+            AbstractDataProviderType::get(StringType)));
+
+        hash<auto> desc = Connect::ConnectTypeHelper::typeToDescriptor(outer);
+        assertEq("hash", desc.kind);
+        assertEq("OuterType", desc.name);
+        assertEq("hash", desc.fields.inner.type.kind);
+        assertEq("InnerType", desc.fields.inner.type.name);
+        assertEq(True, desc.fields.inner.type.fields.hasKey("value"));
+
+        # Round-trip
+        AbstractDataProviderType restored =
+            Connect::ConnectTypeHelper::descriptorToType(desc);
+        assertEq(True, restored instanceof HashDataType);
+        HashDataType rht = cast<HashDataType>(restored);
+        *hash<auto> fields = rht.getFields();
+        assertEq(True, fields.hasKey("inner"));
+        AbstractDataProviderType inner_type = fields.inner.getType();
+        assertEq(True, inner_type instanceof HashDataType);
+    }
+
+    testTypeErrors() {
+        # Unknown kind
+        assertThrows("CONNECT-TYPE-ERROR", sub () {
+            Connect::ConnectTypeHelper::descriptorToType({"kind": "bogus"});
+        });
+    }
+
+    #----------------------------------------------------------------------
+    # Server reflection tests
+    #----------------------------------------------------------------------
+
+    testListServices() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        auto response = client.call("qore.connect.reflection", "ListServices", {});
+        assertEq(True, response.services instanceof list);
+        assertEq(True, response.services.size() > 0, "at least one service");
+
+        # Reflection service itself should be excluded
+        list<string> names = map $1.name, response.services;
+        assertEq(False, (select names, $1 == "qore.connect.reflection").val(),
+            "reflection service excluded");
+
+        # Our services should be listed
+        assertEq(True, (select names, $1 == "Greeter").val(), "Greeter found");
+        assertEq(True, (select names, $1 == "Calculator").val(), "Calculator found");
+        assertEq(True, (select names, $1 == "Numbers").val(), "Numbers found");
+        assertEq(True, (select names, $1 == "Echo").val(), "Echo found");
+        assertEq(True, (select names, $1 == "Upload").val(), "Upload found");
+    }
+
+    testGetServiceDescriptor() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        auto response = client.call("qore.connect.reflection",
+            "GetServiceDescriptor", {"service": "Greeter"});
+        assertEq("Greeter", response.service);
+        assertEq(True, response.methods instanceof list);
+        assertEq(1, response.methods.size());
+
+        hash<auto> method_desc = response.methods[0];
+        assertEq("Greeter", method_desc.service);
+        assertEq("SayHello", method_desc.method);
+        assertEq("/Greeter/SayHello", method_desc.path);
+        assertEq(Connect::CONNECT_RPC_UNARY, method_desc.rpc_type);
+
+        # Type info should be present (we registered with types)
+        assertEq(True, exists method_desc.request_type, "request_type present");
+        assertEq("hash", method_desc.request_type.kind);
+        assertEq("SayHelloRequest", method_desc.request_type.name);
+        assertEq(True, method_desc.request_type.fields.hasKey("name"));
+
+        assertEq(True, exists method_desc.response_type, "response_type present");
+        assertEq("hash", method_desc.response_type.kind);
+        assertEq("SayHelloResponse", method_desc.response_type.name);
+    }
+
+    testGetMethodDescriptor() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        auto response = client.call("qore.connect.reflection",
+            "GetMethodDescriptor",
+            {"service": "Calculator", "method": "Add"});
+        assertEq("Calculator", response.service);
+        assertEq("Add", response.method);
+        assertEq(Connect::CONNECT_RPC_UNARY, response.rpc_type);
+
+        # Calculator/Add was registered without types
+        assertEq(False, exists response.request_type, "no request_type for untyped method");
+        assertEq(False, exists response.response_type, "no response_type for untyped method");
+    }
+
+    testExtendedRegistration() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        # Check server-streaming method with types
+        auto response = client.call("qore.connect.reflection",
+            "GetMethodDescriptor",
+            {"service": "Numbers", "method": "Generate"});
+        assertEq(Connect::CONNECT_RPC_SERVER_STREAM, response.rpc_type);
+        assertEq(True, exists response.request_type, "request_type for server-stream");
+        assertEq("NumbersRequest", response.request_type.name);
+        assertEq(True, exists response.response_type, "response_type for server-stream");
+        assertEq("NumbersResponse", response.response_type.name);
+
+        # Check bidi-streaming method with types
+        response = client.call("qore.connect.reflection",
+            "GetMethodDescriptor",
+            {"service": "Echo", "method": "BidiEcho"});
+        assertEq(Connect::CONNECT_RPC_BIDI, response.rpc_type);
+        assertEq(True, exists response.request_type);
+        assertEq("EchoMessage", response.request_type.name);
+        assertEq(True, exists response.response_type);
+        assertEq("EchoMessage", response.response_type.name);
+
+        # Check client-streaming without types
+        response = client.call("qore.connect.reflection",
+            "GetMethodDescriptor",
+            {"service": "Upload", "method": "Send"});
+        assertEq(Connect::CONNECT_RPC_CLIENT_STREAM, response.rpc_type);
+        assertEq(False, exists response.request_type);
+        assertEq(False, exists response.response_type);
+    }
+
+    #----------------------------------------------------------------------
+    # Client discovery tests
+    #----------------------------------------------------------------------
+
+    testClientListServices() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        Connect::ConnectReflectionClient refl(client);
+        list<string> services = refl.listServices();
+        assertEq(True, services.size() >= 5, "at least 5 services");
+        assertEq(True, (select services, $1 == "Greeter").val());
+        assertEq(True, (select services, $1 == "Calculator").val());
+        assertEq(True, (select services, $1 == "Numbers").val());
+        assertEq(True, (select services, $1 == "Echo").val());
+        assertEq(True, (select services, $1 == "Upload").val());
+    }
+
+    testClientDiscoverAll() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        Connect::ConnectReflectionClient refl(client);
+        hash<string, hash<auto>> all = refl.discoverAll();
+        assertEq(True, all.hasKey("Greeter"));
+        assertEq(True, all.hasKey("Calculator"));
+        assertEq(True, all.hasKey("Numbers"));
+
+        # Verify structure
+        assertEq("Greeter", all.Greeter.service);
+        assertEq(True, all.Greeter.methods instanceof list);
+        assertEq(1, all.Greeter.methods.size());
+        assertEq("SayHello", all.Greeter.methods[0].method);
+    }
+
+    #----------------------------------------------------------------------
+    # DataProvider discovery integration tests
+    #----------------------------------------------------------------------
+
+    testDataProviderDiscovery() {
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{
+            "url": url,
+            "protocol": "h2",
+        });
+
+        # Root should list discovered services
+        *list<string> services = provider.getChildProviderNames();
+        assertEq(True, services.size() >= 5, "discovered services via DataProvider");
+        assertEq(True, (select services, $1 == "Greeter").val());
+
+        # Service should list discovered methods
+        AbstractDataProvider svc = provider.getChildProvider("Greeter");
+        *list<string> methods = svc.getChildProviderNames();
+        assertEq(True, methods.size() > 0, "discovered methods");
+        assertEq(True, (select methods, $1 == "SayHello").val());
+
+        # Method should have typed request/response
+        AbstractDataProvider method = svc.getChildProvider("SayHello");
+        *AbstractDataProviderType req_type = method.getRequestType();
+        assertEq(True, exists req_type);
+        assertEq(True, req_type instanceof HashDataType, "request type is HashDataType");
+        *hash<auto> fields = (cast<HashDataType>(req_type)).getFields();
+        assertEq(True, fields.hasKey("name"), "request type has 'name' field");
+
+        *AbstractDataProviderType resp_type = method.getResponseType();
+        assertEq(True, exists resp_type);
+
+        # Unary call should still work
+        auto result = method.doRequest({"name": "Discovery"});
+        assertEq("Hello, Discovery!", result.message);
+
+        # Server-streaming method should expose "events" child
+        AbstractDataProvider nums = provider.getChildProvider("Numbers")
+            .getChildProvider("Generate");
+        *list<string> children = nums.getChildProviderNames();
+        assertEq(True, (select children, $1 == "events").val(),
+            "server-streaming method has events child");
+        hash<DataProviderInfo> info = nums.getInfo();
+        assertEq(True, info.supports_children);
+
+        # Bidi method should expose "events" child
+        AbstractDataProvider bidi = provider.getChildProvider("Echo")
+            .getChildProvider("BidiEcho");
+        children = bidi.getChildProviderNames();
+        assertEq(True, (select children, $1 == "events").val(),
+            "bidi method has events child");
+
+        # Unary method should NOT have "events" child
+        AbstractDataProvider unary = provider.getChildProvider("Calculator")
+            .getChildProvider("Add");
+        children = unary.getChildProviderNames();
+        assertEq(True, !children || !children.size(),
+            "unary method has no events child");
+    }
+
+    testDataProviderFallback() {
+        # Disable discovery explicitly
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{
+            "url": url,
+            "protocol": "h2",
+            "use_discovery": False,
+        });
+
+        # Should have no discovered children
+        *list<string> services = provider.getChildProviderNames();
+        assertEq(0, services.size(), "no discovered services with use_discovery=False");
+
+        # But dynamic access should still work
+        auto result = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello")
+            .doRequest({"name": "Fallback"});
+        assertEq("Hello, Fallback!", result.message);
+    }
+
+    #----------------------------------------------------------------------
+    # Negative tests
+    #----------------------------------------------------------------------
+
+    testReflectionNegative() {
+        Connect::ConnectClient client(url, NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2"});
+        on_exit client.shutdown();
+
+        # Nonexistent service
+        assertThrows("CONNECT-ERROR", sub () {
+            client.call("qore.connect.reflection", "GetServiceDescriptor",
+                {"service": "NonExistent"});
+        });
+
+        # Nonexistent method
+        assertThrows("CONNECT-ERROR", sub () {
+            client.call("qore.connect.reflection", "GetMethodDescriptor",
+                {"service": "Greeter", "method": "NonExistent"});
+        });
+
+        # Missing service field
+        assertThrows("CONNECT-ERROR", sub () {
+            client.call("qore.connect.reflection", "GetServiceDescriptor", {});
+        });
+
+        # Missing method field
+        assertThrows("CONNECT-ERROR", sub () {
+            client.call("qore.connect.reflection", "GetMethodDescriptor",
+                {"service": "Greeter"});
+        });
+    }
+
+    testConnectionDiscovery() {
+        # Connection with discovery enabled (default)
+        ConnectConnection conn("test-conn", "test connection",
+            sprintf("connects://localhost:%d", port),
+            {},
+            {"protocol": "h2"});
+
+        AbstractDataProvider provider = conn.getDataProvider();
+        *list<string> services = provider.getChildProviderNames();
+        assertEq(True, services.size() > 0, "connection provider has discovered services");
+
+        # Connection with discovery disabled
+        ConnectConnection conn2("test-conn2", "test connection 2",
+            sprintf("connects://localhost:%d", port),
+            {},
+            {"protocol": "h2", "use_discovery": False});
+
+        AbstractDataProvider provider2 = conn2.getDataProvider();
+        *list<string> services2 = provider2.getChildProviderNames();
+        assertEq(0, services2.size(),
+            "connection provider with use_discovery=False has no discovered services");
+    }
+}

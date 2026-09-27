@@ -1,0 +1,273 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires YamlRpcHandler
+%requires HttpServer
+%requires HttpServerUtil
+%requires yaml
+%requires Mime
+%requires QUnit
+
+%exec-class YamlRpcHandlerTest
+
+class MyYamlRpcHandler inherits YamlRpcHandler {
+    constructor(HttpServer::AbstractAuthenticator auth, list methods, *code get_log_msg, bool dbg = False,
+            *string get_prefix, *code log)
+            : YamlRpcHandler(auth, methods, get_log_msg, dbg, get_prefix, log) {
+    }
+
+    hash testCallMethod(hash cx, auto params) {
+        return callMethod(cx, params);
+    }
+
+    hash testHandleRequest(hash cx, hash<auto> hdr, *data body) {
+        return handleRequest(cx, hdr, body);
+    }
+}
+
+class YamlRpcHandlerTest inherits QUnit::Test {
+    public {
+        const Methods = (
+            {
+                "name": "^example\$",
+                "text": "example",
+                "function": string sub (string arg) { return arg; },
+                "help": "example call",
+            },
+            {
+                "name": "^add\$",
+                "text": "add",
+                "function": int sub (int a, int b) { return a + b; },
+                "help": "add two numbers",
+            },
+            {
+                "name": "^echo\$",
+                "text": "echo",
+                "function": auto sub (auto arg) { return arg; },
+                "help": "echo back the argument",
+            },
+            {
+                "name": "^error\$",
+                "text": "error",
+                "function": sub () { throw "TEST-ERROR", "This is a test error"; },
+                "help": "throw an error",
+            },
+            {
+                "name": "^complex\$",
+                "text": "complex",
+                "function": hash sub (hash h) { return h + {"processed": True}; },
+                "help": "process a complex hash",
+            },
+        );
+
+        HttpServer m_http;
+        int port;
+        MyYamlRpcHandler handler;
+        list<string> log_messages = ();
+    }
+
+    constructor() : Test("YamlRpcHandler test", "1.0") {
+        addTestCase("base test", \testYamlRpcHandler());
+        addTestCase("method dispatch", \testMethodDispatch());
+        addTestCase("error handling", \testErrorHandling());
+        addTestCase("GET request", \testGetRequest());
+        addTestCase("POST request", \testPostRequest());
+        addTestCase("invalid method", \testInvalidMethod());
+        addTestCase("missing arguments", \testMissingArguments());
+        addTestCase("unknown method", \testUnknownMethod());
+        addTestCase("complex data types", \testComplexDataTypes());
+        addTestCase("malformed yaml body", \testMalformedYamlBody());
+        addTestCase("introspection", \testIntrospection());
+        addTestCase("logging", \testLogging());
+        addTestCase("response serialization", \testResponseSerialization());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        log_messages = ();
+        handler = new MyYamlRpcHandler(
+            new PermissiveAuthenticator(),
+            Methods,
+            NOTHING,
+            True,  # debug mode
+            NOTHING,
+            sub (string msg) { log_messages += msg; }
+        );
+    }
+
+    testYamlRpcHandler() {
+        assertEq(True, handler instanceof YamlRpcHandler);
+
+        assertThrows("RPC-ARG-ERROR", "missing one or more required arguments",
+            \handler.testCallMethod(), ({"method": "example"}, ()));
+    }
+
+    testMethodDispatch() {
+        # Test simple method call
+        hash<auto> cx = {"method": "add"};
+        hash<auto> result = handler.testCallMethod(cx, (3, 4));
+        assertEq(7, parse_yaml(result.body).result);
+
+        # Test echo method
+        cx.method = "echo";
+        result = handler.testCallMethod(cx, ("test string",));
+        assertEq("test string", parse_yaml(result.body).result);
+
+        # Test echo with list
+        result = handler.testCallMethod(cx, ((1, 2, 3),));
+        assertEq((1, 2, 3), parse_yaml(result.body).result);
+
+        # Test echo with hash
+        hash<auto> testHash = {"key": "value", "num": 42};
+        result = handler.testCallMethod(cx, (testHash,));
+        assertEq(testHash, parse_yaml(result.body).result);
+    }
+
+    testErrorHandling() {
+        # Test method that throws an error - the exception is caught and handled
+        hash<auto> cx = {"method": "error", "peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+        string body = make_yaml({"method": "error", "params": ()});
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
+        assertEq(200, result.code);
+        hash<auto> parsed = parse_yaml(result.body);
+        assertTrue(parsed.hasKey("error"));
+    }
+
+    testGetRequest() {
+        # Test GET request with method in path
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "GET", "path": "/YAML/echo?method=echo&arg=test"};
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, NOTHING);
+        # GET requests parse differently - may need adjustment based on actual implementation
+        assertTrue(result.code >= 200);
+    }
+
+    testPostRequest() {
+        # Test POST request with YAML body
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+        string body = make_yaml({"method": "add", "params": (5, 3)});
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
+        assertEq(200, result.code);
+        hash<auto> parsed = parse_yaml(result.body);
+        assertEq(8, parsed.result);
+    }
+
+    testInvalidMethod() {
+        # Test unsupported HTTP method
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "PUT", "path": "/YAML"};
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, NOTHING);
+        assertEq(501, result.code);
+    }
+
+    testMissingArguments() {
+        # Test method call with missing required arguments
+        hash<auto> cx = {"method": "add"};
+
+        assertThrows("RPC-ARG-ERROR", \handler.testCallMethod(), (cx, (5,)));  # Missing second argument
+    }
+
+    testUnknownMethod() {
+        # Test unknown method call
+        hash<auto> cx = {"method": "nonexistent", "peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> result = handler.testCallMethod(cx, ());
+        assertEq(200, result.code);
+        hash<auto> parsed = parse_yaml(result.body);
+        assertTrue(parsed.hasKey("error"));
+        assertEq(105, parsed.error.code);
+    }
+
+    testComplexDataTypes() {
+        # Test with complex nested data
+        hash<auto> cx = {"method": "complex"};
+        hash<auto> input = {
+            "nested": {
+                "list": (1, 2, 3),
+                "hash": {"a": "b"},
+            },
+            "date": now(),
+            "binary": <48656c6c6f>,
+        };
+
+        hash<auto> result = handler.testCallMethod(cx, (input,));
+        hash<auto> parsed = parse_yaml(result.body);
+        assertTrue(parsed.result.hasKey("processed"));
+        assertEq(True, parsed.result.processed);
+        assertEq(input.nested, parsed.result.nested);
+    }
+
+    testMalformedYamlBody() {
+        # Test POST request with malformed YAML
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+        string body = "{invalid yaml: [";
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
+        assertEq(500, result.code);
+    }
+
+    testIntrospection() {
+        # Test unknown method handling for introspection-style calls
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+        string body = make_yaml({"method": "system.listMethods", "params": ()});
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
+        # Should return error for unknown method
+        assertEq(200, result.code);
+        hash<auto> parsed = parse_yaml(result.body);
+        assertTrue(parsed.hasKey("error"));
+        assertEq(104, parsed.error.code);  # Error code
+    }
+
+    testLogging() {
+        # Test that logging works
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+        string body = make_yaml({"method": "echo", "params": ("test",)});
+
+        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
+        assertEq(200, result.code);
+        # Logging behavior depends on implementation
+    }
+
+    testResponseSerialization() {
+        # Test that responses are properly serialized
+        hash<auto> cx = {"method": "echo"};
+
+        # Test various data types
+        auto types = (
+            42,
+            3.14,
+            "string",
+            True,
+            (1, 2, 3),
+            {"a": 1, "b": 2},
+            now(),
+        );
+
+        foreach auto val in (types) {
+            hash<auto> result = handler.testCallMethod(cx, (val,));
+            hash<auto> parsed = parse_yaml(result.body);
+            # For dates, we need more flexible comparison
+            if (val.type() == "date") {
+                assertTrue(parsed.result.type() == "date");
+            } else {
+                assertEq(val, parsed.result);
+            }
+        }
+    }
+}

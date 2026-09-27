@@ -1,0 +1,1691 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.3
+
+%requires yaml
+%requires Mime >= 1.7
+
+%try-module xml
+%define NoXml
+%endtry
+
+%requires json
+
+%modern
+
+module DataStreamUtil {
+    version = "1.4";
+    desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/*  Version History: see docs below
+*/
+
+/** @mainpage DataStreamUtil Module
+
+    @tableofcontents
+
+    @section datastreamutilintro Introduction to the DataStreamUtil Module
+
+    The %DataStreamUtil module provides client and server support for <a href="http://www.yaml.org/">YAML</a>-encoded <a href="http://tools.ietf.org/html/rfc2616">HTTP 1.1</a> (<a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>) chunked transfers where each chunk is a unique data entity; allowing data to be streamed from remote servers and used as soon as it is received.  This module provides client and server support to allow %Qore code to deal with data on the sending and receiving ends by taking care of the encoding and serialization issues to allow the serialized data to be sent with optional data compression over standard HTTP chunked transfers and be usable immediately on receipt on the remote end.
+
+    In %Qore, DataStream support is implemented on top of and is designed to extend the REST infrastructure provided by the %Qore library.
+
+    This module is used automatically by the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> and <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a> user modules; to use this module directly for low-level DataStream protocol support, use \c "%requires DataStreamUtil" in your code.
+
+    All the public symbols in the module are defined in the DataStreamUtil namespace
+
+    DataStream v1 Functions:
+    - @ref DataStreamUtil::ds_get_content_decode() "ds_get_content_decode()": returns a @ref call_reference "call reference" (or @ref nothing) for decoding content encoded data
+    - @ref DataStreamUtil::ds_get_content_encode() "ds_get_content_encode()": returns a @ref call_reference "call reference" (or @ref nothing) for encoding content encoded data
+    - @ref DataStreamUtil::ds_get_send() "ds_get_send()": returns a @ref call_reference "call reference" for serializing and encoding data for sending DataStream chunked data
+    - @ref DataStreamUtil::ds_get_recv() "ds_get_recv()": returns a @ref call_reference "call reference" for decoding and deserializing data for receiving DataStream chunked data
+    - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()": sets up HTTP headers for DataStream chunked data transfers
+    - @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()": sets up HTTP headers for DataStream non-chunked data transfers
+
+    Connect Protocol (DataStream 2.0) Functions:
+    - @ref DataStreamUtil::connect_frame_message() "connect_frame_message()": frames a binary payload with the 5-byte Connect envelope
+    - @ref DataStreamUtil::connect_unframe_message() "connect_unframe_message()": parses a single Connect-framed message
+    - @ref DataStreamUtil::connect_next_frame_size() "connect_next_frame_size()": returns the size of the next complete frame or -1
+    - @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()": detects Connect protocol from HTTP headers
+    - @ref DataStreamUtil::connect_get_send() "connect_get_send()": returns a send callback with Connect framing
+    - @ref DataStreamUtil::connect_get_recv() "connect_get_recv()": returns a receive callback with Connect frame parsing
+    - @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()": sets up Connect streaming headers
+    - @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()": sets up Connect unary headers
+
+    @section datastreamprotocol DataStream Protocol
+
+    The DataStream protocol is based on <a href="http://tools.ietf.org/html/rfc2616">HTTP 1.1</a> (<a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>) chunked transfers where each chunk contains UTF-8 encoded <a href="http://www.yaml.org/">YAML</a>-serialized data with optional compression and where each chunk is an independently decodable and parsable entity.  This differs from standard HTTP chunked transfers in that content encoding and semantic completeness of a message are defined over the entire message body.  By using DataStream instead of standard HTTP chunked transfer, data can be streamed from one server to another and be usable immediately on receipt on the remote end.
+
+    A DataStream transfer with streaming involves at least one chunked transfer; either the request or the reply must be sent with chunked transfer encoding to have the DataStream protocol applied.  Non-chunked, monolithic requests and responses are also supported, but in these cases standard HTTP encoding and decoding rules are applied.
+
+    A DataStream request-response pair without streaming is equivalent to a standard HTTP request-response pair but with the addition of DataStream headers which are ignored in the case that no chunked transfers are made.
+
+    DataStream runs over <a href="http://tools.ietf.org/html/rfc2616">HTTP 1.1</a> (<a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>) and uses standard HTTP features with custom headers to identify the data serialization, character encoding, and content encoding applied to each chunk.  DataStream is currently defined using UTF-8 encoded <a href="http://www.yaml.org/">YAML</a> for data serialization, but was designed to be extensible for future use with other data serialization methods through the use of appropriate headers.
+
+    @note <a href="http://tools.ietf.org/html/rfc6648">RFC 6648</a> deprecates the use of an \c "X-" prefix in non-standardized HTTP headers and trailers, therefore no such prefix exists for DataStream headers and trailers.
+
+    @subsection datastreamprotocoldata DataStream Data Serialization
+
+    DataStream uses UTF-8 encoded <a href="http://www.yaml.org/">YAML</a> for data serialization to allow for maximum data fidelity over the HTTP link.
+
+    For non-chunked messages, the \c Content-Type header is \c "text/x-yaml;charset=utf8" (\c "utf8" is case-insensitive and may contain a hyphen before the 8), and the data is sent in a normal HTTP message body.  @ref datastreamprotocolcompression "Data compression" is supported with normal HTTP content encoding as described in the previous link, applied to the serialized YAML data before sending, and the reverse operation is applied on receipt before YAML data deserialization to native data structures by the receiver.
+
+    For chunked DataStream requests and responses, the \c Content-Type header is set to \c "application/octet-stream" (to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk) and the content-type of each atomic chunk is given by the \c DataStream-Content-Type header which should be set to \c "text/x-yaml;charset=utf8" (\c "utf8" is case-insensitive and may contain a hyphen before the 8).  Data compression is supported and is applied to each chunk atomically as DataStream-specific content encoding after chunk data serialization; the reverse operation is applied before YAML data deserialization to native data structures by the receiver.
+
+    @subsection datastreamprocotolchunkedrequests DataStream Chunked Request Headers
+
+    The following headers are set with DataStream chunked requests:\n
+    <b>DataStream Chunked Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
+    |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
+    |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
+    |\c DataStream-Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
+    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
+    |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
+
+    @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
+
+    @subsection datastreamprocotolnonchunkedrequests DataStream Non-Chunked Request Headers
+
+    The following headers are set with DataStream non-chunked requests:\n
+    <b>DataStream Non-Chunked Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
+    |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
+    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
+    |[\c Content-Type]|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be included in requests with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in requests without a message body in which case it <b>MUST</b> be ignored by the server (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the request body
+    |[\c Content-Length]|number|This header is required in non-chunked requests with a message body
+
+    @subsection datastreamprocotolchunkedresponses DataStream Chunked Response Headers
+
+    The following headers are set with DataStream chunked responses:\n
+    <b>DataStream Chunked Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
+    |\c DataStream-Content-Type|\c text/x-yaml;charset=utf8|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
+    |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
+    |\c Trailer|\c DataStream-Error|<b>MUST</b> be included as this trailer record will be sent after chunked data is transferred if an error occurs on the sending side, in which case the trailer will be assigned a string giving information about the error that occurred
+
+    @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
+
+    @subsection datastreamprocotolnonchunkedresponses DataStream Non-Chunked Response Headers
+
+    The following headers are set with DataStream non-chunked responses:\n
+    <b>DataStream Non-Chunked Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be included in responses with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in responses without a message body in which case it <b>MUST</b> be ignored by the client (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |\c Content-Length|number|<b>MUST</b> be included in non-chunked responses with a message body
+    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the response body
+
+    @subsection datastreamtrailers DataStream Trailers
+
+    The following trailer may be sent with DataStream chunk responses after all data has been transferred:\n
+    <b>DataStream Chunked Response Trailers</b>
+    |!Trailer|!Description
+    |\c DataStream-Error|This trailer is sent when the chunked data transfer is complete if there were any errors on the sending side.  If so, the value will be a string describing the error
+
+    @subsection datastreamprotocolcompression DataStream Compression
+
+    Compression of chunked message bodies is supported by applying DataStream content encoding as specified by the \c DataStream-Content-Encoding header on each chunk individually (after YAML data serialization) before sending and then applying the reverse operation each chunk immediately after reception and before YAML deserialization; this is analogous to standard HTTP content encoding (which is applied to the message body as a whole) but is applied to each chunk separately.
+
+    Data compression is identified in a DataStream transfer by the following header:
+    - \c "DataStream-Content-Encoding": set to one of \c "identity", \c "bzip2", \c "gzip", or \c "deflate" if data compression is used
+
+    DataStream server implementations <b>MUST</b> support at least the above content encoding methods.  This allows clients to include DataStream compression with the first request in case of streaming data to the server.
+
+    DataStream clients claim support for these content encoding methods by including them in the \c Accept-Encoding and \c DataStream-Accept-Encoding headers in the request; both of these headers must contain the same values in client requests.
+
+    @see <a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>
+
+    @subsection datastreamrequestexample Example DataStream Request
+    @verbatim
+PUT /api/system?action=dataStream HTTP/1.1
+Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
+User-Agent: Qore-DataStreamClient/1.1
+Content-Type: application/octet-stream
+DataStream-Content-Type: text/x-yaml;charset=utf8
+DataStream-Accept: text/x-yaml
+DataStream-Accept-Encoding: gzip,bzip2,deflate
+DataStream-Content-Encoding: gzip
+Transfer-Encoding: chunked
+Accept-Encoding: bzip2,deflate
+Connection: Keep-Alive
+Host: localhost:8001
+    @endverbatim
+
+    @subsection datastreamresponseexample Example DataStream Response
+    @verbatim
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Datastream-Content-Type: text/x-yaml;charset=utf8
+Datastream-Content-Encoding: bzip2
+Trailer: DataStream-Error
+Connection: Keep-Alive
+Date: Sun, 20 Apr 2014 07:49:51 GMT
+Server: Qorus-HTTP-Server/0.3.7
+    @endverbatim
+
+    @section connectprotocol Connect Protocol (DataStream 2.0)
+
+    The Connect protocol supersedes DataStream v1 with 5-byte framed messages, support for all
+    4 RPC patterns (unary, server streaming, client streaming, bidirectional streaming), and
+    compatibility with HTTP/2 and HTTP/3.  Connect uses the same wire format as gRPC (5-byte
+    Length-Prefixed-Message envelope), enabling interoperability with gRPC tooling.
+
+    For the higher-level client and server API, see the
+    <a href="../../Connect/html/index.html">Connect module</a>.  The functions in this module
+    provide low-level framing utilities that can be used directly when integrating Connect
+    framing with existing DataStream infrastructure.
+
+    @subsection connectprotocolframing Connect Framing Format
+
+    Every Connect message (and every gRPC message) uses a 5-byte envelope header followed by
+    the serialized payload:
+
+    <b>Connect / gRPC Length-Prefixed-Message Format</b>
+    |!Offset|!Size|!Field|!Description
+    |0|1 byte|Flags|Bit 0 (\c 0x01): payload is compressed; Bit 1 (\c 0x02): end-of-stream marker
+    |1|4 bytes|Length|Big-endian unsigned 32-bit payload length in bytes
+    |5|N bytes|Payload|Serialized message data (YAML, protobuf, JSON, etc.)
+
+    @note The framing format is identical to the
+    <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">gRPC Length-Prefixed-Message</a>
+    specification.  This means a Connect-framed message can be parsed by gRPC tooling and vice versa.
+
+    @subsection connectprotocolheaders Connect Streaming Headers
+
+    <b>Connect Streaming Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/connect+yaml|Streaming content type: \c application/connect+{codec}
+    |\c Connect-Protocol-Version|\c 1|Connect protocol version (required)
+    |[\c Connect-Content-Encoding]|e.g. \c gzip|Optional compression of individual message payloads
+    |\c Transfer-Encoding|\c chunked|Required for HTTP/1.1 streaming; implicit for HTTP/2 and HTTP/3
+
+    <b>Connect Streaming Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/connect+yaml|Same streaming content type as the request
+    |[\c Connect-Content-Encoding]|e.g. \c gzip|Optional compression matching client's \c Connect-Accept-Encoding
+
+    <b>Connect Unary Request/Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/yaml|Unary content type: \c application/{codec}
+    |\c Connect-Protocol-Version|\c 1|Connect protocol version (required in requests)
+    |[\c Connect-Timeout-Ms]|e.g. \c 5000|Optional request timeout in milliseconds
+
+    @subsection connectprotocolendstream EndStreamResponse
+
+    Streaming responses end with a special frame that has the \c CONNECT_FLAG_END_STREAM flag
+    (\c 0x02) set.  The payload of this frame is always JSON (regardless of the message codec)
+    and carries optional trailing metadata and/or an error:
+
+    @verbatim
+EndStreamResponse (success, no metadata):
+{}
+
+EndStreamResponse (error):
+{"error":{"code":"internal","message":"database connection lost"}}
+
+EndStreamResponse (success with trailing metadata):
+{"metadata":{"x-request-id":"abc-123","x-trace":"def-456"}}
+    @endverbatim
+
+    @subsection connectprotocolexample Example Connect Request and Response
+
+    Unary Connect POST request:
+    @verbatim
+POST /MyService/MyMethod HTTP/1.1
+Host: localhost:8080
+Content-Type: application/yaml
+Connect-Protocol-Version: 1
+Connect-Timeout-Ms: 5000
+Content-Length: 42
+
+message: "Hello, World!"
+count: 42
+    @endverbatim
+
+    Unary Connect response:
+    @verbatim
+HTTP/1.1 200 OK
+Content-Type: application/yaml
+Content-Length: 38
+
+message: "Hello, Hello, World!!"
+    @endverbatim
+
+    @subsection connectprotocoldetection Protocol Detection
+
+    The @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()" function
+    detects whether an incoming HTTP request uses the Connect protocol by checking for:
+    - the \c Connect-Protocol-Version header (value \c "1"), or
+    - a Connect streaming content type (\c application/connect+{codec})
+
+    This allows a single server handler to serve both Connect and DataStream v1 clients
+    transparently.  See the
+    <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>
+    module for automatic dual-protocol handling.
+
+    @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_3_1 DataStreamUtil v1.3.1
+    - added the official \c "application/yaml" MIME type (RFC 9512) to
+      @ref DataStreamUtil::DataStreamDeserializationSupport "DataStreamDeserializationSupport"
+
+    @subsection datastreamutil_v1_3 DataStreamUtil v1.3
+    - added Connect protocol (DataStream 2.0) framing utility functions:
+      @ref DataStreamUtil::connect_frame_message() "connect_frame_message()",
+      @ref DataStreamUtil::connect_unframe_message() "connect_unframe_message()",
+      @ref DataStreamUtil::connect_next_frame_size() "connect_next_frame_size()",
+      @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()",
+      @ref DataStreamUtil::connect_get_send() "connect_get_send()",
+      @ref DataStreamUtil::connect_get_recv() "connect_get_recv()",
+      @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()",
+      @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()"
+    - added Connect protocol constants for dual-protocol (Connect + DataStream v1) support
+    - added @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE constant (4 MB default, matching gRPC)
+    - added \c max_message_size parameter to @ref connect_unframe_message() and
+      @ref connect_get_recv() for frame size validation
+    - updated copyright year to 2026
+
+    @subsection datastreamutil_v1_2 DataStreamUtil v1.2
+    - added \c %strict-args compile-time requirement
+    - updated copyright year to 2025
+
+    @subsection datastreamutil_v1_1 DataStreamUtil v1.1
+    - minor updates for complex types
+
+    @subsection datastreamutil_v1_0_1 DataStreamUtil v1.0.1
+    - fixed a bug handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
+
+    @subsection datastreamutil_v1_0 DataStreamUtil v1.0
+    - initial release of the module
+*/
+
+#! the DataStreamUtil namespace contains all the public objects in the DataStreamUtil module
+public namespace DataStreamUtil {
+    #! @defgroup DataStramHeaders Data Stream Headers
+    /** These are the data stream header values for HTTP chunked transfers where each chunk is encoded separately
+    */
+    #/@{
+    #! HTTP header for the data stream Content-Type header equivalent where each HTTP chunk is encoded/decoded separately
+    public const DataStreamContentType = "DataStream-Content-Type";
+
+    #! HTTP header for the data stream Content-Encoding header equivalent where each HTTP chunk is encoded/decoded separately
+    public const DataStreamContentEncoding = "DataStream-Content-Encoding";
+
+    #! HTTP header for the data stream Accept header equivalent where each HTTP chunk is encoded/decoded separately
+    public const DataStreamAccept = "DataStream-Accept";
+
+    #! HTTP header for the data stream Accept-Encoding header equivalent where each HTTP chunk is encoded/decoded separately
+    public const DataStreamAcceptEncoding = "DataStream-Accept-Encoding";
+
+    #! HTTP trailer to be sent after chunked data has been transferred in case of an error on the sending side, giving a string describing the error
+    public const DataStreamError = "DataStream-Error";
+
+    #! supported values for the DataStream-Accept-Encoding header
+    public const DataStreamContentEncodingHash = {
+        "gzip": True,
+        "bzip2": True,
+        "deflate": True,
+        "identity": True,
+    };
+    #/@}
+
+    #! @defgroup DataStreamDeserialization DataStream Deserialization Support
+    /** These constants provide deserialization support for various content types in DataStream responses
+    */
+    #/@{
+    #! YAML deserialization support hash
+    /** Contains:
+        - \c code: "yaml" - the serialization code
+        - \c in: a call reference to @ref Qore::parse_yaml() for deserializing YAML data
+    */
+    public const DataStreamDeserializeYaml = {
+        "code": "yaml",
+        "in": \parse_yaml(),
+    };
+
+%ifndef NoXml
+    #! XML deserialization support hash (only available if the xml module is present)
+    /** Contains:
+        - \c code: "xml" - the serialization code
+        - \c in: a closure that tries @ref Qore::parse_xmlrpc_value() first, then falls back to @ref Qore::parse_xml()
+    */
+    const DataStreamDeserializeXml = {
+        "code": "xml",
+        "in": hash<auto> sub (string xml) {
+            try {
+                return parse_xmlrpc_value(xml);
+            } catch () {
+                return parse_xml(xml);
+            }
+        },
+    };
+%endif
+
+    #! Hash mapping content-types to deserialization support
+    /** Keys are MIME content-type strings, values are hashes with:
+        - \c code: a string identifying the serialization format
+        - \c in: a call reference or closure for deserializing the data
+
+        Supported content types:
+        - \c "application/x-yaml": YAML deserialization
+        - \c "text/x-yaml": YAML deserialization
+        - \c "application/yaml": YAML deserialization (RFC 9512)
+        - \c "application/json": JSON deserialization (if json module is available)
+        - \c "text/xml": XML deserialization (if xml module is available)
+        - \c "application/xml": XML deserialization (if xml module is available)
+    */
+    public const DataStreamDeserializationSupport = {
+        MimeTypeYamlRpc: DataStreamDeserializeYaml,
+        MimeTypeYaml: DataStreamDeserializeYaml,
+        "text/x-yaml": DataStreamDeserializeYaml,
+%ifndef NoJson
+        MimeTypeJson: {
+            "code": "json",
+            "in": \parse_json(),
+        },
+%endif
+%ifndef NoXml
+        MimeTypeXml: DataStreamDeserializeXml,
+        MimeTypeXmlApp: DataStreamDeserializeXml,
+%endif
+    };
+    #/@}
+
+    #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
+    /** @par Example:
+        @code{.py}
+*code decode = ds_get_content_decode(hdr."content-encoding");
+        @endcode
+
+        The following \c "Content-Encoding" values are recognized:
+        - \c "deflate", \c "x-deflate": returns a call reference to @ref Qore::uncompress_to_string() "uncompress_to_string()"
+        - \c "gzip", \c "x-gzip": returns a call reference to @ref Qore::gunzip_to_string() "gunzip_to_string()"
+        - \c "bzip2", \c "x-bzip2": returns a call reference to @ref Qore::bunzip2_to_string() "bunzip2_to_string()"
+        - \c "br": returns a call reference to @ref Qore::unbrotli_to_string() "unbrotli_to_string()"
+        - \c "zstd": returns a call reference to @ref Qore::unzstd_to_string() "unzstd_to_string()"
+        - \c "identity", @ref nothing: returns @ref nothing
+
+        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
+
+        @throw DESERIALIZATION-ERROR this exception is thrown if the content encoding is not recognized
+
+        @note HTTP headers in requests are converted to lower-case only on receipt
+    */
+    public *code sub ds_get_content_decode(*string ce) {
+        switch (ce) {
+            case "deflate":
+            case "x-deflate":
+                return \uncompress_to_string();
+            case "gzip":
+            case "x-gzip":
+                return \gunzip_to_string();
+            case "bzip2":
+            case "x-bzip2":
+                return \bunzip2_to_string();
+            case "br":
+                return \unbrotli_to_string();
+            case "zstd":
+                return \unzstd_to_string();
+            case "identity":
+            case NOTHING:
+                return;
+        }
+        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", ce);
+    }
+
+    #! Applies @a dce to each concatenated compressed stream in @a data
+    /** The DataStream v1 protocol compresses each record as an independent
+        gzip / deflate stream, relying on HTTP/1.x chunked transfer-encoding
+        to preserve record boundaries. Multiplexed transports (HTTP/2 and
+        HTTP/3) have no chunked transfer-encoding and are free to batch
+        multiple records into a single DATA frame, so a callback may receive
+        N concatenated compressed streams in one buffer. Single-shot
+        @ref Qore::gunzip_to_string() "gunzip_to_string()" (and siblings)
+        throw @c ZLIB-ERROR with \"Unexpected bytes at the end of compressed
+        data\" when handed such a buffer.
+
+        This helper fast-paths the single-stream case (the common case on
+        HTTP/1.x and when the sender has not batched) by calling @a dce
+        directly and returning a one-element list. When that fails, it
+        boundary-scans the buffer and returns one decompressed string per
+        stream in wire order, allowing the caller to deserialize each
+        record independently and invoke per-record callbacks the same way
+        it would when receiving HTTP/1.x chunks.
+
+        For gzip and deflate the scanner locates stream-start magic in the
+        input (@c 0x1f @c 0x8b for gzip; @c 0x78 followed by @c 0x01,
+        @c 0x9c, or @c 0xda for zlib/deflate) and tries decompression at
+        each candidate split; the first split that decompresses cleanly
+        is accepted and decompression continues on the remainder. Other
+        codecs (bzip2, brotli, zstd) rethrow unchanged — per-record
+        concatenation is a gzip/deflate-only pattern in DataStream v1.
+
+        @param dce a decompressor call reference (from @ref ds_get_content_decode())
+        @param data the possibly-concatenated compressed bytes
+        @param enc the output string encoding (UTF-8 for DataStream)
+
+        @return one decompressed string per source stream, in wire order
+
+        @throw ZLIB-ERROR the buffer could not be split into decompressible
+        streams (rethrown from the underlying decoder)
+
+        @since DataStreamUtil 1.4
+    */
+    #! Splits a concatenated stream of YAML documents into individual document strings
+    /** The DataStream v1 protocol emits one YAML document per record, separated by
+        \c "%YAML" directive markers at document boundaries. HTTP/1.x chunked transfer
+        preserves record boundaries naturally (one chunk per doc), but multiplexed
+        transports (HTTP/2, HTTP/3) may batch N docs into one DATA frame, leaving the
+        client with a single concatenated-docs string. This helper splits on the
+        \c "%YAML" directive to recover individual document strings that the single-
+        document @ref Qore::parse_yaml() can handle.
+
+        The first document may omit the directive (it always starts the stream), so
+        the split preserves any leading chunk before the first \c "%YAML" marker.
+        Empty trailing segments after the final newline are discarded.
+
+        @param data the concatenated YAML stream
+        @return one string per YAML document, each suitable for @ref Qore::parse_yaml()
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_split_yaml_documents(string data) {
+        return ds_extract_yaml_documents(\data, True);
+    }
+
+    #! Extracts complete DataStream YAML documents from an incremental receive buffer
+    /** DataStream v1 emits one YAML document per record. HTTP/2 and HTTP/3
+        DATA frames can split or coalesce those records, so receivers need to
+        parse only complete documents and keep the trailing partial document in
+        the buffer until another \c "%YAML" directive or end-of-stream arrives.
+
+        @param data the mutable receive buffer
+        @param is_final if True, the trailing buffered document is complete and is
+        returned as well
+
+        @return complete YAML document strings removed from \a data
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_extract_yaml_documents(reference<string> data,
+            bool is_final = False) {
+        list<string> out = ();
+        while (True) {
+            int pos = data.find("\n%YAML ");
+            if (pos < 0) {
+                break;
+            }
+            out += data.substr(0, pos + 1);
+            data = data.substr(pos + 1);
+        }
+        if (is_final && data.val()) {
+            out += data;
+            data = "";
+        }
+        return out;
+    }
+
+    public list<string> sub ds_decode_content_streams(code dce, binary data, string enc) {
+        # Fast path: buffer is a single compressed stream — succeeds on
+        # HTTP/1.x chunked transfer and whenever the sender did not pack
+        # multiple streams into one frame.
+        try {
+            return (dce(data, enc),);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ZLIB-ERROR") {
+                # Other codecs (bzip2, brotli, zstd) raise codec-specific
+                # error codes — propagate unchanged; chunk-per-record
+                # concatenation is a gzip/deflate-only pattern in
+                # DataStream v1.
+                rethrow;
+            }
+        }
+        # Boundary-scan slow path.
+        list<string> out = ();
+        int pos = 0;
+        while (pos < data.size()) {
+            list<int> cands = ();
+            int p = pos + 2;
+            while (p + 1 < data.size()) {
+                bool is_magic = False;
+                # gzip magic
+                if (data[p] == 0x1f && data[p+1] == 0x8b) {
+                    is_magic = True;
+                }
+                # zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
+                if (data[p] == 0x78 && (data[p+1] == 0x01
+                        || data[p+1] == 0x9c || data[p+1] == 0xda)) {
+                    is_magic = True;
+                }
+                if (is_magic) {
+                    cands += p;
+                }
+                p++;
+            }
+            cands += data.size();
+            bool found = False;
+            foreach int c in (cands) {
+                try {
+                    out += dce(data.substr(pos, c - pos), enc);
+                    pos = c;
+                    found = True;
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "ZLIB-ERROR") {
+                        rethrow;
+                    }
+                    # candidate split is inside a deflate block — try next
+                }
+            }
+            if (!found) {
+                throw "ZLIB-ERROR",
+                    sprintf("could not decompose %d-byte buffer into "
+                        "concatenated compressed streams", data.size() - pos);
+            }
+        }
+        return out;
+    }
+
+    #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
+    /** @par Example:
+        @code{.py}
+*code decode = ds_get_content_encode("bzip2");
+        @endcode
+
+        The following \c "Content-Encoding" values are recognized:
+        - \c "deflate": returns a call reference to @ref Qore::compress() "compress()"
+        - \c "gzip": returns a call reference to @ref Qore::gzip() "gzip()"
+        - \c "bzip2": returns a call reference to @ref Qore::bzip2() "bzip2()"
+        - \c "br": returns a call reference to @ref Qore::brotli() "brotli()"
+        - \c "zstd": returns a call reference to @ref Qore::zstd() "zstd()"
+        - \c "identity", @ref nothing: returns @ref nothing
+
+        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding"
+        header value for encoding HTTP encoded data
+
+        @throw SERIALIZATION-ERROR this exception is thrown if the content encoding is not recognized
+    */
+    public *code sub ds_get_content_encode(*string ce) {
+        switch (ce) {
+            case "deflate":
+                return \compress();
+            case "gzip":
+                return \gzip();
+            case "bzip2":
+                return \bzip2();
+            case "br":
+                return \brotli();
+            case "zstd":
+                return \zstd();
+            case "identity":
+            case NOTHING:
+                return;
+        }
+        throw "SERIALIZATION-ERROR", sprintf("cannot serialize data stream request body with unknown content-encoding "
+            "%y", ce);
+    }
+
+    #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
+    /** @par Example:
+        @code{.py}
+httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, timeout_ms, False, \info);
+        @endcode
+
+        @param scb the send data callback that should return data for sending
+        @param enc_func an optional @ref call_reference "call reference" or @ref closure "closure" for performing content encoding after YAML serialization; see @ref ds_get_content_encode()
+
+        @return a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"; the return value of this function is design to be used as the send callback parameter \a scb in the following methods:
+        - @ref Qore::HTTPClient::sendWithSendCallback() "HTTPClient::sendWithSendCallback()"
+        - @ref Qore::HTTPClient::sendWithCallbacks() "HTTPClient::sendWithCallbacks()"
+        - @ref Qore::Socket::sendHTTPMessageWithCallback() "Socket::sendHTTPMessageWithCallback()"
+        - @ref Qore::Socket::sendHTTPResponseWithCallback() "Socket::sendHTTPResponseWithCallback()"
+
+        @note if using content encoding; the appropriate \c "DataStream-Content-Encoding" header will be added by @ref ds_set_chunked_headers() if the \a content_encoding argument is used
+    */
+    public code<auto()> sub ds_get_send(code<auto()> scb, *code enc_func) {
+        return auto sub () {
+            auto data;
+            try {
+                data = scb();
+
+                # encode data for sending
+                if (exists data) {
+                    data = make_yaml(data);
+                    if (enc_func)
+                        data = enc_func(data);
+                }
+
+                #printf("DBG ds_get_send() returning: %y\n", data);
+                return data;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                #printf("DBG ds_get_send() closure: %s: %s\n", ex.err, ex.desc);
+                string str = sprintf("%s: %s", ex.err, ex.desc);
+                # make sure there are no newlines in the string
+                str =~ s/[\r\n]/ /g;
+                return {
+                    DataStreamError: str,
+                };
+            }
+        };
+    }
+
+    #! returns a @ref closure "closure" useful for receiving HTTP chunked data
+    /** The closure returned if useful with %Qore methods taking receive callbacks; YAML data is deserialized and
+        passed as %Qore data to the given argument
+
+        @par Example:
+        @code{.py}
+httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, hdr, timeout_ms, False, \info);
+        @endcode
+
+        @param recv_callback the data callback; this is called once for each deserialized chunked transfer from the
+        remote end with the deserialized data, and then once with @ref nothing when all data has been received
+        @param eod_callback the "end of data" callback; this must accept a @ref string_or_nothing "*string" argument;
+        this is called with no arguments once all data has been received if the sender does not report a send error,
+        otherwise it's called with a single string giving the send error reported by the sending side in the
+        \c DataStream-Error trailer record
+        @param body_callback an optional "body callback"; if this argument is passed, it must take a string argument
+        which will be the content-decoded raw message body before any data deserialization and a second string
+        argument giving the content-type of the body
+        @param extern_decode non-DataStream messages will be decoded externally
+
+        @return a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods
+        taking receive callbacks; when HTTP headers are received, the closure sets up content decoding by calling
+        @ref ds_get_content_decode() on the \c "Content-Encoding" or "DataStream-Content-Encoding" header values; when
+        raw chunked data is received, first the chunked body is decoded (if content encoding was indicated in the
+        message headers), then YAML data is deserialized and passed as %Qore data to the given callback argument; the
+        return value of this function is design to be used as the receive callback parameter \a recv_callback in the
+        following methods:
+        - @ref Qore::HTTPClient::sendWithRecvCallback() "HTTPClient::sendWithRecvCallback()"
+        - @ref Qore::HTTPClient::sendWithCallbacks() "HTTPClient::sendWithCallbacks()"
+        - @ref Qore::Socket::readHTTPChunkedBodyBinaryWithCallback() "Socket::readHTTPChunkedBodyBinaryWithCallback()"
+        - @ref Qore::Socket::readHTTPChunkedBodyWithCallback() "Socket::readHTTPChunkedBodyWithCallback()"
+
+        @note the callback returned here can throw a \c "DESERIALIZATION-ERROR" if the header's \c "Content-Type" or
+        "DataStream-Content-Type" is not \c "text/yaml" or the \c "Content-Encoding" or
+        \c "DataStream-Content-Encoding" headers give unrecognized content encodings.
+    */
+    public code<nothing(hash<auto>)> sub ds_get_recv(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, *code<nothing(string, string)> body_callback, *bool extern_decode) {
+        # decode content encoding call reference
+        *code dce;
+        # "header parsed" flag
+        bool hp;
+        # chunked flag
+        bool chunked;
+        # data stream flag
+        bool datastream;
+        # send aborted flag
+        bool send_aborted;
+        # HTTP status code received
+        *int status_code;
+        # HTTP status message received
+        *string status_message;
+        # content type received
+        *string ct;
+        # partial YAML document buffered for DataStream v1 over multiplexed transports
+        string yaml_doc_buf;
+
+        code deliver_items = sub (list<auto> items, hash<auto> ddc) {
+            foreach auto item in (items) {
+                auto record;
+                if (body_callback) {
+                    body_callback(item, ddc."code");
+                }
+                if (datastream || (!chunked && !extern_decode)) {
+                    # deserialize each decoded stream independently
+                    auto data = item;
+                    if (data.typeCode() == NT_BINARY) {
+                        data = data.toString("utf-8");
+                    }
+                    record = ddc.in(data);
+                } else {
+                    record = item;
+                }
+
+                # if the server has returned a status code, then handle
+                # as an exception on the remote side, otherwise throw a
+                # SEND-ABORTED exception
+                if (!chunked) {
+                    if ((send_aborted || status_code >= 300) && record.err && record.desc) {
+                        throw record.err, record.desc, record.arg;
+                    }
+                    if (send_aborted) {
+                        if (status_code) {
+                            throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
+                                "complete", status_code), record;
+                        } else {
+                            throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", record;
+                        }
+                    }
+                }
+
+                recv_callback(record);
+            }
+        };
+
+        return sub (hash<auto> h) {
+            #printf("DBG ds_get_recv() h: %y\n", h);
+
+            # decode data received
+            if (h.hasKey("hdr")) {
+                #printf("hp: %y hdr: %y\n", hp, h.hdr);
+                if (hp) {
+                    if (yaml_doc_buf.val()) {
+                        *hash<auto> ddc = DataStreamDeserializationSupport{ct};
+                        if (ddc && ddc."code" == "yaml") {
+                            deliver_items(ds_extract_yaml_documents(\yaml_doc_buf, True), ddc);
+                        }
+                    }
+                    # call "end of data" callback with any error message reported by the sender
+                    eod_callback(h.hdr{DataStreamError.lwr()});
+                    return;
+                }
+
+                # set "header parsed" flag to True
+                hp = True;
+
+                # save status code if present
+                if (h.hdr.status_code) {
+                    status_code = h.hdr.status_code;
+                    status_message = h.hdr.status_message;
+                }
+
+                # parse content type and optionally any content encoding
+                *string ce;
+
+                # set chunked flag
+                chunked = (h.hdr."transfer-encoding" == "chunked");
+
+                # always check DataStream-Content-Type first; HTTP/2 and HTTP/3 don't use
+                # chunked transfer encoding, so the DataStream headers must be checked
+                # regardless of the transfer-encoding
+                ct = h.hdr{DataStreamContentType.lwr()} ?? h.hdr."content-type";
+                ce = h.hdr{DataStreamContentEncoding.lwr()} ?? h.hdr."content-encoding";
+
+                # remove any ";charset=utf-8" from the end of the content-type header
+                ct =~ s/; *charset=utf-?8$//i;
+
+                # data is always transferred in UTF-8 encoding with DataStream
+                h.obj.setEncoding("utf8");
+
+                # set datastream flag if DataStream-Content-Type header is present
+                # NOTE: HTTP/2 and HTTP/3 don't use chunked transfer encoding
+                datastream = h.hdr.hasKey(DataStreamContentType.lwr());
+
+                dce = ds_get_content_decode(ce);
+
+                if (h.send_aborted) {
+                    send_aborted = True;
+                }
+
+                # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
+                # be delivered in the same callback invocation as the headers. Fall through
+                # to check for data.
+            }
+            if (exists h."data") {
+                if (h.deserialized) {
+                    # Caller already deserialized; just hand through.
+                    recv_callback(h."data");
+                    return;
+                }
+                # Decode content-encoding. May produce multiple items when
+                # the sender packed N compressed records into one buffer
+                # (common on HTTP/2 / HTTP/3 where chunked transfer-encoding
+                # doesn't exist; see ds_decode_content_streams()).
+                list<auto> items;
+                switch (h."data".typeCode()) {
+                    # string if sent in a regular body without content-encoding
+                    case NT_STRING: {
+                        # only decode chunked data; monolithic bodies are
+                        # decoded by the Qore library automatically
+                        if (dce && chunked) {
+                            items = ds_decode_content_streams(dce, binary(h."data"), "utf8");
+                        } else {
+                            if (h."data".encoding() != "UTF-8") {
+                                h."data" = force_encoding(h."data", "utf8");
+                            }
+                            items = (h."data",);
+                        }
+                        break;
+                    }
+                    # binary if sent in a regular body without content-encoding
+                    # or sent chunked
+                    case NT_BINARY: {
+                        if (dce) {
+                            if (!chunked || datastream) {
+                                items = ds_decode_content_streams(dce, h."data", "utf8");
+                            } else {
+                                # HTTP/1.x chunked without DataStream
+                                # negotiation — single chunk, single stream.
+                                items = (dce(h."data", "utf8"),);
+                            }
+                        } else {
+                            items = (binary_to_string(h."data", "utf8"),);
+                        }
+                        break;
+                    }
+                    default:
+                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y",
+                            h."data".type());
+                }
+
+                *hash<auto> ddc = DataStreamDeserializationSupport{ct};
+                if (!ddc) {
+                    # Fall back to the legacy single-buffer path: hand the
+                    # first (only) decoded item to body_callback and raise.
+                    auto buf = items.lsize() > 1 ? items.join("") : items[0];
+                    if (body_callback && ct) {
+                        body_callback(buf, ct);
+                    }
+                    if (status_code >= 400) {
+                        throw "DESERIALIZATION-ERROR", sprintf("HTTP server returned a \"%d %s\" response with "
+                            "non-deserializable Content-Type %y: %s", status_code, status_message, ct, buf);
+                    }
+                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: "
+                        "%y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
+                }
+
+                # For YAML DataStream v1 payloads over multiplexed transports
+                # (H2/H3), DATA frames are arbitrary byte ranges: one frame can
+                # contain a partial YAML document or multiple documents. Buffer
+                # the trailing partial document and only parse complete records.
+                if (ddc."code" == "yaml" && datastream && !chunked) {
+                    list<auto> expanded = ();
+                    bool is_final = h.final ?? False;
+                    foreach auto item in (items) {
+                        yaml_doc_buf += item.typeCode() == NT_BINARY ? item.toString("utf-8")
+                            : item;
+                        expanded += ds_extract_yaml_documents(\yaml_doc_buf, is_final);
+                    }
+                    if (expanded) {
+                        deliver_items(expanded, ddc);
+                    }
+                    return;
+                }
+
+                # For other YAML payloads, a single decompressed item may still
+                # carry multiple concatenated YAML documents if the sender
+                # batched records without per-record compression. Split on
+                # @c %YAML directive boundaries so each document can be
+                # deserialized individually.
+                if (ddc."code" == "yaml" && (datastream || (!chunked && !extern_decode))) {
+                    list<auto> expanded = ();
+                    foreach auto item in (items) {
+                        string s = item.typeCode() == NT_BINARY ? item.toString("utf-8")
+                            : item;
+                        if (s =~ /\n%YAML /) {
+                            expanded += ds_split_yaml_documents(s);
+                        } else {
+                            expanded += s;
+                        }
+                    }
+                    if (expanded) {
+                        items = expanded;
+                    }
+                }
+
+                deliver_items(items, ddc);
+            }
+        };
+    }
+
+    #! sets up HTTP headers for DataStream chunked data transfers
+    /** @par Example:
+        @code{.py}
+ds_set_chunked_headers(\hdr, "bzip");
+        @endcode
+
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following
+        headers are set:
+        - \c "Content-Type: application/octet-stream" (set if header not already present in hash)
+        - \c "DataStream-Content-Type: text/x-yaml;charset=utf8" (set if header not already present in hash)
+        - \c "DataStream-Content-Encoding": set to the \c content_encoding argument, if present
+        - \c "Transfer-Encoding: chunked"
+        .
+        For requests, the following headers are processed:
+        - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
+        - \c "DataStream-Accept: text/x-yaml" (set if header not already present in hash)
+        @param content_encoding an optional string giving the \c "DataStream-Content-Encoding" header to set (must be
+        a recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param req set to @ref Qore::True "True" if the headers are required for a request
+    */
+    public nothing sub ds_set_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type")
+            hdr."Content-Type" = MimeTypeOctetStream;
+
+        if (!hdr{DataStreamContentType})
+            hdr{DataStreamContentType} = MimeTypeYaml + ";charset=utf8";
+        else if (hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
+            hdr{DataStreamContentType} += ";charset=utf8";
+
+        if (req)
+            ds_do_request_headers(\hdr);
+
+        if (content_encoding)
+            hdr{DataStreamContentEncoding} = content_encoding;
+
+        hdr += {
+            "Trailer": DataStreamError,
+            "Transfer-Encoding": "chunked",
+        };
+    }
+
+    #! sets up HTTP headers for DataStream non-chunked data transfers
+    /** @par Example:
+        @code{.py}
+ds_set_non_chunked_headers(\hdr, "bzip");
+        @endcode
+
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following
+        headers are set:
+        - \c "Content-Type: text/x-yaml" (set if header not already present in hash)
+        .
+        For requests, the following headers are processed:
+        - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
+        - \c "DataStream-Accept: text/x-yaml" (set if header not already present in hash)
+        @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a
+        recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param req set to @ref Qore::True "True" if the headers are required for a request
+    */
+    public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type")
+            hdr."Content-Type" = MimeTypeYaml + ";charset=utf8";
+        else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
+            hdr."Content-Type" += ";charset=utf8";
+
+        if (req)
+            ds_do_request_headers(\hdr);
+
+        if (content_encoding)
+            hdr."Content-Encoding" = content_encoding;
+    }
+
+    #! returns the \c "DataStream-Accept-Encoding" header value or a default value
+    /** @par Example:
+        @code{.py}
+string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
+        @endcode
+
+        @param ae the value of the \c "Accept-Encoding" header
+
+        @return the \c "DataStream-Accept-Encoding" value corresponding to the \c "Accept-Encoding" header passed as
+        an argument; if no value is passed, then the default value \c "gzip,bzip2,deflate" is returned
+    */
+    public *string sub ds_get_ds_accept_enc_header(*string ae) {
+        if (!ae) {
+            return "gzip,bzip2,deflate";
+        }
+        # we return the recognized encodings in the same order as in the accept header
+        string dae = (select ae.split(","), DataStreamContentEncodingHash.$1).join(",");
+        return dae ? dae : NOTHING;
+    }
+
+    #! @defgroup ConnectProtocolConstants Connect Protocol Constants
+    /** Constants for Connect protocol (DataStream 2.0) framing and header support.
+        These are placed in DataStreamUtil to avoid circular dependencies — both DataStreamClient
+        and DataStreamRequestHandler can use them without requiring the Connect module.
+
+        @since DataStreamUtil 1.3
+    */
+    #/@{
+
+    #! YAML MIME type for Connect unary requests
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectMimeTypeYaml = "application/yaml";
+
+    #! YAML MIME type for Connect streaming requests
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectStreamMimeTypeYaml = "application/connect+yaml";
+
+    #! Connect protocol version header name
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectProtocolVersionHdr = "connect-protocol-version";
+
+    #! Connect protocol version value
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectProtocolVersionVal = "1";
+
+    #! Connect content encoding header for streaming
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectContentEncodingHdr = "connect-content-encoding";
+
+    #! Connect accept encoding header for streaming
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectAcceptEncodingHdr = "connect-accept-encoding";
+
+    #! Envelope flag: payload is compressed (bit 0)
+    /** @since DataStreamUtil 1.3
+    */
+    public const CONNECT_FLAG_COMPRESSED = 0x01;
+
+    #! Envelope flag: end-of-stream marker (bit 1)
+    /** @since DataStreamUtil 1.3
+    */
+    public const CONNECT_FLAG_END_STREAM = 0x02;
+
+    #! Default maximum message size: 4 MB (matches gRPC default)
+    /** Used to prevent unbounded memory allocation from malicious or malformed
+        frames that declare very large payload sizes.
+
+        @since DataStreamUtil 1.3
+    */
+    public const CONNECT_DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
+    #/@}
+
+    #! @defgroup ConnectFramingFunctions Connect Protocol Framing Functions
+    /** Functions for Connect protocol (DataStream 2.0) message framing and protocol detection.
+
+        @since DataStreamUtil 1.3
+    */
+    #/@{
+
+    #! Frame a binary message with the Connect 5-byte envelope header
+    /** @param payload the message payload
+        @param flags envelope flags (combination of \c CONNECT_FLAG_* constants)
+        @return the framed message (5-byte header + payload)
+
+        @since DataStreamUtil 1.3
+    */
+    public binary sub connect_frame_message(binary payload, int flags = 0) {
+        int len = payload.size();
+        string header_str = chr(flags & 0xFF);
+        header_str += chr((len >> 24) & 0xFF);
+        header_str += chr((len >> 16) & 0xFF);
+        header_str += chr((len >> 8) & 0xFF);
+        header_str += chr(len & 0xFF);
+        return binary(header_str) + payload;
+    }
+
+    #! Parse a Connect-framed message
+    /** @param data the framed message data (must be >= 5 bytes)
+        @param max_message_size optional maximum payload size in bytes; 0 means no limit;
+        if not provided, no size validation is performed
+
+        @return a hash with \c flags (int) and \c data (binary) keys
+
+        @throw CONNECT-FRAMING-ERROR if the data is too short or declares more bytes than available
+        @throw CONNECT-MESSAGE-SIZE-ERROR if the declared payload exceeds max_message_size
+
+        @since DataStreamUtil 1.3
+    */
+    public hash<auto> sub connect_unframe_message(binary data, *int max_message_size) {
+        if (data.size() < 5) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect frame too short: %d bytes (minimum 5)", data.size());
+        }
+        int flags = data[0];
+        int len = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+        if (max_message_size > 0 && len > max_message_size) {
+            throw "CONNECT-MESSAGE-SIZE-ERROR",
+                sprintf("Connect frame payload size %d exceeds maximum %d bytes",
+                    len, max_message_size);
+        }
+        if (data.size() < 5 + len) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect frame declares %d bytes but only %d available",
+                    len, data.size() - 5);
+        }
+        return {
+            "flags": flags,
+            "data": data.substr(5, len),
+        };
+    }
+
+    #! Get the size of the next complete Connect frame in a buffer
+    /** @param buf the buffer to check
+        @return the total frame size (5 + payload), or -1 if the buffer does not contain a complete
+        frame
+
+        @since DataStreamUtil 1.3
+    */
+    public int sub connect_next_frame_size(binary buf) {
+        if (buf.size() < 5) {
+            return -1;
+        }
+        int len = (buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4];
+        int total = 5 + len;
+        if (buf.size() < total) {
+            return -1;
+        }
+        return total;
+    }
+
+    #! Detect the Connect protocol from HTTP request headers
+    /** Returns True if the request uses the Connect protocol based on header inspection.
+
+        @param hdr the HTTP request headers (keys in lower-case)
+        @return True if the request is a Connect protocol request
+
+        @since DataStreamUtil 1.3
+    */
+    public bool sub connect_detect_protocol(hash<auto> hdr) {
+        # Check for Connect protocol version header — both unary and streaming Connect
+        # always set this header, so it is the primary detection mechanism
+        if (hdr{ConnectProtocolVersionHdr}.val()) {
+            return True;
+        }
+        # Check for the explicit Connect streaming content type as a fallback;
+        # NOTE: plain "application/yaml" is NOT checked here because it is the official
+        # IANA YAML MIME type (RFC 9512) used by RestClientIo for all YAML requests,
+        # not just Connect; matching it would incorrectly enable Connect mode on regular
+        # REST calls
+        *string ct = hdr."content-type";
+        if (ct.val()) {
+            ct = ct.lwr();
+            if (ct =~ /^application\/connect\+/) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns an interactive send callback for Connect-framed chunked data
+    /** Unlike @ref connect_get_send(), this callback does <b>not</b> emit an EndStreamResponse frame
+        the first time \a scb returns @ref nothing.  In an interactive (interleaved read -> reply)
+        exchange \a scb returns @ref nothing to mean "no more replies for the current inbound
+        operation" — which must <b>not</b> close the stream, because the client will send further
+        operations on it.  The stream is closed (the EndStreamResponse frame emitted) only when
+        \a eos_check returns @ref True "True" (i.e. the inbound side has been fully received / the
+        client half-closed the stream).
+
+        @param scb the send data callback; returns the next reply for the current operation, or
+        @ref nothing when none remain
+        @param enc_func an optional call reference for content encoding after YAML serialization
+        @param eos_check a callback returning @ref True "True" when the stream has ended (the inbound
+        side is fully received) so the terminal EndStreamResponse frame may be emitted
+
+        @return a closure suitable for use with the interactive HTTP/2 / HTTP/3 streaming send path;
+        each call serializes one reply to YAML and frames it, returns @ref nothing between operations,
+        and emits the EndStreamResponse frame exactly once at end of stream
+
+        @see connect_get_send()
+
+        @since DataStreamUtil 1.4
+    */
+    public code<auto()> sub connect_get_send_interactive(code<auto()> scb, *code enc_func,
+            code<bool()> eos_check) {
+        bool eos_sent = False;
+        return auto sub () {
+            if (eos_sent) {
+                return NOTHING;
+            }
+            auto data;
+            try {
+                data = scb();
+                if (!exists data) {
+                    # no more replies for the current operation; only close the stream once the
+                    # inbound side has been fully received (the client half-closed the stream)
+                    if (eos_check()) {
+                        eos_sent = True;
+                        return connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+                    }
+                    return NOTHING;
+                }
+                # Serialize to YAML
+                binary payload = binary(make_yaml(data));
+                # Optionally compress
+                int flags = 0;
+                if (enc_func) {
+                    payload = enc_func(payload);
+                    flags = CONNECT_FLAG_COMPRESSED;
+                }
+                return connect_frame_message(payload, flags);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Emit EndStreamResponse with error
+                eos_sent = True;
+                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
+                err_msg =~ s/[\r\n]/ /g;
+%ifdef NoJson
+                string json = "{\"code\":\"internal\",\"message\":"
+                    + connect_json_escape(err_msg) + "}";
+%else
+                string json = make_json({"error": {"code": "internal", "message": err_msg}});
+%endif
+                return connect_frame_message(binary(json), CONNECT_FLAG_END_STREAM);
+            }
+        };
+    }
+
+    #! Returns a send callback for Connect-framed chunked data
+    /** @param scb the send data callback that should return data for sending; when it returns
+        NOTHING, an EndStreamResponse frame is emitted
+        @param enc_func an optional call reference for content encoding after YAML serialization
+
+        @return a closure suitable for use with HTTP send callback methods; each call serializes
+        data to YAML, frames with the 5-byte Connect envelope, and optionally compresses
+
+        @since DataStreamUtil 1.3
+    */
+    public code<auto()> sub connect_get_send(code<auto()> scb, *code enc_func) {
+        bool eos_sent = False;
+        return auto sub () {
+            if (eos_sent) {
+                return NOTHING;
+            }
+            auto data;
+            try {
+                data = scb();
+                if (!exists data) {
+                    # End of stream: emit EndStreamResponse frame (JSON {} with END_STREAM flag)
+                    eos_sent = True;
+                    return connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+                }
+                # Serialize to YAML
+                binary payload = binary(make_yaml(data));
+                # Optionally compress
+                int flags = 0;
+                if (enc_func) {
+                    payload = enc_func(payload);
+                    flags = CONNECT_FLAG_COMPRESSED;
+                }
+                return connect_frame_message(payload, flags);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Emit EndStreamResponse with error
+                eos_sent = True;
+                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
+                err_msg =~ s/[\r\n]/ /g;
+%ifdef NoJson
+                string json = "{\"code\":\"internal\",\"message\":"
+                    + connect_json_escape(err_msg) + "}";
+%else
+                string json = make_json({"error": {"code": "internal", "message": err_msg}});
+%endif
+                return connect_frame_message(binary(json), CONNECT_FLAG_END_STREAM);
+            }
+        };
+    }
+
+    #! Returns a receive callback for Connect-framed chunked data
+    /** @param recv_cb the data callback; called once for each deserialized message
+        @param eod_cb the "end of data" callback; called with an optional string error argument
+        when all data has been received
+        @param body_cb an optional "body callback" for raw data before deserialization
+        @param extern_decode if True, non-Connect data is decoded externally
+        @param max_message_size maximum message size in bytes; 0 means no limit;
+        defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
+
+        @return a closure suitable for use with HTTP receive callback methods; accumulates binary
+        data, parses 5-byte Connect frames, deserializes YAML payloads, and dispatches to the
+        appropriate callback
+
+        @throw CONNECT-MESSAGE-SIZE-ERROR if a frame payload or buffer exceeds the maximum
+
+        @since DataStreamUtil 1.3
+    */
+    public code<nothing(hash<auto>)> sub connect_get_recv(code<nothing(auto)> recv_cb, code<nothing(*string)> eod_cb, *code<nothing(string, string)> body_cb,
+            *bool extern_decode, int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE) {
+        # binary buffer for accumulating frame data
+        binary buf = binary();
+        # header parsed flag
+        bool hp;
+        # decode content encoding
+        *code dce;
+
+        return sub (hash<auto> h) {
+            # Header delivery
+            if (h.hasKey("hdr")) {
+                if (hp) {
+                    # Second header delivery = trailer (end of data)
+                    eod_cb();
+                    return;
+                }
+                hp = True;
+                # Check for non-Connect error responses: if the server returns an error
+                # status with a non-Connect content type (e.g. text/plain from a generic
+                # HTTP error handler), throw immediately rather than trying to parse the
+                # body as Connect frames — plain text would be misinterpreted as frame
+                # headers, causing spurious CONNECT-MESSAGE-SIZE-ERROR
+                int resp_status = h.hdr.":status" ?? h.hdr.status_code ?? 200;
+                *string ct = h.hdr."content-type";
+                if (resp_status >= 400 && ct.val() && ct !~ /^application\/connect\+/i) {
+                    throw "CONNECT-HTTP-ERROR",
+                        sprintf("server returned HTTP %d with non-Connect content type %y",
+                            resp_status, ct);
+                }
+                # Parse content encoding for compressed frames
+                *string ce = h.hdr{ConnectContentEncodingHdr} ?? h.hdr."content-encoding";
+                dce = ds_get_content_decode(ce);
+                # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
+                # be delivered in the same callback invocation as the headers. Fall through
+                # to check for data.
+            }
+            # Data delivery
+            if (exists h."data") {
+                # Accumulate data
+                if (h."data".typeCode() == NT_BINARY) {
+                    buf += h."data";
+                } else if (h."data".typeCode() == NT_STRING) {
+                    buf += binary(h."data");
+                } else {
+                    # hash = HTTP/2 trailers or other non-data delivery; ignore
+                    return;
+                }
+                # Validate buffer size to prevent unbounded accumulation
+                if (max_message_size > 0 && buf.size() > 5 + max_message_size) {
+                    throw "CONNECT-MESSAGE-SIZE-ERROR",
+                        sprintf("Connect recv buffer size %d exceeds maximum message size %d bytes",
+                            buf.size(), max_message_size);
+                }
+
+                # Parse complete frames
+                while (True) {
+                    int frame_size = connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        # Validate declared frame size before waiting for more data
+                        if (max_message_size > 0 && buf.size() >= 5) {
+                            int declared_len = (buf[1] << 24) | (buf[2] << 16)
+                                | (buf[3] << 8) | buf[4];
+                            if (declared_len > max_message_size) {
+                                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                                    sprintf("Connect frame declares %d bytes, exceeds maximum %d",
+                                        declared_len, max_message_size);
+                            }
+                        }
+                        break;
+                    }
+                    hash<auto> frame = connect_unframe_message(buf);
+                    # Advance buffer past consumed frame
+                    if (buf.size() > frame_size) {
+                        buf = buf.substr(frame_size);
+                    } else {
+                        buf = binary();
+                    }
+
+                    # Check for EndStreamResponse
+                    if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                        # Parse JSON EndStreamResponse for error
+                        *string err_msg;
+                        try {
+                            string json_str = frame.data.toString("utf-8");
+                            if (json_str.val()) {
+%ifdef NoJson
+                                hash<auto> obj = connect_simple_json_decode(json_str);
+%else
+                                hash<auto> obj = parse_json(json_str);
+%endif
+                                if (obj.error.message.val()) {
+                                    err_msg = sprintf("%s: %s", obj.error.code ?? "unknown",
+                                        obj.error.message);
+                                } else if (obj.error.code.val()) {
+                                    err_msg = obj.error.code;
+                                }
+                            }
+                        } catch () {
+                            # Ignore JSON parse errors
+                        }
+                        eod_cb(err_msg);
+                        return;
+                    }
+
+                    # Regular data frame — decompress if needed
+                    binary payload = frame.data;
+                    if ((frame.flags & CONNECT_FLAG_COMPRESSED) && dce) {
+                        payload = binary(dce(payload, "utf8"));
+                    }
+
+                    # Pass raw body to body callback if present
+                    if (body_cb) {
+                        body_cb(payload.toString("utf-8"), "yaml");
+                    }
+
+                    # Deserialize YAML and deliver
+                    auto parsed = parse_yaml(payload.toString("utf-8"));
+                    recv_cb(parsed);
+                }
+            }
+        };
+    }
+
+    #! Sets up HTTP headers for Connect streaming (chunked) data transfers
+    /** @param hdr a reference to a hash of message headers
+        @param content_encoding an optional content encoding string
+        @param req set to True if the headers are for a request
+
+        @since DataStreamUtil 1.3
+    */
+    public nothing sub connect_set_chunked_headers(reference<hash<auto>> hdr,
+            *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type") {
+            hdr."Content-Type" = ConnectStreamMimeTypeYaml;
+        }
+        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        if (content_encoding) {
+            hdr{ConnectContentEncodingHdr} = content_encoding;
+        }
+        hdr += {
+            "Transfer-Encoding": "chunked",
+        };
+    }
+
+    #! Sets up HTTP headers for Connect non-chunked (unary) data transfers
+    /** @param hdr a reference to a hash of message headers
+        @param content_encoding an optional content encoding string
+        @param req set to True if the headers are for a request
+
+        @since DataStreamUtil 1.3
+    */
+    public nothing sub connect_set_non_chunked_headers(reference<hash<auto>> hdr,
+            *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type") {
+            hdr."Content-Type" = ConnectMimeTypeYaml;
+        }
+        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        if (content_encoding) {
+            hdr."Content-Encoding" = content_encoding;
+        }
+    }
+    #/@}
+}
+
+# private namespace for non-exported definitions
+namespace DataStreamUtilPrivate {
+    # private function
+    sub ds_do_request_headers(reference<hash<auto>> hdr) {
+        if (!hdr.Accept) {
+            hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
+        }
+
+        if (!hdr{DataStreamAccept}) {
+            hdr{DataStreamAccept} = MimeTypeYaml;
+        }
+
+        # get DataStream-Accept-Encoding headers
+        if (!hdr{DataStreamAcceptEncoding}) {
+            hdr{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
+        }
+
+        if (!hdr."Accept-Encoding" && hdr{DataStreamAcceptEncoding}) {
+            hdr."Accept-Encoding" = hdr{DataStreamAcceptEncoding};
+        }
+    }
+
+%ifdef NoJson
+    # Escape a string for JSON encoding (minimal implementation for when json module is unavailable)
+    string sub connect_json_escape(string s) {
+        s =~ s/\\/\\\\/g;
+        s =~ s/"/\\"/g;
+        s =~ s/\n/\\n/g;
+        s =~ s/\r/\\r/g;
+        s =~ s/\t/\\t/g;
+        return "\"" + s + "\"";
+    }
+
+    # Simple JSON object decoder for EndStreamResponse (when json module is unavailable)
+    # Handles only the subset needed: {"error":{"code":"...","message":"..."}}
+    hash<auto> sub connect_simple_json_decode(string json) {
+        hash<auto> result();
+        # Look for error.code
+        if (json =~ /"code"\s*:\s*"([^"]*)"/) {
+            if (!result.error) {
+                result.error = {};
+            }
+            result.error.code = $1;
+        }
+        # Look for error.message
+        if (json =~ /"message"\s*:\s*"([^"]*)"/) {
+            if (!result.error) {
+                result.error = {};
+            }
+            result.error.message = $1;
+        }
+        return result;
+    }
+%endif
+}
+
+#! the DataStreamClient namespace contains shared DataStream protocol types
+/** These types are used by both DataStreamClient and DataStreamClientIo modules.
+
+    @since DataStreamUtil 1.4
+*/
+public namespace DataStreamClient {
+
+#! Protocol mode for DataStream client communication
+/** @since DataStreamUtil 1.4
+*/
+public enum DataStreamProtocol : string {
+    #! Automatic protocol detection (default) — tries Connect first, falls back to DataStream v1
+    Auto = "auto",
+    #! Connect protocol (DataStream 2.0) — uses HTTP/2 or HTTP/3 with 5-byte framed messages
+    Connect = "connect",
+    #! DataStream v1 protocol — uses chunked transfer with per-chunk YAML encoding
+    DataStream = "datastream",
+}
+
+#! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+/** @since DataStreamUtil 1.4 (moved from DataStreamClient)
+*/
+public class DataStreamSendMessage {
+    public {}
+
+    #! this method returns data to be returned to the server
+    /** @return the data returned by this callback will be serialized to YAML and send via the
+        @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all
+        data has been send then this callback should return @ref nothing, which will close the chunked message and
+        terminate the request
+
+        @note When this method returns no value, it signifies the end of the streamed data transfer; this method calls
+        sendDataImpl() to return the data
+    */
+    auto sendData() {
+        return sendDataImpl();
+    }
+
+    #! reimplement this method in subclasses to support streamed data transfers
+    /** @return the data returned by this callback will be serialized to YAML and send via the
+        @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all
+        data has been send then this callback should return @ref nothing, which will close the chunked message and
+        terminate the request
+
+        @note When this method returns no value, it signifies the end of the streamed data transfer
+    */
+    private abstract auto sendDataImpl();
+}
+
+#! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+/** @since DataStreamUtil 1.4 (moved from DataStreamClient)
+*/
+public class DataStreamRecvMessage {
+    public {
+        # any datastream error received from the remote end
+        string err;
+    }
+
+    #! receives decoded data from the remote end and calls recvDataImpl()
+    /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+    */
+    nothing recvData(auto data) {
+        recvDataImpl(data);
+    }
+
+    #! this method is called when all data has been received; this method calls recvDataDoneImpl()
+    /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single
+        string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+    */
+    nothing recvDataDone(*string err) {
+        recvDataDoneImpl(err);
+    }
+
+    #! this method is called when all data has been received
+    /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single
+        string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+    */
+    private nothing recvDataDoneImpl(*string err) {
+    }
+
+    #! reimplement this method in subclasses to receive decoded and deserialized data
+    /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+    */
+    private abstract nothing recvDataImpl(auto data);
+}
+
+#! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+/** @since DataStreamUtil 1.4 (moved from DataStreamClient)
+*/
+public class DataStreamMessage inherits DataStreamSendMessage, DataStreamRecvMessage {
+}
+
+#! processes DataStream client options
+/** @since DataStreamUtil 1.4 (moved from DataStreamClient)
+*/
+public hash<auto> sub ds_process_opts(*hash<auto> opts) {
+    hash<auto> local_opts = opts ?? {};
+    # No HTTP version cap — Qore's HTTPClient transparently handles streaming
+    # over HTTP/2 (DATA frames) and HTTP/3 (QUIC DATA) as well as HTTP/1.1
+    # (chunked transfer encoding). DataStream v1 and Connect both work over
+    # any HTTP version.
+    return local_opts;
+}
+
+} # namespace DataStreamClient

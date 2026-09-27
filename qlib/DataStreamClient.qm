@@ -1,0 +1,1250 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamClient.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.3
+
+%requires(reexport) DataStreamUtil >= 1.4
+%requires RestClient >= 1.4
+%requires yaml
+%requires Mime >= 1.7
+
+%modern
+
+module DataStreamClient {
+    version = "1.5.1";
+    desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
+        "where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("ds", DataStreamConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("dss", DataStreamConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage DataStreamClient Module
+
+    @tableofcontents
+
+    @section datastreamclientintro Introduction to the DataStreamClient Module
+
+    The %DataStreamClient module provides client support for the @ref datastreamprotocol "DataStream protocol":
+    YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
+
+    In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library; in
+    this module, the @ref DataStreamClient::DataStreamClient "DataStreamClient" class inherits and extends RestClient
+    for this reason.
+
+    To use this module, use \c "%requires DataStreamClient" in your code.
+
+    All the public symbols in the module are defined in the DataStreamClient namespace
+
+    Classes:
+    - @ref DataStreamClient::DataStreamClient "DataStreamClient"
+    - @ref DataStreamClient::DataStreamRecvMessage "DataStreamRecvMessage"
+    - @ref DataStreamClient::DataStreamSendMessage "DataStreamSendMessage"
+    - @ref DataStreamClient::DataStreamMessage "DataStreamRecvMessage"
+
+    @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
+
+    @section datastreamclientprotocol Protocol Selection and Auto-Negotiation
+
+    The %DataStreamClient supports three protocol modes controlled by the \c protocol constructor
+    option:
+    - \c "auto" (default) — tries Connect (DataStream 2.0) first, falls back to DataStream v1
+    - \c "connect" — forces Connect protocol (DataStream 2.0)
+    - \c "datastream" — forces DataStream v1 chunked protocol
+
+    In \c "auto" mode, the client first attempts a Connect request over HTTP/2 (or HTTP/3 if
+    configured).  If the server responds with HTTP 415 (Unsupported Media Type) or HTTP 406
+    (Not Acceptable), or if a transport error occurs, the client automatically falls back to
+    DataStream v1 and caches the detected protocol for subsequent calls.
+
+    @subsection datastreamclientauto Auto Mode (Default)
+
+    @code{.py}
+%modern
+%requires DataStreamClient
+
+# Create a client in auto mode (default)
+DataStreamClient client({"url": "http://localhost:8080"});
+
+# Make a DataStream call — auto-detects the best protocol
+hash<auto> info;
+auto result = client.getData(msg, \info);
+
+# Query which protocol was used
+string detected = client.getDetectedProtocol();
+printf("Protocol: %s\n", detected);  # "connect" or "datastream"
+    @endcode
+
+    @subsection datastreamclientexplicit Explicit Protocol Selection
+
+    Force DataStream v1 (chunked YAML) for backward compatibility:
+    @code{.py}
+DataStreamClient client({
+    "url": "http://legacy-server:8080",
+    "protocol": "datastream",
+});
+    @endcode
+
+    Force Connect protocol (DataStream 2.0):
+    @code{.py}
+DataStreamClient client({
+    "url": "http://modern-server:8080",
+    "protocol": "connect",
+});
+    @endcode
+
+    The protocol can also be changed at runtime:
+    @code{.py}
+# Switch to DataStream v1
+client.setProtocol("datastream");
+
+# Reset cached protocol detection (next call will re-negotiate)
+client.resetProtocolCache();
+    @endcode
+
+    @subsection datastreamclientmsgsize Message Size Limits
+
+    The \c max_message_size option protects against malformed or oversized Connect frames.
+    The default is 4 MB (matching the gRPC default).
+
+    @code{.py}
+# Set max message size in constructor
+DataStreamClient client({
+    "url": "http://localhost:8080",
+    "max_message_size": 16 * 1024 * 1024,  # 16 MB
+});
+
+# Or change at runtime
+client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
+    @endcode
+
+    @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - accept the official \c "application/yaml" MIME type (RFC 9512) in non-DataStream responses
+
+    @subsection datastreamclient_v1_5 DataStreamClient v1.5
+    - added Connect protocol (DataStream 2.0) support with auto-negotiation: the client tries
+      Connect mode first (over HTTP/2 or HTTP/3) and falls back to DataStream v1 if the server
+      doesn't support Connect
+    - new constructor options: \c protocol ("auto", "connect", "datastream") and \c http3_protocol
+      ("auto", "h2", "h3")
+    - new methods: @ref DataStreamClient::DataStreamClient::setProtocol() "setProtocol()",
+      @ref DataStreamClient::DataStreamClient::getProtocol() "getProtocol()",
+      @ref DataStreamClient::DataStreamClient::getDetectedProtocol() "getDetectedProtocol()",
+      @ref DataStreamClient::DataStreamClient::resetProtocolCache() "resetProtocolCache()"
+    - updated copyright year to 2026
+
+    @subsection datastreamclient_v1_4 DataStreamClient v1.4
+    - added \c %strict-args compile-time requirement
+    - added debug logging support
+    - updated copyright year to 2025
+
+    @subsection datastreamclient_v1_3 DataStreamClient v1.3
+    - added a connection class
+
+    @subsection datastreamclient_v1_2 DataStreamClient v1.2
+    - fixed a bug where the \c "response-code" key of the output info hash could be missing in some cases
+      (<a href="https://github.com/qorelanguage/qore/issues/3237">issue 3237</a>)
+
+    @subsection datastreamclient_v1_1 DataStreamClient v1.1
+    - updated for internal RestClient API changes related to REST schema validation
+      (<a href="https://github.com/qorelanguage/qore/issues/2072">issue 2072</a>)
+
+    @subsection datastreamclient_v1_0_1 DataStreamClient v1.0.1
+    - fixed bugs handling chunked non-DataStream messages
+      (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
+
+    @subsection datastreamclient_v1_0 DataStreamClient v1.0
+    - initial release of the module
+*/
+
+#! the DataStreamClient namespace contains all the public objects in the DataStreamClient module
+public namespace DataStreamClient {
+
+#! Extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol"
+public class DataStreamClient inherits RestClient::RestClient {
+    public {
+        #! DataStreamClient Version
+        const Version = "1.1";
+
+        #! DataStreamClient Version String
+        const VersionString = sprintf("Qore-DataStreamClient/%s", DataStreamClient::Version);
+
+        #! default HTTP headers
+        const DefaultHeaders = RestClient::DefaultHeaders + {
+            "User-Agent": DataStreamClient::VersionString,
+            DataStreamAccept: MimeTypeYaml,
+        };
+    }
+
+    #! calls the base class RestClient constructor and optionally connects to the REST server
+    /** @par Example:
+        @code{.py}
+DataStreamClient ds({"url": "http://localhost:8001/rest"});
+        @endcode
+
+        @param opts valid options are:
+        - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be
+          a relative date-time value for clarity, ex: \c 20s)
+        - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
+          connection URL
+        - \c default_port: The default port number to connect to if none is given in the URL
+        - \c headers: an optional hash of headers to send with every request, these can also be overridden in request
+          method calls
+        - \c http_version: HTTP version to use (\c 'auto', \c '1.0', \c '1.1', \c '2.0', or \c '3.0'; defaults
+          to \c 'auto'); both DataStream v1 and Connect protocols work over any HTTP version — Qore's HTTPClient
+          transparently maps streaming to HTTP/2 DATA frames or HTTP/3 QUIC DATA as appropriate
+        - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+        - \c proxy: The proxy URL for connecting through a proxy
+        - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
+          \c 30s)
+        - \c url: A string giving the URL to connect to
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+
+        @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to
+        \c "yaml" automatically
+    */
+    constructor(*hash<auto> opts, *softbool do_not_connect) : RestClient(ds_process_opts(opts) + ("data": "yaml"),
+            do_not_connect) {
+        hash<auto> local_opts = ds_process_opts(opts);
+
+        # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
+        hash<auto> dh = DefaultHeaders;
+        if (headers."Accept-Encoding") {
+            *string dae = ds_get_ds_accept_enc_header(headers."Accept-Encoding");
+            if (dae) {
+                dh{DataStreamAcceptEncoding} = dae;
+            }
+        } else {
+            dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";
+        }
+        headers = dh + local_opts.headers;
+        effective_http_version = local_opts.http_version ?? "auto";
+
+        # Set protocol preference from options
+        if (opts.protocol) {
+            setProtocol(cast<enum<DataStreamProtocol>>(opts.protocol));
+        }
+        # Set max message size for Connect mode
+        if (exists opts.max_message_size) {
+            m_max_message_size = opts.max_message_size;
+        }
+    }
+
+    public string getEffectiveHttpVersion() {
+        return effective_http_version;
+    }
+
+    #! Set the protocol preference
+    /** @param proto the protocol mode; see @ref DataStreamProtocol for valid values
+
+        @since DataStreamClient 1.5
+    */
+    setProtocol(DataStreamProtocol proto) {
+        protocol_mode = proto;
+    }
+
+    #! Get the protocol preference
+    /** @return the current protocol mode; see @ref DataStreamProtocol
+
+        @since DataStreamClient 1.5
+    */
+    DataStreamProtocol getProtocol() {
+        return protocol_mode;
+    }
+
+    #! Get the detected/cached protocol from auto-negotiation
+    /** @return the detected protocol, or NOTHING if not yet detected
+
+        @since DataStreamClient 1.5
+    */
+    *DataStreamProtocol getDetectedProtocol() {
+        return cached_protocol;
+    }
+
+    #! Reset the protocol cache to force re-negotiation
+    /** @since DataStreamClient 1.5
+    */
+    resetProtocolCache() {
+        cached_protocol = NOTHING;
+    }
+
+    #! Set the maximum message size for Connect mode
+    /** @param size maximum message size in bytes; 0 means no limit
+
+        @since DataStreamClient 1.5
+    */
+    setMaxMessageSize(int size) {
+        m_max_message_size = size;
+    }
+
+    #! Get the maximum message size for Connect mode
+    /** @return the maximum message size in bytes; 0 means no limit
+
+        @since DataStreamClient 1.5
+    */
+    int getMaxMessageSize() {
+        return m_max_message_size;
+    }
+
+    private {
+        string effective_http_version = "auto";
+
+        #! Protocol preference
+        /** @since DataStreamClient 1.5
+        */
+        DataStreamProtocol protocol_mode = DataStreamProtocol::Auto;
+
+        #! Cached detected protocol from auto-negotiation
+        /** @since DataStreamClient 1.5
+        */
+        *DataStreamProtocol cached_protocol;
+
+        #! Maximum message size for Connect mode in bytes (0 = no limit)
+        /** @since DataStreamClient 1.5
+        */
+        int m_max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE;
+    }
+
+
+    #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
+    /** @par Example:
+        @code{.py}
+rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
+        @endcode
+
+        @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+        @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or invalid serialization)
+
+        @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+        */
+    recvDataStream(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, string method, string path, auto body,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(printf("DataStreamClient::recvDataStream() method=%y path=%y protocol=%y\n",
+            method, path, protocol_mode));
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        auto save_body = body;
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        if (use_connect) {
+            # Serialize body and set base headers via RestClient, then add Connect headers
+            RestClient::prepareMsg(method, path, \body, \hdr);
+            connect_set_non_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            prepareMsg(method, path, \body, \hdr);
+        }
+
+        on_exit if (exists body) {
+            info += {
+                "request-body": body,
+                "request-serialization": ds,
+            };
+        }
+
+        # prepare path
+        preparePath(\path);
+
+        # get receive callback with appropriate framing
+        code recv_cb = use_connect
+            ? connect_get_recv(recv_callback, eod_callback)
+            : ds_get_recv(recv_callback, eod_callback);
+
+        try {
+            sendWithRecvCallback(recv_cb, body, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                setHTTPVersion("1.1");
+                # Retry with DataStream v1 using saved originals
+                body = save_body;
+                hdr = save_hdr;
+                path = save_path;
+                prepareMsg(method, path, \body, \hdr);
+                preparePath(\path);
+                recv_cb = ds_get_recv(recv_callback, eod_callback);
+                sendWithRecvCallback(recv_cb, body, method, path, hdr, timeout_ms, False, \info);
+                return;
+            }
+            rethrow;
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
+    }
+
+    #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
+    /** @par Example:
+        @code{.py}
+rest.recvDataStream(reccallback, "GET", "/orders/1", body);
+        @endcode
+
+        @param dsm the @ref DataStreamRecvMessage object providing the DataStreamRecvMessage::recvData() and DataStreamRecvMessage::recvDataDone() methods to be used as callbacks
+        @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+        @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or invalid serialization)
+
+        @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+        */
+    recvDataStream(DataStreamRecvMessage dsm, string method, string path, auto body, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        recvDataStream(\dsm.recvData(), \dsm.recvDataDone(), method, path, body, timeout_ms, \info, hdr);
+    }
+
+    #! Sends an HTTP request to an HTTP REST server using the DataStream protocol
+    /** The message is sent using the @ref datastreamprotocol "DataStream protocol" with the specified method and
+        chunked message body as given by a send callback and returns the deserialized body and response headers
+        received as a response.
+
+        If a connection has not already been established, an internal call to HTTPClient::connect() will be made
+        before sending the message.
+
+        @par Example:
+        @code{.py}
+hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
+        @endcode
+
+        @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be
+        serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response, the \c "body" key will be assigned a list where each list element is the data value of the respective DataStream chunk
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+        @note
+        - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
+        - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+        - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
+        - the value of the return value's \c "body" key will be decoded and deserialized data
+    */
+    hash<auto> sendDataStream(code<auto()> scb, string method, string path, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(printf("DataStreamClient::sendDataStream() method=%y path=%y protocol=%y\n",
+            method, path, protocol_mode));
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        hdr = headers + hdr;
+
+        if (use_connect) {
+            connect_set_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            ds_set_chunked_headers(\hdr, seh.ce, True);
+        }
+
+        # prepare path
+        preparePath(\path);
+
+        /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be
+            respected, and any DataStream content encoding can only be applied to each chunk separately.
+            Therefore we have to intercept the chunked messages here to build the respose data and also capture the
+            headers returned
+        */
+
+        # received data
+        auto rmd;
+        # chunked response flag (determines if rmd is a list or not)
+        bool chunked;
+        # define data callback to build response msg data
+        # For Connect protocol over HTTP/2, transfer-encoding: chunked is not used,
+        # so we auto-detect multi-item responses: if a second item arrives, switch to
+        # list mode to accumulate all items
+        code recv_data_callback = sub (auto d) {
+            if (exists d) {
+                if (chunked) {
+                    rmd += d;
+                } else if (exists rmd) {
+                    # Second data item received — switch to list accumulation mode
+                    chunked = True;
+                    rmd = (rmd, d);
+                } else {
+                    rmd = d;
+                }
+            }
+        };
+        code eod_callback = sub () {};
+        # get receive callback with appropriate framing
+        code dsrecv_callback = use_connect
+            ? connect_get_recv(recv_data_callback, eod_callback)
+            : ds_get_recv(recv_data_callback, eod_callback);
+        # save response header
+        hash<auto> rhdr;
+        # send aborted flag
+        bool send_aborted;
+        # our top-level receive callback to save the header and set the chunked flag
+        code recv_callback = sub (hash<auto> h) {
+            if (h.hdr) {
+                rhdr = h.hdr;
+                if (h.hdr."transfer-encoding" == "chunked") {
+                    chunked = True;
+                } else if (h.send_aborted) {
+                    send_aborted = True;
+                }
+            }
+            dsrecv_callback(h);
+        };
+
+        # get send callback with appropriate framing
+        code send_cb = use_connect
+            ? connect_get_send(scb, seh.func)
+            : ds_get_send(scb, seh.func);
+
+        try {
+            sendWithCallbacks(send_cb, recv_callback, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                # since the connection may already be HTTP/2 (which has no chunked TE)
+                setHTTPVersion("1.1");
+                # Retry with DataStream v1 using saved originals
+                hdr = headers + save_hdr;
+                path = save_path;
+                ds_set_chunked_headers(\hdr, seh.ce, True);
+                preparePath(\path);
+                rmd = NOTHING;
+                chunked = False;
+                rhdr = {};
+                send_aborted = False;
+                dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback);
+                recv_callback = sub (hash<auto> h) {
+                    if (h.hdr) {
+                        rhdr = h.hdr;
+                        if (h.hdr."transfer-encoding" == "chunked") {
+                            chunked = True;
+                        } else if (h.send_aborted) {
+                            send_aborted = True;
+                        }
+                    }
+                    dsrecv_callback(h);
+                };
+                send_cb = ds_get_send(scb, seh.func);
+                sendWithCallbacks(send_cb, recv_callback, method, path, hdr, timeout_ms, False, \info);
+            } else {
+                rethrow;
+            }
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
+
+        # rethrow exceptions returned from the sender
+        if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
+            throw rmd.err, rmd.desc, rmd.arg;
+        }
+
+        if (send_aborted) {
+            throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
+                "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+        }
+
+        return rhdr + ("body": rmd);
+    }
+
+    #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
+    /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+
+        @par Example:
+        @code{.py}
+hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
+        @endcode
+
+        @param dsm the @ref DataStreamSendMessage object providing the DataStreamSendMessage::sendData() method to
+        be used as a callback
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT",
+        \c "DELETE", \c "TRACE", or \c "CONNECT").
+        @param path the URI path to add (will be appended to any root path given in the constructor)
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default
+        timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of
+        request headers and other information about the HTTP request
+        @param hdr any headers to be sent with the request; headers here will override default headers for the
+        object as well
+
+        @return The headers received from the HTTP server with all key names converted to lower-case. The message
+        body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the
+        HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response,
+        the \c "body" key will be assigned a list where each list element is the data value of the respective
+        DataStream chunk
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP
+        server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will
+        be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving
+        the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character
+        encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the
+        timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+        @note
+        - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no
+            \c "Transfer-Encoding" header is already present
+        - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
+            Socket::connectSSL() for secure connections)
+        - this method can also be used when the server returns chunked
+            @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its
+            entirity and returns in the return value's \c "body" key as a list where each list element is the data
+            value of the respective DataStream chunk
+        - the value of the return value's \c "body" key will be decoded and deserialized data
+    */
+    hash<auto> sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        return sendDataStream(\dsm.sendData(), method, path, timeout_ms, \info, hdr);
+    }
+
+    #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
+    /** This method is useful for sending streaming data in the request and where streaming data is also expected in the response.
+
+        If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+
+        @par Example:
+        @code{.py}
+rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
+        @endcode
+
+        @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+        @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+        @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+        @note
+        - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
+        - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+
+        @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+    */
+    sendRecvDataStream(code<auto()> scb, code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, string method, string path,
+            timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(printf("DataStreamClient::sendRecvDataStream() method=%y path=%y protocol=%y\n",
+            method, path, protocol_mode));
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        hdr = headers + hdr;
+
+        if (use_connect) {
+            connect_set_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            ds_set_chunked_headers(\hdr, seh.ce, True);
+        }
+
+        # prepare path
+        preparePath(\path);
+
+        # get send and receive callbacks with appropriate framing
+        code send_cb = use_connect
+            ? connect_get_send(scb, seh.func)
+            : ds_get_send(scb, seh.func);
+        code recv_cb = use_connect
+            ? connect_get_recv(recv_callback, eod_callback)
+            : ds_get_recv(recv_callback, eod_callback);
+
+        try {
+            sendWithCallbacks(send_cb, recv_cb, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                setHTTPVersion("1.1");
+                # Retry with DataStream v1 using saved originals
+                hdr = headers + save_hdr;
+                path = save_path;
+                ds_set_chunked_headers(\hdr, seh.ce, True);
+                preparePath(\path);
+                send_cb = ds_get_send(scb, seh.func);
+                recv_cb = ds_get_recv(recv_callback, eod_callback);
+                sendWithCallbacks(send_cb, recv_cb, method, path, hdr, timeout_ms, False, \info);
+                return;
+            }
+            rethrow;
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
+    }
+
+    #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
+    /** This method is useful for sending streaming data in the request and where streaming data is also expected in the response.
+
+        If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+
+        @par Example:
+        @code{.py}
+rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
+        @endcode
+
+        @param dsm the @ref DataStreamMessage object providing the DataStreamMessage::sendData(), DataStreamMessage::recvData(), and DataStreamMessage::recvDataDone() methods method to be used as callbacks
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+        @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+        @note
+        - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
+        - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+
+        @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+    */
+    sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path, timeout_ms, \info,
+            hdr);
+    }
+
+    #! send raw chunked data to the client and expect a YAML-formatted response
+    /** @par Example:
+        @code{.py}
+hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
+        @endcode
+
+        The request will be made with the \c "Accept" header set to \c "application/x-yaml"; replies are expected to be YAML-serialized data.  Note that the \c "body" key in the return value will contain the deserialized YAML payload as Qore data.
+
+        @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+        @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+        @return The headers received from the HTTP server with all key names converted to lower-case. The deserialized YAML message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key.
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    */
+    hash<auto> sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        if (!hdr.Accept)
+            hdr.Accept = MimeTypeYaml;
+        hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
+        if ((h."content-type" == MimeTypeYaml || h."content-type" == MimeTypeYamlApp) && h.body) {
+            h.body = parse_yaml(h.body.typeCode() == NT_BINARY ? h.body.toString("utf-8") : h.body);
+        }
+        return h;
+    }
+
+    #! receives raw chunked data using the given closure and returns any headers received
+    /** @par Example:
+        @code{.py}
+hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
+        @endcode
+
+        Any message body will be serialized as YAML and the \c "Content-Type" header will be set to \c "application/x-yaml".
+
+        @param recv_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+        - \c "data": the string or binary data
+        - \c "chunked": True if the data was received with chunked transfer encoding, False if not
+        .
+        Header or trailer data is placed in a hash with the following keys:
+        - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
+        - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
+        @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT"). Additional methods can be added in the constructor as a \c additional_methods option.
+        @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+        @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
+        @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+        @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+        @param hdr An optional hash of headers to include in the message.
+
+        @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+        @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+        @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+        @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+        @throw SOCKET-SEND-ERROR There was an error sending the data
+        @throw SOCKET-CLOSED The remote end closed the connection
+        @throw SOCKET-RECV-ERROR There was an error receiving the data
+        @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+        @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+        @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+        @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+    */
+    hash<auto> getRawStream(code recv_callback, string method, *string path, auto body, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        hash<auto> rvhdr;
+        code mrecv_callback = sub (hash<auto> h) {
+            if (h.hdr && !rvhdr)
+                rvhdr = h.hdr;
+            recv_callback(h);
+        };
+        if (exists body) {
+            body = make_yaml(body);
+            hdr."Content-Type" = MimeTypeYaml;
+        }
+        sendWithRecvCallback(mrecv_callback, body, method, path, hdr, timeout_ms, False, \info);
+        return rvhdr;
+    }
+
+    #! adds default headers to each request; these headers will be sent in all requests but can be overridden in requests as well
+    /** @par Example:
+        @code{.py}
+# disable gzip and bzip encoding in responses
+rest.addDefaultHeaders(("Accept-Encoding": "compress"));
+        @endcode
+
+        @param h a hash of headers to add to the default headers to send on each request
+
+        @note default headers can also be set in the constructor
+
+        @see @ref RestClient::RestClient::getDefaultHeaders() "RestClient::getDefaultHeaders()"
+    */
+    addDefaultHeaders(hash<auto> h) {
+        headers += h;
+        if (h."Accept-Encoding")
+            headers{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(h."Accept-Encoding");
+    }
+
+    #! sets the request and desired response encoding for the object; see @ref EncodingSupport for valid options
+    /** @par Example:
+        @code{.py}
+rest.setContentEncoding("gzip");
+        @endcode
+
+        @param enc the data content encoding (compression) option for requests and the desired response content encoding for the object; see @ref EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used for outgoing requests and requested for responses
+
+        @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
+    */
+    setContentEncoding(string enc = "auto") {
+        RestClient::setContentEncoding(enc);
+        headers{DataStreamAcceptEncoding} = headers."Accept-Encoding";
+    }
+
+    #! Get the effective protocol for this call
+    /** @since DataStreamClient 1.5
+    */
+    private DataStreamProtocol getEffectiveProtocol() {
+        if (protocol_mode == DataStreamProtocol::Connect) {
+            return DataStreamProtocol::Connect;
+        }
+        if (protocol_mode == DataStreamProtocol::DataStream) {
+            return DataStreamProtocol::DataStream;
+        }
+        # "auto" mode
+        if (cached_protocol) {
+            return cached_protocol;
+        }
+        # In auto mode, use Connect if the connection is already HTTP/2 or HTTP/3
+        if (isHttp2()) {
+            return DataStreamProtocol::Connect;
+        }
+        # If not yet connected but using HTTPS with "auto" HTTP version, prefer Connect
+        # because ALPN will negotiate h2; if the server rejects Connect, the fallback
+        # to DataStream v1 handles it. DataStream v1 does not work over HTTP/2 because
+        # HTTP/2 has no chunked transfer encoding.
+        if (effective_http_version == "auto" && getURL() =~ /^https/i) {
+            return DataStreamProtocol::Connect;
+        }
+        return DataStreamProtocol::DataStream;
+    }
+
+    #! Check if an exception indicates the server rejected or doesn't support Connect
+    /** Detects:
+        - HTTP 415 (Unsupported Media Type) or 406 (Not Acceptable) — explicit rejection
+        - Connect frame parse errors — server responded with non-Connect body (e.g. plain YAML)
+
+        @since DataStreamClient 1.5
+    */
+    private static bool isConnectRejection(hash<ExceptionInfo> ex) {
+        # HTTP 415/406/501 — server explicitly rejected Connect content type or doesn't support it
+        if (ex.arg.typeCode() == NT_HASH) {
+            *int status = ex.arg.status_code;
+            if (status == 415 || status == 406 || status == 501) {
+                return True;
+            }
+        }
+        # Connect frame parse errors — server responded with non-Connect body
+        if (ex.err == "CONNECT-FRAMING-ERROR") {
+            return True;
+        }
+        # Connect frame size exceeds maximum — server responded with non-Connect data (e.g. raw
+        # YAML) that was misinterpreted as a Connect frame header with an impossibly large size
+        if (ex.err == "CONNECT-MESSAGE-SIZE-ERROR") {
+            return True;
+        }
+        # NOTE: CONNECT-HTTP-ERROR is NOT a protocol rejection — it means the server returned a
+        # non-Connect error response (e.g. 409 with text/yaml for an invalid datasource).  The
+        # server supports Connect; the request simply failed.  Downgrading the protocol would
+        # cause subsequent requests over the same HTTP/2 connection to send raw YAML where the
+        # server expects Connect frames.
+        return False;
+    }
+
+
+    #! sets up headers and encodes any body for sending
+    private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr,
+            string ct = "Content-Type") {
+        RestClient::prepareMsg(method, path, \body, \hdr, ct);
+        ds_set_non_chunked_headers(\hdr, seh.ce, True);
+    }
+
+    #! sends the outgoing HTTP message and recodes the response to data
+    hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+            *code signer) {
+        /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be
+            respected, and any DataStream content encoding can only be applied to each chunk separately.  Therefore
+            we have to intercept the chunked messages here to build the respose data and also capture the headers
+            returned
+        */
+        # received data
+        auto rmd;
+        # chunked response flag (determines if rmd is a list or not)
+        bool chunked;
+        # define data callback to build response msg data
+        code recv_data_callback = sub (auto d) {
+            if (exists d) {
+                if (chunked) {
+                    if (!rmd) {
+                        rmd = ();
+                    }
+                    rmd += d;
+                } else {
+                    rmd = d;
+                }
+            }
+        };
+        code eod_callback = sub () {};
+        # response serialization
+        string rs;
+        # raw response
+        data rrs;
+        on_exit info += {
+            "response-body": rrs,
+            "response-serialization": rs,
+        };
+        code body_callback = sub (auto b, string code) {
+            rrs += b;
+            rs = code;
+        };
+        # Create both DataStream v1 and Connect receive callbacks; the adaptive wrapper below
+        # delegates to the correct one based on the server's actual response Content-Type.
+        # This is needed because the server auto-upgrades to Connect on HTTP/2 (DataStream v1's
+        # chunked-transfer trailers are not supported in HTTP/2 binary framing), so even when
+        # the client sends DataStream v1 headers, the server may return Connect-framed responses.
+        code ds_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback, True);
+        code connect_callback = connect_get_recv(recv_data_callback, eod_callback, body_callback,
+            True, m_max_message_size);
+        # flag to track whether protocol has been selected from response headers
+        bool protocol_selected = False;
+        # flag to track whether to use Connect for response parsing
+        bool use_connect_recv = False;
+        # save response header
+        hash<auto> rhdr;
+        # send aborted flag
+        bool send_aborted;
+        # our top-level receive callback to save the header and set the chunked flag
+        code recv_callback = sub (hash<auto> h) {
+            if (h.hdr) {
+                rhdr = h.hdr;
+                if (h.hdr."transfer-encoding" == "chunked") {
+                    chunked = True;
+                } else if (h.send_aborted) {
+                    send_aborted = True;
+                }
+                # Detect Connect protocol from response Content-Type on first header callback
+                if (!protocol_selected) {
+                    protocol_selected = True;
+                    *string ct = h.hdr."content-type";
+                    if (ct && ct =~ /^application\/connect\+/) {
+                        use_connect_recv = True;
+                    }
+                }
+            }
+            # Delegate to the appropriate protocol callback
+            if (use_connect_recv) {
+                connect_callback(h);
+            } else {
+                ds_callback(h);
+            }
+        };
+
+        # issue #3237: make sure to send the response-code key in all cases
+        on_exit if (rhdr.status_code) {
+            info."response-code" = rhdr.status_code;
+        }
+
+        if (signer && shdr.val()) {
+            hdr{shdr} = signer({
+                "path": path,
+                "body": body,
+                "hdr": hdr - shdr,
+            });
+        }
+
+        sendWithRecvCallback(recv_callback, body, m, path, hdr, getTimeout(), False, \info);
+
+        # we can get a binary response if we received a chunked non-DataStream message
+        # in which case we need to decode it here (issue 1438)
+        if (rrs.typeCode() == NT_BINARY) {
+            *string ce;
+            *string ct;
+            if (chunked) {
+                ct = rhdr{DataStreamContentType.lwr()} ?? rhdr."content-type";
+                ce = rhdr{DataStreamContentEncoding.lwr()} ?? rhdr."content-encoding";
+            } else {
+                ct = rhdr."content-type";
+                ce = rhdr."content-encoding";
+            }
+            if (ce) {
+                rrs = ds_get_content_decode(ce)(rrs, "utf8");
+            }
+            if (rmd.typeCode() == NT_STRING && ct) {
+                *hash<auto> ddc = DataStreamDeserializationSupport{ct};
+                if (ddc) {
+                    rmd = ddc.in(rrs);
+                }
+            }
+        }
+
+        if (send_aborted) {
+            throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
+                "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+        }
+
+        hash<auto> rv = rhdr + {"body": rmd};
+        # Skip processRestResponse() if data was already deserialized by DataStream or Connect
+        bool datastream = use_connect_recv || (chunked && rhdr.hasKey(DataStreamContentType.lwr()));
+        if (!datastream) {
+            rv = processRestResponse(rv, m, path, \info);
+        }
+
+        # rethrow exceptions returned from the sender
+        if (rv.status_code >= 300 && !getErrorPassthru()) {
+            if (rv.body.err && rv.body.desc) {
+                if (decode_errors && rv.body.arg.body) {
+                    decodeError(rv.body.arg, \info);
+                }
+                throw rv.body.err, sprintf("server-side error: %s: %s", get_ex_pos(rv.body), rv.body.desc),
+                    rv.body.arg;
+            }
+            throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
+                rhdr.status_code, rhdr.status_message), rv;
+        }
+
+        return rv;
+    }
+}
+
+#! Class for DataStream REST connections; returns @ref DataStreamClient objects
+public class DataStreamConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "DataStream REST Connection",
+            "short_desc": "A connection to a DataStream API server",
+            "desc": "A connection to a DataStream API server",
+            "cls": Class::forName("DataStreamConnection"),
+            "auto_url": True,
+            "schemes": {
+                "dss": True,
+                "ds": True,
+            },
+            "base_scheme_map": {
+                "https": "dss",
+                "http": "ds",
+            },
+            "options": RestConnection::ConnectionScheme.options - ("data", "allow_any_response"),
+        };
+    }
+
+    #! creates the DataStreamConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the DataStreamConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "dss"
+    string getType() {
+        return "dss";
+    }
+
+    #! returns a @ref DataStreamClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref DataStreamClient object
+    */
+    private DataStreamClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DataStreamClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

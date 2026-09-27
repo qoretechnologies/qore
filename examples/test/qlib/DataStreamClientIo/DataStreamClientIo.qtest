@@ -1,0 +1,678 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpClientIo
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires json
+%requires DataStreamUtil
+%requires DataStreamClientIo
+%requires DataStreamRequestHandler
+%requires Connect
+%requires RestHandler
+%requires QUnit
+
+%exec-class DataStreamClientIoTest
+
+class RestDataStreamArgHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        hash<auto> args = {};
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    private nothing recvDataImpl(auto data) {
+        if (data.typeCode() == NT_HASH) {
+            map args.$1 = data.$1, keys data;
+        }
+    }
+
+    hash<auto> getResponseHeaderMessageImpl() {
+        *hash<auto> err = getErrorResponse();
+        if (err) {
+            return err;
+        }
+        return {
+            "code": 200,
+            "body": args,
+        };
+    }
+
+    *code getPersistentClosedNotification() {
+        return sub () {};
+    }
+
+    private auto sendDataImpl() {
+    }
+}
+
+class RestDataStreamHandler inherits RestHandler::RestHandler {
+    constructor() : RestHandler(NOTHING) {
+    }
+
+    removeRootPath(reference<string> path) {
+        path = regex_subst(path, "^/?ds", "");
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return RestHandler::wantsBodyStreaming(cx, hdr);
+    }
+
+    AbstractRestStreamRequestHandler streamPutArgs(hash<auto> cx, *hash<auto> ah) {
+        return new RestDataStreamArgHandler(cx, ah);
+    }
+}
+
+class DataStreamClientIoTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int m_port;
+        int m_tls_port;
+        bool m_tls_available = False;
+        int m_quic_port;
+        bool m_quic_available = False;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("DataStreamClientIo test", "1.0") {
+        addTestCase("protocol mode accessors", \testProtocolModeAccessors());
+        addTestCase("max message size", \testMaxMessageSize());
+        addTestCase("non-streaming unary (Connect)", \testNonStreamingConnect());
+        addTestCase("connection class", \testConnectionClass());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new TestAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "quic_headers_only": True,
+        };
+        m_http = new HttpServer(http_opts);
+        # Enable async I/O for HTTP/2 streaming support
+        try {
+            m_http.waitForAsyncIo();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("AsyncIo not available: %s\n", ex.desc);
+        }
+
+        # Register ConnectHandler with unary and streaming handlers
+        Connect::ConnectHandler handler();
+        handler.registerUnary("TestService", "Echo",
+            auto sub (auto request, hash<auto> metadata) {
+                return request;
+            });
+        handler.registerUnary("TestService", "Add",
+            auto sub (auto request, hash<auto> metadata) {
+                return {"result": request.a + request.b};
+            });
+        handler.registerServerStream("TestService", "Numbers",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                int count = request.count ?? 5;
+                for (int i = 0; i < count; ++i) {
+                    stream.write({"index": i, "value": sprintf("msg-%d", i)});
+                }
+            });
+        handler.registerClientStream("TestService", "Aggregate",
+            auto sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                list<string> items();
+                while (*auto msg = stream.read()) {
+                    items += msg.name;
+                }
+                return {"count": items.size(), "names": items};
+            });
+        handler.registerBidiStream("TestService", "BidiEcho",
+            sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                while (*auto msg = stream.read()) {
+                    stream.write({"reply": "echo:" + msg.text});
+                }
+            });
+
+        m_http.setHandler("connect", "", NOTHING, handler);
+        m_http.setDefaultHandler("connect", handler);
+        m_http.setHandler("ds-rest", "/ds", NOTHING, new RestDataStreamHandler(), NOTHING, False);
+
+        # HTTP/1.1 (plain) listener for non-streaming tests
+        m_port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # TLS listener for HTTP/2 streaming tests
+        try {
+            hash<auto> tls_info = m_http.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            m_tls_port = tls_info.port;
+            m_tls_available = True;
+
+            addTestCase("H2 recvDataStream (Connect)", \testH2RecvDataStream());
+            addTestCase("H2 sendDataStream (Connect)", \testH2SendDataStream());
+            addTestCase("H2 sendRecvDataStream (Connect)", \testH2SendRecvDataStream());
+            addTestCase("H2 openConnectInteractiveStream (Connect)",
+                \testH2OpenConnectInteractiveStream());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("TLS listener setup failed: %s: %s\n", ex.err, ex.desc);
+        }
+
+        # QUIC (HTTP/3) listener for H3 streaming tests
+        try {
+            hash<auto> quic_info = m_http.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            m_quic_port = quic_info.port;
+            m_quic_available = True;
+
+            addTestCase("H3 recvDataStream (Connect)", \testH3RecvDataStream());
+            addTestCase("H3 REST recvDataStream initial body (Connect)",
+                \testH3RestRecvDataStreamInitialBody());
+            addTestCase("H3 sendDataStream (Connect)", \testH3SendDataStream());
+            addTestCase("H3 sendRecvDataStream (Connect)", \testH3SendRecvDataStream());
+            addTestCase("H3 openConnectInteractiveStream (Connect)",
+                \testH3OpenConnectInteractiveStream());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("QUIC listener setup failed: %s: %s\n", ex.err, ex.desc);
+        }
+
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    private string getHttpUrl() {
+        return sprintf("http://localhost:%d", m_port);
+    }
+
+    private string getHttpsUrl() {
+        return sprintf("https://127.0.0.1:%d", m_tls_port);
+    }
+
+    private string getQuicUrl() {
+        return sprintf("https://127.0.0.1:%d", m_quic_port);
+    }
+
+    # ---- Protocol mode accessor tests ----
+
+    testProtocolModeAccessors() {
+        DataStreamClient::DataStreamClientIo client({"url": getHttpUrl()});
+        assertEq("auto", client.getProtocol(), "default protocol is auto");
+        assertNothing(client.getDetectedProtocol(), "no detected protocol initially");
+
+        client.setProtocol(DataStreamClient::DataStreamProtocol::Connect);
+        assertEq("connect", client.getProtocol(), "protocol set to connect");
+
+        client.setProtocol(DataStreamClient::DataStreamProtocol::DataStream);
+        assertEq("datastream", client.getProtocol(), "protocol set to datastream");
+
+        client.setProtocol(DataStreamClient::DataStreamProtocol::Auto);
+        assertEq("auto", client.getProtocol(), "protocol reset to auto");
+
+        client.resetProtocolCache();
+        assertNothing(client.getDetectedProtocol(), "cache cleared");
+    }
+
+    # ---- Max message size tests ----
+
+    testMaxMessageSize() {
+        DataStreamClient::DataStreamClientIo client({"url": getHttpUrl()});
+        assertEq(CONNECT_DEFAULT_MAX_MESSAGE_SIZE, client.getMaxMessageSize(),
+            "default max message size");
+
+        client.setMaxMessageSize(1024);
+        assertEq(1024, client.getMaxMessageSize(), "custom max message size");
+
+        client.setMaxMessageSize(0);
+        assertEq(0, client.getMaxMessageSize(), "unlimited max message size");
+
+        # Constructor option
+        DataStreamClient::DataStreamClientIo client2({"url": getHttpUrl(),
+            "max_message_size": 2048});
+        assertEq(2048, client2.getMaxMessageSize(), "max_message_size from constructor");
+    }
+
+    # ---- Non-streaming Connect unary test ----
+
+    testNonStreamingConnect() {
+        DataStreamClient::DataStreamClientIo client({
+            "url": getHttpUrl(),
+            "protocol": "connect",
+        });
+
+        # POST with body
+        hash<auto> resp = client.restPost("/TestService/Echo", {"hello": "world"});
+        assertEq(200, resp.status_code, "echo status 200");
+        assertEq("world", resp.body.hello, "echo body matches");
+
+        # POST with Add
+        resp = client.restPost("/TestService/Add", {"a": 3, "b": 4});
+        assertEq(200, resp.status_code, "add status 200");
+        assertEq(7, resp.body.result, "add result");
+    }
+
+    # ---- Connection class tests ----
+
+    testConnectionClass() {
+        # Verify connection scheme registration
+        string url = getHttpUrl();
+        url =~ s/^http:/dsio:/;
+        DataStreamClient::DataStreamConnectionIo conn("test", "test connection", url);
+        assertEq("dsios", conn.getType(), "connection type");
+
+        # Get a client from the connection
+        DataStreamClient::DataStreamClientIo client = conn.get(True);
+        assertTrue(client instanceof DataStreamClient::DataStreamClientIo,
+            "connection returns DataStreamClientIo");
+    }
+
+    private hash<auto> readConnectReply(HttpClientIo::HttpClientStreamHandle stream,
+            binary buf, string label) {
+        while (True) {
+            while (True) {
+                int frame_size = connect_next_frame_size(buf);
+                if (frame_size < 0) {
+                    break;
+                }
+                hash<auto> frame = connect_unframe_message(buf);
+                if (buf.size() > frame_size) {
+                    buf = buf.substr(frame_size);
+                } else {
+                    buf = binary();
+                }
+
+                if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                    return {"end": True, "buf": buf};
+                }
+
+                return {
+                    "body": parse_yaml(frame.data.toString("utf-8")),
+                    "buf": buf,
+                };
+            }
+
+            auto rd = stream.readData(10s);
+            if (!exists rd) {
+                throw "CONNECT-INTERACTIVE-STREAM-TIMEOUT",
+                    sprintf("%s: timed out waiting for a Connect reply", label);
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    return {"end": True, "buf": buf};
+                }
+                if (rd.error) {
+                    throw "CONNECT-INTERACTIVE-STREAM-ERROR",
+                        sprintf("%s: stream error: %y", label, rd.error);
+                }
+                continue;
+            }
+
+            buf += rd.typeCode() == NT_BINARY ? rd : binary(rd);
+        }
+    }
+
+    private testOpenConnectInteractiveStream(string url, string label) {
+        DataStreamClient::DataStreamClientIo client({
+            "url": url,
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = client.openConnectInteractiveStream(
+            "POST", "/TestService/BidiEcho");
+        on_exit stream.cancel();
+
+        binary buf = binary();
+        stream.sendData(connect_frame_message(binary(make_yaml({"text": "hello"})), 0), False);
+        stream.sendData(connect_frame_message(binary(make_yaml({"text": "world"})), 0), False);
+        stream.writesDone();
+
+        hash<auto> reply = readConnectReply(stream, buf, label);
+        buf = reply.buf;
+        assertEq("echo:hello", reply.body.reply, label + ": first interactive reply");
+
+        reply = readConnectReply(stream, buf, label);
+        buf = reply.buf;
+        assertEq("echo:world", reply.body.reply, label + ": second interactive reply");
+    }
+
+    # ---- HTTP/2 streaming tests (require TLS) ----
+
+    testH2RecvDataStream() {
+        if (!m_tls_available) {
+            testSkip("TLS not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getHttpsUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<auto> received();
+        *string recv_error;
+        client.recvDataStream(
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                recv_error = err;
+            },
+            "POST", "/TestService/Numbers",
+            {"count": 3},
+            30s,
+        );
+
+        assertEq(3, received.size(), "received 3 messages");
+        assertEq(0, received[0].index, "first message index");
+        assertEq("msg-0", received[0].value, "first message value");
+        assertEq(2, received[2].index, "last message index");
+        assertNothing(recv_error, "no error");
+    }
+
+    testH2SendDataStream() {
+        if (!m_tls_available) {
+            testSkip("TLS not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getHttpsUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> items = (
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        );
+        int idx = 0;
+        hash<auto> resp = client.sendDataStream(
+            auto sub () {
+                if (idx >= items.size()) {
+                    return NOTHING;
+                }
+                return items[idx++];
+            },
+            "POST", "/TestService/Aggregate",
+            30s,
+        );
+
+        assertEq(3, resp.body.count, "aggregated count");
+        assertEq(("alice", "bob", "charlie"), resp.body.names, "aggregated names");
+    }
+
+    testH2SendRecvDataStream() {
+        if (!m_tls_available) {
+            testSkip("TLS not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getHttpsUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> to_send = (
+            {"text": "hello"},
+            {"text": "world"},
+        );
+        int idx = 0;
+        list<auto> received();
+
+        client.sendRecvDataStream(
+            auto sub () {
+                if (idx >= to_send.size()) {
+                    return NOTHING;
+                }
+                return to_send[idx++];
+            },
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                if (err) {
+                    throw "BIDI-ERROR", err;
+                }
+            },
+            "POST", "/TestService/BidiEcho",
+            30s,
+        );
+
+        assertEq(2, received.size(), "received 2 bidi replies");
+        assertEq("echo:hello", received[0].reply, "first bidi reply");
+        assertEq("echo:world", received[1].reply, "second bidi reply");
+    }
+
+    testH2OpenConnectInteractiveStream() {
+        if (!m_tls_available) {
+            testSkip("TLS not available");
+            return;
+        }
+
+        testOpenConnectInteractiveStream(getHttpsUrl(), "H2");
+    }
+
+    # ---- HTTP/3 (QUIC) Connect streaming tests ----
+
+    testH3RecvDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<auto> received();
+        *string recv_error;
+        client.recvDataStream(
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                recv_error = err;
+            },
+            "POST", "/TestService/Numbers",
+            {"count": 3},
+            30s,
+        );
+
+        assertEq(3, received.size(), "H3: received 3 messages");
+        assertEq(0, received[0].index, "H3: first message index");
+        assertEq("msg-0", received[0].value, "H3: first message value");
+        assertEq(2, received[2].index, "H3: last message index");
+        assertNothing(recv_error, "H3: no error");
+    }
+
+    testH3RestRecvDataStreamInitialBody() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<auto> received();
+        *string recv_error;
+        client.recvDataStream(
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                recv_error = err;
+            },
+            "PUT", "/ds?action=args",
+            {"sql": "select 1 as a", "args": ("x")},
+            30s,
+        );
+
+        assertEq(1, received.size(), "H3 REST: received one response message");
+        assertEq("select 1 as a", received[0].sql, "H3 REST: initial body sql received");
+        assertEq(("x"), received[0].args, "H3 REST: initial body args received");
+        assertNothing(recv_error, "H3 REST: no error");
+    }
+
+    testH3SendDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> items = (
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        );
+        int idx = 0;
+        hash<auto> resp = client.sendDataStream(
+            auto sub () {
+                if (idx >= items.size()) {
+                    return NOTHING;
+                }
+                return items[idx++];
+            },
+            "POST", "/TestService/Aggregate",
+            30s,
+        );
+
+        assertEq(3, resp.body.count, "H3: aggregated count");
+        assertEq(("alice", "bob", "charlie"), resp.body.names, "H3: aggregated names");
+    }
+
+    testH3SendRecvDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> to_send = (
+            {"text": "hello"},
+            {"text": "world"},
+        );
+        int send_idx = 0;
+        list<auto> received();
+        client.sendRecvDataStream(
+            auto sub () {
+                if (send_idx >= to_send.size()) {
+                    return NOTHING;
+                }
+                return to_send[send_idx++];
+            },
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                if (err) {
+                    throw "BIDI-ERROR", err;
+                }
+            },
+            "POST", "/TestService/BidiEcho",
+            30s,
+        );
+
+        assertEq(2, received.size(), "H3: received 2 bidi replies");
+        assertEq("echo:hello", received[0].reply, "H3: first bidi reply");
+        assertEq("echo:world", received[1].reply, "H3: second bidi reply");
+    }
+
+    testH3OpenConnectInteractiveStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        testOpenConnectInteractiveStream(getQuicUrl(), "H3");
+    }
+}
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

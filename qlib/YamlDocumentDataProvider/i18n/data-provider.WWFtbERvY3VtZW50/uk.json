@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.desc": {
+          "source": "Read YAML document data from a specific file location.\n\nThe YAML file may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "Читання даних документа YAML із вказаного файлу.\n\nФайл YAML може містити один або декілька документів, розділених маркерами `---`. Кожен документ ітерується як окремий запис.\n\n**Основні параметри**\n- `path`: розташування файлу для читання (обов'язково)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n- `skip_empty_documents`: пропускати порожні документи (за замовчуванням: `True`)\n- `max_documents`: максимальна кількість документів для читання (`0` = необмежено)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
+          "source": "Read YAML Document File",
+          "message": "Читати файл документа YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "Кодування символів для читання даних YAML. За замовчуванням: `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Кодування символів"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "Вхідне кодування"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "Максимальна кількість документів для читання з потоку. Використовуйте `0` (за замовчуванням) для необмеженої кількості. Корисно для вибірки або обмеження використання пам'яті."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "Макс. кількість документів"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "Максимальна кількість документів для читання"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "Якщо вибрано `True` (за замовчуванням), документи, які розбираються як `NOTHING`, пропускаються. Встановіть значення `False`, щоб включити порожні документи в ітерацію."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "Пропускати порожні документи"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "Пропускати порожні документи"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path to the YAML file containing one or more documents. Documents are separated by `---` markers.",
+          "message": "Шлях у файловій системі до файлу YAML, що містить один або більше документів. Документи розділяються маркерами `---`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to YAML file",
+          "message": "Шлях до файлу YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.short_desc": {
+          "source": "Read YAML document data from a specific file location",
+          "message": "Читати дані документа YAML із вказаного файлу"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.desc": {
+          "source": "Read YAML inline data provided directly as a string.\n\nThe YAML data may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `data`: the YAML string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "Читання вбудованих даних YAML, наданих безпосередньо у вигляді рядка.\n\nДані YAML можуть містити один або декілька документів, розділених маркерами `---`. Кожен документ ітерується як окремий запис.\n\n**Основні параметри**\n- `data`: рядок YAML для аналізу (обов'язково)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n- `skip_empty_documents`: пропускати порожні документи (за замовчуванням: `True`)\n- `max_documents`: максимальна кількість документів для читання (`0` = необмежено)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read YAML Inline Data",
+          "message": "Читати вбудовані дані YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "YAML data provided directly as a string, useful for embedded data or testing scenarios.",
+          "message": "Дані YAML, надані безпосередньо у вигляді рядка, корисні для вбудованих даних або сценаріїв тестування."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "YAML Data",
+          "message": "Дані YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "YAML data as string",
+          "message": "Дані YAML як рядок"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "Кодування символів для читання даних YAML. За замовчуванням: `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Кодування символів"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "Вхідне кодування"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "Максимальна кількість документів для читання з потоку. Використовуйте `0` (за замовчуванням) для необмеженої кількості. Корисно для вибірки або обмеження використання пам'яті."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "Макс. кількість документів"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "Максимальна кількість документів для читання"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "Якщо вибрано `True` (за замовчуванням), документи, які розбираються як `NOTHING`, пропускаються. Встановіть значення `False`, щоб включити порожні документи в ітерацію."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "Пропускати порожні документи"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "Пропускати порожні документи"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read YAML inline data",
+          "message": "Читати вбудовані дані YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Запис записів документів YAML як багатодокументного потоку у вказаний файл.\n\nЗаписи накопичуються та записуються з роздільниками документів `---`, коли викликається `commit()` або коли провайдер знищується.\n\n**Основні параметри**\n- `path`: розташування вихідного файлу (обов'язково)\n- `flow_style`: використовувати компактний вбудований вивід YAML (за замовчуванням: `False`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
+          "source": "Write YAML Document File",
+          "message": "Записати файл документа YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "Кодування символів для запису даних YAML. За замовчуванням: `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Кодування символів"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "Вихідне кодування"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "Стиль flow: компактний вбудований формат (наприклад, {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "Стиль Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "Компактний вбудований формат"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "Стиль block: формат із відступами (за замовчуванням)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "Стиль Block"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "Формат із відступами (за замовчуванням)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "Якщо `True`, виводить YAML у стилі flow (компактний вбудований). Якщо `False` (за замовчуванням), виводить у стилі block (із відступами)."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "Стиль Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "Використовувати компактний вбудований вивід YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path to write the YAML document stream to. Documents are separated by `---` markers.",
+          "message": "Шлях у файловій системі для запису потоку документів YAML. Документи розділяються маркерами `---`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to YAML output file",
+          "message": "Шлях до вихідного файлу YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.short_desc": {
+          "source": "Write YAML document data to a specific file location",
+          "message": "Записати дані документа YAML у вказаний файл"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Запис записів документів YAML як багатодокументного потоку у вихідний потік або отримання результату як бінарних даних.\n\nЗаписи накопичуються та записуються з роздільниками документів `---`, коли викликається `commit()` або коли провайдер знищується.\n\n**Основні параметри**\n- `stream`: вихідний потік для запису\n- `flow_style`: використовувати компактний вбудований вивід YAML (за замовчуванням: `False`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write YAML Inline Data",
+          "message": "Записати вбудовані дані YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "Кодування символів для запису даних YAML. За замовчуванням: `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Кодування символів"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "Вихідне кодування"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "Стиль flow: компактний вбудований формат (наприклад, {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "Стиль Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "Компактний вбудований формат"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "Стиль block: формат із відступами (за замовчуванням)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "Стиль Block"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "Формат із відступами (за замовчуванням)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "Якщо `True`, виводить YAML у стилі flow (компактний вбудований). Якщо `False` (за замовчуванням), виводить у стилі block (із відступами)."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "Стиль Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "Використовувати компактний вбудований вивід YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
+          "message": "Об'єкт `OutputStream` для запису документів YAML. Використовуйте його для запису в мережеві з'єднання, стиснені файли чи інші місця призначення."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Вихідний потік"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "Output stream to write to",
+          "message": "Вихідний потік для запису"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write YAML data to a stream",
+          "message": "Записати дані YAML у потік"
+        },
+        "app.WWFtbERvY3VtZW50.desc": {
+          "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",
+          "message": "Забезпечує доступ для читання та запису до **потоків документів YAML** — файлів або вбудованих даних, що містять один або декілька документів YAML, розділених маркерами `---`.\n\nВикористовуйте цей додаток, коли потрібно:\n- Розбирати багатодокументні конфігураційні файли YAML або експортовані дані\n- Перетворювати дані YAML між системами в межах конвеєра інтеграції\n- Генерувати вивід YAML для керування конфігурацією або обміну даними\n\nПідтримує налаштовуване кодування символів, фільтрацію порожніх документів, а також стилі виводу YAML block (із відступами) та flow (компактний вбудований).\n\n[Qore](https://qore.org)"
+        },
+        "app.WWFtbERvY3VtZW50.display_name": {
+          "source": "YAML Document Files",
+          "message": "Файли документів YAML"
+        },
+        "app.WWFtbERvY3VtZW50.short_desc": {
+          "source": "Read and write YAML document streams",
+          "message": "Читання та запис потоків документів YAML"
+        }
+      }
+    }
+  }
+}

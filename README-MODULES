@@ -96,9 +96,9 @@ website: https://github.com/qorelanguage/module-sqlite3
 git source: https://github.com/qorelanguage/module-sqlite3.git
 
 * yaml
-YAML module
-website: https://github.com/qorelanguage/module-yaml
-git source: https://github.com/qorelanguage/module-yaml.git
+YAML module and its companion user modules are included in Qore 3.0 and later.
+Sources: modules/yaml and qlib in this repository.
+Older Qore releases use https://github.com/qorelanguage/module-yaml.
 
 * json
 JSON module
@@ -114,4 +114,3 @@ git source: https://github.com/qorelanguage/module-uuid.git
 Java bindings, import class and JAR files to use Java APIs directly in Qore
 website: https://github.com/qorelanguage/module-gnu-java
 git source: https://github.com/qorelanguage/module-gnu-java.git
-

@@ -1,0 +1,253 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConnectDataProvider.qm Connect RPC data provider module
+
+/*  ConnectDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires qore >= 2.3
+%requires(reexport) DataProvider
+%requires(reexport) ConnectionProvider
+%requires Connect
+%requires Mime >= 1.7
+
+module ConnectDataProvider {
+    version = "1.0";
+    desc = "Data provider module for Connect RPC protocol, providing DataProvider and "
+        "ConnectionProvider integration for Connect services including datagram support";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("ConnectDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return (
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": ConnectDataProvider::AppName},
+                );
+            });
+        # Register the data provider factory
+        DataProvider::registerFactory(new ConnectDataProviderFactory());
+
+        # Register connection schemes
+        ConnectionSchemeCache::registerScheme("connect",
+            ConnectConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("connects",
+            ConnectConnection::ConnectionScheme);
+
+        # Register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ConnectDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "Connect RPC",
+            "short_desc": "Remote procedure calls over HTTP/2 and HTTP/3",
+            "desc": "Provides integration with **Connect RPC** services (DataStream 2.0) "
+                "for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\n"
+                "Use this app when you need to:\n"
+                "- Call remote services using the Connect RPC protocol with automatic "
+                "service discovery\n"
+                "- Stream data in real time between systems using server-streaming, "
+                "client-streaming, or bidirectional patterns\n"
+                "- Exchange unreliable high-throughput messages via QUIC datagrams\n\n"
+                "**Supported RPC patterns**:\n"
+                "- **Unary**: single request/response (like a REST call)\n"
+                "- **Server-streaming**: one request, multiple responses\n"
+                "- **Client-streaming**: multiple requests, one response\n"
+                "- **Bidirectional**: full-duplex message exchange\n"
+                "- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\n"
+                "Supports YAML, JSON, and CBOR serialization codecs, per-message "
+                "compression (`gzip`/`deflate`), and automatic service/method discovery "
+                "via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+            "logo": ConnectDataProvider::ConnectLogo,
+            "logo_file_name": "connect-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::ApiIntegration,
+                DataProvider::AppGroup::Messaging,
+            ),
+        });
+    };
+}
+
+/** @mainpage ConnectDataProvider Module
+
+    @tableofcontents
+
+    @section connectdataproviderintro ConnectDataProvider Module Introduction
+
+    The %ConnectDataProvider module provides DataProvider and ConnectionProvider
+    integration for the Connect RPC protocol (DataStream 2.0).
+
+    This enables Connect services to be discovered, configured, and invoked
+    through Qore's generic data provider framework.
+
+    @section connectdataproviderusage Usage
+
+    @subsection connectdataprovider_unary Unary RPC via Factory
+
+    @code{.py}
+%modern
+%requires ConnectDataProvider
+
+# Create via factory
+auto provider = DataProvider::getFactoryObject("connect", {"url": "https://example.com:8080"});
+
+# Navigate to a method
+auto method = provider.getChildProvider("Greeter").getChildProvider("SayHello");
+
+# Make a unary RPC call
+auto result = method.doRequest({"name": "World"});
+printf("Response: %y\n", result);
+    @endcode
+
+    @subsection connectdataprovider_discovery Service Discovery
+
+    When connected to a server that supports reflection, services and methods
+    are automatically discovered:
+
+    @code{.py}
+auto provider = DataProvider::getFactoryObject("connect", {"url": "https://example.com:8080"});
+
+# List all available services
+*list<string> services = provider.getChildProviderNames();
+printf("Available services: %y\n", services);
+
+# List methods in a service
+auto svc = provider.getChildProvider("Greeter");
+*list<string> methods = svc.getChildProviderNames();
+printf("Methods: %y\n", methods);
+
+# Inspect discovered request/response types
+auto method = svc.getChildProvider("SayHello");
+*AbstractDataProviderType req_type = method.getRequestType();
+*AbstractDataProviderType resp_type = method.getResponseType();
+    @endcode
+
+    Discovery can be disabled with the \c use_discovery option:
+
+    @code{.py}
+auto provider = DataProvider::getFactoryObject("connect", {
+    "url": "https://example.com:8080",
+    "use_discovery": False,
+});
+# No discovered children, but dynamic access still works
+auto result = provider.getChildProvider("Greeter").getChildProvider("SayHello")
+    .doRequest({"name": "World"});
+    @endcode
+
+    @subsection connectdataprovider_streaming Streaming via DataProvider
+
+    Server-streaming and bidirectional methods return lists from \c doRequest():
+
+    @code{.py}
+# Server-streaming: returns all responses as a list
+auto method = provider.getChildProvider("Numbers").getChildProvider("Generate");
+list<auto> results = method.doRequest({"count": 5});
+map printf("Item: %y\n", $1), results;
+    @endcode
+
+    For event-based streaming, use the \c "events" child provider with the
+    observer pattern:
+
+    @code{.py}
+# Get the events provider for a server-streaming method
+auto events = provider.getChildProvider("Numbers").getChildProvider("Generate")
+    .getChildProvider("events");
+
+# Set the initial request
+events.setObserverRequest({"count": 5});
+
+# Register an observer
+events.registerObserver(new class {
+    update(string event_id, auto data) {
+        if (event_id == "connect-stream-message") {
+            printf("Message: %y\n", data);
+        } else if (event_id == "connect-stream-complete") {
+            printf("Stream complete\n");
+        } else if (event_id == "connect-stream-error") {
+            printf("Error: %s: %s\n", data.err, data.desc);
+        }
+    }
+}());
+
+# Start the stream
+events.observersReady();
+
+# Wait for the stream to finish (or use stopEvents() to cancel early)
+events.waitForInactive(30s);
+    @endcode
+
+    @subsection connectdataproviderconnection Using Connections
+
+    @code{.py}
+# Register a connection
+auto conn = ConnectionSchemeCache::getConnection("connect://localhost:8080");
+auto provider = conn.getDataProvider();
+auto result = provider.getChildProvider("Greeter/SayHello").doRequest({"name": "World"});
+    @endcode
+
+    @section connectdataproviderclasses Classes
+
+    - @ref ConnectDataProvider::ConnectDataProvider "ConnectDataProvider":
+      root data provider for a Connect server
+    - @ref ConnectDataProvider::ConnectServiceDataProvider "ConnectServiceDataProvider":
+      service-level data provider
+    - @ref ConnectDataProvider::ConnectMethodDataProvider "ConnectMethodDataProvider":
+      method-level data provider (supports requests)
+    - @ref ConnectDataProvider::ConnectDataProviderFactory "ConnectDataProviderFactory":
+      factory for creating Connect data providers
+    - @ref ConnectDataProvider::ConnectConnection "ConnectConnection":
+      connection provider for \c connect:// and \c connects:// URL schemes
+    - @ref ConnectDataProvider::ConnectStreamEventDataProvider "ConnectStreamEventDataProvider":
+      observable event data provider for streaming RPC methods
+    - @ref ConnectDataProvider::ConnectDatagramEventDataProvider "ConnectDatagramEventDataProvider":
+      observable event data provider for datagram RPC methods
+
+    @section connectdataproviderrelnotes Release Notes
+
+    @subsection connectdataprovider_v1_0 ConnectDataProvider Module Version 1.0
+
+    - initial release
+    - automatic service discovery via Connect reflection protocol
+      (@ref Connect::ConnectReflectionClient "ConnectReflectionClient")
+    - DataProvider integration for all Connect RPC patterns (unary,
+      server-streaming, client-streaming, bidirectional, datagram fire-and-forget,
+      datagram bidirectional)
+    - request/response type information from reflection for type-aware navigation
+    - observable event providers for server-streaming, bidirectional, and
+      datagram-bidi methods
+    - \c use_discovery option to control automatic reflection (default: enabled)
+    - ConnectionProvider with \c connect:// (plaintext) and \c connects:// (TLS) schemes
+    - factory registration as \c "connect"
+*/
+
+#! Main ConnectDataProvider namespace
+public namespace ConnectDataProvider {
+    #! Application name for DataProviderActionCatalog registration
+    public const AppName = "ConnectRpc";
+
+    #! Connect RPC logo
+    public const ConnectLogo = Priv::ConnectLogoText;
+}
+
+namespace Priv {
+    const ConnectLogoText = File::readTextFile(get_script_dir() + "/connect-logo.svg");
+}

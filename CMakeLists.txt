@@ -3282,6 +3282,9 @@ add_subdirectory(modules/dbi_test)
 add_subdirectory(modules/i18n)
 # json module
 add_subdirectory(modules/json)
+
+# YAML is required by bundled schema providers, streaming modules and debugger tools.
+add_subdirectory(modules/yaml)
 # krb5 module
 add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)
@@ -3382,6 +3385,7 @@ set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/astparser
     ${CMAKE_BINARY_DIR}/modules/avro
     ${CMAKE_BINARY_DIR}/modules/json
+    ${CMAKE_BINARY_DIR}/modules/yaml
     ${CMAKE_BINARY_DIR}/modules/reflection
     ${CMAKE_BINARY_DIR}/modules/i18n
     ${CMAKE_BINARY_DIR}/modules/logger_bin
@@ -3434,7 +3438,7 @@ if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
 endif()
 set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser avro json reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+foreach(_qore_build_module astparser avro json yaml reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
     if(TARGET ${_qore_build_module})
         list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
     endif()
@@ -3463,7 +3467,7 @@ find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 # `configure_file ... COPYONLY` only touches the destination when the
 # content changes -- so qmods don't rebuild on every cmake run, only
 # when the probe set actually changes.
-set(_qore_aot_probe_modules yaml xml uuid msgpack process imagemagick sysconf oracle)
+set(_qore_aot_probe_modules xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
 if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     foreach(_pm ${_qore_aot_probe_modules})
@@ -3942,6 +3946,20 @@ qore_user_module("qlib/NdjsonDataProvider")
 qore_user_module("qlib/OneRecordClient")
 qore_user_module("qlib/OneRecordServerHandler")
 
+# Modules migrated from module-yaml; dependencies are derived from %requires.
+qore_user_module("qlib/Connect")
+qore_user_module("qlib/ConnectDataProvider")
+qore_user_module("qlib/DataStreamClient.qm")
+qore_user_module("qlib/DataStreamClientIo.qm")
+qore_user_module("qlib/DataStreamRequestHandler.qm")
+qore_user_module("qlib/DataStreamUtil.qm")
+qore_user_module("qlib/YamlDocumentDataProvider")
+qore_user_module("qlib/YamlRpcClient.qm")
+qore_user_module("qlib/YamlRpcClientIo")
+qore_user_module("qlib/YamlRpcHandler.qm")
+qore_user_module("qlib/YamlSchema.qm")
+qore_user_module("qlib/YamlTagHandler.qm")
+
 qore_finalize_user_module_dependencies()
 
 # Reconcile the installed i18n catalog root against the fragments this source
@@ -4044,7 +4062,7 @@ endif()
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/qore-lib.tag=../../library/html\"")
     # binary modules that are only built when their dependencies are present; a tag file that is
     # never generated would make every cross-reference to the module resolve to nothing
-    foreach(mod avro dataframe i18n json ocr protobuf tokenizer)
+    foreach(mod avro dataframe i18n json ocr protobuf tokenizer yaml)
         if (TARGET docs-${mod})
             set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/${mod}/${mod}.tag=../../modules/${mod}/html\"")
         endif()
@@ -4085,7 +4103,7 @@ endif()
     endforeach()
     # Binary module doc dependencies
     add_dependencies(docs-lang-final docs-lib docs-astparser docs-reflection docs-logger_bin docs-linenoise docs-krb5 docs-ml docs-sshutil)
-    foreach(mod avro dataframe i18n json ocr protobuf tokenizer)
+    foreach(mod avro dataframe i18n json ocr protobuf tokenizer yaml)
         if (TARGET docs-${mod})
             add_dependencies(docs-lang-final docs-${mod})
         endif()

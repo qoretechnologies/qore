@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Q29ubmVjdFJwYw.desc": {
+          "source": "Provides integration with **Connect RPC** services (DataStream 2.0) for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\nUse this app when you need to:\n- Call remote services using the Connect RPC protocol with automatic service discovery\n- Stream data in real time between systems using server-streaming, client-streaming, or bidirectional patterns\n- Exchange unreliable high-throughput messages via QUIC datagrams\n\n**Supported RPC patterns**:\n- **Unary**: single request/response (like a REST call)\n- **Server-streaming**: one request, multiple responses\n- **Client-streaming**: multiple requests, one response\n- **Bidirectional**: full-duplex message exchange\n- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\nSupports YAML, JSON, and CBOR serialization codecs, per-message compression (`gzip`/`deflate`), and automatic service/method discovery via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+          "message": "提供與 **Connect RPC** 服務 (DataStream 2.0) 的整合，以便透過 HTTP/2 和 HTTP/3 進行高效能遠端程序呼叫。\n\n在需要執行以下作業時使用此應用程式：\n- 使用具備自動服務探索功能的 Connect RPC 通訊協定呼叫遠端服務\n- 使用伺服器串流、用戶端串流或雙向模式在系統之間即時串流資料\n- 透過 QUIC 資料報交換不可靠的高輸送量訊息\n\n**支援的 RPC 模式**：\n- **Unary**：單一請求/回應（類似 REST 呼叫）\n- **伺服器串流**：一個請求，多個回應\n- **用戶端串流**：多個請求，一個回應\n- **雙向**：全雙工訊息交換\n- **Datagram**：不可靠的發後不理或透過 QUIC 進行雙向傳輸\n\n支援 YAML、JSON 和 CBOR 序列化轉碼器、個別訊息壓縮 (`gzip`/`deflate`)，以及透過 Connect 反射通訊協定自動進行服務/方法探索。\n\n[Qore](https://qore.org)"
+        },
+        "app.Q29ubmVjdFJwYw.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "app.Q29ubmVjdFJwYw.short_desc": {
+          "source": "Remote procedure calls over HTTP/2 and HTTP/3",
+          "message": "透過 HTTP/2 和 HTTP/3 進行遠端程序呼叫"
+        }
+      }
+    }
+  }
+}

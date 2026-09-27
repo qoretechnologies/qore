@@ -1,0 +1,448 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file YamlRpcHandler.qm @brief YAML-RPC handler class definition for the HttpServer module
+
+/*  YamlRpcHandler.qm Copyright (C) 2012 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.3
+
+# requires the binary yaml module
+%requires yaml >= 0.7
+
+# need mime definitions
+%requires Mime >= 1.0
+
+# need Util module
+%requires Util
+
+# need HttpServerUtil module at a minimum in this module
+%requires HttpServerUtil
+
+%modern
+
+module YamlRpcHandler {
+    version = "1.5";
+    desc = "YamlRpcHandler module for use with the HttpServer module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage YamlRpcHandler Module
+
+    @tableofcontents
+
+    @section yamlrpchandlerintro Introduction
+
+    This module implements server-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
+
+    This module provides the @ref YamlRpcHandler::YamlRpcHandler "YamlRpcHandler" class which can be used to provide an RPC handler for the HttpServer class provided by the HttpServer module.
+
+    See the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient module</a> for a description of the YAML-RPC protocol implemented here.
+
+    @section example Example Usage
+    @code{.py}
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires HttpServer
+%requires YamlRpcHandler
+%requires Mime
+
+const ApiMethods = (
+    {
+        "name": "^sys\\.shutdown\$",
+        "text": "sys.shutdown",
+        "function": sub () { background http.stop(); return "OK"; },
+        "help": "shuts down this server",
+        "logopt": 0,
+    },
+);
+
+# a logging closure
+code log = sub (string str) {printf("%y: %s\n", now_us(), str);};
+
+# our bind address
+const Bind = 8888;
+
+YamlRpcHandler yamlRpcHandler(new AbstractAuthenticator(), api);
+our HttpServer http(log, log);
+http.addListener(Bind);
+http.setHandler("yamlrpc", "", MimeTypeYamlRpc, yamlRpcHandler);
+http.setDefaultHandler("yamlrpc", yamlRpcHandler);
+log("now listening on %s\n", Bind);
+http.waitStop();
+    @endcode
+
+    @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
+
+    @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
+    - added debug logging support
+    - updated copyright year to 2025
+
+    @subsection yamlrpchandler_v1_2 YamlRpcHandler v1.2
+    - fixed a bug where serialization errors would result in confusing responses
+      (<a href="https://github.com/qorelanguage/qore/issues/4194">issue 4194</a>)
+    - minor error logging updates
+    - updated minimum qore version to 0.8.12 for get_ex_pos()
+    - updated for new YAML function names (removed references to deprecated camel-case functions)
+
+    @subsection yamlrpchandler_v1_1 YamlRpcHandler v1.1
+    - added optional log closure to constructor
+
+    @subsection yamlrpchandler_v1_0 YamlRpcHandler v1.0
+    - updated to a user module
+*/
+
+#! the %YamlRpcHandler namespace holds all public definitions in the %YamlRpcHandler module
+public namespace YamlRpcHandler {
+    #! YamlRpcHandler class definition; to be registered as a handler in the HttpServer class
+    /**
+     */
+    public class YamlRpcHandler inherits public AbstractHttpRequestHandler {
+        #! implementation of the handler
+        const Version = "1.0";
+
+        #! internal methods of the handler (introspection)
+        const InternalMethods = (
+            {
+                "function": "help",
+                "help"    : "shows a list of YAML-RPC methods registered with this handler",
+                "text"    : "help",
+                "logopt"  : 2,
+            },
+            {
+                "function": "listMethods",
+                "help"    : "lists YAML-RPC method names registered with this handler",
+                "text"    : "system.listMethods",
+                "logopt"  : 2,
+            },
+            {
+                "function": "system_describe",
+                "help"    : "returns a service description object, like the one specified by the JSON-RPC 1.1 spec (even though we use YAML instead of JSON)",
+                "text"    : "system.describe",
+                "logopt"  : 2,
+            },
+        );
+
+        #! @cond nodoc
+        private {
+            list methods = ();
+            hash mi;
+            int loglevel;
+
+            # if True then verbose exception info will be logged
+            bool debug;
+
+            # prefix to add to derived methods with GET requests if no "." characters are in the path
+            *string get_prefix;
+
+            # a closure/call reference to get the log message and/or process arguments in incoming requests
+            *code getLogMessage;
+
+            # a closure/call reference for logging (when set this is used instead of the HTTP server's logfunc for logging)
+            *code clog;
+        }
+        #! @endcond
+
+        #! creates the handler with the given method list
+        /** @param auth an authentication object (use new AbstractAuthenticator() for no authentication)
+            @param methods a list of hashes with the following keys:
+            - \c name: a regular expression to use for matching the method name
+            - \c function: a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the caller
+            - \c help: help text for the method
+            - \c text: the human-readable name of the method
+            - \c logopt: (optional - by convention) log options which can be used by a custom logger (see the getLogMessage parameter)
+            @param get_log_msg an optional closure or call reference to be called when an incoming request is received; if this is set then it will be called with the following arguments: a context hash (see HttpServer::AbstractHttpRequestHandler::handleRequest() for a description of the context hash), the method definition as passed in the methods argument to this constructor, and a reference to the arguments in this call
+            @param dbg this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
+            @param get_prefix prefix to add to derived methods with GET requests if no "." characters are in the path
+            @param log an optional closure or call reference to be called when logging
+
+            @throw YAML-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash, \c "function" key not assigned to a callable value
+         */
+        constructor(HttpServer::AbstractAuthenticator auth, list<auto> methods, *code get_log_msg, bool dbg = False,
+                *string get_prefix, *code log) : HttpServer::AbstractHttpRequestHandler(auth) {
+            getLogMessage = get_log_msg;
+            debug = dbg;
+            self.get_prefix = get_prefix;
+            clog = log;
+
+            # add internal methods
+            map addMethodInternal($1 + {"internal": True}), YamlRpcHandler::InternalMethods;
+
+            foreach auto m in (methods) {
+                if (m.typeCode() != NT_HASH) {
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting hash elements of 'methods'; got type %y "
+                        "instead", m.fullType());
+                }
+                if (!exists m.name)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'name' key in method hash: %y", m);
+                if (m.function.typeCode() != NT_CLOSURE && m.function.typeCode() != NT_CALLREF)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'function' key assigned to code in method "
+                        "hash: %y", m);
+                if (!exists m.text)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'text' key in method hash: %y", m);
+                delete m.internal;
+                addMethodInternal(m);
+            }
+        }
+
+        #! adds a method to the handler dynamically
+        /** @param name a regular expression to use for matching the method name
+            @param func a string (giving a function name to call), a call reference, or a closure to call with the
+            deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the
+            caller
+            @param text the human-readable name of the method
+            @param help help text for the method
+            @param logopt log options which can be used by a custom logger (see the getLogMessage parameter)
+            @param cmark any value that will be added in the method hash under the \c "cmark" key
+          */
+        addMethod(string name, code func, string text, string help, auto logopt, auto cmark) {
+            if (!exists func)
+                throw "YAML-RPC-HANDLER-ADD-METHOD-ERROR", "expecting function name and text name as hash key in "
+                    "argument";
+
+            addMethodInternal({
+                "name"    : name,
+                "function": func,
+                "text"    : text,
+                "help"    : help,
+                "logopt"  : logopt,
+                "cmark"   : cmark,
+            });
+        }
+
+        #! turns on or off debugging; when debugging is enabled more verbose error messages are reported
+        setDebug(bool dbg = True) {
+            debug = dbg;
+        }
+
+        #! returns the current status of the debug flag
+        bool getDebug() {
+            return debug;
+        }
+
+        #! serializes a reponse in YAML-RPC format given the arguments
+        static string makeResponse(auto response, int flags = YAML::None) {
+            return make_yaml({"result": response}, flags);
+        }
+
+        #! serializes an error reponse in YAML-RPC format given the arguments
+        static string makeErrorResponse(int code, string mess, auto err, int flags = YAML::None) {
+            hash<auto> h = {
+                "name": "YAMLRPCError",
+                "code": code,
+                "message": mess,
+            } + (err
+                ? {
+                    "error": err,
+                }
+                : NOTHING);
+            try {
+                return make_yaml({"error": h}, flags);
+            } catch (hash<ExceptionInfo> ex) {
+                h.error = sprintf("%s: %s: %s: %y", get_ex_pos(ex), ex.err, ex.desc, h);
+                return make_yaml({"error": h}, flags);
+            }
+        }
+
+        #! @cond nodoc
+        # method called by HttpServer to handle a request
+        # don't reimplement this method; fix/enhance it in the module
+        final hash handleRequest(hash cx, hash<auto> hdr, *data body) {
+            @debug(log(cx, "handleRequest: method=%y path=%y body_size=%d", hdr.method, hdr.path,
+                body.size()));
+
+            hash yamlrpc;
+
+            if (hdr.method == "GET") {
+                string path = substr(hdr.path, index(hdr.path, "/") + 1);
+
+                if (path.empty()) {
+                    return {
+                        "code": 501,
+                        "body": "invalid HTTP GET: no path/YAML-RPC method name given",
+                    };
+                }
+
+                yamlrpc += parse_uri_query(path);
+
+                if (exists get_prefix && index(yamlrpc.method, ".") == -1)
+                    yamlrpc.method = get_prefix + yamlrpc.method;
+            } else {
+                if (hdr.method != "POST") {
+                    return {
+                        "code": 501,
+                        "body": sprintf("don't know how to handle method %n", hdr.method),
+                    };
+                }
+
+                try {
+                    yamlrpc = parse_yaml(body.typeCode() == NT_BINARY
+                        ? body.toString("utf-8") : body);
+                } catch (hash<ExceptionInfo> ex) {
+                    string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
+                    return {
+                        "code": 500,
+                        "errlog": estr,
+                        "body": estr,
+                    };
+                }
+            }
+            cx += {
+                "method": yamlrpc.method,
+                "yamlid": yamlrpc.id,
+            };
+            try {
+                auto rh = callMethod(cx, yamlrpc.params);
+                #printf("msg=%s\nyamlrpc=%N\nans=%N\n", body, yamlrpc, rh);flush();
+                return {
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeYamlRpc},
+                } + rh;
+            } catch (hash<ExceptionInfo> ex) {
+                # show complete exception trace if system debug option is enabled
+                string str = !debug
+                    ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
+                    : get_exception_string(ex);
+                return {
+                    "code"   : 200,
+                    "errlog" : str,
+                    "hdr"    : {"Content-Type": MimeTypeYamlRpc},
+                    "body"   : YamlRpcHandler::makeErrorResponse(104, str, ex.arg)
+                };
+            }
+        }
+
+        # don't reimplement this method; fix/enhance it in the module
+        final private addMethodInternal(hash h) {
+            # check for duplicate in method index
+            auto i = mi.(h.text);
+            if (!exists i)
+                i = elements methods;
+
+            if (!exists h.name)
+                h.name = sprintf("^%s\$", h.text);
+            methods[i] = h;
+        }
+
+        private hash<auto> help() {
+            hash h;
+            foreach hash m in (methods) {
+                h.(m.text).description = m.help;
+                if (exists m.params)
+                    h.(m.text).params = m.params;
+            }
+            return h;
+        }
+
+        private hash<auto> system_describe() {
+            string address = "http://localhost/YAML";
+            # use parens instead of burly brackets to get a list off hashes
+            softlist<hash> procs = map (
+                "name": $1.text,
+                "summary": $1.help,
+            ), methods, $1.text != "service.describe";
+
+            return {
+                "sdversion": "1.0",
+                "name": "Qore YAML-RPC Handler",
+                "id": address,
+                "version": YamlRpcHandler::Version,
+                "summary": "provides a YAML-RPC handler to the HTTP server",
+                #"address": address,
+                "procs": procs,
+            };
+        }
+
+        private softlist<string> listMethods() {
+            return map $1.text, methods;
+        }
+
+        private log(hash<auto> cx, string str) {
+            string msg = "YAML-RPC ";
+            if (exists cx.user)
+                msg += sprintf("user %s ", cx.user);
+            msg += sprintf("from %s: ", cx."peer-info".address_desc);
+            msg += vsprintf(str, argv);
+
+            call_function_args(clog ? clog : cx.logfunc, msg);
+        }
+
+        # don't reimplement this method; fix/enhance it in the module
+        final private hash<auto> callMethod(hash cx, auto params) {
+            @assert(cx.method);
+            string method = cx.method;
+            # find method function
+            hash<auto> found;
+            foreach hash<auto> m in (methods) {
+                if (regex(method, m.name)) {
+                    found = m;
+                    break;
+                }
+            }
+
+            if (found) {
+                @debug(log(cx, "callMethod: found method=%y text=%y internal=%y", method, found.text,
+                    found.internal));
+                # add context marker, if any
+                cx.cmark = found.cmark;
+                cx.function = found.function;
+
+                *string msg = getLogMessage ? getLogMessage(cx, found, \params) : NOTHING;
+                if (msg)
+                    log(cx, msg);
+
+                auto rv;
+                try {
+                    rv = found.internal
+                        ? call_object_method_args(self, found.function, params)
+                        : call_function_args(found.function, params);
+                } catch (hash<ExceptionInfo> ex) {
+                    # issue #2573: provide a more user-friendly error when the argument cannot be matched to the
+                    # closure/call ref
+                    if ((ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR")
+                        && (ex.callstack[0].file =~ /YamlRpcHandler.qm$/
+                        && (ex.callstack[0].function == "call_function_args"
+                            || ex.callstack[0].function == "call_object_method_args")))
+                        throw "RPC-ARG-ERROR", sprintf("a call to YAML-RPC method %y is missing one or more required "
+                            "arguments; internal call error: %s: %s", method, ex.err, ex.desc);
+                    rethrow;
+                }
+                return {
+                    "body": YamlRpcHandler::makeResponse(rv),
+                };
+            } else {
+                string err = sprintf("YAML-RPC-SERVER-UNKNOWN-METHOD: unknown method %n", method);
+                return {
+                    "code"   : 200,
+                    "hdr"    : {"Content-Type": MimeTypeYamlRpc},
+                    "body"   : YamlRpcHandler::makeErrorResponse(105, err),
+                };
+            }
+        }
+        #! @endcond
+    }
+}

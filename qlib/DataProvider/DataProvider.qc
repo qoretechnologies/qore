@@ -128,6 +128,7 @@ public class DataProvider {
             "asyncapi": "AsyncApiDataProvider",
             "azure-openai": "AzureOpenAiDataProvider",
             "bedrock": "BedrockDataProvider",
+            "connect": "ConnectDataProvider",
             "bfl": "BflDataProvider",
 
             "huggingface": "HuggingFaceDataProvider",

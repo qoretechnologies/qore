@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q29ubmVjdFJwYw.desc": {
+          "source": "Provides integration with **Connect RPC** services (DataStream 2.0) for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\nUse this app when you need to:\n- Call remote services using the Connect RPC protocol with automatic service discovery\n- Stream data in real time between systems using server-streaming, client-streaming, or bidirectional patterns\n- Exchange unreliable high-throughput messages via QUIC datagrams\n\n**Supported RPC patterns**:\n- **Unary**: single request/response (like a REST call)\n- **Server-streaming**: one request, multiple responses\n- **Client-streaming**: multiple requests, one response\n- **Bidirectional**: full-duplex message exchange\n- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\nSupports YAML, JSON, and CBOR serialization codecs, per-message compression (`gzip`/`deflate`), and automatic service/method discovery via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+          "message": "HTTP/2 および HTTP/3 経由のハイパフォーマンスなリモートプロシージャコールのための **Connect RPC** サービス (DataStream 2.0) との統合を提供します。\n\n次の用途でこのアプリを使用します:\n- 自動サービス検出を備えた Connect RPC プロトコルを使用したリモートサービスの呼び出し\n- サーバーストリーミング、クライアントストリーミング、または双方向パターンを使用したシステム間のリアルタイムデータストリーミング\n- QUIC データグラム経由での信頼性の低い高スループットメッセージの交換\n\n**サポートされている RPC パターン**:\n- **Unary**: 単一のリクエスト/レスポンス (REST 呼び出しなど)\n- **Server-streaming**: 1 つのリクエスト、複数のレスポンス\n- **Client-streaming**: 複数のリクエスト、1 つのレスポンス\n- **Bidirectional**: 全二重メッセージ交換\n- **Datagram**: QUIC 経由の信頼性の低い投げ放ち (fire-and-forget) または双方向\n\nYAML、JSON、CBOR シリアライゼーションコーデック、メッセージごとの圧縮 (`gzip`/`deflate`)、および Connect リフレクションプロトコルによる自動サービス/メソッド検出をサポートします。\n\n[Qore](https://qore.org)"
+        },
+        "app.Q29ubmVjdFJwYw.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "app.Q29ubmVjdFJwYw.short_desc": {
+          "source": "Remote procedure calls over HTTP/2 and HTTP/3",
+          "message": "HTTP/2 および HTTP/3 経由のリモートプロシージャコール"
+        }
+      }
+    }
+  }
+}

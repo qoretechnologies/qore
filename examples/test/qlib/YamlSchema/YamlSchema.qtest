@@ -1,0 +1,651 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires yaml
+%requires QUnit
+%requires YamlSchema
+
+%requires json
+
+%exec-class YamlSchemaTest
+
+class YamlSchemaTest inherits QUnit::Test {
+    constructor() : Test("YamlSchemaTest", "1.0") {
+        addTestCase("schema from hash", \testSchemaFromHash());
+        addTestCase("schema from string", \testSchemaFromString());
+        addTestCase("validate string", \testValidateString());
+        addTestCase("validate number", \testValidateNumber());
+        addTestCase("validate integer", \testValidateInteger());
+        addTestCase("validate boolean", \testValidateBoolean());
+        addTestCase("validate array", \testValidateArray());
+        addTestCase("validate object", \testValidateObject());
+        addTestCase("validate null", \testValidateNull());
+        addTestCase("required fields", \testRequired());
+        addTestCase("min max constraints", \testMinMax());
+        addTestCase("pattern constraint", \testPattern());
+        addTestCase("enum constraint", \testEnum());
+        addTestCase("oneOf constraint", \testOneOf());
+        addTestCase("anyOf constraint", \testAnyOf());
+        addTestCase("allOf constraint", \testAllOf());
+        addTestCase("not constraint", \testNot());
+        addTestCase("additional properties without properties", \testAdditionalPropertiesWithoutProperties());
+        addTestCase("validation errors", \testValidationErrors());
+        addTestCase("multiple errors", \testMultipleErrors());
+        addTestCase("empty schema", \testEmptySchema());
+        addTestCase("invalid schema", \testInvalidSchema());
+        addTestCase("throw on error", \testThrowOnError());
+        addTestCase("validate yaml string", \testValidateYamlString());
+        addTestCase("invalid pattern", \testInvalidPattern());
+        addTestCase("ref resolution", \testRefResolution());
+        addTestCase("nested ref", \testNestedRef());
+        addTestCase("circular ref detection", \testCircularRefDetection());
+        addTestCase("external ref error", \testExternalRefError());
+        addTestCase("ref comprehensive", \testRefComprehensive());
+        addTestCase("ref negative", \testRefNegative());
+        set_return_value(main());
+    }
+
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module >= 1.11");
+%endif
+    }
+
+    private hash<auto> basicObjectSchema() {
+        return {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer", "minimum": 0},
+            },
+            "required": ("name",),
+        };
+    }
+
+    testSchemaFromHash() {
+        checkJson();
+        YamlSchemaValidator validator(basicObjectSchema());
+        assertTrue(validator.validate({"name": "Alice"}));
+    }
+
+    testSchemaFromString() {
+        checkJson();
+        # YAML string (JSON is valid YAML)
+        string yaml = '{"type": "string"}';
+        YamlSchemaValidator validator(yaml);
+        assertTrue(validator.validate("hello"));
+        assertFalse(validator.validate(123));
+
+        # Pure YAML syntax
+        yaml = "type: string";
+        validator = new YamlSchemaValidator(yaml);
+        assertTrue(validator.validate("hello"));
+        assertFalse(validator.validate(123));
+    }
+
+    testValidateString() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "string"});
+        assertTrue(validator.validate("hello"));
+        assertTrue(validator.validate(""));
+        assertFalse(validator.validate(123));
+        assertFalse(validator.validate(True));
+    }
+
+    testValidateNumber() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "number"});
+        assertTrue(validator.validate(3.14));
+        assertTrue(validator.validate(42));
+        assertTrue(validator.validate(-0.5));
+        assertFalse(validator.validate("3.14"));
+    }
+
+    testValidateInteger() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "integer"});
+        assertTrue(validator.validate(42));
+        assertTrue(validator.validate(-10));
+        assertFalse(validator.validate(3.14));
+        assertFalse(validator.validate("42"));
+    }
+
+    testValidateBoolean() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "boolean"});
+        assertTrue(validator.validate(True));
+        assertTrue(validator.validate(False));
+        assertFalse(validator.validate(1));
+        assertFalse(validator.validate("true"));
+    }
+
+    testValidateArray() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "type": "array",
+            "items": {"type": "integer"},
+            "minItems": 1,
+            "maxItems": 5,
+        });
+        assertTrue(validator.validate((1, 2, 3)));
+        assertFalse(validator.validate(()));  # Too few
+        assertFalse(validator.validate((1, 2, 3, 4, 5, 6)));  # Too many
+        assertFalse(validator.validate((1, "two", 3)));  # Wrong type
+    }
+
+    testValidateObject() {
+        checkJson();
+        YamlSchemaValidator validator(basicObjectSchema());
+        assertTrue(validator.validate({"name": "Alice", "age": 30}));
+        assertFalse(validator.validate({"age": 30}));  # Missing required
+    }
+
+    testValidateNull() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "null"});
+        assertTrue(validator.validate(NOTHING));
+        assertFalse(validator.validate(""));
+        assertFalse(validator.validate(0));
+    }
+
+    testRequired() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "type": "object",
+            "required": ("a", "b"),
+        });
+        assertTrue(validator.validate({"a": 1, "b": 2, "c": 3}));
+        assertFalse(validator.validate({"a": 1}));
+        assertFalse(validator.validate({}));
+    }
+
+    testMinMax() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+        });
+        assertTrue(validator.validate(50));
+        assertTrue(validator.validate(0));
+        assertTrue(validator.validate(100));
+        assertFalse(validator.validate(-1));
+        assertFalse(validator.validate(101));
+    }
+
+    testPattern() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "type": "string",
+            "pattern": "^[a-z]+$",
+        });
+        assertTrue(validator.validate("hello"));
+        assertFalse(validator.validate("Hello"));
+        assertFalse(validator.validate("hello123"));
+    }
+
+    testEnum() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "enum": ("red", "green", "blue"),
+        });
+        assertTrue(validator.validate("red"));
+        assertTrue(validator.validate("green"));
+        assertFalse(validator.validate("yellow"));
+        assertFalse(validator.validate(1));
+    }
+
+    testOneOf() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "oneOf": (
+                {"type": "string"},
+                {"type": "integer"},
+            ),
+        });
+        assertTrue(validator.validate("hello"));
+        assertTrue(validator.validate(42));
+        assertFalse(validator.validate(3.14));
+    }
+
+    testAnyOf() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "anyOf": (
+                {"type": "string", "minLength": 5},
+                {"type": "integer", "minimum": 10},
+            ),
+        });
+        assertTrue(validator.validate("hello"));
+        assertTrue(validator.validate(15));
+        assertFalse(validator.validate("hi"));
+        assertFalse(validator.validate(5));
+    }
+
+    testAllOf() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "allOf": (
+                {"type": "integer"},
+                {"minimum": 0},
+                {"maximum": 100},
+            ),
+        });
+        assertTrue(validator.validate(50));
+        assertFalse(validator.validate(-10));
+        assertFalse(validator.validate(150));
+    }
+
+    testNot() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "not": {"type": "string"},
+        });
+        assertTrue(validator.validate(42));
+        assertTrue(validator.validate(True));
+        assertFalse(validator.validate("hello"));
+    }
+
+    testAdditionalPropertiesWithoutProperties() {
+        checkJson();
+        # Test that additionalProperties: false without properties allows no properties
+        YamlSchemaValidator validator({
+            "type": "object",
+            "additionalProperties": False,
+            # No "properties" key - means ALL properties are additional
+        });
+
+        # Empty object should be valid
+        assertTrue(validator.validate({}));
+
+        # Any property should be rejected since there are no defined properties
+        assertFalse(validator.validate({"any_key": "value"}));
+        assertFalse(validator.validate({"foo": 1, "bar": 2}));
+
+        # Verify error message is about additionalProperties
+        hash<YamlSchemaValidationResult> result = validator.validateWithErrors({"foo": "bar"});
+        assertFalse(result.valid);
+        assertTrue(result.errors.size() > 0);
+        assertEq("additionalProperties", result.errors[0].keyword);
+    }
+
+    testValidationErrors() {
+        checkJson();
+        YamlSchemaValidator validator(basicObjectSchema());
+        hash<YamlSchemaValidationResult> result = validator.validateWithErrors({"age": -5});
+
+        assertFalse(result.valid);
+        assertTrue(result.errors.size() > 0);
+
+        # Should have error for missing required
+        bool found_required = False;
+        foreach hash<YamlSchemaValidationError> err in (result.errors) {
+            if (err.keyword == "required") {
+                found_required = True;
+                break;
+            }
+        }
+        assertTrue(found_required, "should find required error");
+    }
+
+    testMultipleErrors() {
+        checkJson();
+        YamlSchemaValidator validator({
+            "type": "object",
+            "properties": {
+                "a": {"type": "string"},
+                "b": {"type": "integer"},
+                "c": {"type": "boolean"},
+            },
+        });
+
+        hash<YamlSchemaValidationResult> result = validator.validateWithErrors({
+            "a": 123,  # Should be string
+            "b": "not int",  # Should be integer
+            "c": "not bool",  # Should be boolean
+        });
+
+        assertFalse(result.valid);
+        assertTrue(result.errors.size() >= 3, "should have at least 3 errors");
+    }
+
+    testEmptySchema() {
+        checkJson();
+        YamlSchemaValidator validator({});
+        # Empty schema accepts anything
+        assertTrue(validator.validate("string"));
+        assertTrue(validator.validate(123));
+        assertTrue(validator.validate({"key": "value"}));
+    }
+
+    testInvalidSchema() {
+        checkJson();
+        # jsoncons rejects external $ref at compilation time
+        assertThrows("YAML-SCHEMA-ERROR", sub () {
+            new YamlSchemaValidator({"$ref": "https://example.com/schema.json"});
+        });
+    }
+
+    testThrowOnError() {
+        checkJson();
+        YamlSchemaValidator validator({"type": "string"});
+
+        # Should not throw
+        assertTrue(validator.validate("hello", True));
+
+        # Should throw
+        assertThrows("YAML-SCHEMA-VALIDATION-ERROR", sub () {
+            validator.validate(123, True);
+        });
+    }
+
+    testValidateYamlString() {
+        checkJson();
+        YamlSchemaValidator validator(basicObjectSchema());
+
+        assertTrue(validator.validateYaml("name: Alice\nage: 30"));
+        assertFalse(validator.validateYaml("age: 30"));
+    }
+
+    testInvalidPattern() {
+        checkJson();
+        # Invalid regex pattern in schema is rejected at construction time by jsoncons
+        assertThrows("YAML-SCHEMA-ERROR", sub () {
+            new YamlSchemaValidator({
+                "type": "string",
+                "pattern": "[invalid(regex",  # Invalid regex - unclosed bracket
+            });
+        });
+    }
+
+    testRefResolution() {
+        checkJson();
+        # Test basic $ref resolution using $defs
+        YamlSchemaValidator validator({
+            "$defs": {
+                "positiveInt": {"type": "integer", "minimum": 1},
+            },
+            "type": "object",
+            "properties": {
+                "count": {"$ref": "#/$defs/positiveInt"},
+            },
+        });
+
+        assertTrue(validator.validate({"count": 5}));
+        assertTrue(validator.validate({"count": 1}));
+        assertFalse(validator.validate({"count": 0}));
+        assertFalse(validator.validate({"count": -1}));
+    }
+
+    testNestedRef() {
+        checkJson();
+        # Test $ref to reusable type definitions
+        YamlSchemaValidator validator({
+            "$defs": {
+                "address": {
+                    "type": "object",
+                    "properties": {
+                        "street": {"type": "string"},
+                        "city": {"type": "string"},
+                    },
+                    "required": ("street", "city"),
+                },
+            },
+            "type": "object",
+            "properties": {
+                "home": {"$ref": "#/$defs/address"},
+                "work": {"$ref": "#/$defs/address"},
+            },
+        });
+
+        assertTrue(validator.validate({
+            "home": {"street": "123 Main", "city": "NYC"},
+            "work": {"street": "456 Office", "city": "LA"},
+        }));
+
+        # Missing required field in referenced type
+        assertFalse(validator.validate({
+            "home": {"street": "123 Main"},  # Missing city
+        }));
+    }
+
+    testCircularRefDetection() {
+        checkJson();
+        # Circular $ref (A -> B -> A) is detected at construction time
+        assertThrows("YAML-SCHEMA-ERROR", "circular", sub() {
+            new YamlSchemaValidator({
+                "$defs": {
+                    "a": {"$ref": "#/$defs/b"},
+                    "b": {"$ref": "#/$defs/a"},
+                },
+                "$ref": "#/$defs/a",
+            });
+        });
+    }
+
+    testExternalRefError() {
+        checkJson();
+        # Test that external $ref (non-local) throws error
+        assertThrows("YAML-SCHEMA-ERROR", sub() {
+            new YamlSchemaValidator({
+                "$ref": "https://example.com/schema.json",
+            });
+        });
+    }
+
+    testRefComprehensive() {
+        checkJson();
+        # Test $ref with sibling keywords (allowed in draft 2019-09+)
+        YamlSchemaValidator validator({
+            "$defs": {
+                "baseString": {"type": "string"},
+            },
+            "type": "object",
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/baseString",
+                    "minLength": 3,  # Sibling keyword
+                },
+            },
+        });
+        assertTrue(validator.validate({"name": "Alice"}));
+        assertFalse(validator.validate({"name": "Al"}));  # Too short
+
+        # Test $ref in allOf
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "hasName": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ("name",),
+                },
+                "hasAge": {
+                    "type": "object",
+                    "properties": {"age": {"type": "integer"}},
+                    "required": ("age",),
+                },
+            },
+            "allOf": (
+                {"$ref": "#/$defs/hasName"},
+                {"$ref": "#/$defs/hasAge"},
+            ),
+        });
+        assertTrue(validator.validate({"name": "Alice", "age": 30}));
+        assertFalse(validator.validate({"name": "Alice"}));  # Missing age
+        assertFalse(validator.validate({"age": 30}));  # Missing name
+
+        # Test $ref in anyOf
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "stringType": {"type": "string"},
+                "intType": {"type": "integer"},
+            },
+            "anyOf": (
+                {"$ref": "#/$defs/stringType"},
+                {"$ref": "#/$defs/intType"},
+            ),
+        });
+        assertTrue(validator.validate("hello"));
+        assertTrue(validator.validate(42));
+        assertFalse(validator.validate(3.14));  # Neither string nor int
+
+        # Test $ref in oneOf
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "evenInt": {"type": "integer", "multipleOf": 2},
+                "smallInt": {"type": "integer", "maximum": 10},
+            },
+            "oneOf": (
+                {"$ref": "#/$defs/evenInt"},
+                {"$ref": "#/$defs/smallInt"},
+            ),
+        });
+        assertTrue(validator.validate(12));  # Even but > 10: matches only evenInt
+        assertTrue(validator.validate(5));   # Odd but <= 10: matches only smallInt
+        assertFalse(validator.validate(4));  # Even AND <= 10: matches both (invalid for oneOf)
+
+        # Test deeply chained $ref
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "level1": {"$ref": "#/$defs/level2"},
+                "level2": {"$ref": "#/$defs/level3"},
+                "level3": {"type": "string", "minLength": 1},
+            },
+            "$ref": "#/$defs/level1",
+        });
+        assertTrue(validator.validate("hello"));
+        assertFalse(validator.validate(""));
+        assertFalse(validator.validate(123));
+
+        # Test $ref with JSON pointer escape sequences (~0 for ~ and ~1 for /)
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "type/with/slashes": {"type": "string"},
+                "type~with~tildes": {"type": "integer"},
+            },
+            "type": "object",
+            "properties": {
+                "slashes": {"$ref": "#/$defs/type~1with~1slashes"},
+                "tildes": {"$ref": "#/$defs/type~0with~0tildes"},
+            },
+        });
+        assertTrue(validator.validate({"slashes": "hello", "tildes": 42}));
+        assertFalse(validator.validate({"slashes": 123}));
+        assertFalse(validator.validate({"tildes": "not int"}));
+
+        # Test $ref in properties within $defs
+        validator = new YamlSchemaValidator({
+            "$defs": {
+                "name": {"type": "string"},
+                "person": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"$ref": "#/$defs/name"},
+                    },
+                },
+            },
+            "$ref": "#/$defs/person",
+        });
+        assertTrue(validator.validate({"name": "Alice"}));
+        assertFalse(validator.validate({"name": 123}));
+
+        # Test $ref to root schema (recursive schema for tree structures)
+        validator = new YamlSchemaValidator({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "child": {"$ref": "#"},
+            },
+            "additionalProperties": False,
+        });
+        assertTrue(validator.validate({}));
+        assertTrue(validator.validate({"name": "root"}));
+        assertTrue(validator.validate({"name": "root", "child": {"name": "child1"}}));
+        assertTrue(validator.validate({
+            "name": "root",
+            "child": {
+                "name": "child1",
+                "child": {"name": "grandchild"},
+            },
+        }));
+        assertFalse(validator.validate({"other": "value"}));  # additionalProperties: false
+        assertFalse(validator.validate({"name": "root", "child": {"invalid": 123}}));
+
+        # Test recursive array schema (tree with multiple children)
+        validator = new YamlSchemaValidator({
+            "type": "object",
+            "properties": {
+                "value": {"type": "integer"},
+                "children": {
+                    "type": "array",
+                    "items": {"$ref": "#"},
+                },
+            },
+        });
+        assertTrue(validator.validate({"value": 1}));
+        assertTrue(validator.validate({"value": 1, "children": ()}));
+        assertTrue(validator.validate({
+            "value": 1,
+            "children": (
+                {"value": 2},
+                {"value": 3, "children": ({"value": 4},)},
+            ),
+        }));
+        assertFalse(validator.validate({"value": "not an int"}));
+        assertFalse(validator.validate({
+            "value": 1,
+            "children": ({"value": "bad"},),
+        }));
+    }
+
+    testRefNegative() {
+        checkJson();
+        # Test $ref to non-existent path - detected at construction by jsoncons
+        assertThrows("YAML-SCHEMA-ERROR", sub() {
+            new YamlSchemaValidator({
+                "$ref": "#/$defs/nonexistent",
+            });
+        });
+
+        # Test self-referencing $ref (direct circular) - detected at construction
+        assertThrows("YAML-SCHEMA-ERROR", "circular", sub() {
+            new YamlSchemaValidator({
+                "$defs": {
+                    "self": {"$ref": "#/$defs/self"},
+                },
+                "$ref": "#/$defs/self",
+            });
+        });
+
+        # Test indirect circular $ref (A -> B -> C -> A) - detected at construction
+        assertThrows("YAML-SCHEMA-ERROR", "circular", sub() {
+            new YamlSchemaValidator({
+                "$defs": {
+                    "a": {"$ref": "#/$defs/b"},
+                    "b": {"$ref": "#/$defs/c"},
+                    "c": {"$ref": "#/$defs/a"},
+                },
+                "$ref": "#/$defs/a",
+            });
+        });
+
+        # Test file:// $ref (external, should fail at construction)
+        assertThrows("YAML-SCHEMA-ERROR", sub() {
+            new YamlSchemaValidator({
+                "$ref": "file:///path/to/schema.json",
+            });
+        });
+
+        # Test relative $ref (external, should fail at construction)
+        assertThrows("YAML-SCHEMA-ERROR", sub() {
+            new YamlSchemaValidator({
+                "$ref": "./other-schema.json",
+            });
+        });
+    }
+}

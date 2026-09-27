@@ -1,0 +1,295 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_YamlStreamWriter.qpp
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "QC_YamlStreamWriter.h"
+
+//! Options for YAML stream writing
+/** Used with YamlStreamWriter constructor to configure output formatting.
+
+    @par Example:
+    @code{.py}
+# Use block style with explicit document markers
+auto opts = <YamlStreamWriterOptions>{
+    "flags": YAML::BlockStyle | YAML::ExplicitStartDoc,
+    "indent": 4,
+    "width": 80,
+};
+YamlStreamWriter writer(sos, opts);
+    @endcode
+
+    @see YamlStreamWriter
+    @see @ref yaml_option_constants
+
+    @since yaml 1.1
+*/
+hashdecl YamlStreamWriterOptions {
+    //! Output flags combining YAML formatting constants
+    /** Use bitwise OR to combine multiple flags:
+        - @ref YAML::BlockStyle - use block style for sequences and mappings
+        - @ref YAML::Canonical - use canonical YAML format
+        - @ref YAML::ExplicitStartDoc - always emit "---" document start marker
+        - @ref YAML::ExplicitEndDoc - always emit "..." document end marker
+        - @ref YAML::EscapeUnicode - escape non-ASCII characters
+
+        @par Example:
+        @code{.py}
+int flags = YAML::BlockStyle | YAML::ExplicitStartDoc;
+        @endcode
+    */
+    int flags = 0;
+
+    //! Line width for wrapping long lines (-1 = unlimited, 0 = default)
+    /** Controls when the emitter will wrap long lines. Set to -1 to disable
+        line wrapping entirely, or a positive value for the maximum line width.
+
+        @par Example:
+        @code{.py}
+int width = 80;  # Wrap lines at 80 characters
+        @endcode
+    */
+    int width = -1;
+
+    //! Number of spaces for each indentation level
+    /** Controls the indentation of nested structures. Common values are 2 or 4.
+
+        @par Example:
+        @code{.py}
+int indent = 4;  # Use 4-space indentation
+        @endcode
+    */
+    int indent = 2;
+
+    // Note: encoding option removed - libyaml emitter always outputs UTF-8
+}
+
+//! Incremental YAML writer for output streams
+/** Provides fine-grained control over YAML output, useful for:
+    - Writing large documents without buffering in memory
+    - Custom YAML formatting
+    - Streaming output generation
+
+    @par Example: Basic incremental writing
+    @code{.py}
+StringOutputStream sos();
+YamlStreamWriter writer(sos);
+
+writer.startDocument();
+writer.startMapping();
+writer.writeKey("users");
+writer.startSequence();
+
+for (hash<auto> user in users) {
+    writer.write(user);  # Auto-detect structure
+}
+
+writer.endSequence();
+writer.endMapping();
+writer.endDocument();
+writer.close();
+
+string yaml = sos.getData();
+    @endcode
+
+    @par Example: Multiple documents
+    @code{.py}
+FileOutputStream fos("/path/to/output.yaml");
+YamlStreamWriter writer(fos, {"flags": YAML::ExplicitStartDoc});
+
+for (auto record in records) {
+    writer.startDocument();
+    writer.write(record);
+    writer.endDocument();
+}
+writer.close();
+    @endcode
+
+    @par Example: Using anchors
+    @code{.py}
+YamlStreamWriter writer(sos);
+writer.startDocument();
+writer.startMapping();
+
+# Define anchor
+writer.writeKey("defaults");
+writer.startMapping("defaults_anchor");
+writer.writeKey("timeout");
+writer.writeScalar(30);
+writer.endMapping();
+
+# Reference anchor
+writer.writeKey("service1");
+writer.startMapping();
+writer.writeKey("settings");
+writer.writeAlias("defaults_anchor");
+writer.endMapping();
+
+writer.endMapping();
+writer.endDocument();
+writer.close();
+    @endcode
+    @note An instance maintains stream position and must be used by one thread at a time.
+    If it is shared, callers must synchronize the complete sequence of operations.
+*/
+qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML];
+
+//! Creates a YamlStreamWriter for the given output stream
+/** @param stream the output stream to write YAML to
+    @param options optional writer configuration
+*/
+YamlStreamWriter::constructor(Qore::OutputStream[OutputStream] stream, *hash<YamlStreamWriterOptions> options) [flags=NAMED_ARGS] {
+    // Use default values when option keys are not present (not just when options is null)
+    int flags = 0;
+    int width = -1;
+    int indent = 2;
+    if (options) {
+        QoreValue v = options->getKeyValue("flags");
+        if (!v.isNothing()) {
+            flags = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("width");
+        if (!v.isNothing()) {
+            width = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("indent");
+        if (!v.isNothing()) {
+            indent = (int)v.getAsBigInt();
+        }
+    }
+    // Use obj_stream (the QoreObject*) - the C++ class will ref it
+    self->setPrivate(CID_YAMLSTREAMWRITER,
+        new QoreYamlStreamWriter(const_cast<QoreObject*>(obj_stream), flags, width, indent, xsink));
+}
+
+//! Copy constructor - not supported
+/** YamlStreamWriter objects cannot be copied
+*/
+YamlStreamWriter::copy() {
+    xsink->raiseException("COPY-ERROR", "YamlStreamWriter objects cannot be copied");
+}
+
+//! Starts a new YAML document
+/** Emits the document start marker (--- if explicit)
+
+    @throw YAML-STREAM-EMIT-ERROR if document already started or stream closed
+*/
+nothing YamlStreamWriter::startDocument() {
+    writer->startDocument(xsink);
+}
+
+//! Ends the current YAML document
+/** Emits the document end marker (... if explicit)
+
+    @throw YAML-STREAM-EMIT-ERROR if no document started
+*/
+nothing YamlStreamWriter::endDocument() {
+    writer->endDocument(xsink);
+}
+
+//! Starts a YAML sequence (list)
+/** @param anchor optional anchor name for later reference
+
+    @throw YAML-STREAM-EMIT-ERROR if not in valid context for sequence
+*/
+nothing YamlStreamWriter::startSequence(*string anchor) [flags=NAMED_ARGS] {
+    writer->startSequence(anchor ? anchor->c_str() : nullptr, xsink);
+}
+
+//! Ends the current sequence
+/** Closes the most recently opened sequence
+*/
+nothing YamlStreamWriter::endSequence() {
+    writer->endSequence(xsink);
+}
+
+//! Starts a YAML mapping (hash/object)
+/** @param anchor optional anchor name for later reference
+*/
+nothing YamlStreamWriter::startMapping(*string anchor) [flags=NAMED_ARGS] {
+    writer->startMapping(anchor ? anchor->c_str() : nullptr, xsink);
+}
+
+//! Ends the current mapping
+/** Closes the most recently opened mapping
+*/
+nothing YamlStreamWriter::endMapping() {
+    writer->endMapping(xsink);
+}
+
+//! Writes a mapping key
+/** @param key the key string
+
+    @note Must be followed by a value (scalar, sequence, mapping, or alias)
+*/
+nothing YamlStreamWriter::writeKey(string key) [flags=NAMED_ARGS] {
+    writer->writeKey(key, xsink);
+}
+
+//! Writes a scalar value with optional tag and anchor
+/** @param value the scalar value (string, int, float, bool, date, etc.)
+    @param tag optional explicit YAML tag (e.g., "!!str", "!custom")
+    @param anchor optional anchor name
+*/
+nothing YamlStreamWriter::writeScalar(auto value, *string tag, *string anchor) [flags=NAMED_ARGS] {
+    writer->writeScalar(value, tag, anchor, xsink);
+}
+
+//! Writes an alias reference to a previously anchored value
+/** @param anchor the anchor name to reference
+
+    @throw YAML-STREAM-EMIT-ERROR if anchor is unknown
+*/
+nothing YamlStreamWriter::writeAlias(string anchor) [flags=NAMED_ARGS] {
+    writer->writeAlias(anchor->c_str(), xsink);
+}
+
+//! Writes a complete value, auto-detecting type and structure
+/** @param value any Qore value - hashes become mappings, lists become sequences
+
+    Recursively writes complex structures.
+*/
+nothing YamlStreamWriter::write(auto value) [flags=NAMED_ARGS] {
+    writer->write(value, xsink);
+}
+
+//! Flushes buffered output to the stream
+/** Forces any buffered data to be written
+*/
+nothing YamlStreamWriter::flush() {
+    writer->flush(xsink);
+}
+
+//! Closes the writer and finalizes the YAML stream
+/** Must be called to ensure proper stream termination.
+
+    @note After close(), no further writing is possible.
+*/
+nothing YamlStreamWriter::close() {
+    writer->close(xsink);
+}
+
+//! Returns the number of documents written
+/** @return the count of complete documents written so far
+*/
+int YamlStreamWriter::getDocumentCount() [flags=CONSTANT] {
+    return writer->getDocumentCount();
+}

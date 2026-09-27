@@ -1,0 +1,709 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlDocumentIteratorTest
+
+class YamlDocumentIteratorTest inherits QUnit::Test {
+    constructor() : Test("YamlDocumentIteratorTest", "1.0") {
+        addTestCase("basic iteration", \testBasicIteration());
+        addTestCase("single document", \testSingleDocument());
+        addTestCase("mixed types", \testMixedTypes());
+        addTestCase("stream input", \testStreamInput());
+        addTestCase("named argument constructors", \testNamedArgumentConstructors());
+        addTestCase("document count", \testDocumentCount());
+        addTestCase("reset string iterator", \testResetStringIterator());
+        addTestCase("parse_yaml_documents", \testParseYamlDocuments());
+
+        # Options tests
+        addTestCase("skip empty documents true", \testSkipEmptyDocumentsTrue());
+        addTestCase("skip empty documents false", \testSkipEmptyDocumentsFalse());
+        addTestCase("max documents option", \testMaxDocumentsOption());
+        addTestCase("partial options hash", \testPartialOptionsHash());
+
+        # Scalar type parsing tests
+        addTestCase("explicit string tag", \testExplicitStringTag());
+        addTestCase("explicit int tag", \testExplicitIntTag());
+        addTestCase("explicit float tag", \testExplicitFloatTag());
+        addTestCase("explicit bool tag", \testExplicitBoolTag());
+        addTestCase("explicit null tag", \testExplicitNullTag());
+        addTestCase("explicit binary tag", \testExplicitBinaryTag());
+        addTestCase("quoted strings", \testQuotedStrings());
+        addTestCase("plain scalar type inference", \testPlainScalarTypeInference());
+        addTestCase("duration values", \testDurationValues());
+        addTestCase("date values", \testDateValues());
+        addTestCase("number tag", \testNumberTag());
+        addTestCase("sqlnull tag", \testSqlnullTag());
+
+        # Corner cases
+        addTestCase("empty yaml", \testEmptyYaml());
+        addTestCase("whitespace only", \testWhitespaceOnly());
+        addTestCase("large stream", \testLargeStream());
+        addTestCase("deeply nested documents", \testDeeplyNestedDocuments());
+        addTestCase("unicode content", \testUnicodeContent());
+        addTestCase("special yaml values", \testSpecialYamlValues());
+
+        # Negative tests
+        addTestCase("getValue before next", \testGetValueBeforeNext());
+        addTestCase("getValue after exhausted", \testGetValueAfterExhausted());
+        addTestCase("reset stream iterator error", \testResetStreamIteratorError());
+        addTestCase("malformed yaml error", \testMalformedYamlError());
+        addTestCase("alias support", \testAliasSupport());
+        addTestCase("merge key", \testMergeKey());
+        addTestCase("alias unknown anchor", \testAliasUnknownAnchor());
+        addTestCase("complex key error", \testComplexKeyError());
+
+        set_return_value(main());
+    }
+
+    testBasicIteration() {
+        string yaml = "---
+foo: 1
+---
+bar: 2
+---
+baz: 3";
+        YamlDocumentIterator iter(yaml);
+
+        list<auto> docs = ();
+        while (iter.next()) {
+            push docs, iter.getValue();
+        }
+
+        assertEq(3, docs.size());
+        assertEq({"foo": 1}, docs[0]);
+        assertEq({"bar": 2}, docs[1]);
+        assertEq({"baz": 3}, docs[2]);
+    }
+
+    testSingleDocument() {
+        string yaml = "key: value";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        assertEq({"key": "value"}, iter.getValue());
+        assertFalse(iter.next());
+    }
+
+    testMixedTypes() {
+        string yaml = "---
+- item1
+- item2
+---
+key: value
+---
+scalar value
+---
+42";
+        YamlDocumentIterator iter(yaml);
+
+        list<auto> docs = ();
+        while (iter.next()) {
+            push docs, iter.getValue();
+        }
+
+        assertEq(4, docs.size());
+        assertEq(("item1", "item2"), docs[0]);
+        assertEq({"key": "value"}, docs[1]);
+        assertEq("scalar value", docs[2]);
+        assertEq(42, docs[3]);
+    }
+
+    testStreamInput() {
+        string yaml = "---\nfoo: 1\n---\nbar: 2";
+        StringInputStream sis(yaml);
+        YamlDocumentIterator iter(sis);
+
+        list<auto> docs = ();
+        while (iter.next()) {
+            push docs, iter.getValue();
+        }
+
+        assertEq(2, docs.size());
+        assertEq({"foo": 1}, docs[0]);
+        assertEq({"bar": 2}, docs[1]);
+    }
+
+    testNamedArgumentConstructors() {
+        string yaml = "---\nfoo: 1\n---\nbar: 2\n---\nbaz: 3";
+        YamlDocumentIterator string_iter(
+            yaml_str: yaml, options: <YamlDocumentIteratorOptions>{"max_documents": 2});
+
+        list<auto> docs = ();
+        while (string_iter.next()) {
+            push docs, string_iter.getValue();
+        }
+        assertEq(2, docs.size());
+        assertEq({"foo": 1}, docs[0]);
+        assertEq({"bar": 2}, docs[1]);
+
+        StringInputStream sis(yaml);
+        YamlDocumentIterator stream_iter(
+            stream: sis, options: <YamlDocumentIteratorOptions>{"skip_empty_documents": True});
+        assertTrue(stream_iter.next());
+        assertEq({"foo": 1}, stream_iter.getValue());
+    }
+
+    testDocumentCount() {
+        string yaml = "---\na: 1\n---\nb: 2\n---\nc: 3";
+        YamlDocumentIterator iter(yaml);
+
+        int count = 0;
+        while (iter.next()) {
+            count++;
+            assertEq(count, iter.getDocumentNumber());
+        }
+        assertEq(3, count);
+    }
+
+    testResetStringIterator() {
+        string yaml = "---\nfoo: 1\n---\nbar: 2";
+        YamlDocumentIterator iter(yaml);
+
+        # First pass
+        int count1 = 0;
+        while (iter.next()) count1++;
+        assertEq(2, count1);
+
+        # Reset and second pass
+        iter.reset();
+        assertEq(0, iter.getDocumentNumber());
+
+        int count2 = 0;
+        while (iter.next()) count2++;
+        assertEq(2, count2);
+    }
+
+    testParseYamlDocuments() {
+        string yaml = "---
+foo: 1
+---
+bar: 2
+---
+- item1
+- item2";
+
+        list<auto> docs = parse_yaml_documents(yaml);
+
+        assertEq(3, docs.size());
+        assertEq({"foo": 1}, docs[0]);
+        assertEq({"bar": 2}, docs[1]);
+        assertEq(("item1", "item2"), docs[2]);
+    }
+
+    # Options tests
+    testSkipEmptyDocumentsTrue() {
+        string yaml = "---\n---\nfoo: bar\n---\n";
+        YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"skip_empty_documents": True});
+
+        list<auto> docs = ();
+        while (iter.next()) {
+            push docs, iter.getValue();
+        }
+
+        assertEq(1, docs.size());
+        assertEq({"foo": "bar"}, docs[0]);
+    }
+
+    testSkipEmptyDocumentsFalse() {
+        string yaml = "---\n---\nfoo: bar\n---\n";
+        YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"skip_empty_documents": False});
+
+        int count = 0;
+        while (iter.next()) count++;
+
+        # Should include empty documents
+        assertTrue(count >= 2);
+    }
+
+    testMaxDocumentsOption() {
+        string yaml = "";
+        for (int i = 0; i < 10; i++) {
+            yaml += sprintf("---\nitem: %d\n", i);
+        }
+
+        YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"max_documents": 3});
+
+        int count = 0;
+        while (iter.next()) count++;
+
+        assertEq(3, count);
+    }
+
+    testPartialOptionsHash() {
+        # Test that partial options hashes preserve defaults for missing keys
+        # Default: skip_empty_documents = true, max_documents = 0 (unlimited)
+        string yaml = "---\n---\nfoo: bar\n---\nbaz: qux";
+
+        # Only specifying max_documents should keep skip_empty_documents = true (default)
+        YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"max_documents": 10});
+        int count = 0;
+        while (iter.next()) count++;
+        # Should skip empty docs (only 2 non-empty), but not limited by max
+        assertEq(2, count);
+
+        # Only specifying skip_empty_documents should keep max_documents = 0 (unlimited)
+        YamlDocumentIterator iter2(yaml, <YamlDocumentIteratorOptions>{"skip_empty_documents": False});
+        count = 0;
+        while (iter2.next()) count++;
+        # Should include all docs including empties
+        assertTrue(count >= 3);
+
+        # Empty options hash should use all defaults
+        YamlDocumentIterator iter3(yaml, <YamlDocumentIteratorOptions>{});
+        count = 0;
+        while (iter3.next()) count++;
+        # Default: skip_empty_documents = true
+        assertEq(2, count);
+    }
+
+    # Scalar type parsing tests
+    testExplicitStringTag() {
+        string yaml = "value: !!str 123";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq("123", doc.value);
+        assertEq(Type::String, doc.value.type());
+    }
+
+    testExplicitIntTag() {
+        string yaml = "value: !!int 42";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq(42, doc.value);
+        assertEq(Type::Int, doc.value.type());
+    }
+
+    testExplicitFloatTag() {
+        string yaml = "value: !!float 3.14";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertTrue(abs(doc.value - 3.14) < 0.001);
+        assertEq(Type::Float, doc.value.type());
+    }
+
+    testExplicitBoolTag() {
+        string yaml = "value: !!bool true";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq(True, doc.value);
+        assertEq(Type::Boolean, doc.value.type());
+    }
+
+    testExplicitNullTag() {
+        string yaml = "value: !!null null";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertNothing(doc.value);
+    }
+
+    testExplicitBinaryTag() {
+        string yaml = "value: !!binary SGVsbG8gV29ybGQ=";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq(Type::Binary, doc.value.type());
+        assertEq("Hello World", doc.value.toString());
+    }
+
+    testQuotedStrings() {
+        string yaml = "single: 'quoted'\ndouble: \"quoted\"";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq("quoted", doc.single);
+        assertEq("quoted", doc.double);
+        assertEq(Type::String, doc.single.type());
+        assertEq(Type::String, doc.double.type());
+    }
+
+    testPlainScalarTypeInference() {
+        string yaml = "
+int_val: 42
+float_val: 3.14
+bool_true: true
+bool_false: false
+null_val: null
+tilde_null: ~
+string_val: hello";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        assertEq(42, doc.int_val);
+        assertEq(Type::Int, doc.int_val.type());
+
+        assertTrue(abs(doc.float_val - 3.14) < 0.001);
+        assertEq(Type::Float, doc.float_val.type());
+
+        assertEq(True, doc.bool_true);
+        assertEq(Type::Boolean, doc.bool_true.type());
+
+        assertEq(False, doc.bool_false);
+        assertEq(Type::Boolean, doc.bool_false.type());
+
+        assertNothing(doc.null_val);
+        assertNothing(doc.tilde_null);
+
+        assertEq("hello", doc.string_val);
+        assertEq(Type::String, doc.string_val.type());
+    }
+
+    testDurationValues() {
+        # Test that YamlDocumentIterator correctly parses duration values (relative dates)
+        # This tests the refactored shared scalar parsing code
+        string yaml = "
+simple_year: P1Y
+simple_month: P2M
+simple_day: P3D
+simple_hour: PT4H
+simple_minute: PT5M
+simple_second: PT6S
+complex_duration: P1Y2M3DT4H5M6S
+microseconds: P2M3DT10H14u
+quoted_duration: \"P1Y\"";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        # Duration values should be relative dates
+        assertEq(Type::Date, doc.simple_year.type());
+        assertTrue(doc.simple_year.relative());
+        assertEq(P1Y, doc.simple_year);
+
+        assertEq(P2M, doc.simple_month);
+        assertEq(P3D, doc.simple_day);
+        assertEq(PT4H, doc.simple_hour);
+        assertEq(PT5M, doc.simple_minute);
+        assertEq(PT6S, doc.simple_second);
+        assertEq(P1Y2M3DT4H5M6S, doc.complex_duration);
+        assertEq(P2M3DT10H14u, doc.microseconds);
+
+        # Quoted durations should remain strings
+        assertEq("P1Y", doc.quoted_duration);
+        assertEq(Type::String, doc.quoted_duration.type());
+    }
+
+    testDateValues() {
+        # Test that absolute dates are properly parsed
+        string yaml = "
+iso_date: 2024-01-15
+iso_datetime: 2024-01-15T10:30:00
+iso_datetime_tz: 2024-01-15T10:30:00+05:00
+iso_datetime_utc: 2024-01-15T10:30:00Z";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        assertEq(Type::Date, doc.iso_date.type());
+        assertFalse(doc.iso_date.relative());
+        # Check date components rather than exact timestamp (timezone-independent)
+        assertEq(2024, get_years(doc.iso_date));
+        assertEq(1, get_months(doc.iso_date));
+        assertEq(15, get_days(doc.iso_date));
+
+        assertEq(Type::Date, doc.iso_datetime.type());
+        assertEq(Type::Date, doc.iso_datetime_tz.type());
+        assertEq(Type::Date, doc.iso_datetime_utc.type());
+    }
+
+    testNumberTag() {
+        # Test that !number tag creates arbitrary precision numbers
+        string yaml = "
+precise_number: !number 123456789012345678901234567890
+negative_number: !number -9999999999999999999999999999
+decimal_number: !number 3.141592653589793238462643383279";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        # !number should produce number type (arbitrary precision)
+        assertEq(Type::Number, doc.precise_number.type());
+        assertEq(123456789012345678901234567890n, doc.precise_number);
+
+        assertEq(Type::Number, doc.negative_number.type());
+        assertEq(-9999999999999999999999999999n, doc.negative_number);
+
+        assertEq(Type::Number, doc.decimal_number.type());
+    }
+
+    testSqlnullTag() {
+        # Test that !sqlnull tag creates SQL NULL values
+        string yaml = "val: !sqlnull null";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        # !sqlnull should produce NULL type (SQL NULL)
+        assertEq(Type::NullType, doc.val.type());
+    }
+
+    # Corner cases
+    testEmptyYaml() {
+        YamlDocumentIterator iter("");
+        assertFalse(iter.next());
+    }
+
+    testWhitespaceOnly() {
+        # Note: YAML does not allow tabs, so only use spaces/newlines
+        YamlDocumentIterator iter("   \n\n   ");
+        assertFalse(iter.next());
+    }
+
+    testLargeStream() {
+        list<string> docs = ();
+        for (int i = 0; i < 100; i++) {
+            push docs, sprintf("---\nitem: %d", i);
+        }
+        string yaml = docs.join("\n");
+
+        YamlDocumentIterator iter(yaml);
+
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> doc = iter.getValue();
+            assertEq(count, doc.item);
+            count++;
+        }
+        assertEq(100, count);
+    }
+
+    testDeeplyNestedDocuments() {
+        string yaml = "---
+a:
+  b:
+    c:
+      d:
+        e: value";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq("value", doc.a.b.c.d.e);
+    }
+
+    testUnicodeContent() {
+        string yaml = "greeting: \u4F60\u597D";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq("\u4F60\u597D", doc.greeting);
+    }
+
+    testSpecialYamlValues() {
+        string yaml = "
+empty_string: ''
+zero: 0
+negative: -42
+scientific: 1.23e10";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+
+        assertEq("", doc.empty_string);
+        assertEq(0, doc.zero);
+        assertEq(-42, doc.negative);
+        assertTrue(doc.scientific > 1e9);
+    }
+
+    # Negative tests
+    testGetValueBeforeNext() {
+        string yaml = "key: value";
+        YamlDocumentIterator iter(yaml);
+
+        assertThrows("ITERATOR-ERROR", \iter.getValue());
+    }
+
+    testGetValueAfterExhausted() {
+        string yaml = "key: value";
+        YamlDocumentIterator iter(yaml);
+
+        iter.next();
+        iter.getValue();  # OK
+        iter.next();  # Returns false
+
+        assertThrows("ITERATOR-ERROR", \iter.getValue());
+    }
+
+    testResetStreamIteratorError() {
+        string yaml = "key: value";
+        StringInputStream sis(yaml);
+        YamlDocumentIterator iter(sis);
+
+        iter.next();
+
+        assertThrows("ITERATOR-ERROR", \iter.reset());
+    }
+
+    testMalformedYamlError() {
+        string yaml = "key: value\n  bad: indent";
+        YamlDocumentIterator iter(yaml);
+
+        assertThrows("YAML-PARSER-ERROR", \iter.next());
+    }
+
+    testAliasSupport() {
+        # Test basic anchor/alias on scalar
+        string yaml = "
+anchor: &ref value
+alias: *ref";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq("value", doc.anchor);
+        assertEq("value", doc.alias);
+
+        # Test anchor on mapping (direct reference, not merge key)
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+  retries: 3
+service_defaults: *defaults";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq(30, doc.defaults.timeout);
+        assertEq(3, doc.defaults.retries);
+        assertEq(30, doc.service_defaults.timeout);
+        assertEq(3, doc.service_defaults.retries);
+
+        # Test anchor on sequence
+        yaml = "---
+original: &items
+  - item1
+  - item2
+copy: *items";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq(("item1", "item2"), doc.original);
+        assertEq(("item1", "item2"), doc.copy);
+
+        # Test anchor on scalar with multiple references
+        yaml = "---
+first: &val hello
+second: *val
+third: *val";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq("hello", doc.first);
+        assertEq("hello", doc.second);
+        assertEq("hello", doc.third);
+    }
+
+    testMergeKey() {
+        # Test YAML merge key with single alias
+        string yaml = "---
+defaults: &defaults
+  timeout: 30
+  retries: 3
+service:
+  <<: *defaults
+  name: myservice";
+        YamlDocumentIterator iter(yaml);
+
+        assertTrue(iter.next());
+        hash<auto> doc = iter.getValue();
+        assertEq(30, doc.defaults.timeout);
+        assertEq(3, doc.defaults.retries);
+        assertEq(30, doc.service.timeout);
+        assertEq(3, doc.service.retries);
+        assertEq("myservice", doc.service.name);
+
+        # Test merge key with explicit key override
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+  retries: 3
+service:
+  <<: *defaults
+  timeout: 60
+  name: myservice";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq(60, doc.service.timeout);  # Explicit key takes precedence
+        assertEq(3, doc.service.retries);
+        assertEq("myservice", doc.service.name);
+
+        # Test merge key with sequence of aliases
+        yaml = "---
+base: &base
+  env: production
+timeouts: &timeouts
+  timeout: 30
+service:
+  <<: [*base, *timeouts]
+  name: myservice";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq("production", doc.service.env);
+        assertEq(30, doc.service.timeout);
+        assertEq("myservice", doc.service.name);
+
+        # Test merge key precedence: first in sequence takes precedence (per YAML spec)
+        yaml = "---
+first: &first
+  key: first_value
+second: &second
+  key: second_value
+merged:
+  <<: [*first, *second]";
+        iter = new YamlDocumentIterator(yaml);
+
+        assertTrue(iter.next());
+        doc = iter.getValue();
+        assertEq("first_value", doc.merged.key);  # First alias in sequence wins
+    }
+
+    testAliasUnknownAnchor() {
+        # Test that unknown anchor reference raises error
+        string yaml = "alias: *unknown";
+        YamlDocumentIterator iter(yaml);
+
+        assertThrows("YAML-PARSER-ERROR", \iter.next());
+    }
+
+    testComplexKeyError() {
+        string yaml = "
+? - complex
+  - key
+: value";
+        YamlDocumentIterator iter(yaml);
+
+        assertThrows("YAML-PARSER-ERROR", \iter.next());
+    }
+}

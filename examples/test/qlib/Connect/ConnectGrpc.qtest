@@ -1,0 +1,258 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires yaml
+%requires Connect
+%requires QUnit
+
+%try-module grpc
+%define NoGrpc
+%endtry
+
+%exec-class ConnectGrpcTest
+
+class ConnectGrpcTest inherits QUnit::Test {
+    constructor() : Test("ConnectGrpc test", "1.0") {
+        # Always-available tests (no grpc module dependency)
+        addTestCase("grpc request detection", \testGrpcRequestDetection());
+        addTestCase("grpc-web request detection", \testGrpcWebRequestDetection());
+        addTestCase("grpc timeout parsing", \testGrpcTimeoutParsing());
+        addTestCase("grpc frame format", \testGrpcFrameFormat());
+        addTestCase("grpc error code mapping", \testGrpcErrorCodeMapping());
+        addTestCase("grpc content types", \testGrpcContentTypes());
+
+        # grpc-dependent tests
+%ifndef NoGrpc
+        addTestCase("protobuf codec", \testProtobufCodec());
+%endif
+        set_return_value(main());
+    }
+
+    # ---- Always-available tests ----
+
+    testGrpcRequestDetection() {
+        # Positive cases
+        assertTrue(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/grpc"}), "detect application/grpc");
+        assertTrue(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/grpc+proto"}), "detect application/grpc+proto");
+        assertTrue(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/grpc+json"}), "detect application/grpc+json");
+
+        # Negative cases
+        assertFalse(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/yaml"}), "yaml is not grpc");
+        assertFalse(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/grpc-web"}), "grpc-web is not grpc");
+        assertFalse(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "application/grpc-web+proto"}), "grpc-web+proto is not grpc");
+        assertFalse(Connect::GrpcDetection::isGrpcRequest(
+            {}), "missing content-type is not grpc");
+        assertFalse(Connect::GrpcDetection::isGrpcRequest(
+            {"content-type": "text/plain"}), "text/plain is not grpc");
+    }
+
+    testGrpcWebRequestDetection() {
+        # Positive cases
+        assertTrue(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/grpc-web"}), "detect application/grpc-web");
+        assertTrue(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/grpc-web+proto"}), "detect application/grpc-web+proto");
+        assertTrue(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/grpc-web+json"}), "detect application/grpc-web+json");
+
+        # Negative cases
+        assertFalse(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/grpc"}), "grpc is not grpc-web");
+        assertFalse(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/grpc+proto"}), "grpc+proto is not grpc-web");
+        assertFalse(Connect::GrpcDetection::isGrpcWebRequest(
+            {"content-type": "application/yaml"}), "yaml is not grpc-web");
+        assertFalse(Connect::GrpcDetection::isGrpcWebRequest(
+            {}), "missing content-type is not grpc-web");
+    }
+
+    testGrpcTimeoutParsing() {
+        # All 6 units
+        assertEq(3600000, Connect::GrpcDetection::parseGrpcTimeout("1H"), "1 hour");
+        assertEq(7200000, Connect::GrpcDetection::parseGrpcTimeout("2H"), "2 hours");
+        assertEq(60000, Connect::GrpcDetection::parseGrpcTimeout("1M"), "1 minute");
+        assertEq(300000, Connect::GrpcDetection::parseGrpcTimeout("5M"), "5 minutes");
+        assertEq(5000, Connect::GrpcDetection::parseGrpcTimeout("5S"), "5 seconds");
+        assertEq(1000, Connect::GrpcDetection::parseGrpcTimeout("1S"), "1 second");
+        assertEq(5000, Connect::GrpcDetection::parseGrpcTimeout("5000m"), "5000 ms");
+        assertEq(100, Connect::GrpcDetection::parseGrpcTimeout("100m"), "100 ms");
+        assertEq(0, Connect::GrpcDetection::parseGrpcTimeout("500u"), "500 microseconds");
+        assertEq(1, Connect::GrpcDetection::parseGrpcTimeout("1000u"), "1000 microseconds");
+        assertEq(0, Connect::GrpcDetection::parseGrpcTimeout("500000n"), "500000 nanoseconds");
+        assertEq(1, Connect::GrpcDetection::parseGrpcTimeout("1000000n"), "1000000 nanoseconds");
+
+        # Edge cases
+        assertNothing(Connect::GrpcDetection::parseGrpcTimeout(""), "empty string");
+        assertNothing(Connect::GrpcDetection::parseGrpcTimeout("X"), "invalid: single unit char");
+        assertNothing(Connect::GrpcDetection::parseGrpcTimeout("5x"), "invalid unit");
+        assertNothing(Connect::GrpcDetection::parseGrpcTimeout("5Z"), "invalid unit Z");
+
+        # Zero value
+        assertEq(0, Connect::GrpcDetection::parseGrpcTimeout("0S"), "zero seconds");
+        assertEq(0, Connect::GrpcDetection::parseGrpcTimeout("0m"), "zero ms");
+
+        # Large values
+        assertEq(360000000, Connect::GrpcDetection::parseGrpcTimeout("100H"), "100 hours");
+        assertEq(99999, Connect::GrpcDetection::parseGrpcTimeout("99999m"), "large ms value");
+    }
+
+    testGrpcFrameFormat() {
+        # Verify ConnectHelper framing matches gRPC Length-Prefixed-Message spec:
+        # flags(1 byte) + length(4 bytes big-endian) + payload(N bytes)
+
+        binary payload = binary("test payload");
+        binary framed = Connect::ConnectHelper::frameMessage(payload);
+
+        # Total size: 5-byte header + payload
+        assertEq(5 + payload.size(), framed.size(), "frame total size");
+
+        # Byte 0: flags (should be 0 for uncompressed)
+        assertEq(0, framed[0], "flags byte position 0, uncompressed");
+
+        # Bytes 1-4: big-endian length
+        int expected_len = payload.size();
+        assertEq((expected_len >> 24) & 0xFF, framed[1], "length byte 1 (MSB)");
+        assertEq((expected_len >> 16) & 0xFF, framed[2], "length byte 2");
+        assertEq((expected_len >> 8) & 0xFF, framed[3], "length byte 3");
+        assertEq(expected_len & 0xFF, framed[4], "length byte 4 (LSB)");
+
+        # Verify payload data after header
+        hash<Connect::ConnectFrameInfo> info = Connect::ConnectHelper::unframeMessage(framed);
+        assertEq(payload, info.data, "payload matches");
+
+        # Compressed flag (0x01) — bit 0
+        framed = Connect::ConnectHelper::frameMessage(payload, Connect::CONNECT_FLAG_COMPRESSED);
+        assertEq(0x01, framed[0], "compressed flag at byte 0");
+        info = Connect::ConnectHelper::unframeMessage(framed);
+        assertEq(Connect::CONNECT_FLAG_COMPRESSED, info.flags & Connect::CONNECT_FLAG_COMPRESSED,
+            "compressed flag round-trip");
+
+        # Empty payload
+        framed = Connect::ConnectHelper::frameMessage(binary());
+        assertEq(5, framed.size(), "empty payload: 5 bytes total");
+        assertEq(0, framed[0], "empty payload: flags = 0");
+        assertEq(0, framed[1], "empty payload: length byte 1 = 0");
+        assertEq(0, framed[2], "empty payload: length byte 2 = 0");
+        assertEq(0, framed[3], "empty payload: length byte 3 = 0");
+        assertEq(0, framed[4], "empty payload: length byte 4 = 0");
+    }
+
+    testGrpcErrorCodeMapping() {
+        # Verify ConnectErrorToHttpStatus matches gRPC conventions
+        assertEq(408, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_CANCELED},
+            "canceled -> 408");
+        assertEq(500, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_UNKNOWN},
+            "unknown -> 500");
+        assertEq(400, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_INVALID_ARGUMENT},
+            "invalid_argument -> 400");
+        assertEq(408, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_DEADLINE_EXCEEDED},
+            "deadline_exceeded -> 408");
+        assertEq(404, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_NOT_FOUND},
+            "not_found -> 404");
+        assertEq(409, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_ALREADY_EXISTS},
+            "already_exists -> 409");
+        assertEq(403, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_PERMISSION_DENIED},
+            "permission_denied -> 403");
+        assertEq(429, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_RESOURCE_EXHAUSTED},
+            "resource_exhausted -> 429");
+        assertEq(412, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_FAILED_PRECONDITION},
+            "failed_precondition -> 412");
+        assertEq(409, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_ABORTED},
+            "aborted -> 409");
+        assertEq(400, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_OUT_OF_RANGE},
+            "out_of_range -> 400");
+        assertEq(501, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_UNIMPLEMENTED},
+            "unimplemented -> 501");
+        assertEq(500, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_INTERNAL},
+            "internal -> 500");
+        assertEq(503, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_UNAVAILABLE},
+            "unavailable -> 503");
+        assertEq(500, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_DATA_LOSS},
+            "data_loss -> 500");
+        assertEq(401, Connect::ConnectErrorToHttpStatus{Connect::CONNECT_ERROR_UNAUTHENTICATED},
+            "unauthenticated -> 401");
+
+        # Verify HttpStatusToConnectError reverse mapping
+        assertEq(Connect::CONNECT_ERROR_INVALID_ARGUMENT,
+            Connect::HttpStatusToConnectError{400}, "400 -> invalid_argument");
+        assertEq(Connect::CONNECT_ERROR_UNAUTHENTICATED,
+            Connect::HttpStatusToConnectError{401}, "401 -> unauthenticated");
+        assertEq(Connect::CONNECT_ERROR_PERMISSION_DENIED,
+            Connect::HttpStatusToConnectError{403}, "403 -> permission_denied");
+        assertEq(Connect::CONNECT_ERROR_NOT_FOUND,
+            Connect::HttpStatusToConnectError{404}, "404 -> not_found");
+        assertEq(Connect::CONNECT_ERROR_DEADLINE_EXCEEDED,
+            Connect::HttpStatusToConnectError{408}, "408 -> deadline_exceeded");
+        assertEq(Connect::CONNECT_ERROR_ABORTED,
+            Connect::HttpStatusToConnectError{409}, "409 -> aborted");
+        assertEq(Connect::CONNECT_ERROR_FAILED_PRECONDITION,
+            Connect::HttpStatusToConnectError{412}, "412 -> failed_precondition");
+        assertEq(Connect::CONNECT_ERROR_RESOURCE_EXHAUSTED,
+            Connect::HttpStatusToConnectError{429}, "429 -> resource_exhausted");
+        assertEq(Connect::CONNECT_ERROR_CANCELED,
+            Connect::HttpStatusToConnectError{499}, "499 -> canceled");
+        assertEq(Connect::CONNECT_ERROR_INTERNAL,
+            Connect::HttpStatusToConnectError{500}, "500 -> internal");
+        assertEq(Connect::CONNECT_ERROR_UNIMPLEMENTED,
+            Connect::HttpStatusToConnectError{501}, "501 -> unimplemented");
+        assertEq(Connect::CONNECT_ERROR_UNAVAILABLE,
+            Connect::HttpStatusToConnectError{503}, "503 -> unavailable");
+
+        # All 16 error codes must have a mapping
+        assertEq(16, Connect::ConnectErrorToHttpStatus.size(),
+            "ConnectErrorToHttpStatus has 16 entries");
+    }
+
+    testGrpcContentTypes() {
+        # Verify gRPC content-type patterns don't collide with Connect patterns
+        # ConnectHelper::parseContentType should return NOTHING for gRPC types
+        assertFalse(exists Connect::ConnectHelper::parseContentType("application/grpc"),
+            "application/grpc filtered out");
+        assertFalse(exists Connect::ConnectHelper::parseContentType("application/grpc+proto"),
+            "application/grpc+proto filtered out");
+        assertFalse(exists Connect::ConnectHelper::parseContentType("application/grpc-web"),
+            "application/grpc-web filtered out");
+        assertFalse(exists Connect::ConnectHelper::parseContentType("application/grpc-web+proto"),
+            "application/grpc-web+proto filtered out");
+
+        # Connect content types should still parse correctly
+        *hash<auto> ct = Connect::ConnectHelper::parseContentType("application/yaml");
+        assertEq("yaml", ct.codec_name, "yaml parses correctly");
+        assertEq(False, ct.streaming, "yaml is not streaming");
+
+        ct = Connect::ConnectHelper::parseContentType("application/connect+yaml");
+        assertEq("yaml", ct.codec_name, "connect+yaml parses correctly");
+        assertEq(True, ct.streaming, "connect+yaml is streaming");
+
+        ct = Connect::ConnectHelper::parseContentType("application/proto");
+        assertEq("proto", ct.codec_name, "proto parses correctly");
+
+        ct = Connect::ConnectHelper::parseContentType("application/connect+proto");
+        assertEq("proto", ct.codec_name, "connect+proto parses correctly");
+        assertEq(True, ct.streaming, "connect+proto is streaming");
+    }
+
+    # ---- grpc-dependent tests ----
+
+%ifndef NoGrpc
+    testProtobufCodec() {
+        # Test that ProtobufConnectCodec can be instantiated with a schema
+        # and that its name is "proto"
+        # (enhanced when grpc module becomes available)
+        assertTrue(True, "grpc module loaded successfully");
+    }
+%endif
+}

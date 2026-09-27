@@ -9,7 +9,10 @@ cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
 # Only copy the model fixture; all executable code comes from installed packages.
 cp "$test_dir/../../modules/ml/test/data/test_linear.onnx" .
 qore --version
-for module in astparser avro dataframe i18n json krb5 linenoise ml mongodb ocr protobuf reflection sshutil tokenizer; do
+for module in astparser avro dataframe i18n json krb5 linenoise ml mongodb ocr protobuf reflection sshutil tokenizer yaml; do
+    qore -l "$module" -e 'exit(0);'
+done
+for module in Connect ConnectDataProvider DataStreamClient DataStreamClientIo DataStreamRequestHandler DataStreamUtil YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler; do
     qore -l "$module" -e 'exit(0);'
 done
 cat > onnx.q <<'EOF'
@@ -40,9 +43,17 @@ cat > runtime.q <<'EOF'
 %modern
 %requires Util
 %requires json
+%requires yaml
 hash<auto> value = parse_json("{\"answer\":42}");
 if (value.answer != 42) {
     throw "PACKAGE-TEST-ERROR", "JSON round trip failed";
+}
+hash<auto> document = parse_yaml("answer: 42\nwhen: 2026-09-27T12:00:00Z\n", YAML::ParseCoreSchema);
+if (document.answer != 42 || document."when" !== "2026-09-27T12:00:00Z") {
+    throw "PACKAGE-TEST-ERROR", "YAML 1.2 core schema parsing failed";
+}
+if (parse_yaml(make_yaml(value)) != value) {
+    throw "PACKAGE-TEST-ERROR", "YAML round trip failed";
 }
 EOF
 for mode in ast ir jit tiered; do

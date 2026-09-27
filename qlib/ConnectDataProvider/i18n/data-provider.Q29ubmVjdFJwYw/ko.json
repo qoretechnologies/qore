@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q29ubmVjdFJwYw.desc": {
+          "source": "Provides integration with **Connect RPC** services (DataStream 2.0) for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\nUse this app when you need to:\n- Call remote services using the Connect RPC protocol with automatic service discovery\n- Stream data in real time between systems using server-streaming, client-streaming, or bidirectional patterns\n- Exchange unreliable high-throughput messages via QUIC datagrams\n\n**Supported RPC patterns**:\n- **Unary**: single request/response (like a REST call)\n- **Server-streaming**: one request, multiple responses\n- **Client-streaming**: multiple requests, one response\n- **Bidirectional**: full-duplex message exchange\n- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\nSupports YAML, JSON, and CBOR serialization codecs, per-message compression (`gzip`/`deflate`), and automatic service/method discovery via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+          "message": "HTTP/2 및 HTTP/3 기반의 고성능 원격 프로시저 호출을 위한 **Connect RPC** 서비스(DataStream 2.0)와의 연동을 제공합니다.\n\n다음과 같은 경우에 이 앱을 사용하세요:\n- 자동 서비스 검색 기능과 함께 Connect RPC 프로토콜을 사용하여 원격 서비스 호출\n- 서버 스트리밍, 클라이언트 스트리밍 또는 양방향 패턴을 사용하여 시스템 간에 실시간으로 데이터 스트리밍\n- QUIC 데이터그램을 통해 신뢰성이 낮지만 처리량이 높은 메시지 교환\n\n**지원되는 RPC 패턴**:\n- **단항(Unary)**: 단일 요청/응답(REST 호출과 유사)\n- **서버 스트리밍(Server-streaming)**: 단일 요청, 다중 응답\n- **클라이언트 스트리밍(Client-streaming)**: 다중 요청, 단일 응답\n- **양방향(Bidirectional)**: 전이중 메시지 교환\n- **데이터그램(Datagram)**: QUIC을 통한 비신뢰성 단방향(fire-and-forget) 또는 양방향\n\nYAML, JSON 및 CBOR 직렬화 코덱, 메시지별 압축(`gzip`/`deflate`), Connect 리플렉션 프로토콜을 통한 자동 서비스/메서드 검색을 지원합니다.\n\n[Qore](https://qore.org)"
+        },
+        "app.Q29ubmVjdFJwYw.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "app.Q29ubmVjdFJwYw.short_desc": {
+          "source": "Remote procedure calls over HTTP/2 and HTTP/3",
+          "message": "HTTP/2 및 HTTP/3 기반 원격 프로시저 호출"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,387 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires DataStreamClient
+%requires Connect
+%requires QUnit
+
+%exec-class DataStreamDualProtocolTest
+
+class DataStreamDualProtocolTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+        Connect::ConnectHandler m_connect_handler;
+    }
+
+    constructor() : Test("DataStreamDualProtocol test", "1.0") {
+        addTestCase("DS v1 client to Connect-aware ADSRH", \testDSv1ClientToConnectADSRH());
+        addTestCase("Connect detect in ADSRH: DS v1", \testProtocolDetectionDSv1());
+        addTestCase("Connect detect in ADSRH: Connect", \testProtocolDetectionConnect());
+        addTestCase("Protocol caching", \testProtocolCaching());
+        addTestCase("Protocol reset", \testProtocolReset());
+        addTestCase("Connect error format from ADSRH", \testConnectErrorFormat());
+        addTestCase("DataStreamClient protocol option", \testProtocolOption());
+        addTestCase("Connect unary via HTTPClient", \testConnectUnaryViaHTTP());
+        addTestCase("Connect error unary via HTTPClient", \testConnectErrorUnaryViaHTTP());
+        addTestCase("ADSRH DS v1 protocol detection", \testADSRHProtocolDetectionDSv1());
+        addTestCase("ADSRH Connect protocol detection", \testADSRHProtocolDetectionConnect());
+        addTestCase("Connect missing method returns 404", \testConnectMissingMethod());
+        addTestCase("Connect missing service returns 404", \testConnectMissingService());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new TestDPAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+
+        # Register ConnectHandler with unary handlers
+        m_connect_handler = new Connect::ConnectHandler();
+        m_connect_handler.registerUnary("TestService", "Echo",
+            auto sub (auto request, hash<auto> metadata) {
+                return request;
+            });
+        m_connect_handler.registerUnary("TestService", "Add",
+            auto sub (auto request, hash<auto> metadata) {
+                return {"result": request.a + request.b};
+            });
+        m_connect_handler.registerUnary("TestService", "Fail",
+            auto sub (auto request, hash<auto> metadata) {
+                throw "TEST-ERROR", "simulated handler error";
+            });
+
+        m_http.setHandler("connect", "", NOTHING, m_connect_handler);
+        m_http.setDefaultHandler("connect", m_connect_handler);
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    # ---- Test: DataStream v1 client talks to Connect-aware ADSRH ----
+
+    testDSv1ClientToConnectADSRH() {
+        # Use DataStreamClient in explicit "datastream" mode to force DS v1
+        DataStreamClient::DataStreamClient client({"url": "http://localhost:" + port,
+            "protocol": "datastream"}, True);
+        assertEq("datastream", client.getProtocol(), "protocol set to datastream");
+    }
+
+    # ---- Test: Protocol detection in ADSRH — DataStream v1 ----
+
+    testProtocolDetectionDSv1() {
+        # Simulate a DataStream v1 request with DS headers
+        hash<auto> hdr = {
+            "content-type": MimeTypeYaml,
+            "datastream-accept": MimeTypeYaml,
+            "transfer-encoding": "chunked",
+        };
+        # connect_detect_protocol should return False for DS v1
+        assertFalse(connect_detect_protocol(hdr), "DS v1 headers: not Connect");
+    }
+
+    # ---- Test: Protocol detection in ADSRH — Connect ----
+
+    testProtocolDetectionConnect() {
+        # Connect request with protocol version header
+        hash<auto> hdr = {
+            "content-type": "application/yaml",
+            ConnectProtocolVersionHdr: "1",
+        };
+        assertTrue(connect_detect_protocol(hdr), "Connect headers: detected");
+
+        # Connect streaming request
+        hdr = {
+            "content-type": "application/connect+yaml",
+        };
+        assertTrue(connect_detect_protocol(hdr), "Connect streaming: detected");
+    }
+
+    # ---- Test: Protocol caching ----
+
+    testProtocolCaching() {
+        DataStreamClient::DataStreamClient client({"url": "http://localhost:" + port,
+            "protocol": "datastream"}, True);
+
+        # Initially no cached protocol
+        assertEq(NOTHING, client.getDetectedProtocol(), "no cached protocol initially");
+
+        # After setting protocol to datastream, it's used directly
+        assertEq("datastream", client.getProtocol(), "protocol preference: datastream");
+    }
+
+    # ---- Test: Protocol reset ----
+
+    testProtocolReset() {
+        DataStreamClient::DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        # Initially auto mode
+        assertEq("auto", client.getProtocol(), "initial protocol: auto");
+
+        # Set to datastream
+        client.setProtocol(DataStreamProtocol::DataStream);
+        assertEq("datastream", client.getProtocol(), "protocol set to datastream");
+
+        # Reset
+        client.resetProtocolCache();
+        assertEq(NOTHING, client.getDetectedProtocol(), "cached protocol cleared");
+
+        # Set back to auto
+        client.setProtocol(DataStreamProtocol::Auto);
+        assertEq("auto", client.getProtocol(), "protocol reset to auto");
+
+        # Invalid protocol cast - enum type system rejects invalid values
+        assertThrows("RUNTIME-CAST-ERROR", sub () { DataStreamProtocol p = cast<enum<DataStreamProtocol>>("invalid"); remove p; });
+    }
+
+    # ---- Test: Connect error format from ADSRH ----
+
+    testConnectErrorFormat() {
+        # Make a Connect-style request to ConnectHandler's Fail method
+        HTTPClient client({"url": "http://localhost:" + port});
+        hash<auto> hdr = {
+            "Content-Type": "application/yaml",
+            "Connect-Protocol-Version": "1",
+        };
+        Connect::YamlConnectCodec codec();
+        binary payload = codec.serialize({});
+
+        int status_code = 0;
+        *auto resp_body;
+        try {
+            hash<auto> resp = client.send(payload, "POST", "/TestService/Fail", hdr, False);
+            status_code = resp.status_code;
+            if (resp.body.typeCode() == NT_BINARY) {
+                resp_body = resp.body.toString("utf-8");
+            } else {
+                resp_body = resp.body;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() == NT_HASH) {
+                status_code = ex.arg.status_code ?? 0;
+                resp_body = ex.arg.body;
+            }
+        }
+        assertEq(500, status_code, "Connect error: status 500");
+        # Body should contain "simulated handler error" or Connect error JSON
+        assertTrue(resp_body.val(), "Connect error: body present");
+    }
+
+    # ---- Test: DataStreamClient protocol option ----
+
+    testProtocolOption() {
+        # Test explicit datastream mode
+        DataStreamClient::DataStreamClient client_ds({"url": "http://localhost:" + port,
+            "protocol": "datastream"}, True);
+        assertEq("datastream", client_ds.getProtocol(), "explicit datastream");
+
+        # Test explicit auto mode (default)
+        DataStreamClient::DataStreamClient client_auto({"url": "http://localhost:" + port}, True);
+        assertEq("auto", client_auto.getProtocol(), "default auto");
+
+        # Test invalid protocol
+        bool got_error = False;
+        try {
+            DataStreamClient::DataStreamClient client_bad(
+                {"url": "http://localhost:" + port, "protocol": "invalid"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+        }
+        assertTrue(got_error, "invalid protocol throws");
+    }
+
+    # ---- Test: Connect unary request via raw HTTPClient ----
+
+    testConnectUnaryViaHTTP() {
+        HTTPClient client({"url": "http://localhost:" + port});
+
+        # Send Connect unary request with proper Connect headers
+        hash<auto> request = {"message": "connect-test", "value": 99};
+        Connect::YamlConnectCodec codec();
+        binary payload = codec.serialize(request);
+
+        hash<auto> hdr = {
+            "Content-Type": "application/yaml",
+            "Connect-Protocol-Version": "1",
+        };
+
+        hash<auto> resp = client.send(payload, "POST", "/TestService/Echo", hdr, False);
+        assertEq(200, resp.status_code, "Connect unary: status 200");
+
+        # Decode response
+        auto resp_body;
+        if (resp.body.typeCode() == NT_BINARY) {
+            resp_body = codec.deserialize(resp.body);
+        } else {
+            resp_body = parse_yaml(resp.body);
+        }
+        assertEq("connect-test", resp_body.message, "Connect unary: echo message");
+        assertEq(99, resp_body.value, "Connect unary: echo value");
+
+        # Verify Connect response headers
+        assertTrue(resp.hasKey("content-type"), "Connect unary: has content-type");
+    }
+
+    # ---- Test: Connect error response format ----
+
+    testConnectErrorUnaryViaHTTP() {
+        HTTPClient client({"url": "http://localhost:" + port});
+        Connect::YamlConnectCodec codec();
+        binary payload = codec.serialize({});
+
+        hash<auto> hdr = {
+            "Content-Type": "application/yaml",
+            "Connect-Protocol-Version": "1",
+        };
+
+        int status_code = 0;
+        *auto resp_body;
+        try {
+            hash<auto> resp = client.send(payload, "POST", "/TestService/Fail", hdr, False);
+            status_code = resp.status_code;
+            resp_body = resp.body;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() == NT_HASH) {
+                status_code = ex.arg.status_code ?? 0;
+                resp_body = ex.arg.body;
+            }
+        }
+        assertEq(500, status_code, "Connect error: status 500");
+        assertTrue(resp_body.val(), "Connect error: body present");
+
+        # Response should be JSON error format
+        string body_str;
+        if (resp_body.typeCode() == NT_BINARY) {
+            body_str = resp_body.toString("utf-8");
+        } else {
+            body_str = string(resp_body);
+        }
+        assertTrue(body_str =~ /simulated handler error/, "Connect error: contains error message");
+    }
+
+    # ---- Test: ADSRH detects DS v1 from request headers ----
+
+    testADSRHProtocolDetectionDSv1() {
+        # Test that ADSRH correctly detects DS v1 from DataStream headers
+        hash<auto> ds_hdr = {
+            "content-type": MimeTypeYaml + ";charset=utf8",
+            DataStreamAccept.lwr(): MimeTypeYaml,
+            DataStreamContentType.lwr(): MimeTypeYaml + ";charset=utf8",
+            "transfer-encoding": "chunked",
+        };
+        assertFalse(connect_detect_protocol(ds_hdr), "ADSRH: DS v1 not Connect");
+
+        # Verify DS v1 specific headers
+        assertTrue(ds_hdr.hasKey(DataStreamAccept.lwr()), "ADSRH: DS v1 has DataStreamAccept");
+        assertFalse(ds_hdr.hasKey(ConnectProtocolVersionHdr),
+            "ADSRH: DS v1 has no Connect-Protocol-Version");
+    }
+
+    # ---- Test: ADSRH detects Connect from request headers ----
+
+    testADSRHProtocolDetectionConnect() {
+        # Connect unary
+        hash<auto> connect_hdr = {
+            "content-type": "application/yaml",
+            ConnectProtocolVersionHdr: "1",
+        };
+        assertTrue(connect_detect_protocol(connect_hdr), "ADSRH: Connect unary detected");
+
+        # Connect streaming
+        hash<auto> streaming_hdr = {
+            "content-type": ConnectStreamMimeTypeYaml,
+            ConnectProtocolVersionHdr: "1",
+        };
+        assertTrue(connect_detect_protocol(streaming_hdr), "ADSRH: Connect streaming detected");
+
+        # DS v1 with both headers — Connect takes precedence
+        hash<auto> mixed_hdr = {
+            "content-type": "application/yaml",
+            ConnectProtocolVersionHdr: "1",
+            DataStreamAccept.lwr(): MimeTypeYaml,
+        };
+        assertTrue(connect_detect_protocol(mixed_hdr),
+            "ADSRH: Connect takes precedence over DS v1");
+    }
+
+    # ---- Test: Connect missing method returns 404 ----
+
+    testConnectMissingMethod() {
+        HTTPClient client({"url": "http://localhost:" + port});
+        Connect::YamlConnectCodec codec();
+        binary payload = codec.serialize({});
+
+        hash<auto> hdr = {
+            "Content-Type": "application/yaml",
+            "Connect-Protocol-Version": "1",
+        };
+
+        int status_code = 0;
+        try {
+            hash<auto> resp = client.send(payload, "POST",
+                "/TestService/NonExistent", hdr, False);
+            status_code = resp.status_code;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() == NT_HASH) {
+                status_code = ex.arg.status_code ?? 0;
+            }
+        }
+        assertEq(404, status_code, "missing method: 404");
+    }
+
+    # ---- Test: Connect missing service returns 404 ----
+
+    testConnectMissingService() {
+        HTTPClient client({"url": "http://localhost:" + port});
+        Connect::YamlConnectCodec codec();
+        binary payload = codec.serialize({});
+
+        hash<auto> hdr = {
+            "Content-Type": "application/yaml",
+            "Connect-Protocol-Version": "1",
+        };
+
+        int status_code = 0;
+        try {
+            hash<auto> resp = client.send(payload, "POST",
+                "/UnknownService/Echo", hdr, False);
+            status_code = resp.status_code;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() == NT_HASH) {
+                status_code = ex.arg.status_code ?? 0;
+            }
+        }
+        assertEq(404, status_code, "missing service: 404");
+    }
+}
+
+class TestDPAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test",
+            new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

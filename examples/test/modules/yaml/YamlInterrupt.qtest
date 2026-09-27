@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlInterruptTest
+
+class YamlInterruptTest inherits QUnit::Test {
+    constructor() : QUnit::Test("YamlInterruptTest", "1.0") {
+        addTestCase("parse_yaml interrupt - pre-set", \testParseYamlInterruptPreset());
+        addTestCase("YamlDocumentIterator interrupt - pre-set", \testDocumentIteratorInterruptPreset());
+        addTestCase("YamlSaxParser interrupt - pre-set", \testSaxParserInterruptPreset());
+        addTestCase("YamlStreamWriter interrupt - pre-set", \testStreamWriterInterruptPreset());
+        set_return_value(main());
+    }
+
+    # Generate a large YAML string with many elements
+    private string generateLargeYaml(int count) {
+        list<string> items = ();
+        for (int i = 0; i < count; i++) {
+            push items, sprintf("  key%d: value%d", i, i);
+        }
+        return "data:\n" + items.join("\n");
+    }
+
+    # Generate multiple YAML documents
+    private string generateMultiDocYaml(int count) {
+        list<string> docs = ();
+        for (int i = 0; i < count; i++) {
+            push docs, sprintf("---\nkey: value%d", i);
+        }
+        return docs.join("\n");
+    }
+
+    # Test that interrupt is caught when flag is pre-set
+    testParseYamlInterruptPreset() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.loadModule("yaml");
+
+        p.parse("
+%new-style
+%strict-args
+%require-types
+
+hash<auto> sub parse_large_yaml(string yaml_str) {
+    return parse_yaml(yaml_str);
+}
+        ", "parse_yaml_interrupt_test");
+
+        # Generate YAML with enough elements to trigger at least one interrupt check
+        # (checks happen every 1000 iterations)
+        string yaml = generateLargeYaml(5000);
+
+        # Pre-set the interrupt flag
+        sm.requestInterrupt();
+
+        bool caught = False;
+        string ex_err;
+        try {
+            p.callFunction("parse_large_yaml", yaml);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            ex_err = ex.err;
+        }
+
+        assertTrue(caught, "parse_yaml should raise exception when interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "parse_yaml raised PROGRAM-INTERRUPTED");
+    }
+
+    testDocumentIteratorInterruptPreset() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.loadModule("yaml");
+
+        p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub iterate_documents(string yaml_str) {
+    YamlDocumentIterator iter(yaml_str);
+    int count = 0;
+    while (iter.next()) {
+        count++;
+    }
+    return count;
+}
+        ", "doc_iter_interrupt_test");
+
+        # Generate enough documents to trigger at least one interrupt check
+        # (checks happen every 100 iterations in next())
+        string yaml = generateMultiDocYaml(500);
+
+        # Pre-set the interrupt flag
+        sm.requestInterrupt();
+
+        bool caught = False;
+        string ex_err;
+        try {
+            p.callFunction("iterate_documents", yaml);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            ex_err = ex.err;
+        }
+
+        assertTrue(caught, "YamlDocumentIterator should raise exception when interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "YamlDocumentIterator raised PROGRAM-INTERRUPTED");
+    }
+
+    testSaxParserInterruptPreset() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.loadModule("yaml");
+
+        p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub sax_parse(string yaml_str) {
+    YamlSaxParser parser();
+    int count = 0;
+    parser.parse(yaml_str, sub (hash<YamlSaxEvent> e) {
+        count++;
+    });
+    return count;
+}
+        ", "sax_parser_interrupt_test");
+
+        # Generate YAML with enough elements to trigger interrupt check
+        string yaml = generateLargeYaml(5000);
+
+        # Pre-set the interrupt flag
+        sm.requestInterrupt();
+
+        bool caught = False;
+        string ex_err;
+        try {
+            p.callFunction("sax_parse", yaml);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            ex_err = ex.err;
+        }
+
+        assertTrue(caught, "YamlSaxParser should raise exception when interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "YamlSaxParser raised PROGRAM-INTERRUPTED");
+    }
+
+    testStreamWriterInterruptPreset() {
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.loadModule("yaml");
+
+        p.parse("
+%new-style
+%strict-args
+%require-types
+
+string sub write_large_yaml(hash<auto> data) {
+    StringOutputStream sos();
+    YamlStreamWriter writer(sos);
+    writer.startDocument();
+    writer.write(data);
+    writer.endDocument();
+    writer.close();
+    return sos.getData();
+}
+        ", "stream_writer_interrupt_test");
+
+        # Generate a large hash - needs enough elements to trigger interrupt check
+        hash<auto> data = {};
+        for (int i = 0; i < 5000; i++) {
+            data{"key" + string(i)} = "value" + string(i);
+        }
+
+        # Pre-set the interrupt flag
+        sm.requestInterrupt();
+
+        bool caught = False;
+        string ex_err;
+        try {
+            p.callFunction("write_large_yaml", data);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            ex_err = ex.err;
+        }
+
+        assertTrue(caught, "YamlStreamWriter should raise exception when interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "YamlStreamWriter raised PROGRAM-INTERRUPTED");
+    }
+}

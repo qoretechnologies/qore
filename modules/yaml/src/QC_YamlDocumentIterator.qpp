@@ -1,0 +1,221 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_YamlDocumentIterator.qpp
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "QC_YamlDocumentIterator.h"
+
+//! Options for YAML document iteration
+/** Used with YamlDocumentIterator constructor to configure iteration behavior.
+
+    @par Example:
+    @code{.py}
+# Parse at most 100 documents, including empty ones
+auto opts = <YamlDocumentIteratorOptions>{
+    "skip_empty_documents": False,
+    "max_documents": 100,
+};
+YamlDocumentIterator iter(yaml_string, opts);
+    @endcode
+
+    @see YamlDocumentIterator
+    @see parse_yaml_documents()
+
+    @since yaml 1.1
+*/
+hashdecl YamlDocumentIteratorOptions {
+    //! Skip empty documents during iteration
+    /** When @ref True (default), documents that parse to @ref nothing are skipped.
+        Set to @ref False to include empty documents in iteration.
+
+        Empty documents occur when a YAML stream contains consecutive document
+        markers without content:
+        @code{.yaml}
+---
+---
+foo: bar
+        @endcode
+
+        @par Example:
+        @code{.py}
+# Include empty documents in iteration
+YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"skip_empty_documents": False});
+        @endcode
+    */
+    bool skip_empty_documents = True;
+
+    //! Maximum number of documents to parse (0 = unlimited)
+    /** Limits the number of documents returned during iteration. Use this to:
+        - Sample the first N documents from a large stream
+        - Protect against memory exhaustion from unbounded input
+        - Process documents in batches
+
+        @par Example:
+        @code{.py}
+# Process only the first 10 documents
+YamlDocumentIterator iter(yaml, <YamlDocumentIteratorOptions>{"max_documents": 10});
+        @endcode
+    */
+    int max_documents = 0;
+
+    //! Character encoding for stream input
+    /** The character encoding to use when reading from an @ref Qore::InputStream.
+        This option is ignored when parsing from a string (strings are always UTF-8).
+
+        Common values: "UTF-8" (default), "UTF-16", "ISO-8859-1"
+
+        @par Example:
+        @code{.py}
+# Read from a Latin-1 encoded stream
+FileInputStream fis("/path/to/latin1.yaml");
+YamlDocumentIterator iter(fis, <YamlDocumentIteratorOptions>{"encoding": "ISO-8859-1"});
+        @endcode
+    */
+    string encoding = "UTF-8";
+}
+
+//! Iterator for YAML document streams
+/** Provides memory-efficient iteration over multiple YAML documents in a stream.
+
+    @par Example: Iterating documents from string
+    @code{.py}
+string yaml = "---\nfoo: 1\n---\nbar: 2\n---\nbaz: 3";
+YamlDocumentIterator iter(yaml);
+while (iter.next()) {
+    printf("Document %d: %y\n", iter.getDocumentNumber(), iter.getValue());
+}
+    @endcode
+
+    @par Example: Streaming from file
+    @code{.py}
+FileInputStream fis("/path/to/multi-doc.yaml");
+YamlDocumentIterator iter(fis, {"max_documents": 100});
+while (iter.next()) {
+    processDocument(iter.getValue());
+}
+    @endcode
+    @note An instance maintains stream position and must be used by one thread at a time.
+    If it is shared, callers must synchronize the complete sequence of operations.
+*/
+qclass YamlDocumentIterator [arg=QoreYamlDocumentIterator* iter; ns=Qore::YAML];
+
+//! Creates an iterator from a YAML string
+/** @param yaml_str the YAML string containing documents
+    @param options optional iteration options
+
+    @see hash<YamlDocumentIteratorOptions>
+*/
+YamlDocumentIterator::constructor(string yaml_str, *hash<YamlDocumentIteratorOptions> options) [flags=NAMED_ARGS] {
+    // Use default values when option keys are not present (not just when options is null)
+    bool skip_empty = true;
+    int64 max_docs = 0;
+    if (options) {
+        QoreValue v = options->getKeyValue("skip_empty_documents");
+        if (!v.isNothing()) {
+            skip_empty = v.getAsBool();
+        }
+        v = options->getKeyValue("max_documents");
+        if (!v.isNothing()) {
+            max_docs = v.getAsBigInt();
+        }
+    }
+    self->setPrivate(CID_YAMLDOCUMENTITERATOR,
+        new QoreYamlDocumentIterator(yaml_str, skip_empty, max_docs, xsink));
+}
+
+//! Creates an iterator from an input stream
+/** @param stream the input stream to read YAML from
+    @param options optional iteration options
+*/
+YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<YamlDocumentIteratorOptions> options) [flags=NAMED_ARGS] {
+    // Use default values when option keys are not present (not just when options is null)
+    bool skip_empty = true;
+    int64 max_docs = 0;
+    std::string enc = "UTF-8";
+    if (options) {
+        QoreValue v = options->getKeyValue("skip_empty_documents");
+        if (!v.isNothing()) {
+            skip_empty = v.getAsBool();
+        }
+        v = options->getKeyValue("max_documents");
+        if (!v.isNothing()) {
+            max_docs = v.getAsBigInt();
+        }
+        v = options->getKeyValue("encoding");
+        if (!v.isNothing()) {
+            QoreStringValueHelper str(v);
+            enc = str->c_str();
+        }
+    }
+    const QoreEncoding* encoding = QEM.findCreate(enc.c_str());
+    // Use obj_stream (the QoreObject*) - the C++ class will ref it
+    self->setPrivate(CID_YAMLDOCUMENTITERATOR,
+        new QoreYamlDocumentIterator(const_cast<QoreObject*>(obj_stream), encoding, skip_empty, max_docs, xsink));
+}
+
+//! Returns a copy of the YamlDocumentIterator object
+/** YamlDocumentIterator objects cannot be copied
+*/
+YamlDocumentIterator::copy() {
+    xsink->raiseException("COPY-ERROR", "YamlDocumentIterator objects cannot be copied");
+}
+
+//! Advances to the next document
+/** @return True if a document was found, False if no more documents
+
+    @throw YAML-PARSER-ERROR if a document cannot be parsed
+*/
+bool YamlDocumentIterator::next() {
+    return iter->next(xsink);
+}
+
+//! Returns the current document value
+/** @return the parsed value of the current document
+
+    @throw ITERATOR-ERROR if the iterator is not valid
+*/
+auto YamlDocumentIterator::getValue() [flags=RET_VALUE_ONLY] {
+    return iter->getValue(xsink);
+}
+
+//! Returns True if the iterator is positioned on a valid document
+/** @return True if the iterator is valid, False otherwise
+*/
+bool YamlDocumentIterator::valid() [flags=CONSTANT] {
+    return iter->valid();
+}
+
+//! Returns the current document number (1-based)
+/** @return the 1-based document number
+*/
+int YamlDocumentIterator::getDocumentNumber() [flags=CONSTANT] {
+    return iter->getDocumentNumber();
+}
+
+//! Resets the iterator to the beginning
+/** @note Only works for string-based iterators. Stream-based iterators
+    cannot be reset.
+
+    @throw ITERATOR-ERROR if the iterator cannot be reset (stream-based)
+*/
+nothing YamlDocumentIterator::reset() {
+    iter->reset(xsink);
+}

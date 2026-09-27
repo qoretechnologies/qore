@@ -1,0 +1,570 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.3
+
+%requires DataStreamUtil
+%requires RestHandler
+%requires yaml
+%requires Mime
+
+%modern
+
+module DataStreamRequestHandler {
+    version = "1.2";
+    desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
+        "where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/*  Version History: see docs below
+*/
+
+/** @mainpage DataStreamRequestHandler Module
+
+    @tableofcontents
+
+    @section datastreamrequesthandlerintro Introduction to the DataStreamRequestHandler Module
+
+    The %DataStreamRequestHandler module provides server support for the
+    @ref datastreamprotocol "DataStream protocol": YAML-encoded HTTP chunked transfers where each chunk is a unique
+    data entity.
+
+    In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library, for
+    this reason the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
+    inherits and extends AbstractRestStreamRequestHandler provided by the RestHandler module.
+
+    To use this module, use \c "%requires DataStreamRequestHandler" in your code.
+
+    All the public symbols in the module are defined in the DataStreamRequestHandler namespace.
+
+    Classes:
+    - @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
+
+    @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
+
+    @section datastreamrequesthandlerusage Usage
+
+    To use the DataStream request handler, subclass
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
+    and implement the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::recvDataImpl() "recvDataImpl()"
+    and @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::sendDataImpl() "sendDataImpl()" abstract
+    methods.  The handler automatically detects whether the client uses Connect (DataStream 2.0)
+    or DataStream v1 from the request headers — no changes are needed in subclasses.
+
+    @subsection datastreamrequesthandlerexample Subclassing Example
+
+    @code{.py}
+%modern
+%requires DataStreamRequestHandler
+
+class MyDataStreamHandler inherits DataStreamRequestHandler::AbstractDataStreamRequestHandler {
+    private {
+        list<auto> received_records = ();
+        list<auto> response_records;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, list<auto> response_records)
+            : AbstractDataStreamRequestHandler(cx, ah) {
+        self.response_records = response_records;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        received_records += data;
+    }
+
+    private auto sendDataImpl() {
+        if (!response_records.size()) {
+            return NOTHING;  # signals end of stream
+        }
+        return shift response_records;
+    }
+}
+    @endcode
+
+    Each handler instance manages one request.  A new instance is created per incoming
+    request by passing the connection context (\c cx) and URL arguments (\c ah) from
+    the HTTP server to the constructor.  The handler is typically integrated through
+    the \c RestHandler framework, which creates handler instances automatically.
+
+    @subsection datastreamrequesthandlerprotocol Protocol Transparency
+
+    The handler detects the protocol automatically from the request headers using
+    @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()".  Both Connect
+    and DataStream v1 clients are served by the same handler class — the abstract methods
+    \c recvDataImpl() and \c sendDataImpl() receive and return native Qore data structures
+    regardless of the wire protocol.
+
+    If protocol-specific logic is needed, use the
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol() "isConnectProtocol()"
+    method:
+
+    @code{.py}
+private nothing recvDataImpl(auto data) {
+    if (isConnectProtocol()) {
+        # Connect-specific handling (e.g., structured error responses)
+        log("Connect client sent record: %y", data);
+    } else {
+        # DataStream v1 handling
+        log("DS v1 client sent record: %y", data);
+    }
+    received_records += data;
+}
+    @endcode
+
+    @section datastreamrequesthandlerrelnotes Release Notes
+
+    @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
+    - added automatic Connect protocol (DataStream 2.0) detection: the handler now accepts
+      both Connect-framed and DataStream v1 chunked requests without any changes to subclasses
+    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol()
+      "isConnectProtocol()" method to query the detected protocol
+    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::getResponseHeaderMessage()
+      "getResponseHeaderMessage()" override: non-streaming responses (subclasses that return a body in
+      \c getResponseHeaderMessageImpl()) are automatically wrapped in a Connect frame when the request
+      used the Connect protocol, so clients always receive a well-formed Connect response
+
+    @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
+    - added \c %strict-args compile-time requirement
+    - added debug logging support
+    - updated copyright year to 2026
+
+    @subsection datastreamrequesthandler_v1_0 DataStreamRequestHandler v1.0
+    - initial release of the module
+*/
+
+#! the DataStreamRequestHandler namespace contains all the public objects in the DataStreamRequestHandler module
+public namespace DataStreamRequestHandler {
+#! this class implements a chunked request handler supporting the @ref datastreamprotocol "DataStream protocol"
+/** this class must be subclassed and then the @ref recvDataImpl() and @ref sendDataImpl() methods reimplemented
+    to provide data receiving and sending support, respectively.
+*/
+public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
+    public {
+        #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+        code<nothing(hash<auto>)> recv_callback;
+
+        #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+        code<auto()> scb;
+
+        #! the interactive send callback (Connect mode, lazily created); used when @ref wantsInteractiveStreaming() is @ref True "True"
+        /** @since DataStreamRequestHandler 1.3
+        */
+        *code<auto()> interactive_scb;
+
+        #! flag for when all data has been received
+        bool recv_done = False;
+
+        #! flag for when all data has been sent
+        bool send_done = False;
+
+        #! HTTP status code for error response sent
+        int err;
+
+        #! send error string received
+        *string send_error;
+
+        #! True if the request uses the Connect protocol (DataStream 2.0), False for DataStream v1
+        /** @since DataStreamRequestHandler 1.2
+        */
+        bool connect_mode = False;
+
+        #! Effective content-encoding sent in the response (may be empty on multiplexed transports)
+        /** On HTTP/2 and HTTP/3 for the DataStream v1 protocol, per-record
+            compression is suppressed because there is no chunked transfer-
+            encoding to preserve record boundaries. This member captures the
+            encoding actually used on the wire, which @ref getResponseHeaderMessageImpl()
+            reports back to the client via the DataStream-Content-Encoding
+            header. Equals @c cx.encoding for Connect mode and for HTTP/1.x.
+
+            @since DataStreamRequestHandler 1.3
+        */
+        *string effective_encoding;
+    }
+
+    #! creates the chunked request handler according to the arguments
+    /** Automatically detects the protocol (Connect or DataStream v1) from the request headers
+        and sets up the appropriate send/receive callbacks. Subclasses do not need to change —
+        the abstract methods @ref recvDataImpl() and @ref sendDataImpl() work identically
+        regardless of the detected protocol.
+
+        @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
+    */
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
+        # Detect Connect protocol from Content-Type or Connect-specific headers.
+        # Do NOT auto-upgrade based on HTTP/2 pseudo-headers alone — a client that downgraded
+        # from Connect to DataStream v1 (e.g. after a CONNECT-HTTP-ERROR) may send DataStream v1
+        # over HTTP/2, and the server must honor the actual Content-Type.
+        connect_mode = connect_detect_protocol(cx.hdr);
+        # Per-record gzip/deflate compression is incompatible with multiplexed
+        # transports (HTTP/2, HTTP/3) for the DataStream v1 protocol: those
+        # transports have no chunked transfer-encoding to preserve record
+        # boundaries, so the server's per-record-compressed output gets
+        # batched into a single DATA frame as N concatenated compressed
+        # streams, which the receiver cannot decompose without boundary-
+        # scanning. Disable compression on H2/H3 so each record travels as
+        # plain YAML — the client can still split records at @c %YAML
+        # directive boundaries. (H1.x clients continue to receive per-
+        # record-compressed chunks unchanged.) Connect protocol (DataStream
+        # 2.0) is unaffected: it frames each record with an explicit length
+        # header so batching cannot blur record boundaries.
+        bool suppress_ds_v1_content_encoding =
+            !connect_mode && isMultiplexedTransport();
+        effective_encoding = suppress_ds_v1_content_encoding
+            ? NOTHING : cx.encoding;
+        @debug(printf("AbstractDataStreamRequestHandler::constructor() "
+            "encoding=%y effective_encoding=%y connect_mode=%y "
+            "suppress_ds_v1_content_encoding=%y\n",
+            cx.encoding, effective_encoding, connect_mode,
+            suppress_ds_v1_content_encoding));
+        if (connect_mode) {
+            recv_callback = connect_get_recv(\recvData(), \recvDataDone());
+            scb = connect_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+        } else {
+            recv_callback = ds_get_recv(\recvData(), \recvDataDone());
+            scb = ds_get_send(\sendData(), ds_get_content_encode(effective_encoding));
+        }
+
+        # setup data stream with header
+        call_function(recv_callback, {"hdr": cx.hdr, "obj": cx.socketobject});
+    }
+
+    #! Returns @ref True if the request arrived over a multiplexed HTTP transport (H2 or H3)
+    /** Multiplexed transports have no chunked transfer-encoding, so the server
+        must avoid per-record content-encoding for the DataStream v1 protocol.
+
+        @since DataStreamRequestHandler 1.3
+    */
+    private bool isMultiplexedTransport() {
+        *string hv = cx.hdr.http_version;
+        if (!hv) {
+            return False;
+        }
+        # Match H2, H3, HTTP/2, HTTP/3 (or any future 2.x / 3.x)
+        return hv =~ /^(HTTP\/)?[23]/;
+    }
+
+    #! returns @ref False because DataStream manages its own per-chunk content encoding
+    /** Each send() call returns one independently compressed record via the DataStream protocol.
+        The server must not apply additional content encoding on top of this.
+    */
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    #! wraps non-streaming response bodies in Connect framing when in Connect mode
+    /** Subclasses like SqlUtilWriteStream may override getResponseHeaderMessageImpl() and return
+        a response with a body (non-streaming).  In Connect mode the client expects Connect-framed
+        data, so the body must be YAML-serialized, wrapped in a Connect frame, and marked as a raw
+        response to bypass further REST serialization.
+
+        @since DataStreamRequestHandler 1.2
+    */
+    hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessage() {
+        hash<HttpServer::HttpHandlerResponseInfo> h = AbstractRestStreamRequestHandler::getResponseHeaderMessage();
+        if (connect_mode && exists h.body && h.body.typeCode() != NT_BINARY) {
+            # Serialize the body: hash/list → YAML, other types (strings, etc.) → raw bytes
+            binary payload;
+            if (h.body.typeCode() == NT_HASH || h.body.typeCode() == NT_LIST) {
+                payload = binary(make_yaml(h.body));
+            } else {
+                payload = binary(h.body);
+            }
+            # Use flags=0 (regular data frame); the HTTP response completion signals end-of-stream
+            # naturally. CONNECT_FLAG_END_STREAM must not be used here because connect_get_recv()
+            # treats END_STREAM frames as end-of-data signals without delivering the payload.
+            h.body = connect_frame_message(payload, 0);
+            if (!h.hdr) {
+                h.hdr = {};
+            }
+            if (!h.hdr."Content-Type") {
+                h.hdr."Content-Type" = "application/connect+yaml";
+            }
+            h.raw_response = True;
+        }
+        return h;
+    }
+
+    #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
+    /** this method is meant to be called by getResponseHeaderMessageImpl()
+    */
+    *hash<auto> getErrorResponse() {
+        if (connect_mode) {
+            # Connect mode: errors use YAML-serialized hashes with "err" and "desc" keys
+            # to match DataStreamClient's error detection logic
+            if (send_error) {
+                return {
+                    "code": (err = 400),
+                    "body": {"err": "DATASTREAM-ERROR", "desc": "sender reported an error"},
+                };
+            }
+            if (ex) {
+                return {
+                    "code": (err = 500),
+                    "body": {"err": ex.err, "desc": ex.desc},
+                    "close": True,
+                };
+            }
+        } else {
+            # DataStream v1 mode
+            if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml) {
+                return {
+                    "code": (err = 406),
+                    "body": sprintf("cannot accept DataStream request with header %s: %y; "
+                        "expecting %y", DataStreamAccept,
+                        cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
+                    "hdr": {"Content-Type": MimeTypeText},
+                };
+            }
+
+            if (send_error) {
+                return {
+                    "code": (err = 400),
+                    "body": "Sender reported a DataStream error in the request trailer",
+                    "hdr": {"Content-Type": MimeTypeText},
+                };
+            }
+
+            if (ex) {
+                return {
+                    "code": (err = 409),
+                    "body": make_yaml(ex),
+                    "hdr": {"Content-Type": MimeTypeYaml},
+                    "close": True,
+                };
+            }
+        }
+    }
+
+    #! returns the response header to the request
+    /**
+        @return a hash with the following keys:
+        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+        - \c "body": the message body to return in the response; if this key is returned, then the reply is sent
+          immediately; a chunked reply is not made, and send() and sendImpl() are not called
+        - \c "close": (optional) set this key to @ref Qore::True "True" if the connection should be unconditionally
+          closed when the handler returns
+        - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+
+        @note this method is called after the message body has been received
+    */
+    hash<auto> getResponseHeaderMessageImpl() {
+        *hash<auto> h = getErrorResponse();
+        if (h) {
+            return h;
+        }
+
+        hash<auto> hdr;
+        if (connect_mode) {
+            connect_set_chunked_headers(\hdr, cx.encoding);
+        } else {
+            ds_set_chunked_headers(\hdr, effective_encoding);
+        }
+        return {
+            "code": 200,
+            "hdr": hdr,
+        };
+    }
+
+    #! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+    /** The receive callback calls @ref recvDataImpl() to deliver deserialized data.
+
+        When the data is already deserialized (e.g. non-chunked body passed through the REST
+        framework), it is delivered directly to recvDataImpl() bypassing the protocol parser
+        (connect_get_recv / ds_get_recv) which only handles binary/string wire format data.
+
+        @since updated in DataStreamRequestHandler 1.3 to handle pre-deserialized bodies
+    */
+    nothing recvImpl(hash v) {
+        @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
+        if (v.deserialized && exists v.data) {
+            # Pre-deserialized body from the REST framework (non-chunked request).
+            # The data may be truly deserialized (hash/list from REST validator), raw YAML
+            # string, or Connect-framed binary from cx."stream-body". Deserialize as needed.
+            auto data = v.data;
+            if (connect_mode && data.typeCode() == NT_BINARY && data.size() >= 5) {
+                # Connect-framed binary: parse ALL frames and deliver each record
+                binary buf = data;
+                while (buf.size() >= 5) {
+                    int frame_size = DataStreamUtil::connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        break;
+                    }
+                    hash<auto> frame = DataStreamUtil::connect_unframe_message(buf);
+                    if (frame.flags & DataStreamUtil::CONNECT_FLAG_END_STREAM) {
+                        break;
+                    }
+                    auto parsed = parse_yaml(binary_to_string(frame.data, "utf-8"));
+                    recvDataImpl(parsed);
+                    buf = buf.size() > frame_size ? buf.substr(frame_size) : binary();
+                }
+            } else if (data.typeCode() == NT_BINARY || data.typeCode() == NT_STRING) {
+                string yaml_str = data.typeCode() == NT_BINARY
+                    ? binary_to_string(data, "utf-8") : data;
+                # On HTTP/2 and HTTP/3, multiple sendData() calls from the client
+                # get batched into a single request body (no chunked transfer-
+                # encoding to preserve boundaries).  Split on @c %YAML directive
+                # boundaries so each document can be deserialized and delivered
+                # individually.  On HTTP/1.x with chunked transfer, each chunk
+                # is a single YAML document and the split is a no-op.
+                if (yaml_str =~ /\n%YAML /) {
+                    foreach string doc in (DataStreamUtil::ds_split_yaml_documents(yaml_str)) {
+                        recvDataImpl(parse_yaml(doc));
+                    }
+                } else {
+                    recvDataImpl(parse_yaml(yaml_str));
+                }
+            } else {
+                recvDataImpl(data);
+            }
+        } else {
+            recv_callback(v);
+        }
+    }
+
+    #! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+    /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response.
+
+        In interactive mode (@ref wantsInteractiveStreaming() returns @ref True "True"), a Connect send
+        callback that frames each reply individually and only emits the terminal EndStreamResponse
+        frame once the inbound side has been fully received is used instead, so the handler can reply
+        per inbound operation without prematurely closing the stream.
+    */
+    auto sendImpl() {
+        @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
+        if (wantsInteractiveStreaming()) {
+            if (!interactive_scb) {
+                interactive_scb = connect_get_send_interactive(\sendData(),
+                    ds_get_content_encode(cx.encoding), \isInteractiveStreamEnded());
+            }
+            return interactive_scb();
+        }
+        return scb();
+    }
+
+    #! Returns @ref True "True" to drive an interactive (interleaved read -> reply) bidirectional stream on HTTP/2 / HTTP/3
+    /** The default implementation returns @ref False "False" — existing handlers keep the
+        recv-all-then-send model unchanged.  Connect-mode handlers that need an interactive exchange
+        (the client sends an operation, reads its result, then decides the next operation on the same
+        stream — e.g. read-your-writes within one remote SQL session) override this to return
+        @ref True "True".  Interactive mode applies only on HTTP/2 and HTTP/3 (the legacy half-duplex
+        model is always used on HTTP/1.x); typical implementations return
+        @code{.py} connect_mode && isMultiplexedTransport() @endcode
+
+        When enabled, @ref recvDataImpl() must process each inbound operation and queue exactly the
+        reply for it, and @ref sendDataImpl() must return that queued reply and @ref nothing when none
+        remain for the current operation (it will be called again for the next operation).
+
+        @return @ref True "True" to opt in to interactive bidirectional streaming, @ref False "False"
+        (the default) to use the legacy recv-all-then-send model
+
+        @see HttpServer::AbstractStreamRequest::wantsInteractiveStreaming()
+
+        @since DataStreamRequestHandler 1.3
+    */
+    bool wantsInteractiveStreaming() {
+        return False;
+    }
+
+    #! Returns @ref True "True" once the inbound side of an interactive stream has been fully received
+    /** Used by the interactive Connect send callback to decide when the terminal EndStreamResponse
+        frame may be emitted; the stream is only closed after the client half-closes it.
+
+        @since DataStreamRequestHandler 1.3
+    */
+    private bool isInteractiveStreamEnded() {
+        return recv_done;
+    }
+
+    #! Returns True if the request uses the Connect protocol (DataStream 2.0)
+    /** @return True for Connect protocol, False for DataStream v1
+
+        @since DataStreamRequestHandler 1.2
+    */
+    bool isConnectProtocol() {
+        return connect_mode;
+    }
+
+    #! this method is called when all data has been received
+    private nothing recvDataDone(*string err) {
+        # If no explicit error string was passed but the stream handler
+        # captured a recv error (e.g. COLUMN-ERROR caught during chunked
+        # body processing), call recvDataDoneImpl() with an error marker
+        # so it rolls back, but do NOT set send_error -- send_error means
+        # the SENDER reported an error in the trailer, which routes
+        # getErrorResponse() to a 400 plain-text response.  A recv-side
+        # error must keep send_error clear so the captured exception (ex)
+        # surfaces through getErrorResponse() as the rich 409 response
+        # with the original error code and description.
+        if (!err && hasError()) {
+            recv_done = False;
+            recvDataDoneImpl("recv error");
+            return;
+        }
+        send_error = err;
+        recv_done = err ? False : True;
+        recvDataDoneImpl(err);
+    }
+
+    #! This is the concrete method called when data is received; it calls recvDataImpl() in turn
+    /** @param data the data received
+    */
+    private nothing recvData(auto data) {
+        recvDataImpl(data);
+    }
+
+    #! This is the concrete method called when data is received; it calls recvDataImpl() in turn
+    /** @return data the data to be sent over the link
+    */
+    private auto sendData() {
+        auto d = sendDataImpl();
+        if (!exists d) {
+            send_done = True;
+        }
+        return d;
+    }
+
+    #! this method is called when all data has been received
+    private nothing recvDataDoneImpl(*string err) {
+    }
+
+    #! reimplement this method in subclasses to receive decoded and deserialized data
+    /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+    */
+    private abstract nothing recvDataImpl(auto data);
+
+    #! reimplement this method in subclasses to support streamed data transfers
+    /** When this method returns no value, it signifies the end of the streamed data transfer
+
+        @return the data returned by this callback will be serialized to YAML and send via the
+        @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all
+        data has been send then this callback should return @ref nothing, which will close the chunked message and
+        terminate the request
+    */
+    private abstract auto sendDataImpl();
+}
+}

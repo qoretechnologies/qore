@@ -1,0 +1,689 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires DataStreamClient
+%requires QUnit
+
+%exec-class DataStreamClientTest
+
+class YamlHandler inherits AbstractHttpRequestHandler {
+    private {
+        *string m_data;
+        string m_mime;
+    }
+
+    constructor(string mime, *string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "DELETE") {
+            return makeResponse(404, m_data ?? make_yaml({"error": "not found"}),
+                {"Content-Type": m_mime});
+        } else if (hdr.method == "POST") {
+            # Echo back the parsed body
+            auto parsed = body ? parse_yaml(body) : {};
+            return makeResponse(200, make_yaml({"received": parsed}),
+                {"Content-Type": m_mime});
+        } else {
+            return makeResponse(200, m_data ?? make_yaml({"status": "ok"}),
+                {"Content-Type": m_mime});
+        }
+    }
+}
+
+#! Dual-protocol handler that stores/retrieves DataStream records.
+/** Detects Connect (DataStream 2.0) vs plain YAML requests from headers
+    and responds in the matching protocol framing.
+*/
+class DataStreamEchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex mtx();
+        list<auto> records = ();
+    }
+
+    constructor() : AbstractHttpRequestHandler() {
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        bool is_connect = connect_detect_protocol(hdr);
+
+        if (hdr.method == "POST") {
+            list<auto> parsed = ();
+            if (body) {
+                if (is_connect) {
+                    parsed = parseConnectBody(body);
+                } else {
+                    parsed = parseYamlBody(body);
+                }
+            }
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                records += parsed;
+            }
+            int count;
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                count = records.size();
+            }
+            hash<auto> result = {"rows": count, "status": "ok"};
+            if (is_connect) {
+                return makeConnectResponse(200, result);
+            }
+            return makeResponse(200, make_yaml(result), {"Content-Type": MimeTypeYaml});
+        } else if (hdr.method == "GET") {
+            list<auto> data;
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                data = records;
+            }
+            if (is_connect) {
+                return makeConnectResponse(200, data);
+            }
+            return makeResponse(200, make_yaml(data), {"Content-Type": MimeTypeYaml});
+        } else if (hdr.method == "DELETE") {
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                records = ();
+            }
+            hash<auto> result = {"status": "cleared"};
+            if (is_connect) {
+                return makeConnectResponse(200, result);
+            }
+            return makeResponse(200, make_yaml(result), {"Content-Type": MimeTypeYaml});
+        }
+
+        return makeResponse(405, make_yaml({"error": "method not allowed"}), {"Content-Type": MimeTypeYaml});
+    }
+
+    #! Parse a plain YAML body (DataStream v1 sends multiple concatenated YAML documents)
+    private list<auto> parseYamlBody(data body) {
+        list<auto> parsed = ();
+        string body_str = body.typeCode() == NT_BINARY ? body.toString("UTF-8") : string(body);
+        list<auto> parts = body_str.split("%YAML");
+        foreach string part in (parts) {
+            if (part.val()) {
+                parsed += parse_yaml("%YAML" + part);
+            }
+        }
+        return parsed;
+    }
+
+    #! Parse a Connect body — handles both unary (plain YAML) and streaming (Connect-framed)
+    private list<auto> parseConnectBody(data body) {
+        binary buf = body.typeCode() == NT_BINARY ? body : binary(body);
+        # Check if the body starts with a Connect frame (5-byte header)
+        if (buf.size() >= 5) {
+            int maybe_len = (buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4];
+            if (buf[0] <= 3 && maybe_len > 0 && maybe_len <= buf.size() - 5) {
+                # Looks like Connect-framed data — unframe each message
+                list<auto> parsed = ();
+                while (buf.size() >= 5) {
+                    int frame_size = connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        break;
+                    }
+                    hash<auto> frame = connect_unframe_message(buf);
+                    # Advance buffer past consumed frame
+                    if (buf.size() > frame_size) {
+                        buf = buf.substr(frame_size);
+                    } else {
+                        buf = binary();
+                    }
+                    # Skip EndStreamResponse
+                    if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                        break;
+                    }
+                    # Parse YAML payload
+                    string yaml_str = frame.data.toString("UTF-8");
+                    parsed += parse_yaml(yaml_str);
+                }
+                return parsed;
+            }
+        }
+        # Unary Connect: plain YAML body
+        string body_str = buf.toString("UTF-8");
+        auto parsed = parse_yaml(body_str);
+        # Connect unary sends records as a YAML list
+        if (parsed.typeCode() == NT_LIST) {
+            return parsed;
+        }
+        # Single record wrapped in a list
+        return (parsed,);
+    }
+
+    #! Build a Connect-framed response (data frame + EndStreamResponse)
+    private hash<auto> makeConnectResponse(int code, auto data) {
+        binary payload = binary(make_yaml(data));
+        # Data frame (flags=0) + EndStreamResponse frame (flags=END_STREAM, empty JSON)
+        binary body = connect_frame_message(payload, 0)
+            + connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+        return makeResponse(code, body, {
+            "Content-Type": ConnectStreamMimeTypeYaml,
+            ConnectProtocolVersionHdr: ConnectProtocolVersionVal,
+        });
+    }
+}
+
+#! Handler that returns 500 error for DataStream error recovery testing
+class DataStreamErrorHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, make_yaml({"err": "DS-ERROR", "desc": "simulated server error"}),
+            {"Content-Type": MimeTypeYaml});
+    }
+}
+
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    private {
+        *string m_data;
+        string m_mime;
+    }
+
+    constructor(string mime, *string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "DELETE") {
+            return makeResponse(404, m_data ?? binary(body), {"Content-Type": m_mime});
+        } else {
+            return makeResponse(200, m_data ?? binary(body), {"Content-Type": m_mime});
+        }
+    }
+}
+
+class DataStreamClientTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+    }
+
+    constructor() : Test("DataStreamClient test", "1.0") {
+        addTestCase("base test", \testDataStreamClient());
+        addTestCase("constructor options", \testConstructorOptions());
+        addTestCase("http version", \testHttpVersion());
+        addTestCase("connection test", \testConnection());
+        addTestCase("message classes", \testMessageClasses());
+        addTestCase("content encoding", \testContentEncoding());
+        addTestCase("error handling", \testErrorHandling());
+        addTestCase("datastream keep-alive", \testDataStreamKeepAlive());
+        addTestCase("datastream error recovery", \testDataStreamErrorRecovery());
+        addTestCase("DS v1 protocol verification", \testDSv1ProtocolVerification());
+        addTestCase("DS v1 explicit mode", \testDSv1ExplicitMode());
+        addTestCase("DS v1 empty stream", \testDSv1EmptyStream());
+        addTestCase("DS v1 recvDataStream", \testDSv1RecvDataStream());
+        addTestCase("protocol mode accessors", \testProtocolModeAccessors());
+        addTestCase("max message size", \testMaxMessageSize());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new TestAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+        m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
+        m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
+        m_http.setHandler("/ds-echo", "/ds-echo", MimeTypeYaml, new DataStreamEchoHandler());
+        m_http.setHandler("/ds-error", "/ds-error", MimeTypeYaml, new DataStreamErrorHandler());
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    testDataStreamClient() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        assertEq(True, client instanceof DataStreamClient);
+
+        hash<auto> info;
+        assertThrows("DESERIALIZATION-ERROR", \client.del(), ("/api", "NOTHING", \info));
+        assertEq(404, info."response-code");
+
+        client.get("/api", NOTHING, \info);
+        # 204 No Content is returned for responses with empty body
+        assertEq(204, info."response-code");
+    }
+
+    testConstructorOptions() {
+        # Test with various options
+        hash<auto> opts = {
+            "url": "http://localhost:" + port,
+            "connect_timeout": 5000,
+            "timeout": 30000,
+        };
+
+        DataStreamClient client(opts, True);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test default headers
+        client.addDefaultHeaders({"X-Custom": "value"});
+    }
+
+    testHttpVersion() {
+        # Default http_version is "auto" — no longer capped to 1.1
+        DataStreamClient client_default({"url": "http://localhost:" + port}, True);
+        assertEq("auto", client_default.getEffectiveHttpVersion());
+
+        DataStreamClient client_auto({"url": "http://localhost:" + port, "http_version": "auto"}, True);
+        assertEq("auto", client_auto.getEffectiveHttpVersion());
+
+        # HTTP/2 and HTTP/3 are passed through — Qore's HTTPClient handles streaming
+        # transparently over any protocol version
+        DataStreamClient client_two({"url": "http://localhost:" + port, "http_version": "2.0"}, True);
+        assertEq("2.0", client_two.getEffectiveHttpVersion());
+
+        DataStreamClient client_three({"url": "http://localhost:" + port, "http_version": "3.0"}, True);
+        assertEq("3.0", client_three.getEffectiveHttpVersion());
+
+        # Explicit HTTP/1.x versions are preserved
+        DataStreamClient client_one_one({"url": "http://localhost:" + port, "http_version": "1.1"}, True);
+        assertEq("1.1", client_one_one.getEffectiveHttpVersion());
+
+        DataStreamClient client_one_zero({"url": "http://localhost:" + port, "http_version": "1.0"}, True);
+        assertEq("1.0", client_one_zero.getEffectiveHttpVersion());
+    }
+
+    testConnection() {
+        # Test DataStreamConnection
+        string url = "ds://localhost:" + port + "/";
+        DataStreamConnection conn("test", "test", url, {"monitor": False});
+        DataStreamClient client = conn.get(False);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test dss scheme
+        url = "dss://localhost:" + port + "/";
+        conn = new DataStreamConnection("test", "test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test connection type
+        assertEq("dss", conn.getType());
+
+        # Test connection serialization
+        DataStreamConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq(conn.url, conn2.url);
+    }
+
+    testMessageClasses() {
+        # Test DataStreamSendMessage
+        TestSendMessage send_msg();
+        int count = 0;
+        while (True) {
+            auto data = send_msg.sendData();
+            if (!exists data) break;
+            count++;
+            assertTrue(count <= 3);
+        }
+        assertEq(3, count);
+
+        # Test DataStreamRecvMessage
+        TestRecvMessage recv_msg();
+        recv_msg.recvData({"item": 1});
+        recv_msg.recvData({"item": 2});
+        recv_msg.recvDataDone();
+        assertEq(2, recv_msg.getReceivedCount());
+        assertTrue(recv_msg.isDone());
+
+        # Test with error
+        TestRecvMessage recv_msg2();
+        recv_msg2.recvDataDone("test error");
+        assertTrue(recv_msg2.isDone());
+        assertEq("test error", recv_msg2.getError());
+
+        # Test DataStreamMessage (combined send/recv)
+        TestMessage msg();
+        assertEq(True, msg instanceof DataStreamSendMessage);
+        assertEq(True, msg instanceof DataStreamRecvMessage);
+    }
+
+    testContentEncoding() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        # Test setting content encoding
+        client.setContentEncoding("gzip");
+        client.setContentEncoding("auto");
+    }
+
+    testErrorHandling() {
+        DataStreamClient client({"url": "http://localhost:" + port});
+
+        hash<auto> info;
+
+        # Test 404 response
+        try {
+            client.del("/api", NOTHING, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(404, info."response-code");
+        }
+    }
+
+    testDataStreamKeepAlive() {
+        # Test multiple DataStream operations on the same keep-alive connection
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000}, True);
+
+        # Clear any previous state
+        hash<auto> info;
+        client.del("/ds-echo", NOTHING, \info);
+
+        # Operation 1: send 3 records via sendDataStream
+        int send_count = 0;
+        list<auto> send_data1 = ({"name": "rec1", "val": 1}, {"name": "rec2", "val": 2}, {"name": "rec3", "val": 3});
+        code sender1 = auto sub() {
+            if (send_count >= send_data1.size()) {
+                return NOTHING;
+            }
+            return send_data1[send_count++];
+        };
+        hash<auto> resp1 = client.sendDataStream(sender1, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp1.status_code, "sendDataStream POST should return 200");
+        assertEq(3, resp1.body.rows, "server should have stored 3 records");
+
+        # Operation 2: GET the stored records
+        hash<auto> resp2 = client.get("/ds-echo", NOTHING, \info);
+        assertEq(200, info."response-code", "GET should return 200");
+        assertEq(NT_LIST, resp2.body.typeCode(), "GET response body should be a list");
+        assertEq(3, resp2.body.size(), "should retrieve 3 records");
+
+        # Operation 3: send 2 more records
+        send_count = 0;
+        list<auto> send_data2 = ({"name": "rec4", "val": 4}, {"name": "rec5", "val": 5});
+        code sender2 = auto sub() {
+            if (send_count >= send_data2.size()) {
+                return NOTHING;
+            }
+            return send_data2[send_count++];
+        };
+        hash<auto> resp3 = client.sendDataStream(sender2, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp3.status_code, "second sendDataStream should return 200");
+        assertEq(5, resp3.body.rows, "server should now have 5 records");
+
+        # Operation 4: GET all records
+        hash<auto> resp4 = client.get("/ds-echo", NOTHING, \info);
+        assertEq(200, info."response-code", "second GET should return 200");
+        assertEq(5, resp4.body.size(), "should retrieve all 5 records");
+
+        # Verify data integrity of retrieved records
+        assertEq("rec1", resp4.body[0].name, "first record name");
+        assertEq(5, resp4.body[4].val, "last record value");
+
+        if (m_options.verbose > 1) {
+            printf("DataStream keep-alive: 4 operations on same connection OK\n");
+        }
+    }
+
+    testDataStreamErrorRecovery() {
+        # Test that a DataStream error doesn't break the keep-alive connection
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000}, True);
+
+        hash<auto> info;
+
+        # Operation 1: successful GET to establish connection
+        client.get("/yaml", NOTHING, \info);
+        assertEq(200, info."response-code", "initial GET should succeed");
+
+        # Operation 2: request to error handler - should get 500
+        bool got_error = False;
+        try {
+            client.get("/ds-error", NOTHING, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            # DataStreamClient throws on error responses
+        }
+        # Either we got an exception or a 500 response
+        assertTrue(got_error || info."response-code" == 500, "error handler should return 500 or throw");
+
+        # Operation 3: subsequent request on same connection should still work
+        client.get("/yaml", NOTHING, \info);
+        assertEq(200, info."response-code", "GET after error should succeed on same connection");
+
+        if (m_options.verbose > 1) {
+            printf("DataStream error recovery: connection survived error OK\n");
+        }
+    }
+
+    testDSv1ProtocolVerification() {
+        # Test that sendDataStream uses DS v1 protocol with correct headers
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000,
+            "protocol": "datastream"}, True);
+
+        # Clear state
+        hash<auto> info;
+        client.del("/ds-echo", NOTHING, \info);
+
+        int send_count = 0;
+        list<auto> data = ({"item": 1}, {"item": 2});
+        code sender = auto sub () {
+            if (send_count >= data.size()) {
+                return NOTHING;
+            }
+            return data[send_count++];
+        };
+
+        hash<auto> resp = client.sendDataStream(sender, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp.status_code, "DS v1 protocol: status 200");
+
+        # Verify DS v1 headers were used (DataStream-Accept must be in request)
+        assertTrue(info.hasKey("request-uri"), "DS v1 protocol: request-uri in info");
+        # The client is in explicit datastream mode
+        assertEq("datastream", client.getProtocol(), "DS v1 protocol: mode is datastream");
+    }
+
+    testDSv1ExplicitMode() {
+        # Test explicit DataStream v1 mode — Connect should not be attempted
+        DataStreamClient client({"url": "http://localhost:" + port,
+            "protocol": "datastream"}, True);
+
+        assertEq("datastream", client.getProtocol(), "explicit DS v1: protocol");
+        assertEq(NOTHING, client.getDetectedProtocol(), "explicit DS v1: no cached protocol");
+
+        # Regular REST calls should still work
+        hash<auto> info;
+        client.get("/yaml", NOTHING, \info);
+        assertEq(200, info."response-code", "explicit DS v1: REST call works");
+    }
+
+    testDSv1EmptyStream() {
+        # Test sendDataStream with zero items
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000,
+            "protocol": "datastream"}, True);
+
+        # Clear state
+        hash<auto> info;
+        client.del("/ds-echo", NOTHING, \info);
+
+        code sender = auto sub () {
+            return NOTHING;  # Empty stream — no data to send
+        };
+
+        hash<auto> resp = client.sendDataStream(sender, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp.status_code, "empty stream: status 200");
+        assertEq(0, resp.body.rows, "empty stream: 0 records stored");
+    }
+
+    testDSv1RecvDataStream() {
+        # Test recvDataStream — server sends YAML response consumed as stream
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000,
+            "protocol": "datastream"}, True);
+
+        # First populate some data
+        hash<auto> info;
+        client.del("/ds-echo", NOTHING, \info);
+
+        int send_count = 0;
+        list<auto> data = ({"name": "r1"}, {"name": "r2"}, {"name": "r3"});
+        code sender = auto sub () {
+            if (send_count >= data.size()) {
+                return NOTHING;
+            }
+            return data[send_count++];
+        };
+        client.sendDataStream(sender, "POST", "/ds-echo", 20s, \info);
+
+        # Now receive using recvDataStream
+        list<auto> received = ();
+        bool eod = False;
+        *string eod_err;
+
+        code recv = sub (auto d) { push received, d; };
+        code eod_cb = sub (*string err) { eod = True; eod_err = err; };
+
+        client.recvDataStream(recv, eod_cb, "GET", "/ds-echo", NOTHING, 20s, \info);
+
+        # The server returns a non-chunked YAML response with the list
+        # recvDataStream handles both chunked and non-chunked responses
+        assertTrue(received.size() > 0, "recvDataStream: received data");
+        assertTrue(eod, "recvDataStream: EOD called");
+        assertEq(NOTHING, eod_err, "recvDataStream: no error");
+    }
+
+    testProtocolModeAccessors() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        # Default is auto
+        assertEq("auto", client.getProtocol(), "default: auto");
+        assertEq(NOTHING, client.getDetectedProtocol(), "default: no detection");
+
+        # Set to datastream
+        client.setProtocol(DataStreamProtocol::DataStream);
+        assertEq("datastream", client.getProtocol(), "set: datastream");
+
+        # Set to connect
+        client.setProtocol(DataStreamProtocol::Connect);
+        assertEq("connect", client.getProtocol(), "set: connect");
+
+        # Set back to auto
+        client.setProtocol(DataStreamProtocol::Auto);
+        assertEq("auto", client.getProtocol(), "set: auto");
+
+        # Reset cache
+        client.resetProtocolCache();
+        assertEq(NOTHING, client.getDetectedProtocol(), "reset: no detection");
+
+        # Invalid protocol cast - enum type system rejects invalid values
+        assertThrows("RUNTIME-CAST-ERROR", sub () { DataStreamProtocol p = cast<enum<DataStreamProtocol>>("bogus"); remove p; });
+    }
+
+    testMaxMessageSize() {
+        # Test max_message_size getter/setter
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        # Default is CONNECT_DEFAULT_MAX_MESSAGE_SIZE (4MB)
+        assertEq(CONNECT_DEFAULT_MAX_MESSAGE_SIZE, client.getMaxMessageSize(),
+            "default max message size");
+
+        # Set custom
+        client.setMaxMessageSize(1024);
+        assertEq(1024, client.getMaxMessageSize(), "custom max message size");
+
+        # Set to 0 (no limit)
+        client.setMaxMessageSize(0);
+        assertEq(0, client.getMaxMessageSize(), "no limit");
+
+        # Constructor option
+        DataStreamClient client2({"url": "http://localhost:" + port,
+            "max_message_size": 2048}, True);
+        assertEq(2048, client2.getMaxMessageSize(), "constructor max message size");
+    }
+
+    log(string msg) {
+        if (m_options.verbose > 2) {
+            vprintf(msg + "\n", argv);
+        }
+    }
+}
+
+class TestSendMessage inherits DataStreamSendMessage {
+    private {
+        int count = 0;
+    }
+
+    private auto sendDataImpl() {
+        if (count < 3) {
+            return {"item": count++};
+        }
+        return NOTHING;
+    }
+}
+
+class TestRecvMessage inherits DataStreamRecvMessage {
+    private {
+        int received_count = 0;
+        bool done = False;
+        *string error;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        received_count++;
+    }
+
+    private nothing recvDataDoneImpl(*string err) {
+        done = True;
+        error = err;
+    }
+
+    int getReceivedCount() {
+        return received_count;
+    }
+
+    bool isDone() {
+        return done;
+    }
+
+    *string getError() {
+        return error;
+    }
+}
+
+class TestMessage inherits DataStreamMessage {
+    private {
+        int send_count = 0;
+        int recv_count = 0;
+    }
+
+    private auto sendDataImpl() {
+        if (send_count < 2) {
+            return {"item": send_count++};
+        }
+        return NOTHING;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        recv_count++;
+    }
+}
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

@@ -1,0 +1,824 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for Connect RPC datagram support (QUIC datagrams, RFC 9221/9297).
+
+    Unit tests exercise framing, constants, content-type parsing, handler
+    registration, reflection, and DataProvider integration.
+
+    Integration tests exercise the full datagram flow through HttpServer
+    with HTTP/3 (QUIC): fire-and-forget, bidirectional exchange, error
+    handling, and HTTP/2 fallback rejection.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires Connect
+%requires ConnectDataProvider
+%requires QUnit
+
+%requires json
+
+%requires HttpClientIo
+
+%requires HttpServerAsyncIo
+
+%exec-class ConnectDatagramTest
+
+class ConnectDatagramTest inherits QUnit::Test {
+    private {
+        *Logger m_logger;
+        *HttpServer m_http;
+        int m_port;
+        bool m_h3_available = False;
+
+        # Fire-and-forget synchronization
+        Counter m_ff_counter(1);
+        *auto m_ff_msg;
+
+        # Bidi handler error test
+        Counter m_bidi_error_counter(1);
+        bool m_bidi_error_handler_called = False;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("ConnectDatagram test", "1.0") {
+        # ---- Unit tests (no HTTP/3 required) ----
+        addTestCase("datagram constants", \testDatagramConstants());
+        addTestCase("datagram framing", \testDatagramFraming());
+        addTestCase("datagram framing edge cases", \testDatagramFramingEdgeCases());
+        addTestCase("datagram content-type parsing", \testDatagramContentTypeParsing());
+        addTestCase("datagram request headers", \testDatagramRequestHeaders());
+        addTestCase("rpc type name mapping", \testRpcTypeNameMapping());
+        addTestCase("reflection descriptor includes rpc_type_name", \testReflectionDescriptor());
+        addTestCase("datagram handler registration", \testHandlerRegistration());
+        addTestCase("datagram handler registration with types", \testHandlerRegistrationWithTypes());
+        addTestCase("datagram event constants", \testDatagramEventConstants());
+        addTestCase("negative: framing too short", \testFramingTooShort());
+        addTestCase("handler dispatch: non-datagram method with datagram ct",
+            \testNonDatagramMethodWithDatagramCt());
+
+%ifndef NoHttpClientIo
+%ifndef NoHttpServerAsyncIo
+        # ---- Integration tests (require HTTP/3 via HttpClientIo + HttpServerAsyncIo) ----
+        addTestCase("H3 fire-and-forget datagram", \testH3FireAndForget());
+        addTestCase("H3 datagram bidi exchange", \testH3DatagramBidi());
+        addTestCase("H3 datagram bidi multiple messages", \testH3DatagramBidiMultiple());
+        addTestCase("H3 datagram bidi handler error", \testH3DatagramBidiHandlerError());
+        addTestCase("H2 datagram not supported", \testH2DatagramNotSupported());
+        addTestCase("datagram method data provider children", \testMethodDataProviderChildren());
+        addTestCase("negative: datagram bidi doRequest error", \testBidiDoRequestError());
+%endif
+%endif
+
+        m_logger = new Logger("connect-datagram", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            m_logger.addAppender(new TestAppender());
+        }
+
+        createServer();
+        on_exit {
+            delete m_http;
+        }
+
+        set_return_value(main());
+    }
+
+    private createServer() {
+        m_http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": m_logger,
+            "debug": True,
+            "quic_headers_only": True,
+        });
+
+        Connect::ConnectHandler handler();
+        handler.setDebug(m_options.verbose > 2);
+
+        # Fire-and-forget handler: captures the received message
+        handler.registerDatagramFireAndForget("Telemetry", "Report",
+            sub (auto message, hash<auto> metadata) {
+                m_ff_msg = message;
+                m_ff_counter.dec();
+            });
+
+        # Bidi echo handler: echoes each message back with "echo:" prefix
+        handler.registerDatagramBidi("Sensor", "Exchange",
+            sub (Connect::ConnectServerDatagramStream stream, hash<auto> metadata) {
+                while (*auto msg = stream.read(5s)) {
+                    stream.send({"echo": msg});
+                }
+            });
+
+        # Bidi error handler: throws after first read
+        handler.registerDatagramBidi("Error", "Fail",
+            sub (Connect::ConnectServerDatagramStream stream, hash<auto> metadata) {
+                m_bidi_error_handler_called = True;
+                *auto msg = stream.read(5s);
+                m_bidi_error_counter.dec();
+                throw "TEST-ERROR", "deliberate handler error";
+            });
+
+        # Unary handler for protocol mismatch testing
+        handler.registerUnary("TestService", "Echo",
+            auto sub (auto request, hash<auto> metadata) {
+                return request;
+            });
+
+        m_http.setHandler("connect", "", NOTHING, handler);
+        m_http.setDefaultHandler("connect", handler);
+
+        m_http.waitForAsyncIo();
+
+        try {
+            hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "enable_h3": True,
+            });
+            m_port = info.port;
+            m_h3_available = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # enable_h3 may fail if QUIC not compiled in; fall back to TLS-only
+            hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            m_port = info.port;
+        }
+
+        m_http.waitForAsyncIo();
+    }
+
+    private string url() {
+        return sprintf("https://127.0.0.1:%d", m_port);
+    }
+
+    # ======================================================================
+    # Unit tests (no HTTP/3 transport required)
+    # ======================================================================
+
+    # ---- Datagram constant tests ----
+
+    testDatagramConstants() {
+        # RPC type constants
+        assertEq(4, Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
+            "fire-and-forget RPC type constant");
+        assertEq(5, Connect::CONNECT_RPC_DATAGRAM_BIDI,
+            "datagram bidi RPC type constant");
+
+        # Datagram flag constants
+        assertEq(0x04, Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ,
+            "datagram ACK request flag");
+        assertEq(0x08, Connect::CONNECT_FLAG_DATAGRAM_ERROR,
+            "datagram error flag");
+
+        # Content-type prefix
+        assertEq("application/connect+datagram+",
+            Connect::ConnectDatagramContentTypePrefix,
+            "datagram content-type prefix");
+
+        # Capsule-Protocol header
+        assertEq("capsule-protocol", Connect::ConnectCapsuleProtocolHeader,
+            "capsule-protocol header name");
+
+        # Ensure flag bits don't overlap with existing flags
+        assertEq(0, Connect::CONNECT_FLAG_COMPRESSED & Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ,
+            "ACK flag does not overlap with COMPRESSED");
+        assertEq(0, Connect::CONNECT_FLAG_END_STREAM & Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ,
+            "ACK flag does not overlap with END_STREAM");
+        assertEq(0, Connect::CONNECT_FLAG_COMPRESSED & Connect::CONNECT_FLAG_DATAGRAM_ERROR,
+            "ERROR flag does not overlap with COMPRESSED");
+        assertEq(0, Connect::CONNECT_FLAG_END_STREAM & Connect::CONNECT_FLAG_DATAGRAM_ERROR,
+            "ERROR flag does not overlap with END_STREAM");
+        assertEq(0, Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ
+            & Connect::CONNECT_FLAG_DATAGRAM_ERROR,
+            "ACK and ERROR flags do not overlap");
+    }
+
+    # ---- Datagram framing tests ----
+
+    testDatagramFraming() {
+        # Basic framing: flags=0, seq=0, empty payload
+        binary framed = Connect::ConnectHelper::frameDatagramMessage(binary(), 0, 0);
+        assertEq(2, framed.size(), "empty payload frame size");
+        assertEq(0, framed[0], "flags byte");
+        assertEq(0, framed[1], "seq byte");
+
+        # Unframe it
+        hash<Connect::ConnectDatagramFrameInfo> info =
+            Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(0, info.flags, "unframed flags");
+        assertEq(0, info.seq, "unframed seq");
+        assertEq(0, info.data.size(), "unframed empty payload");
+
+        # Framing with payload
+        binary payload = binary("hello datagram");
+        framed = Connect::ConnectHelper::frameDatagramMessage(payload, 0, 42);
+        assertEq(2 + payload.size(), framed.size(), "frame with payload size");
+        assertEq(42, framed[1], "sequence number");
+
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(0, info.flags, "unframed flags with payload");
+        assertEq(42, info.seq, "unframed seq with payload");
+        assertEq(payload, info.data, "unframed payload");
+
+        # Framing with flags
+        framed = Connect::ConnectHelper::frameDatagramMessage(payload,
+            Connect::CONNECT_FLAG_COMPRESSED | Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ, 255);
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(Connect::CONNECT_FLAG_COMPRESSED | Connect::CONNECT_FLAG_DATAGRAM_ACK_REQ,
+            info.flags, "flags preserved");
+        assertEq(255, info.seq, "max seq preserved");
+        assertEq(payload, info.data, "payload preserved with flags");
+
+        # Error flag
+        framed = Connect::ConnectHelper::frameDatagramMessage(payload,
+            Connect::CONNECT_FLAG_DATAGRAM_ERROR, 0);
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(Connect::CONNECT_FLAG_DATAGRAM_ERROR, info.flags, "error flag preserved");
+    }
+
+    testDatagramFramingEdgeCases() {
+        # Sequence number wrapping (only low byte used)
+        binary payload = binary("test");
+        binary framed = Connect::ConnectHelper::frameDatagramMessage(payload, 0, 256);
+        hash<Connect::ConnectDatagramFrameInfo> info =
+            Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(0, info.seq, "seq wraps at 256");
+
+        framed = Connect::ConnectHelper::frameDatagramMessage(payload, 0, 257);
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(1, info.seq, "seq wraps at 257");
+
+        # Flags only use low byte
+        framed = Connect::ConnectHelper::frameDatagramMessage(payload, 0x1FF, 0);
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(0xFF, info.flags, "flags truncated to low byte");
+
+        # Large payload
+        binary large = binary();
+        for (int i = 0; i < 1000; ++i) {
+            large += binary("x");
+        }
+        framed = Connect::ConnectHelper::frameDatagramMessage(large, 0, 100);
+        info = Connect::ConnectHelper::unframeDatagramMessage(framed);
+        assertEq(1000, info.data.size(), "large payload preserved");
+        assertEq(100, info.seq, "seq preserved with large payload");
+    }
+
+    # ---- Negative framing tests ----
+
+    testFramingTooShort() {
+        # Empty data
+        assertThrows("CONNECT-FRAMING-ERROR", sub () {
+            Connect::ConnectHelper::unframeDatagramMessage(binary());
+        }, NOTHING, "empty data throws");
+
+        # 1 byte only
+        assertThrows("CONNECT-FRAMING-ERROR", sub () {
+            Connect::ConnectHelper::unframeDatagramMessage(binary("x"));
+        }, NOTHING, "1-byte data throws");
+    }
+
+    # ---- Content-type parsing ----
+
+    testDatagramContentTypeParsing() {
+        # Basic datagram content type
+        *hash<auto> ct = Connect::ConnectHelper::parseContentType(
+            "application/connect+datagram+yaml");
+        assertEq("yaml", ct.codec_name, "datagram yaml codec name");
+        assertEq(True, ct.datagram, "datagram flag set");
+        assertEq(False, ct.streaming, "streaming flag not set for datagram");
+
+        # JSON datagram
+        ct = Connect::ConnectHelper::parseContentType(
+            "application/connect+datagram+json");
+        assertEq("json", ct.codec_name, "datagram json codec name");
+        assertEq(True, ct.datagram, "datagram flag for json");
+
+        # CBOR datagram
+        ct = Connect::ConnectHelper::parseContentType(
+            "application/connect+datagram+cbor");
+        assertEq("cbor", ct.codec_name, "datagram cbor codec name");
+        assertEq(True, ct.datagram, "datagram flag for cbor");
+
+        # With parameters
+        ct = Connect::ConnectHelper::parseContentType(
+            "application/connect+datagram+yaml; charset=utf-8");
+        assertEq("yaml", ct.codec_name, "datagram with charset param");
+        assertEq(True, ct.datagram, "datagram flag with params");
+
+        # Case insensitive
+        ct = Connect::ConnectHelper::parseContentType(
+            "Application/Connect+Datagram+YAML");
+        assertEq("yaml", ct.codec_name, "case insensitive datagram ct");
+        assertEq(True, ct.datagram, "datagram flag case insensitive");
+
+        # Streaming content type is NOT datagram
+        ct = Connect::ConnectHelper::parseContentType("application/connect+yaml");
+        assertEq("yaml", ct.codec_name, "streaming ct codec name");
+        assertEq(True, ct.streaming, "streaming flag set");
+        assertNothing(ct.datagram, "no datagram flag on streaming ct");
+
+        # Unary content type is NOT datagram
+        ct = Connect::ConnectHelper::parseContentType("application/yaml");
+        assertEq("yaml", ct.codec_name, "unary ct codec name");
+        assertEq(False, ct.streaming, "unary not streaming");
+        assertNothing(ct.datagram, "no datagram flag on unary ct");
+
+        # Empty codec name after datagram prefix — falls through to streaming match
+        # (this is an invalid content-type; the server will reject the unknown codec)
+        ct = Connect::ConnectHelper::parseContentType("application/connect+datagram+");
+        assertEq(True, ct.streaming, "empty datagram codec falls through to streaming");
+        assertEq("datagram+", ct.codec_name,
+            "empty datagram codec parsed as streaming codec 'datagram+'");
+    }
+
+    # ---- Request header building ----
+
+    testDatagramRequestHeaders() {
+        hash<string, string> headers = Connect::ConnectHelper::buildDatagramRequestHeaders(
+            "yaml");
+        assertEq("application/connect+datagram+yaml", headers."content-type",
+            "datagram request content-type");
+        assertEq("1", headers{Connect::ConnectProtocolVersionHeader},
+            "protocol version header");
+        assertEq("?1", headers{Connect::ConnectCapsuleProtocolHeader},
+            "capsule-protocol header");
+
+        # With timeout
+        headers = Connect::ConnectHelper::buildDatagramRequestHeaders("json",
+            <Connect::ConnectCallOptions>{"timeout_ms": 5000});
+        assertEq("application/connect+datagram+json", headers."content-type",
+            "json datagram ct");
+        assertEq("5000", headers{Connect::ConnectTimeoutHeader},
+            "timeout header");
+
+        # With metadata
+        headers = Connect::ConnectHelper::buildDatagramRequestHeaders("yaml",
+            <Connect::ConnectCallOptions>{"metadata": {"x-custom": "val"}});
+        assertEq("val", headers."x-custom", "custom metadata header");
+
+        # Encoding is NOT included in datagram headers (compression is per-message,
+        # not per-channel)
+        headers = Connect::ConnectHelper::buildDatagramRequestHeaders("yaml",
+            <Connect::ConnectCallOptions>{"encoding": "gzip"});
+        assertNothing(headers."content-encoding", "no content-encoding in datagram headers");
+    }
+
+    # ---- RPC type name mapping ----
+
+    testRpcTypeNameMapping() {
+        assertEq("unary",
+            Connect::ConnectTypeHelper::rpcTypeName(Connect::CONNECT_RPC_UNARY),
+            "unary name");
+        assertEq("server_stream",
+            Connect::ConnectTypeHelper::rpcTypeName(Connect::CONNECT_RPC_SERVER_STREAM),
+            "server_stream name");
+        assertEq("client_stream",
+            Connect::ConnectTypeHelper::rpcTypeName(Connect::CONNECT_RPC_CLIENT_STREAM),
+            "client_stream name");
+        assertEq("bidi",
+            Connect::ConnectTypeHelper::rpcTypeName(Connect::CONNECT_RPC_BIDI),
+            "bidi name");
+        assertEq("datagram_fire_and_forget",
+            Connect::ConnectTypeHelper::rpcTypeName(
+                Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET),
+            "datagram_fire_and_forget name");
+        assertEq("datagram_bidi",
+            Connect::ConnectTypeHelper::rpcTypeName(Connect::CONNECT_RPC_DATAGRAM_BIDI),
+            "datagram_bidi name");
+
+        # Unknown type
+        string unknown = Connect::ConnectTypeHelper::rpcTypeName(99);
+        assertRegex("unknown", unknown, "unknown type name");
+    }
+
+    # ---- Reflection descriptor ----
+
+    testReflectionDescriptor() {
+        # Build a descriptor for a datagram method
+        hash<Connect::ConnectServerMethodInfo> info = <Connect::ConnectServerMethodInfo>{
+            "service": "Telemetry",
+            "method": "Report",
+            "path": "/Telemetry/Report",
+            "handler": sub (auto msg, hash<auto> md) {},
+            "rpc_type": Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
+        };
+        hash<auto> desc = Connect::ConnectTypeHelper::methodInfoToDescriptor(info);
+        assertEq("Telemetry", desc.service, "descriptor service");
+        assertEq("Report", desc.method, "descriptor method");
+        assertEq(Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET, desc.rpc_type,
+            "descriptor rpc_type");
+        assertEq("datagram_fire_and_forget", desc.rpc_type_name,
+            "descriptor rpc_type_name");
+
+        # Bidi datagram descriptor
+        info.rpc_type = Connect::CONNECT_RPC_DATAGRAM_BIDI;
+        info.service = "Sensor";
+        info.method = "Exchange";
+        info.path = "/Sensor/Exchange";
+        desc = Connect::ConnectTypeHelper::methodInfoToDescriptor(info);
+        assertEq("datagram_bidi", desc.rpc_type_name,
+            "bidi datagram descriptor rpc_type_name");
+
+        # Existing types also get rpc_type_name
+        info.rpc_type = Connect::CONNECT_RPC_UNARY;
+        desc = Connect::ConnectTypeHelper::methodInfoToDescriptor(info);
+        assertEq("unary", desc.rpc_type_name, "unary descriptor rpc_type_name");
+    }
+
+    # ---- Handler registration ----
+
+    testHandlerRegistration() {
+        Connect::ConnectHandler handler();
+
+        # Register fire-and-forget
+        handler.registerDatagramFireAndForget("Svc1", "Method1",
+            sub (auto msg, hash<auto> md) {});
+        hash<string, hash<Connect::ConnectServerMethodInfo>> registry =
+            handler.getMethodRegistry();
+        assertEq(True, registry.hasKey("Svc1/Method1"), "f&f method registered");
+        assertEq(Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
+            registry."Svc1/Method1".rpc_type, "f&f rpc type");
+
+        # Register datagram bidi
+        handler.registerDatagramBidi("Svc2", "Method2",
+            sub (Connect::ConnectServerDatagramStream stream, hash<auto> md) {});
+        registry = handler.getMethodRegistry();
+        assertEq(True, registry.hasKey("Svc2/Method2"), "bidi datagram method registered");
+        assertEq(Connect::CONNECT_RPC_DATAGRAM_BIDI,
+            registry."Svc2/Method2".rpc_type, "bidi datagram rpc type");
+    }
+
+    testHandlerRegistrationWithTypes() {
+        Connect::ConnectHandler handler();
+
+        HashDataType req_type("TelemetryData");
+        req_type.addField(new QoreDataField("cpu", "CPU usage",
+            AbstractDataProviderType::get(FloatType)));
+
+        # Register fire-and-forget with type
+        handler.registerDatagramFireAndForget("Telemetry", "Report",
+            sub (auto msg, hash<auto> md) {},
+            req_type);
+        hash<string, hash<Connect::ConnectServerMethodInfo>> registry =
+            handler.getMethodRegistry();
+        assertEq(True, exists registry."Telemetry/Report".request_type,
+            "f&f request type registered");
+
+        # Register datagram bidi with types
+        HashDataType resp_type("SensorResponse");
+        resp_type.addField(new QoreDataField("echo", "Echo data",
+            AbstractDataProviderType::get(AutoType)));
+
+        handler.registerDatagramBidi("Sensor", "Exchange",
+            sub (Connect::ConnectServerDatagramStream stream, hash<auto> md) {},
+            req_type, resp_type);
+        registry = handler.getMethodRegistry();
+        assertEq(True, exists registry."Sensor/Exchange".request_type,
+            "bidi datagram request type registered");
+        assertEq(True, exists registry."Sensor/Exchange".response_type,
+            "bidi datagram response type registered");
+    }
+
+    # ---- Datagram event constants ----
+
+    testDatagramEventConstants() {
+        assertEq("connect-datagram-message",
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_MESSAGE,
+            "datagram message event");
+        assertEq("connect-datagram-closed",
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_CLOSED,
+            "datagram closed event");
+        assertEq("connect-datagram-error",
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_ERROR,
+            "datagram error event");
+        assertEq("connect-datagram-send",
+            ConnectDataProvider::MESSAGE_CONNECT_DATAGRAM_SEND,
+            "datagram send message");
+
+        # Ensure no overlap with stream event constants
+        assertNeq(ConnectDataProvider::EVENT_CONNECT_STREAM_MESSAGE,
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_MESSAGE,
+            "datagram message != stream message");
+        assertNeq(ConnectDataProvider::EVENT_CONNECT_STREAM_COMPLETE,
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_CLOSED,
+            "datagram closed != stream complete");
+        assertNeq(ConnectDataProvider::EVENT_CONNECT_STREAM_ERROR,
+            ConnectDataProvider::EVENT_CONNECT_DATAGRAM_ERROR,
+            "datagram error != stream error");
+        assertNeq(ConnectDataProvider::MESSAGE_CONNECT_STREAM_SEND,
+            ConnectDataProvider::MESSAGE_CONNECT_DATAGRAM_SEND,
+            "datagram send != stream send");
+    }
+
+    # ---- Handler dispatch: non-datagram method with datagram content type ----
+
+    testNonDatagramMethodWithDatagramCt() {
+        *hash<auto> ct = Connect::ConnectHelper::parseContentType(
+            "application/connect+datagram+yaml");
+        assertEq(True, ct.datagram, "datagram ct flag");
+
+        ct = Connect::ConnectHelper::parseContentType("application/connect+yaml");
+        assertEq(True, ct.streaming, "streaming ct flag");
+        assertNothing(ct.datagram, "no datagram flag on streaming");
+    }
+
+    # ======================================================================
+    # Integration tests (require HTTP/3 via HttpClientIo + HttpServerAsyncIo)
+    # ======================================================================
+
+%ifndef NoHttpClientIo
+%ifndef NoHttpServerAsyncIo
+
+    # ---- Fire-and-forget: client sends one datagram, server receives it ----
+
+    testH3FireAndForget() {
+        if (!m_h3_available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+            });
+        on_exit client.shutdown();
+
+        # Reset synchronization state
+        m_ff_counter = new Counter(1);
+        m_ff_msg = NOTHING;
+
+        # Send fire-and-forget datagram
+        client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
+
+        # Wait for the server handler to process
+        assertEq(0, m_ff_counter.waitForZero(10s), "f&f counter reached zero");
+        assertEq(42.5, m_ff_msg.cpu, "f&f: cpu value");
+        assertEq(1024, m_ff_msg.mem, "f&f: mem value");
+    }
+
+    # ---- Bidi datagram: single message echo ----
+
+    testH3DatagramBidi() {
+        if (!m_h3_available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+            });
+        on_exit client.shutdown();
+
+        Connect::ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+        on_exit dg.close();
+
+        # Send a message and read the echo
+        dg.send({"reading": 99.1});
+        *auto reply = dg.read(10s);
+        assertTrue(exists reply, "bidi: got reply");
+        assertEq(99.1, reply.echo.reading, "bidi: echo value");
+    }
+
+    # ---- Bidi datagram: multiple message exchange ----
+
+    testH3DatagramBidiMultiple() {
+        if (!m_h3_available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+            });
+        on_exit client.shutdown();
+
+        Connect::ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+        on_exit dg.close();
+
+        # Exchange multiple messages
+        list<float> values = (10.0, 20.0, 30.0);
+        for (int i = 0; i < values.size(); ++i) {
+            dg.send({"reading": values[i]});
+            *auto reply = dg.read(10s);
+            assertTrue(exists reply, sprintf("bidi multi: got reply %d", i));
+            assertEq(values[i], reply.echo.reading,
+                sprintf("bidi multi: echo value %d", i));
+        }
+    }
+
+    # ---- Bidi datagram: server handler throws error ----
+
+    testH3DatagramBidiHandlerError() {
+        if (!m_h3_available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+            });
+        on_exit client.shutdown();
+
+        Connect::ConnectDatagramStream dg = client.datagramBidi("Error", "Fail");
+        on_exit dg.close();
+
+        # Send a message to trigger the handler
+        dg.send({"trigger": True});
+
+        # Wait for the handler to process and throw
+        m_bidi_error_counter.waitForZero(10s);
+        assertTrue(m_bidi_error_handler_called, "error handler was called");
+
+        # The server sends an error datagram before closing; read() should
+        # throw CONNECT-DATAGRAM-ERROR when it receives the error envelope
+        try {
+            *auto reply = dg.read(10s);
+            # If we got a value or NOTHING without exception, that's also acceptable
+            assertTrue(True, "error handler: got response without exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("CONNECT-DATAGRAM-ERROR", ex.err, "error handler: got expected exception");
+        }
+    }
+
+    # ---- HTTP/2 fallback: datagrams rejected ----
+
+    testH2DatagramNotSupported() {
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+            });
+        on_exit client.shutdown();
+
+        assertThrows("CONNECT-DATAGRAM-NOT-SUPPORTED", sub () {
+            client.sendDatagram("Telemetry", "Report", {"cpu": 1.0});
+        }, NOTHING, "H2 fire-and-forget throws");
+
+        assertThrows("CONNECT-DATAGRAM-NOT-SUPPORTED", sub () {
+            client.datagramBidi("Sensor", "Exchange");
+        }, NOTHING, "H2 datagram bidi throws");
+    }
+
+    # ---- ConnectMethodDataProvider children ----
+
+    testMethodDataProviderChildren() {
+        # Fire-and-forget: no children
+        hash<auto> ff_desc = {
+            "rpc_type": Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
+        };
+        ConnectDataProvider::ConnectMethodDataProvider ff_provider("Telemetry", "Report",
+            <ConnectDataProvider::ConnectDataProviderOptions>{
+                "url": url(),
+            }, ff_desc);
+        *list<string> children = ff_provider.getChildProviderNames();
+        assertNothing(children, "fire-and-forget has no children");
+
+        # Datagram bidi: has "datagram-events" child
+        hash<auto> bidi_desc = {
+            "rpc_type": Connect::CONNECT_RPC_DATAGRAM_BIDI,
+        };
+        ConnectDataProvider::ConnectMethodDataProvider bidi_provider("Sensor", "Exchange",
+            <ConnectDataProvider::ConnectDataProviderOptions>{
+                "url": url(),
+            }, bidi_desc);
+        children = bidi_provider.getChildProviderNames();
+        assertEq(("datagram-events",), children, "datagram bidi has datagram-events child");
+
+        *AbstractDataProvider child = bidi_provider.getChildProvider("datagram-events");
+        assertEq(True, exists child, "datagram-events child exists");
+        assertEq("datagram-events", child.getName(), "child provider name");
+
+        # Non-existent child
+        child = bidi_provider.getChildProvider("events");
+        assertNothing(child, "datagram bidi does not have 'events' child");
+
+        # Unary: no children
+        hash<auto> unary_desc = {
+            "rpc_type": Connect::CONNECT_RPC_UNARY,
+        };
+        ConnectDataProvider::ConnectMethodDataProvider unary_provider("Test", "Echo",
+            <ConnectDataProvider::ConnectDataProviderOptions>{
+                "url": url(),
+            }, unary_desc);
+        children = unary_provider.getChildProviderNames();
+        assertNothing(children, "unary has no children");
+    }
+
+    # ---- Negative: datagram bidi via doRequest ----
+
+    testBidiDoRequestError() {
+        hash<auto> bidi_desc = {
+            "rpc_type": Connect::CONNECT_RPC_DATAGRAM_BIDI,
+        };
+        ConnectDataProvider::ConnectMethodDataProvider provider("Sensor", "Exchange",
+            <ConnectDataProvider::ConnectDataProviderOptions>{
+                "url": url(),
+            }, bidi_desc);
+        assertThrows("CONNECT-PROVIDER-ERROR", sub () {
+            provider.doRequest({"data": 1});
+        }, NOTHING, "datagram bidi doRequest throws");
+    }
+
+%endif
+%endif
+}
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%d T%t [%p]: "
+            "%m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

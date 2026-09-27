@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.desc": {
+          "source": "Read YAML document data from a specific file location.\n\nThe YAML file may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "Lit les données d'un document YAML à partir d'un emplacement de fichier spécifique.\n\nLe fichier YAML peut contenir un ou plusieurs documents séparés par des marqueurs `---`. Chaque document fait l'objet d'une itération en tant qu'enregistrement distinct.\n\n**Options principales**\n- `path` : l'emplacement du fichier à lire (obligatoire)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n- `skip_empty_documents` : ignorer les documents vides (par défaut : `True`)\n- `max_documents` : nombre maximal de documents à lire (`0` = illimité)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
+          "source": "Read YAML Document File",
+          "message": "Lire le fichier de document YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "Encodage des caractères pour la lecture des données YAML. Par défaut : `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Encodage de caractères"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "Encodage d'entrée"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "Nombre maximal de documents à lire à partir du flux. Utilisez `0` (par défaut) pour illimité. Utile pour l'échantillonnage ou pour limiter l'utilisation de la mémoire."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "Nombre max. de documents"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "Nombre maximal de documents à lire"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "Lorsque `True` (par défaut), les documents dont l'analyse produit `NOTHING` sont ignorés. Définissez sur `False` pour inclure les documents vides dans l'itération."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "Ignorer les documents vides"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "Ignorer les documents vides"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path to the YAML file containing one or more documents. Documents are separated by `---` markers.",
+          "message": "Le chemin du système de fichiers vers le fichier YAML contenant un ou plusieurs documents. Les documents sont séparés par des marqueurs `---`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Chemin du fichier"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to YAML file",
+          "message": "Chemin d'accès au fichier YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.short_desc": {
+          "source": "Read YAML document data from a specific file location",
+          "message": "Lire les données de document YAML à partir d'un emplacement de fichier spécifique"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.desc": {
+          "source": "Read YAML inline data provided directly as a string.\n\nThe YAML data may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `data`: the YAML string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "Lit les données YAML en ligne fournies directement sous forme de chaîne.\n\nLes données YAML peuvent contenir un ou plusieurs documents séparés par des marqueurs `---`. Chaque document fait l'objet d'une itération en tant qu'enregistrement distinct.\n\n**Options principales**\n- `data` : la chaîne YAML à analyser (obligatoire)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n- `skip_empty_documents` : ignorer les documents vides (par défaut : `True`)\n- `max_documents` : nombre maximal de documents à lire (`0` = illimité)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read YAML Inline Data",
+          "message": "Lire les données YAML en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "YAML data provided directly as a string, useful for embedded data or testing scenarios.",
+          "message": "Données YAML fournies directement sous forme de chaîne, utiles pour les données intégrées ou les scénarios de test."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "YAML Data",
+          "message": "Données YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "YAML data as string",
+          "message": "Données YAML sous forme de chaîne"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "Encodage des caractères pour la lecture des données YAML. Par défaut : `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Encodage de caractères"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "Encodage d'entrée"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "Nombre maximal de documents à lire à partir du flux. Utilisez `0` (par défaut) pour illimité. Utile pour l'échantillonnage ou pour limiter l'utilisation de la mémoire."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "Nombre max. de documents"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "Nombre maximal de documents à lire"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "Lorsque `True` (par défaut), les documents dont l'analyse produit `NOTHING` sont ignorés. Définissez sur `False` pour inclure les documents vides dans l'itération."
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "Ignorer les documents vides"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "Ignorer les documents vides"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read YAML inline data",
+          "message": "Lire les données YAML en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Écrit des enregistrements de document YAML sous forme de flux multi-documents vers un emplacement de fichier spécifique.\n\nLes enregistrements sont accumulés et écrits avec des séparateurs de documents `---` lorsque `commit()` est appelé ou que le fournisseur est détruit.\n\n**Options principales**\n- `path` : l'emplacement du fichier de sortie (obligatoire)\n- `flow_style` : utiliser une sortie YAML compacte en ligne (par défaut : `False`)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
+          "source": "Write YAML Document File",
+          "message": "Écrire le fichier de document YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "Encodage des caractères pour l'écriture des données YAML. Par défaut : `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Encodage de caractères"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "Encodage de sortie"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "Style Flow : format compact en ligne (par ex. {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "Style Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "Format compact en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "Style Block : format indenté (par défaut)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "Style Block"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "Format indenté (par défaut)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "Lorsque `True`, génère le YAML en style flow (compact en ligne). Lorsque `False` (par défaut), génère en style block (indenté)."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "Style Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "Utiliser une sortie YAML compacte en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path to write the YAML document stream to. Documents are separated by `---` markers.",
+          "message": "Le chemin du système de fichiers où écrire le flux de documents YAML. Les documents sont séparés par des marqueurs `---`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Chemin du fichier"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to YAML output file",
+          "message": "Chemin d'accès au fichier de sortie YAML"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.short_desc": {
+          "source": "Write YAML document data to a specific file location",
+          "message": "Écrire les données de document YAML vers un emplacement de fichier spécifique"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Écrit des enregistrements de document YAML sous forme de flux multi-documents vers un flux de sortie ou récupère le résultat sous forme de données binaires.\n\nLes enregistrements sont accumulés et écrits avec des séparateurs de documents `---` lorsque `commit()` est appelé ou que le fournisseur est détruit.\n\n**Options principales**\n- `stream` : le flux de sortie où écrire\n- `flow_style` : utiliser une sortie YAML compacte en ligne (par défaut : `False`)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write YAML Inline Data",
+          "message": "Écrire les données YAML en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "Encodage des caractères pour l'écriture des données YAML. Par défaut : `UTF-8`."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Encodage de caractères"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "Encodage de sortie"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "Style Flow : format compact en ligne (par ex. {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "Style Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "Format compact en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "Style Block : format indenté (par défaut)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "Style Block"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "Format indenté (par défaut)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "Lorsque `True`, génère le YAML en style flow (compact en ligne). Lorsque `False` (par défaut), génère en style block (indenté)."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "Style Flow"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "Utiliser une sortie YAML compacte en ligne"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
+          "message": "Un objet `OutputStream` où écrire les documents YAML. Utilisez ceci pour écrire vers des connexions réseau, des fichiers compressés ou d'autres destinations."
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Flux de sortie"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "Output stream to write to",
+          "message": "Flux de sortie où écrire"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write YAML data to a stream",
+          "message": "Écrire des données YAML vers un flux"
+        },
+        "app.WWFtbERvY3VtZW50.desc": {
+          "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",
+          "message": "Fournit un accès en lecture et en écriture aux **flux de documents YAML** — fichiers ou données en ligne contenant un ou plusieurs documents YAML séparés par des marqueurs `---`.\n\nUtilisez cette application lorsque vous devez :\n- Analyser des fichiers de configuration YAML multi-documents ou des exports de données\n- Transformer des données YAML entre systèmes dans le cadre d'un pipeline d'intégration\n- Générer une sortie YAML pour la gestion de configuration ou l'échange de données\n\nPrend en charge un encodage des caractères configurable, le filtrage des documents vides et les styles de sortie YAML en block (indenté) et en flow (compact en ligne).\n\n[Qore](https://qore.org)"
+        },
+        "app.WWFtbERvY3VtZW50.display_name": {
+          "source": "YAML Document Files",
+          "message": "Fichiers de documents YAML"
+        },
+        "app.WWFtbERvY3VtZW50.short_desc": {
+          "source": "Read and write YAML document streams",
+          "message": "Lire et écrire des flux de documents YAML"
+        }
+      }
+    }
+  }
+}

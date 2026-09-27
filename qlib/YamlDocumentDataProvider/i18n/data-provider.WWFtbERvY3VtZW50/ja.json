@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.desc": {
+          "source": "Read YAML document data from a specific file location.\n\nThe YAML file may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "特定のファイル場所から YAML ドキュメントデータを読み取ります。\n\nYAML ファイルには、`---` マーカーで区切られた 1 つ以上のドキュメントを含めることができます。各ドキュメントは個別のレコードとして反復処理されます。\n\n**主要オプション**\n- `path`: 読み取り元のファイルの場所 (必須)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n- `skip_empty_documents`: 空のドキュメントをスキップ (デフォルト: `True`)\n- `max_documents`: 読み取るドキュメントの最大数 (`0` = 無制限)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.display_name": {
+          "source": "Read YAML Document File",
+          "message": "YAML ドキュメントファイルの読み取り"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "YAML データの読み取りに使用する文字エンコーディング。デフォルト: `UTF-8`。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "文字エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "入力エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "ストリームから読み取るドキュメントの最大数。無制限にするには `0` (デフォルト) を使用します。サンプリングやメモリ使用量の制限に役立ちます。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "最大ドキュメント数"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "読み取る最大ドキュメント数"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "`True` (デフォルト) の場合、`NOTHING` にパースされるドキュメントはスキップされます。反復処理に空のドキュメントを含めるには `False` に設定します。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "空のドキュメントをスキップ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "空のドキュメントをスキップ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path to the YAML file containing one or more documents. Documents are separated by `---` markers.",
+          "message": "1 つ以上のドキュメントを含む YAML ファイルへのファイルシステムパス。ドキュメントは `---` マーカーで区切られます。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "ファイルパス"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to YAML file",
+          "message": "YAML ファイルへのパス"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZA.short_desc": {
+          "source": "Read YAML document data from a specific file location",
+          "message": "特定のファイル場所から YAML ドキュメントデータを読み取り"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.desc": {
+          "source": "Read YAML inline data provided directly as a string.\n\nThe YAML data may contain one or more documents separated by `---` markers. Each document is iterated as a separate record.\n\n**Key Options**\n- `data`: the YAML string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n- `skip_empty_documents`: skip empty documents (default: `True`)\n- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+          "message": "文字列として直接提供された YAML インラインデータを読み取ります。\n\nYAML データには、`---` マーカーで区切られた 1 つ以上のドキュメントを含めることができます。各ドキュメントは個別のレコードとして反復処理されます。\n\n**主要オプション**\n- `data`: パースする YAML 文字列 (必須)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n- `skip_empty_documents`: 空のドキュメントをスキップ (デフォルト: `True`)\n- `max_documents`: 読み取るドキュメントの最大数 (`0` = 無制限)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read YAML Inline Data",
+          "message": "YAML インラインデータの読み取り"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "YAML data provided directly as a string, useful for embedded data or testing scenarios.",
+          "message": "文字列として直接提供される YAML データ。埋め込みデータやテストシナリオに役立ちます。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "YAML Data",
+          "message": "YAML データ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "YAML data as string",
+          "message": "文字列としての YAML データ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for reading the YAML data. Default: `UTF-8`.",
+          "message": "YAML データの読み取りに使用する文字エンコーディング。デフォルト: `UTF-8`。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "文字エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Input encoding",
+          "message": "入力エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.desc": {
+          "source": "Maximum number of documents to read from the stream. Use `0` (default) for unlimited. Useful for sampling or limiting memory usage.",
+          "message": "ストリームから読み取るドキュメントの最大数。無制限にするには `0` (デフォルト) を使用します。サンプリングやメモリ使用量の制限に役立ちます。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.display_name": {
+          "source": "Max Documents",
+          "message": "最大ドキュメント数"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.bWF4X2RvY3VtZW50cw.short_desc": {
+          "source": "Maximum documents to read",
+          "message": "読み取る最大ドキュメント数"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.desc": {
+          "source": "When `True` (default), documents that parse to `NOTHING` are skipped. Set to `False` to include empty documents in iteration.",
+          "message": "`True` (デフォルト) の場合、`NOTHING` にパースされるドキュメントはスキップされます。反復処理に空のドキュメントを含めるには `False` に設定します。"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.display_name": {
+          "source": "Skip Empty Documents",
+          "message": "空のドキュメントをスキップ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.option.c2tpcF9lbXB0eV9kb2N1bWVudHM.short_desc": {
+          "source": "Skip empty documents",
+          "message": "空のドキュメントをスキップ"
+        },
+        "app.WWFtbERvY3VtZW50.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read YAML inline data",
+          "message": "YAML インラインデータを読み取り"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして特定のファイル場所に書き込みます。\n\nレコードは蓄積され、`commit()` が呼び出されるかプロバイダーが破棄されたときに `---` ドキュメント区切り文字とともに出力されます。\n\n**主要オプション**\n- `path`: 出力ファイルの場所 (必須)\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
+          "source": "Write YAML Document File",
+          "message": "YAML ドキュメントファイルの書き込み"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "YAML データの書き込みに使用する文字エンコーディング。デフォルト: `UTF-8`。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "文字エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "出力エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "フロースタイル: コンパクトなインライン形式 (例: {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "フロースタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "コンパクトなインライン形式"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "ブロックスタイル: インデント形式 (デフォルト)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "ブロックスタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "インデント形式 (デフォルト)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "`True` の場合、YAML をフロー (コンパクトなインライン) スタイルで出力します。`False` (デフォルト) の場合、ブロック (インデント) スタイルで出力します。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "フロースタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "コンパクトなインライン YAML 出力を使用"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path to write the YAML document stream to. Documents are separated by `---` markers.",
+          "message": "YAML ドキュメントストリームを書き込むファイルシステムパス。ドキュメントは `---` マーカーで区切られます。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "ファイルパス"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to YAML output file",
+          "message": "YAML 出力ファイルへのパス"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGU.short_desc": {
+          "source": "Write YAML document data to a specific file location",
+          "message": "特定のファイル場所に YAML ドキュメントデータを書き込み"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして出力ストリームに書き込むか、結果をバイナリデータとして取得します。\n\nレコードは蓄積され、`commit()` が呼び出されるかプロバイダーが破棄されたときに `---` ドキュメント区切り文字とともに出力されます。\n\n**主要オプション**\n- `stream`: 書き込み先の出力ストリーム\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write YAML Inline Data",
+          "message": "YAML インラインデータの書き込み"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.short_desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.short_desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.short_desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for writing the YAML data. Default: `UTF-8`.",
+          "message": "YAML データの書き込みに使用する文字エンコーディング。デフォルト: `UTF-8`。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "文字エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output encoding",
+          "message": "出力エンコーディング"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Flow style: compact inline format (e.g. {key: value})",
+          "message": "フロースタイル: コンパクトなインライン形式 (例: {key: value})"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Flow Style",
+          "message": "フロースタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Compact inline format",
+          "message": "コンパクトなインライン形式"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Block style: indented format (default)",
+          "message": "ブロックスタイル: インデント形式 (デフォルト)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "Block Style",
+          "message": "ブロックスタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Indented format (default)",
+          "message": "インデント形式 (デフォルト)"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.desc": {
+          "source": "When `True`, outputs YAML in flow (compact inline) style. When `False` (default), outputs in block (indented) style.",
+          "message": "`True` の場合、YAML をフロー (コンパクトなインライン) スタイルで出力します。`False` (デフォルト) の場合、ブロック (インデント) スタイルで出力します。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.display_name": {
+          "source": "Flow Style",
+          "message": "フロースタイル"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.Zmxvd19zdHlsZQ.short_desc": {
+          "source": "Use compact inline YAML output",
+          "message": "コンパクトなインライン YAML 出力を使用"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
+          "message": "YAML ドキュメントを書き込む `OutputStream` オブジェクト。ネットワーク接続、圧縮ファイル、またはその他の宛先への書き込みに使用します。"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "出力ストリーム"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "Output stream to write to",
+          "message": "書き込み先の出力ストリーム"
+        },
+        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write YAML data to a stream",
+          "message": "YAML データをストリームに書き込み"
+        },
+        "app.WWFtbERvY3VtZW50.desc": {
+          "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",
+          "message": "**YAML ドキュメントストリーム** (`---` マーカーで区切られた 1 つ以上の YAML ドキュメントを含むファイルまたはインラインデータ) への読み書きアクセスを提供します。\n\n次の用途でこのアプリを使用します:\n- マルチドキュメント YAML 設定ファイルやデータエクスポートのパース\n- 統合パイプラインの一部としてのシステム間での YAML データの変換\n- 設定管理またはデータ交換のための YAML 出力の生成\n\n設定可能な文字エンコーディング、空ドキュメントのフィルタリング、ブロック (インデント) およびフロー (コンパクトインライン) の両方の YAML 出力スタイルをサポートします。\n\n[Qore](https://qore.org)"
+        },
+        "app.WWFtbERvY3VtZW50.display_name": {
+          "source": "YAML Document Files",
+          "message": "YAML ドキュメントファイル"
+        },
+        "app.WWFtbERvY3VtZW50.short_desc": {
+          "source": "Read and write YAML document streams",
+          "message": "YAML ドキュメントストリームの読み書き"
+        }
+      }
+    }
+  }
+}

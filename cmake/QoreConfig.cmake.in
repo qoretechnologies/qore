@@ -57,7 +57,7 @@ if (_qore_in_build_tree)
     set(QORE_LIBRARY "@CMAKE_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@qore@CMAKE_SHARED_LIBRARY_SUFFIX@")
     set(QORE_LIBRARIES ${QORE_LIBRARY})
     set(QORE_BUILDTREE_BINARY_MODULE_PATH
-        "@CMAKE_BINARY_DIR@/modules/astparser:@CMAKE_BINARY_DIR@/modules/reflection:@CMAKE_BINARY_DIR@/modules/logger_bin:@CMAKE_BINARY_DIR@/modules/linenoise:@CMAKE_BINARY_DIR@/modules/i18n:@CMAKE_BINARY_DIR@/modules/krb5:@CMAKE_BINARY_DIR@/modules/mongodb:@CMAKE_BINARY_DIR@/modules/ml:@CMAKE_BINARY_DIR@/modules/tokenizer:@CMAKE_BINARY_DIR@/modules/ocr:@CMAKE_BINARY_DIR@/modules/dataframe:@CMAKE_BINARY_DIR@/modules/sshutil:@CMAKE_BINARY_DIR@/modules/protobuf")
+        "@CMAKE_BINARY_DIR@/modules/astparser:@CMAKE_BINARY_DIR@/modules/reflection:@CMAKE_BINARY_DIR@/modules/logger_bin:@CMAKE_BINARY_DIR@/modules/linenoise:@CMAKE_BINARY_DIR@/modules/i18n:@CMAKE_BINARY_DIR@/modules/krb5:@CMAKE_BINARY_DIR@/modules/mongodb:@CMAKE_BINARY_DIR@/modules/ml:@CMAKE_BINARY_DIR@/modules/tokenizer:@CMAKE_BINARY_DIR@/modules/ocr:@CMAKE_BINARY_DIR@/modules/dataframe:@CMAKE_BINARY_DIR@/modules/sshutil:@CMAKE_BINARY_DIR@/modules/protobuf:@CMAKE_BINARY_DIR@/modules/json:@CMAKE_BINARY_DIR@/modules/yaml")
     set(QORE_BUILDTREE_USER_MODULE_PATH
         "@CMAKE_BINARY_DIR@/qlib-qmod:@CMAKE_SOURCE_DIR@/qlib:${QORE_BUILDTREE_BINARY_MODULE_PATH}")
 else()

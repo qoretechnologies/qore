@@ -1,0 +1,1092 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for Connect RPC streaming over HTTP/2 and HTTP/3.
+
+    Exercises the server-side response sending paths:
+    - HTTP/2: sendHttp2StreamData() + flushHttp2()
+    - HTTP/3: submitQuicStreamData() + waitForQuicStreamDrain()
+
+    Uses raw HTTP requests (HttpClientConnectionManager.request()) so we
+    don't depend on client-side streaming support.  This sends a complete
+    request and receives the full response — the server-side streaming
+    code (ConnectHandler + ConnectServerStream) is what's under test.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
+%requires Mime
+%requires yaml
+%requires Connect
+%requires QUnit
+
+%requires HttpClientIo
+
+%requires HttpServerAsyncIo
+
+%exec-class ConnectStreamingTest
+
+class ConnectStreamingTest inherits QUnit::Test {
+    private {
+        #! Maximum retries for transient QUIC connection errors in concurrent tests
+        /** QUIC handshakes over UDP can stall on resource-constrained CI runners
+            (K8s CPU throttling, UDP packet loss on loopback). Retrying avoids
+            flaky failures while still catching real regressions.
+        */
+        const ConcurrentRetries = 2;
+
+        *Logger mLogger;
+        *HttpServer mServer;
+        int mPort;
+        bool mH3Available = False;
+        Connect::YamlConnectCodec mCodec();
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("Connect streaming test", "1.0") {
+%ifdef NoHttpClientIo
+        printf("SKIP: HttpClientIo module not available\n");
+        return;
+%else
+%ifdef NoHttpServerAsyncIo
+        printf("SKIP: HttpServerAsyncIo module not available\n");
+        return;
+%else
+        # HTTP/2 streaming tests
+        addTestCase("H2 unary", \testH2Unary());
+        addTestCase("H2 server-streaming", \testH2ServerStream());
+        addTestCase("H2 client-streaming", \testH2ClientStream());
+        addTestCase("H2 bidi-streaming", \testH2BidiStream());
+        addTestCase("H2 server-streaming error", \testH2ServerStreamError());
+        addTestCase("H2 empty server stream", \testH2EmptyServerStream());
+        addTestCase("H2 large server stream", \testH2LargeServerStream());
+
+        # HTTP/3 streaming tests
+        addTestCase("H3 unary", \testH3Unary());
+        addTestCase("H3 server-streaming", \testH3ServerStream());
+        addTestCase("H3 client-streaming", \testH3ClientStream());
+        addTestCase("H3 bidi-streaming", \testH3BidiStream());
+        addTestCase("H3 server-streaming error", \testH3ServerStreamError());
+        addTestCase("H3 empty server stream", \testH3EmptyServerStream());
+        addTestCase("H3 large server stream", \testH3LargeServerStream());
+
+        # Compression streaming tests
+        addTestCase("H2 compressed server-streaming gzip", \testH2CompressedServerStreamGzip());
+        addTestCase("H2 compressed server-streaming deflate",
+            \testH2CompressedServerStreamDeflate());
+        addTestCase("H2 compressed client-streaming", \testH2CompressedClientStream());
+        addTestCase("H2 compressed bidi-streaming", \testH2CompressedBidiStream());
+        addTestCase("H3 compressed server-streaming gzip", \testH3CompressedServerStreamGzip());
+        addTestCase("H3 compressed client-streaming", \testH3CompressedClientStream());
+
+        # Concurrent/stress streaming tests
+        addTestCase("H2 concurrent server-streaming", \testH2ConcurrentServerStream());
+        addTestCase("H2 concurrent mixed streaming", \testH2ConcurrentMixedStream());
+        addTestCase("H3 concurrent server-streaming", \testH3ConcurrentServerStream());
+        addTestCase("H3 concurrent mixed streaming", \testH3ConcurrentMixedStream());
+        addTestCase("H2 stress server-streaming", \testH2StressServerStream());
+        addTestCase("H3 stress server-streaming", \testH3StressServerStream());
+%endif
+%endif
+
+        mLogger = new Logger("connect-streaming", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new TestAppender());
+        }
+
+        createServer();
+        on_exit {
+            delete mServer;
+        }
+
+        set_return_value(main());
+    }
+
+    private createServer() {
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "quic_headers_only": True,
+        });
+
+        Connect::ConnectHandler handler();
+        handler.setDebug(m_options.verbose > 2);
+
+        # --- Unary: echo ---
+        handler.registerUnary("Test", "Echo",
+            auto sub (auto request, hash<auto> metadata) {
+                return request;
+            });
+
+        # --- Server-streaming: sends N numbered messages ---
+        handler.registerServerStream("Test", "Numbers",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                int count = request.count ?? 5;
+                for (int i = 0; i < count; ++i) {
+                    stream.write({"index": i, "value": sprintf("msg-%d", i)});
+                }
+            });
+
+        # --- Server-streaming: sends large messages ---
+        handler.registerServerStream("Test", "LargeNumbers",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                int count = request.count ?? 3;
+                string big = strmul("X", 10000);
+                for (int i = 0; i < count; ++i) {
+                    stream.write({"index": i, "data": big});
+                }
+            });
+
+        # --- Server-streaming: sends 0 messages (empty stream) ---
+        handler.registerServerStream("Test", "Empty",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                # No writes — just return
+            });
+
+        # --- Server-streaming: handler throws ---
+        handler.registerServerStream("Test", "StreamError",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                stream.write({"index": 0, "value": "before-error"});
+                throw "HANDLER-ERROR", "deliberate test error";
+            });
+
+        # --- Client-streaming: aggregates all messages ---
+        handler.registerClientStream("Test", "Aggregate",
+            auto sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                list<string> items();
+                while (*auto msg = stream.read()) {
+                    items += msg.name;
+                }
+                return {"count": items.size(), "names": items};
+            });
+
+        # --- Bidi: echoes each message with a prefix ---
+        handler.registerBidiStream("Test", "BidiEcho",
+            sub (Connect::ConnectServerStream stream, hash<auto> metadata) {
+                while (*auto msg = stream.read()) {
+                    stream.write({"reply": "echo:" + msg.text});
+                }
+            });
+
+        mServer.setHandler("connect", "", NOTHING, handler);
+        mServer.setDefaultHandler("connect", handler);
+
+        mServer.waitForAsyncIo();
+
+        try {
+            hash<auto> info = mServer.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "enable_h3": True,
+            });
+            mPort = info.port;
+            mH3Available = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # enable_h3 may fail if QUIC not compiled in; try without
+            hash<auto> info = mServer.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            mPort = info.port;
+        }
+
+        mServer.waitForAsyncIo();
+    }
+
+    private HttpClientIo::HttpClientConnectionManager createMgr(string protocol) {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": protocol,
+                "accept_all_certs": True,
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    private string url() {
+        return sprintf("https://127.0.0.1:%d", mPort);
+    }
+
+    # ---- Helpers: build streaming request body and parse streaming response ----
+
+    #! Encode a single request as a streaming body (one data frame + end-of-stream)
+    private binary frameRequest(auto request) {
+        return Connect::ConnectHelper::frameMessage(mCodec.serialize(request));
+    }
+
+    #! Encode multiple messages as a streaming body (data frames only, no end-stream marker)
+    private binary frameMessages(list<auto> messages) {
+        binary body = binary();
+        for (int i = 0; i < messages.size(); ++i) {
+            body += Connect::ConnectHelper::frameMessage(mCodec.serialize(messages[i]));
+        }
+        return body;
+    }
+
+    #! Parse a streaming response into data messages and end-stream info
+    /** @param body the raw response body
+        @param encoding optional compression encoding for decompressing compressed frames
+    */
+    private hash<auto> parseStreamResponse(binary body, *string encoding) {
+        list<hash<Connect::ConnectFrameInfo>> frames =
+            Connect::ConnectHelper::unframeMessages(body);
+        list<auto> messages();
+        *hash<Connect::ConnectEndStreamInfo> end_info;
+        for (int i = 0; i < frames.size(); ++i) {
+            if (frames[i].flags & Connect::CONNECT_FLAG_END_STREAM) {
+                end_info = Connect::ConnectHelper::parseEndStream(frames[i].data);
+            } else {
+                binary frame_data = frames[i].data;
+                if ((frames[i].flags & Connect::CONNECT_FLAG_COMPRESSED) && encoding) {
+                    frame_data = Connect::ConnectCompression::decompress(frame_data,
+                        encoding);
+                }
+                messages += mCodec.deserialize(frame_data);
+            }
+        }
+        return {
+            "messages": messages,
+            "end_info": end_info,
+        };
+    }
+
+    private hash<auto> streamHeaders() {
+        return Connect::ConnectHelper::buildStreamRequestHeaders("yaml");
+    }
+
+    private binary respBody(hash<auto> resp) {
+        if (resp.body.typeCode() == NT_BINARY) {
+            return resp.body;
+        }
+        return binary(resp.body);
+    }
+
+    # ---- HTTP/2 Tests ----
+
+    testH2Unary() {
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2", "accept_all_certs": True});
+        on_exit client.shutdown();
+
+        auto response = client.call("Test", "Echo", {"message": "hello", "count": 42});
+        assertEq("hello", response.message, "H2 unary echo: message");
+        assertEq(42, response.count, "H2 unary echo: count");
+    }
+
+    testH2ServerStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            streamHeaders(), frameRequest({"count": 5}));
+        assertEq(200, resp.status_code, "H2 server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(5, parsed.messages.size(), "H2 server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 server-stream: index %d", i));
+            assertEq(sprintf("msg-%d", i), parsed.messages[i].value,
+                sprintf("H2 server-stream: value %d", i));
+        }
+        assertTrue(exists parsed.end_info, "H2 server-stream: has end-stream");
+        assertFalse(exists parsed.end_info.error, "H2 server-stream: no error");
+    }
+
+    testH2ClientStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send 3 framed messages as the request body
+        binary body = frameMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        ));
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            streamHeaders(), body);
+        assertEq(200, resp.status_code, "H2 client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        # Server sends one response frame + end-stream
+        assertEq(1, parsed.messages.size(), "H2 client-stream: one response");
+        assertEq(3, parsed.messages[0].count, "H2 client-stream: count");
+        assertEq(("alice", "bob", "charlie"), parsed.messages[0].names,
+            "H2 client-stream: names");
+        assertFalse(exists parsed.end_info.error, "H2 client-stream: no error");
+    }
+
+    testH2BidiStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        binary body = frameMessages((
+            {"text": "hello"},
+            {"text": "world"},
+            {"text": "test"},
+        ));
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+            streamHeaders(), body);
+        assertEq(200, resp.status_code, "H2 bidi: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(3, parsed.messages.size(), "H2 bidi: reply count");
+        assertEq("echo:hello", parsed.messages[0].reply, "H2 bidi: reply 0");
+        assertEq("echo:world", parsed.messages[1].reply, "H2 bidi: reply 1");
+        assertEq("echo:test", parsed.messages[2].reply, "H2 bidi: reply 2");
+        assertFalse(exists parsed.end_info.error, "H2 bidi: no error");
+    }
+
+    testH2ServerStreamError() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/StreamError",
+            streamHeaders(), frameRequest({}));
+        assertEq(200, resp.status_code, "H2 stream-error: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(1, parsed.messages.size(), "H2 stream-error: one msg before error");
+        assertEq("before-error", parsed.messages[0].value,
+            "H2 stream-error: message value");
+        assertTrue(exists parsed.end_info.error, "H2 stream-error: has error");
+        assertEq(Connect::CONNECT_ERROR_INTERNAL, parsed.end_info.error.code,
+            "H2 stream-error: error code");
+        assertTrue(parsed.end_info.error.message.find("deliberate test error") >= 0,
+            "H2 stream-error: error message");
+    }
+
+    testH2EmptyServerStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Empty",
+            streamHeaders(), frameRequest({}));
+        assertEq(200, resp.status_code, "H2 empty-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(0, parsed.messages.size(), "H2 empty-stream: zero messages");
+        assertFalse(exists parsed.end_info.error, "H2 empty-stream: no error");
+    }
+
+    testH2LargeServerStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/LargeNumbers",
+            streamHeaders(), frameRequest({"count": 3}));
+        assertEq(200, resp.status_code, "H2 large-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(3, parsed.messages.size(), "H2 large-stream: message count");
+        for (int i = 0; i < 3; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 large-stream: index %d", i));
+            assertEq(10000, parsed.messages[i].data.size(),
+                sprintf("H2 large-stream: data size %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H2 large-stream: no error");
+    }
+
+    # ---- HTTP/3 Tests ----
+
+    testH3Unary() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Echo",
+            {"content-type": "application/yaml"}, mCodec.serialize({"message": "hello", "count": 42}));
+        assertEq(200, resp.status_code, "H3 unary: status");
+        auto response = mCodec.deserialize(binary(resp.body));
+        assertEq("hello", response.message, "H3 unary echo: message");
+        assertEq(42, response.count, "H3 unary echo: count");
+    }
+
+    testH3ServerStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            streamHeaders(), frameRequest({"count": 5}));
+        assertEq(200, resp.status_code, "H3 server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(5, parsed.messages.size(), "H3 server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H3 server-stream: index %d", i));
+            assertEq(sprintf("msg-%d", i), parsed.messages[i].value,
+                sprintf("H3 server-stream: value %d", i));
+        }
+        assertTrue(exists parsed.end_info, "H3 server-stream: has end-stream");
+        assertFalse(exists parsed.end_info.error, "H3 server-stream: no error");
+    }
+
+    testH3ClientStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        binary body = frameMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        ));
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            streamHeaders(), body);
+        assertEq(200, resp.status_code, "H3 client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(1, parsed.messages.size(), "H3 client-stream: one response");
+        assertEq(3, parsed.messages[0].count, "H3 client-stream: count");
+        assertEq(("alice", "bob", "charlie"), parsed.messages[0].names,
+            "H3 client-stream: names");
+        assertFalse(exists parsed.end_info.error, "H3 client-stream: no error");
+    }
+
+    testH3BidiStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        binary body = frameMessages((
+            {"text": "hello"},
+            {"text": "world"},
+            {"text": "test"},
+        ));
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+            streamHeaders(), body);
+        assertEq(200, resp.status_code, "H3 bidi: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(3, parsed.messages.size(), "H3 bidi: reply count");
+        assertEq("echo:hello", parsed.messages[0].reply, "H3 bidi: reply 0");
+        assertEq("echo:world", parsed.messages[1].reply, "H3 bidi: reply 1");
+        assertEq("echo:test", parsed.messages[2].reply, "H3 bidi: reply 2");
+        assertFalse(exists parsed.end_info.error, "H3 bidi: no error");
+    }
+
+    testH3ServerStreamError() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/StreamError",
+            streamHeaders(), frameRequest({}));
+        assertEq(200, resp.status_code, "H3 stream-error: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(1, parsed.messages.size(), "H3 stream-error: one msg before error");
+        assertEq("before-error", parsed.messages[0].value,
+            "H3 stream-error: message value");
+        assertTrue(exists parsed.end_info.error, "H3 stream-error: has error");
+        assertEq(Connect::CONNECT_ERROR_INTERNAL, parsed.end_info.error.code,
+            "H3 stream-error: error code");
+        assertTrue(parsed.end_info.error.message.find("deliberate test error") >= 0,
+            "H3 stream-error: error message");
+    }
+
+    testH3EmptyServerStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Empty",
+            streamHeaders(), frameRequest({}));
+        assertEq(200, resp.status_code, "H3 empty-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(0, parsed.messages.size(), "H3 empty-stream: zero messages");
+        assertFalse(exists parsed.end_info.error, "H3 empty-stream: no error");
+    }
+
+    testH3LargeServerStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/LargeNumbers",
+            streamHeaders(), frameRequest({"count": 3}));
+        assertEq(200, resp.status_code, "H3 large-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp));
+        assertEq(3, parsed.messages.size(), "H3 large-stream: message count");
+        for (int i = 0; i < 3; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H3 large-stream: index %d", i));
+            assertEq(10000, parsed.messages[i].data.size(),
+                sprintf("H3 large-stream: data size %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H3 large-stream: no error");
+    }
+
+    # ---- Compression Streaming Tests ----
+
+    #! Encode a single request as a compressed streaming body
+    private binary frameCompressedRequest(auto request, string encoding) {
+        binary serialized = mCodec.serialize(request);
+        binary compressed = Connect::ConnectCompression::compress(serialized, encoding);
+        return Connect::ConnectHelper::frameMessage(compressed,
+            Connect::CONNECT_FLAG_COMPRESSED);
+    }
+
+    #! Encode multiple messages as compressed streaming frames
+    private binary frameCompressedMessages(list<auto> messages, string encoding) {
+        binary body = binary();
+        for (int i = 0; i < messages.size(); ++i) {
+            binary serialized = mCodec.serialize(messages[i]);
+            binary compressed = Connect::ConnectCompression::compress(serialized, encoding);
+            body += Connect::ConnectHelper::frameMessage(compressed,
+                Connect::CONNECT_FLAG_COMPRESSED);
+        }
+        return body;
+    }
+
+    #! Build streaming headers with compression
+    private hash<auto> compressedStreamHeaders(string encoding) {
+        hash<auto> headers = streamHeaders();
+        headers{Connect::ConnectContentEncodingHeader} = encoding;
+        headers{Connect::ConnectAcceptEncodingHeader} =
+            Connect::ConnectCompression::acceptEncodingValue();
+        return headers;
+    }
+
+    testH2CompressedServerStreamGzip() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send compressed request with gzip, expect compressed responses
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            compressedStreamHeaders("gzip"), frameCompressedRequest({"count": 5}, "gzip"));
+        assertEq(200, resp.status_code, "H2 gzip-server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(5, parsed.messages.size(), "H2 gzip-server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 gzip-server-stream: index %d", i));
+            assertEq(sprintf("msg-%d", i), parsed.messages[i].value,
+                sprintf("H2 gzip-server-stream: value %d", i));
+        }
+        assertTrue(exists parsed.end_info, "H2 gzip-server-stream: has end-stream");
+        assertFalse(exists parsed.end_info.error, "H2 gzip-server-stream: no error");
+    }
+
+    testH2CompressedServerStreamDeflate() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send compressed request with deflate, only accept deflate back
+        hash<auto> headers = streamHeaders();
+        headers{Connect::ConnectContentEncodingHeader} = "deflate";
+        headers{Connect::ConnectAcceptEncodingHeader} = "deflate";
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            headers, frameCompressedRequest({"count": 3}, "deflate"));
+        assertEq(200, resp.status_code, "H2 deflate-server-stream: status");
+        # Server should respond with deflate since that's the only accepted encoding
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "deflate");
+        assertEq(3, parsed.messages.size(), "H2 deflate-server-stream: message count");
+        for (int i = 0; i < 3; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 deflate-server-stream: index %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H2 deflate-server-stream: no error");
+    }
+
+    testH2CompressedClientStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send 3 compressed framed messages
+        binary body = frameCompressedMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H2 compressed-client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(1, parsed.messages.size(), "H2 compressed-client-stream: one response");
+        assertEq(3, parsed.messages[0].count, "H2 compressed-client-stream: count");
+        assertEq(("alice", "bob", "charlie"), parsed.messages[0].names,
+            "H2 compressed-client-stream: names");
+        assertFalse(exists parsed.end_info.error,
+            "H2 compressed-client-stream: no error");
+    }
+
+    testH2CompressedBidiStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        binary body = frameCompressedMessages((
+            {"text": "hello"},
+            {"text": "world"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H2 compressed-bidi: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(2, parsed.messages.size(), "H2 compressed-bidi: reply count");
+        assertEq("echo:hello", parsed.messages[0].reply, "H2 compressed-bidi: reply 0");
+        assertEq("echo:world", parsed.messages[1].reply, "H2 compressed-bidi: reply 1");
+        assertFalse(exists parsed.end_info.error, "H2 compressed-bidi: no error");
+    }
+
+    testH3CompressedServerStreamGzip() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            compressedStreamHeaders("gzip"), frameCompressedRequest({"count": 5}, "gzip"));
+        assertEq(200, resp.status_code, "H3 gzip-server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(5, parsed.messages.size(), "H3 gzip-server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H3 gzip-server-stream: index %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H3 gzip-server-stream: no error");
+    }
+
+    testH3CompressedClientStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        binary body = frameCompressedMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H3 compressed-client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(1, parsed.messages.size(), "H3 compressed-client-stream: one response");
+        assertEq(2, parsed.messages[0].count, "H3 compressed-client-stream: count");
+        assertFalse(exists parsed.end_info.error,
+            "H3 compressed-client-stream: no error");
+    }
+
+    # ---- Concurrent/Stress Streaming Tests ----
+
+    #! Run N concurrent server-streaming RPCs and validate all responses
+    /** Each thread sends a request for a unique message count and validates
+        the response independently. This exercises HTTP/2 or HTTP/3 stream
+        multiplexing under concurrent Connect framing.
+    */
+    private testConcurrentServerStream(string protocol, int num_concurrent) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s concurrent-server-stream(%d)", protocol.upr(), num_concurrent);
+
+        Counter cnt(num_concurrent);
+        list<hash<auto>> results();
+        Mutex results_lock();
+
+        for (int i = 0; i < num_concurrent; ++i) {
+            int idx = i;
+            int msg_count = 3 + idx;  # each thread gets a different count
+            background sub () {
+                hash<auto!> result = {"idx": idx, "expected_count": msg_count};
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
+
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                            streamHeaders(), frameRequest({"count": msg_count}));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.msg_count = parsed.messages.size();
+                            result.has_end = exists parsed.end_info;
+                            result.has_error = exists parsed.end_info.error;
+                            # Verify message content
+                            bool content_ok = True;
+                            for (int j = 0; j < parsed.messages.size(); ++j) {
+                                if (parsed.messages[j].index != j
+                                        || parsed.messages[j].value != sprintf("msg-%d", j)) {
+                                    content_ok = False;
+                                    break;
+                                }
+                            }
+                            result.content_ok = content_ok;
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        # Retry on transient QUIC connection errors
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
+                    }
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        int rc = cnt.waitForZero(120s);
+        assertEq(0, rc, label + ": all threads completed");
+        assertEq(num_concurrent, results.size(), label + ": all results received");
+
+        for (int i = 0; i < results.size(); ++i) {
+            string tag = sprintf("%s[%d]", label, results[i].idx);
+            assertFalse(exists results[i].error, tag + ": no error (got: " + (results[i].error ?? "none") + ")");
+            assertEq(200, results[i].status_code, tag + ": status 200");
+            assertEq(results[i].expected_count, results[i].msg_count, tag + ": message count");
+            assertTrue(results[i].has_end, tag + ": has end-stream");
+            assertFalse(results[i].has_error, tag + ": no end-stream error");
+            assertTrue(results[i].content_ok, tag + ": message content correct");
+        }
+    }
+
+    #! Run N concurrent RPCs of mixed types (server-stream, client-stream, bidi)
+    /** Exercises all three streaming patterns concurrently, with each
+        background task using its own connection/session. Validates correct
+        framing and concurrent behavior.
+    */
+    private testConcurrentMixedStream(string protocol, int num_per_type) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s concurrent-mixed(%d)", protocol.upr(), num_per_type);
+        int total = num_per_type * 3;
+
+        Counter cnt(total);
+        list<hash<auto>> results();
+        Mutex results_lock();
+
+        # Server-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "server-stream"};
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
+
+                        int msg_count = 4 + idx;
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                            streamHeaders(), frameRequest({"count": msg_count}));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.ok = (parsed.messages.size() == msg_count
+                                && !exists parsed.end_info.error);
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
+                    }
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        # Client-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "client-stream"};
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
+
+                        int num_names = 2 + idx;
+                        list<auto> msgs();
+                        for (int j = 0; j < num_names; ++j) {
+                            msgs += {"name": sprintf("name-%d-%d", idx, j)};
+                        }
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+                            streamHeaders(), frameMessages(msgs));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.ok = (parsed.messages.size() == 1
+                                && parsed.messages[0].count == num_names
+                                && !exists parsed.end_info.error);
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
+                    }
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        # Bidi-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "bidi"};
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
+
+                        int num_msgs = 2 + idx;
+                        list<auto> msgs();
+                        for (int j = 0; j < num_msgs; ++j) {
+                            msgs += {"text": sprintf("t-%d-%d", idx, j)};
+                        }
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+                            streamHeaders(), frameMessages(msgs));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            bool content_ok = parsed.messages.size() == num_msgs;
+                            if (content_ok) {
+                                for (int j = 0; j < num_msgs; ++j) {
+                                    if (parsed.messages[j].reply
+                                            != sprintf("echo:t-%d-%d", idx, j)) {
+                                        content_ok = False;
+                                        break;
+                                    }
+                                }
+                            }
+                            result.ok = content_ok && !exists parsed.end_info.error;
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
+                    }
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        int rc = cnt.waitForZero(120s);
+        assertEq(0, rc, label + ": all threads completed");
+        assertEq(total, results.size(), label + ": all results received");
+
+        for (int i = 0; i < results.size(); ++i) {
+            string tag = sprintf("%s[%s/%d]", label, results[i].type, results[i].idx);
+            assertFalse(exists results[i].error,
+                tag + ": no error (got: " + (results[i].error ?? "none") + ")");
+            assertEq(200, results[i].status_code, tag + ": status 200");
+            assertTrue(results[i].ok, tag + ": response validated");
+        }
+    }
+
+    #! High-volume server-streaming stress test
+    /** Runs many iterations of server-streaming RPCs sequentially on a single
+        connection manager, validating Connect framing integrity under sustained
+        load. Uses large message counts to exercise flow control and buffering.
+    */
+    private testStressServerStream(string protocol, int iterations) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s stress-server-stream(%d)", protocol.upr(), iterations);
+
+        # Run a warmup request to measure throughput; skip if too slow (valgrind)
+        date start = now_us();
+        {
+            HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+            on_exit delete mgr;
+            hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                streamHeaders(), frameRequest({"count": 1}));
+            if (resp.status_code != 200) {
+                testSkip(label + ": warmup failed with status " + resp.status_code);
+            }
+        }
+        int warmup_ms = (now_us() - start).durationMilliseconds();
+        if (warmup_ms > 5000) {
+            testSkip(label + ": too slow (valgrind?), warmup took " + warmup_ms + "ms");
+        }
+
+        int success_count = 0;
+        int total_messages = 0;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+        on_exit delete mgr;
+
+        for (int i = 0; i < iterations; ++i) {
+            int msg_count = 10 + (i % 20);  # vary between 10 and 29
+            hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                streamHeaders(), frameRequest({"count": msg_count}));
+            if (resp.status_code != 200) {
+                break;
+            }
+            hash<auto> parsed = parseStreamResponse(respBody(resp));
+            if (parsed.messages.size() != msg_count || exists parsed.end_info.error) {
+                break;
+            }
+            ++success_count;
+            total_messages += msg_count;
+        }
+
+        assertEq(iterations, success_count,
+            sprintf("%s: all %d iterations succeeded (%d total messages)",
+                label, iterations, total_messages));
+    }
+
+    # ---- Concrete test cases ----
+
+    testH2ConcurrentServerStream() {
+        testConcurrentServerStream("h2", 10);
+    }
+
+    testH2ConcurrentMixedStream() {
+        testConcurrentMixedStream("h2", 5);
+    }
+
+    testH3ConcurrentServerStream() {
+        testConcurrentServerStream("h3", 10);
+    }
+
+    testH3ConcurrentMixedStream() {
+        testConcurrentMixedStream("h3", 5);
+    }
+
+    testH2StressServerStream() {
+        testStressServerStream("h2", 50);
+    }
+
+    testH3StressServerStream() {
+        testStressServerStream("h3", 50);
+    }
+}
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test",
+            new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.Q29ubmVjdFJwYw.desc": {
+          "source": "Provides integration with **Connect RPC** services (DataStream 2.0) for high-performance remote procedure calls over HTTP/2 and HTTP/3.\n\nUse this app when you need to:\n- Call remote services using the Connect RPC protocol with automatic service discovery\n- Stream data in real time between systems using server-streaming, client-streaming, or bidirectional patterns\n- Exchange unreliable high-throughput messages via QUIC datagrams\n\n**Supported RPC patterns**:\n- **Unary**: single request/response (like a REST call)\n- **Server-streaming**: one request, multiple responses\n- **Client-streaming**: multiple requests, one response\n- **Bidirectional**: full-duplex message exchange\n- **Datagram**: unreliable fire-and-forget or bidirectional via QUIC\n\nSupports YAML, JSON, and CBOR serialization codecs, per-message compression (`gzip`/`deflate`), and automatic service/method discovery via the Connect reflection protocol.\n\n[Qore](https://qore.org)",
+          "message": "Fournit une intégration avec les services **Connect RPC** (DataStream 2.0) pour des appels de procédure distante haute performance sur HTTP/2 et HTTP/3.\n\nUtilisez cette application lorsque vous devez :\n- Appeler des services distants à l'aide du protocole Connect RPC avec découverte automatique des services\n- Diffuser des données en temps réel entre systèmes à l'aide de modèles de streaming serveur, streaming client ou bidirectionnel\n- Échanger des messages à haut débit non fiables via des datagrammes QUIC\n\n**Modèles RPC pris en charge** :\n- **Unaire** : requête/réponse unique (comme un appel REST)\n- **Streaming serveur** : une requête, réponses multiples\n- **Streaming client** : requêtes multiples, une réponse\n- **Bidirectionnel** : échange de messages en duplex intégral\n- **Datagramme** : sans accusé de réception (fire-and-forget) non fiable ou bidirectionnel via QUIC\n\nPrend en charge les codecs de sérialisation YAML, JSON et CBOR, la compression par message (`gzip`/`deflate`) et la découverte automatique de services/méthodes via le protocole de réflexion Connect.\n\n[Qore](https://qore.org)"
+        },
+        "app.Q29ubmVjdFJwYw.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "app.Q29ubmVjdFJwYw.short_desc": {
+          "source": "Remote procedure calls over HTTP/2 and HTTP/3",
+          "message": "Appels de procédure distante sur HTTP/2 et HTTP/3"
+        }
+      }
+    }
+  }
+}

@@ -40,7 +40,7 @@ not a substitute for packaged Build-Depends and will be ignored.
 
 Package builds also set QORE_BUILD_WITH_EXTERNAL_MODULES=OFF and isolate Qore's
 module search paths. Otherwise an optional module installed on the builder
-(for example YAML) can become an undeclared hard dependency of the AOT-compiled
+(for example XML) can become an undeclared hard dependency of the AOT-compiled
 standard library. The option covers compilation, metadata extraction, and
 documentation; ordinary upstream builds keep optional module discovery enabled.
 
@@ -121,8 +121,10 @@ stamp, AOT linker configuration, and the API metadata generator. It depends on
 the interpreter, C++ compiler, public OpenSSL headers, and the LLVM development
 package matching the build, including the public LLVM plugin API headers.
 
-Remote debugger clients require the separately packaged YAML module and live in
-qore-debug-tools. qore itself includes the local debugger. Package moves include
+YAML and all twelve companion user modules ship in qore-stdlib. Its versioned
+Provides and Breaks/Replaces replace pre-3.0 qore-yaml-module packages.
+Remote debugger clients live in qore-debug-tools and use the bundled YAML
+module. qore itself includes the local debugger. Package moves include
 Breaks/Replaces for upgrades from pre-3.0 packages. Architecture-independent
 tools accept binary-only rebuilds of qore instead of requiring source:Version
 to equal binary:Version.

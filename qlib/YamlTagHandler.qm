@@ -1,0 +1,311 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%requires qore >= 2.3
+%requires yaml
+
+%modern
+
+module YamlTagHandler {
+    version = "1.0";
+    desc = "User module for custom YAML tag handlers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage YamlTagHandler Module
+
+@section yamltaghandlerintro Introduction
+
+The %YamlTagHandler module provides a framework for implementing custom YAML
+tag handlers. This allows users to extend YAML parsing and emission with
+custom types.
+
+@section yamltagusage Usage
+
+To implement a custom tag handler, extend the AbstractYamlTagHandler class:
+
+@code{.py}
+%requires YamlTagHandler
+
+class MyDateHandler inherits AbstractYamlTagHandler {
+    string getTagPrefix() {
+        return "!mydate";
+    }
+
+    auto parseScalar(string tag, string value) {
+        return date(value, "YYYY-MM-DD");
+    }
+
+    bool canEmit(auto value) {
+        return value.typeCode() == NT_DATE;
+    }
+
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) {
+        return <YamlTagEmitInfo>{
+            "tag": "!mydate",
+            "value": format_date("YYYY-MM-DD", value),
+        };
+    }
+}
+@endcode
+
+@section yamltagclasses Classes
+
+- @ref YamlTagHandler::AbstractYamlTagHandler "AbstractYamlTagHandler"
+- @ref YamlTagHandler::YamlTagHandlerRegistry "YamlTagHandlerRegistry"
+
+*/
+
+public namespace YamlTagHandler {
+
+#! Information returned for tag emission
+public hashdecl YamlTagEmitInfo {
+    #! The YAML tag to use (e.g., "!mytag", "!!custom")
+    string tag;
+
+    #! The string value to emit
+    string value;
+
+    #! Optional scalar style: "plain", "single_quoted", "double_quoted", "literal", "folded"
+    *string style;
+}
+
+#! Abstract base class for custom YAML tag handlers
+/** Implement this class to handle custom YAML tags during parsing and emission.
+
+    @par Example: Custom date handler
+    @code{.py}
+class IsoDateHandler inherits AbstractYamlTagHandler {
+    string getTagPrefix() {
+        return "!isodate";
+    }
+
+    auto parseScalar(string tag, string value) {
+        return date(value, "YYYY-MM-DD");
+    }
+
+    bool canEmit(auto value) {
+        return value.typeCode() == NT_DATE && !value.relative();
+    }
+
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) {
+        return <YamlTagEmitInfo>{
+            "tag": "!isodate",
+            "value": format_date("YYYY-MM-DD", value),
+        };
+    }
+}
+    @endcode
+
+    @see YamlTagHandlerRegistry
+*/
+public class AbstractYamlTagHandler {
+    #! Returns the tag prefix this handler manages
+    /** The prefix is matched against the start of YAML tags. For example,
+        returning "!myapp" would match "!myapp", "!myapp:type1", etc.
+
+        @return the tag prefix string (e.g., "!custom", "!myapp")
+    */
+    abstract string getTagPrefix();
+
+    #! Parses a scalar value with this tag
+    /** @param tag the full tag string from the YAML
+        @param value the scalar value as a string
+
+        @return the parsed Qore value
+
+        @throw YAML-TAG-ERROR if the value cannot be parsed
+    */
+    abstract auto parseScalar(string tag, string value);
+
+    #! Checks if this handler should emit a value
+    /** @param value the Qore value being serialized
+
+        @return True if this handler should emit the value, False to use default handling
+    */
+    abstract bool canEmit(auto value);
+
+    #! Returns tag and string representation for emission
+    /** @param value the Qore value to serialize
+
+        @return hash with tag, value, and optional style
+
+        @see hash<YamlTagEmitInfo>
+    */
+    abstract hash<YamlTagEmitInfo> getEmitInfo(auto value);
+
+    #! Handles complex (non-scalar) tagged values
+    /** Override this method to handle tagged sequences or mappings.
+        Default implementation throws an exception.
+
+        @param tag the YAML tag
+        @param value the parsed sequence or mapping
+
+        @return the transformed value
+
+        @throw YAML-TAG-ERROR the default implementation always throws this exception
+    */
+    auto parseComplex(string tag, auto value) {
+        throw "YAML-TAG-ERROR", sprintf("tag handler '%s' does not support complex values",
+                                        getTagPrefix());
+    }
+}
+
+#! Registry for custom YAML tag handlers
+/** Manages registration and lookup of custom tag handlers.
+
+    @par Example:
+    @code{.py}
+YamlTagHandlerRegistry registry();
+registry.register(new MyDateHandler());
+
+# Later, find a handler for a tag
+auto handler = registry.findHandler("!mydate");
+if (exists handler) {
+    auto value = handler.parseScalar("!mydate", "2024-01-15");
+}
+    @endcode
+*/
+public class YamlTagHandlerRegistry {
+    private {
+        #! Map of tag prefix to handler
+        hash<string, AbstractYamlTagHandler> handlers;
+    }
+
+    #! Creates an empty registry
+    constructor() {
+        handlers = {};
+    }
+
+    #! Registers a custom tag handler
+    /** @param handler the tag handler instance
+
+        @throw YAML-TAG-ERROR if a handler for this prefix is already registered
+    */
+    register(AbstractYamlTagHandler handler) {
+        string prefix = handler.getTagPrefix();
+        if (exists handlers{prefix}) {
+            throw "YAML-TAG-ERROR", sprintf("handler for tag prefix '%s' already registered", prefix);
+        }
+        handlers{prefix} = handler;
+    }
+
+    #! Unregisters a tag handler
+    /** @param tag_prefix the tag prefix to unregister
+
+        @throw YAML-TAG-ERROR if no handler registered for this prefix
+    */
+    unregister(string tag_prefix) {
+        if (!exists handlers{tag_prefix}) {
+            throw "YAML-TAG-ERROR", sprintf("no handler registered for tag prefix '%s'", tag_prefix);
+        }
+        remove handlers{tag_prefix};
+    }
+
+    #! Finds a handler for a given tag
+    /** @param tag the full YAML tag (e.g., "!myapp:date")
+
+        @return the handler if found, NOTHING otherwise
+    */
+    *AbstractYamlTagHandler findHandler(string tag) {
+        # Try exact match first
+        if (exists handlers{tag}) {
+            return handlers{tag};
+        }
+
+        # Try prefix match
+        foreach string prefix in (keys handlers) {
+            if (tag.find(prefix) == 0) {
+                return handlers{prefix};
+            }
+        }
+
+        return NOTHING;
+    }
+
+    #! Returns list of registered tag prefixes
+    /** @return list of tag prefix strings currently registered
+    */
+    list<string> getRegisteredPrefixes() {
+        return keys handlers;
+    }
+
+    #! Checks if a prefix is registered
+    /** @param tag_prefix the prefix to check
+
+        @return True if a handler is registered for this prefix
+    */
+    bool isRegistered(string tag_prefix) {
+        return exists handlers{tag_prefix};
+    }
+}
+
+#! Holder class for the global tag handler registry singleton
+/** @private
+*/
+class GlobalTagRegistryHolder {
+    private {
+        static YamlTagHandlerRegistry instance;
+    }
+
+    #! Returns the global tag handler registry singleton
+    /** @return the singleton YamlTagHandlerRegistry instance
+    */
+    static YamlTagHandlerRegistry get() {
+        if (!exists instance) {
+            instance = new YamlTagHandlerRegistry();
+        }
+        return instance;
+    }
+}
+
+#! Returns the global tag handler registry singleton
+/** The global registry is shared across the entire Qore process and provides
+    a central place to register custom tag handlers.
+
+    @return the singleton YamlTagHandlerRegistry instance
+*/
+public YamlTagHandlerRegistry sub globalTagRegistry() {
+    return GlobalTagRegistryHolder::get();
+}
+
+#! Registers a custom YAML tag handler in the global registry
+/** @param handler the tag handler instance
+
+    @throw YAML-TAG-ERROR if a handler for this prefix is already registered
+
+    @par Example:
+    @code{.py}
+class MyHandler inherits AbstractYamlTagHandler {
+    # ... implementation
+}
+register_yaml_tag_handler(new MyHandler());
+    @endcode
+
+    @see AbstractYamlTagHandler
+    @see unregister_yaml_tag_handler()
+*/
+public sub register_yaml_tag_handler(AbstractYamlTagHandler handler) {
+    globalTagRegistry().register(handler);
+}
+
+#! Unregisters a custom YAML tag handler from the global registry
+/** @param tag_prefix the tag prefix to unregister
+
+    @throw YAML-TAG-ERROR if no handler registered for this prefix
+*/
+public sub unregister_yaml_tag_handler(string tag_prefix) {
+    globalTagRegistry().unregister(tag_prefix);
+}
+
+#! Returns list of registered custom tag handler prefixes from the global registry
+/** @return list of tag prefix strings currently registered
+*/
+public list<string> sub get_yaml_tag_handlers() {
+    return globalTagRegistry().getRegisteredPrefixes();
+}
+
+} # namespace YamlTagHandler

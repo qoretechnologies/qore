@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires YamlRpcClientIo
+%requires YamlRpcClient
+%requires YamlRpcHandler
+%requires HttpServer
+%requires yaml
+%requires Mime
+%requires Logger
+%requires QUnit
+
+%exec-class YamlRpcClientTest
+
+class YamlRpcClientTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+    }
+
+    public {
+        const Methods = (
+            {
+                "name": "^echo\$",
+                "text": "echo",
+                "function": auto sub (auto arg) { return arg; },
+                "help": "echo back the argument",
+            },
+            {
+                "name": "^add\$",
+                "text": "add",
+                "function": int sub (int a, int b) { return a + b; },
+                "help": "add two numbers",
+            },
+            {
+                "name": "^error\$",
+                "text": "error",
+                "function": sub () { throw "TEST-ERROR", "Test error message"; },
+                "help": "throws an error",
+            },
+            {
+                "name": "^complex\$",
+                "text": "complex",
+                "function": hash sub (hash h) { return h + {"processed": True}; },
+                "help": "process complex data",
+            },
+        );
+    }
+
+    constructor() : Test("YamlRpcClient test", "1.0") {
+        addTestCase("YAML-RPC client test", \testYamlRpcClient());
+        addTestCase("YAML-RPC connection test", \testYamlRpcConnection());
+        addTestCase("YAML-RPC client constructor options", \testConstructorOptions());
+        addTestCase("YAML-RPC make request", \testMakeRequest());
+        addTestCase("YAML-RPC data stream connection", \testDataStreamConnection());
+        addTestCase("YAML-RPC connection getAsync test", \testYamlRpcConnectionGetAsync());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testYamlRpcClient() {
+        YamlRpcClient client({"url": "http://localhost:80"}, True);
+
+        assertEq(True, client instanceof YamlRpcClient);
+    }
+
+    testYamlRpcConnection() {
+        string url = "yamlrpcs://localhost:8099/";
+        YamlRpcConnection conn("test", "test", url, {"monitor": False});
+        YamlRpcClient client = conn.get(False);
+        string yurl = url;
+        yurl =~ s/^yamlrpc/http/;
+        assertEq(yurl, client.getURL());
+
+        # test default path
+        url = "yamlrpcs://localhost:8099";
+        conn = new YamlRpcConnection("test", "test", url, {"monitor": False});
+        client = conn.get(False);
+        yurl = url;
+        yurl =~ s/^yamlrpc/http/;
+        assertEq(yurl + "/YAML", client.getURL());
+
+        # issue #3696: test connection serialization
+        YamlRpcConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq(conn.url, conn2.url);
+
+        # Test connection scheme info
+        hash<ConnectionSchemeInfo> info = conn.getConnectionSchemeInfo();
+        assertEq("YAML-RPC Connection", info.display_name);
+        assertTrue(info.schemes.hasKey("yamlrpc"));
+        assertTrue(info.schemes.hasKey("yamlrpcs"));
+    }
+
+    testConstructorOptions() {
+        # Test with various constructor options
+        hash<auto> opts = {
+            "url": "http://localhost:8099",
+            "connect_timeout": 5000,
+            "timeout": 30000,
+        };
+
+        YamlRpcClient client(opts, True);
+        assertEq(True, client instanceof YamlRpcClient);
+
+        # Test with path
+        opts.url = "http://localhost:8099/custom/path";
+        client = new YamlRpcClient(opts, True);
+        assertEq(True, client instanceof YamlRpcClient);
+    }
+
+    testMakeRequest() {
+        # Test static makeRequest method
+        string req = YamlRpcClient::makeRequest("test.method", ("arg1", "arg2"));
+        hash<auto> parsed = parse_yaml(req);
+        assertEq("test.method", parsed.method);
+        assertEq(("arg1", "arg2"), parsed.params);
+
+        # Test with no arguments
+        req = YamlRpcClient::makeRequest("noargs", NOTHING);
+        parsed = parse_yaml(req);
+        assertEq("noargs", parsed.method);
+
+        # Test with complex arguments
+        hash<auto> complex_arg = {
+            "nested": {"key": "value"},
+            "list": (1, 2, 3),
+        };
+        req = YamlRpcClient::makeRequest("complex", complex_arg);
+        parsed = parse_yaml(req);
+        assertEq("complex", parsed.method);
+        assertEq(complex_arg, parsed.params);
+
+        # Test with YAML flags
+        req = YamlRpcClient::makeRequest("test", "arg", YAML::Canonical);
+        parsed = parse_yaml(req);
+        assertEq("test", parsed.method);
+    }
+
+    testDataStreamConnection() {
+        # Test YamlRpcConnection URL parsing
+        string url = "yamlrpc://localhost:8099/test";
+        YamlRpcConnection conn("test", "test", url, {"monitor": False});
+        assertEq(True, conn instanceof YamlRpcConnection);
+    }
+
+    testYamlRpcConnectionGetAsync() {
+        # getAsync() should return a YamlRpcClientIo object
+        string url = "yamlrpcs://localhost:8099/";
+        YamlRpcConnection conn("async-test", "async test", url, {"monitor": False});
+        auto async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof YamlRpcClientIo::YamlRpcClientIo,
+            "getAsync should return YamlRpcClientIo");
+        string yurl = url;
+        yurl =~ s/^yamlrpc/http/;
+        assertEq(yurl, async_client.getUrl(), "async client URL should be mapped");
+
+        # Test with non-SSL scheme
+        url = "yamlrpc://localhost:8080/api";
+        conn = new YamlRpcConnection("async-http", "async HTTP test", url, {"monitor": False});
+        async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof YamlRpcClientIo::YamlRpcClientIo,
+            "getAsync should return YamlRpcClientIo for non-SSL");
+        assertEq("http://localhost:8080/api", async_client.getUrl(),
+            "async client URL for non-SSL");
+    }
+}

@@ -1,0 +1,365 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires Connect
+%requires ConnectDataProvider
+%requires QUnit
+
+%requires HttpClientIo
+
+%requires HttpServerAsyncIo
+
+%exec-class ConnectDataProviderTest
+
+class ConnectDataProviderTest inherits QUnit::Test {
+    private {
+        *HttpServer m_http;
+        int port;
+        string url;
+
+        # Self-signed test certificate (localhost, RSA 2048)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("ConnectDataProvider test", "1.0") {
+%ifdef NoHttpClientIo
+        printf("SKIP: HttpClientIo module not available\n");
+        return;
+%else
+%ifdef NoHttpServerAsyncIo
+        printf("SKIP: HttpServerAsyncIo module not available\n");
+        return;
+%else
+        addTestCase("factory registration", \testFactory());
+        addTestCase("connection schemes", \testConnectionSchemes());
+        addTestCase("provider hierarchy", \testProviderHierarchy());
+        addTestCase("provider options", \testProviderOptions());
+        addTestCase("unary RPC via provider", \testUnaryRpc());
+        addTestCase("connection data provider", \testConnectionDataProvider());
+        addTestCase("connection ping", \testConnectionPing());
+        addTestCase("connection getImpl", \testConnectionGetImpl());
+        addTestCase("connection URL conversion", \testUrlConversion());
+        addTestCase("connection type", \testConnectionType());
+        addTestCase("provider error handling", \testProviderErrors());
+        addTestCase("factory info", \testFactoryInfo());
+        addTestCase("method request types", \testMethodRequestTypes());
+        addTestCase("multiple services", \testMultipleServices());
+%endif
+%endif
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        m_http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+
+        Connect::ConnectHandler handler();
+        handler.registerUnary("Greeter", "SayHello",
+            auto sub (auto req, hash<auto> metadata) {
+                return {"message": sprintf("Hello, %s!", req.name)};
+            });
+        handler.registerUnary("Calculator", "Add",
+            auto sub (auto req, hash<auto> metadata) {
+                return {"result": req.a + req.b};
+            });
+        handler.registerUnary("Echo", "Echo",
+            auto sub (auto req, hash<auto> metadata) {
+                return req;
+            });
+        m_http.setHandler("connect", "", NOTHING, handler);
+        m_http.setDefaultHandler("connect", handler);
+        m_http.waitForAsyncIo();
+
+        hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        port = info.port;
+        url = sprintf("https://localhost:%d", port);
+
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    testFactory() {
+        # Test factory creation and info
+        ConnectDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("connect", info.name);
+        assertEq(True, info.desc.val());
+
+        # Test factory can create a provider
+        AbstractDataProvider provider = factory.create({"url": url});
+        assertEq(True, provider instanceof ConnectDataProvider);
+        assertEq(url, provider.getName());
+    }
+
+    testConnectionSchemes() {
+        hash<ConnectionSchemeInfo> scheme = ConnectConnection::ConnectionScheme;
+        assertEq("Connect RPC", scheme.display_name);
+        assertEq(True, scheme.schemes.connect);
+        assertEq(True, scheme.schemes.connects);
+        assertEq("http", scheme.base_scheme_map.connect);
+        assertEq("https", scheme.base_scheme_map.connects);
+        assertEq(True, scheme.options.hasKey("codec"));
+        assertEq(True, scheme.options.hasKey("encoding"));
+        assertEq(True, scheme.options.hasKey("timeout_ms"));
+        assertEq(True, scheme.options.hasKey("accept_all_certs"));
+        assertEq(True, scheme.options.accept_all_certs.default_value);
+    }
+
+    testProviderHierarchy() {
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{"url": url, "protocol": "h2"});
+
+        # Root provider info
+        hash<DataProviderInfo> info = provider.getInfo();
+        assertEq("ConnectDataProvider", info.type);
+        assertEq(True, info.supports_children);
+
+        # Child provider names populated via discovery
+        *list<string> names = provider.getChildProviderNames();
+        assertEq(True, names.size() > 0, "discovered services");
+        assertEq(True, (select names, $1 == "Greeter").val(), "Greeter discovered");
+        assertEq(True, (select names, $1 == "Calculator").val(), "Calculator discovered");
+        assertEq(True, (select names, $1 == "Echo").val(), "Echo discovered");
+
+        # Get a service provider
+        AbstractDataProvider svc = provider.getChildProvider("Greeter");
+        assertEq(True, svc instanceof ConnectServiceDataProvider);
+        assertEq("Greeter", svc.getName());
+        assertRegex("Greeter", svc.getDesc());
+
+        # Service child names populated via discovery
+        names = svc.getChildProviderNames();
+        assertEq(True, names.size() > 0, "discovered methods");
+        assertEq(True, (select names, $1 == "SayHello").val(), "SayHello discovered");
+
+        # Get a method provider
+        AbstractDataProvider method = svc.getChildProvider("SayHello");
+        assertEq(True, method instanceof ConnectMethodDataProvider);
+        assertEq("SayHello", method.getName());
+        assertRegex("Greeter/SayHello", method.getDesc());
+
+        # Method info
+        hash<DataProviderInfo> minfo = method.getInfo();
+        assertEq(True, minfo.supports_request);
+        assertEq(False, minfo.supports_children);
+    }
+
+    testProviderOptions() {
+        hash<ConnectDataProviderOptions> opts = <ConnectDataProviderOptions>{
+            "url": url,
+            "codec": "yaml",
+            "encoding": "gzip",
+            "timeout_ms": 5000,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        };
+        ConnectDataProvider provider(opts);
+        hash<ConnectDataProviderOptions> got = provider.getOptions();
+        assertEq(url, got.url);
+        assertEq("yaml", got.codec);
+        assertEq("gzip", got.encoding);
+        assertEq(5000, got.timeout_ms);
+        assertEq(True, got.accept_all_certs);
+        assertEq("h2", got.protocol);
+    }
+
+    testUnaryRpc() {
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{"url": url, "protocol": "h2"});
+
+        # Test Greeter/SayHello
+        AbstractDataProvider method = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello");
+        auto result = method.doRequest({"name": "World"});
+        assertEq("Hello, World!", result.message);
+
+        # Test Calculator/Add
+        method = provider.getChildProvider("Calculator")
+            .getChildProvider("Add");
+        result = method.doRequest({"a": 3, "b": 4});
+        assertEq(7, result.result);
+
+        # Test Echo
+        hash<auto> echo_data = {"key": "value", "num": 42, "list": (1, 2, 3)};
+        method = provider.getChildProvider("Echo")
+            .getChildProvider("Echo");
+        result = method.doRequest(echo_data);
+        assertEq("value", result.key);
+        assertEq(42, result.num);
+        assertEq((1, 2, 3), result.list);
+    }
+
+    testConnectionDataProvider() {
+        ConnectConnection conn("test-conn", "test connection",
+            sprintf("connects://localhost:%d", port), {}, {"protocol": "h2"});
+
+        # Get data provider from connection
+        AbstractDataProvider provider = conn.getDataProvider();
+        assertEq(True, provider instanceof ConnectDataProvider);
+
+        # Test unary call via connection provider
+        auto result = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello")
+            .doRequest({"name": "Connection"});
+        assertEq("Hello, Connection!", result.message);
+    }
+
+    testConnectionPing() {
+        ConnectConnection conn("test-conn", "test connection",
+            sprintf("connects://localhost:%d", port));
+        hash<PingInfo> ping = conn.ping();
+        assertEq(True, ping.ok);
+
+        # Test ping failure with bad port
+        ConnectConnection bad_conn("bad-conn", "bad connection",
+            "connects://localhost:1");
+        ping = bad_conn.ping();
+        assertEq(False, ping.ok);
+        assertEq(True, exists ping.info);
+    }
+
+    testConnectionGetImpl() {
+        ConnectConnection conn("test-conn", "test connection",
+            sprintf("connects://localhost:%d", port));
+        auto client = conn.get();
+        assertEq(True, client instanceof Connect::ConnectClient);
+    }
+
+    testUrlConversion() {
+        {
+            ConnectConnection conn("c1", "test", "connect://example.com:8080/path");
+            assertEq("http://example.com:8080/path", conn.getHttpUrl());
+        }
+        {
+            ConnectConnection conn("c2", "test", "connects://example.com:443/path");
+            assertEq("https://example.com:443/path", conn.getHttpUrl());
+        }
+        {
+            ConnectConnection conn("c3", "test", "connects://host");
+            assertEq("https://host", conn.getHttpUrl());
+        }
+    }
+
+    testConnectionType() {
+        ConnectConnection conn("test-conn", "test connection",
+            sprintf("connects://localhost:%d", port));
+        assertEq("connect", conn.getType());
+    }
+
+    testProviderErrors() {
+        # Missing URL
+        assertThrows("CONNECT-PROVIDER-ERROR", sub () {
+            new ConnectDataProvider(NOTHING);
+        });
+
+        # Empty options hash
+        assertThrows("CONNECT-PROVIDER-ERROR", sub () {
+            new ConnectDataProvider({});
+        });
+    }
+
+    testFactoryInfo() {
+        ConnectDataProviderFactory factory();
+        assertEq("connect", factory.getInfo().name);
+
+        # Check provider info from factory
+        *hash<auto> pinfo = factory.getInfoAsData();
+        assertEq(True, exists pinfo);
+    }
+
+    testMethodRequestTypes() {
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{"url": url, "protocol": "h2"});
+        AbstractDataProvider method = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello");
+
+        # Request and response types should be auto (generic)
+        *AbstractDataProviderType reqType = method.getRequestType();
+        *AbstractDataProviderType respType = method.getResponseType();
+        assertEq(True, exists reqType);
+        assertEq(True, exists respType);
+    }
+
+    testMultipleServices() {
+        ConnectDataProvider provider(<ConnectDataProviderOptions>{"url": url, "protocol": "h2"});
+
+        # Access multiple services from the same provider
+        auto greet = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello")
+            .doRequest({"name": "Alice"});
+        assertEq("Hello, Alice!", greet.message);
+
+        auto calc = provider.getChildProvider("Calculator")
+            .getChildProvider("Add")
+            .doRequest({"a": 10, "b": 20});
+        assertEq(30, calc.result);
+
+        # Different method providers from same service
+        auto greet2 = provider.getChildProvider("Greeter")
+            .getChildProvider("SayHello")
+            .doRequest({"name": "Bob"});
+        assertEq("Hello, Bob!", greet2.message);
+    }
+}

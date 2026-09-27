@@ -1,0 +1,704 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlSaxParserTest
+
+class YamlSaxParserTest inherits QUnit::Test {
+    constructor() : Test("YamlSaxParserTest", "1.0") {
+        addTestCase("basic events", \testBasicEvents());
+        addTestCase("nested structures", \testNestedStructures());
+        addTestCase("all scalar types", \testAllScalarTypes());
+        addTestCase("anchors and aliases", \testAnchorsAndAliases());
+        addTestCase("multiple documents", \testMultipleDocuments());
+        addTestCase("stream input", \testStreamInput());
+        addTestCase("named argument parsing", \testNamedArgumentParsing());
+        addTestCase("depth tracking", \testDepthTracking());
+        addTestCase("line/column tracking", \testLineColumnTracking());
+        addTestCase("unicode content", \testUnicodeContent());
+        addTestCase("all event types", \testAllEventTypes());
+
+        # Scalar style tests
+        addTestCase("plain scalar style", \testPlainScalarStyle());
+        addTestCase("single quoted style", \testSingleQuotedStyle());
+        addTestCase("double quoted style", \testDoubleQuotedStyle());
+        addTestCase("literal block style", \testLiteralBlockStyle());
+        addTestCase("folded block style", \testFoldedBlockStyle());
+
+        # Tag tests
+        addTestCase("explicit scalar tags", \testExplicitScalarTags());
+        addTestCase("sequence tags", \testSequenceTags());
+        addTestCase("mapping tags", \testMappingTags());
+
+        # Corner cases
+        addTestCase("empty input", \testEmptyInput());
+        addTestCase("whitespace only", \testWhitespaceOnly());
+        addTestCase("single scalar document", \testSingleScalarDocument());
+        addTestCase("deeply nested", \testDeeplyNested());
+        addTestCase("large document", \testLargeDocument());
+        addTestCase("binary content", \testBinaryContent());
+
+        # Negative tests
+        addTestCase("malformed yaml", \testMalformedYaml());
+        addTestCase("callback exception", \testCallbackException());
+        addTestCase("unclosed mapping", \testUnclosedMapping());
+        addTestCase("unclosed sequence", \testUnclosedSequence());
+        addTestCase("bad indentation", \testBadIndentation());
+        addTestCase("duplicate keys warning", \testDuplicateKeys());
+
+        # Deserialization tests
+        addTestCase("quoted string deserialization", \testQuotedStringDeserialization());
+        addTestCase("tagged scalar deserialization", \testTaggedScalarDeserialization());
+        addTestCase("numeric deserialization", \testNumericDeserialization());
+
+        # Stream encoding tests
+        addTestCase("stream with encoding", \testStreamWithEncoding());
+
+        set_return_value(main());
+    }
+
+    testBasicEvents() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        parser.parse("key: value", sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        assertTrue(events.size() >= 6);
+        assertEq(YAML::YamlSaxEventType::StreamStart, events[0].type);
+        assertEq(YAML::YamlSaxEventType::DocumentStart, events[1].type);
+        assertEq(YAML::YamlSaxEventType::MappingStart, events[2].type);
+        assertEq(YAML::YamlSaxEventType::Scalar, events[3].type);
+        assertEq("key", events[3].value);
+        assertEq(YAML::YamlSaxEventType::Scalar, events[4].type);
+        assertEq("value", events[4].value);
+    }
+
+    testNestedStructures() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        string yaml = "
+outer:
+  inner:
+    - item1
+    - item2
+  other: value
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        int max_depth = 0;
+        foreach hash<YamlSaxEvent> e in (events) {
+            if (e.depth > max_depth) max_depth = e.depth;
+        }
+        assertTrue(max_depth >= 3, "should have depth >= 3 for nested structure");
+
+        # Verify sequence is inside mapping
+        bool found_seq_in_mapping = False;
+        foreach hash<YamlSaxEvent> e in (events) {
+            if (e.type == YAML::YamlSaxEventType::SequenceStart && e.depth >= 2) {
+                found_seq_in_mapping = True;
+            }
+        }
+        assertTrue(found_seq_in_mapping);
+    }
+
+    testAllScalarTypes() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        string yaml = "
+string: hello
+integer: 42
+float: 3.14
+boolean_true: true
+boolean_false: false
+null_value: null
+null_tilde: ~
+date: 2024-01-15
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) push events, e;
+        });
+
+        assertTrue(events.size() >= 16);
+
+        # Build key-value pairs from consecutive scalar events
+        hash<string, auto> values;
+        for (int i = 0; i < events.size() - 1; i += 2) {
+            values{events[i].value} = events[i + 1].value;
+        }
+
+        # Verify proper deserialization of each type
+        assertEq("hello", values{"string"});
+        assertEq(Type::String, values{"string"}.type());
+
+        assertEq(42, values{"integer"});
+        assertEq(Type::Int, values{"integer"}.type());
+
+        assertEq(3.14, values{"float"});
+        assertEq(Type::Float, values{"float"}.type());
+
+        assertEq(True, values{"boolean_true"});
+        assertEq(Type::Boolean, values{"boolean_true"}.type());
+
+        assertEq(False, values{"boolean_false"});
+        assertEq(Type::Boolean, values{"boolean_false"}.type());
+
+        assertFalse(exists values{"null_value"});
+        assertFalse(exists values{"null_tilde"});
+
+        assertTrue(values{"date"} instanceof date);
+    }
+
+    testAnchorsAndAliases() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        string yaml = "
+defaults: &defaults
+  timeout: 30
+service:
+  <<: *defaults
+  name: myservice
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        *hash<YamlSaxEvent> anchor_event;
+        *hash<YamlSaxEvent> alias_event;
+        foreach hash<YamlSaxEvent> e in (events) {
+            if (exists e.anchor && e.anchor == "defaults") anchor_event = e;
+            if (e.type == YAML::YamlSaxEventType::Alias) alias_event = e;
+        }
+        assertTrue(exists anchor_event, "should find anchor");
+        assertEq("defaults", anchor_event.anchor);
+        assertTrue(exists alias_event, "should find alias");
+        assertEq("defaults", alias_event.alias);
+    }
+
+    testMultipleDocuments() {
+        YamlSaxParser parser();
+        int doc_starts = 0;
+        int doc_ends = 0;
+
+        string yaml = "---
+doc1: value1
+---
+doc2: value2
+---
+doc3: value3
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::DocumentStart) doc_starts++;
+            if (e.type == YAML::YamlSaxEventType::DocumentEnd) doc_ends++;
+        });
+
+        assertEq(3, doc_starts, "should have 3 document starts");
+        assertEq(3, doc_ends, "should have 3 document ends");
+    }
+
+    testStreamInput() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        StringInputStream sis("key: value\nother: data");
+        parser.parseStream(sis, sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        assertTrue(events.size() > 0);
+        assertEq(YAML::YamlSaxEventType::StreamStart, events[0].type);
+    }
+
+    testNamedArgumentParsing() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+        code callback = sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) {
+                push events, e;
+            }
+        };
+
+        parser.parse(callback: callback, yaml_str: "name: qore");
+        assertEq("name", events[0].value);
+        assertEq("qore", events[1].value);
+
+        events = ();
+        StringInputStream sis("streamed: true");
+        parser.parseStream(stream: sis, callback: callback, encoding: "UTF-8");
+        assertEq("streamed", events[0].value);
+        assertEq(True, events[1].value);
+    }
+
+    testDepthTracking() {
+        YamlSaxParser parser();
+        hash<string, int> depth_at_key;
+
+        string yaml = "
+level0:
+  level1:
+    level2:
+      level3: value
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) {
+                string val = e.value;
+                if (regex(val, "^level")) {
+                    depth_at_key{val} = e.depth;
+                }
+            }
+        });
+
+        assertTrue(depth_at_key{"level1"} > depth_at_key{"level0"});
+        assertTrue(depth_at_key{"level2"} > depth_at_key{"level1"});
+        assertTrue(depth_at_key{"level3"} > depth_at_key{"level2"});
+    }
+
+    testLineColumnTracking() {
+        YamlSaxParser parser();
+        *hash<YamlSaxEvent> second_key;
+        *hash<YamlSaxEvent> third_key;
+
+        string yaml = "first: 1\nsecond: 2\nthird: 3";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) {
+                if (e.value == "second") second_key = e;
+                if (e.value == "third") third_key = e;
+            }
+        });
+
+        assertTrue(exists second_key);
+        assertEq(2, second_key.line);
+        assertTrue(exists third_key);
+        assertEq(3, third_key.line);
+    }
+
+    testUnicodeContent() {
+        YamlSaxParser parser();
+        *string found_value;
+
+        string yaml = "greeting: \u4F60\u597D\u4E16\u754C";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value != "greeting") {
+                found_value = e.value;
+            }
+        });
+
+        assertTrue(exists found_value);
+        assertEq("\u4F60\u597D\u4E16\u754C", found_value);
+    }
+
+    testAllEventTypes() {
+        YamlSaxParser parser();
+        hash<string, bool> seen_types;
+
+        string yaml = "---
+mapping:
+  key: value
+sequence:
+  - &anchor item1
+  - *anchor
+...";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            seen_types{string(e.type)} = True;
+        });
+
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::StreamStart)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::StreamEnd)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::DocumentStart)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::DocumentEnd)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::MappingStart)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::MappingEnd)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::SequenceStart)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::SequenceEnd)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::Scalar)});
+        assertTrue(exists seen_types{string(YAML::YamlSaxEventType::Alias)});
+    }
+
+    # Scalar style tests
+    testPlainScalarStyle() {
+        YamlSaxParser parser();
+        *string style;
+
+        parser.parse("key: plain_value", sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "plain_value") {
+                style = e.style;
+            }
+        });
+
+        assertEq("plain", style);
+    }
+
+    testSingleQuotedStyle() {
+        YamlSaxParser parser();
+        *string style;
+
+        parser.parse("key: 'single quoted'", sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "single quoted") {
+                style = e.style;
+            }
+        });
+
+        assertEq("single_quoted", style);
+    }
+
+    testDoubleQuotedStyle() {
+        YamlSaxParser parser();
+        *string style;
+
+        parser.parse("key: \"double quoted\"", sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "double quoted") {
+                style = e.style;
+            }
+        });
+
+        assertEq("double_quoted", style);
+    }
+
+    testLiteralBlockStyle() {
+        YamlSaxParser parser();
+        *string style;
+
+        string yaml = "key: |\n  line1\n  line2";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value =~ /line1/) {
+                style = e.style;
+            }
+        });
+
+        assertEq("literal", style);
+    }
+
+    testFoldedBlockStyle() {
+        YamlSaxParser parser();
+        *string style;
+
+        string yaml = "key: >\n  line1\n  line2";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value =~ /line1/) {
+                style = e.style;
+            }
+        });
+
+        assertEq("folded", style);
+    }
+
+    # Tag tests
+    testExplicitScalarTags() {
+        YamlSaxParser parser();
+        *string tag;
+
+        parser.parse("key: !!str 123", sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "123") {
+                tag = e.tag;
+            }
+        });
+
+        assertTrue(exists tag);
+        assertTrue(tag =~ /str/);
+    }
+
+    testSequenceTags() {
+        YamlSaxParser parser();
+        *string seq_anchor;
+
+        string yaml = "items: &my_list\n  - a\n  - b";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::SequenceStart && exists e.anchor) {
+                seq_anchor = e.anchor;
+            }
+        });
+
+        assertEq("my_list", seq_anchor);
+    }
+
+    testMappingTags() {
+        YamlSaxParser parser();
+        *string map_anchor;
+
+        string yaml = "data: &my_map\n  a: 1\n  b: 2";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::MappingStart && exists e.anchor) {
+                map_anchor = e.anchor;
+            }
+        });
+
+        assertEq("my_map", map_anchor);
+    }
+
+    # Corner cases
+    testEmptyInput() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        parser.parse("", sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        assertTrue(events.size() >= 2);
+        assertEq(YAML::YamlSaxEventType::StreamStart, events[0].type);
+        assertEq(YAML::YamlSaxEventType::StreamEnd, events[events.size()-1].type);
+    }
+
+    testWhitespaceOnly() {
+        # Note: YAML does not allow tabs, so only use spaces/newlines
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        parser.parse("   \n\n   ", sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        assertTrue(events.size() >= 2);
+        assertEq(YAML::YamlSaxEventType::StreamStart, events[0].type);
+    }
+
+    testSingleScalarDocument() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        parser.parse("just a string", sub (hash<YamlSaxEvent> e) { push events, e; });
+
+        # Should have: stream_start, doc_start, scalar, doc_end, stream_end
+        bool found_scalar = False;
+        foreach hash<YamlSaxEvent> e in (events) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "just a string") {
+                found_scalar = True;
+            }
+        }
+        assertTrue(found_scalar);
+    }
+
+    testDeeplyNested() {
+        YamlSaxParser parser();
+        int max_depth = 0;
+
+        string yaml = "a:\n  b:\n    c:\n      d:\n        e:\n          f: value";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.depth > max_depth) max_depth = e.depth;
+        });
+
+        assertTrue(max_depth >= 5);
+    }
+
+    testLargeDocument() {
+        YamlSaxParser parser();
+        int scalar_count = 0;
+
+        list<string> items = ();
+        for (int i = 0; i < 1000; i++) {
+            push items, sprintf("  - item%d: value%d", i, i);
+        }
+        string yaml = "items:\n" + items.join("\n");
+
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) scalar_count++;
+        });
+
+        assertTrue(scalar_count >= 2000);
+    }
+
+    testBinaryContent() {
+        YamlSaxParser parser();
+        auto binary_value;
+        bool found = False;
+
+        string yaml = "data: !!binary |\n  R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && exists e.tag && e.tag =~ /binary/) {
+                binary_value = e.value;
+                found = True;
+            }
+        });
+
+        assertTrue(found);
+        assertTrue(binary_value instanceof binary);
+    }
+
+    # Deserialization tests
+    testQuotedStringDeserialization() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        # Double-quoted values should always remain strings
+        string yaml = "
+dq_int: \"42\"
+dq_bool: \"true\"
+dq_null: \"null\"
+sq_str: 'hello'
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) push events, e;
+        });
+
+        hash<string, auto> values;
+        for (int i = 0; i < events.size() - 1; i += 2) {
+            values{events[i].value} = events[i + 1].value;
+        }
+
+        # Double-quoted "42" should remain a string, not become int
+        assertEq("42", values{"dq_int"});
+        assertEq(Type::String, values{"dq_int"}.type());
+
+        # Double-quoted "true" should remain a string, not become bool
+        assertEq("true", values{"dq_bool"});
+        assertEq(Type::String, values{"dq_bool"}.type());
+
+        # Double-quoted "null" should remain a string, not become NOTHING
+        assertEq("null", values{"dq_null"});
+        assertEq(Type::String, values{"dq_null"}.type());
+
+        # Single-quoted plain string should remain a string
+        assertEq("hello", values{"sq_str"});
+        assertEq(Type::String, values{"sq_str"}.type());
+    }
+
+    testTaggedScalarDeserialization() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        # Explicit tags should force the type
+        string yaml = "
+str_val: !!str 123
+int_val: !!int 42
+float_val: !!float 3.14
+bool_val: !!bool true
+null_val: !!null ''
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) push events, e;
+        });
+
+        hash<string, auto> values;
+        for (int i = 0; i < events.size() - 1; i += 2) {
+            values{events[i].value} = events[i + 1].value;
+        }
+
+        # !!str 123 should be a string "123"
+        assertEq("123", values{"str_val"});
+        assertEq(Type::String, values{"str_val"}.type());
+
+        # !!int 42 should be integer 42
+        assertEq(42, values{"int_val"});
+        assertEq(Type::Int, values{"int_val"}.type());
+
+        # !!float 3.14 should be float
+        assertEq(3.14, values{"float_val"});
+        assertEq(Type::Float, values{"float_val"}.type());
+
+        # !!bool true should be boolean
+        assertEq(True, values{"bool_val"});
+        assertEq(Type::Boolean, values{"bool_val"}.type());
+
+        # !!null should be NOTHING
+        assertFalse(exists values{"null_val"});
+    }
+
+    testNumericDeserialization() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        string yaml = "
+pos_int: 42
+neg_int: -7
+zero: 0
+pos_float: 1.5
+neg_float: -2.5
+sci_float: 1.0e10
+";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) push events, e;
+        });
+
+        hash<string, auto> values;
+        for (int i = 0; i < events.size() - 1; i += 2) {
+            values{events[i].value} = events[i + 1].value;
+        }
+
+        assertEq(42, values{"pos_int"});
+        assertEq(Type::Int, values{"pos_int"}.type());
+
+        assertEq(-7, values{"neg_int"});
+        assertEq(Type::Int, values{"neg_int"}.type());
+
+        assertEq(0, values{"zero"});
+        assertEq(Type::Int, values{"zero"}.type());
+
+        assertEq(1.5, values{"pos_float"});
+        assertEq(Type::Float, values{"pos_float"}.type());
+
+        assertEq(-2.5, values{"neg_float"});
+        assertEq(Type::Float, values{"neg_float"}.type());
+
+        assertEq(1.0e10, values{"sci_float"});
+        assertEq(Type::Float, values{"sci_float"}.type());
+    }
+
+    # Negative tests
+    testMalformedYaml() {
+        YamlSaxParser parser();
+
+        assertThrows("YAML-SAX-PARSE-ERROR", sub () {
+            parser.parse("key: value\n  bad: indent", sub (hash<YamlSaxEvent> e) {});
+        });
+    }
+
+    testCallbackException() {
+        YamlSaxParser parser();
+
+        assertThrows("TEST-ERROR", sub () {
+            parser.parse("key: value", sub (hash<YamlSaxEvent> e) {
+                throw "TEST-ERROR", "callback error";
+            });
+        });
+    }
+
+    testUnclosedMapping() {
+        YamlSaxParser parser();
+
+        assertThrows("YAML-SAX-PARSE-ERROR", sub () {
+            parser.parse("key: {\n  nested: value", sub (hash<YamlSaxEvent> e) {});
+        });
+    }
+
+    testUnclosedSequence() {
+        YamlSaxParser parser();
+
+        assertThrows("YAML-SAX-PARSE-ERROR", sub () {
+            parser.parse("items: [\n  - item1", sub (hash<YamlSaxEvent> e) {});
+        });
+    }
+
+    testBadIndentation() {
+        YamlSaxParser parser();
+
+        # This causes a proper YAML parse error
+        assertThrows("YAML-SAX-PARSE-ERROR", sub () {
+            parser.parse("key: value\n  bad: indent", sub (hash<YamlSaxEvent> e) {});
+        });
+    }
+
+    testDuplicateKeys() {
+        YamlSaxParser parser();
+        int key_count = 0;
+
+        # Duplicate keys are allowed in YAML, just track them
+        string yaml = "key: value1\nkey: value2";
+        parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar && e.value == "key") {
+                key_count++;
+            }
+        });
+
+        assertEq(2, key_count);
+    }
+
+    testStreamWithEncoding() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+
+        StringInputStream sis("key: value");
+        parser.parseStream(sis, sub (hash<YamlSaxEvent> e) { push events, e; }, "UTF-8");
+
+        assertTrue(events.size() > 0);
+    }
+}

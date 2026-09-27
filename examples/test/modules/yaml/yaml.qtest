@@ -1,0 +1,899 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires yaml
+%requires QUnit
+
+%exec-class Main
+
+const DATA = (
+    1,
+    "two",
+    NOTHING,
+    0,
+    0.0,
+    22,
+    9223372036854775807,
+    -9223372036854775807,
+    500n,
+    M_PIn,
+    2.141578291e50n,
+    2010-05-05T15:35:02.100,
+    False,
+    M_PI,
+    250.192393,
+    1970-01-01Z,
+    (hash(), (), "three \"things\""),
+    P2M3DT10H14u,
+    now_us(),
+    binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
+    {
+        "a": 2.0,
+        "b": "hello",
+        "key": True,
+        "data": "P1YszUFKs8XtFOK",
+    },
+    @inf@n,
+    -@inf@n,
+    @inf@,
+    -@inf@,
+    "'single quoted string'",
+    "'1234'",
+    "P1YszUFKs8XtFOK",
+    "\"P1YszUFKs8XtFOK\"",
+);
+
+const DATA2 = (
+    1,
+    "two",
+    22,
+    @nan@n,
+    @inf@n,
+);
+
+const YAML_OPTIONS = (
+    YAML::Yaml1_1,
+    YAML::Canonical,
+    #YAML::Yaml1_2,
+    #YAML::Yaml1_0,
+);
+
+const YamlWithAlias = "user: &user_def
+    type: string
+    example: user-1234";
+
+public class Main inherits QUnit::Test {
+    constructor() : Test("yaml test", "1.0") {
+        addTestCase("aliases", \testAliases());
+        addTestCase("aliases comprehensive", \testAliasesComprehensive());
+        addTestCase("aliases negative", \testAliasesNegative());
+        addTestCase("merge keys", \testMergeKeys());
+        addTestCase("merge keys comprehensive", \testMergeKeysComprehensive());
+        addTestCase("merge keys negative", \testMergeKeysNegative());
+        addTestCase("issue 4642", \issue4642());
+        addTestCase("number test", \numberTest());
+        addTestCase("float rounding test", \floatRoundingTest());
+        addTestCase("issue 3394", \issue3394());
+        addTestCase("base test", \testYaml());
+        addTestCase("named argument calls", \testNamedArgumentCalls());
+        addTestCase("Options test", \testOptions());
+        addTestCase("Skipped test", \testIndent());
+        addTestCase("Len test", \testLen());
+        addTestCase("Date/Time test", \testDates());
+        addTestCase("Structure with NaN test", \testNanStructure());
+        addTestCase("single quoted strings", \testSingleQuotedStrings());
+        addTestCase("sql null test", \sqlNull());
+        # New comprehensive tests
+        addTestCase("malformed yaml tests", \testMalformedYaml());
+        addTestCase("edge cases", \testEdgeCases());
+        addTestCase("large data", \testLargeData());
+        addTestCase("special characters", \testSpecialCharacters());
+        addTestCase("nested structures", \testNestedStructures());
+        addTestCase("empty values", \testEmptyValues());
+        addTestCase("boundary values", \testBoundaryValues());
+        addTestCase("unicode", \testUnicode());
+        addTestCase("binary data", \testBinaryData());
+        addTestCase("multiline strings", \testMultilineStrings());
+        addTestCase("get_yaml_info", \testGetYamlInfo());
+        addTestCase("object serialization error", \testObjectError());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testAliases() {
+        assertEq({
+            "user": {
+                "type": "string",
+                "example": "user-1234",
+            },
+        }, parse_yaml(YamlWithAlias));
+    }
+
+    testNamedArgumentCalls() {
+        hash<auto> source = {"name": "qore", "items": (1, 2)};
+        string yaml = make_yaml(data: source, flags: YAML::Yaml1_2, width: -1, indent: 2);
+        assertEq(source, parse_yaml(yaml: yaml));
+
+        list<auto> docs = parse_yaml_documents(yaml: "---\na: 1\n---\nb: 2\n");
+        assertEq(2, docs.size());
+        assertEq(1, docs[0].a);
+        assertEq(2, docs[1].b);
+    }
+
+    testMergeKeys() {
+        # Basic merge key test
+        string yaml = "---
+defaults: &defaults
+  timeout: 30
+  retries: 3
+service:
+  <<: *defaults
+  name: myservice
+";
+        hash<auto> result = parse_yaml(yaml);
+        assertEq("myservice", result.service.name);
+        assertEq(30, result.service.timeout);
+        assertEq(3, result.service.retries);
+
+        # Merge key with override
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+  retries: 3
+service:
+  <<: *defaults
+  timeout: 60
+  name: myservice
+";
+        result = parse_yaml(yaml);
+        assertEq(60, result.service.timeout);  # Overridden
+        assertEq(3, result.service.retries);   # From merge
+        assertEq("myservice", result.service.name);
+
+        # Merge key with multiple sources (sequence of mappings)
+        yaml = "---
+base1: &base1
+  a: 1
+  b: 2
+base2: &base2
+  b: 20
+  c: 3
+merged:
+  <<: [*base1, *base2]
+  d: 4
+";
+        result = parse_yaml(yaml);
+        assertEq(1, result.merged.a);    # From base1
+        assertEq(2, result.merged.b);    # From base1 (first in sequence wins)
+        assertEq(3, result.merged.c);    # From base2
+        assertEq(4, result.merged.d);    # Direct key
+
+        # Explicit key overrides merge
+        yaml = "---
+defaults: &defaults
+  key: from_defaults
+target:
+  key: explicit_value
+  <<: *defaults
+";
+        result = parse_yaml(yaml);
+        assertEq("explicit_value", result.target.key);
+
+        # Multiple merge keys
+        yaml = "---
+a: &a
+  x: 1
+b: &b
+  y: 2
+c:
+  <<: *a
+  <<: *b
+  z: 3
+";
+        result = parse_yaml(yaml);
+        assertEq(1, result.c.x);
+        assertEq(2, result.c.y);
+        assertEq(3, result.c.z);
+    }
+
+    testAliasesComprehensive() {
+        # Test anchor redefinition (later definition wins)
+        string yaml = "---
+first: &anchor value1
+second: &anchor value2
+ref: *anchor";
+        hash<auto> result = parse_yaml(yaml);
+        assertEq("value1", result.first);
+        assertEq("value2", result.second);
+        assertEq("value2", result.ref);  # References the later definition
+
+        # Test deeply nested anchor/alias
+        yaml = "---
+outer: &outer
+  middle:
+    inner: &inner
+      deep: value
+ref_outer: *outer
+ref_inner: *inner";
+        result = parse_yaml(yaml);
+        assertEq("value", result.outer.middle.inner.deep);
+        assertEq("value", result.ref_outer.middle.inner.deep);
+        assertEq("value", result.ref_inner.deep);
+
+        # Test anchor with various value types
+        yaml = "---
+int_val: &int 42
+float_val: &float 3.14
+bool_val: &bool true
+null_val: &null ~
+date_val: &date 2024-01-15
+list_val: &list [1, 2, 3]
+refs:
+  r_int: *int
+  r_float: *float
+  r_bool: *bool
+  r_null: *null
+  r_date: *date
+  r_list: *list";
+        result = parse_yaml(yaml);
+        assertEq(42, result.refs.r_int);
+        assertEq(3.14, result.refs.r_float);
+        assertEq(True, result.refs.r_bool);
+        assertEq(NOTHING, result.refs.r_null);
+        # Compare date parts only (avoid timezone issues)
+        assertTrue(result.refs.r_date.typeCode() == NT_DATE);
+        assertEq(2024, get_years(result.refs.r_date));
+        assertEq(1, get_months(result.refs.r_date));
+        assertEq(15, get_days(result.refs.r_date));
+        assertEq((1, 2, 3), result.refs.r_list);
+
+        # Test anchor with empty values
+        yaml = "---
+empty_str: &empty ''
+empty_list: &elist []
+empty_map: &emap {}
+refs:
+  r_str: *empty
+  r_list: *elist
+  r_map: *emap";
+        result = parse_yaml(yaml);
+        assertEq("", result.refs.r_str);
+        assertEq((), result.refs.r_list);
+        assertEq({}, result.refs.r_map);
+
+        # Test multiple references to same anchor
+        yaml = "---
+source: &src shared_value
+ref1: *src
+ref2: *src
+ref3: *src";
+        result = parse_yaml(yaml);
+        assertEq("shared_value", result.source);
+        assertEq("shared_value", result.ref1);
+        assertEq("shared_value", result.ref2);
+        assertEq("shared_value", result.ref3);
+
+        # Test anchor in list items
+        yaml = "---
+items:
+  - &first first_item
+  - second_item
+  - *first";
+        result = parse_yaml(yaml);
+        assertEq("first_item", result.items[0]);
+        assertEq("second_item", result.items[1]);
+        assertEq("first_item", result.items[2]);
+
+        # Test anchor on inline collections
+        yaml = "---
+inline_list: &ilist [a, b, c]
+inline_map: &imap {x: 1, y: 2}
+refs:
+  list_ref: *ilist
+  map_ref: *imap";
+        result = parse_yaml(yaml);
+        assertEq(("a", "b", "c"), result.refs.list_ref);
+        assertEq({"x": 1, "y": 2}, result.refs.map_ref);
+    }
+
+    testAliasesNegative() {
+        # Test unknown anchor reference
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "ref: *undefined");
+
+        # Test anchor used before definition (forward reference - not allowed)
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "ref: *later\nlater: &later value");
+
+        # Test invalid anchor syntax
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "bad: & no_name");
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "bad: *");
+
+        # Test anchor in flow context with invalid syntax
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "{key: &}");
+    }
+
+    testMergeKeysComprehensive() {
+        # Test merge key with nested merge keys
+        string yaml = "---
+base: &base
+  a: 1
+  b: 2
+middle: &middle
+  <<: *base
+  c: 3
+final:
+  <<: *middle
+  d: 4";
+        hash<auto> result = parse_yaml(yaml);
+        assertEq(1, result.final.a);
+        assertEq(2, result.final.b);
+        assertEq(3, result.final.c);
+        assertEq(4, result.final.d);
+
+        # Test merge key ordering - << before other keys
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+service:
+  <<: *defaults
+  name: svc
+  timeout: 60";
+        result = parse_yaml(yaml);
+        assertEq(60, result.service.timeout);  # Explicit key wins
+        assertEq("svc", result.service.name);
+
+        # Test merge key ordering - << after other keys
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+service:
+  name: svc
+  timeout: 60
+  <<: *defaults";
+        result = parse_yaml(yaml);
+        assertEq(60, result.service.timeout);  # Explicit key still wins even if << is last
+        assertEq("svc", result.service.name);
+
+        # Test merge with empty mapping
+        yaml = "---
+empty: &empty {}
+target:
+  <<: *empty
+  key: value";
+        result = parse_yaml(yaml);
+        assertEq("value", result.target.key);
+        assertEq(1, result.target.size());
+
+        # Test merge with null values in source
+        yaml = "---
+defaults: &defaults
+  nullable: ~
+  value: something
+target:
+  <<: *defaults
+  extra: added";
+        result = parse_yaml(yaml);
+        assertEq(NOTHING, result.target.nullable);
+        assertEq("something", result.target.value);
+        assertEq("added", result.target.extra);
+
+        # Test complex merge with many overlapping keys
+        yaml = "---
+a: &a {shared: a_val, only_a: 1}
+b: &b {shared: b_val, only_b: 2}
+c: &c {shared: c_val, only_c: 3}
+merged:
+  <<: [*a, *b, *c]
+  own: 4";
+        result = parse_yaml(yaml);
+        assertEq("a_val", result.merged.shared);  # First in sequence wins
+        assertEq(1, result.merged.only_a);
+        assertEq(2, result.merged.only_b);
+        assertEq(3, result.merged.only_c);
+        assertEq(4, result.merged.own);
+
+        # Test merge in nested mapping
+        yaml = "---
+defaults: &defaults
+  timeout: 30
+parent:
+  child:
+    <<: *defaults
+    name: child_svc";
+        result = parse_yaml(yaml);
+        assertEq(30, result.parent.child.timeout);
+        assertEq("child_svc", result.parent.child.name);
+
+        # Test merge in list item mapping
+        yaml = "---
+defaults: &defaults
+  enabled: true
+services:
+  - <<: *defaults
+    name: service1
+  - <<: *defaults
+    name: service2
+    enabled: false";
+        result = parse_yaml(yaml);
+        assertEq(True, result.services[0].enabled);
+        assertEq("service1", result.services[0].name);
+        assertEq(False, result.services[1].enabled);  # Overridden
+        assertEq("service2", result.services[1].name);
+
+        # Test multiple separate merge keys with same anchor
+        yaml = "---
+common: &common
+  shared: value
+obj1:
+  <<: *common
+  name: obj1
+obj2:
+  <<: *common
+  name: obj2";
+        result = parse_yaml(yaml);
+        assertEq("value", result.obj1.shared);
+        assertEq("obj1", result.obj1.name);
+        assertEq("value", result.obj2.shared);
+        assertEq("obj2", result.obj2.name);
+    }
+
+    testMergeKeysNegative() {
+        # Test merge key with non-mapping value (should be silently ignored per YAML spec)
+        string yaml = "---
+scalar: &scalar value
+target:
+  <<: *scalar
+  key: data";
+        hash<auto> result = parse_yaml(yaml);
+        assertEq("data", result.target.key);
+        # scalar merge is ignored, only explicit key remains
+        assertFalse(result.target.hasKey("<<"));
+
+        # Test merge key with null value (should be silently ignored)
+        yaml = "---
+null_val: &null_val ~
+target:
+  <<: *null_val
+  key: data";
+        result = parse_yaml(yaml);
+        assertEq("data", result.target.key);
+
+        # Test merge key with list containing non-mappings (non-mappings ignored)
+        yaml = "---
+mapping: &mapping {a: 1}
+scalar: &scalar value
+target:
+  <<: [*mapping, *scalar]
+  b: 2";
+        result = parse_yaml(yaml);
+        assertEq(1, result.target.a);
+        assertEq(2, result.target.b);
+    }
+
+    issue4642() {
+        string val = "P1YszUFKs8XtFOK";
+        assertEq(val, parse_yaml(val));
+        assertEq(P1Y, parse_yaml("P1Y"));
+        #assertEq("P1Y", parse_yaml("'P1Y'"));
+        assertEq("P1Y", parse_yaml("\"P1Y\""));
+        assertEq(P2M3DT10H14u, parse_yaml("P2M3DT10H14u"));
+        assertEq("P2M3DT10H14u", parse_yaml("'P2M3DT10H14u'"));
+        assertEq("P2M3DT10H14u", parse_yaml("\"P2M3DT10H14u\""));
+    }
+
+    numberTest() {
+        assertEq("e", parse_yaml("e"));
+    }
+
+    floatRoundingTest() {
+        # some libyaml versions serialize a "\n..." at the end and some don't
+        # With YAML 1.2 as default, output starts with "%YAML 1.2" directive
+        # so we check the value line (after "--- ")
+        string yaml = make_yaml(1.1);
+        assertRegex("1\\.1", yaml);
+        assertEq(1.1, parse_yaml(yaml));
+
+        yaml = make_yaml(1.2);
+        # Note: "1.2" appears in both the version directive and value, so just verify round-trip
+        assertEq(1.2, parse_yaml(yaml));
+
+        yaml = make_yaml(1.3);
+        assertRegex("1\\.3", yaml);
+        assertEq(1.3, parse_yaml(yaml));
+
+        yaml = make_yaml(250.1912);
+        assertRegex("250\\.1912", yaml);
+        assertEq(250.1912, parse_yaml(yaml));
+    }
+
+    issue3394() {
+        assertThrows("YAML-EMITTER-ERROR", "invalid UTF-8", \make_yaml(), binary_to_string(<e1e9edf6fc>, "utf-8"));
+    }
+
+    testYaml() {
+        assertEq(DATA, parse_yaml(make_yaml(DATA)));
+
+        assertEq("n", parse_yaml("'n'"));
+    }
+
+    testOptions() {
+        ListIterator it(YAML_OPTIONS);
+        while (it.next()) {
+            string s = make_yaml(DATA, it.getValue());
+            auto l = parse_yaml(s);
+            assertEq(DATA, l, sprintf("option: %y", it.getValue()));
+        }
+    }
+
+    testIndent() {
+        for (int i = 0; i < 100; i++) {
+            string s = make_yaml(DATA, NOTHING, NOTHING, 1);
+            auto l = parse_yaml(s);
+            testAssertion(sprintf("indent: %2d", i), \equals(), (DATA, l));
+        }
+    }
+
+    testLen() {
+        for (int i = -10; i < 11; i++) {
+            string s = make_yaml(DATA, NOTHING, i);
+            auto l = parse_yaml(s);
+            testAssertion(sprintf("len: %2d", i), \equals(), (DATA, l));
+        }
+    }
+
+    testDates() {
+        TimeZone tz;
+        try {
+            tz = new TimeZone("Europe/Vienna");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("missing timeznoe files");
+        }
+        date dt1 = 2015-03-29T01:00:00Z;
+        date dt2 = tz.date(dt1);
+        testAssertion("timezone test", \equals(), (dt1, dt2));
+
+        auto dt3 = parse_yaml(make_yaml(dt1));
+        testAssertion("yaml date test", \equals(), (dt2, dt3));
+    }
+
+    testNanStructure() {
+        string s = make_yaml(DATA2);
+        auto l = parse_yaml(s);
+        assertEq(DATA2[0], l[0]);
+        assertEq(DATA2[1], l[1]);
+        assertEq(DATA2[2], l[2]);
+        assertTrue(l[3].nanp());
+        assertFalse(DATA2[3] == l[3]);
+        assertEq(DATA2[4], l[4]);
+    }
+
+    testSingleQuotedStrings() {
+        # issue 2343
+        #assertEq("1234", parse_yaml("'1234'"));
+        assertEq(500n, parse_yaml("'5e+02n{128}'"));
+        assertEq(2017-10-26T09:37:36.119613+02:00, parse_yaml("'2017-10-26 09:37:36.119613 +02:00'"));
+    }
+
+    sqlNull() {
+        string yaml = make_yaml(NULL, EmitSqlNull);
+        assertRegex("^sqlnull", yaml);
+        assertEq(NULL, parse_yaml(yaml));
+        yaml = make_yaml("sqlnull");
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml("sqlnull", EmitSqlNull);
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml(NULL);
+        # With YAML 1.2 as default, output includes version directive
+        assertRegex("null", yaml);
+        assertEq(NOTHING, parse_yaml(yaml));
+        list d = DATA + "NULL";
+        yaml = make_yaml(d, EmitSqlNull);
+        assertEq(d, parse_yaml(yaml));
+    }
+
+    # Test malformed YAML input - negative tests
+    testMalformedYaml() {
+        # Unbalanced braces
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "{key: value");
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "[1, 2, 3");
+
+        # Invalid indentation
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "key1: value1\n  key2: value2\n key3: value3");
+
+        # Duplicate keys (should parse but take last value)
+        hash<auto> result = parse_yaml("key: value1\nkey: value2");
+        assertEq("value2", result.key);
+
+        # Tab characters in indentation
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "key:\n\tvalue");
+
+        # Invalid escape sequences in double-quoted strings
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "\"invalid \\z escape\"");
+
+        # Unterminated quoted strings
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "\"unterminated string");
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "'unterminated string");
+
+        # Invalid anchor reference
+        assertThrows("YAML-PARSER-ERROR", \parse_yaml(), "key: *undefined_anchor");
+    }
+
+    # Test edge cases
+    testEdgeCases() {
+        # Empty string
+        assertEq(NOTHING, parse_yaml(""));
+
+        # Whitespace only
+        assertEq(NOTHING, parse_yaml("   "));
+        assertEq(NOTHING, parse_yaml("\n\n\n"));
+
+        # Just a document marker
+        assertEq(NOTHING, parse_yaml("---"));
+        assertEq(NOTHING, parse_yaml("---\n..."));
+
+        # Single values
+        assertEq(42, parse_yaml("42"));
+        assertEq(3.14, parse_yaml("3.14"));
+        assertEq(True, parse_yaml("true"));
+        assertEq(False, parse_yaml("false"));
+        assertEq(NOTHING, parse_yaml("null"));
+        assertEq(NOTHING, parse_yaml("~"));
+
+        # Boolean - standard YAML boolean values
+        # Note: This module uses "true"/"false" for booleans; other YAML 1.1
+        # boolean aliases are treated as strings
+        assertEq(True, parse_yaml("true"));
+        assertEq(False, parse_yaml("false"));
+
+        # Empty collections
+        assertEq({}, parse_yaml("{}"));
+        assertEq((), parse_yaml("[]"));
+
+        # Deeply nested empty structures
+        assertEq({"a": {"b": {"c": {}}}}, parse_yaml("a:\n  b:\n    c: {}"));
+    }
+
+    # Test large data serialization
+    testLargeData() {
+        # Large list
+        list<int> large_list = ();
+        for (int i = 0; i < 1000; i++) {
+            large_list += i;
+        }
+        string yaml = make_yaml(large_list);
+        assertEq(large_list, parse_yaml(yaml));
+
+        # Large hash
+        hash<auto> large_hash = {};
+        for (int i = 0; i < 100; i++) {
+            large_hash{"key_" + string(i)} = "value_" + string(i);
+        }
+        yaml = make_yaml(large_hash);
+        assertEq(large_hash, parse_yaml(yaml));
+
+        # Large string
+        string large_string = strmul("x", 10000);
+        yaml = make_yaml(large_string);
+        assertEq(large_string, parse_yaml(yaml));
+
+        # Deeply nested structure
+        hash<auto> nested = {};
+        hash<auto> current = nested;
+        for (int i = 0; i < 50; i++) {
+            current.child = {};
+            current = current.child;
+        }
+        current.value = "deep";
+        yaml = make_yaml(nested);
+        auto parsed = parse_yaml(yaml);
+        assertEq(nested, parsed);
+    }
+
+    # Test special characters in strings
+    testSpecialCharacters() {
+        # YAML special characters
+        assertEq(":", parse_yaml("\":\""));
+        assertEq("#", parse_yaml("\"#\""));
+        assertEq("&", parse_yaml("\"&\""));
+        assertEq("*", parse_yaml("\"*\""));
+        assertEq("!", parse_yaml("\"!\""));
+        assertEq("|", parse_yaml("\"|\""));
+        assertEq(">", parse_yaml("\">\""));
+        assertEq("-", parse_yaml("\"-\""));
+        assertEq("?", parse_yaml("\"?\""));
+        assertEq("[", parse_yaml("\"[\""));
+        assertEq("]", parse_yaml("\"]\""));
+        assertEq("{", parse_yaml("\"{\""));
+        assertEq("}", parse_yaml("\"}\""));
+        assertEq(",", parse_yaml("\",\""));
+
+        # Escape sequences
+        assertEq("\n", parse_yaml("\"\\n\""));
+        assertEq("\t", parse_yaml("\"\\t\""));
+        assertEq("\\", parse_yaml("\"\\\\\""));
+        assertEq("\"", parse_yaml("\"\\\"\""));
+
+        # Round-trip with special characters
+        string special = "special: chars & symbols # here! [test] {data} *star";
+        string yaml = make_yaml(special);
+        assertEq(special, parse_yaml(yaml));
+    }
+
+    # Test nested structures
+    testNestedStructures() {
+        # List of hashes
+        list<hash<auto>> list_of_hashes = (
+            {"name": "item1", "value": 1},
+            {"name": "item2", "value": 2},
+        );
+        string yaml = make_yaml(list_of_hashes);
+        assertEq(list_of_hashes, parse_yaml(yaml));
+
+        # Hash of lists
+        hash<auto> hash_of_lists = {
+            "numbers": (1, 2, 3),
+            "strings": ("a", "b", "c"),
+        };
+        yaml = make_yaml(hash_of_lists);
+        assertEq(hash_of_lists, parse_yaml(yaml));
+
+        # Mixed nested structure
+        hash<auto> complex = {
+            "config": {
+                "enabled": True,
+                "items": (
+                    {"id": 1, "tags": ("a", "b")},
+                    {"id": 2, "tags": ("c", "d")},
+                ),
+                "settings": {
+                    "timeout": 30,
+                    "retries": 3,
+                },
+            },
+        };
+        yaml = make_yaml(complex);
+        assertEq(complex, parse_yaml(yaml));
+    }
+
+    # Test empty and null values
+    testEmptyValues() {
+        # Empty string
+        assertEq("", parse_yaml("\"\""));
+        assertEq("", parse_yaml("''"));
+
+        # Empty string in hash
+        hash<auto> h = {"key": ""};
+        string yaml = make_yaml(h);
+        assertEq(h, parse_yaml(yaml));
+
+        # Null values
+        h = {"key": NOTHING};
+        yaml = make_yaml(h);
+        hash<auto> parsed = parse_yaml(yaml);
+        assertEq(NOTHING, parsed.key);
+
+        # Empty list in hash
+        h = {"key": ()};
+        yaml = make_yaml(h);
+        assertEq(h, parse_yaml(yaml));
+
+        # Empty hash in hash
+        h = {"key": {}};
+        yaml = make_yaml(h);
+        assertEq(h, parse_yaml(yaml));
+    }
+
+    # Test boundary values
+    testBoundaryValues() {
+        # Maximum and minimum integers
+        assertEq(9223372036854775807, parse_yaml("9223372036854775807"));
+        assertEq(-9223372036854775807, parse_yaml("-9223372036854775807"));
+
+        # Very small and large floats
+        float small = 1e-308;
+        string yaml = make_yaml(small);
+        float parsed = parse_yaml(yaml);
+        assertTrue(abs(small - parsed) < 1e-310);
+
+        float large = 1e308;
+        yaml = make_yaml(large);
+        parsed = parse_yaml(yaml);
+        assertTrue(abs(large - parsed) / large < 1e-10);
+
+        # Zero values
+        assertEq(0, parse_yaml("0"));
+        assertEq(0.0, parse_yaml("0.0"));
+
+        # Negative zero
+        assertEq(0.0, parse_yaml("-0.0"));
+    }
+
+    # Test Unicode handling
+    testUnicode() {
+        # Basic Unicode
+        string unicode = "Hello 世界! مرحبا 🎉";
+        string yaml = make_yaml(unicode);
+        assertEq(unicode, parse_yaml(yaml));
+
+        # Unicode in keys
+        hash<auto> h = {"キー": "値", "מפתח": "ערך"};
+        yaml = make_yaml(h);
+        assertEq(h, parse_yaml(yaml));
+
+        # Emoji
+        string emoji = "🎮🎯🎲🎸🎹";
+        yaml = make_yaml(emoji);
+        assertEq(emoji, parse_yaml(yaml));
+
+        # Mixed script
+        string mixed = "English العربية 中文 日本語 한국어";
+        yaml = make_yaml(mixed);
+        assertEq(mixed, parse_yaml(yaml));
+    }
+
+    # Test binary data
+    testBinaryData() {
+        # Simple binary
+        binary b = <48656c6c6f>;  # "Hello"
+        string yaml = make_yaml(b);
+        assertEq(b, parse_yaml(yaml));
+
+        # Empty binary
+        b = binary();
+        yaml = make_yaml(b);
+        *binary parsed = parse_yaml(yaml);
+        assertEq(0, parsed.size() ?? 0);
+
+        # Large binary - create a binary with all byte values 0-255
+        b = binary();
+        for (int i = 0; i < 256; i++) {
+            b += binary(chr(i));
+        }
+        yaml = make_yaml(b);
+        assertEq(b, parse_yaml(yaml));
+
+        # Binary with nulls
+        b = <0001020003>;
+        yaml = make_yaml(b);
+        assertEq(b, parse_yaml(yaml));
+    }
+
+    # Test multiline strings
+    testMultilineStrings() {
+        # String with newlines
+        string multiline = "line1\nline2\nline3";
+        string yaml = make_yaml(multiline);
+        assertEq(multiline, parse_yaml(yaml));
+
+        # String with carriage returns
+        multiline = "line1\r\nline2\r\nline3";
+        yaml = make_yaml(multiline);
+        assertEq(multiline, parse_yaml(yaml));
+
+        # Literal block scalar
+        assertEq("line1\nline2\n", parse_yaml("|\n  line1\n  line2\n"));
+
+        # Folded block scalar
+        assertEq("line1 line2\n", parse_yaml(">\n  line1\n  line2\n"));
+    }
+
+    # Test get_yaml_info function
+    testGetYamlInfo() {
+        hash<auto> info = get_yaml_info();
+        assertTrue(info.hasKey("version"));
+        assertTrue(info.version.val());
+    }
+
+    # Test object serialization error
+    testObjectError() {
+        Mutex m();
+        assertThrows("YAML-EMITTER-ERROR", \make_yaml(), m);
+    }
+}

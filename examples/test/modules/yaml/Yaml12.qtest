@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class Yaml12Test
+
+class Yaml12Test inherits QUnit::Test {
+    constructor() : Test("Yaml12Test", "1.0") {
+        addTestCase("version constants", \testVersionConstants());
+
+        # Output version tests
+        addTestCase("make_yaml default version", \testMakeYamlDefaultVersion());
+        addTestCase("make_yaml version 1.1", \testMakeYamlVersion11());
+        addTestCase("make_yaml version 1.2", \testMakeYamlVersion12());
+
+        # Boolean output tests
+        addTestCase("boolean output yaml 1.2", \testBooleanOutputYaml12());
+        addTestCase("boolean output yaml 1.1", \testBooleanOutputYaml11());
+
+        # Roundtrip tests
+        addTestCase("roundtrip simple types", \testRoundtripSimpleTypes());
+        addTestCase("roundtrip complex structures", \testRoundtripComplexStructures());
+
+        # Quoted strings preserved
+        addTestCase("quoted booleans are strings", \testQuotedBooleansAreStrings());
+        addTestCase("empty string handling", \testEmptyStringHandling());
+
+        # Parsing behavior tests (default parser)
+        addTestCase("default boolean parsing", \testDefaultBooleanParsing());
+        addTestCase("default number parsing", \testDefaultNumberParsing());
+
+        set_return_value(main());
+    }
+
+    testVersionConstants() {
+        # Test that version constants exist
+        assertTrue(exists YAML::Yaml1_1);
+        assertTrue(exists YAML::Yaml1_2);
+        assertTrue(exists YAML::YamlVersion1_1);
+        assertTrue(exists YAML::YamlVersion1_2);
+
+        # Test values
+        assertEq(11, YAML::YamlVersion1_1);
+        assertEq(12, YAML::YamlVersion1_2);
+
+        # Constants should be different flags
+        assertTrue(YAML::Yaml1_1 != YAML::Yaml1_2);
+
+        # Test that both are integers
+        assertEq(Type::Int, YAML::Yaml1_1.type());
+        assertEq(Type::Int, YAML::Yaml1_2.type());
+    }
+
+    testMakeYamlDefaultVersion() {
+        hash<auto> data = {"value": True};
+
+        # Default version output (should be 1.2)
+        string yaml = make_yaml(data);
+
+        # Should produce valid YAML that parses back correctly
+        auto parsed = parse_yaml(yaml);
+        assertEq(True, parsed.value);
+
+        # Verify it uses true/false format (not yes/no)
+        assertTrue(regex(yaml, "true") || regex(yaml, "True"));
+    }
+
+    testMakeYamlVersion11() {
+        hash<auto> data = {"active": True, "disabled": False};
+
+        string yaml = make_yaml(data, YAML::Yaml1_1);
+
+        # Should produce valid YAML
+        auto parsed = parse_yaml(yaml);
+        assertEq(True, parsed.active);
+        assertEq(False, parsed.disabled);
+    }
+
+    testMakeYamlVersion12() {
+        hash<auto> data = {"active": True, "disabled": False};
+
+        string yaml = make_yaml(data, YAML::Yaml1_2);
+
+        # Should produce valid YAML
+        auto parsed = parse_yaml(yaml);
+        assertEq(True, parsed.active);
+        assertEq(False, parsed.disabled);
+
+        # Output should use true/false (not yes/no) for YAML 1.2
+        assertTrue(regex(yaml, "true") || regex(yaml, "True"));
+        assertTrue(regex(yaml, "false") || regex(yaml, "False"));
+    }
+
+    testBooleanOutputYaml12() {
+        hash<auto> data = {
+            "flag1": True,
+            "flag2": False,
+        };
+
+        string yaml = make_yaml(data, YAML::Yaml1_2);
+
+        # YAML 1.2 should output true/false (not yes/no)
+        assertTrue(regex(yaml, "true") || regex(yaml, "True"));
+        assertTrue(regex(yaml, "false") || regex(yaml, "False"));
+
+        # Should NOT contain yes/no in output
+        assertFalse(regex(yaml, "\\byes\\b"));
+        assertFalse(regex(yaml, "\\bno\\b"));
+    }
+
+    testBooleanOutputYaml11() {
+        hash<auto> data = {
+            "flag1": True,
+            "flag2": False,
+        };
+
+        string yaml = make_yaml(data, YAML::Yaml1_1);
+
+        # Verify roundtrip works
+        auto parsed = parse_yaml(yaml);
+        assertEq(True, parsed.flag1);
+        assertEq(False, parsed.flag2);
+    }
+
+    testRoundtripSimpleTypes() {
+        hash<auto> data = {
+            "string_val": "hello",
+            "int_val": 42,
+            "float_val": 3.14,
+            "bool_true": True,
+            "bool_false": False,
+            "null_val": NOTHING,
+        };
+
+        # Test roundtrip with YAML 1.2
+        string yaml12 = make_yaml(data, YAML::Yaml1_2);
+        auto parsed12 = parse_yaml(yaml12);
+
+        assertEq("hello", parsed12.string_val);
+        assertEq(42, parsed12.int_val);
+        assertTrue(abs(parsed12.float_val - 3.14) < 0.001);
+        assertEq(True, parsed12.bool_true);
+        assertEq(False, parsed12.bool_false);
+        assertNothing(parsed12.null_val);
+
+        # Test roundtrip with YAML 1.1
+        string yaml11 = make_yaml(data, YAML::Yaml1_1);
+        auto parsed11 = parse_yaml(yaml11);
+
+        assertEq("hello", parsed11.string_val);
+        assertEq(42, parsed11.int_val);
+        assertTrue(abs(parsed11.float_val - 3.14) < 0.001);
+        assertEq(True, parsed11.bool_true);
+        assertEq(False, parsed11.bool_false);
+        assertNothing(parsed11.null_val);
+    }
+
+    testRoundtripComplexStructures() {
+        hash<auto> data = {
+            "users": (
+                {"name": "Alice", "active": True},
+                {"name": "Bob", "active": False},
+            ),
+            "config": {
+                "timeout": 30,
+                "enabled": True,
+            },
+        };
+
+        # YAML 1.2 roundtrip
+        string yaml12 = make_yaml(data, YAML::Yaml1_2);
+        auto parsed12 = parse_yaml(yaml12);
+
+        assertEq(2, parsed12.users.size());
+        assertEq("Alice", parsed12.users[0].name);
+        assertEq(True, parsed12.users[0].active);
+        assertEq("Bob", parsed12.users[1].name);
+        assertEq(False, parsed12.users[1].active);
+        assertEq(30, parsed12.config.timeout);
+        assertEq(True, parsed12.config.enabled);
+
+        # YAML 1.1 roundtrip
+        string yaml11 = make_yaml(data, YAML::Yaml1_1);
+        auto parsed11 = parse_yaml(yaml11);
+
+        assertEq(2, parsed11.users.size());
+        assertEq("Alice", parsed11.users[0].name);
+        assertEq(True, parsed11.users[0].active);
+    }
+
+    testQuotedBooleansAreStrings() {
+        # Test that quoted values remain strings when parsed
+        string yaml = "val1: 'true'\nval2: \"false\"\nval3: 'yes'\nval4: \"no\"";
+
+        auto result = parse_yaml(yaml);
+
+        # All should be strings, not booleans
+        assertEq("true", result.val1);
+        assertEq(Type::String, result.val1.type());
+
+        assertEq("false", result.val2);
+        assertEq(Type::String, result.val2.type());
+
+        assertEq("yes", result.val3);
+        assertEq(Type::String, result.val3.type());
+
+        assertEq("no", result.val4);
+        assertEq(Type::String, result.val4.type());
+    }
+
+    testEmptyStringHandling() {
+        # Test empty strings are preserved
+        string yaml = "empty1: ''\nempty2: \"\"";
+
+        auto result = parse_yaml(yaml);
+
+        assertEq("", result.empty1);
+        assertEq(Type::String, result.empty1.type());
+
+        assertEq("", result.empty2);
+        assertEq(Type::String, result.empty2.type());
+    }
+
+    testDefaultBooleanParsing() {
+        # Test default parser behavior for booleans
+        # YAML 1.2: only lowercase true/false are booleans
+        assertEq(True, parse_yaml("true"));
+        assertEq(False, parse_yaml("false"));
+
+        # Mixed case variants are strings in YAML 1.2
+        assertEq("True", parse_yaml("True"));
+        assertEq("TRUE", parse_yaml("TRUE"));
+        assertEq("False", parse_yaml("False"));
+        assertEq("FALSE", parse_yaml("FALSE"));
+
+        # Extended boolean values are strings in YAML 1.2
+        assertEq("yes", parse_yaml("yes"));
+        assertEq("Yes", parse_yaml("Yes"));
+        assertEq("YES", parse_yaml("YES"));
+
+        assertEq("no", parse_yaml("no"));
+        assertEq("No", parse_yaml("No"));
+        assertEq("NO", parse_yaml("NO"));
+
+        assertEq("on", parse_yaml("on"));
+        assertEq("off", parse_yaml("off"));
+    }
+
+    testDefaultNumberParsing() {
+        # Test number parsing
+        assertEq(42, parse_yaml("42"));
+        assertEq(-42, parse_yaml("-42"));
+        assertEq(0, parse_yaml("0"));
+
+        # Floating point
+        assertTrue(abs(parse_yaml("3.14") - 3.14) < 0.001);
+        assertTrue(abs(parse_yaml("-3.14") + 3.14) < 0.001);
+
+        # Scientific notation
+        auto sci = parse_yaml("1.23e10");
+        assertTrue(sci > 1e9);
+
+        # Hexadecimal values are strings in YAML 1.2 parser
+        assertEq("0xFF", parse_yaml("0xFF"));
+        assertEq("0x10", parse_yaml("0x10"));
+
+        # Leading zero is decimal (not octal) in YAML 1.2
+        assertEq(10, parse_yaml("010"));
+        assertEq(77, parse_yaml("077"));
+    }
+}

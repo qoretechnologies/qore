@@ -1,0 +1,345 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_yaml.qpp
+
+    yaml Qore module
+
+    Copyright (C) 2010 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "yaml-module.h"
+#include "QC_YamlDocumentIterator.h"
+
+static QoreStringNode* q_make_yaml(QoreValue data, int64 flags, int64 width, int64 indent, ExceptionSink* xsink) {
+    QoreYamlStringWriteHandler str;
+    {
+        QoreYamlEmitter emitter(str, flags, width, indent, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (emitter.emit(data)) {
+            return nullptr;
+        }
+    }
+
+    return str.take();
+}
+
+static QoreHashNode* q_get_yaml_info() {
+    QoreHashNode *h = new QoreHashNode(autoTypeInfo);
+
+    h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), nullptr);
+
+    int major, minor, patch;
+    yaml_get_version(&major, &minor, &patch);
+
+    h->setKeyValue("major", major, nullptr);
+    h->setKeyValue("minor", minor, nullptr);
+    h->setKeyValue("patch", patch, nullptr);
+
+    return h;
+}
+
+/** @defgroup yaml_emitter_option_constants YAML Emitter Option Constants
+ */
+///@{
+namespace Qore::YAML;
+//! emitter constant: No option (= default output)
+const None = QYE_NONE;
+
+//! emitter constant: Emit canonical YAML
+const Canonical = QYE_CANONICAL;
+
+//! emitter constant: escape unicode characters
+const EscapeUnicode = QYE_ESCAPE_UNICODE;
+
+//! emitter constant: emit an explicit document start sequence
+const ExplicitStartDoc = QYE_EXPLICIT_START_DOC;
+
+//! emitter constant: emit an explicit document end sequence
+const ExplicitEndDoc = QYE_EXPLICIT_END_DOC;
+
+//! emitter constant: emit seq and map with block style
+const BlockStyle = QYE_BLOCK_STYLE;
+
+//! emitter constant: emit SQL null \c "!!sqlnull"
+const EmitSqlNull = QYE_EMIT_SQLNULL;
+
+//const Yaml1_0 = QYE_VER_1_0;
+
+//! emitter constant: emit YAML 1.1
+/** @note As of yaml 1.1, the default is YAML 1.2. Use this constant to emit YAML 1.1 format.
+*/
+const Yaml1_1 = QYE_VER_1_1;
+
+//! emitter constant: emit YAML 1.2 (default as of yaml 1.1)
+/** This is the default as of yaml module version 1.1.
+
+    @since yaml 1.1
+*/
+const Yaml1_2 = QYE_VER_1_2;
+///@}
+
+/** @defgroup yaml_parse_option_constants YAML Parse Option Constants
+    Used with parse_yaml(string, int)
+*/
+///@{
+namespace Qore::YAML;
+
+//! parse option: resolve plain scalars with the YAML 1.2 core schema only
+/** Only plain scalars are resolved, and only to @ref nothing (\c null, \c ~ and empty scalars),
+    booleans, integers (decimal, \c 0o octal and \c 0x hexadecimal) and floats (including \c .inf and \c .nan);
+    every other scalar, including every quoted scalar, is a string.  Qore's extended implicit types - absolute and
+    relative dates, arbitrary-precision numbers, and SQL null - are not recognized; explicit tags still are.
+
+    Use this option for JSON-compatible YAML documents written by other tools, such as OpenAPI descriptions:
+    a plain scalar such as \c 2025-03-05T14:59:25Z (an example value) or \c PT (a country code) stays exactly
+    as written instead of becoming a date.
+
+    @since yaml 1.3
+*/
+const ParseCoreSchema = QYP_CORE_SCHEMA;
+///@}
+
+/** @defgroup yaml_version_enums YAML Version Enum Values
+    Used with parse_yaml() options
+*/
+///@{
+namespace Qore::YAML;
+
+//! YAML 1.1 parsing mode
+/** In YAML 1.1 mode:
+    - "true", "false", "yes", "no", "on", "off" are recognized as booleans
+    - Octal numbers use 0 prefix (010 = 8)
+*/
+const YamlVersion1_1 = 11;
+
+//! YAML 1.2 parsing mode (strict JSON-compatible booleans)
+/** In YAML 1.2 mode:
+    - Only "true" and "false" are recognized as booleans
+    - "yes", "no", "on", "off" are treated as strings
+    - Octal numbers should use 0o prefix (0o10 = 8), but 010 is still decimal 10
+
+    @since yaml 1.1
+*/
+const YamlVersion1_2 = 12;
+///@}
+
+//! YAML parsing options
+/** @note This hashdecl is defined for future use. Currently, parse_yaml() does not accept
+    options and uses YAML 1.2 parsing behavior by default (only true/false as booleans).
+
+    @since yaml 1.1
+*/
+hashdecl YamlParseOptions {
+    //! Target YAML version for parsing (YamlVersion1_1 or YamlVersion1_2)
+    /** When set to YamlVersion1_2:
+        - Only true/false recognized as booleans (not yes/no/on/off)
+        - Octal numbers require 0o prefix (010 is decimal 10, not 8)
+
+        @note Not yet implemented - reserved for future use
+    */
+    *int yaml_version;
+
+    //! Strict boolean parsing - only accept true/false regardless of version
+    /** @note Not yet implemented - reserved for future use
+    */
+    bool strict_booleans = False;
+}
+
+/** @defgroup yaml_functions YAML Functions
+ */
+///@{
+namespace Qore::YAML;
+
+//! Creates a YAML string from Qore data
+/** For information on Qore to YAML serialization, see @ref qore_to_yaml_type_mappings
+
+    @param data Qore data to convert; cannot contain any objects or a \c YAML-EMITTER-ERROR exception will be raised
+    @param flags binary OR'ed @ref yaml_emitter_option_constants; the default is to emit YAML 1.2 format
+    @param width default line width for output, -1 = no line length limit
+    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note
+    that libyaml seems to be ignoring this parameter for now, so it may not have any effect
+
+    @return the YAML string corresponding to the input
+
+    @par Example:
+    @code
+string str = make_yaml(data, YAML::Canonical);
+    @endcode
+
+    @throw YAML-EMITTER-ERROR object found; YAML library error
+
+    @note As of yaml module version 1.1, the default output format is YAML 1.2. Use @ref Yaml1_1 to emit YAML 1.1
+    format.
+
+    @see parse_yaml()
+
+    @since yaml 0.5 as a replacement for deprecated camel-case makeYAML()
+ */
+string make_yaml(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return q_make_yaml(data, flags, width, indent, xsink);
+}
+
+//! Creates a YAML string from Qore data
+/** For information on Qore to YAML serialization, see @ref qore_to_yaml_type_mappings
+
+    @param data Qore data to convert; cannot contain any objects or a \c YAML-EMITTER-ERROR exception will be raised
+    @param flags binary OR'ed @ref yaml_emitter_option_constants; the default is to emit YAML 1.2 format
+    @param width default line width for output, -1 = no line length limit
+    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note
+    that libyaml seems to be ignoring this parameter for now, so it may not have any effect
+
+    @return the YAML string corresponding to the input
+
+    @throw YAML-EMITTER-ERROR object found; YAML library error
+
+    @deprecated use make_yaml(); camel-case function names were deprecated in yaml 0.5
+ */
+string makeYAML(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED,NAMED_ARGS] {
+    return q_make_yaml(data, flags, width, indent, xsink);
+}
+
+//! Parses a YAML string and returns the corresponding Qore value or data structure
+/** For information on YAML to Qore deserialization, see @ref qore_to_yaml_type_mappings
+
+    @param yaml The YAML string to deserialize
+
+    @return Qore data as deserialized from the YAML string
+
+    @par Example:
+    @code
+auto data = parse_yaml(yaml_string);
+    @endcode
+
+    @throw YAML-PARSER-ERROR error parsing YAML string
+
+    @since yaml 0.5 as a replacement for deprecated camel-case parseYAML()
+
+    @see make_yaml()
+ */
+auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreYamlParser parser(*yaml, xsink);
+    return parser.parse();
+}
+
+//! Parses a YAML string with the given options and returns the corresponding Qore value or data structure
+/** @par Example:
+    @code{.py}
+# an OpenAPI description: plain scalars keep their text unless they are JSON types
+hash<auto> api = parse_yaml(text, YAML::ParseCoreSchema);
+    @endcode
+
+    @param yaml The YAML string to deserialize
+    @param options @ref yaml_parse_option_constants "parse options" combined with binary or
+
+    @return Qore data as deserialized from the YAML string
+
+    @throw YAML-PARSER-ERROR error parsing YAML string, or an integer value is out of range
+    @throw YAML-OPTION-ERROR unknown parse option
+
+    @since yaml 1.3
+ */
+auto parse_yaml(string yaml, int options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (options & ~QYP_CORE_SCHEMA) {
+        xsink->raiseException("YAML-OPTION-ERROR", "unknown parse_yaml() option(s): " QLLD,
+            options & ~QYP_CORE_SCHEMA);
+        return QoreValue();
+    }
+    QoreYamlParser parser(*yaml, xsink, options & QYP_CORE_SCHEMA);
+    return parser.parse();
+}
+
+//! Parses a YAML string and returns the corresponding Qore value or data structure
+/** For information on YAML to Qore deserialization, see @ref qore_to_yaml_type_mappings
+
+    @param yaml The YAML string to deserialize
+
+    @return Qore data as deserialized from the YAML string
+
+    @throw YAML-PARSER-ERROR error parsing YAML string
+
+    @deprecated use parse_yaml(); camel-case function names were deprecated in yaml 0.5
+ */
+auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED,NAMED_ARGS] {
+    QoreYamlParser parser(*yaml, xsink);
+    return parser.parse();
+}
+
+//! Parses all YAML documents from a string
+/** @param yaml the YAML string containing one or more documents separated by ---
+
+    @return a list of parsed document values
+
+    @throw YAML-PARSER-ERROR if the YAML is malformed
+
+    @par Example:
+    @code{.py}
+string yaml = "---
+foo: 1
+---
+bar: 2
+---
+- item1
+- item2";
+
+list<auto> docs = parse_yaml_documents(yaml);
+# docs[0] = {"foo": 1}
+# docs[1] = {"bar": 2}
+# docs[2] = ("item1", "item2")
+    @endcode
+
+    @see YamlDocumentIterator for memory-efficient iteration
+
+    @since yaml 1.1
+*/
+list<auto> parse_yaml_documents(string yaml) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return parse_yaml_documents_intern(yaml, xsink);
+}
+
+//! Returns version information about libyaml being used by the yaml module
+/** @return a hash with keys as in the following table:
+    - \c version: the version string for the library, ex: \c "0.1.3"
+    - \c major: the integer major version for the library, ex: \c 0
+    - \c minor: the integer minor version for the library, ex: \c 1
+    - \c patch: the integer patch version for the library, ex: \c 3
+
+    @par Example:
+    @code
+hash<auto> h = get_yaml_info();
+    @endcode
+
+    @since yaml 0.5 as a replacement for deprecated camel-case getYAMLInfo()
+*/
+hash<auto> get_yaml_info() [flags=CONSTANT] {
+    return q_get_yaml_info();
+}
+
+//! Returns version information about libyaml being used by the yaml module
+/** @return a hash with keys as in the following table:
+    - \c version: the version string for the library, ex: \c "0.1.3"
+    - \c major: the integer major version for the library, ex: \c 0
+    - \c minor: the integer minor version for the library, ex: \c 1
+    - \c patch: the integer patch version for the library, ex: \c 3
+
+    @deprecated use get_yaml_info(); camel-case function names were deprecated in yaml 0.5
+*/
+hash getYAMLInfo() [flags=CONSTANT,DEPRECATED] {
+    return q_get_yaml_info();
+}
+///@}

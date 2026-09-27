@@ -40,6 +40,7 @@ BuildRequires: pkgconfig(icu-uc)
 BuildRequires: pkgconfig(icu-i18n)
 BuildRequires: pkgconfig(eigen3)
 BuildRequires: pkgconfig(protobuf)
+BuildRequires: pkgconfig(yaml-0.1)
 
 %description
 Qore is a scripting language supporting threading and embedded logic, designed
@@ -72,6 +73,8 @@ Recommends: %{name} = %{version}
 # qore-json-module up to and including json 1.12; they ship with Qore as of 3.0
 Obsoletes: qore-json-module < 1.13
 Provides: qore-json-module = %{version}-%{release}
+Obsoletes: qore-yaml-module < 3.0.0
+Provides: qore-yaml-module = %{version}-%{release}
 
 %description stdlib
 Qore is a scripting language supporting threading and embedded logic, designed

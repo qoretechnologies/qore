@@ -1,0 +1,247 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Qore Programming Language
+#
+# Copyright 2003 - 2026 Qore Technologies, s.r.o.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+%requires qore >= 2.3
+
+%requires(reexport) DataProvider
+%requires(reexport) FileLocationHandler
+%requires yaml
+
+%modern
+
+module YamlDocumentDataProvider {
+    version = "1.1";
+    desc = "User module providing YAML document stream data providers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("YamlDocumentDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return (
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": YamlDocumentDataProvider::AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": YamlDocumentDataProvider::AppName, "action": "read",
+                    },
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": YamlDocumentDataProvider::AppName, "action": "read-data",
+                    },
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": YamlDocumentDataProvider::AppName, "action": "write",
+                    },
+                    <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": YamlDocumentDataProvider::AppName, "action": "write-data",
+                    },
+                );
+            });
+        # register the data provider factories
+        DataProvider::registerFactory(new YamlDocumentDataProviderFactory());
+        DataProvider::registerFactory(new YamlDocumentWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": YamlDocumentDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "YAML Document Files",
+            "short_desc": "Read and write YAML document streams",
+            "desc": "Provides read and write access to **YAML document streams** — files or "
+                "inline data containing one or more YAML documents separated by `---` markers.\n\n"
+                "Use this app when you need to:\n"
+                "- Parse multi-document YAML configuration files or data exports\n"
+                "- Transform YAML data between systems as part of an integration pipeline\n"
+                "- Generate YAML output for configuration management or data exchange\n\n"
+                "Supports configurable character encoding, empty-document filtering, and "
+                "both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",
+            "logo": YamlDocumentLogo,
+            "logo_file_name": "yaml-document-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Documents, DataProvider::AppGroup::DataTransformation,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "yamldocread",
+            "display_name": "Read YAML Document File",
+            "short_desc": "Read YAML document data from a specific file location",
+            "desc": "Read YAML document data from a specific file location.\n\n"
+                "The YAML file may contain one or more documents separated by `---` markers. "
+                "Each document is iterated as a separate record.\n\n"
+                "**Key Options**\n"
+                "- `path`: the file location to read from (required)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n"
+                "- `skip_empty_documents`: skip empty documents (default: `True`)\n"
+                "- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+            "action_code": DPAT_FIND,
+            "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "subtype": "yamldocread",
+            "display_name": "Read YAML Inline Data",
+            "short_desc": "Read YAML inline data",
+            "desc": "Read YAML inline data provided directly as a string.\n\n"
+                "The YAML data may contain one or more documents separated by `---` markers. "
+                "Each document is iterated as a separate record.\n\n"
+                "**Key Options**\n"
+                "- `data`: the YAML string to parse (required)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n"
+                "- `skip_empty_documents`: skip empty documents (default: `True`)\n"
+                "- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
+            "action_code": DPAT_FIND,
+            "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "subtype": "yamldocwrite",
+            "display_name": "Write YAML Document File",
+            "short_desc": "Write YAML document data to a specific file location",
+            "desc": "Write YAML document records as a multi-document stream to a specific file location.\n\n"
+                "Records are accumulated and written with `---` document separators when `commit()` is "
+                "called or the provider is destroyed.\n\n"
+                "**Key Options**\n"
+                "- `path`: the output file location (required)\n"
+                "- `flow_style`: use compact inline YAML output (default: `False`)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_CREATE,
+            "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions - ("path", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "subtype": "yamldocwrite",
+            "display_name": "Write YAML Inline Data",
+            "short_desc": "Write YAML data to a stream",
+            "desc": "Write YAML document records as a multi-document stream to an output stream or "
+                "retrieve the result as binary data.\n\n"
+                "Records are accumulated and written with `---` document separators when `commit()` is "
+                "called or the provider is destroyed.\n\n"
+                "**Key Options**\n"
+                "- `stream`: the output stream to write to\n"
+                "- `flow_style`: use compact inline YAML output (default: `False`)\n"
+                "- `encoding`: character encoding (default: `UTF-8`)\n",
+            "action_code": DPAT_CREATE,
+            "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions{"stream",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions - ("path", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage YamlDocumentDataProvider Module
+
+@section yamldocumentdataproviderintro Introduction
+
+The %YamlDocumentDataProvider module provides data provider support for YAML
+document streams, enabling integration with Qore's data provider framework
+for reading multi-document YAML files.
+
+@section yamldocusage Usage
+
+@code{.py}
+%requires YamlDocumentDataProvider
+
+# Create provider from file path
+auto provider = DataProvider::getFactoryObject("yamldoc", {"path": "/path/to/file.yaml"});
+
+# Iterate records
+auto iter = provider.searchRecords();
+while (iter.next()) {
+    hash<auto> record = iter.getValue();
+    # Process document...
+}
+@endcode
+
+@section yamldocclasses Classes
+
+- @ref YamlDocumentDataProvider::YamlDocumentReadDataProvider "YamlDocumentReadDataProvider"
+- @ref YamlDocumentDataProvider::YamlDocumentWriteDataProvider "YamlDocumentWriteDataProvider"
+- @ref YamlDocumentDataProvider::YamlDocumentDataProviderFactory "YamlDocumentDataProviderFactory"
+- @ref YamlDocumentDataProvider::YamlDocumentWriteDataProviderFactory "YamlDocumentWriteDataProviderFactory"
+
+*/
+
+public namespace YamlDocumentDataProvider {
+    #! Application name for DataProviderActionCatalog registration
+    public const AppName = "YamlDocument";
+
+    #! Default encoding
+    public const DefaultEncoding = "UTF-8";
+
+    #! YAML document logo
+    public const YamlDocumentLogo = Priv::YamlDocumentLogoText;
+}
+
+namespace Priv {
+    const YamlDocumentLogoText = File::readTextFile(get_script_dir() + "/yaml-document-logo.svg");
+}

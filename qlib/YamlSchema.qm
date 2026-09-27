@@ -1,0 +1,305 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  YamlSchema.qm Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.3
+%requires yaml
+%requires Util
+
+%requires json >= 1.11
+
+%modern
+
+module YamlSchema {
+    version = "1.0";
+    desc = "User module for JSON Schema validation of YAML data";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage YamlSchema Module
+
+@section yamlschemaintro Introduction
+
+The %YamlSchema module provides JSON Schema validation for YAML data. Since YAML
+is a superset of JSON, JSON Schema provides a robust validation mechanism.
+
+Supports basic JSON Schema features including type validation, required fields,
+min/max constraints, pattern matching, enum validation, and recursive schemas
+via $ref.
+
+@section yamlschemausage Usage
+
+@code{.py}
+%requires YamlSchema
+
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "age": {"type": "integer", "minimum": 0}
+    },
+    "required": ["name"]
+};
+
+YamlSchemaValidator validator(schema);
+
+# Valid data
+auto data = parse_yaml("name: Alice\nage: 30");
+assertTrue(validator.validate(data));
+
+# Invalid data - missing required field
+data = parse_yaml("age: 30");
+assertFalse(validator.validate(data));
+@endcode
+
+@section yamlschemaclasses Classes
+
+- @ref YamlSchema::YamlSchemaValidator "YamlSchemaValidator"
+
+*/
+
+public namespace YamlSchema {
+
+#! JSON Schema Draft-07 URI
+public const YamlSchemaDraft07 = "http://json-schema.org/draft-07/schema#";
+
+#! JSON Schema Draft-2019-09 URI
+public const YamlSchemaDraft201909 = "https://json-schema.org/draft/2019-09/schema";
+
+#! JSON Schema Draft-2020-12 URI
+public const YamlSchemaDraft202012 = "https://json-schema.org/draft/2020-12/schema";
+
+#! Validation error information
+public hashdecl YamlSchemaValidationError {
+    #! JSON Pointer path to the error location in the data
+    string path;
+
+    #! The schema keyword that failed (e.g., "type", "required", "minimum")
+    string keyword;
+
+    #! Human-readable error message
+    string message;
+
+    #! JSON Pointer path to the failing constraint in the schema
+    string schema_path;
+}
+
+#! Validation result with detailed error information
+public hashdecl YamlSchemaValidationResult {
+    #! True if validation passed
+    bool valid;
+
+    #! List of validation errors (empty if valid)
+    list<hash<YamlSchemaValidationError>> errors;
+}
+
+#! YAML Schema validator using JSON Schema
+/** Validates YAML data against JSON Schema specifications.
+
+    Delegates to the C++ JsonSchema implementation from the json module for
+    high-performance validation.
+
+    @par Example: Basic validation
+    @code{.py}
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "age": {"type": "integer", "minimum": 0}
+    },
+    "required": ["name"]
+};
+
+YamlSchemaValidator validator(schema);
+
+# Valid data
+auto data = parse_yaml("name: Alice\nage: 30");
+assertTrue(validator.validate(data));
+
+# Invalid data - missing required field
+data = parse_yaml("age: 30");
+assertFalse(validator.validate(data));
+    @endcode
+
+    @par Example: Recursive schema (tree structure)
+    @code{.py}
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "children": {
+            "type": "array",
+            "items": {"$ref": "#"}
+        }
+    }
+};
+
+YamlSchemaValidator validator(schema);
+assertTrue(validator.validate({
+    "name": "root",
+    "children": [
+        {"name": "child1", "children": []},
+        {"name": "child2", "children": [
+            {"name": "grandchild"}
+        ]}
+    ]
+}));
+    @endcode
+
+    @par Example: Detailed error reporting
+    @code{.py}
+YamlSchemaValidator validator(schema);
+auto data = parse_yaml("name: 123\nage: -5");
+
+hash<YamlSchemaValidationResult> result = validator.validateWithErrors(data);
+if (!result.valid) {
+    foreach hash<YamlSchemaValidationError> err in (result.errors) {
+        printf("Error at %s: %s (keyword: %s)\n", err.path, err.message, err.keyword);
+    }
+}
+    @endcode
+*/
+public class YamlSchemaValidator {
+    private {
+        hash<auto> schema;
+%ifndef NoJson
+        Qore::Json::JsonSchema jsonSchema;
+%endif
+    }
+
+    #! Creates a YamlSchemaValidator from a schema hash
+    /** @param schema_hash the JSON Schema as a Qore hash
+
+        @throw YAML-SCHEMA-ERROR if the json module >= 1.11 is not available or the schema is invalid
+    */
+    constructor(hash<auto> schema_hash) {
+%ifdef NoJson
+        throw "YAML-SCHEMA-ERROR", "json module >= 1.11 required for YAML schema validation";
+%else
+        schema = schema_hash;
+        try {
+            jsonSchema = new Qore::Json::JsonSchema(schema_hash);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "YAML-SCHEMA-ERROR", ex.desc;
+        }
+%endif
+    }
+
+    #! Creates a YamlSchemaValidator from a YAML schema string
+    /** @param schema_yaml the schema as a YAML (or JSON) string
+
+        @throw YAML-SCHEMA-ERROR if the json module >= 1.11 is not available or the schema is invalid
+    */
+    constructor(string schema_yaml) {
+%ifdef NoJson
+        throw "YAML-SCHEMA-ERROR", "json module >= 1.11 required for YAML schema validation";
+%else
+        schema = parse_yaml(schema_yaml);
+        try {
+            jsonSchema = new Qore::Json::JsonSchema(schema);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "YAML-SCHEMA-ERROR", ex.desc;
+        }
+%endif
+    }
+
+    #! Validates data against the schema
+    /** @param data the data to validate (any Qore type)
+        @param throw_on_error if True, throws exception on validation failure
+
+        @return True if validation passes, False otherwise
+
+        @throw YAML-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+    */
+    bool validate(auto data, bool throw_on_error = False) {
+        hash<YamlSchemaValidationResult> result = validateWithErrors(data);
+
+        if (!result.valid && throw_on_error) {
+            string msg = "YAML Schema validation failed";
+            if (result.errors.size() > 0) {
+                msg += ": " + result.errors[0].message;
+            }
+            throw "YAML-SCHEMA-VALIDATION-ERROR", msg;
+        }
+
+        return result.valid;
+    }
+
+    #! Validates data and returns detailed error information
+    /** @param data the data to validate
+
+        @return hash with 'valid' (bool) and 'errors' (list) keys
+    */
+    hash<YamlSchemaValidationResult> validateWithErrors(auto data) {
+        hash<auto> jr = jsonSchema.validateWithErrors(data);
+        return <YamlSchemaValidationResult>{
+            "valid": jr.valid,
+            "errors": map <YamlSchemaValidationError>{
+                "path": $1.path,
+                "keyword": $1.keyword,
+                "message": $1.message,
+                "schema_path": $1.schema_path,
+            }, jr.errors,
+        };
+    }
+
+    #! Validates a YAML string against the schema
+    /** @param yaml_str the YAML string to parse and validate
+        @param throw_on_error if True, throws exception on validation failure
+
+        @return True if validation passes, False otherwise
+
+        @throw YAML-PARSE-ERROR if the YAML is malformed
+        @throw YAML-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+    */
+    bool validateYaml(string yaml_str, bool throw_on_error = False) {
+        auto data = parse_yaml(yaml_str);
+        return validate(data, throw_on_error);
+    }
+
+    #! Loads a schema from a JSON file
+    /** @param location the file path to load the schema from
+
+        @return a new YamlSchemaValidator
+
+        @throw YAML-SCHEMA-ERROR if the file cannot be read or schema is invalid
+    */
+    static YamlSchemaValidator load(string location) {
+        string content = ReadOnlyFile::readTextFile(location);
+        return new YamlSchemaValidator(content);
+    }
+
+    #! Loads a schema from a YAML file
+    /** @param location the file path to the YAML schema
+
+        @return a new YamlSchemaValidator
+    */
+    static YamlSchemaValidator loadYaml(string location) {
+        string content = ReadOnlyFile::readTextFile(location);
+        hash<auto> schema_hash = parse_yaml(content);
+        return new YamlSchemaValidator(schema_hash);
+    }
+}
+
+} # namespace YamlSchema

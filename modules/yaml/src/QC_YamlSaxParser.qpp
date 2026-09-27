@@ -1,0 +1,348 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_YamlSaxParser.qpp
+
+    Qore Programming Language
+
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "QC_YamlSaxParser.h"
+
+//! YAML SAX event types
+/** Enum identifying the type of event returned by the SAX parser.
+
+    @par Example:
+    @code{.py}
+parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+    switch (e.type) {
+        case YamlSaxEventType::Scalar:
+            printf("Got scalar: %y\n", e.value);
+            break;
+        case YamlSaxEventType::MappingStart:
+            printf("Starting mapping at depth %d\n", e.depth);
+            break;
+    }
+});
+    @endcode
+
+    @see YamlSaxParser
+    @see hash<YamlSaxEvent>
+
+    @since yaml 1.1
+*/
+enum Qore::YAML::YamlSaxEventType : int {
+    //! Stream start event - YAML stream begins
+    StreamStart = YAML_SAX_STREAM_START,
+    //! Stream end event - YAML stream ends
+    StreamEnd = YAML_SAX_STREAM_END,
+    //! Document start event (--- marker)
+    DocumentStart = YAML_SAX_DOCUMENT_START,
+    //! Document end event (... marker)
+    DocumentEnd = YAML_SAX_DOCUMENT_END,
+    //! Alias reference event (*anchor)
+    Alias = YAML_SAX_ALIAS,
+    //! Scalar value event
+    Scalar = YAML_SAX_SCALAR,
+    //! Sequence start event - list/array begins
+    SequenceStart = YAML_SAX_SEQUENCE_START,
+    //! Sequence end event - list/array ends
+    SequenceEnd = YAML_SAX_SEQUENCE_END,
+    //! Mapping start event - hash/object begins
+    MappingStart = YAML_SAX_MAPPING_START,
+    //! Mapping end event - hash/object ends
+    MappingEnd = YAML_SAX_MAPPING_END,
+};
+
+//! YAML scalar style indicators
+/** Enum indicating how a scalar was formatted in the source YAML.
+
+    @par Example:
+    @code{.py}
+parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+    if (e.type == YamlSaxEventType::Scalar) {
+        if (e.style == YamlScalarStyle::Literal) {
+            # Handle literal block scalar
+        }
+    }
+});
+    @endcode
+
+    @see hash<YamlSaxEvent>
+
+    @since yaml 1.1
+*/
+enum Qore::YAML::YamlScalarStyle : string {
+    //! Unquoted scalar (plain style)
+    Plain = "plain",
+    //! Single-quoted string ('...')
+    SingleQuoted = "single_quoted",
+    //! Double-quoted string ("...")
+    DoubleQuoted = "double_quoted",
+    //! Literal block scalar (|)
+    Literal = "literal",
+    //! Folded block scalar (>)
+    Folded = "folded",
+};
+
+//! Hash structure for YAML SAX events
+/** Contains all information about a single YAML parsing event. The available
+    fields depend on the event type.
+
+    @par Event Types and Available Fields:
+
+    |!Event Type|!Available Fields
+    |@ref YamlSaxEventType::StreamStart|type, line, column
+    |@ref YamlSaxEventType::StreamEnd|type, line, column
+    |@ref YamlSaxEventType::DocumentStart|type, depth, line, column
+    |@ref YamlSaxEventType::DocumentEnd|type, depth, line, column
+    |@ref YamlSaxEventType::Scalar|type, depth, line, column, value, anchor, tag, style, implicit
+    |@ref YamlSaxEventType::SequenceStart|type, depth, line, column, anchor, tag
+    |@ref YamlSaxEventType::SequenceEnd|type, depth, line, column
+    |@ref YamlSaxEventType::MappingStart|type, depth, line, column, anchor, tag
+    |@ref YamlSaxEventType::MappingEnd|type, depth, line, column
+    |@ref YamlSaxEventType::Alias|type, depth, line, column, alias
+
+    @par Example: Inspecting events
+    @code{.py}
+parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
+    switch (e.type) {
+        case YamlSaxEventType::Scalar:
+            printf("Scalar at line %d: %y (style: %s)\n", e.line, e.value, e.style);
+            break;
+        case YamlSaxEventType::MappingStart:
+            printf("Mapping started at depth %d\n", e.depth);
+            if (e.anchor) printf("  with anchor: %s\n", e.anchor);
+            break;
+    }
+});
+    @endcode
+
+    @see YamlSaxParser
+
+    @since yaml 1.1
+*/
+hashdecl YamlSaxEvent {
+    //! Event type
+    /** One of the @ref YamlSaxEventType enum values:
+        - @ref YamlSaxEventType::StreamStart - YAML stream begins
+        - @ref YamlSaxEventType::StreamEnd - YAML stream ends
+        - @ref YamlSaxEventType::DocumentStart - Document begins (--- marker)
+        - @ref YamlSaxEventType::DocumentEnd - Document ends (... marker)
+        - @ref YamlSaxEventType::Scalar - Scalar value
+        - @ref YamlSaxEventType::SequenceStart - Sequence/list begins
+        - @ref YamlSaxEventType::SequenceEnd - Sequence/list ends
+        - @ref YamlSaxEventType::MappingStart - Mapping/hash begins
+        - @ref YamlSaxEventType::MappingEnd - Mapping/hash ends
+        - @ref YamlSaxEventType::Alias - Alias reference (*anchor)
+    */
+    enum<YamlSaxEventType> type;
+
+    //! Anchor name if present
+    /** Set when a node defines an anchor for later reference.
+        Only present for @ref YamlSaxEventType::Scalar, @ref YamlSaxEventType::SequenceStart,
+        and @ref YamlSaxEventType::MappingStart events.
+
+        @par Example YAML:
+        @code{.yaml}
+defaults: &my_anchor
+  timeout: 30
+        @endcode
+        The mapping_start event for "defaults" will have anchor = "my_anchor"
+    */
+    *string anchor;
+
+    //! YAML tag if present
+    /** The explicit or implicit tag for the node. Common tags:
+        - \c "tag:yaml.org,2002:str" - String
+        - \c "tag:yaml.org,2002:int" - Integer
+        - \c "tag:yaml.org,2002:float" - Float
+        - \c "tag:yaml.org,2002:bool" - Boolean
+        - \c "tag:yaml.org,2002:null" - Null
+        - \c "!custom" - Custom application tag
+
+        Only present for @ref YamlSaxEventType::Scalar, @ref YamlSaxEventType::SequenceStart,
+        and @ref YamlSaxEventType::MappingStart events.
+    */
+    *string tag;
+
+    //! Deserialized scalar value
+    /** The deserialized value of the scalar. Only present for
+        @ref YamlSaxEventType::Scalar events. Values are deserialized to their
+        proper Qore types based on the YAML tag and scalar style:
+        - Plain scalars: type-inferred (\c "true" → @ref True, \c "42" → integer, \c "null" → @ref NOTHING, etc.)
+        - Single-quoted scalars: dates and numbers are parsed, other values remain strings
+        - Double-quoted scalars: always returned as strings
+        - Explicitly tagged scalars: parsed according to the tag
+
+        @see yaml_parse_tagged_scalar()
+        @see yaml_parse_implicit_scalar()
+    */
+    auto value;
+
+    //! Alias target anchor name
+    /** The name of the anchor being referenced. Only present for
+        @ref YamlSaxEventType::Alias events.
+
+        @par Example YAML:
+        @code{.yaml}
+reference: *my_anchor
+        @endcode
+        The alias event will have alias = "my_anchor"
+    */
+    *string alias;
+
+    //! Current nesting depth
+    /** The depth of the current node in the document structure.
+        - 0 = document root level
+        - Increments when entering sequences/mappings
+        - Decrements when leaving sequences/mappings
+    */
+    int depth;
+
+    //! Source line number (1-based)
+    /** The line number where this event starts in the source YAML.
+        Useful for error reporting and debugging.
+    */
+    int line;
+
+    //! Source column number (1-based)
+    /** The column number where this event starts in the source YAML.
+        Useful for error reporting and debugging.
+    */
+    int column;
+
+    //! Scalar style indicator
+    /** Only present for @ref YamlSaxEventType::Scalar events. Indicates how the
+        scalar was formatted in the source YAML:
+        - @ref YamlScalarStyle::Plain - Unquoted scalar
+        - @ref YamlScalarStyle::SingleQuoted - Single-quoted string ('...')
+        - @ref YamlScalarStyle::DoubleQuoted - Double-quoted string ("...")
+        - @ref YamlScalarStyle::Literal - Literal block scalar (|)
+        - @ref YamlScalarStyle::Folded - Folded block scalar (>)
+    */
+    *enum<YamlScalarStyle> style;
+
+    //! Implicit tag flag
+    /** Only present for @ref YamlSaxEventType::Scalar events. When @ref True,
+        the tag was inferred by the parser rather than explicitly
+        specified in the YAML source.
+    */
+    *bool implicit;
+}
+
+//! SAX-style streaming YAML parser
+/** Provides event-based parsing of YAML documents without building complete
+    in-memory representation. Useful for large documents or streaming scenarios.
+
+    @par Example: Basic SAX parsing
+    @code{.py}
+YamlSaxParser parser();
+list<hash<YamlSaxEvent>> events = ();
+
+parser.parse("key: value", sub (hash<YamlSaxEvent> event) {
+    push events, event;
+});
+
+# events contains: stream_start, doc_start, mapping_start,
+#                  scalar(key), scalar(value), mapping_end, doc_end, stream_end
+    @endcode
+
+    @par Example: Counting elements in large YAML
+    @code{.py}
+int mapping_count = 0;
+int scalar_count = 0;
+
+YamlSaxParser parser();
+parser.parseStream(new FileInputStream("/large/file.yaml"), sub (hash<YamlSaxEvent> e) {
+    switch (e.type) {
+        case YamlSaxEventType::MappingStart: mapping_count++; break;
+        case YamlSaxEventType::Scalar: scalar_count++; break;
+    }
+});
+    @endcode
+
+    @see hash<YamlSaxEvent>
+
+    @since yaml 1.1
+*/
+qclass YamlSaxParser [arg=QoreYamlSaxParser* parser; ns=Qore::YAML];
+
+//! Creates a new YamlSaxParser instance
+/** @par Example:
+    @code{.py}
+YamlSaxParser parser();
+    @endcode
+*/
+YamlSaxParser::constructor() {
+    self->setPrivate(CID_YAMLSAXPARSER, new QoreYamlSaxParser());
+}
+
+//! Returns a copy of the YamlSaxParser object
+/** Creates a new independent parser instance
+*/
+YamlSaxParser::copy() {
+    self->setPrivate(CID_YAMLSAXPARSER, new QoreYamlSaxParser());
+}
+
+//! Parses a YAML string, calling the callback for each event
+/** @param yaml_str the YAML string to parse
+    @param callback closure or call reference receiving hash<YamlSaxEvent> for each event
+
+    @throw YAML-SAX-PARSE-ERROR if the YAML is malformed
+    @throw <any> if the callback throws an exception, it is propagated directly
+
+    @par Example:
+    @code{.py}
+YamlSaxParser parser();
+parser.parse("items:\n  - one\n  - two", sub (hash<YamlSaxEvent> e) {
+    printf("Event type %d at depth %d\n", e.type, e.depth);
+});
+    @endcode
+
+    @note The callback is invoked synchronously for each event. If the callback
+    throws an exception, parsing stops and the exception is propagated directly.
+*/
+nothing YamlSaxParser::parse(string yaml_str, code callback) [flags=NAMED_ARGS] {
+    ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
+    parser->parse(yaml_str, *holder, xsink);
+}
+
+//! Parses YAML from an input stream, calling the callback for each event
+/** @param stream the input stream to read YAML from
+    @param callback closure or call reference receiving hash<YamlSaxEvent> for each event
+    @param encoding optional character encoding (default: UTF-8)
+
+    @throw YAML-SAX-PARSE-ERROR if the YAML is malformed
+    @throw STREAM-READ-ERROR if the stream cannot be read
+    @throw <any> if the callback throws an exception, it is propagated directly
+
+    @par Example:
+    @code{.py}
+YamlSaxParser parser();
+FileInputStream fis("/path/to/large.yaml");
+parser.parseStream(fis, sub (hash<YamlSaxEvent> e) {
+    # Process events without loading entire file
+});
+    @endcode
+*/
+nothing YamlSaxParser::parseStream(Qore::InputStream[InputStream] stream, code callback, *string encoding) [flags=NAMED_ARGS] {
+    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding->c_str()) : QCS_UTF8;
+    ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
+    // Use obj_stream (the QoreObject*) - the C++ class will ref it
+    parser->parseStream(const_cast<QoreObject*>(obj_stream), *holder, enc, xsink);
+}
