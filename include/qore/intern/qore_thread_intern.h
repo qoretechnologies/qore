@@ -256,6 +256,8 @@ DLLLOCAL void beginParsing(const char* file, void* ps = NULL, const char* src = 
     when the parse is stopped before the end of the source
 */
 DLLLOCAL void* endParsing(bool report_open_blocks = true);
+//! returns true if the file being parsed was included by another, whose scan resumes when it ends
+DLLLOCAL bool parse_has_parent_buffer();
 DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 

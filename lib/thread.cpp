@@ -1784,6 +1784,11 @@ void* endParsing(bool report_open_blocks) {
     return rv;
 }
 
+bool parse_has_parent_buffer() {
+    // endParsing() returns this saved buffer: the including file's, or none for the main file
+    return (bool)thread_data.get()->parseState;
+}
+
 // thread-local functions
 bool is_valid_qore_thread() {
    return (bool)thread_data.get();

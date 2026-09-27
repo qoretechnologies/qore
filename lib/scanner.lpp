@@ -1113,8 +1113,14 @@ static bool angle_balanced(const char* p) {
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
     if (yybs) { /* need to close file and switch to previous buffer */ \
         fclose(yyin); if (yybs) yy_switch_to_buffer(yybs, yyscanner); \
+        /* no token, literal or comment spans an include boundary: the including file resumes where it left */ \
+        BEGIN(INITIAL); \
     } else { yyextra->ended = true; yyterminate(); } \
 }
+// Ends a file in the middle of a literal: an included file reports it here, at the literal's start, since the
+// including file's parse cannot see it; at the end of the main file the parser reports the end of file itself
+#define QORE_FLEX_DO_UNTERMINATED_EOF(what) { if (parse_has_parent_buffer()) { yylloc->restoreFirst(); \
+    parse_error(*get_loc(yylloc), "unexpected end of file in %s", what); } QORE_FLEX_DO_EOF }
 %}
 
 %option noyywrap nomain noyy_top_state warn
@@ -2109,7 +2115,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->String->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->String = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("string literal")
                                         }
 }
 <char_dq_state>{
@@ -2186,7 +2193,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->String->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->String = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("character literal")
                                         }
 }
 <char_sq_state>{
@@ -2263,7 +2271,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->String->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->String = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("character literal")
                                         }
 }
 <regex_subst2>{
@@ -2298,7 +2307,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->RegexSubst->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->RegexSubst = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("regular expression substitution")
                                         }
 }
 <regex_subst1>{
@@ -2313,7 +2323,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->RegexSubst->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->RegexSubst = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("regular expression substitution")
                                         }
 }
 <regex_trans2>{
@@ -2340,7 +2351,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Trans = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("transliteration")
                                         }
 }
 <regex_trans1>{
@@ -2362,7 +2374,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Trans = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("transliteration")
                                         }
 }
 <regex_brace_state>{
@@ -2400,7 +2413,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Regex->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Regex = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("regular expression")
                                         }
 }
 <regex_extract_brace_state>{
@@ -2437,7 +2451,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Regex->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Regex = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("regular expression extraction")
                                         }
 }
 <regex_subst1_brace>{
@@ -2461,7 +2476,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->RegexSubst->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->RegexSubst = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("regular expression substitution")
                                         }
 }
 <regex_subst2_brace_wait>{
@@ -2474,7 +2490,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->RegexSubst->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->RegexSubst = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("regular expression substitution")
                                         }
 }
 <regex_subst2_brace>{
@@ -2512,7 +2529,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->RegexSubst->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->RegexSubst = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("regular expression substitution")
                                         }
 }
 <regex_trans1_brace>{
@@ -2544,7 +2562,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Trans = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("transliteration")
                                         }
 }
 <regex_trans2_brace_wait>{
@@ -2557,7 +2576,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                             yylval->Trans->deref();
-                                            QORE_FLEX_DO_EOF
+                                            yylval->Trans = nullptr;
+                                            QORE_FLEX_DO_UNTERMINATED_EOF("transliteration")
                                         }
 }
 <regex_trans2_brace>{
@@ -2591,7 +2611,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Trans = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("transliteration")
                                         }
 }
 <regex_state>{
@@ -2623,7 +2644,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Regex->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Regex = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("regular expression")
                                         }
 }
 <regex_extract_state>{
@@ -2658,7 +2680,8 @@ c\'                                     {
                                         }
       <<EOF>>                           {
                                            yylval->Regex->deref();
-                                           QORE_FLEX_DO_EOF
+                                           yylval->Regex = nullptr;
+                                           QORE_FLEX_DO_UNTERMINATED_EOF("regular expression extraction")
                                         }
 }
 \#                                      BEGIN(line_comment);
@@ -3272,6 +3295,7 @@ hash\<{WORD}\>\{                        {
                                                "missing closing '>' before end of file",
                                                yylval->String->c_str());
                                            yylval->String->deref();
+                                           yylval->String = nullptr;
                                            QORE_FLEX_DO_EOF
                                         }
 }

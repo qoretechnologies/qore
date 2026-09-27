@@ -3587,6 +3587,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a crash (use-after-free in the scanner) when a file included with
+      @ref include "%include" ends inside a string, character or regular expression literal, a substitution or
+      transliteration, or a block comment: parsing now reports "unexpected end of file in ..." at the literal's start
+      in the included file, and the including file is parsed normally after it
     - Fixed @ref Qore::StringInputStream::getEncoding() "StringInputStream::getEncoding()",
       @ref Qore::StringOutputStream::getEncoding() "StringOutputStream::getEncoding()",
       @ref Qore::FileOutputStream::getEncoding() "FileOutputStream::getEncoding()", and

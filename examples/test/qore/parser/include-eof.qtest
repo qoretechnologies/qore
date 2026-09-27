@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A file included with %include that ends inside a literal or comment is a parse error of that file; the scanner
+# used to carry the literal's state and its freed value into the including file, a use-after-free that crashed
+# the interpreter instead of reporting the error
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%exec-class IncludeEofTest
+
+class IncludeEofTest inherits QUnit::Test {
+    private {
+        string dir;
+    }
+
+    constructor() : QUnit::Test("Include EOF Test", "1.0") {
+        addTestCase("an unterminated literal in an included file is reported there", \testUnterminatedLiteral());
+        addTestCase("the including file resumes in its own state", \testIncludingFileResumes());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + "qore-include-eof-" + get_random_string(8);
+        mkdir(dir);
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    #! Writes an included file and returns its path
+    private string writeInclude(string name, string text) {
+        string path = dir + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+        return path;
+    }
+
+    testUnterminatedLiteral() {
+        hash<string, string> cases = {
+            "x = \"abc": "string literal",
+            "x = c'a": "character literal",
+            "x = \"a\" =~ /ab": "regular expression",
+            "x = \"a\" =~ x/(ab": "regular expression extraction",
+            "x = \"a\" =~ s/a/b": "regular expression substitution",
+            "x = \"a\" =~ tr/a": "transliteration",
+            "/* comment": "block comment",
+        };
+        int n = 0;
+        foreach hash<auto> kase in (cases.pairIterator()) {
+            string path = writeInclude(sprintf("case-%d.q", ++n), "\n" + kase.key + "\nmore text\n");
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "unexpected end of file in " + kase.value, \p.parse(),
+                (sprintf("%%include %s\n", path), "main"), kase.key);
+        }
+    }
+
+    testIncludingFileResumes() {
+        # the string the included file leaves open must not swallow the including file: its own code is parsed,
+        # so its own error is reported too
+        string path = writeInclude("open-string.q", "x = \"abc\n");
+        Program p(PO_NEW_STYLE);
+        string main_text = sprintf("%%include %s\nint sub f() { return 1; }\nnot a statement;\n", path);
+        list<string> errors;
+        try {
+            p.parse(main_text, "main");
+        } catch (hash<ExceptionInfo> ex) {
+            while (True) {
+                errors += ex.desc;
+                if (!ex.next) {
+                    break;
+                }
+                ex = ex.next;
+            }
+        }
+        assertTrue(inlist("unexpected end of file in string literal", errors), sprintf("%y", errors));
+        assertTrue((select errors, $1 =~ /unexpected identifier/).size() > 0,
+            sprintf("the including file's own error is reported: %y", errors));
+    }
+}
