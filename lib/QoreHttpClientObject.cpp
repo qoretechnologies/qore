@@ -82,6 +82,7 @@
 #include <cassert>
 #include <cctype>
 #include <map>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -477,6 +478,166 @@ static QoreValue process_binary_body(const BinaryNode* bin, const char* content_
 
     return qore_decode_http_body(content_type, bin, assumed);
 }
+
+//! Decodes the content coding of a response body that is delivered as it is received
+/** A body that is written to an output stream or passed to a receive callback in chunks is decompressed chunk by
+    chunk, so it can be delivered decoded without holding it in memory; the decoded data is passed on one output buffer
+    of the decompressor at a time, so a small chunk that decompresses to a large amount of data is never held in memory
+    either.  The content coding is determined by the rules used for a body that is received whole (see
+    normalizeContentEncoding()): only the first coding is decoded, and a character encoding sent as the content coding,
+    \c "identity", and an unknown coding (issue #2953) leave the body as it is received.
+*/
+class StreamedBodyDecoder {
+public:
+    //! Receives decoded data; returns 0 for OK, -1 if an exception was raised
+    typedef std::function<int(const char* data, size_t len)> sink_t;
+
+    //! Sets up decoding for the given \c Content-Encoding header value
+    /** @param content_encoding the \c Content-Encoding value of the response, if any
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int init(const std::string& content_encoding, ExceptionSink* xsink) {
+        transform = nullptr;
+        bool ignore_encoding = false;
+        if (content_encoding.empty() || !get_decoder_for_content_encoding(content_encoding.c_str(),
+                ignore_encoding)) {
+            return 0;
+        }
+        const char* start = content_encoding.c_str();
+        while (*start == ' ' || *start == '\t') {
+            ++start;
+        }
+        const char* end = start;
+        while (*end && *end != ',' && *end != ';' && *end != ' ') {
+            ++end;
+        }
+        std::string token(start, end - start);
+        SimpleRefHolder<QoreStringNode> alg(new QoreStringNode(
+            CompressionTransforms::getContentCodingAlgorithm(token.c_str())));
+        transform = CompressionTransforms::getDecompressor(*alg, 0, xsink);
+        if (*xsink) {
+            transform = nullptr;
+            return -1;
+        }
+        buf_size = transform->outputBufferSize();
+        if (!buf_size) {
+            buf_size = 4096;
+        }
+        buf.reset(new char[buf_size]);
+        return 0;
+    }
+
+    //! Returns true if the body is decoded
+    DLLLOCAL bool active() const {
+        return (bool)transform;
+    }
+
+    //! Decodes a body chunk as received; the body must be decoded
+    /** @param body_val the body chunk as received
+        @param sink receives the decoded data
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int decode(QoreValue body_val, const sink_t& sink, ExceptionSink* xsink) {
+        assert(transform);
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* bin = body_val.get<const BinaryNode>();
+            return apply(static_cast<const char*>(bin->getPtr()), bin->size(), sink, xsink);
+        }
+        QoreStringValueHelper str(body_val);
+        return apply(str->c_str(), str->size(), sink, xsink);
+    }
+
+    //! Passes the decoded data held by the decompressor at the end of the body to the sink
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int finish(const sink_t& sink, ExceptionSink* xsink) {
+        if (!transform) {
+            return 0;
+        }
+        return apply(nullptr, 0, sink, xsink);
+    }
+
+    //! Writes a body chunk as received to the output stream, decoded if the body is decoded
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int write(OutputStream* os, QoreValue body_val, ExceptionSink* xsink) {
+        if (transform) {
+            return decode(body_val, getStreamSink(os, xsink), xsink);
+        }
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* bin = body_val.get<const BinaryNode>();
+            if (bin->size()) {
+                os->write(bin->getPtr(), bin->size(), xsink);
+            }
+        } else if (body_val.getType() == NT_STRING) {
+            QoreStringValueHelper str(body_val);
+            if (str->size()) {
+                os->write(str->c_str(), str->size(), xsink);
+            }
+        }
+        return *xsink ? -1 : 0;
+    }
+
+    //! Writes the decoded data held by the decompressor at the end of the body to the output stream
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int finish(OutputStream* os, ExceptionSink* xsink) {
+        return finish(getStreamSink(os, xsink), xsink);
+    }
+
+private:
+    SimpleRefHolder<Transform> transform;
+    std::unique_ptr<char[]> buf;
+    size_t buf_size = 0;
+
+    //! Returns a sink that writes to the output stream
+    DLLLOCAL static sink_t getStreamSink(OutputStream* os, ExceptionSink* xsink) {
+        return [os, xsink] (const char* data, size_t len) -> int {
+            os->write(data, len, xsink);
+            return *xsink ? -1 : 0;
+        };
+    }
+
+    //! Passes input through the decompressor; with no input, flushes the decompressor
+    DLLLOCAL int apply(const char* src, size_t len, const sink_t& sink, ExceptionSink* xsink) {
+        int64 remaining = static_cast<int64>(len);
+        if (src && !remaining) {
+            return 0;
+        }
+        // a small input can decompress to many output buffers, each of which is passed to the sink
+        for (unsigned iteration = 1; ; ++iteration) {
+            if (!(iteration % 10) && qore_check_cancel(xsink, "HTTP response body decoding")) {
+                return -1;
+            }
+            std::pair<int64, int64> r = transform->apply(src, remaining, buf.get(), buf_size, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (r.second && sink(buf.get(), r.second)) {
+                return -1;
+            }
+            if (!src) {
+                // flushing: the decompressor is drained once it produces no more output
+                if (!r.second) {
+                    break;
+                }
+                continue;
+            }
+            src += r.first;
+            remaining -= r.first;
+            // once all input is consumed, a full output buffer means that the decompressor can hold more output for
+            // the input given; it is drained with empty input, so no output is held back until the next chunk
+            if (!remaining && r.second < static_cast<int64>(buf_size)) {
+                break;
+            }
+        }
+        return 0;
+    }
+};
 
 // ============================================================================
 // REDIRECT CHAIN HELPERS
@@ -5467,6 +5628,24 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 bool channel_done = false;
                 bool got_headers = false;
                 bool keep_channel_open = false;
+                // decodes a body that is delivered as it is received
+                StreamedBodyDecoder body_decoder;
+                // passes a body chunk to the receive callback
+                auto deliver_data = [&] (QoreValue data) -> int {
+                    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                    QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
+                    cb_arg->setKeyValue("data", data, xsink);
+                    cb_arg->setKeyValue("chunked", true, xsink);
+                    args->push(cb_arg, xsink);
+                    ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
+                    return *xsink ? -1 : 0;
+                };
+                // passes decoded body data to the receive callback
+                StreamedBodyDecoder::sink_t decoded_sink = [&] (const char* data, size_t len) -> int {
+                    BinaryNode* b = new BinaryNode;
+                    b->append(data, len);
+                    return deliver_data(b);
+                };
 
                 while (true) {
                     bool timed_out = false;
@@ -5609,6 +5788,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             ss_guard.disarm();
                             break;
                         }
+                        // the body is decoded as it is received, unless the caller wants it as sent
+                        if (!encoding_passthru) {
+                            std::optional<std::string> ce = get_string_header_value(xsink, **ans,
+                                "content-encoding");
+                            if (*xsink) {
+                                xsink->clear();
+                            }
+                            if (ce && body_decoder.init(*ce, xsink)) {
+                                channel->close();
+                                return nullptr;
+                            }
+                        }
                         // Fall through to check for body data in the same
                         // hash — H2/H3 streaming send can dispatch headers +
                         // body in a single channel event (when the response
@@ -5619,32 +5810,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     QoreValue body_val = h->getKeyValue("body");
                     if (!body_val.isNullOrNothing()) {
                         if (os) {
-                            if (body_val.getType() == NT_BINARY) {
-                                const BinaryNode* bin = body_val.get<const BinaryNode>();
-                                os->write(bin->getPtr(), bin->size(), xsink);
-                            } else if (body_val.getType() == NT_STRING) {
-                                QoreStringValueHelper str(body_val);
-                                os->write(str->c_str(), str->size(), xsink);
-                            }
-                            if (*xsink) {
+                            if (body_decoder.write(os, body_val, xsink)) {
                                 channel->close();
                                 return nullptr;
                             }
                         } else if (recv_callback) {
-                            ReferenceHolder<QoreListNode> args(
-                                new QoreListNode(autoTypeInfo), xsink);
-                            QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                            cb_arg->setKeyValue("data", body_val.refSelf(), xsink);
-                            cb_arg->setKeyValue("chunked", true, xsink);
-                            args->push(cb_arg, xsink);
-                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
-                            // above aliases the hash held by rv; operator= on a
-                            // ValueHolder discards the current value, freeing the hash
-                            // and turning `h` into a dangling pointer.  Use a local
-                            // holder so the callback return value is properly cleaned
-                            // up without touching the per-iteration channel recv hash.
-                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
-                            if (*xsink) {
+                            int rc = body_decoder.active()
+                                ? body_decoder.decode(body_val, decoded_sink, xsink)
+                                : deliver_data(body_val.refSelf());
+                            if (rc) {
                                 channel->close();
                                 return nullptr;
                             }
@@ -5664,6 +5838,19 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // key (false on body chunks, true on the final event).
                     QoreValue end_val = h->getKeyValue("end_stream");
                     if (end_val.getAsBool()) {
+                        // the rest of a body that is decoded as it is received
+                        if (body_decoder.active()) {
+                            int rc = 0;
+                            if (os) {
+                                rc = body_decoder.finish(os, xsink);
+                            } else if (recv_callback) {
+                                rc = body_decoder.finish(decoded_sink, xsink);
+                            }
+                            if (rc) {
+                                channel->close();
+                                return nullptr;
+                            }
+                        }
                         if (recv_callback) {
                             ReferenceHolder<QoreListNode> args(
                                 new QoreListNode(autoTypeInfo), xsink);
@@ -5805,6 +5992,46 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             bool chunk_charset_set = false;
             QoreHttpBodyCharset chunk_charset;
             SimpleRefHolder<BinaryNode> accumulated_body;
+            // decodes a body that is delivered as it is received
+            StreamedBodyDecoder body_decoder;
+            // delivers a chunk of a body that is not accumulated to the receive callback: without a content-encoding
+            // or with a decoded content-encoding, a text body is delivered as strings decoded by the rules shared by
+            // all HTTP clients; the charset is determined from the first chunk, which is the only one that can start
+            // with a BOM
+            auto deliver_chunk = [&] (QoreValue chunk) -> int {
+                QoreValue cb_data;
+                if ((resp_content_encoding.empty() || body_decoder.active()) && chunk.getType() == NT_BINARY) {
+                    const BinaryNode* bin = chunk.get<const BinaryNode>();
+                    if (!chunk_charset_set) {
+                        chunk_charset = qore_get_http_body_charset(
+                            resp_content_type.empty() ? nullptr : resp_content_type.c_str(),
+                            bin->getPtr(), bin->size(), getAssumedHttpEncoding());
+                        chunk_charset_set = true;
+                    } else {
+                        chunk_charset.bom_len = 0;
+                    }
+                    if (chunk_charset.enc && chunk_charset.bom_len <= bin->size()) {
+                        cb_data = qore_http_body_string(chunk_charset, bin->getPtr(), bin->size());
+                    } else {
+                        cb_data = chunk.refSelf();
+                    }
+                } else {
+                    cb_data = chunk.refSelf();
+                }
+                ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
+                cb_arg->setKeyValue("data", cb_data, xsink);
+                cb_arg->setKeyValue("chunked", true, xsink);
+                args->push(cb_arg, xsink);
+                ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
+                return *xsink ? -1 : 0;
+            };
+            // passes decoded body data to the receive callback
+            StreamedBodyDecoder::sink_t decoded_sink = [&] (const char* data, size_t len) -> int {
+                SimpleRefHolder<BinaryNode> b(new BinaryNode);
+                b->append(data, len);
+                return deliver_chunk(*b);
+            };
             while (true) {
                 bool timed_out = false;
                 bool has_value = false;
@@ -5935,6 +6162,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 && !is_event_stream) {
                             accumulated_body = new BinaryNode();
                         }
+                        // an accumulated body is decoded when it is complete; any other body is decoded as it is
+                        // received, unless the caller wants it as sent
+                        if (!accumulated_body && !encoding_passthru
+                                && body_decoder.init(resp_content_encoding, xsink)) {
+                            channel->close();
+                            return nullptr;
+                        }
                     }
 
                     // Invoke recv_callback with header hash (matching
@@ -5998,14 +6232,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!body_val.isNullOrNothing()) {
                     if (os) {
                         // Write to OutputStream
-                        if (body_val.getType() == NT_BINARY) {
-                            const BinaryNode* bin = body_val.get<const BinaryNode>();
-                            os->write(bin->getPtr(), bin->size(), xsink);
-                        } else if (body_val.getType() == NT_STRING) {
-                            QoreStringValueHelper str(body_val);
-                            os->write(str->c_str(), str->size(), xsink);
-                        }
-                        if (*xsink) {
+                        if (body_decoder.write(os, body_val, xsink)) {
                             channel->close();
                             return nullptr;
                         }
@@ -6029,43 +6256,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 return nullptr;
                             }
                         } else {
-                            // Per-chunk callback: without a content-encoding, a text body is delivered as
-                            // strings decoded by the rules shared by all HTTP clients; the charset is
-                            // determined from the first chunk, which is the only one that can start with a BOM
-                            QoreValue cb_data;
-                            if (resp_content_encoding.empty()
-                                    && body_val.getType() == NT_BINARY) {
-                                const BinaryNode* bin = body_val.get<const BinaryNode>();
-                                if (!chunk_charset_set) {
-                                    chunk_charset = qore_get_http_body_charset(
-                                        resp_content_type.empty() ? nullptr : resp_content_type.c_str(),
-                                        bin->getPtr(), bin->size(), getAssumedHttpEncoding());
-                                    chunk_charset_set = true;
-                                } else {
-                                    chunk_charset.bom_len = 0;
-                                }
-                                if (chunk_charset.enc && chunk_charset.bom_len <= bin->size()) {
-                                    cb_data = qore_http_body_string(chunk_charset, bin->getPtr(), bin->size());
-                                } else {
-                                    cb_data = body_val.refSelf();
-                                }
-                            } else {
-                                cb_data = body_val.refSelf();
-                            }
-                            ReferenceHolder<QoreListNode> args(
-                                new QoreListNode(autoTypeInfo), xsink);
-                            QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                            cb_arg->setKeyValue("data", cb_data, xsink);
-                            cb_arg->setKeyValue("chunked", true, xsink);
-                            args->push(cb_arg, xsink);
-                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
-                            // above aliases the hash held by rv; operator= on a
-                            // ValueHolder discards the current value, freeing the hash
-                            // and turning `h` into a dangling pointer.  Use a local
-                            // holder so the callback return value is properly cleaned
-                            // up without touching the per-iteration channel recv hash.
-                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
-                            if (*xsink) {
+                            int rc = body_decoder.active()
+                                ? body_decoder.decode(body_val, decoded_sink, xsink)
+                                : deliver_chunk(body_val);
+                            if (rc) {
                                 channel->close();
                                 return nullptr;
                             }
@@ -6101,6 +6295,20 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // the response's content-type and raise a spurious
                     // DESERIALIZATION-ERROR.  The terminal hdr=NOTHING
                     // callback below still fires to signal end-of-data.
+                    // the rest of a body that is decoded as it is received
+                    if (body_decoder.active()) {
+                        if (os) {
+                            if (body_decoder.finish(os, xsink)) {
+                                channel->close();
+                                return nullptr;
+                            }
+                        } else if (recv_callback) {
+                            if (body_decoder.finish(decoded_sink, xsink)) {
+                                channel->close();
+                                return nullptr;
+                            }
+                        }
+                    }
                     if (recv_callback && accumulated_body && accumulated_body->size()) {
                         bool ignore_encoding = false;
                         qore_uncompress_to_string_max_t dec =

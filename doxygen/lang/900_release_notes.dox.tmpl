@@ -3604,6 +3604,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::HTTPClient "HTTPClient" methods that deliver a response body as it is received
+      (@ref Qore::HTTPClient::send() "HTTPClient::send()" and
+      @ref Qore::HTTPClient::sendChunked() "HTTPClient::sendChunked()" with an output stream, and a chunked body
+      passed to the receive callback of @ref Qore::HTTPClient::sendWithRecvCallback() "HTTPClient::sendWithRecvCallback()"
+      and @ref Qore::HTTPClient::sendWithCallbacks() "HTTPClient::sendWithCallbacks()"): a body with a content coding
+      was delivered still encoded, although the client requests compressed responses by default, so a file saved
+      from a \c gzip response, for example, was saved compressed; such a body is now decompressed as it is received,
+      one decompressor buffer at a time, unless the \c encoding_passthru option is set
     - Fixed the \c qget script: \c ftp:// and \c ftps:// downloads failed with "Don't know how to handle scheme"
       after the file had been retrieved, a response with an empty body could not be saved, and a failed retrieval
       exited with status 0 and reported the error on standard output instead of standard error; the file name from a

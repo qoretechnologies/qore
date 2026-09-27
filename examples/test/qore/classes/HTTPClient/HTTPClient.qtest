@@ -223,6 +223,128 @@ class BodyTypePeer inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Throws an OUTPUT-LIMIT exception once more than the given number of bytes has been written
+class LimitedOutputStream inherits OutputStream {
+    private:internal {
+        int limit;
+        int received;
+    }
+
+    constructor(int limit) {
+        self.limit = limit;
+    }
+
+    close() {
+    }
+
+    write(binary data) {
+        received += data.size();
+        if (received > limit) {
+            throw "OUTPUT-LIMIT", sprintf("%d bytes received; limit: %d", received, limit);
+        }
+    }
+
+    int getReceived() {
+        return received;
+    }
+}
+
+#! Counts the bytes written and calls a function on the first write
+class CountingOutputStream inherits OutputStream {
+    private:internal {
+        code<nothing()> on_first_write;
+        int received = 0;
+    }
+
+    constructor(code<nothing()> on_first_write) {
+        self.on_first_write = on_first_write;
+    }
+
+    close() {
+    }
+
+    write(binary data) {
+        bool first = !received;
+        received += data.size();
+        if (first) {
+            on_first_write();
+        }
+    }
+
+    int getReceived() {
+        return received;
+    }
+}
+
+class StreamDecodePeer inherits AbstractHttpRequestHandler {
+    public {
+        #! the body before it is encoded: compressible text followed by data that does not compress
+        /** it decompresses to many times the output buffer of a decompressor
+        */
+        const Body = binary(strmul("0123456789abcdef", 40000)) + get_random_bytes(3001);
+
+        #! the text body before it is encoded
+        const Text = strmul("streamed text äöü ", 5000);
+
+        #! the decoded size of the body sent for "/bomb"
+        const BombSize = 16 * 1024 * 1024;
+
+        #! Content-Encoding -> function encoding the body
+        const Encoders = {
+            "gzip": \gzip(),
+            "x-gzip": \gzip(),
+            "deflate": \compress(),
+            "bzip2": \bzip2(),
+            "br": \brotli(),
+            "zstd": \zstd(),
+        };
+    }
+
+    #! serves /<content-encoding>[/chunked][/text]
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        list<string> path = cx.raw_path.substr(1).split("/");
+        string ce = path[0];
+        bool chunked = path.contains("chunked");
+        bool text = path.contains("text");
+        binary plain = text ? binary(Text) : Body;
+        binary encoded;
+        switch (ce) {
+            # a small body that decompresses to BombSize bytes
+            case "bomb": ce = "gzip"; encoded = gzip(binary(strmul("\0", BombSize))); break;
+            # an unknown coding, which is passed through
+            case "x-custom": encoded = plain; break;
+            # an encoded body that cannot be decoded
+            case "corrupt": ce = "gzip"; encoded = gzip(plain).substr(0, 1000); break;
+            default: encoded = call_function(Encoders{ce}, plain); break;
+        }
+        hash<auto> resp_hdr = {
+            "Content-Type": text ? MimeTypeText + ";charset=utf-8" : MimeTypeOctetStream,
+            "Content-Encoding": ce,
+        };
+        if (!chunked) {
+            hash<HttpResponseInfo> rv = makeResponse(resp_hdr, 200, encoded);
+            # the body is already encoded
+            rv.no_content_encoding = True;
+            return rv;
+        }
+        # sent in small chunks, which do not align with the decompressor's buffers
+        int offset = 0;
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": resp_hdr,
+            "no_content_encoding": True,
+            "send_callback": *binary sub () {
+                if (offset >= encoded.size()) {
+                    return;
+                }
+                binary rv = encoded.substr(offset, 997);
+                offset += rv.size();
+                return rv;
+            },
+        };
+    }
+}
+
 class RealTestHttpServer inherits HttpServer {
     private:internal {
         EchoHandler eh();
@@ -446,6 +568,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
         addTestCase("response body type", \responseBodyTypeTest());
+        addTestCase("streamed response body decoding", \streamedBodyDecodingTest());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
         addTestCase("client certs", \clientCertTest());
         addTestCase("issue 3472", \issue3472());
@@ -1441,6 +1564,167 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         hash<auto> resp = pt.send(NOTHING, "GET", "/gzip-text");
         assertEq("binary", resp.body.type());
         assertEq("compressed text", gunzip_to_string(resp.body));
+    }
+
+    #! A response body that is delivered as it is received is decoded like a body that is received whole
+    streamedBodyDecodingTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("stream-decode", new StreamDecodePeer());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        # HTTP/2 is negotiated with TLS
+        int tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCert),
+            "key": new SSLPrivateKey(TestCert),
+        }).port;
+        # HTTP version -> URL
+        hash<string, string> urls = {
+            "1.1": sprintf("http://127.0.0.1:%d", port),
+            "2.0": sprintf("https://127.0.0.1:%d", tls_port),
+        };
+
+        foreach hash<auto> i in (urls.pairIterator()) {
+            string version = i.key;
+            string url = i.value;
+            HTTPClient hc({"url": url, "timeout": 30s, "http_version": version, "ssl_verify_cert": False});
+            foreach string ce in (keys StreamDecodePeer::Encoders) {
+                foreach string framing in ("", "/chunked") {
+                    string path = "/" + ce + framing;
+                    string msg = sprintf("HTTP/%s %s", version, path);
+
+                    # to an output stream
+                    BinaryOutputStream os();
+                    hash<auto> info;
+                    hc.send(os, NOTHING, "GET", path, NOTHING, NOTHING, NOTHING, \info);
+                    assertEq(ce, info."response-headers"."content-encoding", msg);
+                    assertEq(StreamDecodePeer::Body, os.getData(), msg + " (output stream)");
+
+                    # to a receive callback
+                    binary received;
+                    int calls;
+                    code recv = sub (hash<auto> h) {
+                        if (h.hasKey("data")) {
+                            assertEq(Type::Binary, h.data.type(), msg + " (callback data type)");
+                            assertTrue(h.data.size() > 0, msg + " (no empty callback data)");
+                            received += h.data;
+                            ++calls;
+                        }
+                    };
+                    hc.sendWithRecvCallback(recv, NOTHING, "GET", path);
+                    assertEq(StreamDecodePeer::Body, received, msg + " (receive callback)");
+                    assertTrue(calls > 0, msg + " (receive callback calls)");
+
+                    # with a request body that is streamed, which uses a separate receive path
+                    os = new BinaryOutputStream();
+                    hc.sendChunked(os, new BinaryInputStream(binary("request")), "POST", 4096, path);
+                    assertEq(StreamDecodePeer::Body, os.getData(), msg + " (streamed request, output stream)");
+
+                    remove received;
+                    bool sent;
+                    code send = *binary sub () {
+                        if (sent) {
+                            return;
+                        }
+                        sent = True;
+                        return binary("request");
+                    };
+                    hc.sendWithCallbacks(send, recv, "POST", path);
+                    assertEq(StreamDecodePeer::Body, received, msg + " (streamed request, receive callback)");
+                }
+            }
+
+            string msg = sprintf("HTTP/%s", version);
+            # a text body decoded as it is received is delivered as strings
+            {
+                string text;
+                code recv = sub (hash<auto> h) {
+                    if (h.hasKey("data")) {
+                        assertEq(Type::String, h.data.type(), msg + " (text chunk type)");
+                        text += h.data;
+                    }
+                };
+                hc.sendWithRecvCallback(recv, NOTHING, "GET", "/gzip/chunked/text");
+                assertEq(StreamDecodePeer::Text, text, msg + " (text)");
+            }
+
+            # an unknown content coding is delivered as received
+            BinaryOutputStream os();
+            hc.send(os, NOTHING, "GET", "/x-custom/chunked");
+            assertEq(StreamDecodePeer::Body, os.getData(), msg + " (unknown coding)");
+
+            # a body that cannot be decoded raises an error
+            foreach string framing in ("", "/chunked") {
+                assertThrows("ZLIB-ERROR", sub () {
+                    hc.send(new BinaryOutputStream(), NOTHING, "GET", "/corrupt" + framing);
+                }, NOTHING, msg + " (corrupt" + framing + ")");
+            }
+
+            # a body that decompresses to far more than it is received as is passed on as it is decompressed, so a
+            # consumer can stop it without the decompressed body being held in memory
+            {
+                LimitedOutputStream limited(1024 * 1024);
+                assertThrows("OUTPUT-LIMIT", \hc.send(), (limited, NOTHING, "GET", "/bomb"), msg + " (bomb)");
+                assertLt(2 * 1024 * 1024, limited.getReceived(), msg + " (bomb stopped early)");
+
+                int max_chunk;
+                int total;
+                code recv = sub (hash<auto> h) {
+                    if (h.hasKey("data")) {
+                        max_chunk = max(max_chunk, h.data.size());
+                        total += h.data.size();
+                    }
+                };
+                # decoding is a cancellation point: a thread that is cancelled while a body is decoded stops
+                # decoding it; the writing thread is cancelled from this thread after its first write, and the
+                # cancellation is deferred until the write returns to the decoder
+                {
+                    Queue started();
+                    Queue cancelled();
+                    Queue result();
+                    background sub () {
+                        CountingOutputStream cs(sub () {
+                            defer_thread_cancel(sub () {
+                                started.push(gettid());
+                                cancelled.get();
+                            });
+                        });
+                        try {
+                            hc.send(cs, NOTHING, "GET", "/bomb");
+                            result.push({"received": cs.getReceived()});
+                        } catch (hash<ExceptionInfo> ex) {
+                            # the thread is no longer cancelled when the result is reported
+                            clear_thread_cancel();
+                            result.push({"err": ex.err, "desc": ex.desc, "received": cs.getReceived()});
+                        }
+                    }();
+                    cancel_thread(started.get(60s), "test");
+                    cancelled.push(True);
+                    hash<auto> cancel_result = result.get(60s);
+                    assertEq("THREAD-CANCELLED", cancel_result.err, msg + " (cancel)");
+                    assertRegex("^HTTP response body decoding", cancel_result.desc ?? "", msg + " (cancel point)");
+                    assertLt(StreamDecodePeer::BombSize, cancel_result.received, msg + " (cancel stopped early)");
+                }
+
+                # a body that is not chunked is passed to a receive callback in a single call, and HTTP/2 has no
+                # chunked transfer coding
+                hc.sendWithRecvCallback(recv, NOTHING, "GET", "/bomb/chunked");
+                assertEq(StreamDecodePeer::BombSize, total, msg + " (bomb callback total)");
+                if (version == "1.1") {
+                    assertLt(1024 * 1024, max_chunk, msg + " (bomb callback chunk size)");
+                }
+            }
+
+            # with encoding_passthru an encoded body is delivered as sent
+            HTTPClient pt({"url": url, "timeout": 30s, "http_version": version, "ssl_verify_cert": False,
+                "encoding_passthru": True});
+            foreach string framing in ("", "/chunked") {
+                os = new BinaryOutputStream();
+                pt.send(os, NOTHING, "GET", "/gzip" + framing);
+                assertEq(StreamDecodePeer::Body, gunzip_to_binary(os.getData()), msg + " (passthru" + framing + ")");
+            }
+        }
     }
 
     #! Drives a poll operation on this thread until it completes and returns its output

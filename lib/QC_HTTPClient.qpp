@@ -2154,6 +2154,10 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
 
+    @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
+    is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
+    to an output stream and to a chunked body passed to a receive callback, which were previously delivered encoded
+
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @see @ref httpclient_get_with_body
@@ -2243,6 +2247,10 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
 
+    @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
+    is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
+    to an output stream and to a chunked body passed to a receive callback, which were previously delivered encoded
+
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @since
@@ -2266,7 +2274,7 @@ nothing HTTPClient::sendWithRecvCallback(code receive_callback, *binary body, st
     @code{.py}
 # save the HTTP response body directly to a file with a random file name
 string fn = tmp_location() + DirSep + get_random_string() + ".tmp"
-FileOutputString output_stream(fn);
+FileOutputStream output_stream(fn);
 # log the "X-Logme" header
 code receive_callback = sub (hash<auto> h) {
     if (h.hdr."x-logme")
@@ -2313,6 +2321,10 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
 
+    @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
+    is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
+    to an output stream and to a chunked body passed to a receive callback, which were previously delivered encoded
+
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @since %Qore 0.8.13
@@ -2340,7 +2352,7 @@ nothing HTTPClient::send(Qore::OutputStream[OutputStream] output_stream, *data b
     @code{.py}
 # save the HTTP response body directly to a file with a random file name
 string fn = tmp_location() + DirSep + get_random_string() + ".tmp"
-FileOutputString output_stream(fn);
+FileOutputStream output_stream(fn);
 # log the "X-Logme" header
 code receive_callback = sub (hash<auto> h) {
     if (h.hdr."x-logme")
@@ -2395,6 +2407,10 @@ httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream,
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+
+    @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
+    is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
+    to an output stream and to a chunked body passed to a receive callback, which were previously delivered encoded
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2489,6 +2505,9 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
     - if a response is received while the chunked send operation is still in progress, an error is assumed, the send operation is aborted, and the response header is read immediately and the \c send_aborted flag is set in the argument to \a receive_callback
+    - A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it is
+      received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
+      to an output stream and to a chunked body passed to a receive callback, which were previously delivered encoded
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @see @ref httpclient_get_with_body

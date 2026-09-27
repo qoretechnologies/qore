@@ -750,17 +750,30 @@ class RestClientBoundedOutputStream inherits Qore::OutputStream {
     }
 }
 
-#! Output stream that incrementally decodes a response into a bounded sink
+#! Output stream that receives a response into a bounded sink
+/** HTTPClient decodes the content coding of the body as it is received, so the bytes written are the decoded body
+*/
 class RestClientResponseOutputStream inherits Qore::OutputStream {
+    public {
+        #! The content codings that HTTPClient decodes unless the \c encoding_passthru option is set
+        const DecodedContentCodings = {
+            "deflate": True,
+            "x-deflate": True,
+            "gzip": True,
+            "x-gzip": True,
+            "bzip2": True,
+            "x-bzip2": True,
+            "br": True,
+            "zstd": True,
+        };
+    }
+
     private {
         #! Maximum response body size
         int max_response_bytes;
 
         #! Bounded response sink
         RestClientBoundedOutputStream output;
-
-        #! Optional streaming response decompressor
-        *Qore::TransformOutputStream transform;
 
         #! True when the body must be returned as binary data
         bool binary_body = False;
@@ -789,7 +802,6 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         # HTTPClient can report headers for an authentication challenge or redirect before the final response.
         # Such responses have no body delivered to this stream, so reset all per-response state here.
         output = new RestClientBoundedOutputStream(max_response_bytes);
-        transform = NOTHING;
         binary_body = False;
         configured = True;
         self.content_type = content_type;
@@ -809,32 +821,8 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
             # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as
             # binary data, including identity and unknown encodings.
             binary_body = True;
-        } else {
-            Qore::Transform decompressor;
-            switch (token) {
-                case "deflate":
-                case "x-deflate":
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
-                    break;
-                case "gzip":
-                case "x-gzip":
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
-                    break;
-                case "bzip2":
-                case "x-bzip2":
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
-                    break;
-                case "br":
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BROTLI);
-                    break;
-                case "zstd":
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZSTD);
-                    break;
-            }
-            if (decompressor) {
-                transform = new Qore::TransformOutputStream(output, decompressor);
-                decoded_content = True;
-            }
+        } else if (DecodedContentCodings{token}) {
+            decoded_content = True;
         }
 
         # Content-Length is the encoded size for compressed responses, so only use it as an early rejection when it
@@ -847,25 +835,12 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
 
     #! Closes the stream
     close() {
-        finish();
     }
 
     #! Writes response bytes to the bounded response pipeline
     write(binary data) {
         @assert(configured);
-        if (transform) {
-            transform.write(data);
-        } else {
-            output.write(data);
-        }
-    }
-
-    #! Flushes any pending transformed bytes
-    finish() {
-        if (transform) {
-            transform.close();
-            transform = NOTHING;
-        }
+        output.write(data);
     }
 
     #! Returns the complete response body
@@ -3582,7 +3557,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         try {
             send(output_stream: response_stream, body: body, method: m, path: path, headers: hdr,
                 read_response_body: False, info: \info, receive_callback: receive_callback);
-            response_stream.finish();
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-BODY-TOO-LARGE") {
                 # The body was deliberately not drained. Drop the transport so no unread bytes can be mistaken for a
