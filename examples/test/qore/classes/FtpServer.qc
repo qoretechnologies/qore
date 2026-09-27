@@ -463,20 +463,30 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 if (doBroken("retr", data))
                     break;
 
-                if (send_path) {
-                    if (offset) {
-                        data.send(ReadOnlyFile::readBinaryFile(send_path).substr(offset));
-                    } else {
-                        data.sendFromInputStream(new FileInputStream(send_path));
+                try {
+                    if (send_path) {
+                        if (offset) {
+                            data.send(ReadOnlyFile::readBinaryFile(send_path).substr(offset));
+                        } else {
+                            data.sendFromInputStream(new FileInputStream(send_path));
+                        }
+                    } else if (!get_empty) {
+                        # write a bunch of data and then exit
+                        if (offset) {
+                            data.send(strmul("testing abcdefghijklmnopqrstuvwxyz 0123456789\n", 200).substr(offset));
+                        } else {
+                            for (int i = 0; i < 200; ++i)
+                                data.send("testing abcdefghijklmnopqrstuvwxyz 0123456789\n");
+                        }
                     }
-                } else if (!get_empty) {
-                    # write a bunch of data and then exit
-                    if (offset) {
-                        data.send(strmul("testing abcdefghijklmnopqrstuvwxyz 0123456789\n", 200).substr(offset));
-                    } else {
-                        for (int i = 0; i < 200; ++i)
-                            data.send("testing abcdefghijklmnopqrstuvwxyz 0123456789\n");
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the data connection, as a client that aborts a transfer does
+                    if (verbose > 1) {
+                        printf("RETR aborted: %s: %s\n", ex.err, ex.desc);
                     }
+                    data.close();
+                    ftpSend(ns, 426, "Connection closed; transfer aborted.");
+                    continue;
                 }
 
                 data.close();

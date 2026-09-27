@@ -189,6 +189,8 @@ class SocketTest inherits QUnit::Test {
         addTestCase("UNIX socket connect", \unixSocketConnectTest());
         addTestCase("Stream socket transfer", \streamSocketTransferTest());
         addTestCase("Unsafe stream socket transfer rejection", \unsafeStreamSocketTransferRejectionTest());
+        addTestCase("large stream socket transfers", \largeStreamSocketTransferTest());
+        addTestCase("streams after failed socket transfers", \failedStreamSocketTransferTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL upgrade test", \sslUpgradeTest());
         addTestCase("SSL upgrade poll output test", \sslUpgradePollOutputTest());
@@ -2289,6 +2291,87 @@ class SocketTest inherits QUnit::Test {
 
         assertEq(0, ready.size());
         assertTrue(elapsed < 1s, "poll_timeout_ms should wake before caller timeout");
+    }
+
+    #! transfers of more chunks than the I/O thread processes in one pass
+    largeStreamSocketTransferTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+        int port = server.getSocketInfo().port;
+        # many times the 64 KiB chunks times the 32 operations of one pass
+        binary payload = get_random_bytes(8 * 1024 * 1024 + 17);
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 30s);
+            client.sendFromInputStream(new BinaryInputStream(payload), payload.size(), 30s);
+            client.sendHTTPChunkedBodyFromInputStream(new BinaryInputStream(payload), 65536, 30s);
+            assertEq("OK", client.recv(2, 30s));
+        }();
+
+        Socket peer = server.accept(30s);
+        BinaryOutputStream os();
+        peer.recvToOutputStream(os, payload.size(), 30s);
+        assertEq(payload, os.getData());
+        BinaryOutputStream chunked_os();
+        peer.readHTTPChunkedBodyToOutputStream(chunked_os, 30s);
+        assertEq(payload, chunked_os.getData());
+        peer.send("OK");
+        c.waitForZero();
+    }
+
+    #! a stream can be used in the calling thread after a transfer with it failed
+    failedStreamSocketTransferTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+        int port = server.getSocketInfo().port;
+        binary payload = get_random_bytes(8 * 1024 * 1024);
+
+        # sending to a peer that closed the connection fails
+        foreach string method in ("sendFromInputStream", "sendHTTPChunkedBodyFromInputStream") {
+            Counter closed(1);
+            background sub () {
+                on_exit closed.dec();
+                Socket peer = server.accept(30s);
+                peer.close();
+            }();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 30s);
+            closed.waitForZero();
+            BinaryInputStream is(payload);
+            try {
+                if (method == "sendFromInputStream") {
+                    client.sendFromInputStream(is, payload.size(), 30s);
+                } else {
+                    client.sendHTTPChunkedBodyFromInputStream(is, 65536, 30s);
+                }
+                assertTrue(False, method + " to a closed peer succeeded");
+            } catch (hash<ExceptionInfo> ex) {
+                assertRegex("^SOCKET-", ex.err, method);
+            }
+            # the stream is usable in this thread
+            assertEq(1, is.read(1).size(), method);
+        }
+
+        # receiving from a peer that closes the connection before sending all of the data fails
+        Counter sent(1);
+        background sub () {
+            on_exit sent.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 30s);
+            client.send(payload.substr(0, 1000));
+            client.close();
+        }();
+        Socket peer = server.accept(30s);
+        BinaryOutputStream os();
+        assertThrows("SOCKET-RECV-ERROR", \peer.recvToOutputStream(), (os, payload.size(), 30s));
+        sent.waitForZero();
+        # the stream is usable in this thread
+        os.write(binary("x"));
+        assertEq(1001, os.getData().size());
     }
 
     streamSocketTransferTest() {

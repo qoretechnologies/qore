@@ -2791,6 +2791,20 @@ int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(Exceptio
 }
 
 QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink) && input_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        input_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        input_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(ExceptionSink* xsink) {
     // Reassign the input stream to the current (worker) thread on first call
     if (need_reassign) {
         need_reassign = false;

@@ -2376,6 +2376,22 @@ public:
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        QoreHashNode* rv = continuePollIntern(xsink);
+        // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+        // released from another thread
+        if ((*xsink || phase == Phase::Error) && input_stream && !need_reassign) {
+            // the error of the operation is reported; an error releasing the stream cannot be handled further
+            ExceptionSink release_xsink;
+            input_stream->unassignThread(&release_xsink);
+            release_xsink.clear();
+            input_stream = nullptr;
+        }
+        return rv;
+    }
+
+private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink) {
         if (need_reassign) {
             need_reassign = false;
             if (input_stream) {
@@ -2500,10 +2516,11 @@ public:
                     qore_socket_private::get(*sock)->do_data_event(
                         QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, **current_chunk);
                     current_chunk = nullptr;
+                    // the next chunk is processed when the operation continues, as the current one is done
+                    phase = Phase::ReadChunk;
                     if (++loop >= max_nonblock_ops && (size < 0 || bytes_sent < size)) {
                         return getPollInfo(xsink, SOCK_POLLOUT);
                     }
-                    phase = Phase::ReadChunk;
                     continue;
                 }
 
@@ -2514,6 +2531,7 @@ public:
         }
     }
 
+public:
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (phase) {
             case Phase::ReadChunk: return "reading-chunk";
@@ -2659,6 +2677,22 @@ public:
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        QoreHashNode* rv = continuePollIntern(xsink);
+        // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+        // released from another thread
+        if ((*xsink || phase == Phase::Error) && output_stream && !need_reassign) {
+            // the error of the operation is reported; an error releasing the stream cannot be handled further
+            ExceptionSink release_xsink;
+            output_stream->unassignThread(&release_xsink);
+            release_xsink.clear();
+            output_stream = nullptr;
+        }
+        return rv;
+    }
+
+private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink) {
         if (need_reassign) {
             need_reassign = false;
             if (output_stream) {
@@ -2774,10 +2808,11 @@ public:
 
                     current_chunk = nullptr;
                     write_offset = 0;
+                    // the next chunk is processed when the operation continues, as the current one is done
+                    phase = Phase::RecvChunk;
                     if (++loop >= max_nonblock_ops && (size < 0 || bytes_received < size)) {
                         return getPollInfo(xsink, SOCK_POLLIN);
                     }
-                    phase = Phase::RecvChunk;
                     continue;
                 }
 
@@ -2788,6 +2823,7 @@ public:
         }
     }
 
+public:
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (phase) {
             case Phase::RecvChunk: return "receiving-chunk";
@@ -14524,6 +14560,20 @@ void SocketSendInputStreamPollOperation::clearTimeout() {
 }
 
 QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink || phase == Phase::Error) && input_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        input_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        input_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketSendInputStreamPollOperation::continuePollIntern(ExceptionSink* xsink) {
     if (need_reassign) {
         need_reassign = false;
         if (input_stream) {
@@ -14653,10 +14703,11 @@ QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xs
                         QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, **current_chunk);
                 }
                 current_chunk = nullptr;
+                // the next chunk is processed when the operation continues, as the current one is done
+                phase = Phase::ReadChunk;
                 if (++loop >= max_nonblock_ops && (size < 0 || bytes_sent < size)) {
                     return getPollInfo(xsink, SOCK_POLLOUT);
                 }
-                phase = Phase::ReadChunk;
                 continue;
             }
 
@@ -14801,6 +14852,20 @@ void SocketSendHttpChunkedInputStreamPollOperation::clearTimeout() {
 }
 
 QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink || phase == Phase::Error) && input_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        input_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        input_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::continuePollIntern(ExceptionSink* xsink) {
     if (need_reassign) {
         need_reassign = false;
         if (input_stream) {
@@ -14942,10 +15007,11 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::continuePoll(Except
                     return nullptr;
                 }
 
+                // the next chunk is processed when the operation continues, as the current one is done
+                phase = Phase::ReadChunk;
                 if (++loop >= max_nonblock_ops) {
                     return getPollInfo(xsink, SOCK_POLLOUT);
                 }
-                phase = Phase::ReadChunk;
                 continue;
             }
 
@@ -15092,6 +15158,20 @@ void SocketRecvOutputStreamPollOperation::clearTimeout() {
 }
 
 QoreHashNode* SocketRecvOutputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink || phase == Phase::Error) && output_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        output_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        output_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketRecvOutputStreamPollOperation::continuePollIntern(ExceptionSink* xsink) {
     if (need_reassign) {
         need_reassign = false;
         if (output_stream) {
@@ -15212,10 +15292,11 @@ QoreHashNode* SocketRecvOutputStreamPollOperation::continuePoll(ExceptionSink* x
 
                 current_chunk = nullptr;
                 write_offset = 0;
+                // the next chunk is processed when the operation continues, as the current one is done
+                phase = Phase::RecvChunk;
                 if (++loop >= max_nonblock_ops && (size < 0 || bytes_received < size)) {
                     return getPollInfo(xsink, SOCK_POLLIN);
                 }
-                phase = Phase::RecvChunk;
                 continue;
             }
 
@@ -15308,6 +15389,20 @@ void SocketWriteOutputStreamPollOperation::clearTimeout() {
 }
 
 QoreHashNode* SocketWriteOutputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink || phase == Phase::Error) && output_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        output_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        output_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketWriteOutputStreamPollOperation::continuePollIntern(ExceptionSink* xsink) {
     if (need_reassign) {
         need_reassign = false;
         if (output_stream) {
@@ -16865,6 +16960,20 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink || phase == Phase::Error) && input_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        input_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        input_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(ExceptionSink* xsink) {
     SafeLocker al(sock->priv->m);
     if (sock->priv->checkOpen(xsink)) {
         phase = Phase::Error;
@@ -17910,6 +18019,20 @@ SocketHttp2SendStreamingResponsePollOperation::~SocketHttp2SendStreamingResponse
 }
 
 QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {
+    QoreHashNode* rv = continuePollIntern(xsink);
+    // a failed operation releases the stream in the thread that holds it, as the stream cannot be
+    // released from another thread
+    if ((*xsink) && input_stream && !need_reassign) {
+        // the error of the operation is reported; an error releasing the stream cannot be handled further
+        ExceptionSink release_xsink;
+        input_stream->unassignThread(&release_xsink);
+        release_xsink.clear();
+        input_stream = nullptr;
+    }
+    return rv;
+}
+
+QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(ExceptionSink* xsink) {
     // Reassign the input stream to the current (worker) thread on first call
     if (need_reassign) {
         need_reassign = false;

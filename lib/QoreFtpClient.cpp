@@ -48,6 +48,8 @@
 #include "qore/intern/qore_socket_private.h"
 
 #include <atomic>
+#include <mutex>
+#include <vector>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -148,6 +150,144 @@ static int qore_ftp_wait_controller_queue(QoreObject* queue_obj, const char* wha
         return -1;
     }
     return qore_ftp_check_controller_result(result->get<const QoreHashNode>(), label, xsink);
+}
+
+//! An output stream written by the async I/O thread that relays the data to the thread waiting for the transfer
+/** This allows a transfer to be received into any output stream, including one that can only be written in the thread
+    that created it, such as an output stream implemented in Qore: the I/O thread writes this stream, which pushes the
+    data onto the completion queue of the transfer, and the waiting thread writes the data to the target stream in
+    qore_ftp_wait_controller_queue_relay().
+
+    The completion queue is created when the transfer is submitted, and data can be received as soon as it is
+    submitted, so data written before the queue is set is kept and pushed onto the queue when it is set; as the
+    completion result of the transfer can then already be in the queue, the waiting thread also writes any data
+    queued after the completion result.
+*/
+class FtpRelayOutputStream : public OutputStream {
+public:
+    DLLLOCAL FtpRelayOutputStream() {
+    }
+
+    DLLLOCAL ~FtpRelayOutputStream() {
+        ExceptionSink xsink;
+        for (BinaryNode* b : pending) {
+            b->deref();
+        }
+        if (queue) {
+            queue->deref(&xsink);
+        }
+    }
+
+    DLLLOCAL const char* getName() override {
+        return "FtpRelayOutputStream";
+    }
+
+    //! Written by the async I/O thread; write() never blocks
+    DLLLOCAL bool isIoThreadSafe() const override {
+        return true;
+    }
+
+    DLLLOCAL bool isClosed() override {
+        return closed;
+    }
+
+    DLLLOCAL void close(ExceptionSink* xsink) override {
+        closed = true;
+    }
+
+    DLLLOCAL void write(const void* ptr, int64 count, ExceptionSink* xsink) override {
+        assert(count >= 0);
+        if (!count) {
+            return;
+        }
+        BinaryNode* b = new BinaryNode;
+        b->append(ptr, count);
+        std::lock_guard<std::mutex> lck(m);
+        if (queue) {
+            queue->pushAndTakeRef(b);
+        } else {
+            pending.push_back(b);
+        }
+    }
+
+    //! Sets the completion queue of the transfer and pushes any data received before
+    /** @param queue_obj the completion queue object of the transfer
+    */
+    DLLLOCAL int setQueue(QoreObject* queue_obj, ExceptionSink* xsink) {
+        Queue* q = static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        std::lock_guard<std::mutex> lck(m);
+        assert(!queue);
+        queue = q;
+        for (BinaryNode* b : pending) {
+            queue->pushAndTakeRef(b);
+        }
+        pending.clear();
+        return 0;
+    }
+
+private:
+    //! protects the members below
+    std::mutex m;
+    //! the completion queue of the transfer
+    Queue* queue = nullptr;
+    //! data received before the queue was set
+    std::vector<BinaryNode*> pending;
+    bool closed = false;
+};
+
+//! Waits for the completion of a transfer that is relayed with FtpRelayOutputStream
+/** Writes the data relayed to the target stream in the calling thread until the completion result of the transfer is
+    received; see FtpRelayOutputStream
+*/
+static int qore_ftp_wait_controller_queue_relay(QoreObject* queue_obj, OutputStream* target, const char* what,
+        ExceptionSink* xsink) {
+    const char* label = what ? what : "async I/O completion";
+    SocketSyncPoll::assertNotOnIoThread("FtpClient", label, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink)), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    // the completion result, once received
+    ReferenceHolder<QoreHashNode> result(xsink);
+    while (true) {
+        // after the completion result, only data relayed before the queue was set can follow it
+        if (result && !queue->size()) {
+            break;
+        }
+        bool timed_out = false;
+        ValueHolder v(queue->shift(xsink, 0, &timed_out), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (timed_out) {
+            xsink->raiseException("SOCKET-TIMEOUT", "%s timed out waiting for async I/O completion", label);
+            return -1;
+        }
+        if (v->getType() == NT_BINARY) {
+            target->writeHelper(v->get<const BinaryNode>(), xsink);
+            if (*xsink) {
+                return -1;
+            }
+            continue;
+        }
+        if (v->getType() != NT_HASH || result) {
+            xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s expected SocketPollResultInfo from async I/O, got '%s'",
+                label, v->getFullTypeName());
+            return -1;
+        }
+        result = v.release().get<QoreHashNode>();
+        // a transfer that failed is not waited for further
+        if (qore_ftp_check_controller_result(*result, label, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 static void qore_ftp_cancel_and_close_controller_socket(QoreSocketObject* sock) {
@@ -1103,12 +1243,16 @@ struct qore_ftp_private {
         @param send_input_stream input stream to send (for STOR), nullptr otherwise
         @param recv_output_stream output stream to receive into, nullptr otherwise
         @param recv_output receives downloaded data (for RETR/LIST), nullptr for send or output stream receive
+        @param restart_offset the restart offset of a RETR transfer
+        @param relay the relay that \a recv_output_stream is, if the data is relayed to \a relay_target
+        @param relay_target the stream written in this thread with the data relayed, if any
         @return 0 on success, -1 on error
     */
     DLLLOCAL int portTransferAsyncBlocking(const char* transfer_cmd, const char* transfer_arg,
             const void* send_data_ptr, size_t send_len, InputStream* send_input_stream,
             OutputStream* recv_output_stream,
-            BinaryNode** recv_output, ExceptionSink* xsink, int64 restart_offset = 0) {
+            BinaryNode** recv_output, ExceptionSink* xsink, int64 restart_offset = 0,
+            FtpRelayOutputStream* relay = nullptr, OutputStream* relay_target = nullptr) {
         // 1. Get local interface address from the async control socket
         ReferenceHolder<QoreHashNode> ctrl_info(getControlSocketInfoUnlocked(xsink, false), xsink);
         if (*xsink) {
@@ -1309,8 +1453,17 @@ struct qore_ftp_private {
             }
             return -1;
         }
-        if (qore_ftp_wait_controller_queue(*data_queue, "FTP PORT data transfer", xsink)) {
+        if (relay && relay->setQueue(*data_queue, xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            return -1;
+        }
+        if (relay
+            ? qore_ftp_wait_controller_queue_relay(*data_queue, relay_target, "FTP PORT data transfer", xsink)
+            : qore_ftp_wait_controller_queue(*data_queue, "FTP PORT data transfer", xsink)) {
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return -1;
         }
 
@@ -1390,6 +1543,9 @@ struct qore_ftp_private {
         // 5. Wait for data transfer to complete
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return nullptr;
         }
 
@@ -1470,9 +1626,13 @@ struct qore_ftp_private {
 
     DLLLOCAL int getAsyncBlocking(const char* remotepath, OutputStream* output_stream, ExceptionSink* xsink,
             int64 offset = 0) {
+        // a stream that can only be written in this thread receives the data through a relay
+        ReferenceHolder<FtpRelayOutputStream> relay(xsink);
+        OutputStream* relay_target = nullptr;
         if (!output_stream->isIoThreadSafe()) {
-            xsink->raiseException("FTP-GET-ERROR", "OutputStream is not I/O thread safe");
-            return -1;
+            relay = new FtpRelayOutputStream;
+            relay_target = output_stream;
+            output_stream = *relay;
         }
 
         // 1. TYPE I (binary mode)
@@ -1493,7 +1653,7 @@ struct qore_ftp_private {
                 return -1;
             }
             int rc = portTransferAsyncBlocking("RETR", remotepath, nullptr, 0, nullptr, output_stream, nullptr,
-                xsink, offset);
+                xsink, offset, *relay, relay_target);
             return !rc && !*xsink ? stream_guard.reassign() : -1;
         }
 
@@ -1524,6 +1684,10 @@ struct qore_ftp_private {
         }
         ReferenceHolder<QoreObject> data_op_holder(data_op_obj, xsink);
         ReferenceHolder<QoreObject> data_queue_holder(data_queue_obj, xsink);
+        if (relay && relay->setQueue(data_queue_obj, xsink)) {
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            return -1;
+        }
 
         // 4. RETR command on control channel
         resp = sendMsgAsyncBlocking(code, "RETR", remotepath, xsink);
@@ -1537,8 +1701,13 @@ struct qore_ftp_private {
         }
 
         // 5. Wait for data transfer to complete
-        if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
+        if (relay
+            ? qore_ftp_wait_controller_queue_relay(*data_queue_holder, relay_target, "FTP data transfer", xsink)
+            : qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return -1;
         }
 
@@ -1614,6 +1783,9 @@ struct qore_ftp_private {
         // 6. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return -1;
         }
 
@@ -1695,6 +1867,9 @@ struct qore_ftp_private {
         // 5. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return -1;
         }
 
@@ -1781,6 +1956,9 @@ struct qore_ftp_private {
         // 5. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
             qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
+            // the reply to the transfer command is still pending, so the control connection cannot be used
+            // further; the next operation makes a new connection
+            disconnectIntern();
             return nullptr;
         }
 

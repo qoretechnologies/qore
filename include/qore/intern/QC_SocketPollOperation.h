@@ -849,6 +849,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum StreamingState { SS_SUBMIT_HEADERS, SS_READ_CHUNK, SS_SEND_CHUNK, SS_FLUSH, SS_RECV_WINDOW, SS_DONE };
     Http2SessionPtr h2_session;
     StreamingState ss_state = SS_SUBMIT_HEADERS;
@@ -1055,6 +1057,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum class Phase { ReadChunk, SendChunk, Done, Error };
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
@@ -1149,6 +1153,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum class Phase { ReadChunk, SendChunk, Done, Error };
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
@@ -1245,6 +1251,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum class Phase { RecvChunk, WriteChunk, Done, Error };
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
@@ -1330,6 +1338,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum class Phase { Write, Done, Error };
 
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink);
@@ -1409,6 +1419,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::SendHeaders;
 
@@ -2338,6 +2350,8 @@ public:
     }
 
 private:
+    //! Continues the operation; see continuePoll()
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     std::shared_ptr<QuicSession> quic_session;
     int64_t session_id = -1;
     int64_t stream_id = -1;

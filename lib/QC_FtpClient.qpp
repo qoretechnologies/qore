@@ -438,6 +438,9 @@ ftp.get("file.txt", new FileOutputStream("/tmp/file-1.txt"));
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
     @throw FTP-GET-ERROR There was an error retrieving the file
 
+    @note the output stream can be of any class, including a class implemented in %Qore that inherits
+    @ref Qore::OutputStream "OutputStream"; a stream that is not I/O-thread safe is written in the calling thread
+
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
     @see FtpClient::getAsString(), FtpClient::getAsData()
@@ -468,6 +471,9 @@ ftp.get("file.iso", new FileOutputStream(local_path, True), offset);
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-RESTART-ERROR The server does not support restarting the transfer at the given offset
     @throw FTP-GET-ERROR There was an error retrieving the file, or \a offset is negative
+
+    @note the output stream can be of any class, including a class implemented in %Qore that inherits
+    @ref Qore::OutputStream "OutputStream"; a stream that is not I/O-thread safe is written in the calling thread
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 

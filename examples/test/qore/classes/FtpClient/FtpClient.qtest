@@ -12,6 +12,30 @@
 
 %exec-class FtpTest
 
+#! an output stream implemented in Qore, which can only be written in the thread that created it
+class TestFtpOutputStream inherits OutputStream {
+    public {
+        binary data = binary();
+        #! the threads that wrote the stream
+        hash<string, bool> tids = {};
+        #! the number of writes after which writes fail, if any
+        *int fail_after;
+        int writes = 0;
+    }
+
+    write(binary d) {
+        if (exists fail_after && writes >= fail_after) {
+            throw "TEST-STREAM-ERROR", "the stream failed";
+        }
+        data += d;
+        ++writes;
+        tids{gettid()} = True;
+    }
+
+    close() {
+    }
+}
+
 class FtpTest inherits QUnit::Test {
     private {
         # file on some public ftp
@@ -50,6 +74,7 @@ class FtpTest inherits QUnit::Test {
         addTestCase("FtpClient class test case", \testFtpClient());
         addTestCase("FtpClient simulated server", \testFtpClientSim());
         addTestCase("FtpClient size and restarted transfers", \testSizeAndRestart());
+        addTestCase("FtpClient large transfers and output streams", \testLargeTransfersAndStreams());
 
         local_path = createLocalFile();
         on_exit unlink(local_path);
@@ -363,6 +388,54 @@ class FtpTest inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    #! transfers of many more chunks than are processed in one pass of the I/O thread, and output streams of any
+    #! class
+    testLargeTransfersAndStreams() {
+        TmpFile tmp_file("ftp-large-");
+        binary file_data = get_random_bytes(3 * 1024 * 1024 + 7);
+        tmp_file.file.write(file_data);
+        string name = basename(tmp_file.path);
+
+        FtpServer serv(0, m_options.verbose, "127.0.0.1");
+        on_exit serv.shutdown();
+        serv.setFs();
+        FtpClient fc(url: "ftp://user:pass@127.0.0.1:" + serv.getPort());
+        fc.connect();
+        on_exit fc.disconnect();
+
+        foreach string mode in ("pasv", "port") {
+            if (mode == "port") {
+                fc.setModePORT();
+            } else {
+                fc.setModePASV();
+            }
+            # a large file is uploaded from a file and downloaded to a file
+            fc.put(tmp_file.path, name);
+            TmpFile out_file("ftp-large-out-");
+            fc.get(name, out_file.path);
+            assertEq(file_data, ReadOnlyFile::readBinaryFile(out_file.path), mode + " file");
+
+            # a stream implemented in Qore is written in the calling thread
+            TestFtpOutputStream os();
+            fc.get(name, os);
+            assertEq(file_data, os.data, mode + " stream");
+            assertEq({gettid(): True}, os.tids, mode + " stream thread");
+            os = new TestFtpOutputStream();
+            fc.get(name, os, 1000);
+            assertEq(file_data.substr(1000), os.data, mode + " stream with offset");
+
+            # an error writing the stream fails the transfer, and the client makes a new connection for the next
+            # operation, as the reply to the aborted transfer is still pending
+            os = new TestFtpOutputStream();
+            os.fail_after = 2;
+            assertThrows("TEST-STREAM-ERROR", \fc.get(), (name, os));
+            os = new TestFtpOutputStream();
+            fc.get(name, os);
+            assertEq(file_data, os.data, mode + " after a failed transfer");
+        }
+        fc.setModeAuto();
     }
 
     testSizeAndRestart() {
