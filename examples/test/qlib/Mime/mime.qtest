@@ -67,6 +67,9 @@ aωb\r
 
     constructor() : Test("MimeTest", "1.0") {
         addTestCase("text tests", \textTests());
+        addTestCase("header values with parameters", \headerValueTest());
+        addTestCase("RFC 8187 extended parameter values", \extValueTest());
+        addTestCase("Content-Disposition file names", \contentDispositionFilenameTest());
         addTestCase("json tests", \jsonTests());
         addTestCase("issue 2936", \issue2936());
         addTestCase("mime type from ext", \mimeTypeTest());
@@ -967,5 +970,78 @@ aωb\r
         # .yaml and .yml extensions must map to the official type
         assertEq("application/yaml", get_mime_type_from_ext("config.yaml"));
         assertEq("application/yaml", get_mime_type_from_ext("config.yml"));
+    }
+
+    headerValueTest() {
+        # no parameters
+        assertEq(<MimeHeaderValueInfo>{"value": "inline", "params": {}}, mime_parse_header_value(" inline "));
+        assertEq(<MimeHeaderValueInfo>{"value": "", "params": {}}, mime_parse_header_value(""));
+
+        # tokens and quoted strings; names are case-insensitive; case of the value is preserved
+        hash<MimeHeaderValueInfo> h = mime_parse_header_value("Attachment; FileName=\"a b;c.txt\"; size=42");
+        assertEq("Attachment", h.value);
+        assertEq({"filename": "a b;c.txt", "size": "42"}, h.params);
+
+        # a backslash quotes the next character in a quoted string
+        h = mime_parse_header_value("attachment; filename=\"q\\\"uo\\\\te.txt\"");
+        assertEq("q\"uo\\te.txt", h.params.filename);
+
+        # whitespace around "=" and empty parameters are accepted
+        h = mime_parse_header_value("text/plain ;; charset = utf-8 ;");
+        assertEq("text/plain", h.value);
+        assertEq({"charset": "utf-8"}, h.params);
+
+        # the first occurrence of a parameter wins
+        h = mime_parse_header_value("attachment; filename=a.txt; filename=b.txt");
+        assertEq("a.txt", h.params.filename);
+
+        # malformed parameters are ignored
+        h = mime_parse_header_value("attachment; novalue; =x; \"q\"=y; filename=\"unterminated");
+        assertEq({"filename": "unterminated"}, h.params);
+
+        # an extended parameter is decoded and kept apart from the plain parameter
+        h = mime_parse_header_value("attachment; filename=\"EURO rates\"; filename*=utf-8''%e2%82%ac%20rates");
+        assertEq({"filename": "EURO rates", "filename*": "€ rates"}, h.params);
+
+        # an extended parameter that cannot be decoded is ignored
+        h = mime_parse_header_value("attachment; filename=fallback.txt; filename*=utf-8''%ff%fe");
+        assertEq({"filename": "fallback.txt"}, h.params);
+    }
+
+    extValueTest() {
+        assertEq("€ rates", mime_decode_ext_value("UTF-8'en'%E2%82%AC%20rates"));
+        assertEq("€ rates", mime_decode_ext_value("utf-8''%e2%82%ac%20rates"));
+        # ISO-8859-1 is converted to UTF-8
+        string str = mime_decode_ext_value("iso-8859-1''%A3%20rates");
+        assertEq("£ rates", str);
+        assertEq("UTF-8", str.encoding());
+        assertEq("", mime_decode_ext_value("UTF-8''"));
+        # characters that do not need encoding are taken as they are
+        assertEq("a.b-c", mime_decode_ext_value("UTF-8''a.b-c"));
+
+        # not an extended value
+        assertEq(NOTHING, mime_decode_ext_value("plain"));
+        assertEq(NOTHING, mime_decode_ext_value("''%41"));
+        # invalid percent encodings
+        assertEq(NOTHING, mime_decode_ext_value("UTF-8''%4"));
+        assertEq(NOTHING, mime_decode_ext_value("UTF-8''%zz"));
+        # octets that are not valid UTF-8
+        assertEq(NOTHING, mime_decode_ext_value("UTF-8''%C3"));
+        # an unknown character set
+        assertEq(NOTHING, mime_decode_ext_value("x-no-such-charset''%41"));
+    }
+
+    contentDispositionFilenameTest() {
+        # the extended parameter is preferred, in whichever order the parameters are given
+        assertEq("€.txt", mime_get_content_disposition_filename(
+            "attachment; filename*=UTF-8''%E2%82%AC.txt; filename=\"e.txt\""));
+        assertEq("€.txt", mime_get_content_disposition_filename(
+            "attachment; filename=\"e.txt\"; filename*=UTF-8''%E2%82%AC.txt"));
+        assertEq("e.txt", mime_get_content_disposition_filename("attachment; filename=e.txt"));
+        # the name is returned as given, including any path, which the caller must sanitize
+        assertEq("../../etc/passwd", mime_get_content_disposition_filename("attachment; filename=\"../../etc/passwd\""));
+        # no file name
+        assertEq(NOTHING, mime_get_content_disposition_filename("inline"));
+        assertEq(NOTHING, mime_get_content_disposition_filename("attachment; filename*=UTF-8''%ZZ"));
     }
 }

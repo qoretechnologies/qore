@@ -107,6 +107,13 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     @section mimereleasenotes Release Notes
 
     @subsection mime_1_9 v1.9
+    - added @ref Mime::mime_parse_header_value() "mime_parse_header_value()" for parsing header values with
+      parameters, such as \c Content-Type and \c Content-Disposition values, including extended parameters
+    - added @ref Mime::mime_decode_ext_value() "mime_decode_ext_value()" for decoding
+      <a href="https://www.rfc-editor.org/rfc/rfc8187.html">RFC 8187</a> extended parameter values
+    - added @ref Mime::mime_get_content_disposition_filename() "mime_get_content_disposition_filename()" for
+      getting the file name from a \c Content-Disposition value as specified in
+      <a href="https://www.rfc-editor.org/rfc/rfc6266.html">RFC 6266</a>
     - mime_get_form_urlencoded_string() returns an empty string for an empty hash
     - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" now recognizes delimiter lines as
       complete lines as required by
@@ -316,6 +323,20 @@ public namespace Mime {
         hash<auto> hdr;
         #! the data for the message or part
         data body;
+    }
+
+    #! a MIME header value with its parameters, as returned by mime_parse_header_value()
+    /** @since %Mime 1.9
+    */
+    public hashdecl MimeHeaderValueInfo {
+        #! the value without parameters, such as the media type or the disposition type; case is preserved
+        string value;
+        #! the parameters, keyed by lower-case name
+        /** the value of an extended parameter (a parameter name ending in \c "*", such as \c "filename*") is the
+            decoded value, and the parameter is kept under its own name, separately from any parameter with the same
+            name without the \c "*"
+        */
+        hash<string, string> params = {};
     }
 
     /** @defgroup MimeTypeDefinitions MIME Type Definitions
@@ -1384,6 +1405,184 @@ string ct = sprintf("multipart/related; start=%s", mime_quote_parameter_value("<
             return value;
         }
         return sprintf("\"%s\"", replace(replace(value, "\\", "\\\\"), "\"", "\\\""));
+    }
+
+    #! Parses a MIME header value with parameters, such as a \c Content-Type or \c Content-Disposition value
+    /** Parses a value of the form <tt>value *( ";" name "=" ( token / quoted-string ) )</tt> as described in
+        <a href="https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.6">RFC 9110 section 5.6.6</a>; the value
+        of an extended parameter (a parameter name ending in \c "*", such as \c "filename*") is decoded according to
+        <a href="https://www.rfc-editor.org/rfc/rfc8187.html">RFC 8187</a> with mime_decode_ext_value(); parameter
+        continuations as defined in <a href="https://www.rfc-editor.org/rfc/rfc2231.html">RFC 2231</a> (such as
+        \c "name*0" and \c "name*1"), which are not used in HTTP, are returned as separate parameters and are not
+        joined
+
+        @param hdr the header value to parse
+
+        @return the parsed value; parameter names are converted to lower case; the value of a parameter that is given
+        more than once is the value of its first occurrence; malformed parameters, parameters without a value, and
+        extended parameters that cannot be decoded are ignored, so that a value received from a remote peer can
+        always be parsed
+
+        @par Example:
+        @code{.py}
+hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a b.txt\"; filename*=UTF-8''%C3%A4.txt");
+# h.value = "attachment", h.params = {"filename": "a b.txt", "filename*": "ä.txt"}
+        @endcode
+
+        @see
+        - mime_get_content_disposition_filename()
+        - mime_quote_parameter_value()
+
+        @since %Mime 1.9
+    */
+    public hash<MimeHeaderValueInfo> sub mime_parse_header_value(string hdr) {
+        hash<MimeHeaderValueInfo> rv();
+        int len = hdr.length();
+        int i = hdr.find(";");
+        if (i < 0) {
+            rv.value = trim(hdr);
+            return rv;
+        }
+        rv.value = trim(hdr.substr(0, i));
+        ++i;
+        while (i < len) {
+            # skip whitespace and empty parameters
+            while (i < len && (hdr[i] == " " || hdr[i] == "\t" || hdr[i] == ";")) {
+                ++i;
+            }
+            if (i == len) {
+                break;
+            }
+            # the parameter name
+            int start = i;
+            while (i < len && hdr[i] != "=" && hdr[i] != ";") {
+                ++i;
+            }
+            string name = trim(hdr.substr(start, i - start)).lwr();
+            if (i == len || hdr[i] == ";") {
+                # a parameter without a value is ignored
+                continue;
+            }
+            # skip the "=" and any whitespace
+            ++i;
+            while (i < len && (hdr[i] == " " || hdr[i] == "\t")) {
+                ++i;
+            }
+            string val;
+            if (i < len && hdr[i] == "\"") {
+                # a quoted-string; a backslash quotes the next character
+                ++i;
+                while (i < len && hdr[i] != "\"") {
+                    if (hdr[i] == "\\" && (i + 1) < len) {
+                        ++i;
+                    }
+                    val += hdr[i];
+                    ++i;
+                }
+                # skip the closing quote and anything else up to the next parameter
+                while (i < len && hdr[i] != ";") {
+                    ++i;
+                }
+            } else {
+                start = i;
+                while (i < len && hdr[i] != ";") {
+                    ++i;
+                }
+                val = trim(hdr.substr(start, i - start));
+            }
+            if (!name.val() || name =~ /[\s"]/ || exists rv.params{name}) {
+                continue;
+            }
+            if (name =~ /\*$/) {
+                *string decoded = mime_decode_ext_value(val);
+                if (!exists decoded) {
+                    continue;
+                }
+                val = decoded;
+            }
+            rv.params{name} = val;
+        }
+        return rv;
+    }
+
+    #! Decodes an extended parameter value according to RFC 8187
+    /** An extended parameter value has the form <tt>charset "'" [ language ] "'" value-chars</tt>, where the value
+        characters are percent-encoded octets in the given character set, for example \c "UTF-8''%E2%82%AC%20rates"
+
+        @param val the extended parameter value to decode
+
+        @return the decoded value in UTF-8 encoding, or @ref NOTHING if the value is not a valid extended parameter
+        value: if it is not in the form given above, if a percent-encoding is invalid, or if the octets are not
+        valid in the given character set, which must be known to %Qore
+
+        @par Example:
+        @code{.py}
+*string str = mime_decode_ext_value("UTF-8'en'%E2%82%AC%20rates");
+# str = "€ rates"
+        @endcode
+
+        @see <a href="https://www.rfc-editor.org/rfc/rfc8187.html">RFC 8187</a>
+
+        @since %Mime 1.9
+    */
+    public *string sub mime_decode_ext_value(string val) {
+        *list<*string> parts = (val =~ x/^([^']+)'([^']*)'(.*)$/);
+        if (!parts) {
+            return;
+        }
+        string charset = trim(parts[0]);
+        string encoded = parts[2] ?? "";
+        binary octets = binary();
+        int len = encoded.length();
+        for (int i = 0; i < len; ++i) {
+            if (encoded[i] != "%") {
+                octets += binary(string(encoded[i]));
+                continue;
+            }
+            string hex = encoded.substr(i + 1, 2);
+            if (hex !~ /^[0-9A-Fa-f]{2}$/) {
+                return;
+            }
+            octets += parse_hex_string(hex);
+            i += 2;
+        }
+        try {
+            string str = binary_to_string(octets, charset);
+            if (str.encoding() == "UTF-8") {
+                # the octets are validated by the conversion
+                return convert_encoding(convert_encoding(str, "UTF-16"), "UTF-8");
+            }
+            return convert_encoding(str, "UTF-8");
+        } catch (hash<ExceptionInfo> ex) {
+            # the octets are not valid in the character set, or the character set is not known
+            return;
+        }
+    }
+
+    #! Returns the file name given in a \c Content-Disposition header value, if any
+    /** The file name in an extended \c "filename*" parameter is preferred to the file name in a \c "filename"
+        parameter, as required by
+        <a href="https://www.rfc-editor.org/rfc/rfc6266.html#section-4.3">RFC 6266 section 4.3</a>
+
+        @param hdr the \c Content-Disposition header value
+
+        @return the file name as given by the sender, or @ref NOTHING if the value gives no file name; the name
+        can contain path separators and other characters that are not valid in a local file name; it must not be used
+        to name a local file without sanitizing it
+
+        @par Example:
+        @code{.py}
+*string fn = mime_get_content_disposition_filename("attachment; filename=\"EURO rates\"; filename*=utf-8''%e2%82%ac%20rates");
+# fn = "€ rates"
+        @endcode
+
+        @see mime_parse_header_value()
+
+        @since %Mime 1.9
+    */
+    public *string sub mime_get_content_disposition_filename(string hdr) {
+        hash<MimeHeaderValueInfo> h = mime_parse_header_value(hdr);
+        return h.params."filename*" ?? h.params.filename;
     }
 
     #! Returns @ref True if the given MIME type is known to provide text content, @ref False if not
