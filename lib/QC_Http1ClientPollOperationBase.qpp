@@ -327,8 +327,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
 void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
     // Build CONNECT request: "CONNECT host:port HTTP/1.1\r\nHost: host:port\r\n\r\n"
     QoreStringNode* connect_req = new QoreStringNode();
-    connect_req->sprintf("CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n\r\n",
+    connect_req->sprintf("CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n",
         target_host.c_str(), target_port, target_host.c_str(), target_port);
+    // the credentials for the proxy are sent to the proxy only
+    if (!proxy_authorization.empty()) {
+        connect_req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
+    }
+    connect_req->concat("\r\n");
 
     releaseCurrentOp(xsink);
     sock_obj->ref();
@@ -2625,6 +2630,22 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     if (!has_host_header) {
         req->sprintf("Host: %s\r\n", host_str.c_str());
     }
+    // a request sent to the proxy itself carries the credentials for the proxy, unless given by the caller
+    if (is_proxy_plain && !proxy_authorization.empty()) {
+        bool has_proxy_auth = false;
+        if (user_headers) {
+            ConstHashIterator hi(user_headers);
+            while (hi.next()) {
+                if (!strcasecmp(hi.getKey(), "proxy-authorization")) {
+                    has_proxy_auth = true;
+                    break;
+                }
+            }
+        }
+        if (!has_proxy_auth) {
+            req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
+        }
+    }
 
     // Add request headers (skip HTTP/2 pseudo-headers)
     bool has_content_length = false;
@@ -2640,6 +2661,10 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             // sees it twice ("chunked, chunked"), which folds to a list and
             // causes the request body not to be read as chunked.
             if (streaming_send_flag && !strcasecmp(key, "transfer-encoding")) {
+                continue;
+            }
+            // credentials for a proxy are never sent through a tunnel to the target server
+            if (proxy_tunnel && !strcasecmp(key, "proxy-authorization")) {
                 continue;
             }
             QoreValue v = hi.get();
@@ -2969,6 +2994,25 @@ bool Http1ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
 */
 nothing Http1ClientPollOperationBase::abort() {
     priv->abort(xsink);
+}
+
+//! Sets the value of the Proxy-Authorization header sent to the HTTP proxy
+/** The header is sent with the CONNECT request of a tunnel through the proxy, and with each request of a plain HTTP
+    connection through the proxy; it is never sent through a tunnel
+    to the target server.  Must be called before the operation is submitted.
+
+    @param value the header value, for example \c "Basic dXNlcjpwYXNz"
+
+    @throw HTTP-HEADER-ERROR the value contains a CR or LF character
+
+    @since %Qore 3.0
+*/
+nothing Http1ClientPollOperationBase::setProxyAuthorization(string value) [flags=NAMED_ARGS] {
+    if (strpbrk(value->c_str(), "\r\n")) {
+        xsink->raiseException("HTTP-HEADER-ERROR", "the Proxy-Authorization value must not contain CR or LF");
+        return QoreValue();
+    }
+    priv->setProxyAuthorization(value->c_str());
 }
 
 //! Sets the proactive idle timeout for this connection.

@@ -412,6 +412,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 "protocol": purl.protocol ?? "http",
                 "ssl": proxy_ssl,
             };
+            # credentials in the proxy URL are sent to the proxy with Basic authentication (RFC 7617); a user
+            # name and password in a URL are percent-encoded
+            if (purl.username.val()) {
+                proxy_info.authorization = "Basic " + make_base64_string(sprintf("%s:%s",
+                    decode_url(purl.username), decode_url(purl.password ?? "")));
+            }
         }
 
         # Use the process-wide global controller by default; all managers share
@@ -1810,6 +1816,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             return "h1";
         }
         if (opts.protocol == "h2") {
+            # an HTTP proxy forwards plaintext requests as HTTP/1.1 requests with absolute URLs; cleartext HTTP/2
+            # (h2c) cannot be sent through it
+            if (proxy_info && url_info.protocol != "https") {
+                return "h1";
+            }
             return "h2";
         }
         if (opts.protocol == "h3") {

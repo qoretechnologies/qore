@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientStaleConnectionTest
+
+#! A server that closes the connection after each response without announcing it with "Connection: close"
+class ClosingServer {
+    private {
+        Socket listener();
+        int port;
+        bool quit;
+        Counter running(1);
+        #! the number of requests received
+        int requests = 0;
+        Mutex m();
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    int getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    shutdown() {
+        quit = True;
+        # wakes the listener up
+        try {
+            Socket s();
+            s.connectINET("127.0.0.1", port, 1s);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket s = listener.accept();
+            if (quit) {
+                break;
+            }
+            try {
+                string head;
+                while (head !~ /\r\n\r\n/) {
+                    head += s.recv(-1, 5s);
+                }
+                {
+                    AutoLock al(m);
+                    ++requests;
+                }
+                s.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok");
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection
+            }
+            s.close();
+        }
+    }
+}
+
+#! A connection that the peer closes while it waits in the pool is replaced for an idempotent request
+public class HttpClientStaleConnectionTest inherits QUnit::Test {
+    public {
+        const Requests = 20;
+    }
+
+    constructor() : Test("HttpClientStaleConnectionTest", "1.0") {
+        addTestCase("buffered requests", \bufferedTest());
+        addTestCase("streamed responses", \streamedTest());
+        set_return_value(main());
+    }
+
+    bufferedTest() {
+        ClosingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", server.getPort()), "timeout": 10s});
+        for (int i = 0; i < Requests; ++i) {
+            assertEq("ok", hc.get("/"), sprintf("request %d", i));
+            assertEq(200, hc.send(NOTHING, "HEAD", "/").status_code, sprintf("HEAD request %d", i));
+        }
+        # a request is repeated only when the server closed the connection before reading it
+        assertEq(Requests * 2, server.getRequests());
+    }
+
+    streamedTest() {
+        ClosingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", server.getPort()), "timeout": 10s});
+        for (int i = 0; i < Requests; ++i) {
+            BinaryOutputStream os();
+            hc.send(os, NOTHING, "GET", "/");
+            assertEq(binary("ok"), os.getData(), sprintf("request %d", i));
+        }
+        assertEq(Requests, server.getRequests());
+    }
+}

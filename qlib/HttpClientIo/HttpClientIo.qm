@@ -590,9 +590,18 @@ public namespace HttpClientIo {
             For HTTPS targets, the proxy tunnel is established via HTTP CONNECT.
             For plain HTTP targets, requests use absolute URLs through the proxy.
 
+            Plaintext (\c http) requests are forwarded by the proxy as HTTP/1.1 requests, also when the \c protocol
+            option is \c "h2", as cleartext HTTP/2 cannot be sent through an HTTP proxy.
+
+            A user name and password in the URL (e.g., "http://user:pass@proxy:8080") are sent to the proxy with
+            Basic authentication in the \c Proxy-Authorization header of CONNECT requests and of plain HTTP requests
+            through the proxy; they are never sent through a tunnel to the target server.
+
             @note HTTP/3 (QUIC) cannot tunnel through HTTP proxies — when a proxy is
             configured, HTTP/3 is automatically downgraded to HTTP/2 in auto mode,
             or an error is thrown if HTTP/3 is explicitly forced.
+
+            @see get_proxy_url_from_environment()
         */
         *string proxy_url;
 
@@ -717,6 +726,79 @@ string target = encode_http_request_target("/files/my report.txt?q=a|b");
         }
         return rv;
     }
+
+    #! Returns the HTTP proxy URL to use for the given URL from the environment, if any
+    /** The proxy is determined as by \c curl and most other HTTP clients:
+        - for an \c http URL: \c http_proxy (the upper-case \c HTTP_PROXY is not used, as it can be set from a
+          request header in CGI environments)
+        - for an \c https URL: \c https_proxy or \c HTTPS_PROXY
+        - otherwise, and if the variables above are not set: \c all_proxy or \c ALL_PROXY
+
+        No proxy is used for a host matched by \c no_proxy or \c NO_PROXY, a comma-separated list of host names,
+        domain names (matching the domain and any host in it, with or without a leading \c "."), and IP addresses;
+        any port given with an entry is ignored, and \c "*" matches all hosts.
+
+        @param url the URL to retrieve
+
+        @return the proxy URL, or @ref NOTHING if no proxy is to be used; a proxy given without a scheme is returned
+        with \c "http://"
+
+        @par Example:
+        @code{.py}
+HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+    "proxy_url": get_proxy_url_from_environment(url),
+});
+        @endcode
+    */
+    public *string sub get_proxy_url_from_environment(string url) {
+        hash<UrlInfo> info = parse_url(url);
+        string scheme = (info.protocol ?? "http").lwr();
+        *string proxy;
+        if (scheme == "http") {
+            proxy = getenv("http_proxy");
+        } else if (scheme == "https") {
+            proxy = getenv("https_proxy") ?? getenv("HTTPS_PROXY");
+        }
+        proxy = proxy.val() ? proxy : (getenv("all_proxy") ?? getenv("ALL_PROXY"));
+        if (!proxy.val()) {
+            return;
+        }
+        *string no_proxy = getenv("no_proxy") ?? getenv("NO_PROXY");
+        if (no_proxy.val() && info.host && http_proxy_matches_no_proxy(info.host, no_proxy)) {
+            return;
+        }
+        return proxy =~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// ? proxy : "http://" + proxy;
+    }
+
+    #! Returns True if the host is matched by the given no_proxy value (see get_proxy_url_from_environment())
+    bool sub http_proxy_matches_no_proxy(string host, string no_proxy) {
+        host = host.lwr();
+        # an IPv6 address in a URL is enclosed in brackets
+        host =~ s/^\[(.*)\]$/$1/;
+        foreach string entry in (no_proxy.split(",")) {
+            entry = trim(entry).lwr();
+            if (entry == "*") {
+                return True;
+            }
+            # a bracketed IPv6 address, possibly with a port
+            if (entry =~ /^\[/) {
+                entry = (entry =~ x/^\[([^\]]*)\]/)[0] ?? "";
+            } else if (entry =~ /^[^:]*:[0-9]+$/) {
+                # host:port; the port is ignored
+                entry =~ s/:[0-9]+$//;
+            }
+            entry =~ s/^\.//;
+            if (!entry.val()) {
+                continue;
+            }
+            # the host itself, or a host in the domain
+            if (host == entry || (host.size() > entry.size() && host.substr(-(entry.size() + 1)) == "." + entry)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
 
     #! Returns True if the given octet is a hexadecimal digit
     bool sub is_hex_digit(int c) {

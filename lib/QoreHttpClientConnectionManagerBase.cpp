@@ -501,6 +501,25 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 // createConnection (H1 only in P3)
 // ============================================================
 
+bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
+    for (const char* m : {"GET", "HEAD", "PUT", "DELETE", "OPTIONS", "TRACE"}) {
+        if (!strcasecmp(method, m)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
+    QoreValue err = xsink.getExceptionErr();
+    if (err.getType() != NT_STRING) {
+        return false;
+    }
+    const char* e = err.get<const QoreStringNode>()->c_str();
+    return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
+        || !strcmp(e, "SOCKET-CLOSED");
+}
+
 //! Returns the TLS configuration for a new connection from the manager's options
 static Http1SslConfig get_ssl_config(const HttpClientConnectionManagerBase::Options& opts) {
     Http1SslConfig ssl_cfg;
@@ -561,6 +580,20 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 }
                 // an opportunistic HTTP/3 upgrade applies to the origin that advertised it, not to a plaintext one
                 protocol = HttpClientProtocol::H1;
+                break;
+            case HttpClientProtocol::H2:
+                // an HTTP proxy forwards plaintext requests as HTTP/1.1 requests with absolute URLs; cleartext
+                // HTTP/2 cannot be sent through it, and a connection made directly to the target would bypass the
+                // proxy
+                if (proxy_info_) {
+                    if (opts_.protocol_required) {
+                        xsink->raiseException("HTTPCLIENT-PROXY-ERROR", "HTTP/2 was required for this client, but "
+                            "the request target 'http://%s:%d' is not a TLS target, and cleartext HTTP/2 cannot be "
+                            "sent through an HTTP proxy", host, port);
+                        return nullptr;
+                    }
+                    protocol = HttpClientProtocol::H1;
+                }
                 break;
             default:
                 break;
@@ -1209,9 +1242,34 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         return nullptr;
     }
 
+    // RFC 9110 section 9.2.2: an idempotent request can be repeated automatically when the connection fails
+    // before a response is received; a connection that has served a request can be closed by the peer while it
+    // waits in the pool, which is only detected when the next request is sent, so such a request is repeated
+    // once on a new connection
+    bool can_retry = isIdempotentMethod(method);
+    for (int attempt = 0; ; ++attempt) {
+        bool retry = false;
+        QoreHashNode* rv = requestOnce(method, scheme, host, port, path, headers, body, body_len, timeout_ms,
+            xsink, event_sink, can_retry && !attempt ? &retry : nullptr);
+        if (!retry) {
+            return rv;
+        }
+        assert(!rv);
+        xsink->clear();
+    }
+}
+
+QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;
+    }
+    // a request on a connection that has not served one fails for a reason of its own and is not repeated
+    if (retry && !conn->hasServedRequest()) {
+        retry = nullptr;
     }
     // Hold a strong ref for the duration of request().  The pool holds its
     // own ref; the I/O thread may fire onConnectionClosed → deref at any
@@ -1236,6 +1294,10 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
+            // a reused connection closed by the peer while it waited in the pool
+            if (retry) {
+                *retry = true;
+            }
         }
         return nullptr;
     }
@@ -1271,8 +1333,16 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         // pending and before the connection reference goes out of scope.
         abandonRequest(conn, stream_id);
         result.discard(xsink);
+        // a reused connection that was closed by the peer is not used again, and the request is repeated
+        if (retry && isConnectionClosedError(*xsink)) {
+            ExceptionSink evict_xsink;
+            closeAndEvict(conn, &evict_xsink);
+            evict_xsink.clear();
+            *retry = true;
+        }
         return nullptr;
     }
+    conn->setServedRequest();
 
     // A completed request needed no cleanup: the PromiseAction cleared the
     // active stream count inside the poll op when it ran on the I/O thread,
@@ -1330,18 +1400,24 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
-        HttpClientEventSink* event_sink) {
+        HttpClientEventSink* event_sink, bool* reused) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
     }
 
+    if (reused) {
+        *reused = conn->hasServedRequest();
+    }
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
         body, body_len, channel_out, xsink, event_sink);
     if (*xsink || stream_id < 0) {
         releaseConnection(conn);
         return -1;
     }
+    // the response is read from the channel by the caller; a connection that a request has been submitted on is
+    // treated as a reused connection by the next request
+    conn->setServedRequest();
 
     // Release the stream reservation — submitRequestStreaming internally
     // calls releaseStreamReservation on success (matching the non-streaming

@@ -116,12 +116,17 @@ class DigestAuthHandler inherits AbstractHttpRequestHandler {
 class AlwaysRejectHandler inherits AbstractHttpRequestHandler {
     private {
         int request_count = 0;
+        string challenge;
+    }
+
+    constructor(string challenge = "Basic realm=\"test\"") {
+        self.challenge = challenge;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         ++request_count;
         return makeResponse(401, "Always rejected", {
-            "WWW-Authenticate": "Basic realm=\"test\"",
+            "WWW-Authenticate": challenge,
         });
     }
 
@@ -187,7 +192,7 @@ public class HttpServerAuthChallengeTest inherits QUnit::Test {
 
     #! Test that auth retry is limited to one attempt
     testAuthRetryLimited() {
-        AlwaysRejectHandler handler();
+        AlwaysRejectHandler handler("Digest realm=\"test\", nonce=\"abc\", qop=\"auth\"");
         hash<auto> setup = createServer(handler);
         HttpServer server = setup.server;
         on_exit delete server;
@@ -207,6 +212,17 @@ public class HttpServerAuthChallengeTest inherits QUnit::Test {
         }
         # Server should have seen exactly 2 requests (original + 1 retry)
         assertEq(2, handler.getRequestCount(), "exactly 2 requests sent (original + retry)");
+
+        # Basic credentials, which were sent with the original request, are not sent again
+        AlwaysRejectHandler basic_handler();
+        setup = createServer(basic_handler);
+        HttpServer basic_server = setup.server;
+        on_exit delete basic_server;
+        client = new HTTPClient({
+            "url": sprintf("http://user:pass@localhost:%d/reject", setup.port),
+        });
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \client.send(), ("", "GET", "/reject"));
+        assertEq(1, basic_handler.getRequestCount(), "rejected credentials are not sent again");
     }
 
     #! Test that no retry happens without credentials

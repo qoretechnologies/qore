@@ -431,15 +431,24 @@ public class HttpClientRequestUrlTest inherits QUnit::Test {
             "timeout": 30s,
         });
 
-        # a challenge from the origin the credentials belong to is answered
+        # the credentials are sent to the origin they belong to; a Basic challenge is not answered with the same
+        # credentials again, as they were rejected
         peer_a.setRoute("/challenge", 401, {"WWW-Authenticate": "Basic realm=\"a\""});
         peer_a.setRoute("/challenge-ok", 200, {"Content-Type": "text/plain"}, "authenticated");
         peer_a.clear();
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 401", \hc.sendUrl(),
             ("payload", "POST", "/challenge"));
-        # the request was retried with credentials computed from the challenge
+        assertEq(1, peer_a.getRequests().size());
+        assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests()[0].authorization);
+
+        # a challenge from the origin the credentials belong to is answered with credentials computed from it
+        peer_a.setRoute("/challenge-digest", 401, {"WWW-Authenticate": "Digest realm=\"a\", nonce=\"n1\", "
+            "qop=\"auth\""});
+        peer_a.clear();
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 401", \hc.sendUrl(),
+            ("payload", "POST", "/challenge-digest"));
         assertEq(2, peer_a.getRequests().size());
-        assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests()[1].authorization);
+        assertRegex("^Digest username=\"user\"", peer_a.getRequests()[1].authorization);
 
         # a challenge from another origin is not answered with the client's credentials
         peer_b.setRoute("/challenge", 401, {"WWW-Authenticate": "Basic realm=\"b\""});

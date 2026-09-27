@@ -292,6 +292,10 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     if (manager_ && manager_->getOptions().connect_timeout_ms > 0) {
         priv_raw->setConnectTimeout((int64_t)manager_->getOptions().connect_timeout_ms * 1000);
     }
+    // the credentials for the proxy
+    if (manager_ && (use_proxy_tunnel || use_proxy_plain)) {
+        priv_raw->setProxyAuthorization(manager_->getOptions().proxy_authorization);
+    }
 
     // 5. Wrap the priv in a QoreObject.
     ReferenceHolder<QoreObject> poll_obj_holder(

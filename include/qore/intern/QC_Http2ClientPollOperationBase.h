@@ -268,6 +268,16 @@ public:
     /** The session reads the value from the socket when response data arrives; see
         qore_socket_private::max_response_body_size
     */
+    //! Sets the value of the Proxy-Authorization header sent to the HTTP proxy
+    /** The header is sent with the CONNECT request of a tunnel through the proxy, and with each request of a plain
+        HTTP connection through the proxy; it is never sent through a tunnel to the target server
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setProxyAuthorization(std::string value) {
+        proxy_authorization = std::move(value);
+    }
+
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
             sock_obj->setMaxResponseBodySize(max_size);
@@ -468,6 +478,9 @@ private:
 
     //! Target host for :authority pseudo-header and proxy CONNECT
     std::string target_host;
+
+    //! The value of the Proxy-Authorization header sent with a proxy CONNECT request, if any
+    std::string proxy_authorization;
 
     //! Target port
     int target_port;

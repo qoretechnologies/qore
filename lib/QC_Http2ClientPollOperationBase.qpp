@@ -367,8 +367,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
 void Http2ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
     // Build CONNECT request: "CONNECT host:port HTTP/1.1\r\nHost: host:port\r\n\r\n"
     QoreStringNode* connect_req = new QoreStringNode();
-    connect_req->sprintf("CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n\r\n",
+    connect_req->sprintf("CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n",
         target_host.c_str(), target_port, target_host.c_str(), target_port);
+    // the credentials for the proxy are sent to the proxy only
+    if (!proxy_authorization.empty()) {
+        connect_req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
+    }
+    connect_req->concat("\r\n");
 
     sock_obj->ref();
     // SocketSendPollOperation takes ownership of the string ref
@@ -1721,6 +1726,24 @@ bool Http2ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
 */
 nothing Http2ClientPollOperationBase::abort() {
     priv->abort(xsink);
+}
+
+//! Sets the value of the Proxy-Authorization header sent to the HTTP proxy
+/** The header is sent with the CONNECT request of a tunnel through the proxy; it is never sent through a tunnel
+    to the target server.  Must be called before the operation is submitted.
+
+    @param value the header value, for example \c "Basic dXNlcjpwYXNz"
+
+    @throw HTTP-HEADER-ERROR the value contains a CR or LF character
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::setProxyAuthorization(string value) [flags=NAMED_ARGS] {
+    if (strpbrk(value->c_str(), "\r\n")) {
+        xsink->raiseException("HTTP-HEADER-ERROR", "the Proxy-Authorization value must not contain CR or LF");
+        return QoreValue();
+    }
+    priv->setProxyAuthorization(value->c_str());
 }
 
 //! Sets the proactive idle timeout for this connection.

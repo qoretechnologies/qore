@@ -1,0 +1,285 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%include ../TestConnectProxy.qc
+
+%exec-class HttpClientProxyAuthTest
+
+#! Reports the Proxy-Authorization header received by the target server
+class ProxyAuthEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, sprintf("proxy-authorization: %s", hdr."proxy-authorization" ?? "none"),
+            {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Tests the credentials sent to an HTTP proxy
+public class HttpClientProxyAuthTest inherits QUnit::Test {
+    public {
+        #! a certificate for localhost and 127.0.0.1, valid until 2126
+        const Cert = "-----BEGIN CERTIFICATE-----
+MIIDOTCCAiGgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK4wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3
+DQEBAQUAA4IBDwAwggEKAoIBAQCV1xww09YCd0nlSlHTcSvmd2+w+iECqGYJZ0LC
+yMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTuoN2qDfC+bV1iDezfH3wjW2Mi
+woWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGDaA78dfuKMfjVgouQq0j36xct
+Qp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQsnbyj3qWQb4OSH9r3MDqkCNA
+cPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwHP1x9R7zsMctD2utLzg8uE7PC
+xhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+DhMqer1HAgMBAAGjfjB8MBoG
+A1UdEQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMBMGA1UdJQQMMAoG
+CCsGAQUFBwMBMB0GA1UdDgQWBBRrykHXWldynutxb8kegXI2TDL/wjAfBgNVHSME
+GDAWgBQ2CBUEL5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAICu/
+eAbP2pLfzfg2OehX2Md42ESOal0UMpXrfX5Y5FZuk7zbz4YhEUGlOTcayhkzJywt
+eO1a04VCpwhOhKMg47/d/sKaZ6s2y9kXG28nt/EtBSB1jlgyd1bETJTmqTAuLnUT
+qgZgZwmYJ+/UQJNySQQg2oi3hJsTfaK1VLe1+Eo1XwDocUsTZZy3h2hBKQgByMja
+Rwtsu7UOGp2wmXPpXcJIsX6lj/vY15f0EwbWBnUY2TN02TLQUaJmN1o4o1kOQe0H
+BruWF8zd4JEPIHXXq/5WJVF5UPDOktEsK+z4CTZmNxHPJyUrNrlKQBYNZkXIaM3M
+cT/QPnxjlFfMh4oBxA==
+-----END CERTIFICATE-----";
+        const Key = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCV1xww09YCd0nl
+SlHTcSvmd2+w+iECqGYJZ0LCyMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTu
+oN2qDfC+bV1iDezfH3wjW2MiwoWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGD
+aA78dfuKMfjVgouQq0j36xctQp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQ
+snbyj3qWQb4OSH9r3MDqkCNAcPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwH
+P1x9R7zsMctD2utLzg8uE7PCxhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+
+DhMqer1HAgMBAAECggEAEuBGbOBC1YyxgnEaXcij/ySMrX7VKcCNGiIoBuHE0TgA
+2F1RLhSsJN8ejRXmhgfIdtcPjiqsn15TDLy3L/URnuuoF/IpJPKScOHSW06mBa0N
+Zjx+xiG6hpQphv9R7iWNPPlyDxZ8ItrEngk92hAC4CXrcvo/Grp5NsIm6Uy7RWdv
+hTyoL3EWBg6dLHzEGJJprmOh4t+2o5FF3Kt3Rckaw755ALw0sFwdPEnooAjF6ZE3
+rGt4b1GvGH157gzjGwav2ORYUQtcVlfr/+aSsKe6+Jl4OzlGopXF5Gfxcthlb0Ci
+NIswH9/Jaqou0gv8yYLPcld5wuxfXhlTiCPbC2++AQKBgQDSUjHpEn4SruKDNN4g
+rwxHHc2LL7HlrQLTre37sRF6xudsOp9LL7IFImX+Z9Vscp/OyzNEsRu+dwuWyBQd
+aeU9fjKh3A49hA7aL7Wirh88KlRvYyzuL+1YJQO4Lqr1ExLk4ZZtxervcFSV53Wl
+d48gApbBDFmRESlmge65Pkbf8wKBgQC2YjIzFRwbvi9Ph+OTM2auYl8SLXaDve8g
+JDb2wHz9bVR3jonHsLsuIEDQMlzXP1pF3jjL1+y/8eOz0AQ2B4S8bqa1FLCFrfdr
+pVmFffeFtVLqHqX+Or+1Ozzyz1XwGprSFBS2O7utgA4p32ivJPjaFwj9CYV5PjVU
+uuaxwjGWXQKBgD7N0J2aqg8GLhmkBdiYrP/nhGNVwLem7Dstqu0HuQKCtsR41Oxs
+t6oU1YQcmXyi1dm4j/ypLnG3trw1ztvhrVSphJEU1yPDdXPt3z1O5YDf2wrQALC3
+mxZBJ1UuilpYccHrIzJwcXFCh9+jmFvq0dBrNX08JNrO1yAHGLQ0RpHFAoGAI3zX
+57ijz4IiEoeOcIX/5M6fURonhVrfvJFPYJPzvhwX42uIw6JPyZndAqXKCtf46L9k
+rcVF+9NFSyeeqiSsXz3okjOEZX6ENh3mXWM1Vn8BsyxjgCROSSVNprFRN3b1yQq/
+PPZCfm/8UYl3BR1cjpMM3K+NmRnRprr3SH9QxsECgYEAgTR94CDtYFnOf6fYlKrS
+LS2vudPAPnPgvnMyoXqkdMVXPFaGt2H0jZbqJNeZ4rDD+F7xKw7Bh7dobks+nTpE
+DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
++QCcroH4V1WH5zPROGJoPVc=
+-----END PRIVATE KEY-----";
+
+        #! the credentials required by the proxy
+        const User = "user";
+        const Pass = "pass";
+        const ProxyAuth = "Basic " + make_base64_string(User + ":" + Pass);
+
+        #! credentials that must be percent-encoded in a URL
+        const SpecialUser = "us@r";
+        const SpecialPass = "p:ss wörd";
+
+        #! the response of the target server to a request without proxy credentials
+        const TargetResponse = "proxy-authorization: none";
+    }
+
+    private {
+        HttpServer server;
+        int tls_port;
+        int plain_port;
+        TestConnectProxy proxy;
+        #! a proxy requiring SpecialUser and SpecialPass
+        TestConnectProxy special_proxy;
+    }
+
+    constructor() : Test("HttpClientProxyAuthTest", "1.0") {
+        addTestCase("HTTPClient proxy credentials", \httpClientTest());
+        addTestCase("HttpClientIo proxy credentials", \httpClientIoTest());
+        addTestCase("HttpClientIo percent-encoded proxy credentials", \httpClientIoEncodedTest());
+        addTestCase("proxy from the environment", \environmentTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("proxy-auth",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("echo", new ProxyAuthEchoHandler());
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(Cert),
+            "key": new SSLPrivateKey(Key),
+        }).port;
+        plain_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        proxy = new TestConnectProxy(ProxyAuth);
+        special_proxy = new TestConnectProxy("Basic " + make_base64_string(SpecialUser + ":" + SpecialPass));
+    }
+
+    globalTearDown() {
+        proxy.shutdown();
+        special_proxy.shutdown();
+        server.stop();
+    }
+
+    #! returns the proxy URL with or without credentials
+    private string getProxyUrl(bool creds = True, *string pass) {
+        return sprintf("http://%s127.0.0.1:%d", creds ? sprintf("%s:%s@", User, pass ?? Pass) : "",
+            proxy.getPort());
+    }
+
+    httpClientTest() {
+        foreach hash<auto> t in (
+            {"url": sprintf("https://127.0.0.1:%d", tls_port), "versions": ("1.1", "2.0", "auto")},
+            {"url": sprintf("http://127.0.0.1:%d", plain_port), "versions": ("1.1", "2.0")},
+        ) {
+            foreach string version in (t.versions) {
+                string msg = sprintf("HTTPClient %s %s", t.url, version);
+                # the proxy receives the credentials; the target server never does
+                HTTPClient hc({"url": t.url, "http_version": version, "proxy": getProxyUrl(), "timeout": 10s});
+                hc.setSslVerifyMode(SSL_VERIFY_NONE);
+                assertEq(TargetResponse, hc.get("/"), msg);
+
+                # no credentials
+                hc = new HTTPClient({"url": t.url, "http_version": version, "proxy": getProxyUrl(False),
+                    "timeout": 10s});
+                assertRegex("407", getError(\hc.get(), "/"), msg + " (no credentials)");
+
+                # wrong credentials
+                hc = new HTTPClient({"url": t.url, "http_version": version, "proxy": getProxyUrl(True, "wrong"),
+                    "timeout": 10s});
+                assertRegex("407", getError(\hc.get(), "/"), msg + " (wrong credentials)");
+            }
+        }
+
+        # a Proxy-Authorization header given for a request through a tunnel is not sent to the target server
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", tls_port), "http_version": "1.1",
+            "proxy": getProxyUrl(), "timeout": 10s});
+        assertEq(TargetResponse, hc.get("/", {"Proxy-Authorization": "Basic secret"}));
+
+        # every request sent to the proxy carried the credentials, and the tunnels were made to the target
+        list<hash<auto>> reqs = proxy.getRequests();
+        assertTrue(reqs.size() > 10);
+        list<string> connects = map $1.line, reqs, $1.line =~ /^CONNECT/;
+        assertTrue(connects.size() > 0);
+        assertEq((), select connects, $1 != sprintf("CONNECT 127.0.0.1:%d HTTP/1.1", tls_port));
+    }
+
+    httpClientIoTest() {
+        foreach hash<auto> t in (
+            {"url": sprintf("https://127.0.0.1:%d", tls_port), "protocols": ("h1", "h2", "auto")},
+            {"url": sprintf("http://127.0.0.1:%d", plain_port), "protocols": ("h1", "h2", "auto")},
+        ) {
+            foreach string protocol in (t.protocols) {
+                string msg = sprintf("HttpClientIo %s %s", t.url, protocol);
+                HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": protocol,
+                    "proxy_url": getProxyUrl(),
+                    "accept_all_certs": True,
+                    "max_request_retries": 0,
+                });
+                on_exit mgr.closeAll();
+                hash<auto> resp = mgr.request(t.url, "GET", "/");
+                assertEq(200, resp.status_code, msg);
+                assertEq(TargetResponse, resp.body, msg);
+
+                HttpClientIo::HttpClientConnectionManager mgr2(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": protocol,
+                    "proxy_url": getProxyUrl(False),
+                    "accept_all_certs": True,
+                    "max_request_retries": 0,
+                });
+                on_exit mgr2.closeAll();
+                string err;
+                try {
+                    resp = mgr2.request(t.url, "GET", "/");
+                    err = sprintf("status %d", resp.status_code);
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err + ": " + ex.desc;
+                }
+                assertRegex("407", err, msg + " (no credentials)");
+            }
+        }
+    }
+
+    #! credentials in a proxy URL are percent-decoded (RFC 3986 section 3.2.1)
+    httpClientIoEncodedTest() {
+        string proxy_url = sprintf("http://%s:%s@127.0.0.1:%d", encode_url(SpecialUser, True),
+            encode_url(SpecialPass, True), special_proxy.getPort());
+        foreach string url in (sprintf("https://127.0.0.1:%d", tls_port), sprintf("http://127.0.0.1:%d", plain_port)) {
+            HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "auto",
+                "proxy_url": proxy_url,
+                "accept_all_certs": True,
+            });
+            on_exit mgr.closeAll();
+            hash<auto> resp = mgr.request(url, "GET", "/");
+            assertEq(200, resp.status_code, url);
+            assertEq(TargetResponse, resp.body, url);
+        }
+    }
+
+    environmentTest() {
+        hash<string, *string> saved = map {$1: getenv($1)}, ("http_proxy", "https_proxy", "HTTPS_PROXY", "all_proxy",
+            "ALL_PROXY", "no_proxy", "NO_PROXY", "HTTP_PROXY");
+        on_exit {
+            foreach hash<auto> i in (saved.pairIterator()) {
+                if (exists i.value) {
+                    setenv(i.key, i.value);
+                } else {
+                    unsetenv(i.key);
+                }
+            }
+        }
+        map unsetenv($1), keys saved;
+
+        assertEq(NOTHING, get_proxy_url_from_environment("http://example.com/"));
+        # the upper-case HTTP_PROXY is not used
+        setenv("HTTP_PROXY", "http://evil:1");
+        assertEq(NOTHING, get_proxy_url_from_environment("http://example.com/"));
+        setenv("http_proxy", "proxy.local:3128");
+        assertEq("http://proxy.local:3128", get_proxy_url_from_environment("http://example.com/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("https://example.com/"));
+        setenv("HTTPS_PROXY", "http://secure-proxy:8080");
+        assertEq("http://secure-proxy:8080", get_proxy_url_from_environment("https://example.com/"));
+        setenv("https_proxy", "http://lower-proxy:8080");
+        assertEq("http://lower-proxy:8080", get_proxy_url_from_environment("https://example.com/"));
+        unsetenv("https_proxy");
+        unsetenv("HTTPS_PROXY");
+        setenv("all_proxy", "http://all:1");
+        assertEq("http://all:1", get_proxy_url_from_environment("https://example.com/"));
+
+        # hosts excluded with no_proxy
+        setenv("no_proxy", "localhost, .internal.example, example.org:8080, 10.1.2.3, [::1]");
+        assertEq(NOTHING, get_proxy_url_from_environment("http://localhost:8000/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("http://a.internal.example/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("http://internal.example/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("http://www.example.org/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("http://10.1.2.3/"));
+        assertEq(NOTHING, get_proxy_url_from_environment("http://[::1]:8080/"));
+        assertEq("http://proxy.local:3128", get_proxy_url_from_environment("http://notinternal.example/"));
+        assertEq("http://proxy.local:3128", get_proxy_url_from_environment("http://10.1.2.30/"));
+        setenv("no_proxy", "*");
+        assertEq(NOTHING, get_proxy_url_from_environment("http://example.com/"));
+        unsetenv("no_proxy");
+        setenv("NO_PROXY", "example.com");
+        assertEq(NOTHING, get_proxy_url_from_environment("http://example.com/"));
+    }
+
+    #! returns the error raised by the call
+    private string getError(code c, auto arg) {
+        try {
+            c(arg);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+        return "no error";
+    }
+}

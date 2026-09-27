@@ -185,6 +185,14 @@ public:
         //! Client private key for mutual TLS (ref'd; nullptr = no key).
         QoreSSLPrivateKey* client_key = nullptr;
 
+        //! The value of the Proxy-Authorization header sent to the proxy, if any
+        /** Sent with the CONNECT request of a tunnel through the proxy and with each request of a plain HTTP
+            connection through the proxy, never through a tunnel to the target server
+
+            @since %Qore 3.0
+        */
+        std::string proxy_authorization;
+
         //! A PEM file with the CA certificates that server certificates are verified against instead of the
         //! default CAs; empty = not set
         /** @since %Qore 3.0
@@ -504,12 +512,26 @@ public:
     */
     //! @param channel_out receives a ref'd QoreChannel* for reading
     //!     streaming response data.  Caller must deref when done.
+    //! @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
+    //!     before, so a request that fails because the peer closed the connection before responding can be
+    //!     repeated on a new connection
     //! @return stream ID on success, -1 on error
     DLLEXPORT int64_t requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
-        HttpClientEventSink* event_sink = nullptr);
+        HttpClientEventSink* event_sink = nullptr, bool* reused = nullptr);
+
+    //! Returns true if the HTTP method is idempotent (RFC 9110 section 9.2.2), so a request with it can be repeated
+    //! automatically when the connection fails before a response is received
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL static bool isIdempotentMethod(const char* method);
+
+    //! Returns true if the exception means that the peer closed the connection before a response was received
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL static bool isConnectionClosedError(ExceptionSink& xsink);
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 
@@ -660,6 +682,15 @@ protected:
 
 private:
     HttpClientConnectionManagerBase(const HttpClientConnectionManagerBase&) = delete;
+
+    //! Makes one attempt of @ref request
+    /** @param retry if not nullptr, set to true if the request failed because the peer closed a connection that
+        had served a request, in which case the request can be repeated on a new connection; nullptr if the
+        request must not be repeated
+    */
+    DLLLOCAL QoreHashNode* requestOnce(const char* method, const char* scheme, const char* host, int port,
+        const char* path, const QoreHashNode* headers, const void* body, size_t body_len, int timeout_ms,
+        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry);
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
 
     //! Internal: shared implementation for @ref acquireConnection and

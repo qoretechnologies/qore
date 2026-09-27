@@ -91,6 +91,10 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         # deadline is enforced by the I/O thread in the C++ poll operation, never by a
         # caller-side wait (see Http2ClientPollOperationBase::setConnectTimeout())
         Http2ClientPollOperationBase::setConnectTimeout(connect_timeout);
+        # the credentials for the proxy are sent to the proxy only
+        if (proxy_info.authorization) {
+            Http2ClientPollOperationBase::setProxyAuthorization(proxy_info.authorization);
+        }
         # Store connection in Qore data hash for DGC cycle detection
         setConnection(connection);
     }

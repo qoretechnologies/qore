@@ -1387,6 +1387,27 @@ struct qore_httpclient_priv {
         return !sse_recv_buffer.empty() || (sse_decoder && sse_decoder->hasData());
     }
 
+    //! Returns true if a request whose connection was closed before a response was received can be repeated
+    /** @param meth the HTTP method
+        @param conn_reused true if the connection had been used before
+        @param retried true if the request has already been repeated
+    */
+    DLLLOCAL static bool canRepeatOnNewConnection(const char* meth, bool conn_reused, bool retried) {
+        return conn_reused && !retried && HttpClientConnectionManagerBase::isIdempotentMethod(meth);
+    }
+
+    //! Returns the Proxy-Authorization value for the connection manager, or an empty string if not needed
+    DLLLOCAL std::string getConnMgrProxyAuthorization() const {
+        if (!proxy_connection.has_url() || proxy_connection.username.empty()) {
+            return std::string();
+        }
+        QoreString creds;
+        creds.sprintf("%s:%s", proxy_connection.username.c_str(), proxy_connection.password.c_str());
+        QoreString rv("Basic ");
+        rv.concatBase64(&creds);
+        return rv.c_str();
+    }
+
     DLLLOCAL std::string getConnMgrProxyUrl() const {
         if (!proxy_connection.has_url()) {
             return std::string();
@@ -1493,6 +1514,7 @@ struct qore_httpclient_priv {
                 if (opts.protocol != want_proto
                         || opts.protocol_required != want_required
                         || opts.proxy_url != proxy_url
+                        || opts.proxy_authorization != getConnMgrProxyAuthorization()
                         || opts.connect_timeout_ms != connect_timeout_ms
                         || opts.request_timeout_ms != timeout
                         || opts.max_response_body_size != max_response_body_size
@@ -1530,6 +1552,7 @@ struct qore_httpclient_priv {
                 opts.client_key = msock->pk;
                 // Proxy URL from the existing connection info
                 opts.proxy_url = getConnMgrProxyUrl();
+                opts.proxy_authorization = getConnMgrProxyAuthorization();
                 std::shared_ptr<HttpClientConnectionManagerBase> new_mgr(
                     new HttpClientConnectionManagerBase(opts, xsink));
                 if (*xsink) {
@@ -3397,8 +3420,25 @@ struct qore_httpclient_priv {
         if (!auth_value) {
             return false;
         }
+        SimpleRefHolder<QoreStringNode> auth_holder(auth_value);
 
-        nh->setKeyValue(auth_hdr, auth_value, xsink);
+        // credentials that were already sent and rejected are not sent again: the request would be rejected again,
+        // and the peer may have closed the connection after rejecting it
+        {
+            std::string sent;
+            QoreValue v = nh->getKeyValue(auth_hdr);
+            if (v.getType() == NT_STRING) {
+                sent = v.get<const QoreStringNode>()->c_str();
+            } else if (code == 407) {
+                // the credentials that the connection manager sends to the proxy with every request
+                sent = getConnMgrProxyAuthorization();
+            }
+            if (!sent.empty() && sent == auth_value->c_str()) {
+                return false;
+            }
+        }
+
+        nh->setKeyValue(auth_hdr, auth_holder.release(), xsink);
         return !*xsink;
     }
 
@@ -5347,6 +5387,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
     bool auth_retried = false;
+    // true once a streaming request has been repeated on a new connection
+    bool stream_retried = false;
     std::string location_storage;
     const char* location = nullptr;
     ReferenceHolder<QoreHashNode> ans(xsink);
@@ -6008,10 +6050,25 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         } else if (recv_callback || os) {
             // Streaming receive path: use Channel-based delivery
             QoreChannel* channel_raw = nullptr;
+            bool conn_reused = false;
+            // true if the request is repeated on a new connection
+            bool stream_retry = false;
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
-                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink);
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, &conn_reused);
             if (*xsink || stream_id < 0 || !channel_raw) {
+                // a reused connection that the peer closed while it waited in the pool
+                if (*xsink && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
+                        && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
+                    xsink->clear();
+                    if (channel_raw) {
+                        ExceptionSink cxsink;
+                        channel_raw->deref(&cxsink);
+                        cxsink.clear();
+                    }
+                    stream_retried = true;
+                    continue;
+                }
                 return nullptr;
             }
             // ReferenceHolder ensures deref on all exit paths
@@ -6087,6 +6144,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!has_value) {
                     // Channel closed with no more data
                     if (!got_headers) {
+                        // a reused connection closed by the peer while it waited in the pool
+                        if (canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
+                            stream_retry = true;
+                            break;
+                        }
                         xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                             "connection closed before response received");
                     }
@@ -6114,6 +6176,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         desc_str = desc->c_str();
                     }
                     xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                    // a reused connection closed by the peer before a response was received
+                    if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
+                            && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
+                        xsink->clear();
+                        stream_retry = true;
+                        break;
+                    }
                     return nullptr;
                 }
 
@@ -6419,6 +6488,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Close the channel now that we're done reading
             channel->close();
+
+            // the request is repeated once on a new connection
+            if (stream_retry) {
+                stream_retried = true;
+                continue;
+            }
 
             // If we broke out for a redirect, handle it
             if (channel_done && followsRedirect(code)) {
@@ -6955,6 +7030,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.client_cert = msock->cert;
     opts.client_key = msock->pk;
     opts.proxy_url = getConnMgrProxyUrl();
+    opts.proxy_authorization = getConnMgrProxyAuthorization();
 
     HttpClientConnectionManagerBase mgr(opts, xsink);
     if (*xsink) {

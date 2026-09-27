@@ -345,6 +345,16 @@ public:
         connect_timeout_us = timeout_us;
     }
 
+    //! Sets the value of the Proxy-Authorization header sent to the HTTP proxy
+    /** The header is sent with the CONNECT request of a tunnel through the proxy, and with each request of a plain
+        HTTP connection through the proxy; it is never sent through a tunnel to the target server
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setProxyAuthorization(std::string value) {
+        proxy_authorization = std::move(value);
+    }
+
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
     }
@@ -402,6 +412,9 @@ private:
 
     //! Target host for Host header and proxy CONNECT
     std::string target_host;
+
+    //! The value of the Proxy-Authorization header sent to the HTTP proxy, if any
+    std::string proxy_authorization;
 
     //! Target port
     int target_port;

@@ -205,6 +205,23 @@ public:
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
 
+    //! Returns true if a response has been received on this connection
+    /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a
+        request that fails on it because it was closed can be retried on a new connection
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool hasServedRequest() const {
+        return served_request.load(std::memory_order_acquire);
+    }
+
+    //! Records that a response has been received on this connection
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL void setServedRequest() {
+        served_request.store(true, std::memory_order_release);
+    }
+
     //! Registers (or clears) the owning manager back-pointer for close
     //! notifications.
     /** When the connection's state transitions to CLOSED for the first
@@ -703,6 +720,9 @@ protected:
         add one today, but future @c isFoo() reads could participate).
     */
     mutable std::atomic<uint32_t> lifetime_state_{0};
+
+    //! True once a response has been received on this connection
+    std::atomic<bool> served_request{false};
 
     //! Mutex + condvar coordinating @ref drainInFlight with the final
     //! @ref MethodGuard release.  @c close_cv_ is notified from
