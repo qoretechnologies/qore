@@ -24,6 +24,9 @@ if(TREE_SITTER_FOUND)
     target_link_libraries(tree-sitter-lib INTERFACE PkgConfig::TREE_SITTER)
     set(TREE_SITTER_INCLUDE_DIRS_FOR_BUILD ${TREE_SITTER_INCLUDE_DIRS})
 else()
+    if(QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "System tree-sitter >= ${QORE_TREE_SITTER_VERSION} is required; dependency downloads are disabled")
+    endif()
     include(FetchContent)
 
     # Keep the runtime and grammar generation CLI on the same maintenance release.

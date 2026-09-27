@@ -1,0 +1,131 @@
+Building Debian and Ubuntu packages
+==================================
+
+The packaging targets Debian stable and Ubuntu LTS, using native builds in a
+clean sbuild/pbuilder environment for each distribution and architecture. An
+Ubuntu binary package must not be reused as a Debian binary package. A Launchpad
+project is not required; an account/team PPA is an optional Ubuntu build and
+distribution service. Debian needs its own builder and archive.
+
+Dependency availability
+-----------------------
+
+Qore 3.0 currently needs dependencies newer than those in the standard stable/LTS
+archives. The Build-Depends versions deliberately match the upstream CMake
+requirements. Before building, provide distribution-specific backports of:
+
+  c-ares >= 1.34.8
+  nghttp2 >= 1.70.0
+  ngtcp2 and its matching OpenSSL crypto backend >= 1.25.0
+  nghttp3 >= 1.18.0
+  tree-sitter >= 0.26.13
+
+The OpenSSL backend also needs OpenSSL >= 3.5. LLVM >= 18, Eigen >= 3.4,
+Arrow/Parquet, and the other development packages in debian/control must be
+available for the target release. In particular, older Ubuntu LTS releases need
+more backports than the newest LTS. Do not replace the distribution's OpenSSL
+packages casually: older LTS support needs a separately reviewed dependency
+backport strategy and clean installation/upgrade testing.
+
+Normal upstream CMake builds retain FetchContent fallbacks. Debian package
+builds instead set QORE_REQUIRE_SYSTEM_DEPENDENCIES=ON and
+FETCHCONTENT_FULLY_DISCONNECTED=ON: required debian/rules targets must not access
+the network (Debian Policy 4.9). Installing libraries manually in /usr/local is
+not a substitute for packaged Build-Depends and will be ignored.
+
+If a distributor chooses to bundle fallback sources instead of supplying
+backports, those sources must be included in the source package before upload,
+with checksums, their full license notices, and all transitive build inputs.
+Point FETCHCONTENT_SOURCE_DIR_<NAME> at those unpacked sources, adjust the
+Build-Depends and QORE_REQUIRE_SYSTEM_DEPENDENCIES setting for that derivative,
+and verify the whole build without network access. FetchContent's download
+cache on the maintainer's machine is not part of a source package. This tree
+does not supply such a bundled dependency source package.
+
+The source package is not ready for an unmodified stock stable/LTS builder until
+the dependency gap above is resolved. Do not bypass dpkg-checkbuilddeps to claim
+distribution compatibility.
+
+Source and binary builds
+------------------------
+
+The source format is 3.0 (quilt), matching the upstream-version plus Debian
+revision in debian/changelog. Supply the upstream release tarball as
+../qore_<upstream-version>.orig.tar.xz (or .gz). For a Git snapshot, first commit
+the intended upstream changes and create a clean upstream archive, for example:
+
+  git archive --format=tar --prefix=qore-3.0.0/ HEAD -- . ':!debian' \
+      | xz > ../qore_3.0.0.orig.tar.xz
+  dpkg-buildpackage -S -us -uc
+
+Build the resulting .dsc in a clean builder with the required backport archive
+configured. For local binary testing in an already provisioned environment:
+
+  dpkg-checkbuilddeps
+  dpkg-buildpackage -b -us -uc
+
+Use a release-specific changelog distribution and a distinct version for each
+Ubuntu series/PPA upload. Only source packages are uploaded to a PPA. Dependency
+backports must be published before the Qore build can satisfy Build-Depends.
+
+Build options
+-------------
+
+DEB_BUILD_OPTIONS supports parallel=N, nocheck, noopt, nostrip, and nodoc.
+The nodoc build profile also omits qore-doc and its documentation dependencies.
+Architecture-only builds (-B) do not generate documentation. Architecture-
+independent builds (-A) still build the native tools needed to generate docs.
+Cross builds are rejected because the build executes qpp, qore, and qcc.
+
+The CMake build type is None so dpkg-buildflags controls optimization and
+hardening, including noopt. Installed CMake-built ELF objects omit RUNPATH;
+chrpath removes qcc's build-directory RUNPATH from AOT modules before stripping.
+The source tree is not populated with generated qmod symlinks. Optional MongoDB,
+OCR, and Linux io_uring dependencies are declared to keep package contents stable
+between clean builders. ONNX Runtime integration is explicitly disabled.
+
+Package boundaries and ABI
+--------------------------
+
+libqore20 contains only the SONAME library and is Multi-Arch: same. Debhelper
+generates its ldconfig trigger and versioned shlibs dependency; there is no
+hand-maintained minimum version that can become stale as the C++ API grows.
+Changing the SONAME requires renaming this package and updating its dependents.
+Before publishing 3.0, compare the exported C++ ABI with the previously released
+libqore20; an incompatible change requires a SONAME/package-name bump. Qore's
+binary module API version is separate from the shared-library SONAME.
+
+qore-stdlib is Architecture: any: AOT .qmod files are ELF objects installed under
+the multiarch libdir, while Qore sources/resources live under /usr/share. It is
+not marked Multi-Arch: same; shared data and AOT output have not been qualified
+for simultaneous installations of multiple architectures.
+
+libqore-dev contains qcc, qpp, CMake/pkg-config integration, the compiler format
+stamp, AOT linker configuration, and the API metadata generator. It depends on
+the interpreter, C++ compiler, public OpenSSL headers, and the LLVM development
+package matching the build, including the public LLVM plugin API headers.
+
+Remote debugger clients require the separately packaged YAML module and live in
+qore-debug-tools. qore itself includes the local debugger. Package moves include
+Breaks/Replaces for upgrades from pre-3.0 packages. Architecture-independent
+tools accept binary-only rebuilds of qore instead of requiring source:Version
+to equal binary:Version.
+
+qore-doc contains generated HTML and examples. Its docs remain under its own
+package directory; they are not silently omitted or installed into the live
+system by the upstream install-docs target.
+
+Validation before publishing
+----------------------------
+
+  lintian ../qore_*.changes
+  autopkgtest ../qore_*.dsc ../*.deb -- <testbed backend and arguments>
+
+Run the installed-package tests in a clean testbed with the checkout excluded
+from module search paths. They cover native and AOT module loading, interpreter
+execution modes, C++ embedding via pkg-config and CMake, standalone AOT output,
+source-free compiled module loading, and CLI startup. Test both default and
+nodoc/architecture-only builds, installation with Recommends disabled, upgrades
+from the previously published packages, removal/purge, and rebuild
+reproducibility before publishing a release. These are release qualification
+steps; adding the tests alone is not evidence that each release passed them.

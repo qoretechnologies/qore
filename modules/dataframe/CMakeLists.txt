@@ -53,6 +53,9 @@ if (Arrow_FOUND AND Parquet_FOUND)
     message(STATUS "Found system Apache Arrow ${Arrow_VERSION} / Parquet ${PARQUET_VERSION}")
     set(QORE_ARROW_TARGETS Arrow::arrow_shared Parquet::parquet_shared)
 else()
+    if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "System Arrow and Parquet development packages are required; dependency downloads are disabled")
+    endif()
     # FetchContent fallback: build apache-arrow + parquet from source.  The
     # release tarball ships the C++ tree under cpp/CMakeLists.txt; we point
     # FetchContent at that subdirectory so the rest of the monorepo (Java,

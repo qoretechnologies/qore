@@ -1,0 +1,9 @@
+Qore optional tools
+===================
+
+qore-onnx is included, but this package build disables ONNX Runtime integration.
+Commands that require the native ONNX Runtime integration are unavailable.
+Python-based operations require their corresponding Python tools separately.
+
+Database clients and other optional integrations used by the command-line tools
+require the corresponding Qore modules and service configuration.

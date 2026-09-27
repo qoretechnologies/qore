@@ -1,0 +1,13 @@
+Tests: runtime
+Depends: qore
+Restrictions: allow-stderr
+
+Tests: development
+Depends: libqore-dev, cmake, pkgconf
+Restrictions: allow-stderr
+
+Tests: tools
+Depends: qore-misc-tools
+
+Tests: remote-debuggers
+Depends: qore-debug-tools

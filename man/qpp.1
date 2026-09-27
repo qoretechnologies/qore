@@ -1,0 +1,34 @@
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.TH QPP 1 "September 2026" "Qore" "User Commands"
+.SH NAME
+qpp \- generate C++ bindings and documentation from Qore QPP definitions
+.SH SYNOPSIS
+.B qpp
+.RI [ options ] " input-files..."
+.SH DESCRIPTION
+.B qpp
+processes QPP definitions used by the Qore runtime and native modules.
+It can generate C++ source, API documentation, metadata, and compile-time stubs.
+.SH OPTIONS
+.TP
+.BR \-o , " \-\-output=" file
+Write generated C++ source to the given file.
+.TP
+.BR \-d , " \-\-dox-output=" file
+Write Doxygen documentation to the given file.
+.TP
+.BR \-m , " \-\-metadata=" file
+Write JSON API metadata to the given file.
+.TP
+.BR \-s , " \-\-stub-output=" file
+Write a Qore compile-time stub to the given file.
+.TP
+.BR \-D , " \-\-define=" name
+Define a preprocessor macro. May be specified more than once.
+.TP
+.BR \-h , " \-\-help"
+Show all available options.
+.SH SEE ALSO
+.BR qore (1),
+.BR qcc (1),
+.BR qdx (1)

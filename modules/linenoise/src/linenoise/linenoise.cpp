@@ -126,7 +126,7 @@
 #include <fcntl.h>
 
 #include "linenoise.h"
-#include "ConvertUTF.h"
+#include <llvm/Support/ConvertUTF.h>
 
 #include <limits>
 #include <memory>
@@ -139,7 +139,14 @@
 using std::string;
 using std::vector;
 using std::unique_ptr;
-using namespace linenoise_ng;
+using llvm::ConversionResult;
+using llvm::UTF8;
+using llvm::UTF16;
+using llvm::UTF32;
+using llvm::conversionOK;
+using llvm::lenientConversion;
+using llvm::ConvertUTF32toUTF8;
+using llvm::ConvertUTF32toUTF16;
 
 // char8_t became a built-in distinct type in C++20; only typedef when older
 #if __cplusplus < 202002L
@@ -153,7 +160,7 @@ static ConversionResult copyString8to32(char32_t* dst, size_t dstSize,
   UTF32* targetStart = reinterpret_cast<UTF32*>(dst);
   UTF32* targetEnd = targetStart + dstSize;
 
-  ConversionResult res = ConvertUTF8toUTF32(
+  ConversionResult res = llvm::ConvertUTF8toUTF32Partial(
       &sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion);
 
   if (res == conversionOK) {
@@ -226,14 +233,14 @@ static void copyString32to16(char16_t* dst, size_t dstSize, size_t* dstCount,
                              const char32_t* src, size_t srcSize) {
   const UTF32* sourceStart = reinterpret_cast<const UTF32*>(src);
   const UTF32* sourceEnd = sourceStart + srcSize;
-  char16_t* targetStart = reinterpret_cast<char16_t*>(dst);
-  char16_t* targetEnd = targetStart + dstSize;
+  UTF16* targetStart = reinterpret_cast<UTF16*>(dst);
+  UTF16* targetEnd = targetStart + dstSize;
 
   ConversionResult res = ConvertUTF32toUTF16(
       &sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion);
 
   if (res == conversionOK) {
-    *dstCount = targetStart - reinterpret_cast<char16_t*>(dst);
+    *dstCount = targetStart - reinterpret_cast<UTF16*>(dst);
 
     if (*dstCount < dstSize) {
       *targetStart = 0;
@@ -599,7 +606,7 @@ int mk_wcwidth(char32_t ucs);
 static void recomputeCharacterWidths(const char32_t* text, char* widths,
                                      int charCount) {
   for (int i = 0; i < charCount; ++i) {
-    widths[i] = mk_wcwidth(text[i]);
+    widths[i] = linenoise_ng::mk_wcwidth(text[i]);
   }
 }
 
@@ -643,7 +650,7 @@ int mk_wcswidth(const char32_t* pwcs, size_t n);
 }
 
 static int calculateColumnPosition(char32_t* buf32, int len) {
-  int width = mk_wcswidth(reinterpret_cast<const char32_t*>(buf32), len);
+  int width = linenoise_ng::mk_wcswidth(reinterpret_cast<const char32_t*>(buf32), len);
   if (width == -1)
     return len;
   else

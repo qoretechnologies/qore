@@ -3,32 +3,47 @@ Section: devel
 Priority: optional
 Maintainer: David Nichols <david@qore.org>
 Build-Depends: debhelper-compat (= 13),
-               cmake (>= 3.14),
-               g++,
-               flex (>= 2.5.31),
+               cmake (>= 3.20),
+               flex (>= 2.5.35),
                bison,
+               chrpath,
+               git,
                libpcre2-dev,
                libgmp-dev,
-               pkg-config,
-               libssl-dev,
+               pkgconf,
+               libssl-dev (>= 3.5),
                zlib1g-dev,
                libmpfr-dev,
                libbz2-dev,
-               libnghttp2-dev,
-               libngtcp2-dev,
-               libngtcp2-crypto-ossl-dev,
-               libnghttp3-dev,
-               libc-ares-dev,
+               libnghttp2-dev (>= 1.70.0),
+               libngtcp2-dev (>= 1.25.0),
+               libngtcp2-crypto-ossl-dev (>= 1.25.0),
+               libnghttp3-dev (>= 1.18.0),
+               libc-ares-dev (>= 1.34.8),
                libbrotli-dev,
                libzstd-dev,
                liblz4-dev,
                libkrb5-dev,
-               libtree-sitter-dev,
-               llvm-dev | llvm-21-dev | llvm-20-dev,
-               cargo,
-               doxygen
-Standards-Version: 4.6.2
+               libtree-sitter-dev (>= 0.26.13),
+               libicu-dev,
+               libeigen3-dev (>= 3.4),
+               libutf8proc-dev,
+               libprotobuf-dev,
+               protobuf-compiler,
+               libarrow-dev,
+               libparquet-dev,
+               libmongoc-dev,
+               libtesseract-dev,
+               libleptonica-dev,
+               liburing-dev (>= 2.0) [linux-any],
+               llvm-dev (>= 1:18) | llvm-21-dev | llvm-20-dev | llvm-19-dev | llvm-18-dev
+Build-Depends-Indep: doxygen <!nodoc>,
+                     graphviz <!nodoc>
+Standards-Version: 4.7.4
+Rules-Requires-Root: no
 Homepage: https://qore.org
+Vcs-Git: https://github.com/qorelanguage/qore.git
+Vcs-Browser: https://github.com/qorelanguage/qore
 
 Package: qore
 Architecture: any
@@ -36,7 +51,11 @@ Depends: libqore20 (= ${binary:Version}),
          qore-stdlib (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
-Description: Multithreaded Programming Language
+Recommends: ca-certificates
+Suggests: qore-debug-tools (= ${source:Version}),
+          qore-doc,
+          qore-misc-tools
+Description: multithreaded programming language
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
@@ -44,9 +63,10 @@ Description: Multithreaded Programming Language
 Package: libqore20
 Section: libs
 Architecture: any
+Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Description: Libraries for the qore runtime and qore clients
+Description: shared library for the Qore runtime and clients
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
@@ -60,12 +80,13 @@ Depends: libqore20 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Recommends: qore (= ${binary:Version})
+Suggests: tesseract-ocr-eng
 # the json binary module and its 16 user modules were delivered separately as
 # qore-json-module up to and including json 1.12; they ship with Qore as of 3.0
 Provides: qore-json-module
 Replaces: qore-json-module (<< 1.13)
 Breaks: qore-json-module (<< 1.13)
-Description: Standard library modules for Qore
+Description: standard library modules for Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
@@ -76,9 +97,11 @@ Description: Standard library modules for Qore
 Package: qore-doc
 Section: doc
 Architecture: all
-Recommends: qore (= ${source:Version})
+Build-Profiles: <!nodoc>
+Multi-Arch: foreign
+Suggests: qore
 Depends: ${misc:Depends}
-Description: API documentation, programming language reference, and examples
+Description: Qore API documentation, language reference, and examples
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
@@ -90,10 +113,20 @@ Package: libqore-dev
 Section: libdevel
 Architecture: any
 Depends: libqore20 (= ${binary:Version}),
+         qore (= ${binary:Version}),
+         g++,
+         libssl-dev,
+         ${qore:LLVM-Depends},
          ${shlibs:Depends},
          ${misc:Depends}
-Recommends: qore (= ${binary:Version})
-Description: Header files and compiler tools for developing with Qore
+Recommends: cmake,
+            pkgconf
+Suggests: default-jdk-headless,
+          doxygen,
+          qore-jni-module
+Breaks: qore-misc-tools (<< 3.0.0-1~)
+Replaces: qore-misc-tools (<< 3.0.0-1~)
+Description: header files and compiler tools for developing with Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
@@ -103,9 +136,9 @@ Description: Header files and compiler tools for developing with Qore
 
 Package: qore-misc-tools
 Architecture: all
-Depends: qore (= ${source:Version}),
+Depends: qore (>= ${source:Version}),
          ${misc:Depends}
-Description: Miscellaneous user tools written in Qore
+Description: miscellaneous user tools written in Qore
  This package contains tools for working with:
   - REST APIs (rest, saprest, sfrest)
   - SQL Databases (sqlutil, schema-reverse, qschema)
@@ -116,3 +149,15 @@ Description: Miscellaneous user tools written in Qore
   - Language Server (qls)
   - File Downloads (qget)
   - Translation Catalogs (qore-i18n)
+  - ONNX Model Tools (qore-onnx)
+
+Package: qore-debug-tools
+Architecture: all
+Depends: qore (>= ${source:Version}),
+         qore-yaml-module (>= 0.5),
+         ${misc:Depends}
+Breaks: qore (<< 3.0.0-1~)
+Replaces: qore (<< 3.0.0-1~)
+Description: remote debugging tools for Qore
+ This package provides the Qore debug server, remote debugger, and Visual
+ Studio Code debug adapter. The local qdbg debugger is included in qore.

@@ -2,8 +2,15 @@
 
 include /usr/share/dpkg/architecture.mk
 
+builddir = obj-$(DEB_HOST_GNU_TYPE)
+
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export PKG_CONFIG_LIBDIR = /usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig:/usr/share/pkgconfig
+unexport PKG_CONFIG_PATH
+unexport CMAKE_PREFIX_PATH
+unexport LD_LIBRARY_PATH
+unexport LD_PRELOAD
+unexport QORE_AOT_LINK_CONF
 unexport QORE_AOT_BIG_FN_THRESHOLD
 unexport QORE_AOT_NO_DEBUG_INFO
 unexport QORE_DOC_DEFINES
@@ -12,33 +19,88 @@ unexport QORE_INCLUDE_DIRS
 unexport QORE_LIBDIR
 unexport QORE_MODULE_DIR
 
+# Documentation is generated only for builds that include qore-doc.
+build_docs = $(if $(filter nodoc,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)),,$(filter qore-doc,$(shell dh_listpackages)))
+
 %:
-	dh $@ --buildsystem=cmake
+	dh $@ --buildsystem=cmake --builddirectory=$(builddir)
 
 override_dh_auto_configure:
-	# Qore requires nghttp2 >= 1.68.1; allow the CMake fallback on
-	# Ubuntu/Debian releases where libnghttp2-dev is older.
-	dh_auto_configure --buildsystem=cmake -- \
-		-DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+	# Native build tools execute during compilation, including qpp and qcc.
+	test '$(DEB_BUILD_GNU_TYPE)' = '$(DEB_HOST_GNU_TYPE)'
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_SKIP_INSTALL_RPATH=ON \
+		-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON \
 		'-DCMAKE_IGNORE_PATH=/usr/local/include;/usr/local/lib;/usr/local/lib64' \
 		-DCMAKE_IGNORE_PREFIX_PATH=/usr/local \
 		-DOPENSSL_ROOT_DIR=/usr \
 		-DOPENSSL_INCLUDE_DIR=/usr/include \
 		-DOPENSSL_SSL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so \
 		-DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so \
-		-DFETCHCONTENT_FULLY_DISCONNECTED=OFF \
+		-DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+		-DQORE_REQUIRE_SYSTEM_DEPENDENCIES=ON \
+		-DQORE_AOT_LINK_SOURCE_MODULES=OFF \
+		-DQORE_AOT_MODULE_OPT_LEVEL=$(if $(filter noopt,$(DEB_BUILD_OPTIONS)),0,3) \
+		-DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=$(if $(build_docs),OFF,ON) \
 		-DQORE_WITH_ONNXRUNTIME=OFF \
 		-DSINGLE_COMPILATION_UNIT=1
 
+override_dh_auto_build:
+	dh_auto_build
+ifneq (,$(build_docs))
+	dh_auto_build -- docs
+endif
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	dh_auto_build -- linenoise-unicode-test
+	$(builddir)/modules/linenoise/linenoise-unicode-test
+	QORE_BINARY=$(CURDIR)/$(builddir)/qore \
+		QORE_TEST_QMOD_DIR=$(CURDIR)/$(builddir)/qlib-qmod \
+		./run_tests.sh -E -d qore
+else
+	:
+endif
+
 override_dh_auto_install:
-	dh_auto_install --buildsystem=cmake
-	# ensure module directories exist
-	mkdir -p debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore-modules
+	dh_auto_install
+	# Installed scripts must use the packaged interpreter regardless of PATH.
+	for script in debian/tmp/usr/bin/* debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qore/*; do \
+		if LC_ALL=C grep -Iq '^#!/usr/bin/env qore$$' "$$script"; then \
+			sed -i '1s|^#!/usr/bin/env qore$$|#!/usr/bin/qore|' "$$script"; \
+		fi; \
+	done
+	# qcc emits its own ELF RUNPATH independently of CMake's RPATH settings.
+	# Remove build-tree paths before stripping/debug-symbol extraction; chrpath
+	# edits the dynamic table in place, preserving Qore's appended metadata.
+	find debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore-modules -type f -name '*.qmod' \
+		-exec chrpath --delete {} +
+
+override_dh_installdocs:
+	dh_installdocs --remaining-packages -Nqore-doc
+ifneq (,$(build_docs))
+	dh_installdocs -pqore-doc --doc-main-package=qore-doc $(builddir)/docs
+else
+ifneq (,$(filter qore-doc,$(shell dh_listpackages)))
+	dh_installdocs -pqore-doc --doc-main-package=qore-doc
+endif
+endif
+
+override_dh_missing:
+	dh_missing --fail-missing
 
 override_dh_dwz:
 	# AOT-compiled .qmod files contain LLVM DWARF sections that dwz on
 	# current Debian/Ubuntu releases does not understand.
 	dh_dwz -Nqore-stdlib
 
-override_dh_shlibdeps:
-	dh_shlibdeps -- -l/usr/lib/$(DEB_HOST_MULTIARCH)
+override_dh_gencontrol:
+	# The public LLVM plugin headers must match the LLVM used by libqore.
+	if dh_listpackages | grep -qx libqore-dev; then \
+		llvm_dep=$$(sed -n 's/^set(QORE_LLVM_MAJOR_VERSION \([0-9][0-9]*\))$$/llvm-\1-dev/p' \
+			debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qore/QoreConfig.cmake); \
+		test -n "$$llvm_dep" || exit 1; \
+		dh_gencontrol -plibqore-dev -- "-Vqore:LLVM-Depends=$$llvm_dep"; \
+	fi
+	dh_gencontrol --remaining-packages

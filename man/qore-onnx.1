@@ -1,0 +1,34 @@
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.TH QORE-ONNX 1 "September 2026" "Qore" "User Commands"
+.SH NAME
+qore-onnx \- inspect, prepare, and validate ONNX models
+.SH SYNOPSIS
+.B qore-onnx
+.RI [ options ] " command"
+.SH DESCRIPTION
+.B qore-onnx
+provides the command-line interface to the QoreOnnxTools module.
+Commands include inspect, validate, benchmark, compare, profile, optimize,
+quantize, and check-python. Run with
+.B --help
+for the complete command and option list.
+.PP
+Available operations depend on the installed ONNX Runtime and Python tools.
+.SH OPTIONS
+.TP
+.BR \-i , " \-\-input=" file
+Specify the input model.
+.TP
+.BR \-o , " \-\-output=" file
+Specify the output file.
+.TP
+.BR \-J , " \-\-json"
+Use JSON output.
+.TP
+.BR \-h , " \-\-help"
+Show commands and options.
+.TP
+.BR \-V , " \-\-version"
+Show the tool version.
+.SH SEE ALSO
+.BR qore (1)

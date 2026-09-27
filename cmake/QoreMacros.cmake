@@ -2485,6 +2485,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # fixes that don't affect qmod output.  QoreAOTRuntime.cpp is part of
     # the stamp because it deserializes and registers slot-map metadata from
     # qmods; stale qmods can fail at load time if that path changes.
+    set(_qmod_opt_flags)
+    if (DEFINED QORE_AOT_MODULE_OPT_LEVEL)
+        if (NOT "${QORE_AOT_MODULE_OPT_LEVEL}" MATCHES "^[0-3]$")
+            message(FATAL_ERROR "QORE_AOT_MODULE_OPT_LEVEL must be 0, 1, 2, or 3")
+        endif()
+        list(APPEND _qmod_opt_flags "-O${QORE_AOT_MODULE_OPT_LEVEL}")
+    endif()
     set(_qmod_probe_dep "")
     if (DEFINED QORE_AOT_PROBE_STAMP)
         set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
@@ -2501,7 +2508,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                ${_qore_qcc_command} -m ${_source_root}
+                ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
@@ -2565,7 +2572,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                ${_qore_qcc_command} -m ${_source_root}
+                ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}

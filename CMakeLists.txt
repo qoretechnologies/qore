@@ -84,6 +84,11 @@ option(QORE_OPTIMIZE_DEBUG_BUILDS
 option(QORE_BUILD_AOT_MODULES
        "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
        ON)
+set(QORE_AOT_MODULE_OPT_LEVEL "3" CACHE STRING "Optimization level (0-3) for AOT user modules")
+
+option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
+       "Require installed dependencies instead of downloading and bundling fallback sources"
+       OFF)
 
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
@@ -705,6 +710,9 @@ else()
 endif()
 
 if (NOT CARES_FOUND_SYSTEM)
+    if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "System c-ares >= ${CARES_VERSION} is required; dependency downloads are disabled")
+    endif()
     # Build the latest stable c-ares from source via FetchContent.
     message(STATUS "system c-ares not found or too old; building from source (c-ares ${CARES_VERSION})")
     include(FetchContent)
@@ -996,6 +1004,9 @@ endif()
 
 set(QORE_JEMALLOC_LIBRARY)
 if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
+    if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "Bundled jemalloc is disabled by QORE_REQUIRE_SYSTEM_DEPENDENCIES; use QORE_DISABLE_JEMALLOC=ON on musl targets")
+    endif()
     # jemalloc is built from source rather than taken from the distribution, because it has to be built with
     # --disable-initial-exec-tls.  Distribution packages compile jemalloc's thread-specific data (je_tsd_tls) with
     # the initial-exec TLS model; linking that archive into libqore.so propagates an R_X86_64_TPOFF64 relocation
@@ -1148,6 +1159,9 @@ else()
 endif()
 
 if (NOT NGHTTP2_FOUND_SYSTEM)
+    if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "System nghttp2 >= ${NGHTTP2_VERSION} is required; dependency downloads are disabled")
+    endif()
     # Build the latest stable nghttp2 from source via FetchContent.
     # nghttp2 unconditionally creates an add_custom_target(check) like ngtcp2/
     # nghttp3, so we patch it out the same way before add_subdirectory.
@@ -1331,6 +1345,9 @@ else()
 endif()
 
 if (NOT QUIC_FOUND_SYSTEM)
+    if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
+        message(FATAL_ERROR "System ngtcp2 and ngtcp2_crypto_ossl >= ${NGTCP2_VERSION}, and nghttp3 >= ${NGHTTP3_VERSION}, are required; dependency downloads are disabled")
+    endif()
     # Build ngtcp2 and nghttp3 from source via FetchContent.
     # We use FetchContent_Populate + manual add_subdirectory because both
     # projects unconditionally create an add_custom_target(check) which
@@ -2625,6 +2642,7 @@ endfunction()
 # Dynamic link (.qmod): minimal extra libs beyond -lqore; libqore pulls in its
 # own transitive dependencies at load time.
 qore_libs_to_flags(_QORE_AOT_DYN_LIBS ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+string(STRIP "${_QORE_AOT_DYN_LIBS} ${CMAKE_SHARED_LINKER_FLAGS}" _QORE_AOT_DYN_LIBS)
 
 # Static link (--static executable): all of libqore's transitive dependencies,
 # since there is no shared libqore to pull them in.  Include the LLVM library

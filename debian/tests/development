@@ -1,0 +1,69 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+set -eu
+unset QORE_MODULE_DIR QORE_INCLUDE_DIR QORE_INCLUDE_DIRS QORE_LIBDIR QORE_AOT_LINK_CONF LD_LIBRARY_PATH
+cd "${AUTOPKGTEST_TMP:-$(mktemp -d)}"
+
+test -s /usr/bin/qcc-format.stamp
+test -s "$(pkg-config --variable=libdir qore)/qore/aot-link.conf"
+status=0
+qdx -h > qdx-help.txt 2>&1 || status=$?
+cat qdx-help.txt
+test "$status" -le 1
+grep -iq '^usage:' qdx-help.txt
+
+cat > main.cpp <<'EOF'
+#include <qore/Qore.h>
+int main() {
+    qore_init(QL_MIT);
+    qore_cleanup();
+}
+EOF
+c++ -std=c++20 main.cpp -o embedding $(pkg-config --cflags --libs qore)
+./embedding
+
+cat > CMakeLists.txt <<'EOF'
+cmake_minimum_required(VERSION 3.14)
+project(qore-package-test LANGUAGES CXX)
+find_package(Qore REQUIRED CONFIG)
+foreach(helper QORE_QCC_FORMAT_STAMP QORE_QCC_INCREMENTAL_HELPER QORE_QCC_SOURCE_ORDER_HELPER
+               QORE_QCC_BATCH_BOOTSTRAP_HELPER QORE_QCC_PRUNE_HELPER QORE_QM_METADATA_EXECUTABLE)
+    if(NOT EXISTS "${${helper}}")
+        message(FATAL_ERROR "Missing installed Qore support file: ${helper}=${${helper}}")
+    endif()
+endforeach()
+add_executable(embedding main.cpp)
+target_compile_features(embedding PRIVATE cxx_std_20)
+target_include_directories(embedding PRIVATE ${QORE_INCLUDE_DIRS})
+target_link_libraries(embedding PRIVATE ${QORE_LIBRARIES})
+EOF
+cmake -S . -B build
+cmake --build build
+./build/embedding
+
+cat > hello.q <<'EOF'
+%modern
+printf("qore-aot-ok\n");
+EOF
+qcc -o hello hello.q
+test "$(./hello)" = qore-aot-ok
+
+cat > PackageSmoke.qm <<'EOF'
+%modern
+module PackageSmoke {
+    version = "1.0";
+    desc = "Installed package smoke test";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+public int sub package_smoke_answer() {
+    return 42;
+}
+EOF
+qore-extract-qm-metadata PackageSmoke.qm metadata.json
+qore -l json -e 'parse_json(ReadOnlyFile::readTextFile("metadata.json"));'
+qcc -m -o PackageSmoke.qmod PackageSmoke.qm
+# The compiled module must work without its source file.
+mv PackageSmoke.qm PackageSmoke.qm.source
+QORE_MODULE_DIR="$PWD" qore -l PackageSmoke -e 'exit(package_smoke_answer() == 42 ? 0 : 1);'
