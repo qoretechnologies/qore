@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class Http3FamilyFallbackTest
+
+class FallbackHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! HTTP/3 connections to a host whose name resolves to addresses in both families, when the server only receives
+#! datagrams in one of them
+public class Http3FamilyFallbackTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        #! a QUIC listener on IPv4 only
+        int port;
+    }
+
+    constructor() : Test("Http3FamilyFallbackTest", "1.0") {
+        addTestCase("HttpClientIo family fallback", \httpClientIoTest());
+        addTestCase("HTTPClient family fallback", \httpClientTest());
+        addTestCase("no family reachable", \unreachableTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("h3-family",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("fallback", new FallbackHandler());
+        server.waitForAsyncIo();
+        port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(ReadOnlyFile::readTextFile(get_script_dir() + "/../../qore/classes/HTTPClient/"
+                "HttpClientTlsVerify.qtest") =~ x/const GoodCert = "([^"]+)"/[0]),
+            "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(get_script_dir() + "/../../qore/classes/HTTPClient/"
+                "HttpClientTlsVerify.qtest") =~ x/const GoodKey = "([^"]+)"/[0]),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! returns True if "localhost" resolves to an IPv6 address first, which the test needs
+    private bool checkDualStack() {
+        list<hash<auto>> addrs = getaddrinfo("localhost", NOTHING, AF_UNSPEC, 0);
+        hash<string, bool> families = map {$1.family: True}, addrs;
+        if (addrs[0].family != AF_INET6 || !families{AF_INET}) {
+            testSkip("\"localhost\" does not resolve to an IPv6 address and then to an IPv4 address here");
+            return False;
+        }
+        return True;
+    }
+
+    httpClientIoTest() {
+        if (!checkDualStack()) {
+            return;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+        });
+        on_exit mgr.closeAll();
+        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", port), "GET", "/");
+        assertEq(200, resp.status_code);
+        assertEq("reached", resp.body);
+    }
+
+    httpClientTest() {
+        if (!checkDualStack()) {
+            return;
+        }
+        HTTPClient hc({"url": sprintf("https://localhost:%d", port), "http_version": "3.0", "timeout": 20s});
+        hc.acceptAllCertificates();
+        assertEq("reached", hc.get("/"));
+    }
+
+    unreachableTest() {
+        # nothing listens on this port in either family: the error of an attempt is reported
+        int free_port = get_free_port();
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "max_request_retries": 1,
+        });
+        on_exit mgr.closeAll();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \mgr.request(), (sprintf("https://localhost:%d", free_port), "GET",
+            "/"));
+    }
+}

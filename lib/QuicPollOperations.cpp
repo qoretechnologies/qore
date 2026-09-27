@@ -459,7 +459,20 @@ QoreHashNode* SocketQuicClientPollOperation::getResolverPollInfo(ExceptionSink* 
 
 QoreHashNode* SocketQuicClientPollOperation::continueResolve(ExceptionSink* xsink) {
     if (!resolver) {
-        resolver = std::make_unique<QoreCaresAddrInfoResolver>(host, service, family_, SOCK_DGRAM, 0);
+        // a UDP socket that is already bound can only reach addresses in its own family, so without an explicit
+        // family the target is resolved in the family of the socket; otherwise a host with addresses in both
+        // families could resolve to an address the socket cannot connect to
+        int family = family_;
+        if (family == AF_UNSPEC) {
+            AutoLocker al(sock->priv->m);
+            if (sock->priv->socket) {
+                int sfamily = sock->priv->socket->priv->sfamily;
+                if (sfamily == AF_INET || sfamily == AF_INET6) {
+                    family = sfamily;
+                }
+            }
+        }
+        resolver = std::make_unique<QoreCaresAddrInfoResolver>(host, service, family, SOCK_DGRAM, 0);
     }
 
     int rc = resolver->continuePoll(xsink);

@@ -143,10 +143,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk,
-            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path) :
+            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path, *int address_family) :
             Http3ClientPollOperationBase(
                 Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path),
+                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path, address_family),
                 url_info.host,
                 url_info.port,
                 connection,
@@ -579,7 +579,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     */
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
             bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
-            *string ssl_ca_path) {
+            *string ssl_ca_path, *int address_family) {
         Socket sock();
 
         # Apply SSL verification settings before connect
@@ -600,7 +600,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
         }
 
-        int family = Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
+        # the connection manager selects the family, so an origin that is not reachable in one family can be reached
+        # in another
+        int family = address_family ?? Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
         string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
         # QUIC client sockets need a unique local UDP 4-tuple.  SO_REUSEADDR
         # with port 0 can let concurrent clients autobind the same ephemeral

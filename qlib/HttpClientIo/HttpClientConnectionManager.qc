@@ -120,6 +120,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
 
+        #! How long an address family in which an HTTP/3 connection failed without reaching a server is avoided
+        const H3FamilyFailureTtl = 5m;
+
+        #! Errors of HTTP/3 connections that never reached a server
+        const H3UnreachedErrors = {
+            "QUIC-CONNECT-REFUSED": True,
+            "QUIC-HANDSHAKE-TIMEOUT": True,
+        };
+
         #! Interval before re-probing HTTP/3 + HTTP/2 for hosts that fell back to HTTP/1.1
         /** A cached \c "h1" records that the server refused HTTP/2 via ALPN
             <i>and</i> that HTTP/3 also failed (see @ref heTryH1Fallback()).  That
@@ -264,6 +273,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
+
+        #! Address families that HTTP/3 connections failed to reach: "host:port" -> family -> expiry time
+        /** A host name can resolve to addresses of both families while the server only receives QUIC datagrams on
+            one of them; a family whose connection attempt never reached a server is not used for new HTTP/3
+            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl)
+        */
+        hash<string, hash<string, date>> h3_failed_families;
 
         #! Last HTTP/1.1 fallback times: "host:port" -> timestamp
         /** Written by @ref cacheProtocol() whenever \c "h1" is cached; read by
@@ -2137,6 +2153,69 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return url_info;
     }
 
+    #! Internal: returns the address family for a new HTTP/3 connection to the given host
+    /** The family of the first resolved address is used, unless an HTTP/3 connection to the origin in that family
+        recently failed without reaching a server and the host has an address in another family
+
+        @return the address family, or @ref NOTHING if the host name cannot be resolved here
+    */
+    private *int selectH3Family(string host, string key) {
+        if (host =~ /^\[.*\]$/ || host =~ /:/) {
+            return AF_INET6;
+        }
+        list<int> families;
+        try {
+            families = map $1.family, getaddrinfo(host, NOTHING, AF_UNSPEC, 0), $1.family == AF_INET
+                || $1.family == AF_INET6;
+        } catch (hash<ExceptionInfo> ex) {
+            # the QUIC resolver reports the connection error
+            return;
+        }
+        if (!families) {
+            return;
+        }
+        date now = now_us();
+        *hash<string, date> failed;
+        {
+            AutoWriteLock al(pool_lock);
+            # expired entries are removed
+            if (h3_failed_families{key}) {
+                h3_failed_families{key} = map {$1.key: $1.value}, h3_failed_families{key}.pairIterator(),
+                    $1.value > now;
+                if (!h3_failed_families{key}) {
+                    remove h3_failed_families{key};
+                }
+            }
+            failed = h3_failed_families{key};
+        }
+        foreach int family in (families) {
+            if (!failed{family}) {
+                return family;
+            }
+        }
+        # every family failed: start again with the first one
+        return families[0];
+    }
+
+    #! Internal: records that an HTTP/3 connection failed without reaching a server
+    /** @param key the origin pool key
+        @param conn the connection
+        @param err the error code of the failure
+    */
+    private recordH3FamilyFailure(string key, HttpClientConnection conn, *string err) {
+        if (conn.getProtocol() != "h3" || !H3UnreachedErrors{err}) {
+            return;
+        }
+        *int family = cast<Http3ClientConnection>(conn).getAddressFamily();
+        if (!family) {
+            return;
+        }
+        log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
+            "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
+        AutoWriteLock al(pool_lock);
+        h3_failed_families{key}{family} = now_us() + H3FamilyFailureTtl;
+    }
+
     #! Internal: creates a connection for an explicitly selected or cached protocol
     /** Automatic H3 connections use the happy-eyeballs race. Constructing an
         H3 poll operation alone does not prove that QUIC can complete a handshake.
@@ -2156,7 +2235,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             hash<auto> h3_url_info = prepareH3Probe(url_info, key);
             return new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+                selectH3Family(url_info.host, key));
         }
 
         # Create H2 connection
@@ -2473,7 +2553,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+                selectH3Family(url_info.host, key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -2803,7 +2884,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+                selectH3Family(url_info.host, key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -3292,6 +3374,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         if (result.ex) {
             log(LoggerLevel::ERROR, "connection %d error: %s: %s",
                 conn.getConnectionId(), result.ex.err, result.ex.desc);
+            recordH3FamilyFailure(key, conn, result.ex.err);
             # Cache the h1 fallback only on a definitive refusal of HTTP/2 by
             # the endpoint; see isDefinitiveH2AlpnRefusal() for why the broader
             # isH2cIncompatible() set must not be used here (this callback runs
@@ -3318,6 +3401,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             # Cache the h1 fallback only on a definitive ALPN refusal (see the
             # result.ex branch above and isDefinitiveH2AlpnRefusal())
             *hash<auto> op_err = op.getError();
+            recordH3FamilyFailure(key, conn, op_err.err);
             if (conn.getProtocol() == "h2" && isDefinitiveH2AlpnRefusal(op_err)) {
                 log(LoggerLevel::DEBUG, "%s refused HTTP/2 via ALPN, caching h1 fallback", key);
                 AutoWriteLock al(pool_lock);

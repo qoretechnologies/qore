@@ -350,8 +350,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             "h3": quic_good_port,
         };
         foreach hash<auto> i in (targets.pairIterator()) {
-            # the HTTP/3 listener is IPv4 only
-            string url = sprintf("https://%s:%d", i.key == "h3" ? "127.0.0.1" : "localhost", i.value);
+            string url = sprintf("https://localhost:%d", i.value);
             string msg = "HttpClientIo " + i.key;
             # not trusted by the default CAs
             {
