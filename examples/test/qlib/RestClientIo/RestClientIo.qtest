@@ -3354,6 +3354,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *hash<ExceptionInfo> ex = drivePingOp(op);
         assertTrue(exists ex, "non-2xx ping without retry should throw");
         assertEq("REST-PING-ERROR", ex.err);
+        # the status code is the argument, so callers can tell rate limiting and server errors apart
+        assertEq(500, ex.arg.status_code);
         assertFalse(op.goalReached());
     }
 
@@ -3391,6 +3393,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(exists ex, "a non-OAuth 401 ping must throw");
         assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
         assertEq("REST-PING-ERROR", ex.err, "a non-OAuth 401 must surface a ping error");
+        assertEq(401, ex.arg.status_code);
         assertFalse(op.goalReached());
         # no OAuth2 token refresh must have been attempted
         assertEq(0, token_handler.getRequestCount(), "no OAuth2 refresh must be attempted");

@@ -5904,8 +5904,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                 }
 
                 conn.authFailure();
+                # the status code is given as the argument, so a caller can tell rate limiting and server
+                # errors from other failures
                 throw "REST-PING-ERROR", sprintf("HTTP %d from RestClientIo ping %s %y",
-                    status_code, ping_method, ping_path);
+                    status_code, ping_method, ping_path), {"status_code": status_code};
             }
 
             break;
@@ -5994,7 +5996,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         } else {
             conn.authFailure();
             throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d",
-                status_code);
+                status_code), {"status_code": status_code};
         }
     }
 
