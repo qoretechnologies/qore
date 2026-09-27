@@ -36,10 +36,15 @@ class AotMetadataTest(unittest.TestCase):
             stream.write(self.trailers)
 
     def test_strip_and_debuglink(self):
+        nested = self.root / "Separated" / "Separated.qmod"
+        nested.parent.mkdir()
+        nested.write_bytes(self.module.read_bytes())
         debug = self.root / "Probe.debug"
         subprocess.run(["objcopy", "--only-keep-debug", str(self.module), str(debug)], check=True)
-        metadata.preserve(self.root, ["strip", "--strip-unneeded", str(self.module)])
+        metadata.preserve(self.root, ["strip", "--strip-unneeded", str(self.module), str(nested)])
         self.assertLess(self.module.stat().st_size, self.original_size)
+        self.assertLess(nested.stat().st_size, self.original_size)
+        self.assertEqual(metadata.read_trailers(nested), self.trailers)
         metadata.preserve(self.root, ["objcopy", "--add-gnu-debuglink=" + str(debug), str(self.module)])
         self.assertEqual(metadata.read_trailers(self.module), self.trailers)
         sections = subprocess.check_output(["readelf", "-S", str(self.module)], text=True)
