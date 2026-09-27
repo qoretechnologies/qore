@@ -134,6 +134,8 @@ module. qore itself includes the local debugger. Package moves include
 Breaks/Replaces for upgrades from pre-3.0 packages. Architecture-independent
 tools accept binary-only rebuilds of qore instead of requiring source:Version
 to equal binary:Version.
+The transition boundary is 3.0.0~ so 3.0 development snapshots can be installed
+together; a boundary of 3.0.0-1~ would make the new packages break each other.
 
 qore-doc contains generated HTML and examples. Its docs remain under its own
 package directory; they are not silently omitted or installed into the live

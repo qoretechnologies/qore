@@ -130,8 +130,9 @@ Recommends: cmake,
 Suggests: default-jdk-headless,
           doxygen,
           qore-jni-module
-Breaks: qore-misc-tools (<< 3.0.0-1~)
-Replaces: qore-misc-tools (<< 3.0.0-1~)
+# The move is already present in 3.0 development snapshots.
+Breaks: qore-misc-tools (<< 3.0.0~)
+Replaces: qore-misc-tools (<< 3.0.0~)
 Description: header files and compiler tools for developing with Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
@@ -161,8 +162,9 @@ Package: qore-debug-tools
 Architecture: all
 Depends: qore (>= ${source:Version}),
          ${misc:Depends}
-Breaks: qore (<< 3.0.0-1~)
-Replaces: qore (<< 3.0.0-1~)
+# The move is already present in 3.0 development snapshots.
+Breaks: qore (<< 3.0.0~)
+Replaces: qore (<< 3.0.0~)
 Description: remote debugging tools for Qore
  This package provides the Qore debug server, remote debugger, and Visual
  Studio Code debug adapter. The local qdbg debugger is included in qore.
