@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class TerminalColorTest
+
+public class TerminalColorTest inherits QUnit::Test {
+    constructor() : Test("TerminalColorTest", "1.0") {
+        addTestCase("terminal detection", \terminalTest());
+        addTestCase("NO_COLOR", \noColorTest());
+        set_return_value(main());
+    }
+
+    terminalTest() {
+        # a file is not a terminal, even though the process may have a controlling terminal
+        TmpFile tmp();
+        assertFalse(TerminalColor::isTerminal(tmp.file));
+        TerminalColor color(True, tmp.file);
+        assertFalse(color.enabled);
+        assertEq("text", color.red("text"));
+
+        # a file that is not open is not a terminal
+        assertFalse(TerminalColor::isTerminal(new File()));
+
+        # colors are applied if enabled
+        color.enabled = True;
+        assertEq("\033[31mtext\033[0m", color.red("text"));
+
+        # disabled by the argument
+        assertFalse(new TerminalColor(False, tmp.file).enabled);
+    }
+
+    noColorTest() {
+        *string orig = getenv("NO_COLOR");
+        on_exit {
+            if (exists orig) {
+                setenv("NO_COLOR", orig);
+            } else {
+                unsetenv("NO_COLOR");
+            }
+        }
+
+        unsetenv("NO_COLOR");
+        assertFalse(TerminalColor::isColorDisabled());
+        # an empty value does not disable colors
+        setenv("NO_COLOR", "");
+        assertFalse(TerminalColor::isColorDisabled());
+        setenv("NO_COLOR", "1");
+        assertTrue(TerminalColor::isColorDisabled());
+    }
+}

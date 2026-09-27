@@ -51,6 +51,8 @@ module TerminalFormat {
       markdown text to ANSI-formatted terminal output
     - @ref TerminalFormat::TerminalTableRenderer "TerminalTableRenderer": formats tabular
       data with Unicode box-drawing characters and column alignment
+    - @ref TerminalFormat::TerminalProgress "TerminalProgress": displays the progress of one or more transfers,
+      redrawn in place on a terminal and as progress lines in a log
 
     @section terminalformatusage Usage
 
@@ -71,7 +73,7 @@ module TerminalFormat {
     @section terminalformat_relnotes Release Notes
 
     @subsection terminalformat_v1_0 TerminalFormat v1.0
-    - initial release with markdown and table rendering
+    - initial release with markdown and table rendering, and progress display
 */
 
 public namespace TerminalFormat {

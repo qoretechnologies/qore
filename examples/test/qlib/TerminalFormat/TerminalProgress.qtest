@@ -1,0 +1,312 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires TerminalFormat
+%requires FsUtil
+
+%exec-class TerminalProgressTest
+
+#! A display with a clock set by the test and captured output
+class TestProgress inherits TerminalProgress {
+    public {
+        int now = 1000000000;
+        string out;
+    }
+
+    constructor(hash<TerminalProgressOptions> opts) : TerminalProgress(opts) {
+    }
+
+    advance(date d) {
+        now += d.durationMicroseconds();
+    }
+
+    string take() {
+        string rv = out ?? "";
+        remove out;
+        return rv;
+    }
+
+    private int getMicros() {
+        return now;
+    }
+
+    private writeOutput(string str) {
+        out += str;
+    }
+}
+
+public class TerminalProgressTest inherits QUnit::Test {
+    constructor() : Test("TerminalProgressTest", "1.0") {
+        addTestCase("formatting", \formatTest());
+        addTestCase("non-interactive lines", \lineModeTest());
+        addTestCase("interactive bars", \interactiveTest());
+        addTestCase("unknown total", \unknownTotalTest());
+        addTestCase("speed and stall", \speedTest());
+        addTestCase("multiple transfers", \multiTest());
+        addTestCase("narrow display", \narrowTest());
+        addTestCase("colors", \colorTest());
+        addTestCase("output file", \outputFileTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    formatTest() {
+        assertEq("0 B", TerminalProgress::formatBytes(0));
+        assertEq("1023 B", TerminalProgress::formatBytes(1023));
+        assertEq("1.0 KiB", TerminalProgress::formatBytes(1024));
+        assertEq("1.5 MiB", TerminalProgress::formatBytes(1024 * 1024 * 3 / 2));
+        assertEq("2.0 GiB", TerminalProgress::formatBytes(2 * 1024 * 1024 * 1024));
+        assertEq("1.0 TiB", TerminalProgress::formatBytes(1024 * 1024 * 1024 * 1024));
+        assertEq("3.0 PiB", TerminalProgress::formatBytes(3 * 1024 * 1024 * 1024 * 1024 * 1024));
+
+        assertEq("0:00", TerminalProgress::formatDuration(0));
+        assertEq("0:05", TerminalProgress::formatDuration(5000000));
+        assertEq("1:05", TerminalProgress::formatDuration(65000000));
+        assertEq("1:01:05", TerminalProgress::formatDuration(3665000000));
+        assertEq("2.5s", TerminalProgress::formatElapsed(2500000));
+        assertEq("1:05", TerminalProgress::formatElapsed(65000000));
+
+        assertEq("abcdef", TerminalProgress::truncateMiddle("abcdef", 6));
+        assertEq("abc…gh", TerminalProgress::truncateMiddle("abcdefgh", 6));
+        assertEq("ab...h", TerminalProgress::truncateMiddle("abcdefgh", 6, False));
+        assertEq("ab", TerminalProgress::truncateMiddle("abcdefgh", 2, False));
+    }
+
+    lineModeTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": False, "line_interval_ms": 10000});
+        assertFalse(p.isInteractive());
+        int id = p.add("file.bin", 1000);
+        assertEq("", p.take());
+
+        # lines are written at each 10%
+        p.advance(1s);
+        p.update(id, 50);
+        assertEq("", p.take());
+        p.update(id, 100);
+        string line = p.take();
+        assertRegex("^file.bin: 10% 100 B/1000 B ", line);
+        assertEq(1, (line =~ x/(\n)/g).size());
+        # no cursor movements or carriage returns
+        assertFalse(line =~ /[\r\033]/);
+
+        # several steps passed at once give one line
+        p.update(id, 450);
+        assertRegex("^file.bin: 45% ", p.take());
+        p.update(id, 480);
+        assertEq("", p.take());
+
+        # a line is written after the line interval even without a new step
+        p.advance(10s);
+        p.update(id, 490);
+        assertRegex("^file.bin: 49% ", p.take());
+
+        p.finish(id, "saved file.bin");
+        assertEq("saved file.bin\n", p.take());
+        # no message
+        id = p.add("x", 10);
+        p.finish(id);
+        assertEq("", p.take());
+    }
+
+    interactiveTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 80, "unicode": False,
+            "color": False});
+        assertTrue(p.isInteractive());
+        int id = p.add("file.bin", 1000);
+        string out = p.take();
+        # the first draw does not move the cursor up
+        assertEq(-1, out.find("\033[1F"));
+        assertTrue(out =~ /^file.bin +\[> +\]   0% 0 B\/1000 B -- ETA --:--\033\[K\n$/, out);
+
+        # updates within the redraw interval are not drawn
+        p.update(id, 100);
+        assertEq("", p.take());
+        p.advance(100ms);
+        p.update(id, 500);
+        out = p.take();
+        # the display is redrawn in place
+        assertTrue(out =~ /^\033\[1F/, out);
+        assertTrue(out =~ /\[=+> +\]  50% 500 B\/1000 B/, out);
+        # a line fits the display without wrapping
+        string line = (out =~ x/^\033\[1F(.*)\033\[K\n$/)[0];
+        assertEq(79, line.length());
+
+        # a message is written above the bars
+        p.log("redirected");
+        out = p.take();
+        assertTrue(out.find("\033[1F\033[J") == 0, out);
+        assertTrue(out =~ /redirected\n/);
+        assertTrue(out =~ /file\.bin/);
+
+        p.advance(100ms);
+        p.update(id, 1000);
+        out = p.take();
+        assertTrue(out =~ /\[=+\] 100% 1000 B\/1000 B/, out);
+        assertFalse(out =~ /ETA/);
+
+        p.finish(id, "done");
+        out = p.take();
+        # the bar is replaced by the message
+        assertEq("\033[1F\033[Jdone\n", out);
+
+        # close() clears remaining bars
+        id = p.add("other", 10);
+        p.take();
+        p.close();
+        assertEq("\033[1F\033[J", p.take());
+        p.close();
+        assertEq("", p.take());
+    }
+
+    unknownTotalTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 60, "unicode": True,
+            "color": False});
+        int id = p.add("stream", NOTHING);
+        string out = p.take();
+        assertTrue(out =~ /\[ *███ *\] 0 B --\033/, out);
+        assertFalse(out =~ /%/);
+
+        # a total that becomes known is shown
+        p.setTotal(id, 2048);
+        assertTrue(p.take() =~ /  0% 0 B\/2.0 KiB/);
+        p.setLabel(id, "renamed");
+        assertTrue(p.take() =~ /^\033\[1Frenamed /);
+
+        TestProgress l(<TerminalProgressOptions>{"interactive": False, "line_interval_ms": 1000});
+        id = l.add("stream", NOTHING);
+        l.advance(1s);
+        l.update(id, 4096);
+        assertRegex("^stream: 4.0 KiB ", l.take());
+    }
+
+    speedTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": False, "line_interval_ms": 1000, "stall_ms": 5000});
+        int id = p.add("f", 100 * 1024 * 1024);
+        # 1 MiB per second
+        for (int i = 1; i <= 10; ++i) {
+            p.advance(1s);
+            p.update(id, i * 1024 * 1024);
+        }
+        string line = p.take().split("\n")[-1];
+        assertRegex(" 1.0 MiB/s ETA 1:30$", line);
+
+        # the speed follows a change within a few seconds
+        for (int i = 1; i <= 10; ++i) {
+            p.advance(1s);
+            p.update(id, 10 * 1024 * 1024 + i * 2 * 1024 * 1024);
+        }
+        line = p.take().split("\n")[-1];
+        assertRegex(" 2.0 MiB/s ", line);
+
+        # no progress for longer than stall_ms
+        p.advance(6s);
+        p.update(id, 30 * 1024 * 1024);
+        assertRegex(" stalled ETA --:--$", p.take());
+
+        assertRegex("^30.0 MiB in 26.0s \\(1.2 MiB/s\\)$", p.getSummary(id));
+
+        # a resumed transfer does not count what was already done toward the speed
+        id = p.add("r", 2048, 1024);
+        p.advance(2s);
+        p.update(id, 2048);
+        assertEq("2.0 KiB in 2.0s (512 B/s)", p.getSummary(id));
+    }
+
+    multiTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 80, "unicode": False,
+            "color": False});
+        int a = p.add("a", 100);
+        int b = p.add("b", 100);
+        string out = p.take();
+        # the second add redraws both lines
+        assertTrue(out =~ /\033\[1Fa .*\n.*b .*\n$/, out);
+        p.advance(100ms);
+        p.update(b, 50);
+        out = p.take();
+        assertTrue(out =~ /^\033\[2Fa .*\033\[K\nb .*50%.*\033\[K\n$/, out);
+
+        # finishing one transfer leaves the other
+        p.finish(a, "a done");
+        out = p.take();
+        assertTrue(out =~ /^\033\[2F\033\[Ja done\nb /, out);
+        p.advance(100ms);
+        p.update(b, 60);
+        assertTrue(p.take() =~ /^\033\[1Fb /);
+    }
+
+    narrowTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": True, "columns": 40, "unicode": False,
+            "color": False});
+        p.add("a-very-long-file-name-that-does-not-fit.tar.gz", 1000);
+        string line = (p.take() =~ x/^(.*)\033\[K\n$/)[0];
+        assertTrue(line.length() <= 39, line);
+        assertRegex("\\.\\.\\.", line);
+        assertRegex("0 B/1000 B", line);
+    }
+
+    colorTest() {
+        *string orig = getenv("NO_COLOR");
+        on_exit {
+            if (exists orig) {
+                setenv("NO_COLOR", orig);
+            } else {
+                unsetenv("NO_COLOR");
+            }
+        }
+
+        hash<TerminalProgressOptions> opts = <TerminalProgressOptions>{"interactive": True, "columns": 80,
+            "unicode": False};
+        # colors are used by default
+        unsetenv("NO_COLOR");
+        TestProgress p(opts);
+        p.add("f", 10);
+        assertTrue(p.take() =~ /\033\[36m/);
+
+        # NO_COLOR disables colors unless they are requested explicitly
+        setenv("NO_COLOR", "1");
+        p = new TestProgress(opts);
+        p.add("f", 10);
+        assertFalse(p.take() =~ /\033\[3[0-9]m/);
+        p = new TestProgress(cast<hash<TerminalProgressOptions>>(opts + {"color": True}));
+        p.add("f", 10);
+        assertTrue(p.take() =~ /\033\[36m/);
+
+        # a non-interactive display never uses colors
+        p = new TestProgress(cast<hash<TerminalProgressOptions>>(opts + {
+            "interactive": False,
+            "color": True,
+            "line_interval_ms": 0,
+        }));
+        int id = p.add("f", 10);
+        p.update(id, 5);
+        assertFalse(p.take() =~ /\033/);
+    }
+
+    outputFileTest() {
+        TmpFile tmp();
+        # a file is not a terminal, so progress lines are written
+        TerminalProgress p(<TerminalProgressOptions>{"output": tmp.file});
+        assertFalse(p.isInteractive());
+        int id = p.add("f", 10);
+        p.update(id, 5);
+        p.finish(id, "done");
+        list<string> lines = ReadOnlyFile::readTextFile(tmp.path).split("\n");
+        assertEq(2, lines.size());
+        assertRegex("^f: 50% 5 B/10 B ", lines[0]);
+        assertEq("done", lines[1]);
+    }
+
+    errorTest() {
+        TestProgress p(<TerminalProgressOptions>{"interactive": False});
+        assertThrows("TERMINALPROGRESS-ERROR", \p.update(), (99, 1));
+        assertThrows("TERMINALPROGRESS-ERROR", \p.finish(), (99,));
+        assertThrows("TERMINALPROGRESS-ERROR", \p.setTotal(), (99, 1));
+        assertThrows("TERMINALPROGRESS-ERROR", \p.getSummary(), (99,));
+    }
+}

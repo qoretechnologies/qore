@@ -2824,25 +2824,34 @@ public class TerminalColor {
     }
 
     #! Creates a TerminalColor object
-    /** @param enable_color if @ref True "True", color output is enabled if stdout is a terminal;
-        if @ref False "False", color output is always disabled
+    /** @param enable_color if @ref True "True", color output is enabled if the output is a terminal and the
+        \c NO_COLOR environment variable is not set; if @ref False "False", color output is always disabled
+        @param output the file that the colored text is written to; @ref Qore::stdout "stdout" if not given
     */
-    constructor(bool enable_color = True) {
-        # Check if stdout is a terminal and color is requested
-        enabled = enable_color && TerminalColor::isTerminal();
+    constructor(bool enable_color = True, *ReadOnlyFile output) {
+        enabled = enable_color && TerminalColor::isTerminal(output) && !TerminalColor::isColorDisabled();
     }
 
-    #! Check if stdout is connected to a terminal
-    /** @return @ref True "True" if stdout is connected to a terminal, @ref False "False" otherwise
+    #! Returns @ref True "True" if the given file is a terminal
+    /** @param output the file to check; @ref Qore::stdout "stdout" if not given
+
+        @return @ref True "True" if the file is a terminal, @ref False "False" if it is redirected to a file or a pipe,
+        even if the process has a controlling terminal
     */
-    static bool isTerminal() {
+    static bool isTerminal(*ReadOnlyFile output) {
         try {
-            # Try to get terminal window size - this will fail if not a terminal
-            hash<auto> ws = TermIOS::getWindowSize();
-            return ws.columns > 0;
-        } catch () {
+            return (output ?? stdout).isTty();
+        } catch (hash<ExceptionInfo> ex) {
+            # the file is not open
             return False;
         }
+    }
+
+    #! Returns @ref True "True" if color output is disabled by the \c NO_COLOR environment variable
+    /** Color output is disabled if \c NO_COLOR is set to a non-empty value; see https://no-color.org
+    */
+    static bool isColorDisabled() {
+        return getenv("NO_COLOR").val();
     }
 
     #! Apply a color code to text if colors are enabled
