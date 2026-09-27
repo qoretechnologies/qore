@@ -3781,6 +3781,8 @@ QoreSocket* QoreSocket::createAcceptedSocket(int descriptor) {
     if (!priv->alpn_protocols.empty()) {
         s->priv->alpn_protocols = priv->alpn_protocols;
     }
+    s->priv->ssl_ca_file = priv->ssl_ca_file;
+    s->priv->ssl_ca_path = priv->ssl_ca_path;
     return s;
 }
 
@@ -5608,8 +5610,11 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
 #endif
 
     // set verification mode
-    if (qs.ssl_verify_mode != SSL_VERIFY_NONE) {
-        setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target);
+    if (qs.ssl_verify_mode != SSL_VERIFY_NONE
+            && setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target)) {
+        sslError(xsink, mname, "SSL_CTX_load_verify_locations", true, SslCall::Setup);
+        assert(*xsink);
+        return -1;
     }
 
 #if defined(HAVE_SSL_SET_MAX_PROTO_VERSION) && defined(TLS1_3_VERSION)
@@ -6107,12 +6112,21 @@ static int q_ssl_verify_accept_default(int preverify_ok, X509_STORE_CTX* x509_ct
     return preverify_ok;
 }
 
-void SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::string& target) {
+int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::string& target) {
     printd(5, "SSLSocketHelper::setVerifyMode() mode: %d accept_all_certs: %d target: %s\n", mode,
         (int)accept_all_certs, target.c_str());
+    int rc = 0;
     if (!accept_all_certs) {
-        // issue #3818: load default CAs
-        SSL_CTX_set_default_verify_paths(ctx);
+        if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
+            // the configured CA certificates are trusted instead of the default CAs
+            if (!SSL_CTX_load_verify_locations(ctx, qs.ssl_ca_file.empty() ? nullptr : qs.ssl_ca_file.c_str(),
+                    qs.ssl_ca_path.empty() ? nullptr : qs.ssl_ca_path.c_str())) {
+                rc = -1;
+            }
+        } else {
+            // issue #3818: load default CAs
+            SSL_CTX_set_default_verify_paths(ctx);
+        }
 
 #if defined(HAVE_SSL_SET_HOSTFLAGS) && defined(HAVE_SSL_SET1_HOST)
         // issue #3808: enable hostname validation with certificate validation, otherwise all valid certificates are
@@ -6127,6 +6141,7 @@ void SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::
     }
 
     SSL_set_verify(ssl, mode, accept_all_certs ? q_ssl_verify_accept_all : q_ssl_verify_accept_default);
+    return rc;
 }
 
 bool SSLSocketHelper::captureRemoteCert() const {

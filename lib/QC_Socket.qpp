@@ -6719,6 +6719,45 @@ bool Socket::getAcceptAllCertificates() [flags=CONSTANT] {
     return s->getAcceptAllCertificates();
 }
 
+//! Sets the CA certificates that the certificate of the peer is verified against
+/** When set, the certificate of the peer is verified against the given CA certificates instead of the default CA
+    certificates of the system in any TLS handshake started afterwards, so that, for example, a server with a
+    certificate issued by a private CA can be verified; certificates are only verified if verification is enabled
+    with @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()"
+
+    @par Example:
+    @code{.py}
+sock.setSslCaLocations("/etc/pki/my-ca.pem");
+sock.setSslVerifyMode(SSL_VERIFY_PEER);
+sock.connectSSL("server.example.com:443");
+    @endcode
+
+    @param ca_file a file with one or more CA certificates in PEM format
+    @param ca_path a directory with CA certificates in PEM format named by the hash of their subject names, as
+    prepared by the \c openssl \c rehash command; if neither argument is given, the default CA certificates are used
+    again
+
+    @throw SOCKET-SSL-ERROR raised by the TLS handshake if the CA certificates cannot be loaded
+
+    @see
+    - @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()"
+    - @ref Qore::Socket::acceptAllCertificates() "Socket::acceptAllCertificates()"
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        if (ca_file && !smh->checkFilesystemAccess(ca_file->c_str(), QSEC_READ, xsink)) {
+            return QoreValue();
+        }
+        if (ca_path && !smh->checkFilesystemAccess(ca_path->c_str(), QSEC_READ, xsink)) {
+            return QoreValue();
+        }
+    }
+    s->setSslCaLocations(ca_file ? ca_file->c_str() : nullptr, ca_path ? ca_path->c_str() : nullptr, xsink);
+}
+
 //! Sets the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 /** @par Example:
     @code{.py}

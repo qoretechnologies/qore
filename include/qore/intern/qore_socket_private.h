@@ -1030,6 +1030,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::atomic<bool> pre_close_interrupt_fired{false};
     //! ALPN protocols for TLS negotiation (HTTP/2 support)
     std::vector<std::string> alpn_protocols;
+
+    //! A PEM file with the CA certificates that server certificates are verified against, if set
+    /** if either this or @ref ssl_ca_path is set, the certificates are loaded instead of the default CA locations
+    */
+    std::string ssl_ca_file;
+    //! A directory with hashed CA certificates that server certificates are verified against, if set
+    std::string ssl_ca_path;
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
     //! protects event queue pointer, callback argument, and data flag lifetime

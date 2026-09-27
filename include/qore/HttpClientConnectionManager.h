@@ -184,6 +184,18 @@ public:
 
         //! Client private key for mutual TLS (ref'd; nullptr = no key).
         QoreSSLPrivateKey* client_key = nullptr;
+
+        //! A PEM file with the CA certificates that server certificates are verified against instead of the
+        //! default CAs; empty = not set
+        /** @since %Qore 3.0
+        */
+        std::string ssl_ca_file;
+
+        //! A directory with the CA certificates that server certificates are verified against instead of the
+        //! default CAs; empty = not set
+        /** @since %Qore 3.0
+        */
+        std::string ssl_ca_path;
         //! Maximum size in bytes of a response body received into memory; 0 = no limit
         /** A response body that is returned whole and exceeds it fails the request with
             \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; a body delivered incrementally to a streaming consumer is not

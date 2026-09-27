@@ -509,6 +509,36 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
 
 // ===== SSL Context Setup =====
 
+// Verify callback for a client with ssl_accept_all_certs=true: accepts any server certificate, as with a TLS
+// connection over TCP
+static int quic_client_accept_all_verify_cb(int preverify_ok, X509_STORE_CTX* ctx) {
+    return 1;
+}
+
+//! Returns the key of the session tickets of a client: the origin and the trust configuration of the client
+static std::string quic_ticket_cache_key(const char* host, uint16_t port, int ssl_verify_mode,
+        const qore_socket_private* sock, QoreSSLCertificate* client_cert) {
+    std::string key = std::string(host) + ":" + std::to_string(port) + "|v" + std::to_string(ssl_verify_mode);
+    if (sock) {
+        key += sock->ssl_accept_all_certs ? "|a1" : "|a0";
+        key += "|f" + sock->ssl_ca_file + "|p" + sock->ssl_ca_path;
+    }
+    // the client identity is part of the session
+    if (client_cert && client_cert->getData()) {
+        unsigned char md[EVP_MAX_MD_SIZE];
+        unsigned int md_len = 0;
+        if (X509_digest(client_cert->getData(), EVP_sha256(), md, &md_len)) {
+            static const char hex[] = "0123456789abcdef";
+            key += "|c";
+            for (unsigned int i = 0; i < md_len; ++i) {
+                key += hex[md[i] >> 4];
+                key += hex[md[i] & 0xf];
+            }
+        }
+    }
+    return key;
+}
+
 int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink,
                                     QoreSSLCertificate* client_cert, QoreSSLPrivateKey* client_pk) {
     ssl_ctx_ = SSL_CTX_new(TLS_client_method());
@@ -521,11 +551,28 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
     SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(ssl_ctx_, TLS1_3_VERSION);
 
-    // Load system default CA certificates
-    SSL_CTX_set_default_verify_paths(ssl_ctx_);
+    // the trust configuration of the socket, as with a TLS connection over TCP (see SSLSocketHelper::setVerifyMode())
+    bool accept_all = sock_ && sock_->ssl_accept_all_certs;
+    if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
+        // the configured CA certificates are trusted instead of the default CAs
+        if (!SSL_CTX_load_verify_locations(ssl_ctx_,
+                sock_->ssl_ca_file.empty() ? nullptr : sock_->ssl_ca_file.c_str(),
+                sock_->ssl_ca_path.empty() ? nullptr : sock_->ssl_ca_path.c_str())) {
+            unsigned long err = ERR_get_error();
+            char buf[256];
+            ERR_error_string_n(err, buf, sizeof(buf));
+            ERR_clear_error();
+            xsink->raiseException("QUIC-SSL-ERROR", "cannot load the CA certificates (file: '%s', path: '%s'): %s",
+                sock_->ssl_ca_file.c_str(), sock_->ssl_ca_path.c_str(), buf);
+            return -1;
+        }
+    } else {
+        // Load system default CA certificates
+        SSL_CTX_set_default_verify_paths(ssl_ctx_);
+    }
 
-    // Enable certificate verification if requested
-    SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
+    // Enable certificate verification if requested; with accept_all_certs, any certificate is accepted
+    SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, accept_all ? quic_client_accept_all_verify_cb : nullptr);
 
     // Load client certificate and private key for mTLS (mutual TLS)
     if (client_cert && client_pk) {
@@ -569,6 +616,17 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
     }
 
     SSL_set_connect_state(ssl_);
+
+    // a verified certificate must also be valid for the host connected to, otherwise any valid certificate is
+    // accepted, whatever host it was issued for
+    if (ssl_verify_mode != SSL_VERIFY_NONE && !accept_all) {
+        SSL_set_hostflags(ssl_, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+        if (!SSL_set1_host(ssl_, host)) {
+            xsink->raiseException("QUIC-SSL-ERROR", "failed to set the host name '%s' for certificate verification",
+                host);
+            return -1;
+        }
+    }
 
     // Set ALPN to "h3"
     if (SSL_set_alpn_protos(ssl_, H3_ALPN, H3_ALPN_LEN) != 0) {
@@ -745,6 +803,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     if (setupClientSslCtx(host, ssl_verify_mode, xsink, client_cert, client_pk) != 0) {
         return -1;
     }
+    ticket_cache_key_ = quic_ticket_cache_key(host, port, ssl_verify_mode, sock, client_cert);
 
     // Set up conn_ref for TLS integration
     conn_ref_.get_conn = getConnFromRef;
@@ -755,7 +814,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     std::vector<uint8_t> cached_tp;
     if (enable_0rtt) {
         SSL_SESSION* cached_session = nullptr;
-        std::string origin = std::string(host) + ":" + std::to_string(port);
+        const std::string& origin = ticket_cache_key_;
         if (QuicSessionTicketCache::instance().lookup(origin, &cached_session, cached_tp)) {
             SSL_set_session(ssl_, cached_session);
             SSL_SESSION_free(cached_session);  // SSL_set_session up-refs it
@@ -3964,8 +4023,8 @@ int QuicSession::newSessionTicketCallback(SSL* ssl, SSL_SESSION* session) {
         SSL_SESSION_up_ref(session);
         ticket.session = session;
 
-        // Store in cache keyed by origin
-        std::string origin = qs->host_ + ":" + std::to_string(qs->port_);
+        // Store in cache keyed by origin and trust configuration
+        const std::string& origin = qs->ticket_cache_key_;
         QuicSessionTicketCache::instance().store(origin, std::move(ticket));
 
         printd(3, "QuicSession::newSessionTicketCallback(): cached ticket for '%s' "
@@ -3986,7 +4045,7 @@ int QuicSession::earlyDataRejectedCallback(ngtcp2_conn* /* conn */, void* user_d
 
     try {
         // Invalidate the cached ticket since the server rejected 0-RTT
-        std::string origin = session->host_ + ":" + std::to_string(session->port_);
+        const std::string& origin = session->ticket_cache_key_;
         QuicSessionTicketCache::instance().remove(origin);
 
         printd(2, "QuicSession::earlyDataRejectedCallback(): 0-RTT rejected by server, "

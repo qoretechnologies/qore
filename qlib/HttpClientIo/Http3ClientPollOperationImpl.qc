@@ -143,10 +143,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk,
-            HttpClientConnection connection) :
+            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path) :
             Http3ClientPollOperationBase(
                 Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk),
+                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path),
                 url_info.host,
                 url_info.port,
                 connection,
@@ -578,7 +578,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     /** Called from the constructor initializer list before the C++ base constructor.
     */
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
-            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
+            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
+            *string ssl_ca_path) {
         Socket sock();
 
         # Apply SSL verification settings before connect
@@ -594,6 +595,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         }
         if (client_pk) {
             sock.setPrivateKey(client_pk);
+        }
+        if (ssl_ca_file || ssl_ca_path) {
+            sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
         }
 
         int family = Http3ClientPollOperation::selectLocalBindFamily(url_info.host);

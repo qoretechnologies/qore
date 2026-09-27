@@ -127,7 +127,8 @@ public:
     DLLLOCAL X509* getPeerCertificate() const;
     DLLLOCAL long verifyPeerCertificate() const;
 
-    DLLLOCAL void setVerifyMode(int mode, bool accept_all_certs, const std::string& target);
+    //! Sets the verification mode; returns -1 if the configured CA locations cannot be loaded
+    DLLLOCAL int setVerifyMode(int mode, bool accept_all_certs, const std::string& target);
 
     DLLLOCAL bool captureRemoteCert() const;
     DLLLOCAL void clearRemoteCertContext() const;

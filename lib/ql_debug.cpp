@@ -2993,7 +2993,7 @@ static void ut_http2_connection_construct(UnitTestCounters& c) {
     // construction path without exercising the SSL setup.
     ReferenceHolder<Http2ClientConnection> conn(
         new Http2ClientConnection("127.0.0.1", dead_port,
-            /* ssl_required */ false, /* max_streams */ 100, &xsink),
+            /* ssl_required */ false, /* max_streams */ 100, Http1SslConfig(), &xsink),
         &xsink);
     UT_ASSERT(c, !xsink, "Http2ClientConnection construction succeeds (h2c, refused port)");
     if (xsink) { xsink.clear(); return; }
@@ -3027,7 +3027,7 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
 
     ReferenceHolder<Http2ClientConnection> conn(
         new Http2ClientConnection("127.0.0.1", dead_port,
-            /* ssl_required */ true, /* max_streams */ 100, &xsink),
+            /* ssl_required */ true, /* max_streams */ 100, Http1SslConfig(), &xsink),
         &xsink);
     UT_ASSERT(c, !xsink, "HTTPS Http2ClientConnection construction succeeds (ALPN configured)");
     if (xsink) { xsink.clear(); return; }

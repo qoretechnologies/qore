@@ -61,12 +61,14 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param proxy_info parsed HTTP proxy info (optional)
         @param client_cert X.509 client certificate for mutual TLS (optional)
         @param client_pk private key matching \a client_cert (optional)
+        @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     Http1ClientConnection::validateMaxStreams(max_streams),
                     proxy_info) {
@@ -76,7 +78,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             client_cert ? True : False);
 
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk);
+            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path);
     }
 
     #! Enforces the HTTP/1.1 single-stream cap before the parent constructor runs.

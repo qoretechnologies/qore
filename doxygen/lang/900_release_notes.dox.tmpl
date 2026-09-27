@@ -1718,6 +1718,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endcode
     @endparblock
 
+    @par Private Certificate Authorities for TLS Clients
+    @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()" and the new \c ssl_ca_file and
+    \c ssl_ca_path options of @ref Qore::HTTPClient::constructor() "HTTPClient::constructor()" set the CA
+    certificates that server certificates are verified against instead of the default CA certificates of the
+    system, for HTTP/1.1, HTTP/2, and HTTP/3 connections.
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse

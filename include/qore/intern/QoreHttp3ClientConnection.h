@@ -79,6 +79,8 @@ public:
         @param ssl_accept_all_certs pass through to the socket (matches H1/H2)
         @param client_cert optional mTLS client certificate (ref'd by ctor)
         @param client_key optional mTLS client private key (ref'd by ctor)
+        @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
     */
     DLLLOCAL Http3ClientConnection(const char* target_host, int target_port,
         int max_concurrent_streams, ExceptionSink* xsink,
@@ -86,7 +88,9 @@ public:
         int ssl_verify_mode = 0,
         bool ssl_accept_all_certs = false,
         QoreSSLCertificate* client_cert = nullptr,
-        QoreSSLPrivateKey* client_key = nullptr);
+        QoreSSLPrivateKey* client_key = nullptr,
+        const std::string& ssl_ca_file = std::string(),
+        const std::string& ssl_ca_path = std::string());
 
     DLLLOCAL virtual ~Http3ClientConnection();
 
@@ -246,6 +250,8 @@ private:
     */
     int ssl_verify_mode_ = 0;
     bool ssl_accept_all_certs_ = false;
+    std::string ssl_ca_file_;
+    std::string ssl_ca_path_;
     QoreSSLCertificate* client_cert_ = nullptr;
     QoreSSLPrivateKey* client_key_ = nullptr;
 

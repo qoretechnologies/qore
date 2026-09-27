@@ -1573,6 +1573,11 @@ private:
     std::atomic<uint64_t> migration_gen_{0};
     int64_t goaway_max_stream_id_{-1};               //!< max stream ID from received GOAWAY; protected by mtx_
     std::string host_;                               //!< server hostname for :authority fallback
+    //! the key of this client's session tickets in QuicSessionTicketCache: the origin and the trust configuration
+    /** a resumed TLS session is not verified again, so a ticket obtained with one trust configuration (for example
+        with all certificates accepted) must never be used by a client with another one
+    */
+    std::string ticket_cache_key_;
     uint16_t port_ = 0;                             //!< server port
 
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)

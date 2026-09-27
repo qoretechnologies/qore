@@ -1,0 +1,397 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientTlsVerifyTest
+
+class TlsVerifyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "verified", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Tests verification of server certificates against the default and against given CA certificates
+public class HttpClientTlsVerifyTest inherits QUnit::Test {
+    public {
+        #! a test CA; the certificates below are issued by it and are valid until 2126
+        const CaCert = "-----BEGIN CERTIFICATE-----
+MIIDADCCAeigAwIBAgIUR2sLyK+bBRz7slg+Z7BV+NmPp6wwDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAXMRUwEwYDVQQDDAxRb3JlIFRlc3QgQ0EwggEiMA0GCSqG
+SIb3DQEBAQUAA4IBDwAwggEKAoIBAQDNQ33+AdkQ1e+95ebIvJJnLQvcElmccCFM
+S6NmRPTgycf/AELEY9kYlGriaGHv9HmbIkawi0JS5+SBAQlJEgkMziHoPWPVEYAQ
+oLEP+iYcJICIiHCyuZ/ViJvna5SqT5k2XpT+ztqgYxrFlAsyWc0VpUU3Ke1kSxBQ
+z4LJz+shcqZHbBdYOBFanSK71fFUN4Otx5eAOD8Fnp9V2GRvYPpawOWyhIjL2JpA
+A4WxxVSDee+dZZqgrYBzofoNnOUTp47MDOkLappFVy6CLl5NDqLfcEbApftSsYHD
+hrb7MyC+zujTAhc+MkdBcitYRum1uTXIRrNoligEuJGmEWsg3LGVAgMBAAGjQjBA
+MA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBQ2CBUE
+L5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAjp2bBTTdUdBawMyh
+FzLEU0cOpTtUs2+RhrWIji6elFzvgkG7PttC8eGXgv8hqe8ZTa9ws4WvIFhMdDJQ
+vexnWjWtz1j5txp2RewHqKm2pCn9VfG3HegwDPaa1eWhc9jfPvix6noOPJSoosky
++bofotpipnmK0hWQkGM1Lr1UVBCAFkhJwt7kvCz8YkxqvCjZrcUIhMpbINVMDvg/
+upJuI3MLGgHxZN8LS7gEiA7iqVfd+TIQGcrbBPKOwHblmkYWE3RWdPhkd0z/8y9Q
+ZcD8HKkXG/XGRPLa1MfbikECRSfI+xAa1YJ3bkAxw3+ReumG4R8dAirVkVCd8gA1
+MveKGQ==
+-----END CERTIFICATE-----";
+
+        const GoodCert = "-----BEGIN CERTIFICATE-----
+MIIDOTCCAiGgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK4wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3
+DQEBAQUAA4IBDwAwggEKAoIBAQCV1xww09YCd0nlSlHTcSvmd2+w+iECqGYJZ0LC
+yMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTuoN2qDfC+bV1iDezfH3wjW2Mi
+woWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGDaA78dfuKMfjVgouQq0j36xct
+Qp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQsnbyj3qWQb4OSH9r3MDqkCNA
+cPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwHP1x9R7zsMctD2utLzg8uE7PC
+xhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+DhMqer1HAgMBAAGjfjB8MBoG
+A1UdEQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMBMGA1UdJQQMMAoG
+CCsGAQUFBwMBMB0GA1UdDgQWBBRrykHXWldynutxb8kegXI2TDL/wjAfBgNVHSME
+GDAWgBQ2CBUEL5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAICu/
+eAbP2pLfzfg2OehX2Md42ESOal0UMpXrfX5Y5FZuk7zbz4YhEUGlOTcayhkzJywt
+eO1a04VCpwhOhKMg47/d/sKaZ6s2y9kXG28nt/EtBSB1jlgyd1bETJTmqTAuLnUT
+qgZgZwmYJ+/UQJNySQQg2oi3hJsTfaK1VLe1+Eo1XwDocUsTZZy3h2hBKQgByMja
+Rwtsu7UOGp2wmXPpXcJIsX6lj/vY15f0EwbWBnUY2TN02TLQUaJmN1o4o1kOQe0H
+BruWF8zd4JEPIHXXq/5WJVF5UPDOktEsK+z4CTZmNxHPJyUrNrlKQBYNZkXIaM3M
+cT/QPnxjlFfMh4oBxA==
+-----END CERTIFICATE-----";
+
+        const GoodKey = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCV1xww09YCd0nl
+SlHTcSvmd2+w+iECqGYJZ0LCyMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTu
+oN2qDfC+bV1iDezfH3wjW2MiwoWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGD
+aA78dfuKMfjVgouQq0j36xctQp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQ
+snbyj3qWQb4OSH9r3MDqkCNAcPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwH
+P1x9R7zsMctD2utLzg8uE7PCxhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+
+DhMqer1HAgMBAAECggEAEuBGbOBC1YyxgnEaXcij/ySMrX7VKcCNGiIoBuHE0TgA
+2F1RLhSsJN8ejRXmhgfIdtcPjiqsn15TDLy3L/URnuuoF/IpJPKScOHSW06mBa0N
+Zjx+xiG6hpQphv9R7iWNPPlyDxZ8ItrEngk92hAC4CXrcvo/Grp5NsIm6Uy7RWdv
+hTyoL3EWBg6dLHzEGJJprmOh4t+2o5FF3Kt3Rckaw755ALw0sFwdPEnooAjF6ZE3
+rGt4b1GvGH157gzjGwav2ORYUQtcVlfr/+aSsKe6+Jl4OzlGopXF5Gfxcthlb0Ci
+NIswH9/Jaqou0gv8yYLPcld5wuxfXhlTiCPbC2++AQKBgQDSUjHpEn4SruKDNN4g
+rwxHHc2LL7HlrQLTre37sRF6xudsOp9LL7IFImX+Z9Vscp/OyzNEsRu+dwuWyBQd
+aeU9fjKh3A49hA7aL7Wirh88KlRvYyzuL+1YJQO4Lqr1ExLk4ZZtxervcFSV53Wl
+d48gApbBDFmRESlmge65Pkbf8wKBgQC2YjIzFRwbvi9Ph+OTM2auYl8SLXaDve8g
+JDb2wHz9bVR3jonHsLsuIEDQMlzXP1pF3jjL1+y/8eOz0AQ2B4S8bqa1FLCFrfdr
+pVmFffeFtVLqHqX+Or+1Ozzyz1XwGprSFBS2O7utgA4p32ivJPjaFwj9CYV5PjVU
+uuaxwjGWXQKBgD7N0J2aqg8GLhmkBdiYrP/nhGNVwLem7Dstqu0HuQKCtsR41Oxs
+t6oU1YQcmXyi1dm4j/ypLnG3trw1ztvhrVSphJEU1yPDdXPt3z1O5YDf2wrQALC3
+mxZBJ1UuilpYccHrIzJwcXFCh9+jmFvq0dBrNX08JNrO1yAHGLQ0RpHFAoGAI3zX
+57ijz4IiEoeOcIX/5M6fURonhVrfvJFPYJPzvhwX42uIw6JPyZndAqXKCtf46L9k
+rcVF+9NFSyeeqiSsXz3okjOEZX6ENh3mXWM1Vn8BsyxjgCROSSVNprFRN3b1yQq/
+PPZCfm/8UYl3BR1cjpMM3K+NmRnRprr3SH9QxsECgYEAgTR94CDtYFnOf6fYlKrS
+LS2vudPAPnPgvnMyoXqkdMVXPFaGt2H0jZbqJNeZ4rDD+F7xKw7Bh7dobks+nTpE
+DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
++QCcroH4V1WH5zPROGJoPVc=
+-----END PRIVATE KEY-----";
+
+        const WrongHostCert = "-----BEGIN CERTIFICATE-----
+MIIDOzCCAiOgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK8wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAYMRYwFAYDVQQDDA13cm9uZy5leGFtcGxlMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwO+qaTPK6GbIZQbX8o2X+/Mhxk7HVqSx
+816E+UnDLMip4bIqLqvIoJ5hGDxQ0a7sMgYBOukt3RZIFYcsf/l/C7CvjRb8XWDg
+VSBnww/55/r91KS+7EGyXy8wmoS9vhp+iaYQlMmF2aHHZKd4bt/9Ijd4rvGkczY8
+DHuoTKVdtqcjactDLPVH6N6DD4aGyvCCnMZlKWTZlm7o1VtlH6sIY5CzahvU7k2p
++u0RYeaCWezp5nXI1M+gxJEfwmG9jMJxNqmQZZIyGXulkwfoy1VZTDW63+fPXkZw
+I+Lla+qLdz9Av3GxpyRwG5l0/Cvngi2fSvoIUzag5SHm07Fq4IcjNwIDAQABo3ww
+ejAYBgNVHREEETAPgg13cm9uZy5leGFtcGxlMAkGA1UdEwQCMAAwEwYDVR0lBAww
+CgYIKwYBBQUHAwEwHQYDVR0OBBYEFNqjH4kxDaMdPkQ8wUal1KINH4+sMB8GA1Ud
+IwQYMBaAFDYIFQQvmu4ohXtBjX26E+WtWq17MA0GCSqGSIb3DQEBCwUAA4IBAQBt
+mva8AxwROjl35RMm0m9zdyqlF39eOtQzz1c0TDLPQFS8E6RwPZnCxuRTcOz6vudI
+XAwkiLRZotpe40IE/n2R/r6MDkrBBOHc2KtIBFIN5IlqyFILPsjoH+7uHPdxjmkl
+D888ngNQL6uoLp8qLJWji9Nj+b2YLyzFOT0QhQfov8Ys6lnqkzvfDeI2k8yRCIcg
+K5DSSS4xhgHAimoAgAHYAl0DomZnAWR0lKurPpAztpuXhsh4ZUuVBXxT5SXKKebS
+q93zma4tfuQ2dEPADe4ByiXtbIYNmnE++3r7mVVoTddz9w44yJWWYYUdFA+ups4E
+4oPyUfNoP1pLBnjJpT6J
+-----END CERTIFICATE-----";
+
+        const WrongHostKey = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDA76ppM8roZshl
+BtfyjZf78yHGTsdWpLHzXoT5ScMsyKnhsiouq8ignmEYPFDRruwyBgE66S3dFkgV
+hyx/+X8LsK+NFvxdYOBVIGfDD/nn+v3UpL7sQbJfLzCahL2+Gn6JphCUyYXZocdk
+p3hu3/0iN3iu8aRzNjwMe6hMpV22pyNpy0Ms9Ufo3oMPhobK8IKcxmUpZNmWbujV
+W2UfqwhjkLNqG9TuTan67RFh5oJZ7OnmdcjUz6DEkR/CYb2MwnE2qZBlkjIZe6WT
+B+jLVVlMNbrf589eRnAj4uVr6ot3P0C/cbGnJHAbmXT8K+eCLZ9K+ghTNqDlIebT
+sWrghyM3AgMBAAECggEARY8i1UMDCL7lyOaqvJwoC4Igzypf2/EM5z1Qm7/oSiEe
+fmyJoMH2V1JCl0ZHrRFvvqlDkEW5b1g1LO3LMWh2UXSmFiwPWGsw9f/06PK9mtF2
+6k9rNiqJcJ/G2i65aeyLan0gxUPSqiAVj0iBtxeyX7+4Fvqv24nWJHoAt4F3Q/5m
+FpPGogA+O1caU2WAGU3VahW94f9akPr9EBgB8wn8VYram77mdBao1vEH7x1NxC8s
+8qMa3F4JlkyQ7qTcpbee7n6W3qWcSQMSH+u9mkNpCneK1+fyD0XoW1junXStDmQC
+JdrYNXIQvy1KWP0DLyczr3v2yczyKmdd96Bult2vwQKBgQDg8wxsuavBo1/UAWar
+l3pZ7Tt8YST61USg8tzE0B1K1Du8qemre+QCJDa/qigsuQ6JYwv8tJCRUA5KiLUN
+CaXpduk6zsEub9g0Ya3p4VatbnVrF1+QDOBEJ19Cf9WIq4R/G6U/igG3OXHQgeYX
+SHnbNpIPXbzAE+xB6jNGGtVGmQKBgQDbkWDd7br7YFmnngKFiK/xYwQgj8QiAxwA
+FTt5DnXH91pWES3Y+nu3ugB7wSJvyeZh4WnpQU3GNaWkWR5qy8l8oahwqYiQZbvw
+DiP6xnJDLwEhuHd/VlcM/F7HCmIgRqtHXKtmR373Rvs0P/I2MupiigfHqfvDhwp5
+oL6xoTNqTwKBgAeRheB+mr3IHmhGp8qsLQyrg63aouDhng6APVdN3T5wR5ZAbUE8
+yN4dk839Dp76lveeYn/dH2QUOnbdhKHsqi1ht9Unsa47Sx3wD2boEv+A0OiKf8eb
+90uzu2vEW03e33VbW8L4hLhCcYbfZ/tuj9MFUgK8V6ZqxS8ujw0TyAs5AoGAM6UL
+SsgbHft4uxNQdoZDFBz9IIeQU4u1r1NPLNc43vMQXYQm641nQjzO1k0EQ5USyl0R
+41qH56JAttp7bBVI7Da9/tnxlD1Jqlo5HkhFIgZRVtQjz2DIkvZdeKW5lOvqZ5ul
+eSZB9/nLJmwQFa1+MfVThSQ3YrNFxHwJvpAzHsMCgYEApTLnfEFcIXMdDeseDAGf
+wizI/j/Ai3ZonZNJ1u22DXsfVGKvpkYlgw+anjqgqmXMC3Jfuba5lTCx+R6O2SmW
+czUixLJ966g4AJiHp4pFPkKsSxgEcq/yyrkH3Ji5VZmvcz2C6Wd0X4v9CVNib5Sq
+WKEuKQ7xuGuAiIESuSDBsSg=
+-----END PRIVATE KEY-----";
+
+        #! the subject name hash of CaCert, which names it in a CA directory
+        const CaHash = "86453cfa";
+
+        #! HTTP versions tested over TCP
+        const TcpVersions = ("1.1", "2.0", "auto");
+    }
+
+    private {
+        TmpDir tmp;
+        string ca_file;
+        string ca_dir;
+        HttpServer server;
+        #! TLS listener with a certificate for localhost and 127.0.0.1
+        int good_port;
+        #! TLS listener with a certificate for another host
+        int wrong_port;
+        #! QUIC listeners
+        int quic_good_port;
+        int quic_wrong_port;
+    }
+
+    constructor() : Test("HttpClientTlsVerifyTest", "1.0") {
+        addTestCase("Socket CA locations", \socketTest());
+        addTestCase("HTTPClient CA options", \httpClientTest());
+        addTestCase("HTTPClient CA with HTTP/3", \http3Test());
+        addTestCase("HTTP/3 session tickets", \http3TicketTest());
+        addTestCase("HttpClientIo CA options", \httpClientIoTest());
+        addTestCase("HTTPClient option errors", \optionErrorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("tls-verify-");
+        ca_file = tmp.path + "/ca.pem";
+        File f();
+        f.open2(ca_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(CaCert + "\n");
+        ca_dir = tmp.path + "/ca-dir";
+        mkdir(ca_dir);
+        f = new File();
+        f.open2(ca_dir + "/" + CaHash + ".0", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(CaCert + "\n");
+
+        Logger logger("tls-verify", LoggerLevel::getLevelInfo());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server.setDefaultHandler("tls", new TlsVerifyHandler());
+        good_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(GoodCert),
+            "key": new SSLPrivateKey(GoodKey),
+        }).port;
+        wrong_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(WrongHostCert),
+            "key": new SSLPrivateKey(WrongHostKey),
+        }).port;
+        server.waitForAsyncIo();
+        quic_good_port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(GoodCert),
+            "key": new SSLPrivateKey(GoodKey),
+        }).port;
+        quic_wrong_port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(WrongHostCert),
+            "key": new SSLPrivateKey(WrongHostKey),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+        delete tmp;
+    }
+
+    socketTest() {
+        # the default CAs do not include the test CA
+        Socket s();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        assertThrows("SOCKET-SSL-ERROR", \s.connectSSL(), ("localhost:" + good_port, 10s));
+
+        # a CA file
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(ca_file);
+        s.connectSSL("localhost:" + good_port, 10s);
+        assertEq("X509_V_OK", s.verifyPeerCertificate());
+        s.close();
+
+        # a CA directory
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(NOTHING, ca_dir);
+        s.connectSSL("localhost:" + good_port, 10s);
+        s.close();
+
+        # a certificate issued by the CA for another host is rejected
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(ca_file);
+        assertThrows("SOCKET-SSL-ERROR", \s.connectSSL(), ("localhost:" + wrong_port, 10s));
+
+        # ... unless all certificates are accepted
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(ca_file);
+        s.acceptAllCertificates();
+        s.connectSSL("localhost:" + wrong_port, 10s);
+        s.close();
+
+        # CA locations that cannot be loaded are an error
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(tmp.path + "/no-such-file.pem");
+        assertThrows("SOCKET-SSL-ERROR", \s.connectSSL(), ("localhost:" + good_port, 10s));
+
+        # clearing the CA locations restores the default CAs
+        s = new Socket();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslCaLocations(ca_file);
+        s.setSslCaLocations();
+        assertThrows("SOCKET-SSL-ERROR", \s.connectSSL(), ("localhost:" + good_port, 10s));
+    }
+
+    httpClientTest() {
+        foreach string version in (TcpVersions) {
+            string msg = "HTTP " + version;
+            # not trusted by the default CAs
+            HTTPClient hc({"url": "https://localhost:" + good_port, "http_version": version,
+                "ssl_verify_cert": True, "timeout": 10s});
+            assertThrows("SOCKET-SSL-ERROR", \hc.get(), "/", msg + " (default CAs)");
+
+            # trusted with the CA file or directory
+            foreach hash<auto> opt in ({"ssl_ca_file": ca_file}, {"ssl_ca_path": ca_dir}) {
+                hc = new HTTPClient({"url": "https://localhost:" + good_port, "http_version": version,
+                    "ssl_verify_cert": True, "timeout": 10s} + opt);
+                assertEq("verified", hc.get("/"), msg + sprintf(" %y", opt));
+            }
+
+            # the CA locations are serialized with the client
+            HTTPClient hc2 = Serializable::deserialize(hc.serialize());
+            assertEq("verified", hc2.get("/"), msg + " (deserialized)");
+
+            # a certificate issued for another host is rejected
+            hc = new HTTPClient({"url": "https://localhost:" + wrong_port, "http_version": version,
+                "ssl_verify_cert": True, "ssl_ca_file": ca_file, "timeout": 10s});
+            assertThrows("SOCKET-SSL-ERROR", \hc.get(), "/", msg + " (wrong host)");
+
+            # setting the CA locations on an existing client applies to new connections
+            hc = new HTTPClient({"url": "https://localhost:" + good_port, "http_version": version,
+                "ssl_verify_cert": True, "timeout": 10s});
+            hc.setSslCaLocations(ca_file);
+            assertEq("verified", hc.get("/"), msg + " (setSslCaLocations())");
+        }
+    }
+
+    http3Test() {
+        string url = "https://localhost:" + quic_good_port;
+        HTTPClient hc({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "timeout": 10s});
+        assertRejected(\hc.get(), "/", "HTTP/3 default CAs");
+
+        hc = new HTTPClient({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "ssl_ca_file": ca_file,
+            "timeout": 10s});
+        assertEq("verified", hc.get("/"));
+
+        # the host name is verified
+        url = "https://localhost:" + quic_wrong_port;
+        hc = new HTTPClient({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "ssl_ca_file": ca_file,
+            "timeout": 10s});
+        assertRejected(\hc.get(), "/", "HTTP/3 wrong host");
+
+        # all certificates are accepted if requested
+        hc = new HTTPClient({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "ssl_ca_file": ca_file,
+            "timeout": 10s});
+        hc.acceptAllCertificates();
+        assertEq("verified", hc.get("/"));
+    }
+
+    #! A session resumed with a ticket is not verified again, so a ticket must not be used with another trust configuration
+    http3TicketTest() {
+        string url = "https://localhost:" + quic_wrong_port;
+        # a client that accepts all certificates connects and receives a session ticket
+        for (int i = 0; i < 2; ++i) {
+            HTTPClient hc({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "timeout": 10s});
+            hc.acceptAllCertificates();
+            assertEq("verified", hc.get("/"));
+            hc.disconnect();
+        }
+        # a verifying client to the same origin must not resume that session
+        HTTPClient hc({"url": url, "http_version": "3.0", "ssl_verify_cert": True, "ssl_ca_file": ca_file,
+            "timeout": 10s});
+        assertRejected(\hc.get(), "/", "HTTP/3 no resumption across trust configurations");
+    }
+
+    httpClientIoTest() {
+        # protocol -> port
+        hash<string, int> targets = {
+            "h1": good_port,
+            "h2": good_port,
+            "h3": quic_good_port,
+        };
+        foreach hash<auto> i in (targets.pairIterator()) {
+            # the HTTP/3 listener is IPv4 only
+            string url = sprintf("https://%s:%d", i.key == "h3" ? "127.0.0.1" : "localhost", i.value);
+            string msg = "HttpClientIo " + i.key;
+            # not trusted by the default CAs
+            {
+                HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": i.key,
+                    "ssl_verify_mode": SSL_VERIFY_PEER,
+                });
+                on_exit mgr.closeAll();
+                assertRejected(\mgr.request(), (url, "GET", "/"), msg + " (default CAs)");
+            }
+            foreach hash<auto> opt in ({"ssl_ca_file": ca_file}, {"ssl_ca_path": ca_dir}) {
+                HttpClientIo::HttpClientConnectionManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>(
+                    {"protocol": i.key, "ssl_verify_mode": SSL_VERIFY_PEER} + opt));
+                on_exit mgr.closeAll();
+                hash<auto> resp = mgr.request(url, "GET", "/");
+                assertEq(200, resp.status_code, msg + sprintf(" %y", opt));
+                assertEq("verified", resp.body, msg + sprintf(" %y", opt));
+            }
+        }
+    }
+
+    optionErrorTest() {
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", sub () {
+            HTTPClient hc({"url": "https://localhost", "ssl_ca_file": 1});
+        });
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", sub () {
+            HTTPClient hc({"url": "https://localhost", "ssl_ca_path": True});
+        });
+    }
+
+    #! asserts that the call fails because the server certificate is rejected
+    private assertRejected(code c, auto args, string msg) {
+        try {
+            call_function_args(c, args);
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("%s: %s: %s\n", msg, ex.err, ex.desc);
+            }
+            assertRegex("certificate verify failed", ex.desc, msg + ": " + ex.err);
+        }
+    }
+}

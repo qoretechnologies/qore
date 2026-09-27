@@ -62,6 +62,8 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     accept_all_certs = ssl_config.accept_all;
     client_cert = ssl_config.cert;
     client_key = ssl_config.key;
+    ssl_ca_file = ssl_config.ca_file;
+    ssl_ca_path = ssl_config.ca_path;
     // Set the manager BEFORE submitting to the I/O controller so that
     // onClosedHook dispatches correctly even when the I/O thread
     // processes a connect failure before we return to the caller.
@@ -85,6 +87,8 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     accept_all_certs = ssl_config.accept_all;
     client_cert = ssl_config.cert;
     client_key = ssl_config.key;
+    ssl_ca_file = ssl_config.ca_file;
+    ssl_ca_path = ssl_config.ca_path;
     negotiate_alpn = ssl_config.negotiate_alpn;
     if (mgr) {
         setManager(mgr);
@@ -175,6 +179,14 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //     by configureSsl() called from the manager after construction.
     sock_priv_raw->setSslVerifyMode(ssl_verify_mode);
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
+    if (!ssl_ca_file.empty() || !ssl_ca_path.empty()) {
+        // the socket is not submitted yet, so it is configured directly
+        sock_priv_raw->setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
+            ssl_ca_path.empty() ? nullptr : ssl_ca_path.c_str(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the

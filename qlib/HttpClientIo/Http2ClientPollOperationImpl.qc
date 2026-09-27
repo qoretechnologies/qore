@@ -71,14 +71,16 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         @param connection the owning HttpClientConnection
         @param client_cert X.509 client certificate for mutual TLS (optional)
         @param client_pk private key matching \a client_cert (optional)
+        @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info, HttpClientConnection connection,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) :
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) :
             Http2ClientPollOperationBase(
                 Http2ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk),
+                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path),
                 Http2ClientPollOperation::computeConnectTarget(url_info, proxy_info),
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
@@ -174,7 +176,8 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
 
     #! Internal: creates and configures a TCP socket for HTTP/2
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
-            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
+            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
+            *string ssl_ca_path) {
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {
@@ -189,6 +192,9 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
             }
             if (client_pk) {
                 sock.setPrivateKey(client_pk);
+            }
+            if (ssl_ca_file || ssl_ca_path) {
+                sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
             }
             sock.setAlpnProtocols(("h2",));
         }

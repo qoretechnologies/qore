@@ -2147,7 +2147,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
             HttpClientConnection conn = new Http1ClientConnection(url_info, opts.connect_timeout, logger,
                 1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
-                opts.client_cert, opts.client_pk);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
             applyTcpUserTimeout(conn);
             return conn;
         }
@@ -2156,7 +2156,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             hash<auto> h3_url_info = prepareH3Probe(url_info, key);
             return new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         }
 
         # Create H2 connection
@@ -2164,7 +2164,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         HttpClientConnection h2 = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk);
+            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2);
         return h2;
     }
@@ -2473,7 +2473,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -2525,7 +2525,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
         Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk);
+            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
@@ -2803,7 +2803,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk);
+                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -3000,7 +3000,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             "happy eyeballs (async): starting H2 for %s (H3 still pending)", race.key);
         Http2ClientConnection h2conn(race.url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk);
+            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, race.key);

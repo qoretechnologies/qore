@@ -57,6 +57,8 @@ struct Http1SslConfig {
     QoreSSLCertificate* cert = nullptr;  //!< client cert for mutual TLS (NOT ref'd by this struct)
     QoreSSLPrivateKey* key = nullptr;    //!< client key for mutual TLS (NOT ref'd by this struct)
     bool negotiate_alpn = false; //!< if true, configure ALPN {"h2","http/1.1"} on the socket
+    std::string ca_file;        //!< PEM file with the CA certificates to verify the server with, if set
+    std::string ca_path;        //!< directory with the CA certificates to verify the server with, if set
 };
 
 //! HTTP/1.1 C++ client connection
@@ -390,6 +392,10 @@ private:
 
     //! Client private key for mutual TLS (ref'd; nullptr = no key)
     QoreSSLPrivateKey* client_key = nullptr;
+
+    //! CA certificates to verify the server with instead of the default CAs, if set
+    std::string ssl_ca_file;
+    std::string ssl_ca_path;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.

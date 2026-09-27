@@ -220,7 +220,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     as a @ref binary "binary" value, because its octets are not text and converting them would corrupt them.
 
     |!Media type|!Body
-    |\c text/*, \c application/json, \c application/xml, \c application/javascript, \c application/x-www-form-urlencoded, \c application/x-yaml, \c application/yaml, and any \c +json or \c +xml structured syntax suffix|a string in the character encoding given by the \c charset parameter, or the assumed encoding if none is given
+    |\c text/&#42;, \c application/json, \c application/xml, \c application/javascript, \c application/x-www-form-urlencoded, \c application/x-yaml, \c application/yaml, and any \c +json or \c +xml structured syntax suffix|a string in the character encoding given by the \c charset parameter, or the assumed encoding if none is given
     |any other media type, such as \c application/octet-stream, \c image/png, or \c application/pdf|a @ref binary "binary" value holding the octets as received
     |none declared|a string, as this class has always delivered a response that declares no media type
 
@@ -514,6 +514,13 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       used, then the calling context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which
       is checked at runtime
     - \c ssl_key_password: the password to the private key given with \c ssl_key_path
+    - \c ssl_ca_file: a file with one or more CA certificates in PEM format; if set, the server's certificate is
+      verified against these CA certificates instead of the default CA certificates of the system (see
+      @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()"); if this option is used, then the calling
+      context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which is checked at runtime
+    - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
+      set, the server's certificate is verified against these CA certificates instead of the default CA certificates
+      of the system; the same restrictions apply as with \c ssl_ca_file
     - \c ssl_verify_cert: if @ref True "True" then the server's certificate will only be accepted if it's verified
     - \c timeout: The timeout value in milliseconds (also can be a @ref relative_dates "relative date-time value" for
       clarity, ex: \c 5m)
@@ -567,6 +574,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 3.0 added the following options:
       - \c http3_mode
       - \c max_response_body_size
+      - \c ssl_ca_file
+      - \c ssl_ca_path
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);

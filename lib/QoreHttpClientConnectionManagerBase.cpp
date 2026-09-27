@@ -501,6 +501,18 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 // createConnection (H1 only in P3)
 // ============================================================
 
+//! Returns the TLS configuration for a new connection from the manager's options
+static Http1SslConfig get_ssl_config(const HttpClientConnectionManagerBase::Options& opts) {
+    Http1SslConfig ssl_cfg;
+    ssl_cfg.verify_mode = opts.ssl_verify_mode;
+    ssl_cfg.accept_all = opts.accept_all_certs;
+    ssl_cfg.cert = opts.client_cert;
+    ssl_cfg.key = opts.client_key;
+    ssl_cfg.ca_file = opts.ssl_ca_file;
+    ssl_cfg.ca_path = opts.ssl_ca_path;
+    return ssl_cfg;
+}
+
 HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         const std::string& /*key*/, const char* host, int port,
         bool ssl_required, ExceptionSink* xsink, bool wait_for_ready) {
@@ -557,11 +569,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 
     switch (protocol) {
         case HttpClientProtocol::H1: {
-            Http1SslConfig ssl_cfg;
-            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
-            ssl_cfg.accept_all = opts_.accept_all_certs;
-            ssl_cfg.cert = opts_.client_cert;
-            ssl_cfg.key = opts_.client_key;
+            Http1SslConfig ssl_cfg = get_ssl_config(opts_);
             if (proxy_info_) {
                 conn = new Http1ClientConnection(host, port, ssl_required,
                     proxy_info_->host.c_str(), proxy_info_->port,
@@ -572,7 +580,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             }
             break;
         }
-        case HttpClientProtocol::H2:
+        case HttpClientProtocol::H2: {
             if (proxy_info_ && ssl_required) {
                 // H2 through an HTTP proxy: use the NEGOTIATE path which
                 // creates an H1 CONNECT tunnel, does SSL+ALPN inside, and
@@ -580,9 +588,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 // to the NEGOTIATE case.
                 goto negotiate_case;
             }
+            // the server certificate is verified as with any other protocol
+            Http1SslConfig ssl_cfg = get_ssl_config(opts_);
             conn = new Http2ClientConnection(host, port, ssl_required,
-                opts_.max_streams_per_connection, xsink, this);
+                opts_.max_streams_per_connection, ssl_cfg, xsink, this);
             break;
+        }
         case HttpClientProtocol::H3:
             if (proxy_info_) {
                 xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
@@ -592,7 +603,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this,
                 opts_.ssl_verify_mode, opts_.accept_all_certs,
-                opts_.client_cert, opts_.client_key);
+                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path);
             break;
         case HttpClientProtocol::NEGOTIATE:
         negotiate_case: {
@@ -617,11 +628,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 return nullptr;
             }
 
-            Http1SslConfig ssl_cfg;
-            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
-            ssl_cfg.accept_all = opts_.accept_all_certs;
-            ssl_cfg.cert = opts_.client_cert;
-            ssl_cfg.key = opts_.client_key;
+            Http1SslConfig ssl_cfg = get_ssl_config(opts_);
 
             if (proxy_info_) {
                 // the connect phase of the tunneled connection starts now; an HTTP/2 connection adopting its

@@ -35,6 +35,7 @@
 
 #include <qore/HttpClientConnection.h>
 #include <qore/ReferenceHolder.h>
+#include "qore/intern/QoreHttp1ClientConnection.h"
 
 #include <string>
 
@@ -86,11 +87,14 @@ public:
         @param max_concurrent_streams advisory cap on concurrent streams
             per connection (0 = unlimited; the actual cap is also bounded
             by the server's @c MAX_CONCURRENT_STREAMS setting)
+        @param ssl_config the TLS configuration of the connection: certificate verification and any client
+            certificate; applied to the socket before connecting (the ALPN setting is not used, as ALPN \c "h2" is
+            always configured for a TLS connection)
         @param xsink exception sink — set on construction failure
         @param mgr optional owning manager — registered before I/O submission
     */
     DLLLOCAL Http2ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink,
+        bool ssl_required, int max_concurrent_streams, const Http1SslConfig& ssl_config, ExceptionSink* xsink,
         HttpClientConnectionManagerBase* mgr = nullptr);
 
     //! Creates a new HTTP/2 client connection by adopting an
@@ -272,6 +276,11 @@ private:
 
     //! Configured max concurrent streams (0 = unlimited).
     int max_concurrent_streams_ = 0;
+
+    //! the TLS configuration applied to the socket of a connection that connects itself
+    /** the client certificate and key are not referenced; they are owned by the manager's options
+    */
+    Http1SslConfig ssl_config_;
 
     //! Owner string for controller submit info hash; default per-instance.
     std::string owner_str;

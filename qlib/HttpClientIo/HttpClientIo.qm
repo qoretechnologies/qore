@@ -565,6 +565,18 @@ public namespace HttpClientIo {
         #! Accept all SSL certificates including self-signed certificates
         bool accept_all_certs = False;
 
+        #! A PEM file with the CA certificates that server certificates are verified against
+        /** if set, server certificates are verified against these CA certificates instead of the default CA
+            certificates of the system; see @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()"
+        */
+        *string ssl_ca_file;
+
+        #! A directory with the CA certificates that server certificates are verified against
+        /** if set, server certificates are verified against the CA certificates in this directory, which are named
+            by the hash of their subject names, instead of the default CA certificates of the system
+        */
+        *string ssl_ca_path;
+
         #! Logger for connection manager
         *LoggerInterface logger;
 

@@ -399,6 +399,15 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
         ssl_config.key->ref();
         sock_priv_raw->setPrivateKey(ssl_config.key);
     }
+    if (!ssl_config.ca_file.empty() || !ssl_config.ca_path.empty()) {
+        // the socket is not submitted yet, so it is configured directly
+        sock_priv_raw->setSslCaLocationsForAsyncPoll(
+            ssl_config.ca_file.empty() ? nullptr : ssl_config.ca_file.c_str(),
+            ssl_config.ca_path.empty() ? nullptr : ssl_config.ca_path.c_str(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
 
     ReferenceHolder<QoreObject> sock_obj_holder(
         new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);

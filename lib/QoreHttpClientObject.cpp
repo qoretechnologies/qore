@@ -1499,6 +1499,8 @@ struct qore_httpclient_priv {
                         || opts.assumed_encoding != getAssumedHttpEncoding()
                         || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
+                        || opts.ssl_ca_file != msock->socket->priv->ssl_ca_file
+                        || opts.ssl_ca_path != msock->socket->priv->ssl_ca_path
                         || opts.client_cert != msock->cert
                         || opts.client_key != msock->pk) {
                     old_mgr = std::move(conn_mgr);
@@ -1522,6 +1524,8 @@ struct qore_httpclient_priv {
                 // SSL settings from the HTTPClient
                 opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+                opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
+                opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
                 opts.client_cert = msock->cert;
                 opts.client_key = msock->pk;
                 // Proxy URL from the existing connection info
@@ -1771,6 +1775,12 @@ struct qore_httpclient_priv {
         }
         if (sock.ssl_verify_mode == SSL_VERIFY_PEER) {
             h->setKeyValueIntern("ssl_verify_cert", true);
+        }
+        if (!sock.ssl_ca_file.empty()) {
+            h->setKeyValueIntern("ssl_ca_file", new QoreStringNode(sock.ssl_ca_file));
+        }
+        if (!sock.ssl_ca_path.empty()) {
+            h->setKeyValueIntern("ssl_ca_path", new QoreStringNode(sock.ssl_ca_path));
         }
         if (timeout != HTTPCLIENT_DEFAULT_TIMEOUT) {
             h->setKeyValueIntern("timeout", timeout);
@@ -3854,6 +3864,34 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("ssl_verify_cert");
     if (n.getAsBool()) {
         priv->socket->setSslVerifyMode(SSL_VERIFY_PEER);
+    }
+
+    // the CA certificates that the server certificate is verified against instead of the default CAs
+    for (const char* key : {"ssl_ca_file", "ssl_ca_path"}) {
+        n = opts->getKeyValue(key);
+        if (n.isNothing()) {
+            continue;
+        }
+        if (n.getType() != NT_STRING) {
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting a string value for the \"%s\" key in the "
+                "options hash; got type \"%s\" instead", key, n.getTypeName());
+            return -1;
+        }
+        const char* path = n.get<const QoreStringNode>()->c_str();
+        if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
+            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
+                "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
+            return -1;
+        }
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+            return -1;
+        }
+        if (!strcmp(key, "ssl_ca_file")) {
+            qore_socket_private::get(*priv->socket)->ssl_ca_file = path;
+        } else {
+            qore_socket_private::get(*priv->socket)->ssl_ca_path = path;
+        }
     }
 
     n = opts->getKeyValue("error_passthru");
@@ -6912,6 +6950,8 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.idle_timeout_ms = 60000;
     opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+    opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
+    opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
     opts.client_cert = msock->cert;
     opts.client_key = msock->pk;
     opts.proxy_url = getConnMgrProxyUrl();

@@ -52,18 +52,20 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param accept_all_certs if True, accept all server certificates
         @param client_cert optional client certificate for mutual TLS (mTLS)
         @param client_pk optional client private key for mutual TLS (mTLS)
+        @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
 
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
-            accept_all_certs, client_cert, client_pk, self);
+            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path);
     }
 
     #! Copying is not supported

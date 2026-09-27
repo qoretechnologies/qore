@@ -480,6 +480,20 @@ public:
     DLLEXPORT void setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
     DLLLOCAL void setAlpnProtocolsForAsyncPoll(const QoreListNode* protocols, ExceptionSink* xsink);
 
+    //! Sets the CA certificates that the certificate of the peer is verified against
+    /** The CA certificates are used instead of the default CA locations when the certificate of the peer is
+        verified in a TLS handshake started after this call
+
+        @param ca_file a PEM file with one or more CA certificates, or nullptr
+        @param ca_path a directory with CA certificates named by their subject name hashes, or nullptr
+        @param xsink raises an exception if the socket is not valid
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setSslCaLocations(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+    //! Sets the CA locations from the async I/O thread; see setSslCaLocations()
+    DLLLOCAL void setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+
     //! Returns the negotiated ALPN protocol after a TLS connection is established
     /** @return The negotiated protocol string, or nullptr if no protocol was negotiated
 

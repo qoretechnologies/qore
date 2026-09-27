@@ -2409,6 +2409,7 @@ public:
         GetCipherVersion,
         IsSecure,
         SetAlpnProtocols,
+        SetCaLocations,
         GetAlpnProtocol,
         IsHttp2,
         VerifyPeerCertificate,
@@ -2422,6 +2423,12 @@ public:
 
     DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, std::vector<std::string>&& protocols)
             : sock(sock), action(Action::SetAlpnProtocols), protocols(std::move(protocols)) {
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, std::string&& ca_file,
+            std::string&& ca_path)
+            : sock(sock), action(Action::SetCaLocations), ca_file(std::move(ca_file)), ca_path(std::move(ca_path)) {
         sock->ref();
     }
 
@@ -2480,6 +2487,12 @@ public:
                 output = 0;
                 break;
 
+            case Action::SetCaLocations:
+                sp->ssl_ca_file = ca_file;
+                sp->ssl_ca_path = ca_path;
+                output = 0;
+                break;
+
             case Action::GetAlpnProtocol:
                 setAlpnValue(sp);
                 break;
@@ -2521,6 +2534,7 @@ private:
             case Action::VerifyPeerCertificate:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
+            case Action::SetCaLocations:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
             case Action::GetCipherVersion:
@@ -2551,6 +2565,9 @@ private:
     QoreValue output;
     Action action;
     std::vector<std::string> protocols;
+    //! the CA locations for Action::SetCaLocations
+    std::string ca_file;
+    std::string ca_path;
     bool done = false;
 };
 
@@ -4555,6 +4572,8 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     if (!src->alpn_protocols.empty()) {
         dst->alpn_protocols = src->alpn_protocols;
     }
+    dst->ssl_ca_file = src->ssl_ca_file;
+    dst->ssl_ca_path = src->ssl_ca_path;
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
@@ -5441,6 +5460,29 @@ void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, Exception
     ValueHolder rv(qore_socket_object_exec_poll_output(this,
         new QoreSocketObjectTlsStatePollOperation(this, std::move(proto_list)),
         -1, "setAlpnProtocols", "tls-state", xsink), xsink);
+}
+
+void QoreSocketObject::setSslCaLocations(const char* ca_file, const char* ca_path, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        setSslCaLocationsForAsyncPoll(ca_file, ca_path, xsink);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(this,
+        new QoreSocketObjectTlsStatePollOperation(this, std::string(ca_file ? ca_file : ""),
+            std::string(ca_path ? ca_path : "")),
+        -1, "setSslCaLocations", "tls-state", xsink), xsink);
+}
+
+void QoreSocketObject::setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->checkValid(xsink)) {
+        return;
+    }
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    sp->ssl_ca_file = ca_file ? ca_file : "";
+    sp->ssl_ca_path = ca_path ? ca_path : "";
 }
 
 void QoreSocketObject::setAlpnProtocolsForAsyncPoll(const QoreListNode* protocols, ExceptionSink* xsink) {

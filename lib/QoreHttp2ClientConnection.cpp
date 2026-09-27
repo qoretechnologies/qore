@@ -55,10 +55,11 @@ extern QoreClass* QC_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 
 Http2ClientConnection::Http2ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink,
+        bool ssl_required, int max_concurrent_streams, const Http1SslConfig& ssl_config, ExceptionSink* xsink,
         HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
-      max_concurrent_streams_(max_concurrent_streams) {
+      max_concurrent_streams_(max_concurrent_streams),
+      ssl_config_(ssl_config) {
     if (mgr) {
         setManager(mgr);
     }
@@ -126,6 +127,28 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     ReferenceHolder<QoreObject> sock_obj_holder(
         new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+
+    // 1b. Apply the TLS configuration to the socket before connecting; it takes effect when the poll op starts the
+    //     TLS handshake, so the server certificate is verified as with any other connection
+    sock_priv_raw->setSslVerifyMode(ssl_config_.verify_mode);
+    sock_priv_raw->acceptAllCertificates(ssl_config_.accept_all);
+    if (ssl_config_.cert) {
+        ssl_config_.cert->ref();
+        sock_priv_raw->setCertificate(ssl_config_.cert);
+    }
+    if (ssl_config_.key) {
+        ssl_config_.key->ref();
+        sock_priv_raw->setPrivateKey(ssl_config_.key);
+    }
+    if (!ssl_config_.ca_file.empty() || !ssl_config_.ca_path.empty()) {
+        // the socket is not submitted yet, so it is configured directly
+        sock_priv_raw->setSslCaLocationsForAsyncPoll(
+            ssl_config_.ca_file.empty() ? nullptr : ssl_config_.ca_file.c_str(),
+            ssl_config_.ca_path.empty() ? nullptr : ssl_config_.ca_path.c_str(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the

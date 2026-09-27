@@ -99,11 +99,15 @@ Http3ClientConnection::Http3ClientConnection(const char* target_host, int target
         int ssl_verify_mode,
         bool ssl_accept_all_certs,
         QoreSSLCertificate* client_cert,
-        QoreSSLPrivateKey* client_key)
+        QoreSSLPrivateKey* client_key,
+        const std::string& ssl_ca_file,
+        const std::string& ssl_ca_path)
     : HttpClientConnectionBase(target_host, target_port, /* ssl_required (always for H3) */ true),
       max_concurrent_streams_(max_concurrent_streams),
       ssl_verify_mode_(ssl_verify_mode),
       ssl_accept_all_certs_(ssl_accept_all_certs),
+      ssl_ca_file_(ssl_ca_file),
+      ssl_ca_path_(ssl_ca_path),
       client_cert_(client_cert),
       client_key_(client_key) {
     if (client_cert_) {
@@ -204,6 +208,14 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     }
     if (ssl_accept_all_certs_) {
         sock_priv_raw->acceptAllCertificates(true);
+    }
+    if (!ssl_ca_file_.empty() || !ssl_ca_path_.empty()) {
+        // the socket is not submitted yet, so it is configured directly
+        sock_priv_raw->setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty() ? nullptr : ssl_ca_file_.c_str(),
+            ssl_ca_path_.empty() ? nullptr : ssl_ca_path_.c_str(), xsink);
+        if (*xsink) {
+            return -1;
+        }
     }
     if (client_cert_ && client_key_) {
         client_cert_->ref();
@@ -679,14 +691,25 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     onConnectionReady();
 }
 
+//! Returns true if a handshake error means that the attempt never reached a server
+static bool is_unreached_error(const char* err) {
+    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT")
+        || !strcmp(err, "QUIC-SEND-ERROR");
+}
+
 void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
         const char* err, const char* desc) {
     std::unique_lock<std::mutex> lk(attempts_mu_);
 
-    // Record the error details so that, if all attempts fail, the caller
-    // sees the most recent failure rather than a generic "closed" message.
-    last_err_ = err ? err : "HTTP3-CONNECT-ERROR";
-    last_desc_ = desc ? desc : "QUIC handshake failed";
+    // Record the error details so that, if all attempts fail, the caller sees the failure of the attempt that got
+    // furthest rather than a generic "closed" message: an attempt that reached the server, and failed for example
+    // because its certificate was rejected, explains the failure, while an attempt to another address of the host
+    // that never reached a server (such as an IPv6 address that the server does not listen on) does not
+    const char* new_err = err ? err : "HTTP3-CONNECT-ERROR";
+    if (last_err_.empty() || !is_unreached_error(new_err) || is_unreached_error(last_err_.c_str())) {
+        last_err_ = new_err;
+        last_desc_ = desc ? desc : "QUIC handshake failed";
+    }
 
     // Mark this attempt finished.  If the winner has already been chosen,
     // this is just a stale losing-attempt failure — ignore.
