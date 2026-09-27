@@ -3,14 +3,14 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
-# YAML is an optional external binary module
-%try-module yaml
-%define NoYaml
+%try-module xml
+%define NoXml
 %endtry
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
+%requires yaml
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/QUnit.qm
@@ -27,11 +27,7 @@ string sub my_make_json(any v) {
 }
 
 string sub my_make_yaml(any v) {
-%ifndef NoYaml
     return make_yaml(v);
-%else
-    return "";
-%endif
 }
 
 class HttpTestServer {
@@ -443,12 +439,6 @@ public class OpenApi3Test inherits QUnit::Test {
         set_return_value(main());
     }
 
-    checkModules() {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
-    }
-
     #! An operation may declare any number of object-valued query parameters
     /** OpenAPI 3 places no limit on them, and a real schema commonly declares several: Stripe's
         \c "GET /v1/credit_notes/preview" declares \c metadata and \c shipping_cost, each
@@ -462,8 +452,6 @@ public class OpenApi3Test inherits QUnit::Test {
         valid document unloadable — and the whole of Stripe's published schema with it.
     */
     testMultipleObjectQueryParams() {
-        checkModules();
-
         hash<auto> meta = {
             "name": "metadata", "in": "query", "style": "deepObject", "explode": True,
             "schema": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -503,8 +491,6 @@ public class OpenApi3Test inherits QUnit::Test {
         identifiers failed outright rather than returning the records asked for.
     */
     testArrayQueryParamElementTypes() {
-        checkModules();
-
         OpenApi3Schema so = loadWithQueryParams((
             {"name": "ids", "in": "query", "schema": {"type": "array", "items": {"type": "integer"}}},
             {"name": "keys", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}},
@@ -541,8 +527,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testServerUrlScheme() {
-        checkModules();
-
         # the scheme declared in "servers" has to survive into the target URL: downgrading a schema that
         # says it is served over TLS would have a client built from it send credentials in the clear
         OpenApi3Schema https = loadWithServers(({"url": "https://api.example.com/v1"},));
@@ -562,8 +546,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testResponseHeaderReference() {
-        checkModules();
-
         # a response declares each of its headers as either a Header Object or a Reference Object, and a
         # description that keeps its headers in "#/components/headers" -- as GitHub's does for the "Link"
         # pagination header -- is unparseable unless the reference is followed
@@ -610,8 +592,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testReferenceSiblings() {
-        checkModules();
-
         # OpenAPI 3.0 says a sibling of "$ref" is ignored, because a Reference Object is a JSON Reference.
         # Real descriptions rely on it: Xero's accounting document declares "$ref" beside "type" at 28
         # sites, and rejecting them made the whole document unloadable.
@@ -655,8 +635,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testConstraintOnlyComposition() {
-        checkModules();
-
         # an object that declares its properties and then adds "anyOf: [{required: [a]}, {required: [b]}]"
         # is saying "at least one of these two", not "one of two different shapes"; exposing that as a union
         # would replace a typed object by an opaque one.  GitHub's "request reviewers" body is this.
@@ -705,8 +683,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testFormUrlEncodedBody() {
-        checkModules();
-
         # "deepObject" is what an API taking structured form bodies declares, and without honoring the
         # Encoding Object a property that is not a scalar cannot be serialized at all
         OpenApi3Schema schema = loadWithFormBody({
@@ -832,8 +808,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testTypeForReference() {
-        checkModules();
-
         # build a schema with a reusable schema reference in "components.schemas"
         hash<auto> soh = ValidOpenApi3Schema + {
             "components": ValidOpenApi3Schema.components + {
@@ -875,8 +849,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testFiles() {
-        checkModules();
-
         {
             OpenApi3::OpenApi3Schema so;
             string basePath = normalize_dir(dirname(get_script_path())) + DirSep;
@@ -940,8 +912,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi3Schema() {
-        checkModules();
-
         assertThrows("INVALID-FIELD-TYPE", loadjson, '{"openapi": true}');
         assertThrows("REQUIRED-FIELD-MISSING", loadjson, '{}', "missing openapi3 field");
         assertThrows("REQUIRED-FIELD-MISSING", loadjson, '{"openapi": 3.0}', "missing info field");
@@ -1499,7 +1469,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 hash<auto> hdr += {"Test-Header": "Test"};
                 hash<RestRequestServerInfo> req = so.parseRequest("GET", uri_path, NOTHING, \hdr);
                 assertEq(Type::Float, req.query."float".type());
-                assertEq(2024-09-19T10:09:42, req.query.dt);
+                assertEq(2024-09-19T08:09:42Z, req.query.dt);
             }
 
             {
@@ -1567,8 +1537,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testInfoObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash info;
 
@@ -1597,8 +1565,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testContactObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash info;
 
@@ -1613,8 +1579,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testLicenseObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash info;
 
@@ -1631,8 +1595,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testPathsObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash p;
 
@@ -1643,8 +1605,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testPathItemObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash p;
 
@@ -1689,8 +1649,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOperationObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash r = {"200": {"description": "a"}};
         hash p;
@@ -1790,8 +1748,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testExternalDocumentationObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash extDocs;
 
@@ -1808,8 +1764,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testParameterObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash p;
 
@@ -1974,8 +1928,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testItemsObject() {
-        checkModules();
-
         # OpenAPI 3.0 base schema without parameter references in paths
         hash base = {
             "openapi": "3.0",
@@ -2061,8 +2013,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testResponsesObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash p;
 
@@ -2078,8 +2028,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testResponseObject() {
-        checkModules();
-
         # OpenAPI 3.0 base schema without parameter references
         hash base = {
             "openapi": "3.0",
@@ -2201,8 +2149,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testHeaderObject() {
-        checkModules();
-
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash r;
 
@@ -2298,8 +2244,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testTagObject() {
-        checkModules();
-
         hash base = ValidOpenApi3Schema;
         hash tag;
 
@@ -2320,8 +2264,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testSemanticStringFormats() {
-        checkModules();
-
         OpenApi3Schema schema("", {"openapi": "3.0", "info": ValidInfoObject, "paths": {}});
         foreach string fmt in (("email", "uri", "uuid", "hostname", "ipv4", "ipv6", "phone")) {
             auto t = schema.getType("p", "string", fmt);
@@ -2333,8 +2275,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testSchemaObject() {
-        checkModules();
-
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash s;
 
@@ -2618,8 +2558,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testSchemaCompositionValidation() {
-        checkModules();
-
         hash hdr = {"content-type": MimeTypeJson};
 
         # Test allOf - value must match all schemas
@@ -2941,8 +2879,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testXmlObject() {
-        checkModules();
-
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash s;
 
@@ -2985,8 +2921,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testSecuritySchemeObject() {
-        checkModules();
-
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash sd;
 
@@ -3074,8 +3008,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testScopesObject() {
-        checkModules();
-
         hash base = {"openapi": "3.0", "info": ValidInfoObject, "paths": {}};
         hash sd;
 
@@ -3089,8 +3021,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testValidation() {
-        checkModules();
-
         testValidation(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.yaml"));
         testValidation(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.json"));
 
@@ -3705,7 +3635,7 @@ public class OpenApi3Test inherits QUnit::Test {
                     "\"string\"", {"content-type": MimeTypeJson}));
             }
 
-            h = so.processRequest("get", "/v1/api/unix-time?t=2024-09-30T12:35:52", NOTHING, NOTHING, MimeTypeJson);
+            h = so.processRequest("get", "/v1/api/unix-time?t=2024-09-30T10:35:52Z", NOTHING, NOTHING, MimeTypeJson);
             assertEq("/v1/api/unix-time?t=1727692552", h.uri_path);
             assertNothing(h.body);
             assertNothing(h.content);
@@ -3716,11 +3646,11 @@ public class OpenApi3Test inherits QUnit::Test {
                 hash<RestRequestServerInfo> sh = so.parseRequest("get", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);
-                assertEq(2024-09-30T12:35:52, sh.query.t);
+                assertEq(2024-09-30T10:35:52Z, sh.query.t);
                 assertNothing(sh.body);
             }
 
-            h = so.processRequest("post", "/v1/api/unix-time", 2024-09-30T12:35:52, NOTHING, MimeTypeJson);
+            h = so.processRequest("post", "/v1/api/unix-time", 2024-09-30T10:35:52Z, NOTHING, MimeTypeJson);
             assertEq("/v1/api/unix-time", h.uri_path);
             assertEq("1727692552", h.body);
             assertEq(MimeTypeJson, h.content);
@@ -3732,11 +3662,11 @@ public class OpenApi3Test inherits QUnit::Test {
                 hash<RestRequestServerInfo> sh = so.parseRequest("post", h.uri_path, h.body, \hdr);
                 on_error printf("sh: %N\n", sh);
                 assertEq("/api/unix-time", sh.path);
-                assertEq(2024-09-30T12:35:52, sh.body);
+                assertEq(2024-09-30T10:35:52Z, sh.body);
             }
 
             {
-                hash<HttpResponseInfo> res = so.processResponse("post", "/api/unix-time", 200, 2024-09-30T12:35:52, NOTHING, MimeTypeJson);
+                hash<HttpResponseInfo> res = so.processResponse("post", "/api/unix-time", 200, 2024-09-30T10:35:52Z, NOTHING, MimeTypeJson);
                 {
                     on_error printf("res: %N\n", res);
                     assertEq(200, res."code");
@@ -3747,7 +3677,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 hash<RestResponseClientInfo> cres = so.parseResponse("post", "/api/unix-time", res."code", res.body, res.hdr);
                 assertEq(200, cres."code");
                 assertEq(MimeTypeJson, cres.hdr."Content-Type");
-                assertEq(2024-09-30T12:35:52, cres.body);
+                assertEq(2024-09-30T10:35:52Z, cres.body);
             }
         }
 
@@ -3902,8 +3832,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testExamples() {
-        checkModules();
-
         testExamples(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.yaml"));
         testExamples(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.json"));
     }
@@ -3941,8 +3869,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testRealMessages() {
-        checkModules();
-
         testRealMessages(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.yaml"));
         testRealMessages(OpenApi3::OpenApi3Loader::fromFile(get_script_dir() + DirSep + "PetStore.openapi3.json"));
     }
@@ -3974,8 +3900,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31Version() {
-        checkModules();
-
         # Test 3.0.x detection
         {
             hash<auto> schema30 = {
@@ -4023,8 +3947,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31TypeArrays() {
-        checkModules();
-
         # Test type array with null (OpenAPI 3.1 nullable syntax)
         {
             hash<auto> schema = {
@@ -4067,8 +3989,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31NullType() {
-        checkModules();
-
         # a standalone scalar "null" type: unconstrained and nullable, symmetric with the list form
         {
             OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
@@ -4207,8 +4127,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi3DiscriminatorObject() {
-        checkModules();
-
         # OpenAPI 3.x object form with a mapping
         {
             OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
@@ -4391,8 +4309,6 @@ public class OpenApi3Test inherits QUnit::Test {
         the fields a caller actually reads, while the API returned all of them.
     */
     testAllOfObjectProperties() {
-        checkModules();
-
         OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
             "components": {
                 "schemas": {
@@ -4495,8 +4411,6 @@ public class OpenApi3Test inherits QUnit::Test {
         schema, and joining those repeated the first sentence.
     */
     testContainedFieldDescription() {
-        checkModules();
-
         code<string(string, string)> load = string sub (string param_desc, string schema_desc) {
             hash<auto> src = ValidOpenApi31Schema + {
                 "paths": {
@@ -4546,8 +4460,6 @@ public class OpenApi3Test inherits QUnit::Test {
         survived until a manifest happened to export two such listings.
     */
     testSharedSchemaFieldDocumentation() {
-        checkModules();
-
         hash<auto> src = ValidOpenApi31Schema + {
             "paths": {
                 "/widgets": {
@@ -4599,8 +4511,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testSelfReferentialSchemas() {
-        checkModules();
-
         hash<auto> src = ValidOpenApi31Schema + {
             "components": {
                 "schemas": {
@@ -4692,8 +4602,6 @@ public class OpenApi3Test inherits QUnit::Test {
         value.
     */
     testNullValueInResponse() {
-        checkModules();
-
         hash<auto> soh = ValidOpenApi3Schema + {
             "paths": {
                 "/row": {
@@ -4744,8 +4652,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi3AllOfScalar() {
-        checkModules();
-
         # a one-member "allOf" wrapping a scalar $ref is how OpenAPI 3.x attaches a per-use description to a
         # reusable scalar type; the composition must adopt the referenced type rather than stay unconstrained
         {
@@ -4962,8 +4868,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31JsonSchemaKeywords() {
-        checkModules();
-
         # JSON Schema 2020-12 keywords adopted by OpenAPI 3.1 that the module does not model but must accept
         # rather than reject; these are regression tests locking in that documents using them still parse
         {
@@ -4996,8 +4900,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31File() {
-        checkModules();
-
         # the 3.1 fixture exercises every 3.1-specific construct the module supports, in a real document
         string path = normalize_dir(dirname(get_script_path())) + DirSep + "PetStore31.openapi3.yaml";
         OpenApi3::OpenApi3Schema so = OpenApi3::OpenApi3Loader::fromFile(path);
@@ -5056,8 +4958,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31ExclusiveNumeric() {
-        checkModules();
-
         # Test exclusiveMinimum/exclusiveMaximum as numbers (OpenAPI 3.1 style)
         {
             hash<auto> schema = {
@@ -5108,8 +5008,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31Examples() {
-        checkModules();
-
         # Test examples array (OpenAPI 3.1)
         {
             hash<auto> schema = {
@@ -5135,8 +5033,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31Webhooks() {
-        checkModules();
-
         # Test webhooks parsing
         {
             hash<auto> schema = {
@@ -5173,8 +5069,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31MutualTLS() {
-        checkModules();
-
         # Test mutualTLS security scheme
         {
             hash<auto> schema = {
@@ -5197,8 +5091,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31ContentEncoding() {
-        checkModules();
-
         # Test contentEncoding and contentMediaType
         {
             hash<auto> schema = {
@@ -5223,8 +5115,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31InfoSummary() {
-        checkModules();
-
         # Test info.summary field
         {
             hash<auto> schema = {
@@ -5243,8 +5133,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31LicenseIdentifier() {
-        checkModules();
-
         # Test license.identifier field (SPDX)
         {
             hash<auto> schema = {
@@ -5285,8 +5173,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testCommonExtensions() {
-        checkModules();
-
         # Test schema-specific extensions
         {
             hash<auto> schema = {
@@ -5377,8 +5263,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31NegativeCases() {
-        checkModules();
-
         # Test invalid OpenAPI version (not 3.x)
         {
             hash<auto> schema = {
@@ -5592,8 +5476,6 @@ public class OpenApi3Test inherits QUnit::Test {
     }
 
     testOpenApi31TypeValidation() {
-        checkModules();
-
         # Test that nullable type from type array is parsed correctly
         {
             hash<auto> schema = {
@@ -5736,8 +5618,6 @@ public class OpenApi3Test inherits QUnit::Test {
 
     #! Test that multiple content types in requestBody are all accepted
     testMultipleContentTypes() {
-        checkModules();
-
         # Test schema with requestBody supporting multiple content types
         # This tests that all content types from requestBody.content are added to consumes,
         # not just the first one (which was the bug fixed in this commit)
@@ -5799,10 +5679,15 @@ public class OpenApi3Test inherits QUnit::Test {
         # Before the fix, only the first content type (JSON) would be in consumes,
         # so requesting XML would fail
         {
+%ifndef NoXml
             hash<RestRequestClientInfo> req = so.processRequest("POST", "/data", body, NOTHING,
                 (MimeTypeXmlApp,));
             assertEq("/data", req.uri_path);
             assertEq(MimeTypeXmlApp, req.content);
+%else
+            assertThrows("SERIALIZATION-ERROR", \so.processRequest(),
+                ("POST", "/data", body, NOTHING, (MimeTypeXmlApp,)));
+%endif
         }
 
         # Test that YAML content type is accepted when explicitly requested
