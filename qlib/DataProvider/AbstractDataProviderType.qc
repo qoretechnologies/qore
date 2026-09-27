@@ -1083,6 +1083,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     /** @param emap a hash to ensure that examples are only produced once
         @param fname any field context for the value
 
+        @return a value accepted by this type, or @ref nothing if no valid example can be generated
+
+        @note Generated examples larger than 1000 values are omitted to bound validation of shared type graphs.
+
         @since DataProvider 3.0
     */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
@@ -1113,10 +1117,40 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
         int trunc0 = extrunc ?? 0;
         auto rv = getExampleValueImpl(emap, fname);
+        if (exists rv) {
+            int budget = 1000;
+            if (!AbstractDataProviderType::exampleFitsBudget(rv, \budget)) {
+                # A small shared type DAG can describe an exponentially large value. Do not expand it during
+                # validation after the memoized generator has finished building its shared representation.
+                remove rv;
+            } else {
+                try {
+                    rv = acceptsValue(rv);
+                } catch (hash<ExceptionInfo> ex) {
+                    # Examples are optional metadata; a placeholder must never violate the type's constraints.
+                    remove rv;
+                }
+            }
+        }
         if ((extrunc ?? 0) == trunc0) {
             exmap{ck} = {"set": True, "value": rv};
         }
         return rv;
+    }
+
+    #! Bounds the expanded size of a generated example before recursive type validation
+    private static bool exampleFitsBudget(auto value, reference<int> budget) {
+        if (--budget < 0) {
+            return False;
+        }
+        if (value.typeCode() == NT_HASH || value.typeCode() == NT_LIST) {
+            foreach auto child in (value.iterator()) {
+                if (!AbstractDataProviderType::exampleFitsBudget(child, \budget)) {
+                    return False;
+                }
+            }
+        }
+        return True;
     }
 
     #! Returns any example value for the type; cycle detection and memoization are handled by the caller
@@ -1131,7 +1165,18 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             if (isOrNothingType()) {
                 return;
             }
-            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, fields.pairIterator();
+            hash<auto> rv = {};
+            foreach hash<string, auto> entry in (fields.pairIterator()) {
+                AbstractDataField field = entry.value;
+                auto value = field.getExampleValue(emap, entry.key);
+                if (exists value) {
+                    rv{entry.key} = value;
+                } else if (field.isMandatory() || field.getAttributes().required) {
+                    # Required nullable fields still need a key; optional fields without an example are omitted.
+                    rv{entry.key} = NOTHING;
+                }
+            }
+            return rv;
         }
         int t = getBaseTypeCode();
         switch (getBaseTypeCode()) {

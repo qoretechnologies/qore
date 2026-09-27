@@ -352,10 +352,11 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
             try {
                 auto rv = type.getExampleValue(emap, fname);
                 if (exists rv) {
-                    return rv;
+                    # The union can impose additional constraints, including exactly-one matching.
+                    return acceptsValue(rv);
                 }
             } catch (hash<ExceptionInfo> ex) {
-                # an alternative such as "null" has no example value
+                # Try the next member if this candidate does not satisfy the complete union.
             }
         }
     }

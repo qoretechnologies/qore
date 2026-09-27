@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%requires Swagger
+%requires json
+%exec-class SchemaExamplesTest
+
+class SchemaExamplesTest inherits QUnit::Test {
+    private {
+        list<OpenApi3Schema> documents = ();
+    }
+
+    constructor() : Test("Schema examples satisfy their types", "1.0", \ARGV) {
+        addTestCase("schema examples and constraints", \schemaTest());
+        addTestCase("complete union members", \unionTest());
+        addTestCase("generic constrained types", \typeTest());
+        addTestCase("shared type graph examples remain bounded", \graphTest());
+        addTestCase("Swagger examples", \swaggerTest());
+        set_return_value(main());
+    }
+
+    private hash<string, OpenApi3::SchemaObject> schemas(hash<auto> definitions) {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.1.0", "info": {"title": "Example regression", "version": "1"},
+            "paths": {}, "components": {"schemas": definitions},
+        }), True);
+        documents += doc;
+        return doc.components.schemas;
+    }
+
+    private checkField(AbstractDataField field) {
+        auto value = field.getExampleValue();
+        if (exists value) {
+            assertEq(value, field.getType().acceptsValue(value), field.getName());
+        }
+        QoreDataField rebuilt({"name": field.getName(), "type": field.getType(), "example_value": value});
+        assertEq(value, rebuilt.getConfigInfo().example_value, field.getName());
+    }
+
+    schemaTest() {
+        hash<auto> id = {"type": "string", "pattern": "^pro_[a-z\\d]{26}$"};
+        string product = "pro_01gsz97mq9pa4fkyy0wqenepkz";
+        hash<auto> definitions = {
+            "Plural": id + {"examples": (product,)},
+            "Singular": id + {"example": product, "examples": ("invalid",)},
+            "Fallback": id + {"example": "invalid", "examples": (product,)},
+            "Wrapped": {"allOf": ({"$ref": "#/components/schemas/Plural"},),
+                "description": "Product used to create a price"},
+            "Absent": id,
+            "Invalid": id + {"examples": ("invalid",)},
+            "False": {"type": "boolean", "examples": (False,)},
+            "Zero": {"type": "integer", "examples": (0,)},
+            "Empty": {"type": "string", "examples": ("",)},
+            "Length": {"type": "string", "maxLength": 2},
+            "Bound": {"type": "integer", "exclusiveMinimum": 1000},
+            "Multiple": {"type": "number", "multipleOf": 7},
+            "Items": {"type": "array", "items": {"type": "integer"}, "minItems": 2},
+            "Properties": {"type": "object", "minProperties": 3},
+            "Object": {"type": "object", "required": ("id",), "properties": {
+                "id": id + {"examples": (product,)}, "optional": id,
+            }},
+            "BadObject": {"type": "object", "required": ("id",), "properties": {"id": id},
+                "example": {"id": "invalid"}},
+            "Recursive": {"type": "object", "properties": {
+                "next": {"$ref": "#/components/schemas/Recursive"},
+            }},
+        };
+        hash<string, OpenApi3::SchemaObject> s = schemas(definitions);
+        foreach string name in (("Plural", "Singular", "Fallback", "Wrapped")) {
+            assertEq(product, s{name}.getExampleValue());
+            AbstractDataField field = s{name}.getField("product_id", "Product identifier");
+            assertEq(product, field.getExampleValue());
+            assertEq(product, field.getSoftType().getExampleValue());
+            assertEq(product, field.getOrNothingType().getExampleValue());
+            assertEq(product, s{name}.getField("product_id", "Another use").getExampleValue());
+        }
+        foreach string name in (("Absent", "Invalid", "Length", "Bound", "Multiple", "Items", "Properties",
+                "BadObject")) {
+            assertNothing(s{name}.getExampleValue(), name);
+        }
+        assertEq(False, s."False".getExampleValue());
+        assertEq(0, s.Zero.getExampleValue());
+        assertEq("", s.Empty.getExampleValue());
+        assertEq({"id": product}, s.Object.getExampleValue());
+        assertEq({}, s.Recursive.getExampleValue());
+        foreach OpenApi3::SchemaObject schema in (s.iterator()) {
+            checkField(schema.getField(schema.name, NOTHING));
+        }
+    }
+
+    unionTest() {
+        hash<string, OpenApi3::SchemaObject> s = schemas({
+            "Item": {"oneOf": (
+                {"type": "object", "required": ("price_id", "quantity"), "properties": {
+                    "price_id": {"type": "string", "pattern": "^pri_[0-9]+$", "examples": ("pri_123",)},
+                    "quantity": {"type": "integer", "minimum": 1},
+                }},
+                {"type": "object", "required": ("price",), "properties": {
+                    "price": {"type": "object", "required": ("amount",), "properties": {
+                        "amount": {"type": "integer", "minimum": 1},
+                    }},
+                }},
+            )},
+            "Later": {"anyOf": (
+                {"type": "string", "pattern": "^unavailable$"},
+                {"type": "object", "required": ("price",), "properties": {
+                    "price": {"type": "integer"},
+                }},
+            )},
+            "Exclusive": {"oneOf": (
+                {"type": "string"}, {"type": "string", "pattern": "^"}, {"type": "integer"},
+            )},
+        });
+        auto item = s.Item.getExampleValue();
+        assertTrue(exists item);
+        assertTrue(item.hasKey("price_id"));
+        assertTrue(item.hasKey("quantity"));
+        assertEq(item, s.Item.getDataType().acceptsValue(item));
+        auto later = s.Later.getExampleValue();
+        assertTrue(exists later);
+        assertTrue(later.hasKey("price"));
+        assertEq(later, s.Later.getDataType().acceptsValue(later));
+        assertEq(NT_INT, s.Exclusive.getExampleValue().typeCode(),
+            "a candidate matching two members must not hide a later exclusive match");
+        checkField(s.Item.getField("items", NOTHING));
+        checkField(s.Later.getField("later", NOTHING));
+    }
+
+    typeTest() {
+        foreach hash<auto> spec in ((
+            {"type": "string", "constraints": {"pattern": "^pro_[0-9]+$"}},
+            {"type": "string", "constraints": {"max_length": 2}},
+            {"type": "int", "constraints": {"minimum": 1000}},
+            {"type": "number", "constraints": {"multiple_of": 7}},
+        )) {
+            AbstractDataProviderType type = AbstractDataProviderType::get(spec.type)
+                .copyWithConstraints(cast<hash<DataTypeConstraintInfo>>(spec.constraints));
+            assertNothing(type.getExampleValue());
+            checkField(new QoreDataField("constrained", "Constrained value", type));
+        }
+        HashDataType impossible("Impossible");
+        impossible.addField(new QoreDataField("child", "Required child", impossible));
+        assertNothing(impossible.getExampleValue(), "required recursion cannot produce a finite example");
+        QoreUnionDataType union((impossible, AbstractDataProviderTypeMap."int"));
+        assertEq(100, union.getExampleValue(), "invalid first branch must not hide a valid later branch");
+    }
+
+    graphTest() {
+        HashDataType type("Leaf");
+        type.addField(new QoreDataField("value", "Leaf value", IntType));
+        for (int i = 0; i < 14; ++i) {
+            HashDataType parent("Parent" + i);
+            foreach string name in (("a", "b", "c")) {
+                parent.addField(new QoreDataField(name, "Shared child", type));
+            }
+            type = parent;
+        }
+        date start = now_us();
+        assertNothing(type.getExampleValue(), "an exponentially large example is omitted");
+        assertLt(5s, now_us() - start, "validation stays bounded on a shared type graph");
+    }
+
+    swaggerTest() {
+        Swagger::SwaggerSchema doc = Swagger::SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Examples", "version": "1"}, "paths": {},
+            "definitions": {
+                "Id": {"type": "string", "pattern": "^id_[0-9]+$", "example": "id_123"},
+                "Invalid": {"type": "string", "pattern": "^id_[0-9]+$", "example": "bad"},
+            },
+        }), True);
+        assertEq("id_123", doc.definitions.Id.getExampleValue());
+        assertNothing(doc.definitions.Invalid.getExampleValue());
+        checkField(doc.definitions.Id.getField("id", NOTHING));
+        Swagger::OtherParameter parameter("id", {
+            "name": "id", "in": "query", "type": "string", "pattern": "^id_[0-9]+$",
+        }, doc);
+        assertNothing(parameter.getExampleValue());
+    }
+}

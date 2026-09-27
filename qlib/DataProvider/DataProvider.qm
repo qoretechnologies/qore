@@ -1354,6 +1354,8 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - omit generated examples that violate type constraints, omit optional fields without examples from object
+      examples, and try later union alternatives when an example does not satisfy the union
     - stopping a watch data provider cancels its polling thread, which ends a blocking operation in it, such as an
       HTTP request, at once; observer notifications and checkpoint persistence run with cancellation deferred, so
       they are not interrupted.  The watch data providers of the REST-based modules no longer close their REST

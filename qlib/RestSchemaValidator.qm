@@ -78,6 +78,7 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - prefer valid schema examples when describing fields and omit generated examples that violate the field type
     - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
       instead of relabeling ISO-8859-1 text as UTF-8; HTTP bodies are decoded with their actual encoding (see
       @ref Qore::decode_http_body() "decode_http_body()"), and YAML with a UTF-16 byte order mark is parsed correctly
@@ -516,7 +517,7 @@ public namespace RestSchemaValidator {
         */
         abstract string getMethodLabel();
 
-        #! Returns an example value for the given type
+        #! Returns a candidate example for the given type; callers validate it against the finished field type
         private auto getExampleValueWithFormat(string type, *string format, *string fname) {
             if (enumValues) {
                 auto rv = enumValues.firstKey();
@@ -1575,7 +1576,7 @@ public namespace RestSchemaValidator {
             # same way: the schema's enum values are hash keys and therefore strings, and it is
             # updateFieldType() that converts them to the type they belong to.  Constructing the copy with
             # the final type instead leaves an integer enum published as a list of strings.
-            QoreDataField rv({
+            RestSchemaExampleDataField rv({
                 "name": name,
                 "desc": getMergedFieldDesc(desc),
                 "type": AutoType,
@@ -1586,7 +1587,7 @@ public namespace RestSchemaValidator {
                     "preselected": True,
                     "required": True,
                 },
-            } : NOTHING));
+            } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
             usemap{ukey}{rstr} = rv;
             return rv;
@@ -1625,6 +1626,29 @@ public namespace RestSchemaValidator {
         */
         private *list<auto> getFieldEnumValues() {
             return keys enumValues;
+        }
+
+        #! Returns schema examples followed by the default
+        /** @return candidate values in preference order; each is validated against the finished field type
+        */
+        private list<auto> getExampleCandidates() {
+            return (example, defaultVal);
+        }
+
+        #! Checks declared candidates against the schema before they are attached to a field
+        private list<auto> getValidatedExampleCandidates() {
+            list<auto> rv = ();
+            foreach auto candidate in (getExampleCandidates()) {
+                if (exists candidate) {
+                    try {
+                        check(False, True, "/", "POST", name, \candidate);
+                        push rv, candidate;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # Specifications can contain invalid examples, including invalid nested properties.
+                    }
+                }
+            }
+            return rv;
         }
 
         #! Returns a field object from the given cache
@@ -1672,7 +1696,7 @@ public namespace RestSchemaValidator {
             on_exit remove building{name};
             if (type == "object" || hasSchemaCompositionFeatures()) {
                 # create the field with a placeholder type
-                QoreDataField field({
+                RestSchemaExampleDataField field({
                     "name": name,
                     "desc": field_desc,
                     "type": AutoType,
@@ -1683,20 +1707,20 @@ public namespace RestSchemaValidator {
                         "preselected": True,
                         "required": True,
                     },
-                } : NOTHING));
+                } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
                 fieldmap{name}{rstr} = field;
                 field.updateFieldType(getDataType(required, rest));
                 return field;
             }
 
             # create the field with a placeholder type
-            QoreDataField field({
+            RestSchemaExampleDataField field({
                 "name": name,
                 "desc": field_desc,
                 "type": AutoType,
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
-            });
+            }, getValidatedExampleCandidates(), getConstraintInfo());
             fieldmap{name}{rstr} = field;
             field.updateFieldType(getSchemaType(path, type, format, items, required));
             return field;
@@ -1725,6 +1749,66 @@ public namespace RestSchemaValidator {
         #! Returns a hash of property schemas for objects
         *hash<string, AbstractSchemaObject> getProperties() {
             return properties;
+        }
+    }
+
+    #! A schema field whose example candidates are validated after its type is complete
+    /** Schema fields initially carry placeholder types to break recursive graphs. Validation is deferred until
+        an example is requested so that it sees the finished type, including any action-specific conversions.
+        Candidates are immutable and copied with the field when its type or presentation changes.
+
+        @par Example:
+        A product identifier constrained by a pattern uses the vendor's valid example identifier; an invalid
+        placeholder is omitted instead of preventing the action's input fields from being constructed.
+
+        @since RestSchemaValidator 2.5
+    */
+    public class RestSchemaExampleDataField inherits QoreDataField {
+        private {
+            list<auto> candidates;
+            AbstractDataProviderType example_constraints;
+        }
+
+        #! Creates a schema field with candidate example values
+        /** @param info field construction information
+            @param candidates schema examples, defaults, and scalar examples in preference order
+            @param constraints schema constraints to check even when the field type does not describe them
+            @throw QORE-DATA-FIELD-ERROR invalid field construction information
+            @throw RUNTIME-TYPE-ERROR a supplied field value violates its type
+        */
+        constructor(hash<auto> info, list<auto> candidates, *hash<DataTypeConstraintInfo> constraints)
+                : QoreDataField(info) {
+            self.candidates = candidates;
+            example_constraints = AbstractDataProviderTypeMap."auto".copyWithConstraints(constraints);
+        }
+
+        #! Returns the first accepted schema example or a generated example
+        /** @param emap types already visited by the example traversal
+            @param fname field context for generated values
+            @return an accepted example, or @ref nothing when no example can be generated
+        */
+        auto getExampleValue(*hash<string, bool> emap, *string fname) {
+            foreach auto candidate in (candidates) {
+                if (exists candidate) {
+                    try {
+                        auto value = acceptsValue(candidate);
+                        example_constraints.checkConstraints(value);
+                        return value;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # An invalid example in a specification must not invalidate its field metadata.
+                    }
+                }
+            }
+            auto candidate = QoreDataField::getExampleValue(emap, fname);
+            if (exists candidate) {
+                try {
+                    auto value = acceptsValue(candidate);
+                    example_constraints.checkConstraints(value);
+                    return value;
+                } catch (hash<ExceptionInfo> ex) {
+                    # Field defaults and choices can have been attached to the original placeholder type.
+                }
+            }
         }
     }
 

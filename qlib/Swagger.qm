@@ -143,6 +143,7 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - validate schema and parameter examples and omit placeholders that violate their constraints
     - JSON and YAML bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed, instead of
       being relabeled as UTF-8, which corrupted correctly labeled text such as YAML with a UTF-16 byte order mark;
       HTTP bodies are decoded with their actual encoding (see @ref Qore::decode_http_body() "decode_http_body()")
@@ -3501,10 +3502,20 @@ public class TypedParameter inherits AbstractSwaggerParameterObject, SchemaBase 
     }
 
     #! returns an example value of the parameter (default: @ref nothing)
+    /** @param emap types already visited by the example traversal
+        @param fname field context for generated values
+        @return a validated example value or @ref nothing if no usable example can be generated
+    */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
-        if (exists defaultVal)
-            return defaultVal;
-        return getExampleValueWithFormat(type, format, fname);
+        auto value = defaultVal ?? getExampleValueWithFormat(type, format, fname);
+        if (exists value) {
+            try {
+                SchemaBase::check(False, True, type, format, items, "/", "GET", fname ?? name, \value);
+                return value;
+            } catch (hash<ExceptionInfo> ex) {
+                # A parameter without a usable example can still describe a valid request.
+            }
+        }
     }
 
     #! validates default values
@@ -4154,38 +4165,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return str;
     }
 
-    # returns an example value for a REST API call
+    #! Returns schema examples before default and generated values
+    private list<auto> getExampleCandidates() {
+        return (example, defaultVal, getExampleValueWithFormat(type, format, name));
+    }
+
+    #! Returns an example accepted by the schema's field type, if one can be generated
+    /** @param emap types already visited by the example traversal
+        @param fname field context for generated values
+        @return a valid example value or @ref nothing
+    */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
-        if (exists example)
-            return example;
-        if (exists defaultVal)
-            return defaultVal;
-
-        # Handle allOf by merging properties from all schemas
-        if (allOf) {
-            hash<auto> rv = {};
-            foreach SchemaObject schema in (allOf) {
-                *hash<auto> schemaExample = schema.getExampleValue(emap, fname);
-                if (schemaExample) {
-                    rv += schemaExample;
-                }
-            }
-            # Also add any local properties
-            if (properties) {
-                rv += map {$1.key: cast<SchemaObject>($1.value).getExampleValue(emap, $1.key)}, properties.pairIterator();
-            }
-            return rv;
-        }
-
-        if (type == "object") {
-            return map {$1.key: cast<SchemaObject>($1.value).getExampleValue(emap, $1.key)}, properties.pairIterator();
-        }
-
-        if (type == "array") {
-            return (cast<SchemaObject>(items).getExampleValue(emap, fname),);
-        }
-
-        return SchemaBase::getExampleValueWithFormat(type, format);
+        return getField(fname ?? name, desc).getExampleValue(emap, fname);
     }
 
     #! validates the value against the schema definition

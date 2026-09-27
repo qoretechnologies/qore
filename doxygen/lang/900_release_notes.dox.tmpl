@@ -4208,6 +4208,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - schema fields prefer valid declared examples, including OpenAPI 3.1 \c examples; generated examples are
+        validated against their types, and omitted when constraints cannot be satisfied, so action options can
+        be reconstructed without example-related type errors
       - schema data types describe and enforce the schema's validation constraints, so a value violating them is
         rejected when the type accepts it rather than only when a request is validated
       - the scalar and array alternatives of a \c oneOf or \c anyOf union are not soft types: the union checks each

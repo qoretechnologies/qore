@@ -1702,6 +1702,8 @@ public class RestSchemaActionOperation {
         }
         if (exists ov.example_value) {
             h.example_value = ov.example_value;
+        } else if (!type_replaced && exists fi.example_value) {
+            h.example_value = fi.example_value;
         }
         # a value the schema fixed for the wire form cannot be assigned to a type that replaced it, and
         # would be describing something the action no longer presents

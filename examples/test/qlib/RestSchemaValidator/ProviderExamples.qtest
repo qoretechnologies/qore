@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires AssemblyAiDataProvider
+%requires AwsTextractDataProvider
+%requires AzureDocumentIntelligenceDataProvider
+%requires AzureOpenAiDataProvider
+%requires BedrockDataProvider
+%requires BflDataProvider
+%requires BitbucketDataProvider
+%requires CohereDataProvider
+%requires ConfluenceDataProvider
+%requires ExaDataProvider
+%requires FireworksDataProvider
+%requires GitHubDataProvider
+%requires GitLabDataProvider
+%requires GoogleDocumentAiDataProvider
+%requires IntercomDataProvider
+%requires JinaDataProvider
+%requires KlaviyoDataProvider
+%requires LlamaParseDataProvider
+%requires MewsRestDataProvider
+%requires MistralDataProvider
+%requires PaddleDataProvider
+%requires PineconeDataProvider
+%requires StabilityAiDataProvider
+%requires StripeDataProvider
+%requires TogetherDataProvider
+%requires UnstructuredDataProvider
+%requires XeroDataProvider
+
+%exec-class ProviderExamplesTest
+
+#! Offline coverage of every option of the built-in schema-backed applications
+class ProviderExamplesTest inherits QUnit::Test {
+    constructor() : Test("Schema provider action examples", "1.0", \ARGV) {
+        addTestCase("AssemblyAiDataProvider", \checkApp(), AssemblyAiDataProvider::AppName);
+        addTestCase("AwsTextractDataProvider", \checkApp(), AwsTextractDataProvider::AppName);
+        addTestCase("AzureDocumentIntelligenceDataProvider", \checkApp(), AzureDocumentIntelligenceDataProvider::AppName);
+        addTestCase("AzureOpenAiDataProvider", \checkApp(), AzureOpenAiDataProvider::AppName);
+        addTestCase("BedrockDataProvider", \checkApp(), BedrockDataProvider::AppName);
+        addTestCase("BflDataProvider", \checkApp(), BflDataProvider::AppName);
+        addTestCase("BitbucketDataProvider", \checkApp(), BitbucketDataProvider::AppName);
+        addTestCase("CohereDataProvider", \checkApp(), CohereDataProvider::AppName);
+        addTestCase("ConfluenceDataProvider", \checkApp(), ConfluenceDataProvider::AppName);
+        addTestCase("ExaDataProvider", \checkApp(), ExaDataProvider::AppName);
+        addTestCase("FireworksDataProvider", \checkApp(), FireworksDataProvider::AppName);
+        addTestCase("GitHubDataProvider", \checkApp(), GitHubDataProvider::AppName);
+        addTestCase("GitLabDataProvider", \checkApp(), GitLabDataProvider::AppName);
+        addTestCase("GoogleDocumentAiDataProvider", \checkApp(), GoogleDocumentAiDataProvider::AppName);
+        addTestCase("IntercomDataProvider", \checkApp(), IntercomDataProvider::AppName);
+        addTestCase("JinaDataProvider", \checkApp(), JinaDataProvider::AppName);
+        addTestCase("KlaviyoDataProvider", \checkApp(), KlaviyoDataProvider::AppName);
+        addTestCase("LlamaParseDataProvider", \checkApp(), LlamaParseDataProvider::AppName);
+        addTestCase("MewsRestDataProvider", \checkApp(), "Mews");
+        addTestCase("MistralDataProvider", \checkApp(), MistralDataProvider::AppName);
+        addTestCase("PaddleDataProvider", \checkApp(), PaddleDataProvider::AppName);
+        addTestCase("PineconeDataProvider", \checkApp(), PineconeDataProvider::AppName);
+        addTestCase("StabilityAiDataProvider", \checkApp(), StabilityAiDataProvider::AppName);
+        addTestCase("StripeDataProvider", \checkApp(), StripeDataProvider::AppName);
+        addTestCase("TogetherDataProvider", \checkApp(), TogetherDataProvider::AppName);
+        addTestCase("UnstructuredDataProvider", \checkApp(), UnstructuredDataProvider::AppName);
+        addTestCase("XeroDataProvider", \checkApp(), XeroDataProvider::AppName);
+        set_return_value(main());
+    }
+
+    checkApp(string app) {
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app, False);
+        assertTrue(actions.size() > 0, app + " has actions");
+        int count = 0;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            foreach hash<auto> entry in ((action.options ?? {}).pairIterator()) {
+                hash<auto> option = entry.value;
+                string ctx = app + "/" + action.action + "/" + entry.key;
+                on_error rethrow $1.err, ctx + ": " + $1.desc;
+                QoreDataField field(option + {"name": entry.key});
+                if (exists option.example_value) {
+                    assertEq(field.getExampleValue(), field.getType().acceptsValue(option.example_value), ctx);
+                }
+                if (app == "Paddle" && action.action == "create_price" && entry.key == "product_id") {
+                    assertEq("pro_01gsz97mq9pa4fkyy0wqenepkz", option.example_value,
+                        "presentation overrides preserve the schema's product identifier example");
+                }
+                ++count;
+            }
+        }
+        assertTrue(count > 0, app + " has action options");
+    }
+}

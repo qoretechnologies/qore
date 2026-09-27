@@ -303,6 +303,8 @@ excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObje
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
+    - use valid declared examples, including OpenAPI 3.1 `examples`, and generate only examples accepted by the
+      schema's field type, including complete union members
     - retain OpenAPI 3.1 positional `prefixItems` and boolean `items` constraints through native type serialization
     - preserve positional array response direction and bound recursive schema type construction
     - keep schema validation context alive for independently serialized composition types and repeated round trips
@@ -6446,43 +6448,44 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return required ? rv : rv.getOrNothingType();
     }
 
-    # returns an example value for a REST API call
+    #! Returns schema examples before default and generated values
+    private list<auto> getExampleCandidates() {
+        hash<string, bool> seen;
+        list<auto> rv = new list<auto>();
+        addDeclaredExampleCandidates(\seen, \rv);
+        push rv, getExampleValueWithFormat(type, format, name);
+        return rv;
+    }
+
+    #! Retains declared examples through composition wrappers without constructing recursive field types
+    private addDeclaredExampleCandidates(reference<hash<string, bool>> seen, reference<list<auto>> candidates) {
+        string key = self.uniqueHash();
+        if (seen{key}) {
+            return;
+        }
+        seen{key} = True;
+        foreach auto candidate in ((has_const ? const_value : NOTHING, example, examples[0], defaultVal)) {
+            if (exists candidate) {
+                push candidates, candidate;
+            }
+        }
+        foreach SchemaObject member in (allOf + oneOf + anyOf) {
+            member.addDeclaredExampleCandidates(\seen, \candidates);
+        }
+    }
+
+    #! Returns an example accepted by the schema's field type, if one can be generated
+    /** @return a valid example value or @ref nothing
+    */
     auto getExampleValue() {
         if (has_const) {
-            return const_value;
-        }
-        if (exists example) {
-            return example;
-        }
-        if (exists defaultVal) {
-            return defaultVal;
-        }
-
-        # Handle allOf by merging properties from all schemas
-        if (allOf) {
-            hash<auto> rv = {};
-            foreach SchemaObject schema in (allOf) {
-                *hash<auto> schemaExample = schema.getExampleValue();
-                if (schemaExample) {
-                    rv += schemaExample;
-                }
+            try {
+                return getDataType().acceptsValue(const_value);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
             }
-            # Also add any local properties
-            if (properties) {
-                rv += map {$1.key: cast<SchemaObject>($1.value).getExampleValue()}, properties.pairIterator();
-            }
-            return rv;
         }
-
-        if (type == "object") {
-            return map {$1.key: cast<SchemaObject>($1.value).getExampleValue()}, properties.pairIterator();
-        }
-
-        if (type == "array") {
-            return (cast<SchemaObject>(items).getExampleValue(),);
-        }
-
-        return SchemaBase::getExampleValueWithFormat(type, format, name);
+        return getField(name, desc).getExampleValue();
     }
 
     #! Validates the value against the schema definition
