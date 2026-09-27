@@ -1219,7 +1219,7 @@ class HttpIoRedirectState {
             drop_body = True;
         }
         if (drop_body) {
-            remove body;
+            body = NOTHING;
             headers -= (map $1, keys headers, $1 =~ /^(content-|transfer-encoding$)/i);
         }
 

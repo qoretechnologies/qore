@@ -372,9 +372,11 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         @return a hash with "stream_id" (int) and "future" (Future) keys
 
         @throw HTTPCLIENT-STATE-ERROR if the connection is not ready
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitRequest(string method, string path, *hash<auto> headers, *data body,
             bool suppress_wake = False) {
+        check_http_request_body(method, headers, body);
         *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
@@ -438,9 +440,11 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         @param notifier EventNotifier to signal on response completion
 
         @return a hash with "stream_id" (int), "future" (Future), and "promise" (Promise)
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitRequestWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);

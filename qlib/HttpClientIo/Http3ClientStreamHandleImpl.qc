@@ -210,10 +210,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body, *EventNotifier notifier,
             bool sse_install_eligible = False) {
+        check_http_request_body(method, headers, body, body_streaming);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -294,9 +296,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Starts an SSE streaming request with I/O-thread event parsing
     /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
             *EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {

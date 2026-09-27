@@ -717,9 +717,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
         stale connections transparently.
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
             *hash<auto> headers, bool body_streaming = False, *data body) {
+        check_http_request_body(method, headers, body, body_streaming);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -800,9 +802,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, bool decode_text = True) {
+        check_http_request_body(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -907,9 +911,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
         @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
 
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, bool decode_text = True) {
+        check_http_request_body(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -1021,9 +1027,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTP-REDIRECT-ERROR if the maximum number of redirects is exceeded, or a redirect cannot be followed:
         the response has no \c Location value or more than one, or the location has no host, an invalid host, a
         scheme other than \c http or \c https, or names a UNIX domain socket and the request is not on one
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms, bool decode_text = True) {
+        check_http_request_body(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -1282,7 +1290,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             drop_body = True;
         }
         if (drop_body) {
-            remove rs.body;
+            rs.body = NOTHING;
             rs.headers -= (map $1, keys rs.headers, $1 =~ /^(content-|transfer-encoding$)/i);
         }
 

@@ -295,6 +295,8 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         assertEq(<e4f6>, reqs[2].body);
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "404", \FileLocationHandler::writeFileToLocation(),
             (url + "/missing", "x"));
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \FileLocationHandler::writeFileToLocation(),
+            (url + "/echo/get{method=get}", "body"));
         # error_passthru
         FileLocationHandler::writeFileToLocation(url + "/missing{error_passthru=true}", "x");
     }
@@ -307,13 +309,17 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         assertEq(("POST", "POST"), (map $1.method, reqs));
         assertEq(binary("repeated"), reqs[1].body);
         assertEq("/echo/307", reqs[1].target);
-        # 303 and a POST redirected with 302 are retrieved with GET without the body
-        foreach string path in (("/post-303", "/post-302")) {
+        # 303 changes POST/PUT/PATCH to GET; 302 changes POST to GET. None retain a body or content headers.
+        foreach list<string> request in (("/post-303", "POST"), ("/post-302", "POST"),
+                ("/post-303{method=put}", "PUT"), ("/post-303{method=patch}", "PATCH")) {
+            string path = request[0];
             handler.clear();
             FileLocationHandler::writeFileToLocation(url + path, "dropped");
             reqs = handler.getRequests();
-            assertEq(("POST", "GET"), (map $1.method, reqs), path);
+            assertEq((request[1], "GET"), (map $1.method, reqs), path);
             assertNothing(reqs[1].body, path);
+            assertNothing(reqs[1].content_type, path);
+            assertNothing(reqs[1].transfer_encoding, path);
         }
         # a PUT redirected with 302 is repeated
         handler.clear();

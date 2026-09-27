@@ -45,7 +45,9 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires RestClientIo
-%requires process
+%try-module process >= 2.0
+%define NoProcess
+%endtry
 
 %requires json
 
@@ -530,6 +532,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("persistent session abort/error discards connection", \testPersistentSessionAbort());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
+        addTestCase("GET request bodies are rejected", \testGetRequestBodiesRejected());
         addTestCase("owned manager closes on destruction", \testOwnedManagerClosesOnDestruction());
         addTestCase("restGetAsync", \testRestGetAsync());
         addTestCase("restPostAsync", \testRestPostAsync());
@@ -1292,6 +1295,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         server resources initialized by the first request.
     */
     testOwnedManagerClosesOnDestruction() {
+%ifdef NoProcess
+        testSkip("process module 2.0 or later is unavailable; descriptor counts cannot be checked");
+%else
         int before = Process::getDescriptorCount();
         for (int i = 0; i < 64; ++i) {
             {
@@ -1310,6 +1316,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertLe(8, after - before,
             sprintf("short-lived clients retain at most fixed process resources "
                 "(before %d, after %d)", before, after));
+%endif
+    }
+
+    testGetRequestBodiesRejected() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \rest.restDoRequest(),
+            ("GET", "/api/test", {"unexpected": "body"}));
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", sub () {
+            rest.restDoRequestAsync("GET", "/api/test", {"unexpected": "body"}).get(30s);
+        });
+        assertEq(200, rest.restGet("/api/test").status_code,
+            "bodyless requests still work after rejected GET bodies");
     }
 
     testRestGetAsync() {

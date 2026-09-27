@@ -122,10 +122,12 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @since %Qore 3.0 (the \c body_streaming = \c True path was added in
             this release; previously the method threw \c HTTP1-STREAMING-ERROR
             on \c sendData())
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body, *EventNotifier notifier,
             bool sse_install_eligible = False) {
+        check_http_request_body(method, headers, body, body_streaming);
         if (body_streaming && body && body.size() > 0) {
             throw "HTTPCLIENT-STATE-ERROR",
                 "body_streaming=True is incompatible with a non-empty body; "
@@ -211,9 +213,11 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Starts an SSE streaming request with I/O-thread event parsing
     /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
             *EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {

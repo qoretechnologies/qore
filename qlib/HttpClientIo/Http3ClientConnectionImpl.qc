@@ -183,9 +183,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
     #! Submits a request on this connection (protocol-specific)
     /** The capacity check is performed atomically inside poll_op.submitRequest()
         under the stream_lock.
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise) {
+        check_http_request_body(method, headers, body);
         return poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
     }
@@ -193,6 +195,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
     #! Submits a request using CompositeAction (Promise + EventNotifier) — HTTP/3
     int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise, EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
             notifier, max_concurrent_streams);
     }
@@ -321,9 +324,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         @note The capacity check is performed atomically inside
         poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
             Promise promise, bool streaming = False) {
+        check_http_request_body(method, headers, body, streaming);
         *AsyncSocketIoController ctl;
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
@@ -357,10 +362,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param notifier optional EventNotifier signaled after channel updates
         @return the stream ID
         @param sse_install_eligible permits installing the SSE parser for a qualifying response
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestStreamingWithChannel(string method, string path, *hash<auto> headers,
             *data body, Channel channel, bool streaming = False,
             *EventNotifier notifier, bool sse_install_eligible = False) {
+        check_http_request_body(method, headers, body, streaming);
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -396,9 +403,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestSse(string method, string path, *hash<auto> headers, *data body,
             Queue queue, *EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());

@@ -420,9 +420,11 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT if the request times out
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the maximum response body size, as
         received or as decoded
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
+        check_http_request_body(method, headers, body);
         timeout wait_timeout = timeout_ms ?? request_timeout;
         date end_time = now_us() + wait_timeout;
 
@@ -526,6 +528,7 @@ public class HttpClientStreamHandle {
         @return a Future that resolves to the raw response hash
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body
         @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
 
         @note The caller must keep the returned Future alive (or call \c get())
@@ -539,8 +542,10 @@ public class HttpClientStreamHandle {
 
     #! Submits an async request and returns a Future for the response
     /** @return hash with "stream_id" (int) and "future" (Future)
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsync(string method, string path, *hash<auto> headers, *data body) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -615,9 +620,11 @@ public class HttpClientStreamHandle {
 
         @return hash with "stream_id" (int) and "future" (Future)
 
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -684,8 +691,10 @@ public class HttpClientStreamHandle {
         @note This method never blocks. The Future is resolved by a C++ PromiseAction
         on the I/O thread (pure C++, no user code on I/O thread).
 
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -744,9 +753,11 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
         @throw HTTPCLIENT-CANCELLED if the stream was cancelled during connection setup
         @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
             binary datagram) {
+        check_http_request_body(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -1077,6 +1088,7 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
 
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
         @throw HTTPCLIENT-NOT-READY if \c notifier is provided and the connection is not ready for
         request submission
@@ -1234,6 +1246,7 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
 
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support SSE streaming
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
 
     */

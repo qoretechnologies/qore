@@ -116,9 +116,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
     #! Submits a request on this connection (protocol-specific)
     /** The capacity check is performed atomically inside poll_op.submitRequest()
         under the stream_lock.
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise) {
+        check_http_request_body(method, headers, body);
         int sid = poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
         # Wake the I/O controller so it processes the queued request
@@ -136,6 +138,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
     #! Submits a request using CompositeAction (Promise + EventNotifier) — HTTP/1.1
     int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise, EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
             notifier, max_concurrent_streams);
     }
@@ -159,11 +162,13 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @return the stream ID
 
         @see submitRequestImpl()
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
             *data body, Channel channel, bool streaming = True,
             bool body_streaming = False, *EventNotifier notifier,
             bool sse_install_eligible = False) {
+        check_http_request_body(method, headers, body, body_streaming);
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming, body_streaming, notifier,
             sse_install_eligible);
@@ -265,9 +270,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     int submitRequestSse(string method, string path, *hash<auto> headers,
             *data body, Queue queue, *EventNotifier notifier) {
+        check_http_request_body(method, headers, body);
         int sid = poll_op.submitRequestSse(method, path, headers, body, queue,
             max_concurrent_streams, notifier);
         # Wake the I/O controller so it processes the queued request

@@ -66,6 +66,11 @@ module HttpClientIo {
     - **UNIX domain sockets**: plain HTTP/1.1 to a local server listening on a UNIX domain socket, addressed
       like @ref Qore::HTTPClient "HTTPClient" with a \c socket= URL
 
+    GET requests must use @ref NOTHING for the request body and cannot enable request-body streaming.
+    A supplied body (including an empty string or binary value) or an upload stream raises
+    \c HTTPCLIENT-REQUEST-BODY-ERROR. Receiving a streaming response to a bodyless GET remains supported.
+    Redirects that change the request method to GET discard the original body and content headers.
+
     @section httpclientio_components Components
 
     - @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" - Unified connection pool with protocol auto-selection
@@ -799,6 +804,15 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
         return False;
     }
 
+
+    #! Rejects request bodies and upload streams for GET, including an HTTP/2 or HTTP/3 method override
+    sub check_http_request_body(string method, *hash<auto> headers, *data body, bool body_streaming = False) {
+        if ((method.upr() == "GET" || (headers{":method"}.typeCode() == NT_STRING
+                && headers{":method"}.upr() == "GET")) && (exists body || body_streaming)) {
+            throw "HTTPCLIENT-REQUEST-BODY-ERROR",
+                "GET requests cannot have a request body or enable request-body streaming; use NOTHING for the body";
+        }
+    }
 
     #! Returns True if the given octet is a hexadecimal digit
     bool sub is_hex_digit(int c) {

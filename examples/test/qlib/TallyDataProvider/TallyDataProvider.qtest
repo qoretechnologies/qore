@@ -30,7 +30,9 @@
 %requires Logger
 %requires DataProvider
 %requires TallyDataProvider
-%requires uuid
+%try-module uuid
+%define NoUuid
+%endtry
 
 %requires json
 
@@ -400,6 +402,9 @@ public class TallyDataProviderTest inherits QUnit::Test {
     }
 
     createFormTest() {
+%ifdef NoUuid
+        testSkip("uuid module is unavailable; form creation requires generated UUIDs");
+%endif
         checkModule();
         FakeTallyRestClientIo rest();
         rest.response_body = {
@@ -967,6 +972,9 @@ public class TallyDataProviderTest inherits QUnit::Test {
     }
 
     liveFormCrudTest() {
+%ifdef NoUuid
+        testSkip("uuid module is unavailable; live form creation requires generated UUIDs");
+%else
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
@@ -1034,6 +1042,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
             questions += it.getValue();
         }
         assertTrue(questions.lsize() >= 0, "questions endpoint returns results");
+%endif
     }
 
     liveWebhookCrudTest() {

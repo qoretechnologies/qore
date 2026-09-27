@@ -461,6 +461,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("unified POST request with body", \testUnifiedPostWithBody());
         addTestCase("one-shot request Content-Length framing",
             \testOneShotRequestContentLengthFraming());
+        addTestCase("GET request bodies are rejected", \testGetRequestBodiesRejected());
+        addTestCase("legacy HTTPClient GET body compatibility", \testLegacyGetBodyCompatibility());
         addTestCase("unified error response", \testUnifiedErrorResponse());
         addTestCase("unified large response", \testUnifiedLargeResponse());
         addTestCase("unified concurrent multiplexed", \testUnifiedConcurrentRequests());
@@ -1324,6 +1326,68 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             ? response.body.toString() : response.body;
         assertRegex("method=POST content-length=3 body-size=3", response_body,
             protocol + " sends the exact nonempty Content-Length");
+    }
+
+    testGetRequestBodiesRejected() {
+        testGetRequestBodiesRejectedIntern("h1", mHttpUrl);
+        testGetRequestBodiesRejectedIntern("h2", mSslUrl);
+        if (mQuicUrl) {
+            testGetRequestBodiesRejectedIntern("h3", mQuicUrl);
+        }
+    }
+
+    private testGetRequestBodiesRejectedIntern(string protocol, string url) {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": protocol,
+        });
+        on_exit mgr.closeAll();
+        const string Err = "HTTPCLIENT-REQUEST-BODY-ERROR";
+        # Explicit empty bodies are also rejected; NOTHING is the bodyless request.
+        foreach data payload in (("payload", <0001ff>, "", binary())) {
+            assertThrows(Err, \mgr.request(), (url, "GET", "/request-framing", NOTHING, payload));
+        }
+        assertThrows(Err, \mgr.requestAsync(), (url, "get", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \mgr.submitRequestAsync(), (url, "GET", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \mgr.acquireAndStartStreaming(), (url, "GET", "/request-framing", NOTHING, True));
+        assertThrows(Err, \mgr.acquireAndStartStreaming(),
+            (url, "GET", "/request-framing", NOTHING, False, "payload"));
+        assertThrows(Err, \mgr.request(),
+            (url, "POST", "/request-framing", {":method": "GET"}, "payload"));
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        EventNotifier notifier();
+        assertThrows(Err, \stream.request(), ("GET", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \stream.requestAsync(), ("GET", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \stream.submitAsyncWithNotifier(),
+            ("GET", "/request-framing", NOTHING, "payload", notifier));
+        assertThrows(Err, \stream.submitAsyncNonBlocking(), ("GET", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \stream.submitAsyncWithDatagram(),
+            ("GET", "/request-framing", NOTHING, "payload", <01>));
+        assertThrows(Err, \stream.startStreaming(), ("GET", "/request-framing", NOTHING, True));
+        assertThrows(Err, \stream.startStreaming(), ("GET", "/request-framing", NOTHING, False, "payload"));
+        assertThrows(Err, \stream.startSseStreaming(), ("GET", "/request-framing", NOTHING, "payload"));
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        assertThrows(Err, \conn.submitRequest(), ("GET", "/request-framing", NOTHING, "payload"));
+        assertThrows(Err, \conn.submitRequestWithNotifier(),
+            ("GET", "/request-framing", NOTHING, "payload", notifier));
+
+        # Validation must leave the stream reservation usable and send no rejected body.
+        hash<auto> response = stream.request("GET", "/request-framing");
+        assertEq(200, response.status_code, protocol + " stream remains usable after validation errors");
+        string text = response.body.typeCode() == NT_BINARY ? response.body.toString() : response.body;
+        assertRegex("method=GET content-length=absent body-size=0", text,
+            protocol + " accepts a bodyless GET after rejecting bodies");
+    }
+
+    testLegacyGetBodyCompatibility() {
+        HTTPClient client({"url": mHttpUrl});
+        on_exit client.disconnect();
+        hash<auto> response = client.send("legacy", "GET", "/request-framing", NOTHING, True);
+        string text = response.body.typeCode() == NT_BINARY ? response.body.toString() : response.body;
+        assertRegex("method=GET content-length=6 body-size=6", text,
+            "the historical HTTPClient API retains its GET-body behavior");
     }
 
     testUnifiedErrorResponse() {

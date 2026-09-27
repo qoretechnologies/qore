@@ -1996,6 +1996,8 @@ while (*binary chunk = input.read(65536)) {
       - binary streams and stream readers of \c ftp(s):// locations deliver the file as it is received instead of
         reading the whole file into memory first, and an error in an FTP or SFTP transfer is raised by the stream;
         before, an SFTP stream simply ended, so a failed transfer was taken for a complete but shorter file
+      - redirects that change the method to GET explicitly clear the original request body in both source and
+        compiled modules; the follow-up request also drops its content headers
       - \c http(s):// locations use @ref httpclientiointro "HttpClientIo" and \c rest(s):// locations use
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3); non-blocking readers do no blocking
         I/O, stream reads read the body as it is consumed and raise error responses when the stream is opened, and
@@ -3083,6 +3085,10 @@ while (*binary chunk = input.read(65536)) {
       - new module for structure-agnostic parsing and writing of HL7 v2 delimited healthcare messages
 
     - @ref httpclientiointro "HttpClientIo" module
+      - GET requests reject explicit request bodies (including empty values) and request-body streaming with
+        \c HTTPCLIENT-REQUEST-BODY-ERROR across HTTP/1.1, HTTP/2, and HTTP/3; bodyless GET response streaming
+        remains supported. This also applies to clients built on HttpClientIo, including RestClientIo.
+        The historical native HTTPClient API retains its existing behavior.
       - new unified module providing HTTP/2 and HTTP/3 multiplexed client I/O support
 
     - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
