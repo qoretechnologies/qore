@@ -3240,7 +3240,9 @@ if (DOXYGEN_FOUND)
         COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
-    add_dependencies(docs-lang qore)
+    # qdx loads astparser, and subsequent module documentation runs qjar,
+    # which loads reflection. Neither tool may race a module relink.
+    add_dependencies(docs-lang qore astparser reflection)
     # C++ API documentation links to core language types and execution-mode sections.
     add_dependencies(docs-lib docs-lang)
     # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
@@ -4095,7 +4097,7 @@ endif()
         COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
         VERBATIM
     )
-    add_dependencies(docs-lang-final-fast qore)
+    add_dependencies(docs-lang-final-fast qore astparser reflection)
 
     # docs-lang-final depends on all module docs (so their tagfiles exist)
     foreach(mod ${QORE_USER_MODULE_NAMES})

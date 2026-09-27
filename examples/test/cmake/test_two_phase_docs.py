@@ -78,6 +78,43 @@ qore_binary_module_two_phase_docs(xml "First;Second")
             self.assertFalse((build / "Doxyfile.final").exists())
             self.assertNotIn("WARN_IF_DOC_ERROR", (build / "Doxyfile").read_text())
 
+    def test_binary_module_java_documentation_environment(self):
+        with tempfile.TemporaryDirectory(prefix="qore-qjar-env-") as directory:
+            source = Path(directory) / "source~snapshot"
+            build = Path(directory) / "build~snapshot"
+            (source / "cmake").mkdir(parents=True)
+            (source / "cmake/cmake_uninstall.cmake.in").write_text("# fixture\n")
+            (source / "fixture.c").write_text("void fixture(void) {}\n")
+            (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
+            (source / "check-env.py").write_text(f'''import os
+from pathlib import Path
+assert os.environ["QORE_MODULE_DIR"] == {f"{build}/modules/fixture:{source}/qlib"!r}
+assert os.environ["QORE_DOC_DEFINES"] == "QORE_QDX_RUN,Unix"
+Path({str(build / "qjar-environment-ok")!r}).touch()
+''')
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(BinaryDocEnvironment C)
+set(QORE_MODULE_DIR_FOR_DOCS "${{CMAKE_SOURCE_DIR}}/qlib")
+set(QORE_DOC_DEFINES "QORE_QDX_RUN,Unix")
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "${{CMAKE_COMMAND}}" -E true)
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+set(QORE_QJAR_COMMAND "{sys.executable}" "${{CMAKE_SOURCE_DIR}}/check-env.py")
+set(QORE_USERMODULE_DOXYGEN_TEMPLATE "${{CMAKE_SOURCE_DIR}}/Doxyfile.in")
+set(QORE_MODULES_DIR lib/qore-modules)
+set(QORE_API_VERSION 2.0)
+add_custom_target(docs)
+add_custom_target(docs-lang)
+add_library(fixture MODULE fixture.c)
+qore_binary_module_intern2(fixture 1.0 "" "1")
+''')
+            for command in ([CMAKE, "-S", str(source), "-B", str(build)],
+                            [CMAKE, "--build", str(build), "--target", "docs"]):
+                result = subprocess.run(command, text=True, capture_output=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertTrue((build / "qjar-environment-ok").is_file())
+
     def test_missing_dependency_is_an_error(self):
         with tempfile.TemporaryDirectory(prefix="qore-doc-helper-") as directory:
             _, result = self.configure(Path(directory), missing_target=True)

@@ -2137,7 +2137,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_dox_output}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_working_dir}/Doxyfile
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_dox_output}/html ${_dox_output}/html/search
-                COMMAND ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
+                COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 WORKING_DIRECTORY ${_working_dir}
                 COMMENT "Generating API documentation with Doxygen"
@@ -3158,6 +3158,14 @@ MACRO (QORE_USER_MODULE _module_file)
             )
             add_dependencies(docs-fast-${f} qore)
         endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+
+        # Fast documentation skips docs-lang, which normally builds these
+        # native tool dependencies before qdx and qjar can load them.
+        foreach(_qore_doc_tool astparser reflection)
+            if (TARGET ${_qore_doc_tool})
+                add_dependencies(docs-fast-${f} ${_qore_doc_tool})
+            endif()
+        endforeach()
 
         # make 'docs' target dependent on this module documentation
         add_dependencies(docs docs-${f})
