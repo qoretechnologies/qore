@@ -420,6 +420,14 @@ else
     TIMEOUT_CMD=""
 fi
 
+# GNU timeout aborts a test that exceeds its time limit, so the test dumps core and the stacks of its threads
+# show where it hangs; BusyBox timeout (Alpine) keeps SIGTERM, as the exit code of an abort there would be
+# taken for a crash
+TIMEOUT_SIGNAL_OPTS=""
+if [ -n "$TIMEOUT_CMD" ] && $TIMEOUT_CMD --version 2>/dev/null | grep -q GNU; then
+    TIMEOUT_SIGNAL_OPTS="-s ABRT -k 60"
+fi
+
 # Run tests.
 i=1
 for test in $TESTS; do
@@ -439,13 +447,13 @@ for test in $TESTS; do
 
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
             eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
-            $TIMEOUT_CMD $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
             $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
@@ -455,6 +463,16 @@ for test in $TESTS; do
     # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
     if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
         echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
+        # the stacks of the threads of a test aborted by the timeout show where it hangs
+        if [ -n "$TIMEOUT_SIGNAL_OPTS" ] && command -v gdb > /dev/null 2>&1; then
+            TIMEOUT_CORE=`ls -t "$CORE_DIR"/core.* 2>/dev/null | head -1`
+            if [ -n "$TIMEOUT_CORE" ]; then
+                echo "*** Core dump of the hung test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
+                BT_FILE="$CORE_DIR/backtrace-`basename "$test" .qtest`-timeout.txt"
+                gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
+                head -500 "$BT_FILE"
+            fi
+        fi
     fi
 
     if [ $test_exit -eq 0 ]; then
