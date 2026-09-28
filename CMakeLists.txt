@@ -3122,8 +3122,8 @@ message(STATUS "Generating QoreConfigVersion.cmake")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/QoreConfigVersion.cmake.in
                ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake @ONLY)
 message(STATUS "Generating QoreConfig.cmake")
-configure_file(${CMAKE_SOURCE_DIR}/cmake/QoreConfig.cmake.in
-               ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake @ONLY)
+include(${CMAKE_SOURCE_DIR}/cmake/QoreConfigurePackage.cmake)
+qore_configure_package_configs()
 message(STATUS "Generating qore.pc")
 configure_file(${CMAKE_SOURCE_DIR}/qore.pc.in
                ${CMAKE_BINARY_DIR}/qore.pc @ONLY)
@@ -3149,7 +3149,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order

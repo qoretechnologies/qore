@@ -26,41 +26,12 @@ endif()
 
 set(QORE_FOUND 1)
 
-set(_qore_build_cmake_dir "@CMAKE_BINARY_DIR@/cmake")
-# Resolve both sides to real paths before comparing: symlinked build/checkout paths
-# (common on macOS, e.g. /tmp vs /private/tmp, /var vs /private/var) otherwise make this
-# exact STREQUAL fail, falling through to the installed branch which includes a
-# QoreMacros.cmake that does not exist next to a build-tree config -> the exported
-# qore_* commands become undefined for build-tree consumers.
-get_filename_component(_qore_this_cmake_dir_real "${CMAKE_CURRENT_LIST_DIR}" REALPATH)
-get_filename_component(_qore_build_cmake_dir_real "${_qore_build_cmake_dir}" REALPATH)
-if (_qore_this_cmake_dir_real STREQUAL _qore_build_cmake_dir_real)
-    set(_qore_in_build_tree TRUE)
-else()
-    set(_qore_in_build_tree FALSE)
-endif()
-# Exported so consumers can tell an in-tree qore from an installed one.  The AOT
-# build-input contract differs between them: see QORE_GET_QCC_DEPS().
+# The installed export contains no paths into the temporary build tree.
+# Build-tree exports load their separate, uninstalled settings file here.
+set(_qore_in_build_tree FALSE)
+@QORE_CONFIG_BUILD_TREE_SETUP@
 set(QORE_IN_BUILD_TREE ${_qore_in_build_tree})
-# Build-tree mode: point consumers at build outputs for local debugging without install.
-# Limitations: assumes single-config generators and default output dirs; multi-config/custom
-# output layouts may need explicit Qore_DIR or manual overrides.
-if (_qore_in_build_tree)
-    set(QORE_CMAKE_DIR "@CMAKE_SOURCE_DIR@/cmake")
-    set(QORE_QCC_INCREMENTAL_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-incremental")
-    set(QORE_QCC_SOURCE_ORDER_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-source-order")
-    set(QORE_QCC_BATCH_BOOTSTRAP_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-batch-bootstrap")
-    set(QORE_QCC_INCREMENTAL_PLAN_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-incremental-plan")
-    set(QORE_QCC_PRUNE_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-prune")
-    set(QORE_INCLUDE_DIR "@CMAKE_SOURCE_DIR@/include")
-    set(QORE_INCLUDE_DIRS "${QORE_INCLUDE_DIR};@CMAKE_BINARY_DIR@/include")
-    set(QORE_LIBRARY "@CMAKE_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@qore@CMAKE_SHARED_LIBRARY_SUFFIX@")
-    set(QORE_LIBRARIES ${QORE_LIBRARY})
-    set(QORE_BUILDTREE_BINARY_MODULE_PATH
-        "@CMAKE_BINARY_DIR@/modules/astparser:@CMAKE_BINARY_DIR@/modules/reflection:@CMAKE_BINARY_DIR@/modules/logger_bin:@CMAKE_BINARY_DIR@/modules/linenoise:@CMAKE_BINARY_DIR@/modules/i18n:@CMAKE_BINARY_DIR@/modules/krb5:@CMAKE_BINARY_DIR@/modules/mongodb:@CMAKE_BINARY_DIR@/modules/ml:@CMAKE_BINARY_DIR@/modules/tokenizer:@CMAKE_BINARY_DIR@/modules/ocr:@CMAKE_BINARY_DIR@/modules/dataframe:@CMAKE_BINARY_DIR@/modules/sshutil:@CMAKE_BINARY_DIR@/modules/protobuf:@CMAKE_BINARY_DIR@/modules/json:@CMAKE_BINARY_DIR@/modules/yaml")
-    set(QORE_BUILDTREE_USER_MODULE_PATH
-        "@CMAKE_BINARY_DIR@/qlib-qmod:@CMAKE_SOURCE_DIR@/qlib:${QORE_BUILDTREE_BINARY_MODULE_PATH}")
-else()
+if (NOT _qore_in_build_tree)
     set(QORE_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
     set(QORE_QCC_INCREMENTAL_HELPER "${CMAKE_CURRENT_LIST_DIR}/qore-qo-incremental")
     set(QORE_QCC_SOURCE_ORDER_HELPER "${CMAKE_CURRENT_LIST_DIR}/qore-qo-source-order")
@@ -134,23 +105,23 @@ endif()
 # allow the qore executable to be overridden (for example, when cross-compiling)
 if (_qore_in_build_tree)
     if(NOT DEFINED QORE_EXECUTABLE)
-        set(QORE_EXECUTABLE "@CMAKE_BINARY_DIR@/qore${CMAKE_EXECUTABLE_SUFFIX}")
+        set(QORE_EXECUTABLE "${_qore_build_binary_dir}/qore${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
     if(DEFINED QPP_EXECUTABLE)
         set(QORE_QPP_EXECUTABLE ${QPP_EXECUTABLE})
     else()
-        set(QORE_QPP_EXECUTABLE "@CMAKE_BINARY_DIR@/qpp${CMAKE_EXECUTABLE_SUFFIX}")
+        set(QORE_QPP_EXECUTABLE "${_qore_build_binary_dir}/qpp${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
     if(NOT DEFINED QORE_QCC_EXECUTABLE)
-        set(QORE_QCC_EXECUTABLE "@CMAKE_BINARY_DIR@/qcc${CMAKE_EXECUTABLE_SUFFIX}")
+        set(QORE_QCC_EXECUTABLE "${_qore_build_binary_dir}/qcc${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
-    set(QORE_QCC_FORMAT_STAMP "@CMAKE_BINARY_DIR@/qcc-format.stamp")
-    set(QORE_QDX_EXECUTABLE "@CMAKE_SOURCE_DIR@/doxygen/qdx")
-    set(QORE_QM_METADATA_EXECUTABLE "@CMAKE_SOURCE_DIR@/bin/qore-extract-qm-metadata")
+    set(QORE_QCC_FORMAT_STAMP "${_qore_build_binary_dir}/qcc-format.stamp")
+    set(QORE_QDX_EXECUTABLE "${_qore_build_source_dir}/doxygen/qdx")
+    set(QORE_QM_METADATA_EXECUTABLE "${_qore_build_source_dir}/bin/qore-extract-qm-metadata")
     if(DEFINED QJAR_EXECUTABLE)
         set(QORE_QJAR_EXECUTABLE ${QJAR_EXECUTABLE})
     else()
-        set(QORE_QJAR_EXECUTABLE "@CMAKE_SOURCE_DIR@/doxygen/qjar")
+        set(QORE_QJAR_EXECUTABLE "${_qore_build_source_dir}/doxygen/qjar")
     endif()
 else()
     if(NOT DEFINED QORE_EXECUTABLE)
@@ -219,8 +190,4 @@ else ()
 endif ()
 
 
-if (_qore_in_build_tree)
-    include("@CMAKE_SOURCE_DIR@/cmake/QoreMacros.cmake")
-else()
-    include("${CMAKE_CURRENT_LIST_DIR}/QoreMacros.cmake")
-endif()
+include("${QORE_CMAKE_DIR}/QoreMacros.cmake")
