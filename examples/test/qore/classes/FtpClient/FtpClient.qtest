@@ -427,6 +427,24 @@ class FtpTest inherits QUnit::Test {
             fc.get(name, os, 1000);
             assertEq(file_data.substr(1000), os.data, mode + " stream with offset");
 
+            # a pipe is written in a thread of its own and read in another one
+            StreamPipe pipe(sync_close: False);
+            background sub () {
+                PipeOutputStream pos = pipe.getOutputStream();
+                try {
+                    fc.get(name, pos);
+                    pos.close();
+                } catch (hash<ExceptionInfo> ex) {
+                    pos.reportError(ex);
+                }
+            }();
+            binary piped = binary();
+            PipeInputStream pis = pipe.getInputStream();
+            while (*binary chunk = pis.read(65536)) {
+                piped += chunk;
+            }
+            assertEq(file_data, piped, mode + " pipe");
+
             # an error writing the stream fails the transfer, and the client makes a new connection for the next
             # operation, as the reply to the aborted transfer is still pending
             os = new TestFtpOutputStream();

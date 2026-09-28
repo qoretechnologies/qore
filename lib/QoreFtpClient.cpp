@@ -270,7 +270,16 @@ static int qore_ftp_wait_controller_queue_relay(QoreObject* queue_obj, OutputStr
             return -1;
         }
         if (v->getType() == NT_BINARY) {
-            target->writeHelper(v->get<const BinaryNode>(), xsink);
+            // the data is written in the thread that called FtpClient::get() with the stream, as the caller would
+            // write it itself; the stream's thread binding is not checked, as a stream meant to be written from
+            // another thread, such as a PipeOutputStream, is bound to the thread that created it
+            if (target->isClosed()) {
+                xsink->raiseException("OUTPUT-STREAM-CLOSED-ERROR", "the %s object has already been closed",
+                    target->getName());
+                return -1;
+            }
+            const BinaryNode* b = v->get<const BinaryNode>();
+            target->write(b->getPtr(), b->size(), xsink);
             if (*xsink) {
                 return -1;
             }

@@ -103,7 +103,7 @@ public:
         return false;
     }
     DLLLOCAL virtual const char *getName() override {
-        return "PipeInputStream";
+        return "PipeOutputStream";
     }
 
 protected:
