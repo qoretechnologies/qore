@@ -37,6 +37,9 @@ public const DataSchemaJsonSchema = {
     "description": "Schema definition for .ysm (YAML) and .jsm (JSON) data schema files",
     "type": "object",
     "required": ("schema",),
+    # a top-level key the loader does not know would be dropped; e.g. auto_triggers and constraints are declared
+    # per table
+    "additionalProperties": False,
     "properties": {
         "schema": {
             "$ref": "#/$defs/schemaMetadata",

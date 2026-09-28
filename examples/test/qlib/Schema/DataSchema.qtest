@@ -832,6 +832,44 @@ class DataSchemaTest inherits QUnit::Test {
             \Schema::DataSchemaLoader::validate(), (ref_schema,));
         assertThrows("DATA-SCHEMA-ERROR", "^reference_data\\.strict table \"t\": unknown key \"row\"",
             \Schema::DataSchemaLoader::normalizeReferenceData(), (ref_schema.reference_data,));
+        # the top level is closed too
+        assertEq(False, ms.additionalProperties);
+        assertEq(sort(Schema::DataSchemaLoader::TopLevelKeys), sort(keys ms.properties));
+        hash<auto> base = getSequenceSchema({"columns": columns});
+        # a top-level auto_triggers is refused, saying it is declared per table
+        hash<auto> top = base + {"auto_triggers": {"created": True}};
+        string msg = "^data schema: unknown key \"auto_triggers\"; \"auto_triggers\" is declared per table "
+            "\\(tables\\.<table>\\.auto_triggers\\); valid keys: ";
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", msg, \Schema::DataSchemaLoader::loadHash(), (top,));
+        assertThrows("DATA-SCHEMA-ERROR", msg, \Schema::DataSchemaLoader::loadHash(), (top, False));
+        assertThrows("DATA-SCHEMA-ERROR", msg, \Schema::DataSchemaLoader::normalize(), (top,));
+        assertFalse(js.validateWithErrors(top).valid);
+        # a top-level constraints is refused, saying how constraints are declared per table
+        top = base + {"constraints": {"primary_key": {"name": "t_pk", "columns": ("id",)}}};
+        msg = "^data schema: unknown key \"constraints\"; constraints are declared per table with \"primary_key\", "
+            "\"unique_constraints\" and \"foreign_constraints\" \\(tables\\.<table>\\.primary_key, "
+            "tables\\.<table>\\.unique_constraints, tables\\.<table>\\.foreign_constraints\\)";
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", msg, \Schema::DataSchemaLoader::validate(), (top,));
+        assertThrows("DATA-SCHEMA-ERROR", msg, \Schema::DataSchemaLoader::loadHash(), (top, False));
+        # other per-table keys name their table path
+        assertThrows("DATA-SCHEMA-ERROR", "^data schema: unknown key \"primary_key\"; \"primary_key\" is declared "
+            "per table \\(tables\\.<table>\\.primary_key\\)",
+            \Schema::DataSchemaLoader::normalize(), (base + {"primary_key": {}},));
+        assertThrows("DATA-SCHEMA-ERROR", "^data schema: unknown key \"sequence_columns\"; \"sequence_columns\" is "
+            "declared per table under \"auto_triggers\" \\(tables\\.<table>\\.auto_triggers\\.sequence_columns\\)",
+            \Schema::DataSchemaLoader::normalize(), (base + {"sequence_columns": {"id": "t_seq"}},));
+        # any other unknown top-level key names the valid keys
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^data schema: unknown key \"tabels\"; valid keys: \\[\"schema\"",
+            \Schema::DataSchemaLoader::validate(), (base + {"tabels": {}},));
+        # every valid top-level key is still accepted
+        hash<auto> full = base + {
+            "types": {}, "functions": {}, "procedures": {}, "packages": {}, "materialized_views": {},
+            "index_options": {}, "column_options": {}, "columns": {"c": {"type": "int"}},
+            "indexes": {"i": {"columns": ("id",)}}, "migrations": (), "reference_data": {},
+        };
+        assertEq(sort(Schema::DataSchemaLoader::TopLevelKeys), sort(keys full));
+        assertEq("SeqSchema", Schema::DataSchemaLoader::loadHash(full).schema.name);
+
         # valid reference data still loads
         ref_schema.reference_data = {"strict": {"t": {"columns": ("id",), "rows": ((1,),)}}};
         assertEq({"strict": {"t": (("id",), (1,))}},

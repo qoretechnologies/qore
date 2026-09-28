@@ -102,10 +102,10 @@ public class DataSchemaLoader {
     #! Validates a raw schema hash against the meta-schema
     /** @param raw the schema hash to validate
 
-        @throw DATA-SCHEMA-VALIDATION-ERROR if validation fails; a table, its \c auto_triggers configuration, or
-        the reference data carrying an unknown key fails validation with a message naming the key and, for a key
-        that belongs elsewhere (such as \c sequence_columns, which belongs under \c auto_triggers), where it
-        belongs
+        @throw DATA-SCHEMA-VALIDATION-ERROR if validation fails; the top level, a table, its \c auto_triggers
+        configuration, or the reference data carrying an unknown key fails validation with a message naming the
+        key and, for a key that belongs elsewhere (such as \c sequence_columns, which belongs under
+        \c auto_triggers), where it belongs
     */
     static validate(hash<auto> raw) {
         # Basic structural validation (always available)
@@ -119,9 +119,11 @@ public class DataSchemaLoader {
             throw "DATA-SCHEMA-VALIDATION-ERROR", "missing required 'schema.version' key";
         }
 
-        # Unknown keys in tables, auto_triggers and reference data are reported here, before the meta-schema is
-        # applied, so the error names the key and where it belongs; the meta-schema rejects them as well, but its
-        # error names only the enclosing object (e.g. "/tables: Additional property 't' found but was invalid")
+        # Unknown keys at the top level and in tables, auto_triggers and reference data are reported here, before
+        # the meta-schema is applied, so the error names the key and where it belongs; the meta-schema rejects them
+        # as well, but its error names only the enclosing object (e.g. "/tables: Additional property 't' found but
+        # was invalid")
+        DataSchemaLoader::checkTopLevelKeys("DATA-SCHEMA-VALIDATION-ERROR", raw);
         if (raw.tables.typeCode() == NT_HASH) {
             foreach hash<auto> pair in (raw.tables.pairIterator()) {
                 if (pair.value.typeCode() == NT_HASH) {
@@ -164,8 +166,16 @@ public class DataSchemaLoader {
 
         @param raw the raw (validated) schema hash
         @return the normalized schema hash
+
+        @throw DATA-SCHEMA-ERROR \a raw carries a key that is not in
+        @ref Schema::DataSchemaLoader::TopLevelKeys "TopLevelKeys", or a table, its \c auto_triggers, a shorthand
+        column, or the reference data carries an unknown key; the message names the key and, for a key that
+        belongs elsewhere (such as a top-level \c auto_triggers, which is declared per table), where it belongs
     */
     static hash<auto> normalize(hash<auto> raw) {
+        # every top-level key is either copied or consumed below; any other would be dropped, so it is rejected
+        DataSchemaLoader::checkTopLevelKeys("DATA-SCHEMA-ERROR", raw);
+
         hash<auto!> result = {
             "schema": raw.schema,
         };
@@ -305,6 +315,17 @@ public class DataSchemaLoader {
         return base + (def - DataSchemaLoader::SharedDefinitionKey);
     }
 
+    #! The keys the top level of a data schema may carry
+    /** Any other key is rejected by @ref Schema::DataSchemaLoader::validate() "validate()" and
+        @ref Schema::DataSchemaLoader::normalize() "normalize()" rather than dropped; a key that belongs in each
+        table, such as \c constraints or \c auto_triggers, is rejected with a message saying where it belongs.
+
+        @since Schema 1.9
+    */
+    public const TopLevelKeys = ("schema", "tables", "sequences", "types", "functions", "procedures", "packages",
+        "materialized_views", "reference_data", "migrations", "index_options", "column_options", "columns",
+        "indexes");
+
     #! The keys a table definition may carry
     /** Any other key is rejected by @ref Schema::DataSchemaLoader::normalizeTable() "normalizeTable()" rather
         than dropped, as a dropped key silently loses what it describes.
@@ -403,6 +424,34 @@ public class DataSchemaLoader {
                 }
             }
         }
+    }
+
+    #! Checks that the top level of a data schema carries only known keys
+    /** @param err the exception code to throw
+        @param raw the raw schema
+
+        @throw err \a raw carries a key that is not in @ref Schema::DataSchemaLoader::TopLevelKeys "TopLevelKeys"
+    */
+    private static checkTopLevelKeys(string err, hash<auto> raw) {
+        DataSchemaLoader::checkKeys(err, "data schema", raw, TopLevelKeys, DataSchemaLoader::getTopLevelKeyHints());
+    }
+
+    #! Returns hints for the unknown top-level keys of a schema that belong in each table
+    private static hash<string, string> getTopLevelKeyHints() {
+        hash<string, string> hints();
+        foreach string key in (TableKeys) {
+            if (!inlist(key, TopLevelKeys)) {
+                hints{key} = sprintf("%y is declared per table (tables.<table>.%s)", key, key);
+            }
+        }
+        foreach string key in (AutoTriggerKeys) {
+            hints{key} = sprintf("%y is declared per table under \"auto_triggers\" "
+                "(tables.<table>.auto_triggers.%s)", key, key);
+        }
+        hints.constraints = "constraints are declared per table with \"primary_key\", \"unique_constraints\" and "
+            "\"foreign_constraints\" (tables.<table>.primary_key, tables.<table>.unique_constraints, "
+            "tables.<table>.foreign_constraints)";
+        return hints;
     }
 
     #! Returns hints for the unknown keys of a table, saying where each belongs
