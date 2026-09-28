@@ -1506,6 +1506,30 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
 using AOTStatementLocEntries = std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry>;
 using AOTStatementLocIndex = std::unordered_map<std::string, AOTStatementLocEntries>;
 
+static void getAOTStatementLocations(QoreProgram* pgm,
+        std::vector<const QoreProgramLocation*>& locs) {
+    qore_program_private::get(*pgm)->getRegisteredStatementLocations(locs);
+    // Statement registration can follow pointer-ordered parser structures. This
+    // metadata-only inventory has no native slot references; use source order.
+    std::sort(locs.begin(), locs.end(), [](const auto* lhs, const auto* rhs) {
+        int cmp = strcmp(lhs->getFileValue(), rhs->getFileValue());
+        if (cmp) {
+            return cmp < 0;
+        }
+        cmp = strcmp(lhs->getSourceValue(), rhs->getSourceValue());
+        if (cmp) {
+            return cmp < 0;
+        }
+        if (lhs->offset != rhs->offset) {
+            return lhs->offset < rhs->offset;
+        }
+        if (lhs->start_line != rhs->start_line) {
+            return lhs->start_line < rhs->start_line;
+        }
+        return lhs->end_line < rhs->end_line;
+    });
+}
+
 static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
         const std::unordered_set<std::string>& file_filter_set,
         AOTStatementLocIndex& index,
@@ -1514,9 +1538,8 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
         return true;
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
     std::vector<const QoreProgramLocation*> stmt_locs;
-    pp->getRegisteredStatementLocations(stmt_locs);
+    getAOTStatementLocations(pgm, stmt_locs);
 
     std::unordered_set<std::string> seen;
     for (size_t i = 0; i < stmt_locs.size(); ++i) {
@@ -1575,9 +1598,8 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
         return true;
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
     std::vector<const QoreProgramLocation*> stmt_locs;
-    pp->getRegisteredStatementLocations(stmt_locs);
+    getAOTStatementLocations(pgm, stmt_locs);
 
     std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry> locs;
     std::unordered_set<std::string> seen;
@@ -23483,6 +23505,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
     {
         QoreAOTBinaryWriter writer;
+        writer.emit_parse_constant_values = false;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
@@ -25725,6 +25748,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Step 4: Generate module ABI with serialized metadata
     {
         QoreAOTBinaryWriter writer;
+        writer.emit_parse_constant_values = false;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
@@ -26218,6 +26242,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // Step 10: Generate module ABI with serialized metadata
         {
             QoreAOTBinaryWriter writer;
+            writer.emit_parse_constant_values = false;
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;

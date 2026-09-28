@@ -42,6 +42,12 @@ qore (3.0.0-1) unstable; urgency=medium
   * Make native AOT cleanup, handler caches, closure captures and serialized
     slot identities independent of allocator addresses.
   * Render binary default arguments as stable values in function signatures.
+  * Sort debugger statement locations and fix the package build timezone and
+    qcc partition count for reproducibility under different jobserver loads.
+  * Allocate native local SSA PHIs in source-access order, preserving stable
+    debug IR when compiler allocation addresses change.
+  * Keep pending-constant parse caches in incremental objects only; final
+    modules and executables must not retain build directories or cached dates.
   * Detect platform features before configuring conditional documentation.
   * Avoid executable-archive probes for generated Doxygen text while retaining
     image and archive normalization.

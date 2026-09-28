@@ -8015,6 +8015,9 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         size_t block = 0;
     };
     std::unordered_map<const LocalVar*, std::vector<LocalAccess>> accesses;
+    // PHI IDs and insertion order must follow the first source access, not
+    // pointer hashes, so serialized debug IR and native code are reproducible.
+    std::vector<const LocalVar*> access_order;
     std::unordered_set<const LocalVar*> dedicated_accesses;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
@@ -8029,7 +8032,11 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
                     || inst->opcode == QoreIROpcode::UninstantiateLocal) {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 if (local_inst->local) {
-                    accesses[local_inst->local].push_back({inst, block_id});
+                    auto [entry, inserted] = accesses.try_emplace(local_inst->local);
+                    if (inserted) {
+                        access_order.push_back(local_inst->local);
+                    }
+                    entry->second.push_back({inst, block_id});
                 }
             } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
                 auto* local_inst =
@@ -8062,11 +8069,12 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
     };
     std::vector<Promotion> promotions;
 
-    for (const auto& [local, local_accesses] : accesses) {
+    for (const LocalVar* local : access_order) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR native local SSA candidate analysis")) {
             return {};
         }
+        const auto& local_accesses = accesses.at(local);
         const void* key = reinterpret_cast<const void*>(local);
         const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
         QoreIRValueRepresentation representation =

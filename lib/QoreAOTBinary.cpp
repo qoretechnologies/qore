@@ -10644,6 +10644,10 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
     different declared types for every constant folded from a sibling, and switching modes invalidated every
     consumer.  Recording the value the producing parse computed closes that gap.
 
+    Final executable/module writers disable this cache: they execute the native initializers at load time,
+    and retaining a producing parse's resource directories or date values would tie them to the build host.
+    Incremental object writers retain it for declaration preloads.
+
     Writes a presence byte and, when present, the value.  A value that cannot be serialized without loss (an
     object, a closure) writes only a 0 byte: the consuming parse then defers exactly as it did before, so this
     never turns a compile that used to succeed into a failure.  Rolling the payload back can leave type paths
@@ -10654,6 +10658,10 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
     @param ce the constant being written; must have a pending init function
 */
 static void writePendingConstantParseValue(QoreAOTBinaryWriter& writer, const ConstantEntry* ce) {
+    if (!writer.emit_parse_constant_values) {
+        writer.writeU8(0);
+        return;
+    }
     const uint32_t mark = writer.position();
     ValueHolder parse_value(ce->getReferencedValue(), nullptr);
     // an initializer whose own evaluation was deferred (it reads a `--stub` constant or an unresolved shell)

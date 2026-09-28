@@ -254,6 +254,91 @@ public string sub probe() {
         for output in outputs[1:]:
             self.assertEqual(outputs[0], output)
 
+    def test_native_local_ssa_is_independent_of_allocator_layout(self):
+        # Multiple live loop-carried locals require PHIs. Their IDs and order
+        # must follow source traversal, not the addresses of LocalVar objects.
+        source = self.root / "ReproProbe.qm"
+        declarations = "".join(f"    int value{i} = {i};\n" for i in range(12))
+        updates = "".join(f"        value{i} = value{i} + round + {i};\n" for i in range(12))
+        expression = " + ".join(f"value{i}" for i in range(12))
+        source.write_text(HEADER + "public int sub probe(int rounds) {\n" + declarations
+                          + "    for (int round = 0; round < rounds; ++round) {\n"
+                          + updates + "    }\n    return " + expression + ";\n}\n")
+        artifact = self.root / "ReproProbe.qmod"
+        outputs = []
+        self.env["QCC_JOBS"] = "1"
+        for tcache in (7, 0, 2, 12):
+            self.env["GLIBC_TUNABLES"] = f"glibc.malloc.tcache_count={tcache}"
+            self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={self.root}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            outputs.append(artifact.read_bytes())
+            self.env["QORE_MODULE_DIR"] = str(self.root)
+            self.assertEqual("66:1266\n", self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                'printf("%d:%d\\n", probe(0), probe(10));'))
+        for output in outputs[1:]:
+            self.assertEqual(outputs[0], output)
+
+    def test_final_module_omits_build_only_constant_values(self):
+        outputs = []
+        for name in ("first", "different-longer"):
+            directory = self.root / name
+            directory.mkdir()
+            source = directory / "ReproProbe.qm"
+            source.write_text(HEADER + '''
+const SourceDir = get_script_dir();
+public class ResourceProbe {
+    const SourceDir = get_script_dir();
+    static string directory() { return SourceDir; }
+}
+public string sub directory() { return SourceDir; }
+public string sub literal() { return "/literal/source/keep"; }
+''')
+            artifact = directory / "ReproProbe.qmod"
+            self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={directory}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            outputs.append(artifact.read_bytes())
+            installed = self.root / (name + "-installed")
+            installed.mkdir()
+            artifact.rename(installed / artifact.name)
+            source.unlink()
+            self.env["QORE_MODULE_DIR"] = str(installed)
+            result = self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                'printf("%s\\n%s\\n%s\\n", directory(), ResourceProbe::directory(), literal());')
+            self.assertEqual(f"{installed}/\n{installed}/\n/literal/source/keep\n", result)
+        self.assertEqual(*outputs)
+
+    def test_inherited_statement_locations_across_build_roots(self):
+        outputs = []
+        # Imported and overridden methods contribute debugger-only statement locations.
+        # Preserve their source identities when addresses and physical paths change.
+        methods = "".join(f"    int method{i}(int v) {{ int n = v + {i}; ++n; return n; }}\n"
+                          for i in range(32))
+        for i, tcache in enumerate((7, 0, 2, 12)):
+            directory = self.root / ("checkout" + "-longer" * i)
+            directory.mkdir()
+            base = directory / "ReproBase.qm"
+            base.write_text(HEADER.replace("ReproProbe", "ReproBase")
+                            + "public class ReproBase {\n" + methods + "}\n")
+            source = directory / "ReproProbe.qm"
+            source.write_text(HEADER + '''
+%requires ReproBase
+public class ReproChild inherits ReproBase {
+    int method3(int v) { int n = v + 4; ++n; return n; }
+}
+public int sub probe() { ReproChild obj(); return obj.method3(37) + obj.method4(37); }
+''')
+            self.env.update(GLIBC_TUNABLES=f"glibc.malloc.tcache_count={tcache}",
+                            QCC_JOBS="1", QORE_MODULE_DIR=str(directory))
+            for module in (base, source):
+                self.run_tool(QCC, "-m", "-O3",
+                              f"--file-prefix-map={directory}=/usr/src/qore-test",
+                              "-o", module.with_suffix(".qmod"), module)
+            outputs.append(source.with_suffix(".qmod").read_bytes())
+            self.assertEqual("84\n", self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                'printf("%d\\n", probe());'))
+        for output in outputs[1:]:
+            self.assertEqual(outputs[0], output)
+
     def test_single_module_artifacts_and_inline_locations(self):
         first = self.compile_module("first")
         second = self.compile_module("different-second")

@@ -544,6 +544,14 @@ val = "string";      # OK
     so allocator layout no longer changes these emitted instructions or metadata records.
     Binary default arguments use hexadecimal values in function signatures, allowing stable
     metadata and exact variant matching across compiler and runtime processes.
+    Final executables and modules omit the build-only pending-constant cache used by incremental
+    objects. Native initializers still compute runtime values, including module resource directories.
+    Incremental object preloads retain their cached values and type information.
+    Debugger statement-location inventories use source order, independent of registration order.
+    Native local SSA promotion follows source-access order so generated PHI identities and
+    debugger IR are independent of allocator addresses.
+    Debian package builds use UTC for compile-time schema dates and one code-generation partition
+    per module, while retaining parallel compilation of independent modules.
     Native AOT links honor CMake's \c CMAKE_SKIP_RPATH and \c CMAKE_SKIP_INSTALL_RPATH policies;
     package builds omit the build-directory RPATH at link time. Output and library paths containing
     spaces, quotes or commas are passed as individual linker arguments.

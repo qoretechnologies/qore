@@ -814,6 +814,11 @@ public:
     //! section writers serialize values.
     uint64_t feature_flags = 0;
 
+    //! Keep evaluated pending constants for incremental object declaration preloads.
+    //! Final executables/modules run their native initializers and must not retain
+    //! this build-only cache, which can contain source directories and schema dates.
+    bool emit_parse_constant_values = true;
+
     //! Fully-qualified constant currently being serialized. Used to avoid
     //! encoding self-referential VT_CONST_REF values when a top-level constant's
     //! own container node appears in the program reverse map.

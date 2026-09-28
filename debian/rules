@@ -21,6 +21,14 @@ unexport QORE_MODULE_DIR
 # Tests, documentation, metadata extraction and qcc must see only the module
 # paths supplied by this build, not optional modules from an older installation.
 export QORE_MODULE_DIR_ONLY = 1
+# Adaptive intra-module codegen partitions depend on transient jobserver tokens
+# and change object bytes. Keep each qcc emission single-partition; debhelper
+# still compiles independent modules in parallel.
+export QCC_JOBS = 1
+unexport QCC_SPLIT_THRESHOLD
+# Schemas contain date values parsed during AOT compilation. Give those values
+# a canonical build timezone without changing the installed runtime's timezone.
+export TZ = UTC
 
 # Documentation is generated only for builds that include qore-doc.
 build_docs = $(if $(filter nodoc,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)),,$(filter qore-doc,$(shell dh_listpackages)))
