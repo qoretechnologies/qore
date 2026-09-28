@@ -109,7 +109,11 @@ apt-get install -y --no-install-recommends autopkgtest
 # The null backend is safe here because it is confined to this disposable
 # container. It must never be used to install test dependencies on the host.
 autopkgtest /test-source "${debs[@]}" --output-dir=/results/autopkgtest -- null
-apt-get install -y --no-install-recommends "${debs[@]}"
+# Test dependencies are now installed. Use the supplied artifacts directly for
+# the final coinstallation: APT can classify a different build of the same
+# version as a downgrade when that version also exists in the configured PPA.
+# dpkg still checks dependencies, and real version downgrades remain forbidden.
+dpkg --refuse-downgrade --install "${debs[@]}"
 for package in "${names[@]}"; do
     test "$(dpkg-query -W -f='${Version}' "$package")" = "$version"
 done

@@ -92,8 +92,10 @@ The same optional signed APT settings above supply dependency backports. The
 helper checks the distribution/version, installs real older artifacts before
 upgrading, runs the installed runtime tests after upgrade, and validates a
 minimal installation without Recommends before installing test dependencies.
-It runs all four autopkgtests, coinstalls the supplied split packages, verifies
-files with dpkg -V, purges, and reinstalls the runtime. The autopkgtest null
+It runs all four autopkgtests, then uses dpkg to coinstall the exact supplied
+artifacts with dependencies checked and version downgrades refused. This also
+handles rebuilt artifacts whose version already exists in the testing archive.
+It verifies files with dpkg -V, purges, and reinstalls the runtime. The autopkgtest null
 backend is confined to the disposable container; never run it on the host.
 
 Omit the previous-package directory for a first-version installation test; the
