@@ -1751,6 +1751,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endcode
     @endparblock
 
+    @par DataStream Connection URLs
+    The synchronous and multiplexed DataStream connection schemes (\c ds, \c dss, \c dsio, and \c dsios)
+    now require a user-supplied server URL. They no longer advertise automatic URL generation, which could
+    create unusable placeholder connections instead of prompting for the deployment's server address.
+
     @par Incremental Message Digests
     The new @ref Qore::Digest "Digest" class calculates a message digest from data added in parts, such as data
     read from a stream or received from the network, without holding the data in memory; intermediate digests can

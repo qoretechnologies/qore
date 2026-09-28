@@ -1307,7 +1307,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     #! client tore down the QUIC connection before the handler got to
     #! readQuicStreamDataBlock().
     /** Reproduces the Qorus streams.qtest failure at rest-test/test?stream=echo
-        (GET with body): without pinning the session in the socket map while a
+        using a POST body: without pinning the session in the socket map while a
         stream is dispatched to a handler, cleanupClosedSessions() evicts the
         session as soon as the QUIC connection enters draining, and the
         handler's readQuicStreamDataBlock throws QUIC-ERROR.  With the fix
@@ -1326,7 +1326,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
 
-        # Fire the H3 GET-with-body request in the background — the handler
+        # Fire the H3 POST request in the background — the handler
         # blocks before body read, so this call won't return until the
         # handler completes (or throws).  We don't care about the client-side
         # result; the race is proven if the handler reads the body cleanly.
@@ -1336,7 +1336,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         background sub () {
             on_exit req_done.dec();
             try {
-                mgr.request(url, "GET", "/dispatch-race",
+                mgr.request(url, "POST", "/dispatch-race",
                     {"Content-Type": "application/octet-stream"},
                     binary("race-body"));
             } catch (hash<ExceptionInfo> ex) {
@@ -1346,7 +1346,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Wait until the server's handler has been dispatched — at this
         # point the server's QuicSession has the stream marked dispatched=true.
-        race_handler.started.waitForZero(15s);
+        int dispatch_rc = race_handler.started.waitForZero(15s);
 
         # Close the client side.  This queues a CONNECTION_CLOSE which the
         # server processes; its QuicSession::isClosed() then flips true.  Any
@@ -1362,7 +1362,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Wait for the background request to finish (success OR failure —
         # client-side may have already errored out due to the mgr delete).
-        req_done.waitForZero(30s);
+        assertEq(0, req_done.waitForZero(30s), "background request completed after client close");
+        assertEq(0, dispatch_rc,
+            sprintf("request reached the handler before client close: client error=%y", req_ex));
 
         # Independently wait for the handler's body-read attempt to
         # complete.  The client-side @c req_done fires as soon as
@@ -1371,7 +1373,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # via @c readQuicStreamDataBlock (up to its 10s timeout).
         # Without this barrier, the assertion would race the handler
         # and see @c body_read_ok unset.
-        race_handler.done.waitForZero(15s);
+        assertEq(0, race_handler.done.waitForZero(15s), "handler completed its body read");
 
         assertTrue(race_handler.body_read_ok,
             sprintf("handler must read body after client close: err=%y desc=%y",

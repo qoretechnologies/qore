@@ -1778,7 +1778,7 @@ public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnect
             "desc": "A connection to a DataStream API server using RestClientIo for multiplexed "
                 "HTTP/1.1, HTTP/2, and HTTP/3 connections",
             "cls": Class::forName("DataStreamClient::DataStreamConnectionIo"),
-            "auto_url": True,
+            "auto_url": False,
             "schemes": {
                 "dsios": True,
                 "dsio": True,

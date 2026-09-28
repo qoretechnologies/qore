@@ -1178,7 +1178,7 @@ public class DataStreamConnection inherits RestClient::RestConnection {
             "short_desc": "A connection to a DataStream API server",
             "desc": "A connection to a DataStream API server",
             "cls": Class::forName("DataStreamConnection"),
-            "auto_url": True,
+            "auto_url": False,
             "schemes": {
                 "dss": True,
                 "ds": True,

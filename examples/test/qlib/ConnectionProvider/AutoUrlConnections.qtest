@@ -7,6 +7,8 @@
 %requires Util
 %requires QUnit
 %requires ConnectionProvider
+%requires DataStreamClient
+%requires DataStreamClientIo
 
 %exec-class AutoUrlConnectionsTest
 
@@ -96,7 +98,8 @@ public class AutoUrlConnectionsTest inherits QUnit::Test {
 
     selfHostedTest() {
         # the URL of a self-hosted server or of a per-environment service cannot be generated
-        foreach string scheme in ("bge-m3", "chroma", "milvus", "mewsrest", "ollama", "sglang", "weaviate") {
+        foreach string scheme in ("bge-m3", "chroma", "ds", "dss", "dsio", "dsios", "milvus", "mewsrest",
+                "ollama", "sglang", "weaviate") {
             assertFalse(ConnectionSchemeCache::getSchemeEx(scheme).auto_url, scheme);
         }
     }
