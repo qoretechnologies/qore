@@ -1772,7 +1772,9 @@ while (*binary chunk = input.read(65536)) {
 
     @par qget Rewritten on Async I/O
     \c qget was rewritten on the new @ref urldownloaderintro "UrlDownloader" module: downloads over HTTP/1.1,
-    HTTP/2, HTTP/3, FTP, and FTPS are streamed to \c .part files, with a colorized progress display with a speed
+    HTTP/2, HTTP/3, FTP, and FTPS, and from locations with any scheme supported by
+    @ref filelocationhandlerintro "FileLocationHandler" (such as \c file, \c data, \c sftp, and \c conn), are
+    streamed to \c .part files, with a colorized progress display with a speed
     graph, redirects, proxies (also from the environment), TLS options (\c --cacert, \c --capath, \c -E, \c -k),
     time limits, several URLs at once, and Ctrl-C handling that keeps the data received; see \c qget \c --help.
 
@@ -1988,6 +1990,9 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref filelocationhandlerintro "FileLocationHandler" module
+      - binary streams and stream readers of \c ftp(s):// locations deliver the file as it is received instead of
+        reading the whole file into memory first, and an error in an FTP or SFTP transfer is raised by the stream;
+        before, an SFTP stream simply ended, so a failed transfer was taken for a complete but shorter file
       - \c http(s):// locations use @ref httpclientiointro "HttpClientIo" and \c rest(s):// locations use
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3); non-blocking readers do no blocking
         I/O, stream reads read the body as it is consumed and raise error responses when the stream is opened, and
@@ -3600,7 +3605,8 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a REST client for <a href="https://unstructured.io">Unstructured.io</a>'s document-partitioning and platform APIs
 
     - @ref urldownloaderintro "UrlDownloader" module
-      - new module for downloading \c http, \c https, \c ftp, and \c ftps URLs to files with progress reporting,
+      - new module for downloading \c http, \c https, \c ftp, and \c ftps URLs, and locations with any scheme
+        supported by @ref filelocationhandlerintro "FileLocationHandler", to files with progress reporting,
         classified errors, time limits, \c .part files, and cancellation; it is the engine of \c qget
 
     - @ref vertexaidataproviderintro "VertexAiDataProvider" module

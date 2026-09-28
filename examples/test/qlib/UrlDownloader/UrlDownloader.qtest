@@ -177,6 +177,7 @@ public class UrlDownloaderTest inherits QUnit::Test {
         addTestCase("FTP", \ftpTest());
         addTestCase("proxies", \proxyTest());
         addTestCase("named connections", \connectionTest());
+        addTestCase("other locations", \locationTest());
         addTestCase("errors", \errorTest());
         set_return_value(main());
     }
@@ -631,6 +632,56 @@ public class UrlDownloaderTest inherits QUnit::Test {
         dl = getDownloader("1.1", {"output": out});
         dl.download(urls."1.1" + "/dir/");
         assertEq(count + 1, proxy.getRequests().size());
+    }
+
+    #! locations with schemes other than http, https, ftp, and ftps are read with FileLocationHandler
+    locationTest() {
+        list<string> schemes = UrlDownloader::getSupportedSchemes();
+        foreach string scheme in (("http", "https", "ftp", "ftps", "file", "data", "sftp", "conn")) {
+            assertTrue(inlist(scheme, schemes), scheme);
+        }
+
+        TmpDir dir("urldl-loc-");
+        # a file location, saved under its own name
+        TmpFile src("urldl-loc-src-", ".bin");
+        binary data = get_random_bytes(1024 * 1024 + 3);
+        src.file.write(data);
+        src.file.close();
+        TmpDir out_dir("urldl-loc-out-");
+        UrlDownloader dl(<UrlDownloadOptions>{"output_dir": out_dir.path});
+        TestListener listener();
+        hash<UrlDownloadResult> res = dl.download("file://" + src.path, listener);
+        assertEq(out_dir.path + DirSep + basename(src.path), res.file);
+        assertEq(data, ReadOnlyFile::readBinaryFile(res.file));
+        assertEq("file", res.protocol);
+        assertEq(data.size(), res.total);
+        assertEq(data.size(), res.size);
+        assertTrue(res.complete);
+        assertEq(data.size(), listener.start_info.total);
+        assertEq(data.size(), listener.last_done);
+        assertFalse(is_file(res.file + ".part"));
+
+        # immediate data to a stream
+        BinaryOutputStream os();
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output": "-"});
+        res = dl.download("data://immediate data", NOTHING, os);
+        assertEq(binary("immediate data"), os.getData());
+        assertEq("data", res.protocol);
+        assertEq(14, res.size);
+        assertEq(NOTHING, res.total);
+
+        # a location without a file name
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output_dir": dir.path});
+        assertEq(dir.path + DirSep + UrlDownloader::DefaultFileName, dl.download("data://x").file);
+
+        # errors
+        assertThrows("DOWNLOAD-IO-ERROR", \dl.download(), "file://" + dir.path + "/no-such-file");
+        assertFalse(is_file(dir.path + DirSep + "no-such-file.part"));
+        assertThrows("DOWNLOAD-URL-ERROR", "unsupported URL scheme", \dl.download(), "gopher://127.0.0.1/x");
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output": dir.path + DirSep + "x", "clobber": False});
+        dl.download("data://y");
+        assertThrows("DOWNLOAD-FILE-EXISTS", \dl.download(), "data://y");
+        assertEq("y", ReadOnlyFile::readTextFile(dir.path + DirSep + "x"));
     }
 
     #! a connection name is resolved with the connection providers of the QORE_CONNECTION_PROVIDERS environment

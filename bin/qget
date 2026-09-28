@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# @file qget downloads files from http, https, ftp, and ftps URLs
+# @file qget downloads files from http, https, ftp, ftps, and other URLs
 
 /*  qget Copyright 2011 - 2026 Qore Technologies, s.r.o.
 
@@ -329,7 +329,9 @@ public class QgetApp {
                     color.dim(sprintf("%s in %s", TerminalProgress::formatBytes(bytes), time))));
             }
         }
-        *StdoutOutputStream out = opts.output == "-" || opts.output_document == "-" ? new StdoutOutputStream() : NOTHING;
+        *StdoutOutputStream out = (opts.output == "-" || opts.output_document == "-")
+            ? new StdoutOutputStream()
+            : NOTHING;
         foreach string url in (urls) {
             QgetListener listener(self, url);
             try {
@@ -501,10 +503,12 @@ public class QgetApp {
     }
 
     static usage(TerminalColor c) {
-        printf("%s - download files from http, https, ftp, and ftps URLs\n\n", c.bold("qget"));
+        printf("%s - download files from URLs\n\n", c.bold("qget"));
         printf("%s\n", c.bold("USAGE"));
         printf("  qget [options] URL...\n");
         printf("  qget [options] connection[/path]\n\n");
+        printf("%s\n", c.bold("URL SCHEMES"));
+        printf("  %s\n\n", (sort(UrlDownloader::getSupportedSchemes())).join(", "));
 
         printf("%s\n", c.bold("OUTPUT"));
         printHelpLine(c, "-o, -O, --output=FILE", "write to FILE; \"-\" writes to stdout");

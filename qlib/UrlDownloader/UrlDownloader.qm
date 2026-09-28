@@ -30,6 +30,7 @@
 %requires Mime
 %requires HttpClientIo
 %requires ConnectionProvider
+%requires FileLocationHandler
 
 module UrlDownloader {
     version = "1.0";
@@ -45,8 +46,10 @@ module UrlDownloader {
 
     @section urldownloaderintro Introduction to the UrlDownloader Module
 
-    The %UrlDownloader module downloads resources from \c http, \c https, \c ftp, and \c ftps URLs to files or to
-    an output stream, without holding them in memory.  It is the engine of the \c qget program and can be used by
+    The %UrlDownloader module downloads resources from \c http, \c https, \c ftp, and \c ftps URLs, and from any
+    location supported by @ref FileLocationHandler::FileLocationHandler "FileLocationHandler" (such as \c file,
+    \c data, \c sftp, and \c conn locations, and further schemes registered by other modules), to files or to an
+    output stream, without holding them in memory.  It is the engine of the \c qget program and can be used by
     any program that needs to download files:
     - HTTP/1.1, HTTP/2, and HTTP/3 through @ref HttpClientIo::HttpClientConnectionManager
       "HttpClientConnectionManager", with connections reused between downloads from the same server
@@ -195,10 +198,10 @@ public hashdecl UrlDownloadStartInfo {
     */
     *int total;
 
-    #! the HTTP status code, or the FTP reply code \c 226 for FTP
+    #! the HTTP status code, the FTP reply code \c 226 for FTP, or 0 for other locations
     int status_code;
 
-    #! the protocol: \c "h1", \c "h2", \c "h3", \c "ftp", or \c "ftps"
+    #! the protocol: \c "h1", \c "h2", \c "h3", \c "ftp", \c "ftps", or the URL scheme for other locations
     string protocol;
 
     #! the content type of the response, if known
@@ -301,6 +304,12 @@ public string sub get_download_error_code(hash<ExceptionInfo> ex) {
     }
     if (err =~ /SSL|TLS|CERT/ || ex.desc =~ /certificate|SSL|TLS handshake/i) {
         return "DOWNLOAD-TLS-ERROR";
+    }
+    if (err =~ /^(FILE|DIR)-/) {
+        return "DOWNLOAD-IO-ERROR";
+    }
+    if (err == "LOCATION-ERROR") {
+        return "DOWNLOAD-URL-ERROR";
     }
     if (err =~ /LOGIN|AUTH/) {
         return "DOWNLOAD-AUTH-ERROR";

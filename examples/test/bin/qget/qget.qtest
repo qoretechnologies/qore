@@ -46,6 +46,7 @@ public class QgetTest inherits QUnit::Test {
         addTestCase("multiple URLs", \multipleUrls());
         addTestCase("deprecated options", \deprecatedOptions());
         addTestCase("named connections", \namedConnections());
+        addTestCase("other locations", \otherLocations());
         addTestCase("interrupt", \interrupt());
 
         # not a multiple of any buffer size, and large enough to be read in several packets
@@ -224,6 +225,8 @@ public class QgetTest inherits QUnit::Test {
         result = runQget(tmp.path, "gopher://localhost/x");
         assertEq(2, result.rc);
         assertRegex("unsupported URL scheme", result.err);
+        # the supported schemes are listed
+        assertRegex("sftp", result.err);
 
         result = runQget(tmp.path, "");
         assertEq(2, result.rc);
@@ -375,6 +378,27 @@ public *hash<auto> sub get_mod_connections() {
 
         result = runQget(tmp.path, "no-such-connection/x", env);
         assertEq(2, result.rc);
+    }
+
+    #! locations with other schemes are read with FileLocationHandler
+    otherLocations() {
+        TmpDir tmp("qget-test-");
+        File f();
+        f.open2(tmp.path + "/source.bin", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(blob);
+        f.close();
+        mkdir(tmp.path + "/out");
+        hash<auto> result = runQget(tmp.path + "/out", "file://" + tmp.path + "/source.bin");
+        assertEq(0, result.rc, result.err);
+        assertEq(blob, ReadOnlyFile::readBinaryFile(tmp.path + "/out/source.bin"));
+
+        result = runQget(tmp.path, "-o - data://some-data");
+        assertEq(0, result.rc, result.err);
+        assertEq("some-data", result.out);
+
+        # a file that does not exist
+        result = runQget(tmp.path, "file://" + tmp.path + "/no-such-file");
+        assertEq(3, result.rc, result.err);
     }
 
     #! Ctrl-C cancels the download

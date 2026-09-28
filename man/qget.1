@@ -4,7 +4,7 @@
 .\"
 .TH QGET 1 "2026 September 27" "Qore 3.0" "Qore Programming Language"
 .SH NAME
-qget \- download files from http, https, ftp, and ftps URLs
+qget \- download files from URLs
 .SH SYNOPSIS
 .B qget
 [\fIoptions\fP]
@@ -15,10 +15,16 @@ qget \- download files from http, https, ftp, and ftps URLs
 \fIconnection\fP[\fI/path\fP]
 .SH DESCRIPTION
 \fBqget\fR downloads resources from \fBhttp\fR, \fBhttps\fR, \fBftp\fR, and
-\fBftps\fR URLs, or from named connections of the Qore connection providers
-(see \fBQORE_CONNECTION_PROVIDERS\fR), and saves them to files named after the
-last component of the URL path.
-HTTP/1.1, HTTP/2, and HTTP/3 are negotiated automatically.
+\fBftps\fR URLs, from locations with the other schemes supported by the
+Qore FileLocationHandler module (such as \fBfile\fR, \fBdata\fR, \fBsftp\fR,
+and \fBconn\fR, and schemes registered by other modules), or from named
+connections of the Qore connection providers (see
+\fBQORE_CONNECTION_PROVIDERS\fR), and saves them to files named after the
+last component of the URL path; \fBqget \-\-help\fR lists the supported
+schemes.
+HTTP/1.1, HTTP/2, and HTTP/3 are negotiated automatically; the network options
+(redirects, TLS, proxies, and the connect and read timeouts) apply to
+\fBhttp\fR, \fBhttps\fR, \fBftp\fR, and \fBftps\fR URLs.
 .PP
 Data is written to a \fIfile\fB.part\fR file that is renamed when the download
 is complete, so an incomplete file never has the final name; the data received

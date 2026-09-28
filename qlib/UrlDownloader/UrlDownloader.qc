@@ -45,6 +45,9 @@ public class UrlDownloader {
 
         #! the file name used when a URL has no file name
         const DefaultFileName = "index.html";
+
+        #! the maximum size of the data read from a location at once
+        const ReadChunkSize = 65536;
     }
 
     private:internal {
@@ -112,8 +115,9 @@ public class UrlDownloader {
     #! Downloads a URL
     /** A stream given with \a output is not closed
 
-        @param url the URL to download: an \c http, \c https, \c ftp, or \c ftps URL, or the name of a connection
-        of a supported type, optionally followed by a path (\c "name/path")
+        @param url the URL to download: an \c http, \c https, \c ftp, or \c ftps URL, a URL with a scheme supported
+        by @ref FileLocationHandler::FileLocationHandler "FileLocationHandler" (see @ref getSupportedSchemes()), or
+        the name of a connection of a supported type, optionally followed by a path (\c "name/path")
         @param listener receives the events of the download, if any
         @param output the stream to write the data to when the \c output option is \c "-"
 
@@ -252,6 +256,46 @@ public class UrlDownloader {
         if (url !~ /^[a-z][a-z0-9+.-]*:\/\//i) {
             url = UrlDownloader::getConnectionUrl(url);
         }
+        string scheme = (url =~ x/^([a-z][a-z0-9+.-]*):/i)[0].lwr();
+        if (opts.output == "-" && !output) {
+            throw "DOWNLOAD-ERROR", "no output stream given for output \"-\"";
+        }
+        # a named output file that exists is not downloaded at all
+        if (opts.output && opts.output != "-" && !opts.clobber && is_file(opts.output)) {
+            throw "DOWNLOAD-FILE-EXISTS", sprintf("%y already exists", opts.output);
+        }
+        switch (scheme) {
+            case "http":
+            case "https":
+                downloadHttp(url, UrlDownloader::parseNetworkUrl(url), listener, output, \res, target);
+                break;
+            case "ftp":
+            case "ftps":
+                downloadFtp(url, UrlDownloader::parseNetworkUrl(url), listener, output, \res, target);
+                break;
+            default:
+                if (!FileLocationHandler::isSchemeSupported(scheme)) {
+                    throw "DOWNLOAD-URL-ERROR", sprintf("unsupported URL scheme %y; expecting one of: %s", scheme,
+                        (sort(UrlDownloader::getSupportedSchemes())).join(", "));
+                }
+                downloadLocation(url, scheme, listener, output, \res, target);
+                break;
+        }
+    }
+
+    #! Returns the URL schemes that can be downloaded
+    /** @return \c http, \c https, \c ftp, \c ftps, and the schemes supported by
+        @ref FileLocationHandler::FileLocationHandler "FileLocationHandler", such as \c file, \c data, \c sftp, and
+        \c conn; modules can register further schemes with FileLocationHandler
+    */
+    static list<string> getSupportedSchemes() {
+        hash<string, bool> schemes = map {$1: True}, ("http", "https", "ftp", "ftps");
+        schemes += map {$1: True}, FileLocationHandler::getSupportedSchemes();
+        return keys schemes;
+    }
+
+    #! Returns the parsed URL of a download over the network, which must have a host
+    private:internal static hash<UrlInfo> parseNetworkUrl(string url) {
         hash<UrlInfo> info;
         try {
             info = parse_url(url);
@@ -261,25 +305,64 @@ public class UrlDownloader {
         if (!info.host) {
             throw "DOWNLOAD-URL-ERROR", sprintf("URL %y has no host", url);
         }
-        if (opts.output == "-" && !output) {
-            throw "DOWNLOAD-ERROR", "no output stream given for output \"-\"";
+        return info;
+    }
+
+    #! Makes a download with FileLocationHandler, for a scheme other than http, https, ftp, and ftps
+    /** The data is read from the stream of the location as it is received; the total size is known for \c file
+        locations only.  The \c max_time option is checked between reads, and the other network options do not
+        apply
+    */
+    private:internal downloadLocation(string url, string scheme, *UrlDownloadListener listener,
+            *OutputStream output, reference<hash<UrlDownloadResult>> res, DownloadTarget target) {
+        int deadline = opts.max_time ? clock_getmillis() + opts.max_time : 0;
+        res.effective_url = url;
+        res.protocol = scheme;
+        # the path of the location, if it has one
+        *string path;
+        try {
+            path = parse_url(url).path;
+        } catch (hash<ExceptionInfo> ex) {
+            # a location such as data://... has no path
         }
-        # a named output file that exists is not downloaded at all
-        if (opts.output && opts.output != "-" && !opts.clobber && is_file(opts.output)) {
-            throw "DOWNLOAD-FILE-EXISTS", sprintf("%y already exists", opts.output);
+        if (scheme == "file" && path) {
+            res.total = hstat(substitute_env_vars(path)).size;
         }
-        switch (info.protocol.lwr()) {
-            case "http":
-            case "https":
-                downloadHttp(url, info, listener, output, \res, target);
-                break;
-            case "ftp":
-            case "ftps":
-                downloadFtp(url, info, listener, output, \res, target);
-                break;
-            default:
-                throw "DOWNLOAD-URL-ERROR", sprintf("unsupported URL scheme %y; expecting http, https, ftp, or ftps",
-                    info.protocol);
+
+        InputStream is = FileLocationHandler::getBinaryStreamFromLocation(url);
+        if (opts.output == "-") {
+            target.setStream(output);
+        } else {
+            string name = opts.output ?? getOutputPath(UrlDownloader::getSafeFileName(path) ?? DefaultFileName);
+            if (!opts.clobber && is_file(name)) {
+                throw "DOWNLOAD-FILE-EXISTS", sprintf("%y already exists", name);
+            }
+            target.open(name, opts.part_file);
+        }
+        res.status_code = 0;
+        if (listener) {
+            listener.started(<UrlDownloadStartInfo>{
+                "url": url,
+                "effective_url": url,
+                "file": target.getFileName(),
+                "total": res.total,
+                "status_code": 0,
+                "protocol": scheme,
+            });
+        }
+        while (*binary chunk = is.read(ReadChunkSize)) {
+            target.write(chunk);
+            res.size += chunk.size();
+            res.received = res.size;
+            if (listener) {
+                listener.progress(res.received, res.total);
+            }
+            if (deadline) {
+                getWait(opts.read_timeout, deadline);
+            }
+        }
+        if (exists res.total && res.received < res.total) {
+            throw "DOWNLOAD-IO-ERROR", sprintf("the transfer ended after %d of %d bytes", res.received, res.total);
         }
     }
 
