@@ -62,8 +62,23 @@ Source and binary builds
 
 The source format is 3.0 (quilt), matching the upstream-version plus Debian
 revision in debian/changelog. Supply the upstream release tarball as
-../qore_<upstream-version>.orig.tar.xz (or .gz). For a Git snapshot, first commit
-the intended upstream changes and create a clean upstream archive, for example:
+../qore_<upstream-version>.orig.tar.xz (or .gz). For a development snapshot,
+use a version below the final release and above the last accepted upload:
+
+  tools/prepare-debian-source.py --ref HEAD \
+    --version '3.0.0~git20260928.1-0qore1~ubuntu26.04' --suite resolute \
+    --previous-version '3.0.0~git20260927.4-0qore1~ubuntu26.04' \
+    --output /path/to/new-source-workspace
+
+This archives the selected commit, not uncommitted working-tree changes. It
+uses the commit date for archive/changelog timestamps, records source checksums
+and provenance, and prepares an unsigned source upload. Use the distribution's
+/usr/bin/python3 with tarfile's data extraction filter (Python 3.11.8 or newer),
+Git, xz and dpkg-dev. The numeric snapshot serial must increase for each upload;
+never put a Git hash in the serial or reuse an accepted version. The helper
+rejects release versions, mismatched upstream versions and downgrades.
+
+For a final release, after freezing and reviewing the release commit:
 
   git archive --format=tar --prefix=qore-3.0.0/ HEAD -- . ':!debian' \
       | xz > ../qore_3.0.0.orig.tar.xz
@@ -156,3 +171,7 @@ nodoc/architecture-only builds, installation with Recommends disabled, upgrades
 from the previously published packages, removal/purge, and rebuild
 reproducibility before publishing a release. These are release qualification
 steps; adding the tests alone is not evidence that each release passed them.
+
+See debian/README.qualification for repeatable clean-build, artifact-inspection,
+upgrade and reproducibility commands, and the distinction between testing
+snapshots and final release acceptance.

@@ -16,5 +16,7 @@ qore (3.0.0-1) unstable; urgency=medium
   * Find AOT fallback sources across the installed module search path.
   * Use LLVM's maintained Unicode conversion routines in linenoise instead of
     the legacy ConvertUTF sources rejected by Lintian.
+  * Add reproducible snapshot source preparation, offline build and installed
+    package qualification helpers, ELF/AOT checks, and artifact comparisons.
 
  -- David Nichols <david@qore.org>  Fri, 06 Feb 2026 00:00:00 +0000

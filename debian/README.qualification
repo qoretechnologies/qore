@@ -1,0 +1,128 @@
+Package qualification
+=====================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Use qore-packagers/qore-testing for development snapshots. Qualifying a snapshot
+does not publish a final release. Repeat acceptance on the exact frozen release
+artifacts before promoting them. Keep each run's source manifest, image IDs,
+build dependency inventory, .buildinfo, .changes, logs and package checksums.
+Do not put results or generated source archives inside the checkout.
+
+The helpers run local rootless Podman containers and retain logs outside them;
+they never install packages on the development host. Pull the target base image
+first and pass its digest when repeatability is required. Distribution and
+architecture qualification are separate: an Ubuntu build is not a Debian build.
+
+Clean builds
+------------
+
+Prepare the source with tools/prepare-debian-source.py as described in
+README.source. Verify source signatures/provenance before building downloaded
+sources. For Ubuntu 26.04, provide the testing PPA's public archive key and a
+deb822 .sources file using Signed-By: /usr/share/keyrings/qore-testing.gpg:
+
+  export QORE_TEST_APT_KEY=/path/to/verified-qore-testing.gpg
+  export QORE_TEST_APT_SOURCE=/path/to/qore-testing.sources
+  tools/build-debian-package.sh /path/to/qore_source.dsc \
+    /path/to/new-build-results docker.io/library/ubuntu:26.04
+
+The current testing archive fingerprint is
+064EECD97DD60E822006EC8A2324C51F64E7B4EA; verify it against Launchpad before
+trusting a downloaded key. This is the archive key, not an uploader's key.
+APT provisioning has network access. Compilation, documentation and tests run
+without networking as an unprivileged user with HOME=/sbuild-nonexistent.
+All Build-Depends must resolve; the helper rejects nocheck. Binary Lintian
+errors fail the run. Inspect warnings too. The provisioned image is retained
+and identified in build-image.txt for diagnosis.
+
+The default options match the testing PPA: parallel=8 noautodbgsym. For debug
+package qualification set QORE_DEB_BUILD_OPTIONS=parallel=8. For nodoc builds
+set QORE_DEB_BUILD_PROFILES=nodoc and QORE_DEB_BUILD_OPTIONS='parallel=8 nodoc'.
+Record and compare matching profiles; a nodoc build cannot qualify qore-doc.
+The helper performs full binary builds; use sbuild -B separately to qualify
+the architecture-only build path.
+
+Static artifact checks and reproducibility
+-----------------------------------------
+
+  tools/check-debian-artifacts.py inspect /path/to/build-results \
+    --output /path/to/inspection.json
+
+This checks every shipped runtime ELF for position independence, full RELRO,
+non-executable stack, absence of RPATH/RUNPATH and text relocations, and validates
+the versioned AOT metadata chain. A binary .changes file, when present, must
+match every referenced artifact's size and SHA-256 digest, and every inspected
+.deb must be listed. This is integrity verification, not signature verification.
+Without .changes, the report explicitly records that no manifest was supplied.
+Debug .ddeb files are checksum-verified but not subjected to runtime ELF checks.
+Keep each version/profile in its own directory. Compiler fortification and
+stack-protector coverage still require build-flag review; ELF checks alone do
+not establish those properties for every function.
+
+Build the same source twice in fresh containers, with the same dependency
+versions and build options. Vary the build path/time/locale deliberately when
+investigating reproducibility. Inspect each build, then compare:
+
+  tools/check-debian-artifacts.py compare /path/to/first.json /path/to/second.json \
+    --output /path/to/comparison.json
+
+Any differing package bytes make the comparison fail. It also lists changed
+payload/control members, including modes, timestamps, ownership, symlink targets
+and content hashes. Matching file inventories or successful tests alone are not
+reproducibility. Use diffoscope on differing packages for deeper analysis.
+
+Installation, upgrades and removal
+---------------------------------
+
+  tools/qualify-debian-packages.sh /path/to/qore_source.dsc \
+    /path/to/packages /path/to/new-install-results docker.io/library/ubuntu:26.04 \
+    /path/to/previous-packages
+
+The same optional signed APT settings above supply dependency backports. The
+helper checks the distribution/version, installs real older artifacts before
+upgrading, runs the installed runtime tests after upgrade, and validates a
+minimal installation without Recommends before installing test dependencies.
+It runs all four autopkgtests, coinstalls the supplied split packages, verifies
+files with dpkg -V, purges, and reinstalls the runtime. The autopkgtest null
+backend is confined to the disposable container; never run it on the host.
+
+Omit the previous-package directory for a first-version installation test; the
+report then explicitly records that upgrades were not tested. A PASS marker
+does not erase that limitation. Test every actual supported upgrade baseline.
+There are currently no previously distributed standalone module packages to
+migrate. JSON, YAML and all other bundled modules remain in qore-stdlib.
+Source-built installations under /usr/local or /opt are not dpkg upgrades:
+test their chosen migration separately without deleting unmanaged files.
+
+Independent modules
+-------------------
+
+Build independent module packages against the installed libqore-dev and qore,
+using native builds for the target distribution. Keep modules shipped in Qore's
+modules/ and qlib/ trees in Qore's packages. Do not create duplicate JSON/YAML
+packages. Before packaging a separate module, inventory its native libraries,
+Qore dependencies, vendored sources/licenses, user modules/resources, tests,
+documentation and generated metadata. Preserve AOT trailers when stripping
+user modules, just as Qore does. Run tests against installed artifacts.
+
+The initial external-module SDK check builds UUID from a clean committed source
+archive, using only installed Qore headers/tools/libraries, and runs its tests.
+This verifies that SDK path but does not qualify every module or a module .deb.
+External module repositories require their own packaging commits and checks;
+database/service modules also need their integration services. Proprietary SDKs,
+large vendored runtimes, JNI JAR inventories and architecture restrictions must
+be resolved per module rather than hidden by a generic package template.
+
+Release acceptance
+------------------
+
+Before general publication, freeze the version and source, repeat builds and
+installed-artifact checks, assess ABI compatibility with any distributed
+libqore20 snapshots, qualify debug symbols, and resolve reproducibility findings.
+Test the actual Qorus image and independent modules against that release.
+Retain license/provenance inventories and assign dependency/security maintenance
+ownership. Support only distribution/architecture combinations with successful
+evidence. Sign the reviewed source uploads with debsign and upload only source
+.changes files to the testing PPA as documented in backports/README. Promotion
+to a release archive is a later, explicit release action.

@@ -60,6 +60,7 @@ endif
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_aot_metadata.py
+	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_artifacts.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s examples/test/cmake
 	dh_auto_build -- linenoise-unicode-test
 	$(builddir)/modules/linenoise/linenoise-unicode-test
