@@ -109,6 +109,14 @@ override_dh_dwz:
 	# current Debian/Ubuntu releases does not understand.
 	dh_dwz -Nqore-stdlib
 
+override_dh_strip_nondeterminism:
+	dh_strip_nondeterminism --remaining-packages -Nqore-doc
+ifneq (,$(build_docs))
+	# Doxygen text is already deterministic. Avoid probing every HTML, script,
+	# stylesheet and SVG for executable ZIP content; keep image/archive handling.
+	dh_strip_nondeterminism -pqore-doc -X.html -X.js -X.css -X.svg
+endif
+
 override_dh_strip:
 	# strip and objcopy discard Qore's EOF trailers. Preserve the dependency,
 	# source-location and optional-module metadata around all dh_strip edits.

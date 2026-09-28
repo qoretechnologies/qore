@@ -6,8 +6,8 @@ qore (3.0.0-1) unstable; urgency=medium
   * Use quilt source format and declare complete, versioned build dependencies.
   * Require offline builds with packaged dependencies; retain upstream CMake
     FetchContent behavior for ordinary developer builds.
-  * Complete compiler/tool file lists, build and install documentation, and split
-    remote debugging tools with their YAML dependency.
+  * Complete compiler/tool file lists, build and install documentation, and
+    split remote debugging tools with their YAML dependency.
   * Honor dpkg build flags, remove AOT build-directory RUNPATHs, and generate
     shared-library metadata with debhelper.
   * Add installed-package tests and document stable/LTS dependency backports.
@@ -22,15 +22,23 @@ qore (3.0.0-1) unstable; urgency=medium
   * Keep temporary build paths out of the installed CMake SDK configuration.
   * Qualify exact rebuilt artifacts when the same version exists in the PPA.
   * Version the pending changelog entry when preparing prerelease snapshots.
-  * Include debug packages and removed package splits in lifecycle qualification.
-  * Honor compiler file-prefix maps in QPP metadata and builtin source locations.
+  * Include debug packages and removed package splits in lifecycle
+    qualification.
+  * Honor compiler file-prefix maps in QPP metadata and builtin source
+    locations.
   * Make the installed compiler fingerprint independent of checkout paths.
-  * Use source-relative documentation labels and omit Doxygen graph build caches.
-  * Map final AOT artifact paths without changing input files or runtime resources.
+  * Use source-relative documentation labels and omit Doxygen graph build
+    caches.
+  * Map final AOT artifact paths without changing input files or runtime
+    resources.
   * Omit AOT build RPATHs at link time and keep build-tree discovery paths and
     temporary prefix-map options out of installed compiler binaries.
   * Restore the original HTTP streaming C++ entry point alongside the overload
     that reports connection reuse.
-  * Correct date components when local time crosses the epoch in a negative zone.
+  * Correct date components when local time crosses the epoch in a negative
+    zone.
+  * Detect platform features before configuring conditional documentation.
+  * Avoid executable-archive probes for generated Doxygen text while retaining
+    image and archive normalization.
 
  -- David Nichols <david@qore.org>  Fri, 06 Feb 2026 00:00:00 +0000
