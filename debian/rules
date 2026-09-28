@@ -98,6 +98,7 @@ override_dh_installdocs:
 	dh_installdocs --remaining-packages -Nqore-doc
 ifneq (,$(build_docs))
 	dh_installdocs -pqore-doc --doc-main-package=qore-doc $(builddir)/docs
+	python3 debian/clean-doxygen-cache.py debian/qore-doc/usr/share/doc/qore-doc
 else
 ifneq (,$(filter qore-doc,$(shell dh_listpackages)))
 	dh_installdocs -pqore-doc --doc-main-package=qore-doc

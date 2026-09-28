@@ -84,6 +84,13 @@ payload/control members, including modes, timestamps, ownership, symlink targets
 and content hashes. Matching file inventories or successful tests alone are not
 reproducibility. Use diffoscope on differing packages for deeper analysis.
 
+Documentation labels strip the source/build directory prefixes. Installation
+removes Doxygen graph caches (.map/.md5 with corresponding rendered graphs),
+which contain temporary tag-file paths; rendered SVG/PNG graphs and links are
+retained. The documentation regression test generates real HTML and graphs in
+two different roots and compares the staged payload byte for byte. It requires
+Doxygen and Graphviz, so it is skipped when those tools are absent in nodoc builds.
+
 Installation, upgrades and removal
 ---------------------------------
 

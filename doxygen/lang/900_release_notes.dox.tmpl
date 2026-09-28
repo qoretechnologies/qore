@@ -528,6 +528,9 @@ val = "string";      # OK
     wins. C++ line directives retain their original paths for the compiler's separate debug maps.
     The installed \c qcc compiler fingerprint uses stable input names and normalized build roots
     while continuing to detect source, configuration, and input-list changes.
+    Documentation file labels exclude temporary source/build roots, keeping generated graphs stable
+    when the checkout moves. Debian documentation packages omit Doxygen's intermediate graph caches
+    while retaining the rendered images and links.
 
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
