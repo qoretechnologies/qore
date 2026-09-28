@@ -255,6 +255,15 @@ public class QgetTest inherits QUnit::Test {
         assertEq(0, result.rc);
         assertRegex("USAGE", result.out);
         assertRegex("--content-disposition", result.out);
+        # long options without a short form are aligned with those that have one
+        list<string> opt_lines = select (result.out.split("\n")), $1 =~ /^  (-[a-zA-Z], | {4})--/;
+        assertGt(30, opt_lines.size());
+        assertRegex("\n      --no-clobber ", result.out);
+        assertRegex("\n  -O, --output-document=FILE ", result.out);
+        foreach string line in (opt_lines) {
+            assertEq(6, line.find("--"), line);
+        }
+        assertEq(0, (select (result.out.split("\n")), $1 =~ /^  --/).size());
     }
 
     noClobber() {

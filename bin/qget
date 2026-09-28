@@ -498,7 +498,12 @@ public class QgetApp {
         refresh_counter.waitForZero();
     }
 
-    private static printHelpLine(TerminalColor c, string opt, string desc, int width = 30) {
+    private static printHelpLine(TerminalColor c, string opt, string desc, int width = 32) {
+        # indent options without a short form by the width of a short option prefix ("-x, ") so that all long
+        # options are aligned in the same column
+        if (opt =~ /^--/) {
+            opt = "    " + opt;
+        }
         printf("  %s %s\n", TerminalColor::padRight(c.key(opt), width), desc);
     }
 
@@ -511,7 +516,8 @@ public class QgetApp {
         printf("  %s\n\n", (sort(UrlDownloader::getSupportedSchemes())).join(", "));
 
         printf("%s\n", c.bold("OUTPUT"));
-        printHelpLine(c, "-o, -O, --output=FILE", "write to FILE; \"-\" writes to stdout");
+        printHelpLine(c, "-o, --output=FILE", "write to FILE; \"-\" writes to stdout");
+        printHelpLine(c, "-O, --output-document=FILE", "same as --output");
         printHelpLine(c, "--directory-prefix=DIR", "save files in DIR");
         printHelpLine(c, "--no-clobber", "fail if a file exists instead of overwriting it");
         printHelpLine(c, "--no-part", "write directly to the file instead of a .part file");
