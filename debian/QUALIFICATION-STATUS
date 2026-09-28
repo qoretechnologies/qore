@@ -7,8 +7,9 @@ This records development snapshot results, not final release acceptance. See
 README.qualification for the commands and acceptance procedure. Results below
 cover Ubuntu 26.04 (resolute), amd64, with the dependency backports in the
 qore-packagers/qore-testing PPA. They do not qualify other distributions or
-architectures. The evidence bundle is qore-production-20260928, retained outside
-Git with source/package checksums, dependency inventories and complete logs.
+architectures. The evidence bundles are qore-production-20260928 and
+qore-repro-20260928, retained outside Git with source/package checksums,
+dependency inventories and complete logs.
 
 Builds and installed artifacts
 -----------------------------
@@ -40,15 +41,62 @@ Local snapshot 3.0.0~git20260928.2-0qore1~ubuntu26.04, from 2be76a8aa:
 - Evidence: nodoc-debug-build/, nodoc-debug-artifacts.json,
   nodoc-debug-lifecycle-complete/.
 
-Subsequent packaging fixes have targeted checks and are not included in those
-binary snapshots. The installed CMake export no longer embeds its build/source
-directory; installed exports match across different roots, and build-tree
+Local snapshot 3.0.0~git20260928.4-0qore1~ubuntu26.04, from 21a9ed246:
+
+- The fresh offline/unprivileged nodoc build passed all 394 core suites,
+  40 packaging/CMake checks and binary Lintian. It includes the SDK, package
+  lifecycle tooling, snapshot changelog and QPP/fingerprint fixes.
+- All six regular packages and four debug packages pass manifest integrity,
+  ELF hardening and AOT metadata checks. All 410 runtime ELF files have matching
+  detached DWARF files, build IDs and debuglink CRCs.
+- Upgrade from the local 20260928.2 snapshot, including its four debug packages,
+  passed. Minimal installation, all four installed autopkgtests, exact
+  coinstallation of all ten artifacts, dpkg file verification, purge and
+  reinstall also passed. Runtime checks include ONNX inference and bundled
+  JSON/YAML. The purged inventory contains no Qore packages; the minimal
+  inventory contains only qore, libqore20 and qore-stdlib from this source.
+- Evidence in qore-repro-20260928: candidate-build/, candidate-artifacts.json,
+  candidate-generator-check.json, candidate-lifecycle/ and
+  candidate-lifecycle-inventory-check.json. This build predates the
+  documentation fix e5c373725 and uses nodoc; it does not qualify that fix in a
+  binary package.
+
+The installed CMake export no longer embeds its build/source directory;
+installed exports match across different roots, and build-tree
 discovery still works through symlinks. An independent UUID module builds from
 clean committed sources against the corrected installed SDK and passes 14
 tests / 227 assertions. This is SDK qualification, not a UUID package build.
 Snapshot changelog generation also passes four regression tests and actual
 source-package generation without the previous version-order warning.
-The combined packaging and CMake regression suite has 31 passing tests.
+The combined packaging and CMake regression suite now has 41 passing tests.
+Two independent source preparations from 21a9ed246 produce identical .dsc,
+orig.tar.xz and debian.tar.xz files for the 20260928.4 snapshot. Source buildinfo
+differs only in Build-Date; its .changes checksum follows that recorded time.
+Evidence: source-reproducibility.json and source-buildinfo.diff in the new
+evidence bundle.
+
+Generator and documentation qualification
+----------------------------------------
+
+The qpp/fingerprint fix in 21a9ed246 maps persisted QPP source paths using the
+native compiler's file-prefix maps, and gives compiler fingerprint inputs
+stable source-relative labels. Actual compiler flags and physical input paths
+are preserved. All 324 real QPP metadata files are byte-identical across two
+checkout roots, as is a compiled native C++ probe with mapped debug information.
+Malformed maps, quoted paths, overlapping mappings and fingerprint invalidation
+on real source/configuration changes are covered by regression tests.
+
+The documentation fix in e5c373725 strips checkout/build roots from displayed
+paths and removes recognized intermediate Doxygen graph caches from staging.
+All 1,850 files in the complete C++ library documentation match byte-for-byte
+between two checkout roots. A separate Doxygen/Graphviz test verifies external
+tag links, rendered graphs and preservation of unrelated .map/.md5 files.
+This qualifies those generators, not a complete rebuilt qore-doc package.
+
+Evidence in qore-repro-20260928: qpp-corpus.json, qpp-object-comparison.log,
+full-library-docs.json/log, docs-cmake-tests-final.log, debian-tests-final.log,
+audit-generators.md and audit-docs.md. Both code commits passed all applicable
+audit-changes checks, with every one of the 71 checklist items reported.
 
 Remaining reproducibility work
 ------------------------------
@@ -58,10 +106,15 @@ qore-debug-tools and qore-misc-tools are byte-identical. libqore-dev, libqore20,
 qore, qore-stdlib and qore-doc differ. Evidence: rebuild-comparison.json,
 rebuild-input-comparison.json and REPRODUCIBILITY.md in the evidence bundle.
 
-Confirmed path-dependent outputs include AOT inline source locations, qpp JSON
-source_file metadata, qcc-format.stamp source filenames, and compiler flags
-embedded in libqore. The installed CMake export has been fixed separately.
-Documentation graph maps/hashes and HTML also differ and still need isolation.
+The installed CMake export, qpp JSON/reflection paths, qcc-format.stamp input
+labels and documentation path/cache generation have since been fixed with the
+targeted checks above. The original compared packages predate these fixes.
+Remaining path-dependent outputs include AOT inline source locations, other
+serialized source identities, and compiler flags embedded in libqore. qcc's
+compiled build-tree discovery paths also need review. Mapping must preserve
+physical file access, provider/import identities and useful debug locations.
+The full language/module/qlib documentation package still needs rebuilding and
+comparison with the documentation fix.
 The qore executable's .text section matches; its other differing sections
 include build ID and debuglink data. Do not suppress comparison failures.
 
@@ -69,6 +122,10 @@ The compared builds also differ in rust-coreutils version (0.10.0 versus 0.8.0)
 and locale declarations. Repeat with exact dependency versions and controlled
 environment variations after fixing source-path serialization. A matching
 source archive alone does not establish binary reproducibility.
+
+The earlier runtime-fix CI pipeline 57786 at ef1486692 passed all 21 jobs.
+These subsequent local qualification commits have not been pushed and are not
+covered by that pipeline.
 
 Distribution and module work
 ----------------------------
