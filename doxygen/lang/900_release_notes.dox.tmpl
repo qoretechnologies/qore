@@ -2320,6 +2320,12 @@ while (*binary chunk = input.read(65536)) {
       - new \c chat-model connection option, so the model used when the connection is
         selected for chat can be configured on the connection; defaults to \c "sonar"
 
+    - @ref providerindexintro "ProviderIndex" module
+      - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()", which stops the
+        worker processes of the index builds in progress; they run in their own process groups, so a process that
+        builds an index and is asked to stop must call it, or its workers keep running.  A cancelled build fails
+        with \c PROVIDER-INDEX-CANCELLED and publishes nothing
+
     - @ref qdxintro "Qdx" module
       - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
         (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)

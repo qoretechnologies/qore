@@ -61,6 +61,9 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_2 ProviderIndex v1.2
+    - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()" to stop the worker
+      processes of the index builds in progress, which run in their own process groups and are therefore not stopped
+      with the process that builds the index; a cancelled build fails with \c PROVIDER-INDEX-CANCELLED
     - the info of every data provider factory in the index that is registered while the index is built is
       published in the index, so that the factories can be listed with their info without loading their modules
       (see @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()"); it is read

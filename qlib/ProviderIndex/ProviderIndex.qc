@@ -115,6 +115,67 @@ public class ProviderIndex inherits ProviderIndexUtil {
     private {
         #! The batch of this process, if it is an index worker
         static *hash<auto> worker_batch;
+
+        #! Protects the running worker processes and the cancellation generation
+        static Mutex worker_lock();
+        #! Incremented by cancelWorkers(); a build started in an earlier generation has been cancelled
+        static int cancel_generation = 0;
+%ifndef NoProcess
+        #! The worker processes of the builds in progress, by batch file
+        static hash<string, Process> worker_processes = {};
+%endif
+    }
+
+    #! Stops the index worker processes of every build in progress in this process
+    /** Each running worker is terminated and no further worker is started; the builds fail with
+        \c PROVIDER-INDEX-CANCELLED and publish nothing.  Builds started afterwards are not affected.
+
+        @return the number of worker processes that were terminated
+
+        @par Example
+        @code{.py}
+# a builder that is asked to stop takes its workers with it
+set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
+        @endcode
+
+        @note Worker processes run in their own process groups, so they are not stopped by a signal sent to the
+        process building the index; call this method when that process is asked to stop
+    */
+    static int cancelWorkers() {
+%ifdef NoProcess
+        {
+            AutoLock al(worker_lock);
+            ++cancel_generation;
+        }
+        return 0;
+%else
+        list<Process> running;
+        {
+            AutoLock al(worker_lock);
+            ++cancel_generation;
+            running = map $1, worker_processes.iterator();
+        }
+        foreach Process p in (running) {
+            try {
+                p.terminate();
+            } catch (hash<ExceptionInfo> ex) {
+                # the worker has already exited
+            }
+        }
+        return running.size();
+%endif
+    }
+
+    #! Returns the current cancellation generation
+    private static int getCancelGeneration() {
+        AutoLock al(worker_lock);
+        return cancel_generation;
+    }
+
+    #! Returns True if builds of the given generation have been cancelled
+    private static bool isCancelled(int generation) {
+        AutoLock al(worker_lock);
+        return cancel_generation != generation;
     }
 
     #! Create the data provider index
@@ -129,6 +190,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
         @throw DATA-PROVIDER-DISCOVERY-STALE if registration changes after qualification
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
+        @throw PROVIDER-INDEX-CANCELLED a worker build was stopped by cancelWorkers()
         @note The index is built in index build mode (see
             @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()"), so the
             index being replaced is never read; when the build finishes, the next index lookup reads the new index.
@@ -946,6 +1008,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<string, *string> saved_env = setWorkerEnvironment();
         on_exit restoreWorkerEnvironment(saved_env);
 
+        # a build is cancelled by cancelWorkers() while it runs
+        int generation = getCancelGeneration();
+
         # run the workers
         int count = batches.size();
         int next = 0;
@@ -965,14 +1030,14 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     {
                         lock.lock();
                         on_exit lock.unlock();
-                        if (next == count || abort) {
+                        if (next == count || abort || isCancelled(generation)) {
                             return;
                         }
                         batch = batches[next++];
                     }
                     log(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
                         map $1.name, batch.items);
-                    hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms);
+                    hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms, generation);
                     log(LoggerLevel::LevelInfo, "index worker %s finished in %y with exit code %y", batch.id,
                         run.elapsed, run.exit_code);
                     lock.lock();
@@ -985,6 +1050,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }();
         }
         running.waitForZero();
+        if (isCancelled(generation)) {
+            throw "PROVIDER-INDEX-CANCELLED", "the index build was cancelled; no index was published";
+        }
         restoreWorkerEnvironment(saved_env);
         saved_env = {};
 
@@ -1317,7 +1385,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
 %ifndef NoProcess
     #! Runs one worker and returns the result of the run
-    private static hash<auto> runWorker(hash<auto> batch, list<string> command, string staging_dir, int timeout_ms) {
+    private static hash<auto> runWorker(hash<auto> batch, list<string> command, string staging_dir, int timeout_ms,
+            int generation) {
         string base = staging_dir + DirSep + batch.id;
         batch += {
             "staging_dir": staging_dir,
@@ -1336,10 +1405,23 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             out.open2(base + "-stdout.log", O_CREAT | O_TRUNC | O_WRONLY, 0600);
             File err();
             err.open2(err_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-            Process p(command[0], (command.size() > 1 ? command[1..] : ()) + batch_path, {
-                "stdout": out,
-                "stderr": err,
-            });
+            # a worker is started and registered atomically, so cancelWorkers() cannot miss it
+            Process p;
+            {
+                AutoLock al(worker_lock);
+                if (cancel_generation != generation) {
+                    throw "PROVIDER-INDEX-CANCELLED", "the index build was cancelled";
+                }
+                p = new Process(command[0], (command.size() > 1 ? command[1..] : ()) + batch_path, {
+                    "stdout": out,
+                    "stderr": err,
+                });
+                worker_processes{batch_path} = p;
+            }
+            on_exit {
+                AutoLock al(worker_lock);
+                remove worker_processes{batch_path};
+            }
             if (!p.wait(timeout_ms)) {
                 run.timed_out = True;
                 p.terminate();

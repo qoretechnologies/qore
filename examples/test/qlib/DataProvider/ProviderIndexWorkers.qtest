@@ -38,6 +38,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
         addTestCase("workers that describe an action differently fail the build", \conflictTest());
         addTestCase("a worker setup error is reported and no further workers are started", \setupErrorTest());
         addTestCase("without MessagePack, a worker build is run in the calling process", \noMessagePackTest());
+        addTestCase("cancelled workers are stopped and publish nothing", \cancelTest());
 
         set_return_value(main());
     }
@@ -255,6 +256,79 @@ public hash<string, string> sub get_data_provider_map() {
         assertTrue(info.summary.qualification.complete);
         assertEq(0, info.summary.workers.size(), "no workers are started");
         assertTrue(inlist("IndexIdentityFixture", info.summary.qualification.apps));
+    }
+
+    cancelTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", registration_module);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
+        ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", getOptions(1));
+        hash<string, binary> published = readIndexFiles(dir + "/index");
+
+        # a worker that reports its PID through a FIFO and then never finishes
+        string fifo = dir + "/worker-pid";
+        assertEq(0, mkfifo(fifo, 0600));
+        string script = dir + "/worker.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("%%modern
+File f();
+f.open2(%y, O_WRONLY);
+f.write(sprintf(\"%%d\\n\", getpid()));
+f.close();
+Queue q();
+q.get();
+", fifo));
+        f.close();
+
+        hash<ProviderIndexCreateOptions> opts = getOptions(1);
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore.find(DirSep) >= 0) {
+            qore = normalize_dir(qore);
+        }
+        opts.worker_command = (qore, script);
+
+        Queue result();
+        background sub () {
+            # a build that ends without its worker starting would otherwise leave the reader below waiting
+            on_exit {
+                try {
+                    File w();
+                    w.open2(fifo, O_WRONLY | O_NONBLOCK);
+                    w.write("0\n");
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            }
+            try {
+                ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", opts);
+                result.push("published");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+
+        File r();
+        r.open2(fifo, O_RDONLY);
+        int pid = int(trim(r.readLine()));
+        r.close();
+        assertGt(0, pid, "the worker started");
+        assertTrue(Process::checkPid(pid), "the worker is running");
+
+        assertEq(1, ProviderIndex::cancelWorkers(), "the running worker is terminated");
+        assertEq("PROVIDER-INDEX-CANCELLED", result.get(), "the cancelled build fails");
+        assertFalse(Process::checkPid(pid), "the worker has exited");
+        assertEq(published, readIndexFiles(dir + "/index"), "the published index is untouched");
+        assertEq((), (map $1, readIndexFiles(dir + "/index").keyIterator(), $1 =~ /^\./) ?? (),
+            "no staging files are left");
+
+        # builds started after the cancellation are not affected
+        assertEq(0, ProviderIndex::cancelWorkers(), "no worker is running");
+        ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", getOptions(1));
+        assertEq(published, readIndexFiles(dir + "/index"), "a later build publishes the same index");
     }
 
     setupErrorTest() {
