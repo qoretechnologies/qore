@@ -2901,7 +2901,6 @@ file(WRITE "${CMAKE_BINARY_DIR}/qcc-build-paths.conf" "qcc-build-paths-v1\n${_QO
 # see _QORE_AOT_SANITIZE_FLAGS
 target_compile_definitions(qcc PRIVATE QORE_QCC_SANITIZE_FLAGS="${_QORE_AOT_SANITIZE_FLAGS}")
 set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 # qcc format-version fingerprint.  Purpose: decouple qmod rebuilds from
 # libqore.so / qcc binary mtime.  Without this, any libqore source
@@ -3114,7 +3113,6 @@ add_custom_target(qcc-format-source-qmod-clean DEPENDS ${QCC_FORMAT_SOURCE_QMOD_
 
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 # configuration files
 # Qore::CFLAGS names the flags libqore was compiled with.  CMake passes the macOS deployment target to every
