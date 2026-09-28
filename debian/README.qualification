@@ -53,9 +53,18 @@ This checks every shipped runtime ELF for position independence, full RELRO,
 non-executable stack, absence of RPATH/RUNPATH and text relocations, and validates
 the versioned AOT metadata chain. A binary .changes file, when present, must
 match every referenced artifact's size and SHA-256 digest, and every inspected
-.deb must be listed. This is integrity verification, not signature verification.
+.deb/.ddeb must be listed. This is integrity verification, not signature verification.
 Without .changes, the report explicitly records that no manifest was supplied.
-Debug .ddeb files are checksum-verified but not subjected to runtime ELF checks.
+Detached debug packages are inspected without applying runtime ELF hardening
+requirements to their non-loadable files. To qualify a debug-enabled build, run:
+
+  tools/check-debian-artifacts.py inspect /path/to/build-results \
+    --require-debug-symbols --output /path/to/debug-inspection.json
+
+Every runtime ELF must have a matching detached debug file with DWARF, the same
+build ID, the standard /usr/lib/debug/.build-id location, and a filename/CRC
+matching its .gnu_debuglink. Both Ubuntu .ddeb and
+Debian -dbgsym .deb packages are supported. Missing symbols fail this check.
 Keep each version/profile in its own directory. Compiler fortification and
 stack-protector coverage still require build-flag review; ELF checks alone do
 not establish those properties for every function.

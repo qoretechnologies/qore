@@ -18,6 +18,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import zlib
 
 
 FOOTER = struct.Struct("<Q4sI")
@@ -61,7 +62,7 @@ def verify_changes(directory, packages):
             raise ValueError(f"Artifact does not match .changes: {name}")
         expected[name] = checksum
     if not all(path.name in expected for path in packages):
-        raise ValueError("A .deb is absent from the .changes manifest")
+        raise ValueError("A binary package is absent from the .changes manifest")
     return {"status": "verified", "manifest": changes[0].name, "sha256": file_digest(changes[0])}
 
 
@@ -82,14 +83,33 @@ def trailers(data):
     return result
 
 
-def inspect_elf(data, scratch):
+def inspect_elf(data, scratch, debug=False):
     scratch.write_bytes(data)
     info = subprocess.check_output(
-        ["readelf", "--wide", "--file-header", "--program-headers", "--dynamic", str(scratch)],
+        ["readelf", "--wide", "--file-header", "--program-headers", "--dynamic",
+         "--section-headers", "--notes", str(scratch)],
         text=True, stderr=subprocess.STDOUT, env={**os.environ, "LC_ALL": "C"})
     kind = re.search(r"Type:\s+(\w+)", info).group(1)
+    build_id = re.search(r"Build ID: ([0-9a-f]+)", info)
+    symbols = {"build_id": build_id[1] if build_id else None,
+               "debug_info": bool(re.search(r"\]\s+\.(?:debug_info|zdebug_info)\s", info))}
+    if debug:
+        return {"type": kind, **symbols, "crc32": zlib.crc32(data)}, []
+    link = re.search(r"\]\s+\.gnu_debuglink\s+\S+\s+[0-9a-f]+\s+([0-9a-f]+)\s+([0-9a-f]+)\s", info)
+    if link:
+        offset, size = (int(value, 16) for value in link.groups())
+        if size < 8 or offset + size > len(data):
+            raise ValueError("Invalid .gnu_debuglink section bounds")
+        section = data[offset:offset + size]
+        name, separator, _ = section[:-4].partition(b"\0")
+        if not separator or not name or (len(name) + 4) // 4 * 4 + 4 != size:
+            raise ValueError("Invalid .gnu_debuglink filename or padding")
+        symbols["debug_link"] = name.decode("utf-8")
+        if Path(symbols["debug_link"]).name != symbols["debug_link"]:
+            raise ValueError(".gnu_debuglink must contain a filename without directory components")
+        symbols["debug_crc32"] = int.from_bytes(section[-4:], "little" if data[5] == 1 else "big")
     if kind not in ("EXEC", "DYN"):
-        return {"type": kind}, []
+        return {"type": kind, **symbols}, []
     stack = next((line for line in info.splitlines() if "GNU_STACK" in line), "")
     stack_fields = stack.split()
     checks = {
@@ -101,10 +121,10 @@ def inspect_elf(data, scratch):
     }
     # ET_EXEC is not PIE; shared libraries and PIE executables are ET_DYN.
     checks["position_independent"] = kind == "DYN"
-    return {"type": kind, **checks}, [key for key, passed in checks.items() if not passed]
+    return {"type": kind, **symbols, **checks}, [key for key, passed in checks.items() if not passed]
 
 
-def archive_members(path, control=False, scratch=None):
+def archive_members(path, control=False, scratch=None, debug=False):
     flag = "--ctrl-tarfile" if control else "--fsys-tarfile"
     process = subprocess.Popen(["dpkg-deb", flag, str(path)], stdout=subprocess.PIPE)
     members, findings = {}, []
@@ -124,7 +144,7 @@ def archive_members(path, control=False, scratch=None):
                     entry["sha256"] = digest(data)
                     entry["size"] = len(data)
                     if not control and data.startswith(b"\x7fELF"):
-                        entry["elf"], failures = inspect_elf(data, scratch)
+                        entry["elf"], failures = inspect_elf(data, scratch, debug=debug)
                         findings.extend(f"{name}: {failure}" for failure in failures)
                     if not control and name.endswith(".qmod") and "-api-" not in name:
                         entry["trailers"] = trailers(data)
@@ -139,11 +159,41 @@ def archive_members(path, control=False, scratch=None):
     return members, findings
 
 
-def inspect(directory):
+def check_debug_symbols(packages):
+    """Match each shipped runtime ELF to its actual detached debug file."""
+    debug_files = set()
+    for package in packages.values():
+        if not package["debug_package"]:
+            continue
+        for name, member in package["payload"].items():
+            elf = member.get("elf", {})
+            if elf.get("build_id") and elf.get("debug_info"):
+                debug_files.add((elf["build_id"], name, elf["crc32"]))
+    findings, checked = [], 0
+    for key, package in packages.items():
+        if package["debug_package"]:
+            continue
+        for name, member in package["payload"].items():
+            elf = member.get("elf", {})
+            if elf.get("type") not in ("EXEC", "DYN"):
+                continue
+            checked += 1
+            build_id = elf.get("build_id") or ""
+            expected_path = f"usr/lib/debug/.build-id/{build_id[:2]}/{build_id[2:]}.debug"
+            valid = (build_id, expected_path, elf.get("debug_crc32")) in debug_files \
+                and Path(expected_path).name == elf.get("debug_link")
+            if not valid:
+                findings.append(f"{key}: {name}: no matching debug file (build ID, debuglink, CRC and DWARF required)")
+    if not checked:
+        findings.append("No runtime ELF files found for debug-symbol qualification")
+    return {"checked": checked, "passed": not findings}, findings
+
+
+def inspect(directory, require_debug=False):
     packages, findings = {}, []
-    inputs = sorted(directory.glob("*.deb"))
+    inputs = sorted([*directory.glob("*.deb"), *directory.glob("*.ddeb")])
     if not inputs:
-        raise ValueError(f"No .deb packages in {directory}")
+        raise ValueError(f"No binary packages in {directory}")
     manifest = verify_changes(directory, inputs)
     with tempfile.TemporaryDirectory(prefix="qore-elf-check-") as temporary:
         scratch = Path(temporary) / "object"
@@ -155,13 +205,18 @@ def inspect(directory):
             key = f"{package}:{architecture}"
             if key in packages:
                 raise ValueError(f"Multiple versions of {key} in input")
-            payload, errors = archive_members(path, scratch=scratch)
+            debug = package.endswith("-dbgsym")
+            payload, errors = archive_members(path, scratch=scratch, debug=debug)
             control, _ = archive_members(path, control=True)
             findings.extend(f"{key}: {error}" for error in errors)
-            packages[key] = {"version": version, "sha256": file_digest(path),
+            packages[key] = {"version": version, "sha256": file_digest(path), "debug_package": debug,
                              "payload": payload, "control": control}
+    symbols = {"status": "not requested"}
+    if require_debug:
+        symbols, errors = check_debug_symbols(packages)
+        findings.extend(errors)
     return {"schema": 1, "packages": packages, "findings": findings, "checksums": manifest,
-            "passed": not findings}
+            "debug_symbols": symbols, "passed": not findings}
 
 
 def compare(left, right):
@@ -190,6 +245,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("inspect", help="Inspect all .deb files in a directory")
     check.add_argument("directory", type=Path)
+    check.add_argument("--require-debug-symbols", action="store_true",
+                       help="Require matching detached DWARF, build IDs and debuglink CRCs for every runtime ELF")
     diff = commands.add_parser("compare", help="Compare JSON reports from two builds")
     diff.add_argument("left", type=Path)
     diff.add_argument("right", type=Path)
@@ -197,7 +254,7 @@ def main():
         command.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "inspect":
-        result = inspect(args.directory)
+        result = inspect(args.directory, require_debug=args.require_debug_symbols)
         passed = result["passed"]
         print(f"Inspected {len(result['packages'])} packages; {len(result['findings'])} findings")
     else:

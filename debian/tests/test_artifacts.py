@@ -75,6 +75,41 @@ class ArtifactChecksTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             artifacts.trailers((payload + footer) * 2)
 
+    def test_detached_debug_symbols(self):
+        if not shutil.which("objcopy") or not shutil.which("strip"):
+            self.skipTest("objcopy and strip are required")
+        self.compile("-g", "-fPIE", "-pie", "-Wl,--build-id,-z,relro,-z,now,-z,noexecstack")
+        binary = self.root / "binary"
+        full, _ = artifacts.inspect_elf(binary.read_bytes(), self.root / "scratch")
+        build_id = full["build_id"]
+        symbols = self.root / (build_id[2:] + ".debug")
+        debug_path = f"usr/lib/debug/.build-id/{build_id[:2]}/{symbols.name}"
+        subprocess.run(["objcopy", "--only-keep-debug", str(binary), str(symbols)], check=True)
+        subprocess.run(["strip", "--strip-unneeded", str(binary)], check=True)
+        subprocess.run(["objcopy", "--add-gnu-debuglink=" + str(symbols), str(binary)], check=True)
+        runtime, failures = artifacts.inspect_elf(binary.read_bytes(), self.root / "scratch")
+        debug, _ = artifacts.inspect_elf(symbols.read_bytes(), self.root / "scratch", debug=True)
+        self.assertEqual([], failures)
+        packages = {
+            "fixture:amd64": {"debug_package": False, "payload": {"usr/bin/fixture": {"elf": runtime}}},
+            "fixture-dbgsym:amd64": {"debug_package": True,
+                "payload": {debug_path: {"elf": debug}}},
+        }
+        result, failures = artifacts.check_debug_symbols(packages)
+        self.assertEqual({"checked": 1, "passed": True}, result)
+        self.assertEqual([], failures)
+        for key, value in (("crc32", 0), ("build_id", "wrong"), ("debug_info", False)):
+            broken = copy.deepcopy(packages)
+            broken["fixture-dbgsym:amd64"]["payload"][debug_path]["elf"][key] = value
+            self.assertFalse(artifacts.check_debug_symbols(broken)[0]["passed"])
+        misplaced = copy.deepcopy(packages)
+        files = misplaced["fixture-dbgsym:amd64"]["payload"]
+        files["wrong-directory/" + symbols.name] = files.pop(debug_path)
+        self.assertFalse(artifacts.check_debug_symbols(misplaced)[0]["passed"])
+        del packages["fixture-dbgsym:amd64"]
+        self.assertFalse(artifacts.check_debug_symbols(packages)[0]["passed"])
+        self.assertFalse(artifacts.check_debug_symbols({})[0]["passed"])
+
     def test_real_package_and_changed_payload(self):
         if not shutil.which("dpkg-deb"):
             self.skipTest("dpkg-deb is required")
@@ -107,7 +142,9 @@ class ArtifactChecksTest(unittest.TestCase):
         other["packages"]["qore-artifact-test:all"]["version"] = "2.0-1"
         with self.assertRaises(ValueError):
             artifacts.compare(left, other)
-        shutil.copyfile(deb, debs / "duplicate.deb")
+        # Ubuntu uses .ddeb for detached symbols, Debian uses -dbgsym .deb;
+        # both suffixes must be inspected and participate in duplicate checks.
+        shutil.copyfile(deb, debs / "duplicate.ddeb")
         with self.assertRaises(ValueError):
             artifacts.inspect(debs)
 
