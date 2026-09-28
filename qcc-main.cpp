@@ -69,6 +69,7 @@
 #include <llvm/Support/Error.h>
 
 static const char* QCC_VERSION = "1.0";
+static std::vector<std::pair<std::string, std::string>> file_prefix_maps;
 
 #ifndef QORE_QCC_SOURCE_INCLUDE_DIR
 #define QORE_QCC_SOURCE_INCLUDE_DIR ""
@@ -1270,6 +1271,11 @@ static void print_usage(const char* prog) {
            "                         Metadata compression policy: auto, none, zlib, zstd,\n"
            "                         sectioned\n"
            "                         (default: auto)\n");
+    printf("      --file-prefix-map=OLD=NEW\n"
+           "                         Map emitted source paths in a final executable or\n"
+           "                         whole module; last matching prefix wins. Input\n"
+           "                         files and depfiles keep physical paths. Not for\n"
+           "                         incremental .qo or object-link modes.\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
@@ -1390,6 +1396,7 @@ static struct option long_options[] = {
     {"aggregate-contract-stamp", required_argument, nullptr, 0x127},
     {"depfile-declaration-contract-stamps", no_argument, nullptr, 0x128},
     {"body-contract-stamp", required_argument, nullptr, 0x129},
+    {"file-prefix-map", required_argument, nullptr, 0x12a},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1404,6 +1411,16 @@ static int parse_options_cmdline(int argc, char** argv) {
     int opt;
     while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:age:rvhV", long_options, nullptr)) != -1) {
         switch (opt) {
+            case 0x12a: {  // --file-prefix-map
+                const std::string map(optarg);
+                const size_t separator = map.rfind('=');
+                if (separator == std::string::npos || !separator) {
+                    fprintf(stderr, "error: --file-prefix-map requires OLD=NEW with a nonempty OLD prefix\n");
+                    return 1;
+                }
+                file_prefix_maps.emplace_back(map.substr(0, separator), map.substr(separator + 1));
+                break;
+            }
             case 'o':
                 output_path = optarg;
                 break;
@@ -7773,6 +7790,22 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
     write_json_file_string_field(f, "aggregate_symbol", manifest.aggregate_symbol, 4, "");
     fputs("  },\n", f);
 
+    std::vector<std::string> manifest_prefix_maps;
+    for (size_t i = 0; i < file_prefix_maps.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("qcc source-prefix map manifest")) {
+            error = "operation cancelled during source-prefix map manifest generation";
+            fclose(f);
+            free(buf);
+            return false;
+        }
+        manifest_prefix_maps.push_back(file_prefix_maps[i].first + "=" + file_prefix_maps[i].second);
+    }
+    if (!json_file_string_array(f, "file_prefix_maps", manifest_prefix_maps, error)) {
+        fclose(f);
+        free(buf);
+        return false;
+    }
+
     fprintf(f, "  \"environment\": {\n");
     const char* qore_include_dir = getenv("QORE_INCLUDE_DIR");
     const char* qore_module_dir = getenv("QORE_MODULE_DIR");
@@ -9184,6 +9217,17 @@ int main(int argc, char** argv) {
 
     bool batch_compile_arguments = compile_only && !context_dir
         && (optind + 1 < argc);
+    if (!file_prefix_maps.empty()) {
+        // Incremental .qo workflows use physical source identities to preload and bind sibling
+        // declarations. Deployment path maps apply to one final executable or whole module only.
+        if (compile_only || context_dir || from_objects || archive_mode || link_qo
+                || script_aggregate_symbol || optind + 1 != argc) {
+            fprintf(stderr, "error: --file-prefix-map requires a single-source executable or whole-module "
+                "build; incremental objects and object linking retain physical source identities\n");
+            return 1;
+        }
+        QoreAOT::setFilePrefixMaps(file_prefix_maps);
+    }
     if (depfile_path && depfile_dir && !batch_compile_arguments) {
         fprintf(stderr,
             "error: --depfile and --depfile-dir are mutually exclusive "

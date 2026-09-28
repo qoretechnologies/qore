@@ -964,6 +964,18 @@ public:
         buffer.insert(buffer.end(), p, p + len);
     }
 
+    //! Intern an emitted source path, applying the current compiler's prefix maps.
+    /** @param path physical source path
+        @return string-pool offset of its mapped label
+    */
+    uint32_t addSourcePath(const char* path);
+
+    //! Write a source-path reference; ordinary string values must use writeStringRef().
+    /** @param path physical source path */
+    void writeSourcePath(const char* path) {
+        writeU32(addSourcePath(path));
+    }
+
     //! Write a string reference (adds to pool, writes offset)
     void writeStringRef(const char* str) {
         uint32_t offset = strings.add(str);

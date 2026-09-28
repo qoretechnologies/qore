@@ -531,6 +531,12 @@ val = "string";      # OK
     Documentation file labels exclude temporary source/build roots, keeping generated graphs stable
     when the checkout moves. Debian documentation packages omit Doxygen's intermediate graph caches
     while retaining the rendered images and links.
+    The \c qcc compiler also accepts \c --file-prefix-map=OLD=NEW for final executables and
+    whole modules. Native debug files, exception locations, module labels and symbol-index paths
+    use the mapped names; parsing and dependency collection keep physical paths, and user strings
+    remain unchanged. Mapped source files retain content hashes without embedding a build-machine
+    mtime shortcut. CMake forwards native file-prefix maps to whole-module compilation.
+    Incremental object and object-link modes retain physical source identities and reject this option.
 
     @par LoggerAppenderQueue Default Memory Limit
     @parblock

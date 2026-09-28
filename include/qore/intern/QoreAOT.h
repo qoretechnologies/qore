@@ -53,6 +53,12 @@
 
 class AbstractStatement;
 
+//! Map a path for final AOT output without changing the physical source used by the compiler.
+/** @param path physical source path, or nullptr for an absent location
+    @return mapped path, or an empty string for nullptr
+*/
+std::string qore_aot_map_source_path(const char* path);
+
 class AbstractQoreFunctionVariant;
 class CaseNodeRegex;
 class ExceptionSink;
@@ -765,6 +771,14 @@ DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:
+    //! Set source-path maps for final executables and whole-module compilation on this thread.
+    /** Parsing and dependency collection retain physical paths. Only emitted path fields are mapped;
+        source text and user string values are unchanged. Incremental fragments require physical source
+        identities and must be compiled without these maps. An empty list restores ordinary emission.
+        @param maps ordered OLD/NEW prefixes; the last matching prefix wins
+    */
+    static void setFilePrefixMaps(const std::vector<std::pair<std::string, std::string>>& maps);
+
     //! True if the last compile on this thread failed loading or resolving the objects it preloaded
     /** A compile with library paths resolves what it does not compile from `.qo` objects, and a failure
         there concerns the preload set the caller chose rather than the sources compiled: a parse of the

@@ -2501,6 +2501,15 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # the stamp because it deserializes and registers slot-map metadata from
     # qmods; stale qmods can fail at load time if that path changes.
     set(_qmod_opt_flags)
+    # Final module output uses the same source-prefix maps as native compilation.
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_qcc_build_type)
+    separate_arguments(_qore_qcc_cxx_flags NATIVE_COMMAND
+        "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${_qore_qcc_build_type}}")
+    foreach(_qore_qcc_flag IN LISTS _qore_qcc_cxx_flags)
+        if (_qore_qcc_flag MATCHES "^-ffile-prefix-map=(.+)$")
+            list(APPEND _qmod_opt_flags "--file-prefix-map=${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
     if (DEFINED QORE_AOT_MODULE_OPT_LEVEL)
         if (NOT "${QORE_AOT_MODULE_OPT_LEVEL}" MATCHES "^[0-3]$")
             message(FATAL_ERROR "QORE_AOT_MODULE_OPT_LEVEL must be 0, 1, 2, or 3")

@@ -26,6 +26,25 @@ Cross-compilation requires LLVM support for the selected target.
 Static linking requires a Qore build configured with
 \fBBUILD_STATIC_LIBQORE=ON\fP.
 .SH OPTIONS
+.SS "Reproducible Deployment Paths"
+.TP
+.B \-\-file\-prefix\-map=\fIOLD\fP=\fINEW\fP
+Replace the matching prefix of emitted source paths when building a final
+single-source executable or whole module. Repeat the option to define multiple
+mappings; the last matching mapping wins. The last equals sign separates the
+prefixes, and OLD must be nonempty.
+Native debug information, Qore exception locations, module labels, and symbol
+index paths use the mapped names. Physical input files and dependency files
+retain their original paths; source text and user string values are unchanged.
+Mapped source files omit the optional mtime shortcut and retain their content
+hash for source validation.
+.PP
+For example, \fBqcc -m --file-prefix-map=/build/qore=/usr/src/qore MyModule.qm\fP
+records the stable source directory in the compiled module. Module resources
+are still resolved beside the deployed module.
+.PP
+This option is for deployment artifacts. Incremental \fB.qo\fP compilation,
+archives and object linking retain physical identities and reject the option.
 .SS "Output Mode"
 .TP
 .BR \-o ", " \-\-output =\fIfile\fP

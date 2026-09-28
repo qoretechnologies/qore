@@ -5224,7 +5224,8 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
     }
 
     // Split file path into directory + filename
-    llvm::StringRef path(file_path);
+    const std::string mapped_path = aot_mode ? qore_aot_map_source_path(file_path) : file_path;
+    llvm::StringRef path(mapped_path);
     llvm::StringRef dir = "";
     llvm::StringRef filename = path;
 

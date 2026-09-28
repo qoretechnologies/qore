@@ -178,6 +178,10 @@ static thread_local std::string qore_aot_expr_serialization_error;
 
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
+uint32_t QoreAOTBinaryWriter::addSourcePath(const char* path) {
+    return strings.add(qore_aot_map_source_path(path).c_str());
+}
+
 // ---------------------------------------------------------------------------
 // AOT PC->loc trailer (lazy on-throw source-location maps). See QoreAOTBinary.h
 // for the on-disk layout.
@@ -7674,15 +7678,15 @@ static bool writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeU16(rec.flags);
     writer.writeU32(rec.metadata_slot);
     writer.writeStringRef(rec.qore_path.c_str());
-    writer.writeStringRef(rec.source_file.c_str());
+    writer.writeSourcePath(rec.source_file.c_str());
     writer.writeStringRef(rec.visibility.c_str());
     writer.writeStringRef(rec.signature_hash.c_str());
     writer.writeStringRef(rec.declaration_hash.c_str());
     writer.writeStringRef(rec.value_hash.c_str());
     writer.writeStringRef(rec.native_symbol.c_str());
     writer.writeStringRef(rec.abi_kind.c_str());
-    writer.writeStringRef(rec.consumer_source_file.c_str());
-    writer.writeStringRef(rec.provider_source_file.c_str());
+    writer.writeSourcePath(rec.consumer_source_file.c_str());
+    writer.writeSourcePath(rec.provider_source_file.c_str());
     writer.writeU32(rec.fast_entry_flags);
     writer.writeU32(rec.fast_entry_num_params);
     writer.writeU8(rec.fast_return_kind);
@@ -7838,7 +7842,7 @@ static bool writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
             }
             return false;
         }
-        writer.writeStringRef(rec.body_dependency_files[i].c_str());
+        writer.writeSourcePath(rec.body_dependency_files[i].c_str());
     }
     writer.writeStringRef(rec.body_contract_hash.c_str());
     if (rec.body_contract_dependencies.size()
@@ -7861,7 +7865,7 @@ static bool writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         }
         const auto& dependency = rec.body_contract_dependencies[i];
         writer.writeStringRef(dependency.qore_path.c_str());
-        writer.writeStringRef(dependency.provider_source_file.c_str());
+        writer.writeSourcePath(dependency.provider_source_file.c_str());
         writer.writeStringRef(dependency.body_contract_hash.c_str());
     }
     return true;
@@ -8770,7 +8774,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     context.emplace_back("feature_flags", aotHashHex(writer.feature_flags));
     context.emplace_back("max_opcode_id", std::to_string(QORE_IR_MAX_OPCODE));
     context.emplace_back("module_filter", module_name ? module_name : "");
-    context.emplace_back("compile_file", compile_file ? compile_file : "");
+    context.emplace_back("compile_file", qore_aot_map_source_path(compile_file));
     context.emplace_back("compile_file_count", std::to_string(compile_files ? compile_files->size() : 0));
     if (QoreProgram* pgm = root_ns->getProgram()) {
         const std::vector<qore_program_private::source_parse_define_t>& source_parse_defines =
@@ -9176,7 +9180,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             "aggregate_declaration_location_v1",
             qoreAOTSymbolKindName(rec.kind),
             rec.qore_path,
-            rec.source_file,
+            qore_aot_map_source_path(rec.source_file.c_str()),
             std::to_string(rec.declaration_start_line),
             std::to_string(rec.declaration_end_line),
             std::to_string(rec.declaration_entry_start_line),
@@ -14025,7 +14029,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& loc : func.aot_locs) {
             qore_aot_write_line(writer, loc.start_line);
             qore_aot_write_line(writer, loc.end_line);
-            writer.writeStringRef(loc.file.c_str());
+            writer.writeSourcePath(loc.file.c_str());
         }
         traceEntryOffset("after loc table");
 
@@ -14039,8 +14043,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             qore_aot_write_line(writer, loc.start_line);
             qore_aot_write_line(writer, loc.end_line);
             writer.writeI64(loc.offset);
-            writer.writeStringRef(loc.file.c_str());
-            writer.writeStringRef(loc.source.c_str());
+            writer.writeSourcePath(loc.file.c_str());
+            writer.writeSourcePath(loc.source.c_str());
         }
         traceEntryOffset("after stmt-loc table");
 
@@ -14674,7 +14678,7 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     if (inst->loc && inst->loc->start_line > 0) {
         qore_aot_write_line(writer, inst->loc->start_line);
         qore_aot_write_line(writer, inst->loc->end_line);
-        writer.writeStringRef(inst->loc->getFile() ? inst->loc->getFile() : "");
+        writer.writeSourcePath(inst->loc->getFile() ? inst->loc->getFile() : "");
     } else {
         qore_aot_write_line(writer, 0);  // start_line=0 signals "no location"
         qore_aot_write_line(writer, 0);
@@ -20438,7 +20442,7 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
         uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_PATH_PREPEND);
         writer.writeU32(static_cast<uint32_t>(prepended.size()));
         for (const std::string& p : prepended) {
-            writer.writeStringRef(p.c_str());
+            writer.writeSourcePath(p.c_str());
         }
         writer.endSection(sec_idx);
     }
@@ -20446,7 +20450,7 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
         uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_PATH_APPEND);
         writer.writeU32(static_cast<uint32_t>(appended.size()));
         for (const std::string& p : appended) {
-            writer.writeStringRef(p.c_str());
+            writer.writeSourcePath(p.c_str());
         }
         writer.endSection(sec_idx);
     }

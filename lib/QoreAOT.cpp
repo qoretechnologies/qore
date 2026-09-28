@@ -206,10 +206,27 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
-// AOT incremental-dependency sink (see qore_aot_deps.h).  Thread-local so the
-// batch worker pool can run independent single-file compiles concurrently; null
-// for every normal program, so the resolution-path hooks are a single pointer
-// test off the hot path.
+// Final-artifact emission settings belong to the compiling thread. Parsing and JIT execution
+// keep their original locations; LLVM backend workers consume already-mapped debug metadata.
+static thread_local std::vector<std::pair<std::string, std::string>> aot_file_prefix_maps;
+
+void QoreAOT::setFilePrefixMaps(const std::vector<std::pair<std::string, std::string>>& maps) {
+    aot_file_prefix_maps = maps;
+}
+
+std::string qore_aot_map_source_path(const char* path) {
+    if (!path) {
+        return {};
+    }
+    std::string value(path);
+    auto match = std::find_if(aot_file_prefix_maps.rbegin(), aot_file_prefix_maps.rend(),
+        [&value](const auto& map) { return value.compare(0, map.first.size(), map.first) == 0; });
+    return match == aot_file_prefix_maps.rend() ? value
+        : match->second + value.substr(match->first.size());
+}
+
+// AOT incremental-dependency sink (see qore_aot_deps.h). Thread-local so the batch worker pool
+// can run independent single-file compiles concurrently; null for every normal program.
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
 static thread_local QoreAOTSourceDependencyMap* aot_dep_map = nullptr;
 static thread_local QoreAOTBodyContractDependencyMap*
@@ -1940,7 +1957,10 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     serializeBuildInfo(writer, info);
 
     QoreAOTSourceStatFingerprint source_fingerprint;
-    if (getAOTSourceStatFingerprint(source_path, source_fingerprint)) {
+    // A mapped deployment label cannot identify the original source's stat data. Retain the content
+    // hash (and runtime hash-based validation) without persisting a build-machine mtime shortcut.
+    if (qore_aot_map_source_path(source_path) == (source_path ? source_path : "")
+            && getAOTSourceStatFingerprint(source_path, source_fingerprint)) {
         serializeAOTSourceStatFingerprint(writer, source_fingerprint);
     }
 }
@@ -21440,7 +21460,7 @@ static void buildAOTPcLocMaps(const std::string& path,
                 if (li != locs_by_line.end() && !li->second.empty()) {
                     if (!row_file.empty()) {
                         for (const auto* cand : li->second) {
-                            if (cand->file == row_file) {
+                            if (qore_aot_map_source_path(cand->file.c_str()) == row_file) {
                                 match = cand;
                                 break;
                             }
@@ -21462,7 +21482,7 @@ static void buildAOTPcLocMaps(const std::string& path,
                 AOTCompiledFuncWithSlots::AOTLocEntry extra;
                 extra.start_line = static_cast<int32_t>(row.Line);
                 extra.end_line = match ? match->end_line : static_cast<int32_t>(row.Line);
-                extra.file = match ? match->file : row_file;
+                extra.file = match ? qore_aot_map_source_path(match->file.c_str()) : row_file;
                 std::string key = extra.file + ":" + std::to_string(extra.start_line)
                     + ":" + std::to_string(extra.end_line);
                 auto& per_func = extra_index[it->second];
@@ -23006,7 +23026,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
 
     // Embed label as a global constant
     llvm::Constant* label_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(label), true);  // null-terminated
+        qore_aot_map_source_path(label), true);  // null-terminated
     auto* label_gv = new llvm::GlobalVariable(module,
         label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
         label_data, "qore_aot_label");
@@ -23441,7 +23461,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
         hdr.parse_options_lo = parse_options.getLo();
-        hdr.label_offset = writer.strings.add(label);
+        hdr.label_offset = writer.addSourcePath(label);
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -24859,7 +24879,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
 
     // Private label string for diagnostics.
     auto* label_data = llvm::ConstantDataArray::getString(ctx,
-        register_label ? register_label : file_basename_san.c_str(), true);
+        qore_aot_map_source_path(register_label ? register_label : file_basename_san.c_str()), true);
     auto* label_gv = new llvm::GlobalVariable(module, label_data->getType(),
         true, llvm::GlobalValue::PrivateLinkage, label_data,
         "qore_aot_script_label_" + file_basename_san);
@@ -25159,7 +25179,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
 
     // Embed label as a private global constant
     llvm::Constant* label_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(label), true);
+        qore_aot_map_source_path(label), true);
     auto* label_gv = new llvm::GlobalVariable(module,
         label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
         label_data, "qore_aot_mod_label");
@@ -25673,7 +25693,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // wouldn't inherit PO_ALLOW_BARE_REFS from the Util module's %modern.
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
-        hdr.label_offset = writer.strings.add(label);
+        hdr.label_offset = writer.addSourcePath(label);
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -26163,7 +26183,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // initial mod_po — see comment in generateModuleBinary().
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
-            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.label_offset = writer.addSourcePath(qm_path.c_str());
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -26824,7 +26844,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
-        hdr.label_offset = writer.strings.add(target_canon.c_str());
+        hdr.label_offset = writer.addSourcePath(target_canon.c_str());
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -29610,7 +29630,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
-        hdr.label_offset = writer.strings.add(target_canon.c_str());
+        hdr.label_offset = writer.addSourcePath(target_canon.c_str());
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -30190,7 +30210,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
-            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.label_offset = writer.addSourcePath(qm_path.c_str());
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -30664,7 +30684,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
-            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.label_offset = writer.addSourcePath(qm_path.c_str());
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
@@ -31153,7 +31173,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
-            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.label_offset = writer.addSourcePath(qm_path.c_str());
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
