@@ -544,9 +544,10 @@ val = "string";      # OK
     so allocator layout no longer changes these emitted instructions or metadata records.
     Binary default arguments use hexadecimal values in function signatures, allowing stable
     metadata and exact variant matching across compiler and runtime processes.
-    Final executables and modules omit the build-only pending-constant cache used by incremental
-    objects. Native initializers still compute runtime values, including module resource directories.
-    Incremental object preloads retain their cached values and type information.
+    Direct builds of executables and modules omit the build-only pending-constant cache used by
+    incremental objects. Native initializers still compute runtime values, including module resource
+    directories. Incremental objects retain their cached values and type information for declaration
+    preloads; linking existing objects preserves their metadata.
     Debugger statement-location inventories use source order, independent of registration order.
     Native local SSA promotion follows source-access order so generated PHI identities and
     debugger IR are independent of allocator addresses.

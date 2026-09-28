@@ -34,10 +34,17 @@ The current testing archive fingerprint is
 064EECD97DD60E822006EC8A2324C51F64E7B4EA; verify it against Launchpad before
 trusting a downloaded key. This is the archive key, not an uploader's key.
 APT provisioning has network access. Compilation, documentation and tests run
-without networking as an unprivileged user with HOME=/sbuild-nonexistent.
+without networking as an unprivileged user. The incoming HOME is
+/sbuild-nonexistent; debhelper gives build commands a private generated HOME.
 All Build-Depends must resolve; the helper rejects nocheck. Binary Lintian
 errors fail the run. Inspect warnings too. The provisioned image is retained
 and identified in build-image.txt for diagnosis.
+
+The package rules set TZ=UTC for compile-time schema dates and QCC_JOBS=1 so
+transient GNU make jobserver tokens cannot change LLVM codegen partitions.
+Independent modules still build in parallel. Vary the incoming timezone and
+parallelism to verify these settings reach the compiler; retain the effective
+environment as well as the caller's settings.
 
 The default options match the testing PPA: parallel=8 noautodbgsym. For debug
 package qualification set QORE_DEB_BUILD_OPTIONS=parallel=8. For nodoc builds
@@ -90,6 +97,10 @@ which contain temporary tag-file paths; rendered SVG/PNG graphs and links are
 retained. The documentation regression test generates real HTML and graphs in
 two different roots and compares the staged payload byte for byte. It requires
 Doxygen and Graphviz, so it is skipped when those tools are absent in nodoc builds.
+Generated Doxygen HTML, JavaScript, CSS and SVG are excluded from executable-ZIP
+probing during normalization; PNG and archive normalization remains enabled.
+The text exclusion assumes Doxygen output and needs review if another HTML
+generator is added. Full package comparisons still cover every text file.
 
 Installation, upgrades and removal
 ---------------------------------
@@ -119,6 +130,51 @@ There are currently no previously distributed standalone module packages to
 migrate. JSON, YAML and all other bundled modules remain in qore-stdlib.
 Source-built installations under /usr/local or /opt are not dpkg upgrades:
 test their chosen migration separately without deleting unmanaged files.
+
+For a source-installation migration, record checksums of the original runtime
+and modules, install the candidate in a disposable copy of the downstream image,
+and explicitly select /usr/bin/qore and the packaged library directory before
+the old prefix in PATH and LD_LIBRARY_PATH. Put the packaged module directories
+first, retaining external module directories only as fallbacks. Check the actual
+loaded libqore and get_module_hash() filenames: a successful command can otherwise
+be testing the old installation. Repeat the downstream baseline tests offline
+and verify the unmanaged installation's checksums afterward.
+
+Qorus resolves JNI JARs and launchers relative to its Qore interpreter unless
+explicit paths are supplied. When core Qore is packaged under /usr and the
+independent JNI module remains under /opt, configure Qorus with:
+
+  export QORE_JNI_JAR=/opt/share/qore/java/qore-jni.jar
+  export QORE_JNI_COMPILER_JAR=/opt/share/qore/java/qore-jni-compiler.jar
+  export QORE_QJAVAC=/opt/bin/qjavac
+  export QORE_QJAVA2JAR=/opt/bin/qjava2jar
+
+Record these external build inputs and verify the launchers use the selected
+packaged interpreter. Keep the JNI resources in its independent module package.
+
+Native ABI
+----------
+
+Compare the exact candidate runtime and development packages against each
+supported baseline. Include all detached debug packages: DWZ can place shared
+type information in a separate debug object. Use abidiff with --fail-no-debug-info,
+the two installed public-header directories (--hd1/--hd2), and their debug roots
+(--d1/--d2). Retain the commands, package checksums and complete reports.
+
+Review every reported difference. An abidiff exit status of 4 means ABI changes
+were found; the absence of its incompatible-change flag does not prove layout
+compatibility. A symbol inventory alone cannot detect changed public C++ object
+layouts. If using an unstripped build for analysis, verify its build ID matches
+the exact runtime package. Clearly distinguish a source-equivalent rebuild from
+an identical distributed binary.
+
+The September 27 development snapshot predates changes to the public HTTP
+connection-manager Options layout. The original requestStreaming overload is
+retained, but clients using that earlier layout still need recompilation.
+Before release, resolve that incompatibility by restoring the supported layout
+or changing the SONAME/package name and rebuilding affected downstream modules.
+Freeze and review the resulting ABI baseline; restoring a method symbol does
+not restore an older class layout.
 
 Independent modules
 -------------------

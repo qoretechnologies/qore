@@ -46,8 +46,8 @@ qore (3.0.0-1) unstable; urgency=medium
     qcc partition count for reproducibility under different jobserver loads.
   * Allocate native local SSA PHIs in source-access order, preserving stable
     debug IR when compiler allocation addresses change.
-  * Keep pending-constant parse caches in incremental objects only; final
-    modules and executables must not retain build directories or cached dates.
+  * Omit pending-constant parse caches from directly compiled final modules
+    and executables; preserve incremental object caches for declaration preloads.
   * Detect platform features before configuring conditional documentation.
   * Avoid executable-archive probes for generated Doxygen text while retaining
     image and archive normalization.
