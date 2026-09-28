@@ -544,6 +544,13 @@ val = "string";      # OK
     embedding checkout paths in the installed \c qcc executable. Recorded \c Qore::CFLAGS preserve
     reusable compiler options and their quoting, excluding build-machine file/debug/macro prefix maps.
 
+    @par C++ HTTP Streaming Entry Point
+    The original \c HttpClientConnectionManagerBase::requestStreaming() overload remains exported
+    alongside the overload that reports connection reuse. Adding the reuse output argument no longer
+    removes the original linker symbol. This does not restore the earlier prerelease layout of the
+    HTTP connection manager's public \c Options structure; code compiled against that older layout
+    must be rebuilt before using the current development library.
+
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
 \if QORE_LANG_FINAL

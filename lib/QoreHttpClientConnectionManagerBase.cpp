@@ -1400,6 +1400,15 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink) {
+    return requestStreaming(method, scheme, host, port, path, headers, body, body_len,
+        channel_out, xsink, event_sink, nullptr);
+}
+
+int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink,
         HttpClientEventSink* event_sink, bool* reused) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {

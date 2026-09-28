@@ -5,7 +5,9 @@
 
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -62,7 +64,12 @@ endif()
 
 
 class NativeLinkConfigTest(unittest.TestCase):
-    setUpClass = classmethod(aot.AotPrefixMapsTest.setUpClass.__func__)
+    @classmethod
+    def setUpClass(cls):
+        aot.AotPrefixMapsTest.setUpClass()
+        if sys.platform != "linux" or not shutil.which("readelf"):
+            raise unittest.SkipTest("Native ELF configuration tests require Linux and readelf")
+
     setUp = aot.AotPrefixMapsTest.setUp
     run_tool = aot.AotPrefixMapsTest.run_tool
 
@@ -154,6 +161,51 @@ class NativeLinkConfigTest(unittest.TestCase):
         self.assert_rpath(output, False)
         self.env["QORE_MODULE_DIR"] = str(output_dir)
         self.assertEqual("42\n", self.run_tool(aot.QORE, "-l", "ReproProbe", "-e", "printf(\"%d\\n\", answer());"))
+
+    def test_http_streaming_compatibility_overload(self):
+        source = self.root / "http-abi.cpp"
+        source.write_text(r'''#include <qore/Qore.h>
+#include <qore/HttpClientConnectionManager.h>
+#include <cstring>
+
+int main() {
+    qore_init(QL_MIT);
+    bool ok = true;
+    {
+        ExceptionSink xsink;
+        HttpClientConnectionManagerBase::Options options;
+        HttpClientConnectionManagerBase manager(options, &xsink);
+        ok = !xsink;
+        manager.closeAll(&xsink);
+        ok = ok && !xsink;
+        QoreChannel* channel = nullptr;
+        auto result = manager.requestStreaming("GET", "http", "127.0.0.1", 1, "/",
+            nullptr, nullptr, 0, channel, &xsink);
+        ok = ok && result == -1 && xsink && !channel;
+        if (xsink) {
+            ok = ok && !strcmp(xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
+                "HTTPCLIENT-SHUTDOWN");
+            xsink.clear();
+        }
+        bool reused = false;
+        result = manager.requestStreaming("GET", "http", "127.0.0.1", 1, "/",
+            nullptr, nullptr, 0, channel, &xsink, nullptr, &reused);
+        ok = ok && result == -1 && xsink && !channel && !reused;
+        if (xsink) {
+            ok = ok && !strcmp(xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
+                "HTTPCLIENT-SHUTDOWN");
+            xsink.clear();
+        }
+    }
+    qore_cleanup();
+    return ok ? 0 : 1;
+}
+''')
+        output = self.root / "http-abi"
+        # Build-generated headers precede public source headers as in qcc's SDK discovery.
+        self.run_tool("c++", "-std=c++20", f"-I{aot.QCC.parent}/include", f"-I{ROOT}/include",
+                      source, f"-L{aot.QCC.parent}", "-lqore", "-o", output)
+        self.run_tool(output)
 
 
 if __name__ == "__main__":

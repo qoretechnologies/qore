@@ -29,5 +29,7 @@ qore (3.0.0-1) unstable; urgency=medium
   * Map final AOT artifact paths without changing input files or runtime resources.
   * Omit AOT build RPATHs at link time and keep build-tree discovery paths and
     temporary prefix-map options out of installed compiler binaries.
+  * Restore the original HTTP streaming C++ entry point alongside the overload
+    that reports connection reuse.
 
  -- David Nichols <david@qore.org>  Fri, 06 Feb 2026 00:00:00 +0000

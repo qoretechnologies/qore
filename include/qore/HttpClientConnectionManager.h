@@ -512,15 +512,26 @@ public:
     */
     //! @param channel_out receives a ref'd QoreChannel* for reading
     //!     streaming response data.  Caller must deref when done.
-    //! @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
-    //!     before, so a request that fails because the peer closed the connection before responding can be
-    //!     repeated on a new connection
     //! @return stream ID on success, -1 on error
     DLLEXPORT int64_t requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
-        HttpClientEventSink* event_sink = nullptr, bool* reused = nullptr);
+        HttpClientEventSink* event_sink = nullptr);
+
+    //! Streaming request with connection reuse information
+    /** @overload
+        @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
+            before, so a request that fails because the peer closed the connection before responding can be
+            repeated on a new connection
+        @return stream ID on success, -1 on error
+        @note The overload without this argument retains its existing C++ linker symbol.
+    */
+    DLLEXPORT int64_t requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink, bool* reused);
 
     //! Returns true if the HTTP method is idempotent (RFC 9110 section 9.2.2), so a request with it can be repeated
     //! automatically when the connection fails before a response is received
