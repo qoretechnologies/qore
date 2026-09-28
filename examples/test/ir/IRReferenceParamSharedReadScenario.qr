@@ -1,0 +1,72 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Fixture for IRReferenceParamSharedRead.qtest
+#
+# A thread waits in a loop for a flag that it received through a reference parameter while another
+# thread assigns the variable, directly or through a reference parameter of its own.  The waiter reads
+# the flag once before the other thread assigns it, so a value that the code read once and kept would
+# never change; each wait is bounded, and prints whether the assignment was seen.  The functions are
+# called several times, so the tiers that compile a function after a number of calls run the compiled
+# code too.
+
+const Calls = 4;
+# waits of 10 ms each
+const MaxWaits = 500;
+
+# The waiters call nothing but the builtin usleep() while waiting, so nothing prompts compiled code to read the
+# flag again if it keeps a copy; the flag is tested in the loop condition, as in a loop that runs until it is
+# told to stop.
+
+bool sub waitTyped(reference<bool> flag) {
+    int n = 0;
+    while (!flag && n < MaxWaits) {
+        usleep(10ms);
+        ++n;
+    }
+    return n < MaxWaits;
+}
+
+bool sub waitUntyped(reference flag) {
+    int n = 0;
+    while (!flag && n < MaxWaits) {
+        usleep(10ms);
+        ++n;
+    }
+    return n < MaxWaits;
+}
+
+sub setThroughReference(reference<bool> flag) {
+    flag = True;
+}
+
+bool sub run(bool typed, bool through_reference) {
+    bool flag = False;
+    bool seen;
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        seen = typed ? waitTyped(\flag) : waitUntyped(\flag);
+    }();
+    # the flag is assigned while the waiter is waiting, so a copy of the flag kept by the waiter would still
+    # be False; the delay cannot make a correct waiter fail, it only decides whether the waiter reads the flag
+    # before or after the assignment
+    usleep(100ms);
+    if (through_reference) {
+        setThroughReference(\flag);
+    } else {
+        flag = True;
+    }
+    done.waitForZero();
+    return seen;
+}
+
+for (int i = 0; i < Calls; ++i) {
+    foreach bool typed in ((True, False)) {
+        foreach bool through_reference in ((False, True)) {
+            printf("%s %s %d: %y\n", typed ? "typed" : "untyped", through_reference ? "reference" : "direct", i,
+                run(typed, through_reference));
+        }
+    }
+}

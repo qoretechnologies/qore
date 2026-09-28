@@ -9937,6 +9937,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
             const QoreTypeInfo* ti = lv->getTypeInfo();
+            // a reference parameter is read through the reference on every load (see LoadLocal), never from a
+            // native copy
+            if (QoreTypeInfo::isReference(ti)) {
+                continue;
+            }
             // Enum types report base type NT_INT, but an enum VALUE is a tagged
             // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int.
             // Unboxing an enum local to a native int strips the enum tag, so a
@@ -13506,6 +13511,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // If this local underwent COW, reload fresh from runtime stack instead of
             // using cached alloca, which may have the old pre-COW value.
             if (linst->local && cow_modified_locals.count(linst->local)) {
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                return true;
+            }
+
+            // A local declared as a reference (a "reference" or "reference<T>" parameter) is read through the
+            // reference on every load: the variable it refers to is shared, so another thread can assign it at any
+            // time, and a value cached in an alloca when the function is entered would never see the new value (a
+            // loop waiting for a flag passed by reference then never ends).  Assignments already go through the
+            // runtime helpers, which assign the referenced variable.
+            if (linst->local && QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",

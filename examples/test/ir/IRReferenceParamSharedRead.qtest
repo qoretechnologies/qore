@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class IRReferenceParamSharedReadTest
+
+#! Regression coverage for reading a reference parameter that another thread assigns
+/** LLVM code read a local declared as a reference (a "reference" or "reference<T>" parameter) once when
+    the function was entered and kept the value in an alloca, so a loop waiting for a flag passed by
+    reference never saw another thread assign it and never ended.  The FtpServer test fixture hung this
+    way in JIT and tiered CI jobs: its data connection thread waits for a flag passed by reference.
+
+    The fixture waits for such flags in every tier and AOT and prints whether each assignment was seen.
+*/
+class IRReferenceParamSharedReadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+
+        #! forces promotion on the first call so ir/tiered also run the native code
+        const Promote = "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+
+        #! exec mode -> extra environment
+        const Tiers = (
+            ("ast", ""),
+            ("ir", ""),
+            ("ir", Promote),
+            ("jit", ""),
+            ("jit", Promote),
+            ("tiered", ""),
+            ("tiered", Promote),
+        );
+    }
+
+    constructor() : QUnit::Test("IRReferenceParamSharedReadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture = get_script_dir() + "/IRReferenceParamSharedReadScenario.qr";
+
+        foreach list<string> tier in (Tiers) {
+            string mode = tier[0];
+            string env = tier[1];
+            addTestCase("reference parameter assigned by another thread: " + mode + (env ? " (promoted)" : ""),
+                sub () {
+                    assertEq(expected(), run(mode, env), sprintf("exec-mode=%s %s output", mode, env));
+                });
+        }
+        addTestCase("reference parameter assigned by another thread: AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private static string expected() {
+        string rv;
+        for (int i = 0; i < 4; ++i) {
+            foreach string typed in (("typed", "untyped")) {
+                foreach string how in (("direct", "reference")) {
+                    rv += sprintf("%s %s %d: True\n", typed, how, i);
+                }
+            }
+        }
+        return rv;
+    }
+
+    private string run(string mode, string env) {
+        # synchronous compilation makes promotion deterministic instead of racing the compiler
+        return backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-reference-param-shared-read-");
+        string exe = tmp.path + "/shared-read";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(qcc_bin), shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(exe))), "AOT output");
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
