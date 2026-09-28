@@ -95,6 +95,10 @@ minimal installation without Recommends before installing test dependencies.
 It runs all four autopkgtests, then uses dpkg to coinstall the exact supplied
 artifacts with dependencies checked and version downgrades refused. This also
 handles rebuilt artifacts whose version already exists in the testing archive.
+Debug packages (.ddeb and -dbgsym.deb) are included in coinstallation, file
+verification and removal. After an upgrade, it purges both the previous and
+current package sets and checks their dpkg state, so a change of build profile
+or package split cannot leave baseline packages in the minimal-install test.
 It verifies files with dpkg -V, purges, and reinstalls the runtime. The autopkgtest null
 backend is confined to the disposable container; never run it on the host.
 

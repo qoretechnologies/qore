@@ -62,9 +62,10 @@ dpkg --print-architecture > /results/architecture
 shopt -s nullglob
 debs=(/packages/*.deb)
 [[ ${#debs[@]} -gt 0 ]]
+artifacts=("${debs[@]}" /packages/*.ddeb)
 names=()
 version=
-for deb in "${debs[@]}"; do
+for deb in "${artifacts[@]}"; do
     package=$(dpkg-deb -f "$deb" Package)
     candidate=$(dpkg-deb -f "$deb" Version)
     [[ -z "$version" || "$candidate" = "$version" ]]
@@ -80,19 +81,50 @@ run_runtime() {
     mkdir -p "/results/$1"
     AUTOPKGTEST_TMP="/results/$1" /test-source/debian/tests/runtime > "/results/$1.log" 2>&1
 }
+assert_purged() {
+    local package state status
+    for package in "$@"; do
+        if state=$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null); then
+            :
+        else
+            status=$?
+            # A package absent from the database is expected after purge.
+            # Fatal query failures must not be mistaken for successful removal.
+            [[ "$status" = 1 ]] || {
+                echo "Cannot check purged package: $package (dpkg-query exit $status)" >&2
+                return "$status"
+            }
+            state=not-installed
+        fi
+        [[ "$state" = not-installed ]] || {
+            echo "Package remains after purge: $package ($state)" >&2
+            return 1
+        }
+    done
+}
 if [[ -d /previous ]]; then
     old_debs=(/previous/*.deb)
     [[ ${#old_debs[@]} -gt 0 ]]
-    for deb in "${old_debs[@]}"; do
+    old_debug=(/previous/*.ddeb)
+    old_names=()
+    for deb in "${old_debs[@]}" "${old_debug[@]}"; do
         dpkg --compare-versions "$(dpkg-deb -f "$deb" Version)" lt "$version"
+        old_names+=("$(dpkg-deb -f "$deb" Package)")
     done
     apt-get install -y --no-install-recommends "${old_debs[@]}"
+    if [[ ${#old_debug[@]} -gt 0 ]]; then
+        dpkg --install "${old_debug[@]}"
+    fi
     dpkg-query -W > /results/previous-inventory.txt
     qore -l json -l yaml -e 'if (parse_json("{\"answer\":42}").answer != 42 || parse_yaml("answer: 42\n").answer != 42) { exit(1); }'
     apt-get install -y --no-install-recommends "${debs[@]}"
+    dpkg --refuse-downgrade --install "${artifacts[@]}"
     run_runtime upgraded-runtime
     printf '%s\n' PASS > /results/upgrade-result
-    apt-get purge -y "${names[@]}"
+    # Profiles/package splits can change: remove the baseline's packages too,
+    # otherwise e.g. qore-doc survives a full-to-nodoc upgrade qualification.
+    apt-get purge -y "${names[@]}" "${old_names[@]}"
+    assert_purged "${names[@]}" "${old_names[@]}"
 else
     printf '%s\n' 'NOT RUN: no previous package artifacts supplied' > /results/upgrade-result
 fi
@@ -113,7 +145,7 @@ autopkgtest /test-source "${debs[@]}" --output-dir=/results/autopkgtest -- null
 # the final coinstallation: APT can classify a different build of the same
 # version as a downgrade when that version also exists in the configured PPA.
 # dpkg still checks dependencies, and real version downgrades remain forbidden.
-dpkg --refuse-downgrade --install "${debs[@]}"
+dpkg --refuse-downgrade --install "${artifacts[@]}"
 for package in "${names[@]}"; do
     test "$(dpkg-query -W -f='${Version}' "$package")" = "$version"
 done
@@ -121,6 +153,7 @@ dpkg-query -W > /results/coinstalled-inventory.txt
 dpkg -V "${names[@]}" > /results/installed-file-verification.txt
 test ! -s /results/installed-file-verification.txt
 apt-get purge -y "${names[@]}"
+assert_purged "${names[@]}"
 test ! -e /usr/bin/qore
 test ! -e /usr/bin/qcc
 test ! -e /usr/bin/qdbg-server
