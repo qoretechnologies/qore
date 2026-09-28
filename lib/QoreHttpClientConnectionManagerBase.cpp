@@ -1290,7 +1290,9 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // and report this connection's stored error as that request's failure.
         // A connection that is merely at its stream limit, or that rejected the
         // request for any other reason, is still healthy and stays pooled.
-        if (conn->isClosed()) {
+        // The protocol poll operation publishes its closed error before its callback updates
+        // the pooled connection state. A submit in that window must evict and retry too.
+        if (conn->isClosed() || isConnectionClosedError(*xsink)) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();

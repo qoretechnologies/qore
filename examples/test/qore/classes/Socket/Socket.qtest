@@ -3442,7 +3442,10 @@ class SocketTest inherits QUnit::Test {
         assertEq("0.0.0.0", info.address);
 
         Socket sender();
-        sender.bindINET("127.0.0.1", 0, True, AF_INET, SOCK_DGRAM);
+        # Address reuse could assign the wildcard receiver's port to this more specific bind,
+        # in which case the sender receives its own datagram instead of the receiver.
+        sender.bindINET("127.0.0.1", 0, False, AF_INET, SOCK_DGRAM);
+        assertNeq(info.port, sender.getSocketInfo().port, "the UDP endpoints have distinct ports");
         on_exit sender.close();
         drivePollOperation(sender.startPollSendTo("127.0.0.1", info.port, binary("ping")));
         hash<auto> dgram = drivePollOperation(udp.startPollRecvFrom());

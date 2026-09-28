@@ -162,6 +162,94 @@ class NativeLinkConfigTest(unittest.TestCase):
         self.env["QORE_MODULE_DIR"] = str(output_dir)
         self.assertEqual("42\n", self.run_tool(aot.QORE, "-l", "ReproProbe", "-e", "printf(\"%d\\n\", answer());"))
 
+    def test_http_retry_before_connection_close_callback(self):
+        source = self.root / "http-close-race.cpp"
+        source.write_text(r'''#include <qore/Qore.h>
+#include <qore/HttpClientConnection.h>
+#include <qore/HttpClientConnectionManager.h>
+#include <cstring>
+
+class ClosingConnection : public HttpClientConnectionBase {
+public:
+    explicit ClosingConnection(const char* error, bool reused) : error(error) {
+        if (reused) {
+            setServedRequest();
+        }
+    }
+    QoreHashNode* submitRequest(const char*, const char*, const QoreHashNode*, const void*, size_t,
+            ExceptionSink* xsink, HttpClientEventSink*) override {
+        // The protocol poll operation can report closure before its callback updates the pooled connection.
+        xsink->raiseException(error, "protocol closed before connection-state callback");
+        return nullptr;
+    }
+private:
+    const char* error;
+};
+
+class RetryManager : public HttpClientConnectionManagerBase {
+public:
+    RetryManager(ExceptionSink* xsink, const char* error, bool reused)
+        : HttpClientConnectionManagerBase(Options(), xsink), connection(new ClosingConnection(error, reused)) {
+    }
+    ~RetryManager() override {
+        ExceptionSink xsink;
+        connection->deref(&xsink);
+    }
+    HttpClientConnectionBase* acquireConnection(const char*, const char*, int, ExceptionSink*) override {
+        ++acquired;
+        return connection;
+    }
+    void releaseConnection(HttpClientConnectionBase*) override {
+        ++released;
+    }
+    void closeAndEvict(HttpClientConnectionBase*, ExceptionSink*) override {
+        ++evicted;
+    }
+    HttpClientConnectionBase* createConnection(const std::string&, const char*, int, bool,
+            ExceptionSink* xsink, bool) override {
+        xsink->raiseException("TEST-ERROR", "unexpected connection creation");
+        return nullptr;
+    }
+    int acquired = 0;
+    int released = 0;
+    int evicted = 0;
+private:
+    ClosingConnection* connection;
+};
+
+int main() {
+    qore_init(QL_MIT);
+    bool ok = true;
+    for (const char* error : {"HTTP1-CONNECTION-CLOSED", "HTTP2-CONNECTION-CLOSED", "SOCKET-CLOSED",
+            "HTTP1-CAPACITY-ERROR"}) {
+        for (const char* method : {"GET", "HEAD", "POST"}) {
+            for (bool reused : {false, true}) {
+                ExceptionSink xsink;
+                RetryManager manager(&xsink, error, reused);
+                bool closed = strcmp(error, "HTTP1-CAPACITY-ERROR");
+                int expected = closed && reused && strcmp(method, "POST") ? 2 : 1;
+                ReferenceHolder<QoreHashNode> result(manager.request(method, "http", "127.0.0.1", 1, "/",
+                    nullptr, nullptr, 0, 100, &xsink), &xsink);
+                bool passed = !result && xsink && manager.acquired == expected && manager.released == expected
+                    && manager.evicted == (closed ? expected : 0);
+                if (!passed) {
+                    fprintf(stderr, "%s %s reused=%d: acquire=%d release=%d evict=%d expected=%d\n",
+                        error, method, reused, manager.acquired, manager.released, manager.evicted, expected);
+                }
+                ok = ok && passed;
+                xsink.clear();
+            }
+        }
+    }
+    qore_cleanup();
+    return ok ? 0 : 1;
+}
+''')
+        output = self.root / "http-close-race"
+        self.run_tool("c++", "-std=c++20", f"-I{aot.QCC.parent}/include", f"-I{ROOT}/include",
+                      source, f"-L{aot.QCC.parent}", "-lqore", "-o", output)
+        self.run_tool(output)
+
     def test_http_streaming_compatibility_overload(self):
         source = self.root / "http-abi.cpp"
         source.write_text(r'''#include <qore/Qore.h>

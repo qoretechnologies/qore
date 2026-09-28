@@ -37,6 +37,8 @@ qore (3.0.0-1) unstable; urgency=medium
     that reports connection reuse.
   * Correct date components when local time crosses the epoch in a negative
     zone.
+  * Retry stale HTTP connections when protocol closure precedes the pooled
+    state update, and prevent UDP test endpoint port collisions.
   * Detect platform features before configuring conditional documentation.
   * Avoid executable-archive probes for generated Doxygen text while retaining
     image and archive normalization.

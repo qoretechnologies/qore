@@ -547,6 +547,10 @@ val = "string";      # OK
     reusable compiler options and their quoting, excluding build-machine file/debug/macro prefix maps.
 
     @par C++ HTTP Streaming Entry Point
+    Synchronous idempotent HTTP requests also retry a reused connection when the protocol reports
+    closure before its connection-state callback runs. This closes a race that could expose an
+    intermittent \c HTTP1-CONNECTION-CLOSED error instead of replacing the stale connection.
+
     The original \c HttpClientConnectionManagerBase::requestStreaming() overload remains exported
     alongside the overload that reports connection reuse. Adding the reuse output argument no longer
     removes the original linker symbol. This does not restore the earlier prerelease layout of the
