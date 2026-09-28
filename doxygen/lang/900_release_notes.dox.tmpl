@@ -1723,6 +1723,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     Fixed offsets of minus one second also survive timezone and date serialization; timezone initialization
     no longer reserves that valid offset as an unset marker.
 
+    Absolute date hours, minutes and seconds remain nonnegative when UTC and local time fall on opposite
+    sides of the Unix epoch. For example, <tt>1969-12-31T20:15:25-10:00</tt> now returns 20, 15 and 25
+    from its component methods instead of negative values.
+
     @ref Qore::TimeZone::date(string) "TimeZone::date(string)" now propagates \c INVALID-DATE
     errors from the date parser instead of silently returning a fallback or normalized date for invalid input.
     Strings without an explicit zone still use the object's time zone, including its daylight saving rules.

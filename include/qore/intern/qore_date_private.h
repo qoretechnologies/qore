@@ -711,39 +711,23 @@ public:
     }
 
     DLLLOCAL int getHour() const {
-        if (epoch >= 0)
-            return (int)(((epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch)) % SECS_PER_DAY) / SECS_PER_HOUR);
-
-        qore_time_info info;
-        const char* zname;
-        bool isdst;
-        int offset = AbstractQoreZoneInfo::getUTCOffset(zone, epoch, isdst, zname);
-        info.set(epoch, us, offset, isdst, zname, zone);
-        return info.hour;
+        return getSecondsWithinDay() / SECS_PER_HOUR;
     }
 
     DLLLOCAL int getMinute() const {
-        if (epoch >= 0)
-            return (int)(((epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch)) % SECS_PER_HOUR) / SECS_PER_MINUTE);
-
-        qore_time_info info;
-        const char* zname;
-        bool isdst;
-        int offset = AbstractQoreZoneInfo::getUTCOffset(zone, epoch, isdst, zname);
-        info.set(epoch, us, offset, isdst, zname, zone);
-        return info.minute;
+        return (getSecondsWithinDay() % SECS_PER_HOUR) / SECS_PER_MINUTE;
     }
 
     DLLLOCAL int getSecond() const {
-        if (epoch >= 0)
-            return ((epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch)) % SECS_PER_MINUTE);
+        return getSecondsWithinDay() % SECS_PER_MINUTE;
+    }
 
-        qore_time_info info;
-        const char* zname;
-        bool isdst;
-        int offset = AbstractQoreZoneInfo::getUTCOffset(zone, epoch, isdst, zname);
-        info.set(epoch, us, offset, isdst, zname, zone);
-        return info.second;
+    DLLLOCAL int getSecondsWithinDay() const {
+        // Reduce before adding the offset to avoid overflowing at either epoch limit.
+        // UTC and local time can have opposite signs around 1970-01-01.
+        int64 local_seconds = epoch % SECS_PER_DAY + AbstractQoreZoneInfo::getUTCOffset(zone, epoch);
+        int seconds = static_cast<int>(local_seconds % SECS_PER_DAY);
+        return seconds < 0 ? seconds + SECS_PER_DAY : seconds;
     }
 
     DLLLOCAL int getMillisecond() const {
