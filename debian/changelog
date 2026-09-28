@@ -21,5 +21,6 @@ qore (3.0.0-1) unstable; urgency=medium
   * Verify detached debug files against runtime build IDs and debuglink CRCs.
   * Keep temporary build paths out of the installed CMake SDK configuration.
   * Qualify exact rebuilt artifacts when the same version exists in the PPA.
+  * Version the pending changelog entry when preparing prerelease snapshots.
 
  -- David Nichols <david@qore.org>  Fri, 06 Feb 2026 00:00:00 +0000

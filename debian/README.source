@@ -72,8 +72,11 @@ use a version below the final release and above the last accepted upload:
 
 This archives the selected commit, not uncommitted working-tree changes. It
 uses the commit date for archive/changelog timestamps, records source checksums
-and provenance, and prepares an unsigned source upload. Use the distribution's
-/usr/bin/python3 with tarfile's data extraction filter (Python 3.11.8 or newer),
+and provenance, and prepares an unsigned source upload. It versions the pending
+top changelog entry, retaining its changes and the older release history; the
+future final-release placeholder must not become an older snapshot entry.
+Use the distribution's /usr/bin/python3 with tarfile's data extraction filter
+(Python 3.11.8 or newer),
 Git, xz and dpkg-dev. The numeric snapshot serial must increase for each upload;
 never put a Git hash in the serial or reuse an accepted version. The helper
 rejects release versions, mismatched upstream versions and downgrades.

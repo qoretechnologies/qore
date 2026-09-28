@@ -27,6 +27,22 @@ def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
 
 
+def snapshot_changelog(text, version, suite, commit, date, maintainer):
+    """Version the pending entry without retaining a future release as history."""
+    header = re.match(r"qore \([^)]+\) [^;\n]+;([^\n]+)\n", text)
+    signature = re.search(r"\n -- [^\n]+\n", text)
+    if not header or not signature or signature.start() < header.end():
+        raise ValueError("Expected a complete pending Qore changelog entry")
+    history = text[signature.end():]
+    for previous in re.findall(r"^qore \(([^)]+)\) ", history, re.MULTILINE):
+        if subprocess.run(["dpkg", "--compare-versions", previous, "lt", version]).returncode:
+            raise ValueError(f"Snapshot {version} must follow historical version {previous}")
+    body = text[header.end():signature.start()].strip("\n")
+    return (f"qore ({version}) {suite};{header[1]}\n\n"
+            f"  * Testing snapshot from commit {commit}.\n" + body + "\n\n"
+            f" -- {maintainer}  {date}\n" + history)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ref", default="HEAD", help="Committed source revision (default: HEAD)")
@@ -81,9 +97,8 @@ def main():
         tar.extractall(source, filter="data")
     date = format_datetime(datetime.fromtimestamp(timestamp, timezone.utc))
     changelog = source / "debian/changelog"
-    changelog.write_text(f"qore ({args.version}) {args.suite}; urgency=medium\n\n"
-        f"  * Testing snapshot from commit {commit}.\n\n"
-        f" -- {args.maintainer}  {date}\n\n" + changelog.read_text())
+    changelog.write_text(snapshot_changelog(changelog.read_text(), args.version, args.suite,
+                                            commit, date, args.maintainer))
     # Git archive uses the commit timestamp; also normalize the generated changelog.
     os.utime(changelog, (timestamp, timestamp))
     with (output / "source-build.log").open("w") as log:
