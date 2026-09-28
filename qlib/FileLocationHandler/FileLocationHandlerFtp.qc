@@ -254,12 +254,36 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @param location the location string without the scheme
         @param opts read options
 
-        @return an input stream of the file's contents, if it can be retrieved
+        @return an input stream of the file's contents, which are delivered as they are received
 
-        @note This method can throw any exception related to making an FTP transfer
+        @note
+        - The file is transferred in a background thread; an error in the transfer is raised by the returned
+          stream, so an incomplete file is never taken for a complete one
+        - This method can throw any exception related to connecting to the FTP server
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
-        return new BinaryInputStream(source: getBinaryFileImpl(scheme, location, opts));
+        string file;
+        FtpClient f = getFtpClient(scheme, location, opts, \file);
+
+        StreamPipe pipe(sync_close: False);
+        # the file is transferred in the background and written to the pipe as it is received
+        background sub () {
+            PipeOutputStream os = pipe.getOutputStream();
+            try {
+                f.get(file, os);
+                os.close();
+            } catch (hash<ExceptionInfo> ex) {
+                # the reader gets the error instead of the end of the data
+                os.reportError(ex);
+            }
+            try {
+                f.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection is closed in any case
+            }
+        }();
+
+        return pipe.getInputStream();
     }
 
     #! Writes data to a file at the given location

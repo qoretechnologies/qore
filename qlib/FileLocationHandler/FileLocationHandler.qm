@@ -328,6 +328,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    - binary streams and stream readers of \c ftp(s):// locations deliver the file as it is received instead of
+      reading the whole file into memory first, and an error in an FTP or SFTP transfer is raised by the stream
+      instead of ending it as if the file were complete
     - the stream readers of HTTP locations decode the text in the encoding determined from the response, like text
       reads do (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"), with the \c encoding option as
       the assumed encoding; the option was used for every response

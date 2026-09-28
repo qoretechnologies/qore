@@ -232,6 +232,17 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         assertEq(random_content.toBinary(), runPoller(FileLocationHandler::getIoPollerForLocation(url)),
             "the polled bytes must equal what the blocking read returns");
 
+        # a large file is streamed as it is received, not read into memory first
+        binary large = get_random_bytes(3 * 1024 * 1024 + 7);
+        string large_url = "ftp://user:pass@127.0.0.1:" + port + "/large-" + file_name;
+        FileLocationHandler::writeFileToLocation(large_url, large);
+        assertEq(large, readAll(FileLocationHandler::getBinaryStreamFromLocation(large_url)), "streamed FTP file");
+        # an error in the transfer is raised by the stream, so a missing or incomplete file is not taken for a
+        # complete one
+        InputStream missing = FileLocationHandler::getBinaryStreamFromLocation("ftp://user:pass@127.0.0.1:" + port
+            + "/no-such-file-" + file_name);
+        assertThrows("FTP-GET-ERROR", \readAll(), missing);
+
         # the same file over ftps:// drives the poller through AUTH TLS, PBSZ 0 and PROT P, and reads the
         # data channel over TLS as well
         string ftps_url = "ftps://user:pass@127.0.0.1:" + port + "/" + file_name;
@@ -315,6 +326,15 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         return op.getOutput();
     }
 
+    #! Returns all of the data of a stream
+    private static binary readAll(InputStream stream) {
+        binary rv = binary();
+        while (*binary chunk = stream.read(65536)) {
+            rv += chunk;
+        }
+        return rv;
+    }
+
     private doTests(string url, *bool no_write_stream) {
         on_error printf("ERROR URL: %y\n", url);
 
@@ -329,9 +349,8 @@ public class FileLocationHandlerTest inherits QUnit::Test {
         StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(url);
         d0 = sr.readString();
         assertEq(random_content, d0);
-        InputStream stream = FileLocationHandler::getBinaryStreamFromLocation(url);
-        d0 = stream.read(d0.size() * 2);
-        assertEq(random_content.toBinary(), d0);
+        # a stream can deliver the data in several reads
+        assertEq(random_content.toBinary(), readAll(FileLocationHandler::getBinaryStreamFromLocation(url)));
 
         if (no_write_stream) {
             return;

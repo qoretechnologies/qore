@@ -123,22 +123,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an SFTP transfer
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        string file;
-        object sftp = getSftpClient(scheme, location, opts, \file);
-
-        StreamPipe pipe(sync_close: False);
-
-        # run the I/O operation in the background
-        background sub () {
-            try {
-                OutputStream os = pipe.getOutputStream();
-                sftp.get(file, os);
-                os.close();
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }();
-
-        return new StreamReader(pipe.getInputStream(), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
     }
 
     #! Retrieves a binary file from the given location
@@ -158,11 +143,13 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
 
         # run the I/O operation in the background
         background sub () {
+            PipeOutputStream os = pipe.getOutputStream();
             try {
-                OutputStream os = pipe.getOutputStream();
                 sftp.get(file, os);
                 os.close();
             } catch (hash<ExceptionInfo> ex) {
+                # the reader gets the error instead of the end of the data
+                os.reportError(ex);
             }
         }();
 
