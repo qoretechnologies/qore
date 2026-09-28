@@ -49,6 +49,7 @@
 #include <cerrno>
 #include <dirent.h>
 #include <dlfcn.h>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -71,20 +72,8 @@
 static const char* QCC_VERSION = "1.0";
 static std::vector<std::pair<std::string, std::string>> file_prefix_maps;
 
-#ifndef QORE_QCC_SOURCE_INCLUDE_DIR
-#define QORE_QCC_SOURCE_INCLUDE_DIR ""
-#endif
-
-#ifndef QORE_QCC_BUILD_INCLUDE_DIR
-#define QORE_QCC_BUILD_INCLUDE_DIR ""
-#endif
-
 #ifndef QORE_QCC_INSTALL_INCLUDE_DIR
 #define QORE_QCC_INSTALL_INCLUDE_DIR ""
-#endif
-
-#ifndef QORE_QCC_BUILD_LIBDIR
-#define QORE_QCC_BUILD_LIBDIR ""
 #endif
 
 #ifndef QORE_QCC_INSTALL_LIBDIR
@@ -254,7 +243,6 @@ static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
 
     const std::string loaded_libdir = get_loaded_libqore_dir();
     add_qore_lib_candidate(lib_dirs, loaded_libdir);
-    add_qore_lib_candidate(lib_dirs, QORE_QCC_BUILD_LIBDIR);
     add_qore_lib_candidate(lib_dirs, QORE_QCC_INSTALL_LIBDIR);
 
     std::vector<std::string> lib_based_include_dirs;
@@ -270,20 +258,23 @@ static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
         }
     }
 
-    const bool loaded_from_build_tree = !loaded_libdir.empty()
-        && loaded_libdir == QORE_QCC_BUILD_LIBDIR;
-    if (loaded_from_build_tree) {
-        add_qore_include_candidate(include_dirs, QORE_QCC_BUILD_INCLUDE_DIR);
-        add_qore_include_candidate(include_dirs, QORE_QCC_SOURCE_INCLUDE_DIR);
+    if (!loaded_libdir.empty()) {
+        // This two-line file is generated only for development builds and is
+        // never installed. Read it here in the standalone compiler, before any
+        // user program executes; installed SDKs use the derived paths below.
+        std::ifstream paths(join_path(loaded_libdir, "qcc-build-paths.conf"));
+        std::string version, source_include;
+        if (std::getline(paths, version) && version == "qcc-build-paths-v1"
+                && std::getline(paths, source_include) && !source_include.empty()) {
+            add_qore_include_candidate(include_dirs, join_path(loaded_libdir, "include"));
+            add_qore_include_candidate(include_dirs, source_include[0] == '/' ? source_include
+                : join_path(loaded_libdir, source_include.c_str()));
+        }
     }
     for (const auto& dir : lib_based_include_dirs) {
         add_qore_include_candidate(include_dirs, dir);
     }
     add_qore_include_candidate(include_dirs, QORE_QCC_INSTALL_INCLUDE_DIR);
-    if (!loaded_from_build_tree) {
-        add_qore_include_candidate(include_dirs, QORE_QCC_BUILD_INCLUDE_DIR);
-        add_qore_include_candidate(include_dirs, QORE_QCC_SOURCE_INCLUDE_DIR);
-    }
 }
 
 #ifndef QORE_QCC_SANITIZE_FLAGS
@@ -310,8 +301,10 @@ static void append_qcc_link_flags(std::string& cmd, const std::vector<std::strin
         cmd += " -L" + shell_quote(dir);
     }
     cmd += " -lqore";
-    for (const auto& dir : lib_dirs) {
-        cmd += " -Wl,-rpath," + shell_quote(dir);
+    if (QoreAOT::shouldEmitLinkRPath()) {
+        for (const auto& dir : lib_dirs) {
+            cmd += " -Xlinker -rpath -Xlinker " + shell_quote(dir);
+        }
     }
 }
 

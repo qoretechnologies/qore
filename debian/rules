@@ -89,11 +89,6 @@ override_dh_auto_install:
 			sed -i '1s|^#!/usr/bin/env qore$$|#!/usr/bin/qore|' "$$script"; \
 		fi; \
 	done
-	# qcc emits its own ELF RUNPATH independently of CMake's RPATH settings.
-	# Remove build-tree paths before stripping/debug-symbol extraction; chrpath
-	# edits the dynamic table in place, preserving Qore's appended metadata.
-	find debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore-modules -type f -name '*.qmod' \
-		-exec chrpath --delete {} +
 
 override_dh_installdocs:
 	dh_installdocs --remaining-packages -Nqore-doc

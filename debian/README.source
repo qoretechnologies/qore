@@ -108,7 +108,8 @@ Cross builds are rejected because the build executes qpp, qore, and qcc.
 
 The CMake build type is None so dpkg-buildflags controls optimization and
 hardening, including noopt. Installed CMake-built ELF objects omit RUNPATH;
-chrpath removes qcc's build-directory RUNPATH from AOT modules before stripping.
+qcc honors CMAKE_SKIP_INSTALL_RPATH and omits build-directory RUNPATHs while
+linking AOT modules, avoiding residual build paths in the ELF string table.
 The dh_strip wrapper preserves Qore's appended dependency, source-location and
 optional-module metadata while keeping normal stripping and dbgsym generation.
 Without the optional-module metadata, installing an external module could leave

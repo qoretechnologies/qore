@@ -537,6 +537,12 @@ val = "string";      # OK
     remain unchanged. Mapped source files retain content hashes without embedding a build-machine
     mtime shortcut. CMake forwards native file-prefix maps to whole-module compilation.
     Incremental object and object-link modes retain physical source identities and reject this option.
+    Native AOT links honor CMake's \c CMAKE_SKIP_RPATH and \c CMAKE_SKIP_INSTALL_RPATH policies;
+    package builds omit the build-directory RPATH at link time. Output and library paths containing
+    spaces, quotes or commas are passed as individual linker arguments.
+    Build-tree SDK header discovery uses a local configuration file beside \c libqore instead of
+    embedding checkout paths in the installed \c qcc executable. Recorded \c Qore::CFLAGS preserve
+    reusable compiler options and their quoting, excluding build-machine file/debug/macro prefix maps.
 
     @par LoggerAppenderQueue Default Memory Limit
     @parblock

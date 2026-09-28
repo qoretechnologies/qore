@@ -801,6 +801,12 @@ public:
     */
     static std::string getLinkTargetFlags();
 
+    //! Return the configured runtime-library search-path policy for native AOT links
+    /** @return true unless the CMake-generated link configuration disables RPATH
+        @note CMAKE_SKIP_RPATH and CMAKE_SKIP_INSTALL_RPATH disable it for package builds.
+    */
+    static bool shouldEmitLinkRPath();
+
     //! Compile a parsed program to a standalone executable
     /** The binary uses serialized metadata.
         @param pgm parsed QoreProgram (must have been parsed successfully)

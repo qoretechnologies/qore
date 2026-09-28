@@ -22846,6 +22846,7 @@ struct AOTLinkConfig {
     std::string static_libs;    //!< all transitive deps for static linking
     //! the sanitizer options libqore was built with (e.g. \c -fsanitize=thread), for executables
     std::string sanitize_flags;
+    bool emit_rpath = true;    //!< preserve developer linking unless CMake disables RPATH
     bool loaded = false;
 };
 
@@ -22920,12 +22921,27 @@ static AOTLinkConfig loadAOTLinkConfig() {
             config.static_libs = val;
         } else if (key == "sanitize_flags") {
             config.sanitize_flags = val;
+        } else if (key == "emit_rpath") {
+            config.emit_rpath = val != "0";
         }
     }
 
     config.loaded = true;
     printd(2, "AOT: loaded link config from '%s'\n", conf_path.c_str());
     return config;
+}
+
+bool QoreAOT::shouldEmitLinkRPath() {
+    return loadAOTLinkConfig().emit_rpath;
+}
+
+//! Quote one native linker argument, preserving cancellation as a compilation failure.
+static bool quoteAOTLinkArgument(const std::string& value, std::string& quoted, std::string& error) {
+    if (shellSingleQuote(value, quoted)) {
+        return true;
+    }
+    error = "AOT linking cancelled";
+    return false;
 }
 
 //! Link an object file into a standalone executable
@@ -22951,6 +22967,13 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
     // Determine library directory (auto-detect from loaded libqore.so)
     std::string libqore_dir = getLibqoreDir();
 
+    std::string compiler, output, object, libdir;
+    if (!quoteAOTLinkArgument(config.cxx, compiler, error)
+            || !quoteAOTLinkArgument(exe_path, output, error)
+            || !quoteAOTLinkArgument(obj_path, object, error)
+            || !quoteAOTLinkArgument(libqore_dir, libdir, error)) {
+        return false;
+    }
     std::string cmd;
     if (static_link) {
         // Check for static libqore
@@ -22965,8 +22988,11 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         }
 
         // Static link: use CXX compiler from config, link static lib + all transitive deps
-        cmd = config.cxx + " -o " + exe_path + " " + obj_path
-            + " " + static_lib;
+        std::string archive;
+        if (!quoteAOTLinkArgument(static_lib, archive, error)) {
+            return false;
+        }
+        cmd = compiler + " -o " + output + " " + object + " " + archive;
         if (!config.target_flags.empty()) {
             cmd += " " + config.target_flags;
         }
@@ -22980,9 +23006,10 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         }
     } else {
         // Dynamic link: use CXX compiler from config, link -lqore + system libs
-        cmd = config.cxx + " -o " + exe_path + " " + obj_path
-            + " -L" + libqore_dir + " -lqore"
-            + " -Wl,-rpath," + libqore_dir;
+        cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -lqore";
+        if (config.emit_rpath) {
+            cmd += " -Xlinker -rpath -Xlinker " + libdir;
+        }
         if (!config.target_flags.empty()) {
             cmd += " " + config.target_flags;
         }
@@ -25454,9 +25481,20 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     // Keep source-tree qlib symlinks pointing at a complete old or new
     // qmod; parallel qcc jobs may load dependencies while this link runs.
     std::string tmp_so_path = so_path + ".tmp." + std::to_string(getpid());
-    std::string cmd = config.cxx + " -shared -o " + tmp_so_path + " " + obj_path
-        + " -L" + libqore_dir + " -lqore"
-        + " -Wl,-rpath," + libqore_dir;
+    std::string compiler, output, libdir;
+    if (!quoteAOTLinkArgument(config.cxx, compiler, error)
+            || !quoteAOTLinkArgument(tmp_so_path, output, error)
+            || !quoteAOTLinkArgument(libqore_dir, libdir, error)) {
+        return false;
+    }
+    std::string object;
+    if (!quoteAOTLinkArgument(obj_path, object, error)) {
+        return false;
+    }
+    std::string cmd = compiler + " -shared -o " + output + " " + object + " -L" + libdir + " -lqore";
+    if (config.emit_rpath) {
+        cmd += " -Xlinker -rpath -Xlinker " + libdir;
+    }
     if (!config.target_flags.empty()) {
         cmd += " " + config.target_flags;
     }
@@ -25465,7 +25503,12 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
         return false;
     }
     if (!version_script.empty()) {
-        cmd += " -Wl,--version-script," + version_script;
+        std::string quoted_script;
+        if (!quoteAOTLinkArgument(version_script, quoted_script, error)) {
+            remove(version_script.c_str());
+            return false;
+        }
+        cmd += " -Xlinker --version-script -Xlinker " + quoted_script;
     }
     if (!config.dynamic_libs.empty()) {
         cmd += " " + config.dynamic_libs;
@@ -30400,12 +30443,29 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     // Keep source-tree qlib symlinks pointing at a complete old or new
     // qmod; parallel qcc jobs may load dependencies while this link runs.
     std::string tmp_so_path = so_path + ".tmp." + std::to_string(getpid());
-    std::string cmd = config.cxx + " -shared -o " + tmp_so_path;
-    for (const std::string& p : obj_paths) {
-        cmd += " " + p;
+    std::string compiler, output, libdir;
+    if (!quoteAOTLinkArgument(config.cxx, compiler, error)
+            || !quoteAOTLinkArgument(tmp_so_path, output, error)
+            || !quoteAOTLinkArgument(libqore_dir, libdir, error)) {
+        return false;
     }
-    cmd += " -L" + libqore_dir + " -lqore"
-        + " -Wl,-rpath," + libqore_dir;
+    std::string cmd = compiler + " -shared -o " + output;
+    size_t count = 0;
+    for (const std::string& p : obj_paths) {
+        if (!(count++ % 100) && qore_check_cancel(nullptr, "AOT native linking")) {
+            error = "AOT linking cancelled";
+            return false;
+        }
+        std::string object;
+        if (!quoteAOTLinkArgument(p, object, error)) {
+            return false;
+        }
+        cmd += " " + object;
+    }
+    cmd += " -L" + libdir + " -lqore";
+    if (config.emit_rpath) {
+        cmd += " -Xlinker -rpath -Xlinker " + libdir;
+    }
     if (!config.target_flags.empty()) {
         cmd += " " + config.target_flags;
     }
@@ -30414,7 +30474,12 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
         return false;
     }
     if (!version_script.empty()) {
-        cmd += " -Wl,--version-script," + version_script;
+        std::string quoted_script;
+        if (!quoteAOTLinkArgument(version_script, quoted_script, error)) {
+            remove(version_script.c_str());
+            return false;
+        }
+        cmd += " -Xlinker --version-script -Xlinker " + quoted_script;
     }
     if (!config.dynamic_libs.empty()) {
         cmd += " " + config.dynamic_libs;
