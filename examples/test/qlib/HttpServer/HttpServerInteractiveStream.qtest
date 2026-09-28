@@ -133,6 +133,10 @@ class SessionStreamRequest inherits HttpServer::AbstractStreamRequest {
                 case "select":
                     reply = {"status": "ok", "rows": m_rows};
                     break;
+                case "abort":
+                    # the handler fails mid-session, after the 200 response headers were sent, so the
+                    # server abandons a response that is in progress
+                    throw "SESSION-ABORTED", "the session was abandoned mid-stream";
                 default:
                     reply = {"status": "error", "err": sprintf("unknown cmd %y", op.cmd)};
                     break;
@@ -228,6 +232,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     constructor() : Test("HttpServerInteractiveStreamTest", "1.0") {
         addTestCase("interactive read-your-writes HTTP/2", \testInteractiveH2());
         addTestCase("interactive read-your-writes HTTP/3", \testInteractiveH3());
+        addTestCase("an abandoned session ends the client's read HTTP/2", \testAbandonedH2());
+        addTestCase("an abandoned session ends the client's read HTTP/3", \testAbandonedH3());
         set_return_value(main());
     }
 
@@ -347,6 +353,80 @@ l50Xb2GWQesIt9k5jF5IOw==
                 break;
             }
         }
+    }
+
+    #! After the handler abandons a session mid-stream, the client learns it instead of waiting for a reply
+    /** The 200 response headers are already sent, so the client is committed to reading reply frames on the
+        stream.  When the server abandons it, it must end the response direction too: HTTP/2 does that with
+        RST_STREAM, and HTTP/3 must reset the stream in both directions.  A STOP_SENDING alone only tells the
+        client to stop sending, so its pending read waits for a reply that never comes - a Qorus
+        RemoteSqlSession commit waited out its whole session timeout when the service it talked to stopped.
+
+        What this catches is a read that returns nothing because its bound expired.  How quickly the client
+        learns the stream is gone is not asserted, and either way of learning counts: the send or half-close
+        failing, or the read ending in an error or an end of stream.
+    */
+    private doAbandonedSession(string protocol) {
+        HttpClientIo::HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", mPort);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        stream.startStreaming("POST", "/session", {"Content-Type": "application/connect+yaml"}, True);
+
+        # the session is live, so the response headers have been sent
+        stream.sendData(frame_encode({"cmd": "insert", "row": {"id": 1}}));
+        assertEq("ok", readReply(stream).status, protocol + ": the session is live before it is abandoned");
+
+        # the handler fails on this op and abandons the stream
+        stream.sendData(frame_encode({"cmd": "abort"}));
+
+        # a client that has not noticed yet sends another op and half-closes, as a commit does
+        *string send_error;
+        try {
+            stream.sendData(frame_encode({"cmd": "select"}));
+            stream.writesDone();
+        } catch (hash<ExceptionInfo> ex) {
+            send_error = ex.err;
+        }
+
+        # the reply direction must end, in an error or an end of stream, rather than leave the read waiting
+        *string ended;
+        try {
+            while (!ended) {
+                auto data = stream.readData(20s);
+                if (!exists data) {
+                    # the bound expired: the read was left waiting for a reply that never came
+                    break;
+                }
+                if (data.typeCode() == NT_HASH) {
+                    if (data.error) {
+                        ended = sprintf("error: %y", data.error);
+                    } else if (data.end_stream) {
+                        ended = "end of stream";
+                    }
+                }
+                # reply data already in flight before the abort is not the end of the stream; keep reading
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            ended = ex.err;
+        }
+        assertTrue(ended.val(), sprintf("%s: an abandoned stream ends the client's read instead of leaving it "
+            "waiting (the send or half-close raised: %y)", protocol, send_error));
+    }
+
+    testAbandonedH2() {
+        if (!HaveYaml) {
+            testSkip("the yaml module is required for this test");
+        }
+        doAbandonedSession("h2");
+    }
+
+    testAbandonedH3() {
+        if (!HaveYaml) {
+            testSkip("the yaml module is required for this test");
+        }
+        doAbandonedSession("h3");
     }
 
     testInteractiveH2() {
