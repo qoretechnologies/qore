@@ -4064,6 +4064,13 @@ while (*binary chunk = input.read(65536)) {
         end of an index build
       - added @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()",
         which writes a published index, or one app of it, as YAML
+      - added @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()", which
+        makes a running process use an index that has been published again since the process read it, and reports
+        the apps that were added, removed, or changed, so that state derived from their metadata can be refreshed;
+        the index is replaced atomically for concurrent lookups, apps and actions added to the cache by the process
+        are kept, and an index that cannot be read leaves the process using the index it read before; added
+        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexSha256() "ProviderIndexUtil::getIndexSha256()", which
+        identifies the index a process uses
       - publishing an index never changes a file that the previous index references, so an interrupted or failed
         publication leaves the previous index readable
       - an index whose routing index or metadata cache is corrupt or incomplete is reported by

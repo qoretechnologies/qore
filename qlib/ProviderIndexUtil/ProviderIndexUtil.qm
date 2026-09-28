@@ -59,9 +59,43 @@ module ProviderIndexUtil {
     The %ProviderIndexUtil module providers APIs to index data providers, so that they can support
     on-demand initialization.
 
+    @section providerindexutil_reload Reloading the Published Index
+
+    A process reads the published index once, when it is first needed, and keeps using it.  After the index has been
+    published again, as when it has been regenerated after provider modules were updated, a running process uses the
+    new index after
+    @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()" is called; the apps
+    added, removed, or changed are returned, so that state derived from their metadata can be refreshed:
+
+    @code{.py}
+hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+if (!info.reloaded) {
+    # the process keeps using the index it read before
+    log(LoggerLevel::LevelError, "cannot reload the data provider index: %s", info.error);
+} else {
+    map refreshAppTools($1), info.added + info.changed;
+    map removeAppTools($1), info.removed;
+}
+    @endcode
+
+    @ref ProviderIndexUtil::ProviderIndexUtil::getIndexSha256() "ProviderIndexUtil::getIndexSha256()" identifies the
+    index a process uses by the digest that
+    @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()"
+    returns for a published index, so a process can check whether the index has been published again since it read
+    it.
+
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - added @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()", which
+      makes a running process use an index published since the process read it, and reports the apps that were
+      added, removed, or changed (see @ref providerindexutil_reload); the index is replaced atomically for concurrent
+      lookups, cache edits made with
+      @ref ProviderIndexUtil::ProviderIndexUtil::addAppToCache() "ProviderIndexUtil::addAppToCache()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::addActionToCache() "ProviderIndexUtil::addActionToCache()", and
+      @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()" are kept,
+      and an index that cannot be read leaves the process using the index it read before; added
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexSha256() "ProviderIndexUtil::getIndexSha256()"
     - the routing index and the metadata cache are the published index; the canonical index file
       (\c qore-data-index.yaml), a YAML copy of the complete index that can be hundreds of megabytes, is only
       written if requested with the new \c write_canonical_yaml argument of

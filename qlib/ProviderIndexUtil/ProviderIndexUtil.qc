@@ -267,6 +267,66 @@ hashdecl RawMetadataIndexResult {
     bool complete;
 }
 
+#! The result of reloading the published data provider index
+/** @see ProviderIndexUtil::reloadIndex()
+
+    @since ProviderIndexUtil 1.2
+*/
+public hashdecl ProviderIndexReloadInfo {
+    #! @ref True if the published index was read and is now used by the process
+    /** @ref False if it could not be read, in which case the process keeps using the index it used before, and the
+        error is in \c error
+    */
+    bool reloaded = False;
+
+    #! The digest of the routing index of the index now in use
+    /** This is the digest returned for the index by
+        @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()";
+        @ref nothing if no index is published, or if the index was read from its canonical index file
+    */
+    *string sha256;
+
+    #! The digest of the routing index of the index used before the reload, if any
+    *string previous_sha256;
+
+    #! The sorted names of the apps in the index read that were not in the previous index
+    list<string> added = ();
+
+    #! The sorted names of the apps in the previous index that are not in the index read
+    list<string> removed = ();
+
+    #! The sorted names of the apps in both indexes whose metadata or module dependencies are different
+    /** An app is also reported as changed if its metadata in the two indexes cannot be compared; see
+        @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()"
+    */
+    list<string> changed = ();
+
+    #! The error reading the published index, if it was not reloaded
+    /** The error is also reported by
+        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()"
+    */
+    *string error;
+}
+
+#! The in-memory state of a data provider index as read from its files
+hashdecl IndexStateInfo {
+    # the routing maps of the index; its metadata maps are empty
+    hash<DataProviderIndexInfo> index;
+    # serialized app and action metadata not yet materialized
+    hash<string, hash<auto>> raw_appinfomap = {};
+    hash<string, hash<string, hash<auto>>> raw_actioninfomap = {};
+    # set if the metadata is read from the metadata cache or the canonical index file when needed
+    bool deferred = False;
+    *string metadata_cache_sha256;
+    *int metadata_cache_version;
+    *hash<DataProviderMetadataCacheManifest> manifest;
+    bool manifest_checked = False;
+    # the digest of the routing index, if the index was read from it
+    *string sha256;
+    # the apps of an index read from its canonical index file
+    *hash<string, bool> canonical_apps;
+}
+
 #! The main utility class
 public class ProviderIndexUtil {
     public {}
@@ -344,6 +404,39 @@ public class ProviderIndexUtil {
 
         #! Index build mode flag; while set, the published index is never read
         static bool build_mode = parse_boolean(ENV{ProviderIndexBuildEnvVar});
+
+        #! The generation of the in-memory index state, incremented whenever the state is replaced
+        /** A lookup that materializes metadata and then reads it retries if the generation changed in between, so
+            it never combines the state of two indexes
+        */
+        static int index_generation = 0;
+
+        #! The digest of the routing index of the index in use, if it was read from its routing index
+        static *string index_sha256;
+
+        #! The apps of the index in use, if it was read from its canonical index file
+        static *hash<string, bool> canonical_apps;
+
+        #! Set while the index is reloaded; reloads are serialized
+        static bool reloading = False;
+
+        #! The thread reloading the index
+        static *int reload_tid;
+
+        #! Condition for threads waiting for a reload to finish
+        static Condition reload_cond();
+
+        #! The last error reading the index while it is reloaded; only set by the reloading thread
+        static *string reload_read_error;
+
+        #! App info added to the cache by the process, kept when the index is reloaded
+        static hash<string, hash<auto>> live_appinfomap;
+
+        #! Actions added to the cache by the process, as indexed actions, kept when the index is reloaded
+        static hash<string, hash<string, hash<auto>>> live_actioninfomap;
+
+        #! Apps removed from the cache by the process, whose indexed metadata stays hidden when the index is reloaded
+        static hash<string, bool> removed_apps;
     }
 
     #! Enters or leaves index build mode
@@ -378,24 +471,53 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         on_exit m.unlock();
         bool rv = build_mode;
         if (build != build_mode) {
-            # do not discard the state while another thread is reading the index into it
-            while (initializing || raw_metadata_loading || metadata_initializing || app_metadata_initializing
-                    || action_metadata_initializing) {
-                if (initializing_tid == gettid() || raw_metadata_loading_tid == gettid()
-                        || metadata_initializing_tid == gettid()) {
+            # a reload reads the published index, which build mode never does
+            while (reloading) {
+                if (reload_tid == gettid()) {
                     throw "PROVIDER-INDEX-ERROR", "cannot change the index build mode while the data provider "
-                        "index is being read in the same thread";
+                        "index is being reloaded in the same thread";
                 }
-                if (initializing) {
-                    init_cond.wait(m);
-                } else {
-                    metadata_init_cond.wait(m);
-                }
+                reload_cond.wait(m);
             }
+            waitForIndexReaders("change the index build mode");
             build_mode = build;
             resetIndexState();
         }
         return rv;
+    }
+
+    #! Waits until no thread is reading the index into the in-memory index state; must be called with the lock held
+    /** @param action what the caller is doing, for the exception
+
+        @throw PROVIDER-INDEX-ERROR the calling thread is reading the index
+    */
+    static private waitForIndexReaders(string action) {
+        # do not replace the state while another thread is reading the index into it
+        while (initializing || raw_metadata_loading || metadata_initializing || app_metadata_initializing
+                || action_metadata_initializing) {
+            if (initializing_tid == gettid() || raw_metadata_loading_tid == gettid()
+                    || metadata_initializing_tid == gettid() || hasThread(app_metadata_initializing)
+                    || hasThread(action_metadata_initializing)) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("cannot %s while the data provider index is being read in "
+                    "the same thread", action);
+            }
+            if (initializing) {
+                init_cond.wait(m);
+            } else {
+                metadata_init_cond.wait(m);
+            }
+        }
+    }
+
+    #! Returns @ref True if the current thread is one of the threads in the given map of names to thread IDs
+    static private bool hasThread(hash<string, int> tids) {
+        int tid = gettid();
+        foreach int t in (tids.iterator()) {
+            if (t == tid) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Returns @ref True if MessagePack support is available
@@ -430,6 +552,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     }
 
     #! Discards the in-memory index state; the next lookup initializes it again; must be called with the lock held
+    /** The cache edits made by the process are discarded too
+    */
     static private resetIndexState() {
         remove index;
         initialized = False;
@@ -446,6 +570,87 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         metadata_cache_manifest_checked = False;
         factory_info_checked = False;
         apps_loaded = False;
+        remove index_sha256;
+        remove canonical_apps;
+        live_appinfomap = {};
+        live_actioninfomap = {};
+        removed_apps = {};
+        ++index_generation;
+    }
+
+    #! Makes the given index state the in-memory index state; must be called with the lock held
+    /** The cache edits made by the process are applied to the new state, so an app, action, or removal from the
+        cache is not lost when the index is read or reloaded
+    */
+    static private installIndexState(hash<IndexStateInfo> state) {
+        index = state.index;
+        raw_appinfomap = state.raw_appinfomap;
+        raw_actioninfomap = state.raw_actioninfomap;
+        app_metadata_initialized = {};
+        action_metadata_initialized = {};
+        raw_metadata_deferred = state.deferred;
+        raw_metadata_app_loaded = {};
+        raw_metadata_apps_loaded = False;
+        metadata_cache_sha256 = state.metadata_cache_sha256;
+        metadata_cache_version = state.metadata_cache_version;
+        metadata_cache_manifest = state.manifest;
+        metadata_cache_manifest_checked = state.manifest_checked;
+        factory_info_checked = False;
+        apps_loaded = False;
+        index_sha256 = state.sha256;
+        canonical_apps = state.canonical_apps;
+        initialized = True;
+        ++index_generation;
+
+        # a removed app's indexed metadata stays hidden, even if it has been added again since
+        foreach string app in (keys removed_apps) {
+            remove raw_appinfomap{app};
+            remove raw_actioninfomap{app};
+            app_metadata_initialized{app} = True;
+            action_metadata_initialized{app} = True;
+            remove index.altmap{app};
+        }
+        foreach hash<auto> i in (live_appinfomap.pairIterator()) {
+            index.appinfomap{i.key} = i.value;
+            remove raw_appinfomap{i.key};
+            app_metadata_initialized{i.key} = True;
+        }
+        # the indexed actions of an app are merged with the actions added by the process when they are restored
+        foreach hash<auto> i in (live_actioninfomap.pairIterator()) {
+            foreach hash<auto> action in (i.value.iterator()) {
+                setCachedActionIntern(action);
+            }
+        }
+    }
+
+    #! Sets the given indexed action in the in-memory index; must be called with the lock held
+    static private setCachedActionIntern(hash<auto> action) {
+        index.actioninfomap{action.app}{action.action} = action;
+        index.top_actioninfomap{action.app + "/" + action.action} = action;
+        # an index that does not record the declarations is not completed by one action
+        if (exists index.altmap) {
+            if (declaresConnectionAlternative(action)) {
+                index.altmap{action.app}{action.action} = True;
+            } else if (index.altmap{action.app}) {
+                remove index.altmap{action.app}{action.action};
+                if (!index.altmap{action.app}) {
+                    remove index.altmap{action.app};
+                }
+            }
+        }
+    }
+
+    #! Merges the indexed actions of an app with the actions already in the cache; must be called with the lock held
+    /** @param app the app name
+        @param actions the app's indexed actions
+
+        Actions added by the process win over indexed actions with the same name
+    */
+    static private mergeIndexedActions(string app, *hash<auto> actions) {
+        index.actioninfomap{app} = (actions ?? {}) + (index.actioninfomap{app} ?? {});
+        foreach hash<auto> action in (index.actioninfomap{app}.pairIterator()) {
+            index.top_actioninfomap{app + "/" + action.key} = action.value;
+        }
     }
 
     #! Returns any error encountered while reading the published data provider index
@@ -471,10 +676,216 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         return index_read_error;
     }
 
+    #! Reloads the published data provider index
+    /** Reads the index currently published, as after it has been regenerated, and makes the process use it in place
+        of the index it read before; a process otherwise reads the published index once, when it is first needed.
+
+        The routing index and the metadata cache manifest of the published index are read and verified before the
+        process uses the index; the metadata of each app is read when it is first needed, as when the index is first
+        read.  If the index cannot be read, the process keeps using the index it used before, and the error is
+        returned and reported by @ref getIndexReadError().
+
+        The index is replaced atomically: the metadata of the index is never mixed with that of the index used
+        before, and lookups in other threads never fail because the index is reloaded; a lookup that started before
+        the index was replaced returns its result from the index used before, or from the reloaded index.
+
+        App info and actions added to the cache with @ref addAppToCache() and @ref addActionToCache() are kept, and
+        apps removed from the cache with @ref removeCachedApp() stay removed; modules already loaded stay loaded.
+
+        The apps whose metadata has changed are reported, so that state derived from their metadata can be
+        refreshed: an app is reported as changed if its metadata or module dependencies are different, or if its
+        metadata in the two indexes cannot be compared, which is the case if either index was read from its canonical
+        index file, or if the metadata cache manifest of the index used before was not read and is no longer
+        published.  No app is reported if the routing index of the two indexes is identical.
+
+        @return the result of the reload; see @ref ProviderIndexReloadInfo
+
+        @throw PROVIDER-INDEX-ERROR the process is in index build mode (see @ref setBuildMode()), in which the
+        published index is never read, or the calling thread is reading the index or reloading it
+
+        @par Example:
+        @code{.py}
+# regenerate the index, then use it in the running process
+hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+if (!info.reloaded) {
+    throw "INDEX-ERROR", sprintf("the regenerated index cannot be read: %s", info.error);
+}
+map refreshTools($1), info.added + info.changed;
+map removeTools($1), info.removed;
+        @endcode
+
+        @note A reload can fail if the index is published again while it is read, since the files of an index that
+        is replaced are removed; it can then be reloaded again
+
+        @see getIndexSha256()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static hash<ProviderIndexReloadInfo> reloadIndex() {
+        # the index used before is read first, so that its changes can be reported
+        checkDataIndex();
+
+        # the index used before, for the changes
+        bool old_initialized;
+        *string old_sha256;
+        *hash<string, hash<string, bool>> old_appmap;
+        *hash<DataProviderMetadataCacheManifest> old_manifest;
+        bool old_manifest_checked;
+        *string old_metadata_cache_sha256;
+        *int old_metadata_cache_version;
+        *hash<string, bool> old_canonical_apps;
+        {
+            m.lock();
+            on_exit m.unlock();
+            if (build_mode) {
+                throw "PROVIDER-INDEX-ERROR", "cannot reload the data provider index in index build mode, in which "
+                    "the published index is never read";
+            }
+            while (reloading) {
+                if (reload_tid == gettid()) {
+                    throw "PROVIDER-INDEX-ERROR", "cannot reload the data provider index while it is being reloaded "
+                        "in the same thread";
+                }
+                reload_cond.wait(m);
+            }
+            waitForIndexReaders("reload the data provider index");
+            # build mode cannot be entered while the index is reloaded
+            if (build_mode) {
+                throw "PROVIDER-INDEX-ERROR", "cannot reload the data provider index in index build mode, in which "
+                    "the published index is never read";
+            }
+            reloading = True;
+            reload_tid = gettid();
+            remove reload_read_error;
+
+            old_initialized = initialized;
+            if (initialized) {
+                old_sha256 = index_sha256;
+                old_appmap = index.appmap;
+                old_manifest = metadata_cache_manifest;
+                old_manifest_checked = metadata_cache_manifest_checked;
+                old_metadata_cache_sha256 = metadata_cache_sha256;
+                old_metadata_cache_version = metadata_cache_version;
+                old_canonical_apps = canonical_apps;
+            }
+        }
+        on_exit {
+            m.lock();
+            reloading = False;
+            remove reload_tid;
+            remove reload_read_error;
+            reload_cond.broadcast();
+            m.unlock();
+        }
+
+        hash<string, *string> old_apps = {};
+        if (old_initialized) {
+            # the manifest of the index used before is read if it has not been read yet; its files are removed when
+            # an index is published, in which case its apps cannot be compared
+            if (!old_manifest_checked && old_metadata_cache_sha256) {
+                old_manifest = readMetadataCacheManifestFile(old_metadata_cache_sha256,
+                    old_metadata_cache_version ?? MetadataCacheVersion, False);
+            }
+            old_apps = getIndexAppDigests(old_manifest, old_canonical_apps, old_appmap);
+        }
+
+        hash<IndexStateInfo> state = readIndexState(True);
+
+        m.lock();
+        on_exit m.unlock();
+        # set only in this thread
+        if (*string err = reload_read_error) {
+            # the process keeps using its index
+            index_read_error = err;
+            return <ProviderIndexReloadInfo>{
+                "sha256": index_sha256,
+                "previous_sha256": index_sha256,
+                "error": err,
+            };
+        }
+
+        hash<ProviderIndexReloadInfo> rv = <ProviderIndexReloadInfo>{
+            "reloaded": True,
+            "sha256": state.sha256,
+            "previous_sha256": old_sha256,
+        };
+        # the same routing index identifies the same index
+        if (!old_sha256 || old_sha256 != state.sha256) {
+            hash<string, *string> new_apps = getIndexAppDigests(state.manifest, state.canonical_apps,
+                state.index.appmap);
+            foreach string app in (sort(keys new_apps)) {
+                if (!old_apps.hasKey(app)) {
+                    rv.added += app;
+                } else if (!exists old_apps{app} || old_apps{app} != new_apps{app}
+                        || (old_appmap{app} ?? {}) != (state.index.appmap{app} ?? {})) {
+                    rv.changed += app;
+                }
+            }
+            foreach string app in (sort(keys old_apps)) {
+                if (!new_apps.hasKey(app)) {
+                    rv.removed += app;
+                }
+            }
+        }
+
+        # the state is not replaced while another thread is reading the index into it
+        waitForIndexReaders("reload the data provider index");
+        installIndexState(state);
+        remove index_read_error;
+        log(LoggerLevel::LevelInfo, "Reloaded the data provider index %y (previous index %y): %d app(s) added, %d "
+            "removed, %d changed", rv.sha256, rv.previous_sha256, rv.added.size(), rv.removed.size(),
+            rv.changed.size());
+        return rv;
+    }
+
+    #! Returns the digest of the routing index of the data provider index used by the process
+    /** The published index is read first if the process has not read it yet.
+
+        @return the digest of the routing index of the index used by the process, which is the digest returned for
+        the index by @ref getSerializedDataProviderIndexSource(); @ref nothing if no index is published, if the
+        index was read from its canonical index file, or if the process is in index build mode
+
+        @par Example:
+        @code{.py}
+# reload the index if it has been published again since the process read it
+*hash<SerializedDataProviderIndexInfo> published =
+    ProviderIndexUtil::getSerializedDataProviderIndexSource(ProviderIndexUtil::tryGetIndexDir(True));
+if (published && published.sha256 != ProviderIndexUtil::getIndexSha256()) {
+    ProviderIndexUtil::reloadIndex();
+}
+        @endcode
+
+        @see reloadIndex()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *string getIndexSha256() {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        return index_sha256;
+    }
+
+    #! Returns the apps of an index with the digests of their metadata
+    /** @param manifest the metadata cache manifest of the index, if it has been read
+        @param canonical_apps the apps of an index read from its canonical index file
+        @param appmap the routing app map of the index
+
+        @return the apps of the index with the digests of their metadata, which is @ref nothing for an app whose
+        metadata has no known digest; if neither the manifest nor the apps of a canonical index file are known, the
+        apps are those of the routing app map
+    */
+    static private hash<string, *string> getIndexAppDigests(*hash<DataProviderMetadataCacheManifest> manifest,
+            *hash<string, bool> canonical_apps, *hash<string, hash<string, bool>> appmap) {
+        if (manifest) {
+            return (map {$1.key: $1.value.sha256}, manifest.apps.pairIterator()) ?? {};
+        }
+        return (map {$1: NOTHING}, keys (canonical_apps ?? appmap)) ?? {};
+    }
+
     #! Returns a list of cached app info
     static *list<hash<auto>> getCachedApps() {
-        checkAllAppMetadata();
-        return index.appinfomap.values();
+        return getAllAppInfo().values();
     }
 
     #! Searches the app info cache for applications whose names or descriptions match a regular expression pattern
@@ -484,8 +895,7 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         @return All cached applications that match the regular expression pattern in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
-        checkAllAppMetadata();
-        return map $1, index.appinfomap.values(),
+        return map $1, getAllAppInfo().values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
 
@@ -497,20 +907,57 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         @return All cached applications that match the substring argument in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppSubstr(string substr, bool ignore_case = True) {
-        checkAllAppMetadata();
+        *hash<string, hash<auto>> apps = getAllAppInfo();
         if (ignore_case) {
             substr = substr.upr();
 
-            return map $1, index.appinfomap.values(),
+            return map $1, apps.values(),
                 ($1.name.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
         }
-        return map $1, index.appinfomap.values(), ($1.name.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+        return map $1, apps.values(), ($1.name.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
     }
 
     #! Try to return any cached app info for the given app
     static *hash<auto> tryGetAppInfo(string app) {
-        checkAppMetadata(app);
-        return index.appinfomap{app};
+        return getConsistent(sub () { checkAppMetadata(app); }, auto sub () { return index.appinfomap{app}; });
+    }
+
+    #! Returns the info of all cached apps
+    static private *hash<string, hash<auto>> getAllAppInfo() {
+        return getConsistent(\ProviderIndexUtil::checkAllAppMetadata(), auto sub () { return index.appinfomap; });
+    }
+
+    #! Returns the cached actions of the given app
+    static private *hash<string, hash<auto>> getAppActions(string app) {
+        return getConsistent(sub () { checkActionMetadata(app); },
+            auto sub () { return index.actioninfomap{app}; });
+    }
+
+    #! Returns all cached actions, keyed by \c "<app>/<action>"
+    static private *hash<string, hash<auto>> getAllActions() {
+        return getConsistent(\ProviderIndexUtil::checkAllActionMetadata(),
+            auto sub () { return index.top_actioninfomap; });
+    }
+
+    #! Makes sure that metadata is in the cache, and returns it from the same index state
+    /** @param check makes sure that the metadata is in the cache
+        @param get returns the metadata; called with the lock held
+
+        @return the value returned by @a get
+
+        If the index is reloaded after @a check was called, it is called again for the reloaded index, so the
+        metadata of two indexes is never mixed
+    */
+    static private auto getConsistent(code<nothing()> check, code<auto()> get) {
+        while (True) {
+            int gen = index_generation;
+            check();
+            m.lock();
+            on_exit m.unlock();
+            if (gen == index_generation) {
+                return get();
+            }
+        }
     }
 
     #! Returns the indexed actions of the given app
@@ -543,8 +990,8 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         @since ProviderIndexUtil 1.2
     */
     static *list<hash<auto>> tryGetActionMetadataForApp(string app) {
-        checkActionMetadata(app);
-        return index.actioninfomap{app} ? index.actioninfomap{app}.values() : NOTHING;
+        *hash<string, hash<auto>> actions = getAppActions(app);
+        return actions ? actions.values() : NOTHING;
     }
 
     #! Returns the actions of the given app that declare an alternative to its scheme connection
@@ -745,8 +1192,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         @since ProviderIndexUtil 1.2
     */
     static *hash<auto> tryGetActionMetadata(string app, string action) {
-        checkActionMetadata(app);
-        return index.actioninfomap{app}{action};
+        return getAppActions(app){action};
     }
 
     #! Searches for cached application actions whose descriptions match a regular expression pattern
@@ -761,8 +1207,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     */
     static *list<hash<auto>> searchCachedAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkActionMetadata(app);
-        return map $1, index.actioninfomap{app}.values(),
+        return map $1, getAppActions(app).values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
 
@@ -777,13 +1222,13 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         @note If the application is not cached, no results are returned
     */
     static *list<hash<auto>> searchCachedAppActionSubstr(string app, string substr, bool ignore_case = True) {
-        checkActionMetadata(app);
+        *hash<string, hash<auto>> actions = getAppActions(app);
         if (ignore_case) {
             substr = substr.upr();
-            return map $1, index.actioninfomap{app}.values(),
+            return map $1, actions.values(),
                 (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
         }
-        return map $1, index.actioninfomap{app}.values(),
+        return map $1, actions.values(),
             (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
     }
 
@@ -795,8 +1240,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     */
     static *list<hash<auto>> searchCachedActionRegex(string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkAllActionMetadata();
-        return map $1, index.top_actioninfomap.values(),
+        return map $1, getAllActions().values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
 
@@ -807,13 +1251,13 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         @return All cached actions that match the substring argument in the \c short_desc or \c desc fields
     */
     static *list<hash<auto>> searchCachedActionSubstr(string substr, bool ignore_case = True) {
-        checkAllActionMetadata();
+        *hash<string, hash<auto>> actions = getAllActions();
         if (ignore_case) {
             substr = substr.upr();
-            return map $1, index.top_actioninfomap.values(),
+            return map $1, actions.values(),
                 (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
         }
-        return map $1, index.top_actioninfomap.values(),
+        return map $1, actions.values(),
             (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
     }
 
@@ -821,74 +1265,104 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     /** @return all cached actions as \c DataProvider::DataProviderIndexedActionInfo hashes
     */
     static *list<hash<auto>> getAllCachedActions() {
-        checkAllActionMetadata();
-        return index.top_actioninfomap.values();
+        return getAllActions().values();
     }
 
     #! Adds the given app and actions to the cache
+    /** @param app the app info
+
+        @note The app info replaces any indexed info of the app, and is kept when the index is reloaded with
+        @ref reloadIndex()
+    */
     static addAppToCache(hash<auto> app) {
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
-        checkAppMetadata(app.name);
-        m.lock();
-        on_exit m.unlock();
-        index.appinfomap{app.name} = app;
-        remove raw_appinfomap{app.name};
-        app_metadata_initialized{app.name} = True;
+        while (True) {
+            int gen = index_generation;
+            checkAppMetadata(app.name);
+            m.lock();
+            on_exit m.unlock();
+            # the index was replaced after the app's metadata was checked
+            if (gen != index_generation) {
+                continue;
+            }
+            index.appinfomap{app.name} = app;
+            remove raw_appinfomap{app.name};
+            app_metadata_initialized{app.name} = True;
+            live_appinfomap{app.name} = app;
+            return;
+        }
     }
 
     #! Adds the given action to the cache
     /** @param action a registered action as a \c DataProvider::DataProviderActionInfo hash; it is cached as a
         \c DataProvider::DataProviderIndexedActionInfo hash, like an indexed action
+
+        @note The action replaces any indexed action with the same name, and is kept when the index is reloaded with
+        @ref reloadIndex()
     */
     static addActionToCache(hash<auto> action) {
-        checkAppMetadata(action.app);
-        checkActionMetadata(action.app);
         if (!checkMetadataContext()) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
                 "provider index is initializing", action.action, action.app);
         }
         action = getIndexedAction(action, metadata_context);
-        m.lock();
-        on_exit m.unlock();
-        if (!index.appinfomap{action.app}) {
-            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action for unknown app %y to cache", action.app);
-        }
-        if (!action.action) {
-            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action info to cache for app %y: action name is "
-                "missing", action.app);
-        }
-        index.actioninfomap{action.app}{action.action} = action;
-        index.top_actioninfomap{action.app + "/" + action.action} = action;
-        remove raw_actioninfomap{action.app}{action.action};
-        action_metadata_initialized{action.app} = True;
-        # an index that does not record the declarations is not completed by one action
-        if (exists index.altmap) {
-            if (declaresConnectionAlternative(action)) {
-                index.altmap{action.app}{action.action} = True;
-            } else if (index.altmap{action.app}) {
-                remove index.altmap{action.app}{action.action};
-                if (!index.altmap{action.app}) {
-                    remove index.altmap{action.app};
-                }
+        while (True) {
+            int gen = index_generation;
+            checkAppMetadata(action.app);
+            checkActionMetadata(action.app);
+            m.lock();
+            on_exit m.unlock();
+            # the index was replaced after the app's metadata was checked
+            if (gen != index_generation) {
+                continue;
             }
+            if (!index.appinfomap{action.app}) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action for unknown app %y to cache", action.app);
+            }
+            if (!action.action) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action info to cache for app %y: action name is "
+                    "missing", action.app);
+            }
+            setCachedActionIntern(action);
+            remove raw_actioninfomap{action.app}{action.action};
+            action_metadata_initialized{action.app} = True;
+            live_actioninfomap{action.app}{action.action} = action;
+            return;
         }
     }
 
     #! Removes the given app and all its actions from the cache
+    /** @param app the app name
+
+        @return @ref True if the app was in the cache and has been removed, @ref False if it was not in the cache
+
+        @note A removed app's indexed metadata stays hidden when the index is reloaded with @ref reloadIndex(); only
+        info and actions added again with @ref addAppToCache() and @ref addActionToCache() are cached for it
+    */
     static bool removeCachedApp(string app) {
-        checkAppMetadata(app);
-        checkActionMetadata(app);
-        m.lock();
-        on_exit m.unlock();
-        if (!remove index.appinfomap{app}) {
-            return False;
+        while (True) {
+            int gen = index_generation;
+            checkAppMetadata(app);
+            checkActionMetadata(app);
+            m.lock();
+            on_exit m.unlock();
+            # the index was replaced after the app's metadata was checked
+            if (gen != index_generation) {
+                continue;
+            }
+            if (!remove index.appinfomap{app}) {
+                return False;
+            }
+            map remove index.top_actioninfomap{app + "/" + $1}, keys (remove index.actioninfomap{app});
+            remove raw_actioninfomap{app};
+            remove index.altmap{app};
+            remove live_appinfomap{app};
+            remove live_actioninfomap{app};
+            removed_apps{app} = True;
+            return True;
         }
-        map remove index.top_actioninfomap{app + "/" + $1}, keys (remove index.actioninfomap{app});
-        remove raw_actioninfomap{app};
-        remove index.altmap{app};
-        return True;
     }
 
     #! Try to ensure that any required module is loaded for the given factory
@@ -1038,12 +1512,10 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             build = build_mode;
         }
 
-        *hash<DataProviderIndexInfo> new_index;
+        hash<IndexStateInfo> state;
         try {
             # a process building the index never reads the index it replaces
-            if (!build) {
-                new_index = readInitialDataProviderIndex();
-            }
+            state = build ? getEmptyIndexState() : readIndexState(False);
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -1055,18 +1527,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         m.lock();
         on_exit m.unlock();
-        raw_appinfomap = {};
-        raw_actioninfomap = {};
-        if (new_index) {
-            raw_appinfomap = new_index.appinfomap ?? {};
-            raw_actioninfomap = new_index.actioninfomap ?? {};
-            new_index.appinfomap = {};
-            new_index.actioninfomap = {};
-            # rebuilt from the typed action metadata when it is restored
-            new_index.top_actioninfomap = {};
-            index = new_index;
-        }
-        initialized = True;
+        installIndexState(state);
         initializing = False;
         remove initializing_tid;
         init_cond.broadcast();
@@ -1079,6 +1540,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         their app info
     */
     static private checkRawMetadataIndex(*string app = NOTHING, bool actions = True) {
+        int gen = index_generation;
         checkDataIndex();
         if (!initialized || !raw_metadata_deferred || (app && raw_metadata_app_loaded{app})
                 || (!app && !actions && raw_metadata_apps_loaded)) {
@@ -1090,6 +1552,10 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             on_exit m.unlock();
             while (raw_metadata_loading && raw_metadata_loading_tid != gettid()) {
                 metadata_init_cond.wait(m);
+            }
+            # the index was replaced; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
             }
             if (!raw_metadata_deferred || (app && raw_metadata_app_loaded{app})
                     || (!app && !actions && raw_metadata_apps_loaded)) {
@@ -1188,6 +1654,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
     #! Ensures that app metadata for the given app has been deserialized
     static private checkAppMetadata(string app) {
+        int gen = index_generation;
         checkRawMetadataIndex(app);
         if (!initialized || app_metadata_initialized{app} || !checkMetadataContext()) {
             return;
@@ -1199,6 +1666,10 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             on_exit m.unlock();
             while (exists app_metadata_initializing{app} && app_metadata_initializing{app} != gettid()) {
                 metadata_init_cond.wait(m);
+            }
+            # the index was replaced after its raw metadata was loaded; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
             }
             if (app_metadata_initialized{app} || exists app_metadata_initializing{app}) {
                 return;
@@ -1231,6 +1702,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
     #! Ensures that action metadata for the given app has been deserialized
     static private checkActionMetadata(string app) {
+        int gen = index_generation;
         checkRawMetadataIndex(app);
         if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
             return;
@@ -1242,6 +1714,10 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             on_exit m.unlock();
             while (exists action_metadata_initializing{app} && action_metadata_initializing{app} != gettid()) {
                 metadata_init_cond.wait(m);
+            }
+            # the index was replaced after its raw metadata was loaded; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
             }
             if (action_metadata_initialized{app} || exists action_metadata_initializing{app}) {
                 return;
@@ -1264,10 +1740,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         m.lock();
         on_exit m.unlock();
-        index.actioninfomap{app} = action_map{app} ?? {};
-        foreach hash<auto> action in (index.actioninfomap{app}.pairIterator()) {
-            index.top_actioninfomap{app + "/" + action.key} = action.value;
-        }
+        mergeIndexedActions(app, action_map{app});
         remove raw_actioninfomap{app};
         action_metadata_initialized{app} = True;
         remove action_metadata_initializing{app};
@@ -1276,6 +1749,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
     #! Ensures that all app metadata has been deserialized
     static private checkAllAppMetadata() {
+        int gen = index_generation;
         # the actions of each app are loaded only when needed
         checkRawMetadataIndex(NOTHING, False);
         if (!initialized || !checkMetadataContext()) {
@@ -1288,12 +1762,14 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             m.lock();
             on_exit m.unlock();
             while (app_metadata_initializing.size()) {
-                foreach int tid in (app_metadata_initializing.iterator()) {
-                    if (tid == gettid()) {
-                        return;
-                    }
+                if (hasThread(app_metadata_initializing)) {
+                    return;
                 }
                 metadata_init_cond.wait(m);
+            }
+            # the index was replaced after its raw metadata was loaded; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
             }
             apps = keys raw_appinfomap;
             if (!apps) {
@@ -1326,6 +1802,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
     #! Ensures that all action metadata has been deserialized
     static private checkAllActionMetadata() {
+        int gen = index_generation;
         checkRawMetadataIndex();
         if (!initialized || !checkMetadataContext()) {
             return;
@@ -1337,12 +1814,14 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             m.lock();
             on_exit m.unlock();
             while (action_metadata_initializing.size()) {
-                foreach int tid in (action_metadata_initializing.iterator()) {
-                    if (tid == gettid()) {
-                        return;
-                    }
+                if (hasThread(action_metadata_initializing)) {
+                    return;
                 }
                 metadata_init_cond.wait(m);
+            }
+            # the index was replaced after its raw metadata was loaded; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
             }
             apps = select keys raw_actioninfomap, !action_metadata_initialized{$1};
             if (!apps) {
@@ -1364,10 +1843,8 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         m.lock();
         on_exit m.unlock();
-        index.actioninfomap += action_map;
         foreach hash<auto> app_actions in (action_map.pairIterator()) {
-            map index.top_actioninfomap{app_actions.key + "/" + $1.key} = $1.value,
-                app_actions.value.pairIterator();
+            mergeIndexedActions(app_actions.key, app_actions.value);
         }
         map remove raw_actioninfomap{$1}, apps.iterator();
         map action_metadata_initialized{$1} = True, apps.iterator();
@@ -2294,21 +2771,62 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         return DefaultMaxCanonicalIndexSize;
     }
 
-    #! Reads a validated routing sidecar when available, otherwise reads the canonical index
-    static private *hash<DataProviderIndexInfo> readInitialDataProviderIndex() {
+    #! Reads the published index into a new index state, without changing the state of the process
+    /** @param eager if @ref True, the metadata cache manifest is read and verified now; otherwise it is read when
+        metadata is first needed
+
+        @return the index state; the state of an index that is not published, or that cannot be read, has no apps,
+        in which case the error is reported by @ref getIndexReadError()
+    */
+    static private hash<IndexStateInfo> readIndexState(bool eager) {
         # each read of the index reports its own errors
-        remove index_read_error;
-        *hash<DataProviderIndexInfo> rv = readRoutingDataProviderIndex();
-        if (rv) {
-            raw_metadata_deferred = True;
+        clearIndexReadError();
+        hash<IndexStateInfo> rv = getEmptyIndexState();
+        *string sha256;
+        *hash<DataProviderRoutingIndexInfo> routing = readValidRoutingIndex(\sha256);
+        if (routing) {
+            rv.index.factorymap = routing.factorymap ?? {};
+            rv.index.appmap = routing.appmap ?? {};
+            rv.index.schememap = routing.schememap ?? {};
+            # a routing index published before version 4 does not record the declarations
+            rv.index.altmap = routing.version >= 4 ? (routing.altmap ?? {}) : NOTHING;
+            # the metadata is read from the metadata cache, or the canonical index file, when it is needed
+            rv.deferred = True;
+            rv.sha256 = sha256;
+            if (routing.metadata_cache_sha256) {
+                rv.metadata_cache_sha256 = routing.metadata_cache_sha256;
+                rv.metadata_cache_version = routing.metadata_cache_version;
+                if (eager) {
+                    rv.manifest = readMetadataCacheManifestFile(routing.metadata_cache_sha256,
+                        routing.metadata_cache_version);
+                    rv.manifest_checked = True;
+                }
+            }
             return rv;
         }
-        rv = readCanonicalDataProviderIndex();
-        # the canonical index file holds every action, so the declarations are found in it
-        if (rv && !exists rv.altmap) {
-            rv.altmap = getConnectionAlternativeMap(rv.actioninfomap);
+        *hash<DataProviderIndexInfo> canonical = readCanonicalDataProviderIndex();
+        if (canonical) {
+            # the canonical index file holds every action, so the declarations are found in it
+            if (!exists canonical.altmap) {
+                canonical.altmap = getConnectionAlternativeMap(canonical.actioninfomap);
+            }
+            rv.raw_appinfomap = canonical.appinfomap ?? {};
+            rv.raw_actioninfomap = canonical.actioninfomap ?? {};
+            rv.canonical_apps = map {$1: True}, keys rv.raw_appinfomap;
+            # the metadata maps are rebuilt from the typed metadata when it is restored
+            canonical.appinfomap = {};
+            canonical.actioninfomap = {};
+            canonical.top_actioninfomap = {};
+            rv.index = canonical;
         }
         return rv;
+    }
+
+    #! Returns the state of an index with no apps
+    static private hash<IndexStateInfo> getEmptyIndexState() {
+        return <IndexStateInfo>{
+            "index": createEmptyDataProviderIndex(),
+        };
     }
 
     #! Writes the compact routing sidecar for a data provider index
@@ -2346,35 +2864,31 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param desc the error description
     */
     static private setIndexReadError(string err, string desc) {
-        index_read_error = sprintf("%s: %s", err, desc);
+        recordIndexReadError(sprintf("%s: %s", err, desc));
         log(LoggerLevel::LevelError, "Error reading the data provider index: %s: %s", err, desc);
     }
 
-    #! Reads and validates the compact routing sidecar
-    /** @return the index maps, with the metadata deferred, or @ref nothing if the routing index cannot be used, in
-        which case the canonical index file is read if there is one
+    #! Records an error reading a published index
+    /** While the index is reloaded, an error reading it in the reloading thread is recorded for the reload, and
+        only reported by @ref getIndexReadError() if the reload fails, since the process keeps using its index then
+
+        @param err the error, as \c "<code>: <description>"
     */
-    static private *hash<DataProviderIndexInfo> readRoutingDataProviderIndex() {
-        remove metadata_cache_sha256;
-        remove metadata_cache_version;
-        *hash<DataProviderRoutingIndexInfo> routing = readValidRoutingIndex();
-        if (!routing) {
-            return;
+    static private recordIndexReadError(string err) {
+        if (reload_tid == gettid()) {
+            reload_read_error = err;
+        } else {
+            index_read_error = err;
         }
-        if (routing.metadata_cache_sha256) {
-            metadata_cache_sha256 = routing.metadata_cache_sha256;
-            metadata_cache_version = routing.metadata_cache_version;
+    }
+
+    #! Clears the error reading a published index; see recordIndexReadError()
+    static private clearIndexReadError() {
+        if (reload_tid == gettid()) {
+            remove reload_read_error;
+        } else {
+            remove index_read_error;
         }
-        return <DataProviderIndexInfo>{
-            "factorymap": routing.factorymap ?? {},
-            "appmap": routing.appmap ?? {},
-            "schememap": routing.schememap ?? {},
-            # a routing index published before version 4 does not record the declarations
-            "altmap": routing.version >= 4 ? (routing.altmap ?? {}) : NOTHING,
-            "appinfomap": {},
-            "actioninfomap": {},
-            "top_actioninfomap": {},
-        };
     }
 
     #! Reads and validates the routing index in the configured directory
@@ -2382,11 +2896,13 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         this validates the routing index against its own checksum, and against the canonical index file if one was
         published with it.
 
+        @param sha256 set to the digest of the routing index, if one is returned
+
         @return the routing index, or @ref nothing if it cannot be used, in which case the canonical index file is
         read if there is one; the returned routing index has a metadata cache with a supported version, or was
         published with a canonical index file; any error is reported by @ref getIndexReadError()
     */
-    static private *hash<DataProviderRoutingIndexInfo> readValidRoutingIndex() {
+    static private *hash<DataProviderRoutingIndexInfo> readValidRoutingIndex(*reference<*string> sha256) {
         # skip silently when the index env var is not configured, as in readIndex()
         if (!ENV{ProviderIndexEnvVar}.val()) {
             return;
@@ -2394,13 +2910,16 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         string routing_path;
         *hash<StatInfo> routing_stat;
         *hash<DataProviderRoutingIndexInfo> routing;
+        *string routing_sha256;
         try {
             routing_path = getIndexPath("routing");
             routing_stat = hstat(routing_path);
             if (!routing_stat) {
                 return;
             }
-            routing = parseRoutingIndex(ReadOnlyFile::readBinaryFile(routing_path));
+            binary data = ReadOnlyFile::readBinaryFile(routing_path);
+            routing = parseRoutingIndex(data);
+            routing_sha256 = digest("sha256", data).toHex();
         } catch (hash<ExceptionInfo> ex) {
             # the routing index is replaced atomically, so a file that cannot be read is not a partial write
             setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the routing index %y: %s: %s",
@@ -2456,6 +2975,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             remove routing.metadata_cache_sha256;
             remove routing.metadata_cache_version;
         }
+        sha256 = routing_sha256;
         return routing;
     }
 
@@ -2619,37 +3139,43 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     #! Reads and validates a metadata cache manifest in the configured directory
     /** @param sha256 the digest of the manifest recorded in the routing index
         @param version the metadata cache version recorded in the routing index
+        @param report if @ref False, an error reading the manifest is not reported
 
         @return the manifest, or @ref nothing if it cannot be read, in which case the error is reported by
         @ref getIndexReadError()
     */
     static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifestFile(string sha256,
-            int version) {
+            int version, bool report = True) {
 %ifdef NoMsgPack
-        setIndexReadError("PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the metadata "
-            "cache");
+        if (report) {
+            setIndexReadError("PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the "
+                "metadata cache");
+        }
         return;
 %else
         *string path;
+        string err;
         try {
             path = getMetadataCachePath(sha256, version);
             binary data = ReadOnlyFile::readBinaryFile(path);
             if (digest("sha256", data).toHex() != sha256) {
-                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata cache manifest %y does not match "
-                    "the digest recorded in the routing index", path));
-                return;
+                err = sprintf("the metadata cache manifest %y does not match the digest recorded in the routing "
+                    "index", path);
+            } else {
+                *hash<DataProviderMetadataCacheManifest> manifest =
+                    cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(data));
+                if (manifest && manifest.version == version) {
+                    return manifest;
+                }
+                err = sprintf("the metadata cache manifest %y has version %y; expecting %y", path, manifest.version,
+                    version);
             }
-            *hash<DataProviderMetadataCacheManifest> manifest =
-                cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(data));
-            if (!manifest || manifest.version != version) {
-                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata cache manifest %y has version %y; "
-                    "expecting %y", path, manifest.version, version));
-                return;
-            }
-            return manifest;
         } catch (hash<ExceptionInfo> ex) {
-            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the metadata cache manifest %y: %s: %s",
-                path ?? "<unknown>", ex.err, ex.desc));
+            err = sprintf("cannot read the metadata cache manifest %y: %s: %s", path ?? "<unknown>", ex.err,
+                ex.desc);
+        }
+        if (report) {
+            setIndexReadError("PROVIDER-INDEX-ERROR", err);
         }
 %endif
     }
@@ -3123,7 +3649,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             }
             *hash<auto> rv = parse_yaml(File::readTextFile(path));
             if (type == "data") {
-                remove index_read_error;
+                clearIndexReadError();
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
@@ -3132,9 +3658,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             bool missing = ex.arg == ENOENT;
             if (type == "data") {
                 if (missing) {
-                    remove index_read_error;
+                    clearIndexReadError();
                 } else {
-                    index_read_error = sprintf("%s: %s", ex.err, ex.desc);
+                    recordIndexReadError(sprintf("%s: %s", ex.err, ex.desc));
                 }
             }
             if (!quiet) {

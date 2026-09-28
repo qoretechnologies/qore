@@ -1,0 +1,808 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexReloadTest
+
+#! Tests reloading a published data provider index in a running process
+public class ProviderIndexReloadTest inherits QUnit::Test {
+    private {
+        const Orders = "QoreTestOrders";
+        const Invoices = "QoreTestInvoices";
+        const Shipping = "QoreTestShipping";
+        const Empty = "QoreTestEmpty";
+        const Live = "QoreTestLive";
+
+        # the number of reader threads and reloads in the concurrency test
+        const Readers = 4;
+        const Reloads = 20;
+        # the number of apps added in the concurrent cache edit test
+        const Edits = 100;
+    }
+
+    constructor() : Test("ProviderIndex reload test", "1.0") {
+        addTestCase("a republished index is used after it is reloaded", \republishTest());
+        addTestCase("changed apps are reported exactly once", \changeReportTest());
+        addTestCase("a change of module dependencies only is reported", \moduleDependencyChangeTest());
+        addTestCase("an unchanged index is reloaded without changes", \unchangedTest());
+        addTestCase("apps are reported as changed when the previous metadata cannot be compared",
+            \unreadPreviousManifestTest());
+        addTestCase("an index read from its canonical file is reloaded", \canonicalTest());
+        addTestCase("cache edits made by the process survive a reload", \liveEditsTest());
+        addTestCase("a corrupt routing index is not reloaded", \corruptRoutingTest());
+        addTestCase("an index with a missing manifest is not reloaded", \missingManifestTest());
+        addTestCase("an unpublished index is reloaded as an empty index", \unpublishedTest());
+        addTestCase("the index cannot be reloaded in build mode", \buildModeTest());
+        addTestCase("concurrent lookups never see a mixed index", \concurrentTest());
+        addTestCase("cache edits made while the index is reloaded are kept", \concurrentEditTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    republishTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        *string v1_sha256 = getPublishedSha256(dir);
+        assertEq(v1_sha256, ProviderIndexUtil::getIndexSha256(), "the digest identifies the published index");
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq("creates an order v1", ProviderIndexUtil::tryGetActionMetadata(Orders, "create-order").desc);
+        assertEq("invoices", ProviderIndexUtil::tryGetAppInfo(Invoices).desc);
+
+        writeIndex(getV2Maps(), getV2Actions());
+        # the process uses the index it read until it is reloaded
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq(v1_sha256, ProviderIndexUtil::getIndexSha256());
+
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(NOTHING, info.error);
+        assertEq(1, log.getMessages("Reloaded the data provider index.*1 app\\(s\\) added, 1 removed, 1 changed")
+            .size(), "the reload is logged");
+        *string v2_sha256 = getPublishedSha256(dir);
+        assertNeq(v1_sha256, v2_sha256);
+        assertEq(v2_sha256, info.sha256, "the reload reports the digest of the published routing index");
+        assertEq(v1_sha256, info.previous_sha256);
+        assertEq(v2_sha256, ProviderIndexUtil::getIndexSha256());
+        assertEq(NOTHING, ProviderIndexUtil::getIndexReadError());
+
+        # the lookups return the metadata of the reloaded index
+        assertEq("orders v2", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq("creates an order v2", ProviderIndexUtil::tryGetActionMetadata(Orders, "create-order").desc);
+        assertEq(NOTHING, ProviderIndexUtil::tryGetAppInfo(Invoices), "a removed app is gone");
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(Invoices));
+        assertEq("shipping", ProviderIndexUtil::tryGetAppInfo(Shipping).desc);
+        assertEq((Empty, Orders, Shipping), getAppNames());
+        assertEq((Orders + "/cancel-order", Orders + "/create-order", Shipping + "/ship-order"), getActionNames());
+        assertEq(("create-order",), (map $1.action, ProviderIndexUtil::searchCachedAppActionSubstr(Orders, "creates")));
+        assertEq((), ProviderIndexUtil::searchCachedActionSubstr("v1"), "no action of the previous index");
+        # the routing maps are reloaded too
+        assertEq(("qoretest2",), ProviderIndexUtil::getIndexedFactories());
+        assertEq({"ship-order": True}, ProviderIndexUtil::tryGetConnectionAlternativeActions(Shipping));
+        assertEq({}, ProviderIndexUtil::tryGetConnectionAlternativeActions(Orders));
+    }
+
+    changeReportTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        # the metadata of the index is read, as by a process that lists its apps
+        assertEq(3, ProviderIndexUtil::getCachedApps().size());
+
+        writeIndex(getV2Maps(), getV2Actions());
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        # Orders changed, Invoices was removed, Shipping was added, and Empty is unchanged
+        assertEq((Shipping,), info.added);
+        assertEq((Invoices,), info.removed);
+        assertEq((Orders,), info.changed);
+
+        # back to the first index: every change is reported in the other direction
+        writeIndex(getV1Maps(), getV1Actions());
+        info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq((Invoices,), info.added);
+        assertEq((Shipping,), info.removed);
+        assertEq((Orders,), info.changed);
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+    }
+
+    moduleDependencyChangeTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        ProviderIndexUtil::getCachedApps();
+
+        # only the module of Invoices changes; its metadata is the same
+        hash<auto> maps = getV1Maps();
+        maps.appmap{Invoices} = {"QoreTestInvoiceModule": True};
+        writeIndex(maps, getV1Actions());
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq((), info.added);
+        assertEq((), info.removed);
+        assertEq((Invoices,), info.changed);
+    }
+
+    unchangedTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+
+        # the same index published again has the same routing index
+        writeIndex(getV1Maps(), getV1Actions());
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(info.previous_sha256, info.sha256);
+        assertEq(getPublishedSha256(dir), info.sha256);
+        assertEq((), info.added);
+        assertEq((), info.removed);
+        assertEq((), info.changed);
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+
+        # a process that has not read the index yet reads it before the reload, so nothing has changed
+        resetIndexState();
+        info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(getPublishedSha256(dir), info.previous_sha256);
+        assertEq(info.previous_sha256, info.sha256);
+        assertEq((), info.added + info.removed + info.changed);
+        assertEq((Empty, Invoices, Orders), getAppNames());
+    }
+
+    unreadPreviousManifestTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        # every app has a module, so the routing index lists every app
+        hash<auto> v1_maps = getV1Maps();
+        v1_maps.appmap{Empty} = {"QoreTestModule": True};
+        hash<auto> v2_maps = getV2Maps();
+        v2_maps.appmap{Empty} = {"QoreTestModule": True};
+
+        writeIndex(v1_maps, getV1Actions());
+        resetIndexState();
+        # only the routing index is read; the manifest, which is removed when the next index is published, is not
+        assertEq(("qoretest",), ProviderIndexUtil::getIndexedFactories());
+
+        writeIndex(v2_maps, getV2Actions());
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq((Shipping,), info.added);
+        assertEq((Invoices,), info.removed);
+        # the metadata of the apps in both indexes cannot be compared
+        assertEq((Empty, Orders), info.changed);
+        assertEq("orders v2", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+
+        # the manifest of the reloaded index has been read, so the next reload compares the apps
+        writeIndex(v1_maps, getV1Actions());
+        info = ProviderIndexUtil::reloadIndex();
+        assertEq((Invoices,), info.added);
+        assertEq((Shipping,), info.removed);
+        assertEq((Orders,), info.changed);
+    }
+
+    canonicalTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions(), True);
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        resetIndexState();
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq(NOTHING, ProviderIndexUtil::getIndexSha256(), "an index read from its canonical file has no digest");
+
+        writeIndex(getV2Maps(), getV2Actions(), True);
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(NOTHING, info.sha256);
+        assertEq((Shipping,), info.added);
+        assertEq((Invoices,), info.removed);
+        # apps read from canonical index files cannot be compared
+        assertEq((Empty, Orders), info.changed);
+        assertEq("orders v2", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq("creates an order v2", ProviderIndexUtil::tryGetActionMetadata(Orders, "create-order").desc);
+        assertEq(NOTHING, ProviderIndexUtil::tryGetAppInfo(Invoices));
+    }
+
+    liveEditsTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+
+        # an app that is not indexed, an action replacing an indexed one, a new action of an indexed app, and a
+        # removed app
+        ProviderIndexUtil::addAppToCache({"name": Live, "desc": "a live app"});
+        ProviderIndexUtil::addActionToCache(getLiveAction(Live, "live-action", "a live action"));
+        ProviderIndexUtil::addActionToCache(getLiveAction(Orders, "create-order", "a live create order", True));
+        ProviderIndexUtil::addActionToCache(getLiveAction(Orders, "refund-order", "a live refund"));
+        assertTrue(ProviderIndexUtil::removeCachedApp(Invoices));
+        # an app removed and added again has only the metadata added by the process
+        assertTrue(ProviderIndexUtil::removeCachedApp(Empty));
+        ProviderIndexUtil::addAppToCache({"name": Empty, "desc": "added again"});
+
+        hash<string, auto> before = getLiveState();
+
+        # the next index changes Orders and its indexed actions, and still has Invoices and Empty
+        hash<auto> maps = getV2Maps();
+        maps.appmap{Invoices} = {"QoreTestModule": True};
+        maps.appinfomap{Invoices} = {"name": Invoices, "desc": "invoices v2"};
+        maps.appinfomap{Empty} = {"name": Empty, "desc": "empty v2"};
+        hash<auto> actions = getV2Actions();
+        actions{Invoices} = {"send-invoice": {"app": Invoices, "action": "send-invoice", "desc": "sends v2"}};
+        actions{Empty} = {"empty-action": {"app": Empty, "action": "empty-action", "desc": "indexed"}};
+        writeIndex(maps, actions);
+
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+
+        # the cache edits are unchanged
+        assertEq(before, getLiveState());
+        # the indexed metadata of Orders is reloaded; the actions added by the process win
+        assertEq("orders v2", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq("cancels an order v2", ProviderIndexUtil::tryGetActionMetadata(Orders, "cancel-order").desc);
+        assertEq(("cancel-order", "create-order", "refund-order"),
+            sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(Orders)));
+        hash<string, bool> all = map {$1.app + "/" + $1.action: True}, ProviderIndexUtil::getAllCachedActions();
+        assertEq((Live + "/live-action", Orders + "/cancel-order", Orders + "/create-order", Orders + "/refund-order",
+            Shipping + "/ship-order"), sort(keys all));
+        # the connection alternative of the action added by the process is kept
+        assertEq({"create-order": True}, ProviderIndexUtil::tryGetConnectionAlternativeActions(Orders));
+        assertEq((Empty, Live, Orders, Shipping), getAppNames());
+
+        # an action added after the reload is merged with the reloaded index
+        ProviderIndexUtil::addActionToCache(getLiveAction(Shipping, "track-order", "a live tracking action"));
+        assertEq(("ship-order", "track-order"),
+            sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(Shipping)));
+    }
+
+    corruptRoutingTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        *string v1_sha256 = ProviderIndexUtil::getIndexSha256();
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
+
+        File f();
+        f.open2(dir + DirSep + "qore-routing-index.yaml", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("version: 4\nrouting_sha256: not-a-digest\n");
+        f.close();
+
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertFalse(info.reloaded);
+        assertRegex("routing index.*corrupt", info.error);
+        assertEq(1, log.getMessages("routing index.*corrupt").size(), "the error is logged");
+        assertEq((), log.getMessages("Reloaded"));
+        assertEq(info.error, ProviderIndexUtil::getIndexReadError(), "the error is reported");
+        assertEq(v1_sha256, info.sha256, "the index used before is still used");
+        assertEq(v1_sha256, info.previous_sha256);
+        assertEq((), info.added + info.removed + info.changed);
+        # the metadata read before keeps being served
+        assertEq(v1_sha256, ProviderIndexUtil::getIndexSha256());
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+        assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
+
+        # a good index is reloaded, and the error is cleared
+        writeIndex(getV2Maps(), getV2Actions());
+        info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(NOTHING, info.error);
+        assertEq(NOTHING, ProviderIndexUtil::getIndexReadError());
+        assertEq(v1_sha256, info.previous_sha256);
+        assertEq("orders v2", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+    }
+
+    missingManifestTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        *string v1_sha256 = ProviderIndexUtil::getIndexSha256();
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+
+        writeIndex(getV2Maps(), getV2Actions());
+        map unlink($1), glob(dir + DirSep + "qore-data-index-manifest-*.msgpack");
+
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertFalse(info.reloaded);
+        assertRegex("metadata cache manifest", info.error);
+        assertEq(1, log.getMessages("metadata cache manifest").size(), "the error is logged");
+        assertEq(info.error, ProviderIndexUtil::getIndexReadError());
+        assertEq(v1_sha256, ProviderIndexUtil::getIndexSha256());
+        assertEq("orders v1", ProviderIndexUtil::tryGetAppInfo(Orders).desc);
+    }
+
+    unpublishedTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        resetIndexState();
+        ProviderIndexUtil::getCachedApps();
+
+        # the index is no longer published, as in a process that has never had one
+        map unlink($1), glob(dir + DirSep + "qore-*");
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq(NOTHING, info.error);
+        assertEq(NOTHING, info.sha256);
+        assertEq((Empty, Invoices, Orders), info.removed);
+        assertEq((), info.added + info.changed);
+        assertEq((), ProviderIndexUtil::getCachedApps());
+        assertEq(NOTHING, ProviderIndexUtil::getIndexedFactories());
+        assertEq(NOTHING, ProviderIndexUtil::getIndexReadError());
+    }
+
+    buildModeTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code<nothing()> restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeIndex(getV1Maps(), getV1Actions());
+        bool build_mode = ProviderIndexUtil::setBuildMode(True);
+        on_exit ProviderIndexUtil::setBuildMode(build_mode);
+        assertThrows("PROVIDER-INDEX-ERROR", "build mode", \ProviderIndexUtil::reloadIndex());
+        # the published index is still not read
+        assertEq((), ProviderIndexUtil::getCachedApps());
+        assertEq(NOTHING, ProviderIndexUtil::getIndexSha256());
+    }
+
+    concurrentTest() {
+        checkModules();
+
+        # the two indexes are published in their own directories, which also hold the metadata cache files of the
+        # other index, so the metadata of either index can be read while the process uses it
+        string v1_dir = make_tmp_dir();
+        on_exit remove_tree(v1_dir);
+        string v2_dir = make_tmp_dir();
+        on_exit remove_tree(v2_dir);
+        code<nothing()> restore = useIndexDir(v2_dir);
+        on_exit restore();
+        writeIndex(getV2Maps(), getV2Actions());
+        ProviderIndexUtil::setEnvironmentVariable(v1_dir);
+        writeIndex(getV1Maps(), getV1Actions());
+        copyMetadataCache(v1_dir, v2_dir);
+        copyMetadataCache(v2_dir, v1_dir);
+        resetIndexState();
+
+        # the results of each lookup in the two indexes
+        hash<auto> v1 = {
+            "apps": {Empty: NOTHING, Invoices: "invoices", Orders: "orders v1"},
+            "orders": "orders v1",
+            "order_actions": {"cancel-order": "cancels an order v1", "create-order": "creates an order v1"},
+            "actions": (Invoices + "/send-invoice", Orders + "/cancel-order", Orders + "/create-order"),
+        };
+        hash<auto> v2 = {
+            "apps": {Empty: NOTHING, Orders: "orders v2", Shipping: "shipping"},
+            "orders": "orders v2",
+            "order_actions": {"cancel-order": "cancels an order v2", "create-order": "creates an order v2"},
+            "actions": (Orders + "/cancel-order", Orders + "/create-order", Shipping + "/ship-order"),
+        };
+
+        # the readers report once in each round that they have looked up the index in it
+        Queue lookups();
+        int round = 0;
+        bool done = False;
+        Mutex errors_lock();
+        list<string> errors = ();
+        hash<string, int> seen = {"v1": 0, "v2": 0};
+        Counter running(Readers);
+        code<nothing(string)> record_error = sub (string err) {
+            errors_lock.lock();
+            on_exit errors_lock.unlock();
+            errors += err;
+        };
+        code<nothing(string, auto, auto, auto)> check = sub (string what, auto value, auto v1_value,
+                auto v2_value) {
+            if (value == v1_value) {
+                errors_lock.lock();
+                on_exit errors_lock.unlock();
+                ++seen.v1;
+            } else if (value == v2_value) {
+                errors_lock.lock();
+                on_exit errors_lock.unlock();
+                ++seen.v2;
+            } else {
+                record_error(sprintf("%s: %y is neither %y nor %y", what, value, v1_value, v2_value));
+            }
+        };
+        code<nothing(int)> reader = sub (int id) {
+            on_exit running.dec();
+            int reported = -1;
+            while (!done) {
+                # an error is recorded, and the reader keeps reporting its rounds, so the main thread never waits
+                # for a reader that has stopped
+                try {
+                    # each lookup returns the metadata of one index
+                    hash<auto> apps = (map {$1.name: $1.desc}, ProviderIndexUtil::getCachedApps()) ?? {};
+                    check("apps", apps, v1.apps, v2.apps);
+                    check("orders", ProviderIndexUtil::tryGetAppInfo(Orders).desc, v1.orders, v2.orders);
+                    hash<auto> order_actions = (map {$1.action: $1.desc},
+                        ProviderIndexUtil::tryGetActionMetadataForApp(Orders)) ?? {};
+                    check("order actions", order_actions, v1.order_actions, v2.order_actions);
+                    list<string> actions = sort(map $1.app + "/" + $1.action,
+                        ProviderIndexUtil::getAllCachedActions()) ?? ();
+                    check("actions", actions, v1.actions, v2.actions);
+                } catch (hash<ExceptionInfo> ex) {
+                    record_error(sprintf("reader %d: %s", id, get_exception_string(ex)));
+                }
+                if (reported != round) {
+                    reported = round;
+                    lookups.push(id);
+                }
+            }
+        };
+        map background reader($1), xrange(Readers);
+        on_exit {
+            done = True;
+            running.waitForZero();
+        }
+
+        for (int i = 0; i < Reloads; ++i) {
+            # every reader has looked up the index used in this round, and keeps looking it up during the reload
+            map lookups.get(), xrange(Readers);
+            ProviderIndexUtil::setEnvironmentVariable(i % 2 ? v1_dir : v2_dir);
+            hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+            if (!info.reloaded) {
+                record_error(sprintf("reload %d failed: %s", i, info.error));
+            }
+            ++round;
+        }
+        map lookups.get(), xrange(Readers);
+        done = True;
+        running.waitForZero();
+
+        assertEq((), errors);
+        assertGt(0, seen.v1, "lookups returned the first index");
+        assertGt(0, seen.v2, "lookups returned the second index");
+        assertEq(NOTHING, ProviderIndexUtil::getIndexReadError());
+    }
+
+    concurrentEditTest() {
+        checkModules();
+
+        string v1_dir = make_tmp_dir();
+        on_exit remove_tree(v1_dir);
+        string v2_dir = make_tmp_dir();
+        on_exit remove_tree(v2_dir);
+        code<nothing()> restore = useIndexDir(v2_dir);
+        on_exit restore();
+        writeIndex(getV2Maps(), getV2Actions());
+        ProviderIndexUtil::setEnvironmentVariable(v1_dir);
+        writeIndex(getV1Maps(), getV1Actions());
+        copyMetadataCache(v1_dir, v2_dir);
+        copyMetadataCache(v2_dir, v1_dir);
+        resetIndexState();
+
+        # apps and actions are added to the cache while the index is reloaded
+        bool finished = False;
+        Counter running(1);
+        *hash<ExceptionInfo> error;
+        background sub () {
+            on_exit {
+                finished = True;
+                running.dec();
+            }
+            try {
+                for (int i = 0; i < Edits; ++i) {
+                    string app = sprintf("%s%d", Live, i);
+                    ProviderIndexUtil::addAppToCache({"name": app, "desc": "live app " + i});
+                    ProviderIndexUtil::addActionToCache(getLiveAction(app, "live-action", "live action " + i));
+                    ProviderIndexUtil::addActionToCache(getLiveAction(Orders, "live-" + i, "live action " + i));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                error = ex;
+            }
+        }();
+
+        int reloads = 0;
+        bool v2 = False;
+        while (!finished) {
+            v2 = !v2;
+            ProviderIndexUtil::setEnvironmentVariable(v2 ? v2_dir : v1_dir);
+            assertTrue(ProviderIndexUtil::reloadIndex().reloaded);
+            ++reloads;
+        }
+        running.waitForZero();
+        assertEq(NOTHING, error);
+        assertGt(0, reloads);
+
+        # every edit is in the cache of the index in use, whichever it is
+        list<string> expected_orders = sort(("cancel-order", "create-order") + (map "live-" + $1, xrange(Edits)));
+        assertEq(expected_orders, sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(Orders)));
+        for (int i = 0; i < Edits; ++i) {
+            string app = sprintf("%s%d", Live, i);
+            assertEq("live app " + i, ProviderIndexUtil::tryGetAppInfo(app).desc);
+            assertEq(("live action " + i,), (map $1.desc, ProviderIndexUtil::tryGetActionMetadataForApp(app)));
+        }
+
+        # and in the other index after it is reloaded
+        ProviderIndexUtil::setEnvironmentVariable(v2 ? v1_dir : v2_dir);
+        assertTrue(ProviderIndexUtil::reloadIndex().reloaded);
+        assertEq(expected_orders, sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(Orders)));
+        assertEq(Edits, (select ProviderIndexUtil::getCachedApps(), $1.name =~ /^QoreTestLive[0-9]+$/).size());
+    }
+
+    #! Captures the log messages of ProviderIndexUtil until the global logger is cleared
+    private static LogCapture captureLog() {
+        LogCapture capture();
+        Logger logger("provider-index-reload-test", LoggerLevel::LevelAll);
+        logger.addAppender(capture);
+        ProviderIndexUtil::setGlobalLogger(logger);
+        return capture;
+    }
+
+    #! Returns the names of the apps in the cache
+    private static list<string> getAppNames() {
+        return sort(map $1.name, ProviderIndexUtil::getCachedApps()) ?? ();
+    }
+
+    #! Returns the names of all actions in the cache
+    private static list<string> getActionNames() {
+        return sort(map $1.app + "/" + $1.action, ProviderIndexUtil::getAllCachedActions()) ?? ();
+    }
+
+    #! Returns the state of the cache edits made in liveEditsTest()
+    private static hash<string, auto> getLiveState() {
+        return {
+            "live": ProviderIndexUtil::tryGetAppInfo(Live),
+            "live_actions": (map $1.desc, ProviderIndexUtil::tryGetActionMetadataForApp(Live)),
+            "create_order": ProviderIndexUtil::tryGetActionMetadata(Orders, "create-order").desc,
+            "refund_order": ProviderIndexUtil::tryGetActionMetadata(Orders, "refund-order").desc,
+            "invoices": ProviderIndexUtil::tryGetAppInfo(Invoices),
+            "invoice_actions": ProviderIndexUtil::tryGetActionMetadataForApp(Invoices),
+            "empty": ProviderIndexUtil::tryGetAppInfo(Empty),
+            "empty_actions": ProviderIndexUtil::tryGetActionMetadataForApp(Empty),
+        };
+    }
+
+    #! Returns a registered action
+    private static hash<DataProviderActionInfo> getLiveAction(string app, string action, string desc,
+            *bool connection_alternative) {
+        hash<DataProviderActionInfo> rv = <DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": desc,
+            "desc": desc,
+            "action_code": DPAT_API,
+            "input_data_types": {},
+            "output_data_type": DPAD_NORMAL,
+        };
+        if (connection_alternative) {
+            rv.metadata = {"connection_alternative": {"option": "webhook", "required_group": "destination"}};
+        }
+        return rv;
+    }
+
+    #! Returns the digest of the index published in the given directory
+    private static *string getPublishedSha256(string dir) {
+        return ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).sha256;
+    }
+
+    #! Copies the metadata cache files of the index in one directory to another
+    private static copyMetadataCache(string from, string to) {
+        foreach string path in (glob(from + DirSep + "qore-data-index-*.msgpack")) {
+            # a file with the same name has the same contents
+            string dest = to + DirSep + basename(path);
+            if (!is_file(dest)) {
+                copy_file(path, dest);
+            }
+        }
+    }
+
+    #! Sets the index directory for a test case; the previous one is restored on exit by the returned code
+    private static code<nothing()> useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            # no later test case reads this index, and the cache edits of a test case are discarded
+            resetIndexState();
+        };
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    #! Writes an index to the configured directory
+    private static hash<ProviderIndexInfo> writeIndex(hash<auto> maps, hash<auto> actions, *bool canonical) {
+        return ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
+            return actions{app};
+        }, 0s, {}, canonical);
+    }
+
+    #! Returns the maps of the first test index
+    private static hash<auto> getV1Maps() {
+        return {
+            "factorymap": {"qoretest": "QoreTestModule"},
+            "appmap": {
+                Orders: {"QoreTestModule": True},
+                Invoices: {"QoreTestModule": True},
+            },
+            "schememap": {"qoretest": {"QoreTestModule": True}},
+            "appinfomap": {
+                Orders: {"name": Orders, "desc": "orders v1"},
+                Invoices: {"name": Invoices, "desc": "invoices"},
+                Empty: {"name": Empty},
+            },
+        };
+    }
+
+    #! Returns the actions of the first test index
+    private static hash<auto> getV1Actions() {
+        return {
+            Orders: {
+                "create-order": {"app": Orders, "action": "create-order", "desc": "creates an order v1"},
+                "cancel-order": {"app": Orders, "action": "cancel-order", "desc": "cancels an order v1"},
+            },
+            Invoices: {
+                "send-invoice": {"app": Invoices, "action": "send-invoice", "desc": "sends an invoice"},
+            },
+        };
+    }
+
+    #! Returns the maps of the second test index: Orders is changed, Invoices is removed, and Shipping is added
+    private static hash<auto> getV2Maps() {
+        return {
+            "factorymap": {"qoretest2": "QoreTestModule2"},
+            "appmap": {
+                Orders: {"QoreTestModule2": True},
+                Shipping: {"QoreTestModule2": True},
+            },
+            "schememap": {"qoretest": {"QoreTestModule": True}},
+            "appinfomap": {
+                Orders: {"name": Orders, "desc": "orders v2"},
+                Shipping: {"name": Shipping, "desc": "shipping"},
+                Empty: {"name": Empty},
+            },
+        };
+    }
+
+    #! Returns the actions of the second test index
+    private static hash<auto> getV2Actions() {
+        return {
+            Orders: {
+                "create-order": {"app": Orders, "action": "create-order", "desc": "creates an order v2"},
+                "cancel-order": {"app": Orders, "action": "cancel-order", "desc": "cancels an order v2"},
+            },
+            Shipping: {
+                "ship-order": {
+                    "app": Shipping,
+                    "action": "ship-order",
+                    "desc": "ships an order",
+                    "metadata": {
+                        "connection_alternative": {"option": "webhook", "required_group": "destination"},
+                    },
+                },
+            },
+        };
+    }
+}
+
+#! Captures log messages
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+
+    #! Returns the messages matching the given regular expression
+    list<string> getMessages(string pattern) {
+        AutoLock al(mtx);
+        return (map $1, messages, regex($1, pattern)) ?? ();
+    }
+}
