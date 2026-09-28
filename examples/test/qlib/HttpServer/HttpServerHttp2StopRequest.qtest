@@ -215,9 +215,10 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         Socket s = connect();
         on_exit s.close();
 
-        # the request is complete before the response: there is nothing to stop
-        sendRequest(s, 1, "/early", False);
-        s.send(frame(DATA, END_STREAM, 1, binary(strmul("x", ChunkSize))));
+        # the request is complete with its HEADERS, before the handler can answer: there is nothing to stop; a body
+        # sent in a separate DATA frame could arrive after the handler, which does not wait for it, has answered,
+        # and then the server correctly stops the request
+        sendRequest(s, 1, "/early", True);
         list<hash<H2Frame>> frames = readResponse(s, 1);
         assertNoStop(s, frames, 1);
     }
