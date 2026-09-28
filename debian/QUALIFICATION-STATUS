@@ -1,0 +1,109 @@
+Packaging qualification checkpoint: 2026-09-28
+==============================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+This records development snapshot results, not final release acceptance. See
+README.qualification for the commands and acceptance procedure. Results below
+cover Ubuntu 26.04 (resolute), amd64, with the dependency backports in the
+qore-packagers/qore-testing PPA. They do not qualify other distributions or
+architectures. The evidence bundle is qore-production-20260928, retained outside
+Git with source/package checksums, dependency inventories and complete logs.
+
+Builds and installed artifacts
+-----------------------------
+
+Published snapshot 3.0.0~git20260927.4-0qore1~ubuntu26.04, based on upstream
+c58353a24d4baf8699e92c4ab598831e6c442205:
+
+- A fresh unprivileged build of its signed source completed without network
+  access, with HOME=/sbuild-nonexistent, full documentation and AOT compilation.
+  All 390 core test suites passed; all seven binary packages passed Lintian.
+- Published and rebuilt packages passed manifest integrity, ELF hardening and
+  AOT metadata checks. Both sets contain 409 runtime ELF files and 389 AOT
+  modules. Installed tests cover minimal runtime, the SDK, command-line tools,
+  remote debuggers, exact-artifact coinstallation, file verification, purge and
+  reinstall. The earlier published .2-to-.4 snapshot upgrade also passed.
+- Evidence: rebuild.log, rebuilt-lintian.log, rebuilt-artifacts.json,
+  published-artifacts-current.json, rebuilt-lifecycle-fixed/, lifecycle-verified/.
+
+Local snapshot 3.0.0~git20260928.2-0qore1~ubuntu26.04, from 2be76a8aa:
+
+- A fresh offline nodoc build with automatic debug packages enabled passed all
+  394 core test suites and binary Lintian. Six regular packages and four debug
+  packages were produced. No documentation acceptance is implied by this build.
+- All ten artifacts passed inspection. All 410 runtime ELF files have matching
+  detached DWARF files, build IDs and debuglink CRCs at the standard debug paths.
+- The .4-to-this-snapshot upgrade, four installed autopkgtests, coinstallation
+  including debug packages, dpkg file verification, purge and reinstall passed.
+  The baseline's qore-doc is removed before the minimal installation test.
+- Evidence: nodoc-debug-build/, nodoc-debug-artifacts.json,
+  nodoc-debug-lifecycle-complete/.
+
+Subsequent packaging fixes have targeted checks and are not included in those
+binary snapshots. The installed CMake export no longer embeds its build/source
+directory; installed exports match across different roots, and build-tree
+discovery still works through symlinks. An independent UUID module builds from
+clean committed sources against the corrected installed SDK and passes 14
+tests / 227 assertions. This is SDK qualification, not a UUID package build.
+Snapshot changelog generation also passes four regression tests and actual
+source-package generation without the previous version-order warning.
+The combined packaging and CMake regression suite has 31 passing tests.
+
+Remaining reproducibility work
+------------------------------
+
+The published .4 snapshot and its clean rebuild are not fully reproducible.
+qore-debug-tools and qore-misc-tools are byte-identical. libqore-dev, libqore20,
+qore, qore-stdlib and qore-doc differ. Evidence: rebuild-comparison.json,
+rebuild-input-comparison.json and REPRODUCIBILITY.md in the evidence bundle.
+
+Confirmed path-dependent outputs include AOT inline source locations, qpp JSON
+source_file metadata, qcc-format.stamp source filenames, and compiler flags
+embedded in libqore. The installed CMake export has been fixed separately.
+Documentation graph maps/hashes and HTML also differ and still need isolation.
+The qore executable's .text section matches; its other differing sections
+include build ID and debuglink data. Do not suppress comparison failures.
+
+The compared builds also differ in rust-coreutils version (0.10.0 versus 0.8.0)
+and locale declarations. Repeat with exact dependency versions and controlled
+environment variations after fixing source-path serialization. A matching
+source archive alone does not establish binary reproducibility.
+
+Distribution and module work
+----------------------------
+
+The base repository inventory in dependency-matrix.json found:
+
+- Ubuntu 26.04 requires the existing nghttp2, ngtcp2, nghttp3, c-ares and
+  tree-sitter backports. ONNX Runtime, Arrow and Parquet are enabled and supplied
+  by native distribution packages.
+- Debian 13 additionally needs suitable ONNX Runtime and Arrow/Parquet packages.
+- Ubuntu 24.04 and 22.04 also lack the required OpenSSL 3.5 baseline; 22.04's
+  default LLVM is too old. These need a reviewed dependency and maintenance
+  strategy, not just another source upload.
+
+Independent module repositories have been inventoried (36 repositories), but
+their Debian packaging has not been created. Package them against the installed
+SDK, with their own libraries, resources, licenses, AOT metadata and integration
+tests accounted for. JSON, YAML and every module shipped in Qore's modules/ and
+qlib/ trees remain part of Qore's packages; do not duplicate them externally.
+There are no existing standalone module packages available for upgrade tests.
+Migration from source installations needs separate qualification.
+
+Final release gates
+-------------------
+
+- Resolve the reproducibility findings, then rebuild and repeat all acceptance
+  checks on the exact frozen source version, including the later packaging fixes.
+- Qualify the architecture-only build and every advertised distribution and
+  architecture; the current evidence is full/nodoc binary builds on amd64.
+- Decide and configure debug-symbol publication. The testing PPA had automatic
+  debug building/publication disabled at this checkpoint; the successful local
+  debug build does not make debug packages available in the PPA.
+- Assess ABI compatibility against distributed libqore20 snapshots, qualify
+  independent module packages, and test the actual downstream Qorus images.
+- Complete license/provenance and dependency security-maintenance review; retain
+  signed source and binary manifests and the release qualification evidence.
+- Publish only after Qore is ready for release and final acceptance passes.
+  This checkpoint does not publish, promote or upload any new packages.

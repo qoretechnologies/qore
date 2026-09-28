@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: qore
 Upstream-Contact: David Nichols <david@qore.org>
-Source: https://github.com/qorelanguage/qore
+Source: https://github.com/qoretechnologies/qore
 
 Files: *
 Copyright: 2003-2026 Qore Technologies, s.r.o.

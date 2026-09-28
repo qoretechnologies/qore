@@ -45,8 +45,8 @@ Build-Depends-Indep: doxygen <!nodoc>,
 Standards-Version: 4.7.4
 Rules-Requires-Root: no
 Homepage: https://qore.org
-Vcs-Git: https://github.com/qorelanguage/qore.git
-Vcs-Browser: https://github.com/qorelanguage/qore
+Vcs-Git: https://github.com/qoretechnologies/qore.git
+Vcs-Browser: https://github.com/qoretechnologies/qore
 
 Package: qore
 Architecture: any

@@ -3,6 +3,9 @@ Package qualification
 
 Copyright 2026 Qore Technologies, s.r.o.
 
+See QUALIFICATION-STATUS for the dated snapshot results and remaining release
+gates. This file describes the repeatable qualification procedure.
+
 Use qore-packagers/qore-testing for development snapshots. Qualifying a snapshot
 does not publish a final release. Repeat acceptance on the exact frozen release
 artifacts before promoting them. Keep each run's source manifest, image IDs,
