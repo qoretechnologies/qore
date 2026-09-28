@@ -2946,6 +2946,10 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref datastreamclientiointro "DataStreamClientIo" module
       - migrated from module-yaml; asynchronous clients for HTTP data streaming
+      - \c GET receive streams are made with the DataStream protocol in the default \c auto protocol mode, because
+        a Connect streaming call always sends a request body; \c GET receive streams no longer fail with
+        \c HTTPCLIENT-REQUEST-BODY-ERROR, and with the protocol set to \c connect they fail with
+        \c CONNECT-PROTOCOL-ERROR
 
     - @ref datastreamrequesthandlerintro "DataStreamRequestHandler" module
       - migrated from module-yaml; server-side handling of HTTP data streams

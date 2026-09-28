@@ -54,6 +54,27 @@ class RestDataStreamArgHandler inherits AbstractDataStreamRequestHandler {
     }
 }
 
+#! Sends a fixed number of items in response to a GET stream request, which has no request body
+class RestDataStreamItemsHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        int count;
+        int sent = 0;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+        count = ah.count.toInt();
+    }
+
+    private nothing recvDataImpl(auto data) {
+    }
+
+    private auto sendDataImpl() {
+        if (sent < count) {
+            return {"n": ++sent};
+        }
+    }
+}
+
 class RestDataStreamHandler inherits RestHandler::RestHandler {
     constructor() : RestHandler(NOTHING) {
     }
@@ -68,6 +89,10 @@ class RestDataStreamHandler inherits RestHandler::RestHandler {
 
     AbstractRestStreamRequestHandler streamPutArgs(hash<auto> cx, *hash<auto> ah) {
         return new RestDataStreamArgHandler(cx, ah);
+    }
+
+    AbstractRestStreamRequestHandler streamGetItems(hash<auto> cx, *hash<auto> ah) {
+        return new RestDataStreamItemsHandler(cx, ah);
     }
 }
 
@@ -208,6 +233,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             addTestCase("H2 sendRecvDataStream (Connect)", \testH2SendRecvDataStream());
             addTestCase("H2 openConnectInteractiveStream (Connect)",
                 \testH2OpenConnectInteractiveStream());
+            addTestCase("H2 REST GET recvDataStream (auto)", sub () { testRestGetRecvDataStream(getHttpsUrl()); });
         } catch (hash<ExceptionInfo> ex) {
             printf("TLS listener setup failed: %s: %s\n", ex.err, ex.desc);
         }
@@ -228,6 +254,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             addTestCase("H3 sendRecvDataStream (Connect)", \testH3SendRecvDataStream());
             addTestCase("H3 openConnectInteractiveStream (Connect)",
                 \testH3OpenConnectInteractiveStream());
+            addTestCase("H3 REST GET recvDataStream (auto)", sub () { testRestGetRecvDataStream(getQuicUrl()); });
         } catch (hash<ExceptionInfo> ex) {
             printf("QUIC listener setup failed: %s: %s\n", ex.err, ex.desc);
         }
@@ -577,6 +604,55 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("select 1 as a", received[0].sql, "H3 REST: initial body sql received");
         assertEq(("x"), received[0].args, "H3 REST: initial body args received");
         assertNothing(recv_error, "H3 REST: no error");
+    }
+
+    #! A GET receive stream cannot be a Connect call, which always sends a request body
+    testRestGetRecvDataStream(string url) {
+        DataStreamClient::DataStreamClientIo client({
+            "url": url,
+            "accept_all_certs": True,
+        });
+        assertEq("auto", client.getProtocol(), "the client negotiates the protocol");
+
+        list<auto> received();
+        *string recv_error;
+        code recv = sub (auto data) {
+            received += data;
+        };
+        code eod = sub (*string err) {
+            recv_error = err;
+        };
+        client.recvDataStream(recv, eod, "GET", "/ds?action=items;count=3", NOTHING, 30s);
+        assertEq(({"n": 1}, {"n": 2}, {"n": 3}), received, "GET: all items received");
+        assertNothing(recv_error, "GET: no error");
+        # the GET was made with the DataStream protocol for that request only
+        assertNothing(client.getDetectedProtocol(), "GET: no protocol recorded for other requests");
+
+        # a request that can have a body is still made with Connect
+        received = ();
+        client.recvDataStream(recv, eod, "PUT", "/ds?action=args", {"sql": "select 1"}, 30s);
+        assertEq("select 1", received[0].sql, "PUT after GET: initial body received");
+        assertNothing(recv_error, "PUT after GET: no error");
+        assertEq(DataStreamClient::DataStreamProtocol::Connect, client.getDetectedProtocol(),
+            "PUT after GET: Connect detected");
+
+        # the next GET is still made with the DataStream protocol
+        received = ();
+        client.recvDataStream(recv, eod, "GET", "/ds?action=items;count=2", NOTHING, 30s);
+        assertEq(({"n": 1}, {"n": 2}), received, "GET after Connect detection: all items received");
+        assertNothing(recv_error, "GET after Connect detection: no error");
+
+        # a GET request cannot have a body in any protocol
+        received = ();
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \client.recvDataStream(),
+            (recv, eod, "GET", "/ds?action=items;count=1", {"x": 1}, 30s));
+        assertEq((), received, "GET with a body: nothing received");
+
+        # a GET cannot be made when the Connect protocol is required
+        client.setProtocol(DataStreamClient::DataStreamProtocol::Connect);
+        assertThrows("CONNECT-PROTOCOL-ERROR", "/ds\\?action=items", \client.recvDataStream(),
+            (recv, eod, "GET", "/ds?action=items;count=1", NOTHING, 30s));
+        assertEq((), received, "GET with Connect: nothing received");
     }
 
     testH3SendDataStream() {

@@ -382,11 +382,19 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         @param timeout_ms socket I/O timeout (0 = default)
         @param info optional output reference for request info
         @param hdr optional extra headers
+
+        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamProtocol::Connect "Connect" and
+        \a method is \c GET
+
+        @note A Connect streaming call always sends its request as a framed request body, which a \c GET
+        request cannot have, so in @ref DataStreamProtocol::Auto "Auto" mode a \c GET receive stream is made
+        with the DataStream protocol, without changing the protocol detected for other requests; a \c GET
+        request cannot have a \a body in any protocol
     */
     recvDataStream(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
             string method, string path, auto body, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+        bool use_connect = useConnectForRecv(method, path);
 
         # Save originals for retry
         auto save_body = body;
@@ -924,6 +932,24 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         # RestClientIo defaults to H3-first happy eyeballs for HTTPS, so
         # Connect is the natural default for multiplexed transports.
         return DataStreamProtocol::Connect;
+    }
+
+    #! Returns @ref True if a receive stream with the given HTTP method is made with the Connect protocol
+    /** A Connect streaming call always sends a framed request body, and a \c GET request cannot have one
+
+        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamProtocol::Connect "Connect" and
+        \a method is \c GET
+    */
+    private bool useConnectForRecv(string method, string path) {
+        if (method.upr() != "GET") {
+            return getEffectiveProtocol() == DataStreamProtocol::Connect;
+        }
+        if (getProtocol() == DataStreamProtocol::Connect) {
+            throw "CONNECT-PROTOCOL-ERROR", sprintf("cannot receive %y with GET using the Connect protocol, "
+                "which sends every streaming request with a request body; use another HTTP method or the "
+                "\"auto\" or \"datastream\" protocol", path);
+        }
+        return False;
     }
 
     #! Check if an HTTP response indicates the server rejected Connect
