@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 
+# Do this before project() and its toolchain/dependency-provider hooks can discover packages.
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/QoreResetPackageRedirects.cmake")
+
 # NOTE: Qore should always use semantic versioning: https://semver.org/
 set(VERSION_MAJOR 3)
 set(VERSION_MINOR 0)

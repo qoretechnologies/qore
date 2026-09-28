@@ -515,6 +515,12 @@ val = "string";      # OK
     files for build instructions.
     @endparblock
 
+    @par Reconfiguring Downloaded Dependencies
+    Before dependency discovery, the build resets package redirects left behind when CMake could not clear
+    their directory, for example because files were created by another user. This prevents repeated
+    configuration failures where Arrow finds stale Boost package metadata but \c Boost::headers is absent.
+    Old redirects are preserved beside the new directory; installed-package hints remain in effect.
+
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
 \if QORE_LANG_FINAL

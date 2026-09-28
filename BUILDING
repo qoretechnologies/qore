@@ -121,6 +121,14 @@ Example from the root source directory:
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr
     make && make docs && sudo make install
 
+When reconfiguring an existing build, Qore checks CMake's temporary package redirects before
+dependency discovery. These files describe targets from one configure run and must be recreated
+on the next run. If CMake could not remove old redirects (for example because another user owns
+the directory), Qore moves the directory to CMakeFiles/pkgRedirects.stale-<suffix>, prints that
+path, and creates an empty redirect directory. This prevents false package matches such as
+Boost being reported as found while Arrow cannot link Boost::headers. If the parent directory
+is also unwritable, configuration stops with a permissions diagnostic.
+
 
 Two-Pass Build (for environments installing external binary modules between passes)
 -----------------------------------------------------------------------------------
