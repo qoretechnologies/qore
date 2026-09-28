@@ -20,6 +20,13 @@ Write Doxygen documentation to the given file.
 .BR \-m , " \-\-metadata=" file
 Write JSON API metadata to the given file.
 .TP
+.BR \-\-file-prefix-map= OLD=NEW
+Replace a source filename prefix in JSON metadata, builtin reflection locations
+and generated stub comments. May be repeated; the last matching prefix wins.
+Input files and C++ line directives keep their original paths, allowing the
+native compiler to apply its own debug-prefix maps. CMake builds automatically
+forward the compiler's file-prefix maps to qpp.
+.TP
 .BR \-s , " \-\-stub-output=" file
 Write a Qore compile-time stub to the given file.
 .TP

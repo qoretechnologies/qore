@@ -1758,6 +1758,19 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+    # QPP persists source filenames in JSON, stubs and builtin reflection data.
+    # Honor the native compiler's reproducible-build maps for these strings too;
+    # leave #line directives to the compiler's separate debug-prefix mapping.
+    set(_qore_qpp_prefix_args)
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_qpp_build_type)
+    separate_arguments(_qore_qpp_cxx_flags NATIVE_COMMAND
+        "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${_qore_qpp_build_type}}")
+    foreach(_qore_qpp_flag IN LISTS _qore_qpp_cxx_flags)
+        if (_qore_qpp_flag MATCHES "^-ffile-prefix-map=(.+)$")
+            list(APPEND _qore_qpp_prefix_args "--file-prefix-map=${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
+
     FOREACH (it ${_WRAP_QPP_UNPARSED_ARGUMENTS})
         GET_FILENAME_COMPONENT(_outfile ${it} NAME_WE)
         GET_FILENAME_COMPONENT(_infile ${it} ABSOLUTE)
@@ -1785,7 +1798,7 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
 
         ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_qore_qpp_prefix_args} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
                            DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

@@ -3022,6 +3022,7 @@ endif ()
 # qcc/libqore build has different code-generation settings.
 set(_qcc_format_config ${CMAKE_BINARY_DIR}/qcc-format-config.txt)
 set(_qcc_format_config_content "format=1\n")
+include(${CMAKE_SOURCE_DIR}/cmake/QoreRecordedBuildFlags.cmake)
 foreach(_qcc_format_config_var
         CMAKE_BUILD_TYPE
         CMAKE_CXX_COMPILER_ID
@@ -3036,8 +3037,9 @@ foreach(_qcc_format_config_var
         CMAKE_SIZEOF_VOID_P
         LLVM_PACKAGE_VERSION
         QORE_LLVM_MAJOR_VERSION)
+    qore_recorded_build_flags(_qcc_format_config_value "${${_qcc_format_config_var}}")
     string(APPEND _qcc_format_config_content
-        "${_qcc_format_config_var}=${${_qcc_format_config_var}}\n")
+        "${_qcc_format_config_var}=${_qcc_format_config_value}\n")
 endforeach()
 if (EXISTS "${_qcc_format_config}")
     file(READ "${_qcc_format_config}" _qcc_format_config_old)
@@ -3052,11 +3054,17 @@ endif()
 # build tree can miss a newly-added dependency if the file is older than the
 # current fingerprint.
 set(_qcc_format_sources_manifest ${CMAKE_BINARY_DIR}/qcc-format-sources.txt)
+set(_qcc_format_sources_labels ${CMAKE_BINARY_DIR}/qcc-format-source-labels.txt)
 set(_qcc_format_sources_manifest_content "")
+set(_qcc_format_sources_labels_content "")
 foreach(_qcc_format_source IN LISTS _qcc_format_sources)
     string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_source}\n")
+    file(RELATIVE_PATH _qcc_format_source_label "${CMAKE_SOURCE_DIR}" "${_qcc_format_source}")
+    string(APPEND _qcc_format_sources_labels_content "${_qcc_format_source_label}\n")
 endforeach()
 string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_config}\n")
+string(APPEND _qcc_format_sources_labels_content "@build-config\n")
+QORE_WRITE_IF_CHANGED("${_qcc_format_sources_labels}" "${_qcc_format_sources_labels_content}")
 if (EXISTS "${_qcc_format_sources_manifest}")
     file(READ "${_qcc_format_sources_manifest}" _qcc_format_sources_manifest_old)
 else()
@@ -3071,6 +3079,7 @@ add_custom_command(
     OUTPUT ${QCC_FORMAT_STAMP}
     COMMAND ${CMAKE_COMMAND}
         -DINPUT_LIST=${_qcc_format_sources_manifest}
+        -DINPUT_LABELS=${_qcc_format_sources_labels}
         -DOUTPUT=${QCC_FORMAT_STAMP}
         -DSUCCESS_STAMP=${QCC_FORMAT_STAMP}
         -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
@@ -3078,6 +3087,7 @@ add_custom_command(
         ${_qcc_format_sources}
         ${_qcc_format_config}
         ${_qcc_format_sources_manifest}
+        ${_qcc_format_sources_labels}
         ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
     COMMENT "Updating qcc format-version fingerprint"
     VERBATIM

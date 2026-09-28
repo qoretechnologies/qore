@@ -68,6 +68,7 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -h, --help             this help text\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
     " -m, --metadata=arg     JSON metadata output file name\n"
+    "     --file-prefix-map=OLD=NEW  remap emitted source paths (repeatable)\n"
     " -o, --output=arg       cpp output file name\n"
     " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
@@ -81,6 +82,7 @@ static const option pgm_opts[] = {
     {"help", no_argument, nullptr, 'h'},
     {"javadoc", required_argument, nullptr, 'j'},
     {"metadata", required_argument, nullptr, 'm'},
+    {"file-prefix-map", required_argument, nullptr, 256},
     {"output", required_argument, nullptr, 'o'},
     {"stub-output", required_argument, nullptr, 's'},
     {"table", required_argument, nullptr, 't'},
@@ -106,6 +108,7 @@ static struct qpp_opts {
     std::string unit_test_fn;
     std::string stub_fn;
     std::string table_fn;
+    std::vector<std::pair<std::string, std::string>> file_prefix_maps;
     int verbose;
     // treat documentation table issues as errors
     bool table_strict = false;
@@ -113,6 +116,19 @@ static struct qpp_opts {
     qpp_opts() : verbose(LL_INFO) {
     }
 } opts;
+
+//! Map persisted source labels like the compiler's -ffile-prefix-map; the last matching map wins.
+/** Input filenames and C++ line directives retain their original paths so diagnostics, file reads,
+    and the C++ compiler's separate -fdebug-prefix-map handling still use the real source file.
+*/
+static std::string mapped_source_path(const std::string& path) {
+    for (auto i = opts.file_prefix_maps.rbegin(); i != opts.file_prefix_maps.rend(); ++i) {
+        if (!path.compare(0, i->first.size(), i->first)) {
+            return i->second + path.substr(i->first.size());
+        }
+    }
+    return path;
+}
 
 // program name
 std::string pn;
@@ -383,6 +399,25 @@ static std::string json_escape_string(const std::string& s) {
                     result += c;
                 }
                 break;
+        }
+    }
+    return result;
+}
+
+//! Escape a mapped source label for an emitted C++ string literal.
+static std::string cpp_source_path(const std::string& path) {
+    std::string result;
+    for (unsigned char c : mapped_source_path(path)) {
+        if (c == '"' || c == '\\') {
+            result += '\\';
+            result += static_cast<char>(c);
+        } else if (c < 0x20 || c == 0x7f) {
+            // Three-digit octal escapes cannot absorb a following digit, unlike hex escapes.
+            char escaped[5];
+            snprintf(escaped, sizeof(escaped), "\\%03o", static_cast<unsigned>(c));
+            result += escaped;
+        } else {
+            result += static_cast<char>(c);
         }
     }
     return result;
@@ -4241,7 +4276,7 @@ public:
         // variant outlives the RAII scope.
         fprintf(fp, "    {\n");
         fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
-            fileName.c_str(), line);
+            cpp_source_path(fileName).c_str(), line);
         fprintf(fp, "        ns.addBuiltinVariant(\"%s\", (%s)f_%s, ",
             name.c_str(), getFunctionType(), vname.c_str());
 
@@ -6194,7 +6229,7 @@ protected:
         // the declaring .qpp file+line — see serializeCppBinding above.
         fprintf(fp, "    {\n");
         fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
-            fileName.c_str(), line);
+            cpp_source_path(fileName).c_str(), line);
         fprintf(fp, "        QC_%s->%s(%s_%s, %s, ", UC, "addConstructor", cname, vname.c_str(), get_access(attr));
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
         fputs(", ", fp);
@@ -6611,7 +6646,7 @@ public:
         // scope so reflection reports the declaring .qpp file+line.
         fprintf(fp, "    {\n");
         fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
-            fileName.c_str(), line);
+            cpp_source_path(fileName).c_str(), line);
         fprintf(fp, "        QC_%s->", UC);
         if (attr & QCA_ABSTRACT)
             fprintf(fp, "%s(\"%s\", %s, ", const_method ? "addConstAbstractMethod" : "addAbstractMethod",
@@ -6682,7 +6717,7 @@ public:
         // reflection reports the declaring .qpp file+line.
         fprintf(fp, "    {\n");
         fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
-            fileName.c_str(), line);
+            cpp_source_path(fileName).c_str(), line);
         fprintf(fp, "        QC_%s->addStaticMethod(\"%s\", (%s)static_%s_%s, %s, ",
             UC, name.c_str(), getFunctionType(), cname, vname.c_str(), get_access(attr));
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
@@ -8347,7 +8382,8 @@ public:
         // (and the Qore-source they replace).  qcc's --stub= reader
         // parses each file independently, so each stub must carry
         // its own directives.
-        fprintf(fp, "# Auto-generated from %s by qpp --stub-output.\n", fileName);
+        fprintf(fp, "# Auto-generated from %s by qpp --stub-output.\n",
+            json_escape_string(mapped_source_path(fileName)).c_str());
         fputs("# DO NOT EDIT; this file regenerates on every build.\n", fp);
         fputs("\n", fp);
         fputs("%new-style\n", fp);
@@ -8386,7 +8422,7 @@ public:
         log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
 
         fprintf(fp.get(), "{\"schema_version\":\"1.1\",\"source_file\":\"%s\"",
-            json_escape_string(fileName).c_str());
+            json_escape_string(mapped_source_path(fileName)).c_str());
 
         // classes
         fputs(",\"classes\":[", fp.get());
@@ -8747,6 +8783,19 @@ void process_command_line(int& argc, char**& argv) {
             case 'm':
                 opts.metadata_fn = optarg;
                 break;
+
+            case 256: {
+                std::string mapping(optarg);
+                // Like the native compiler, split at the last '=' so OLD can
+                // itself name a checkout containing '='.
+                size_t equals = mapping.rfind('=');
+                if (equals == std::string::npos || !equals) {
+                    error("--file-prefix-map requires OLD=NEW with a nonempty OLD prefix\n");
+                    exit(1);
+                }
+                opts.file_prefix_maps.emplace_back(mapping.substr(0, equals), mapping.substr(equals + 1));
+                break;
+            }
 
             case 'o':
                 opts.output_fn = optarg;

@@ -521,6 +521,14 @@ val = "string";      # OK
     configuration failures where Arrow finds stale Boost package metadata but \c Boost::headers is absent.
     Old redirects are preserved beside the new directory; installed-package hints remain in effect.
 
+    @par Reproducible Build Metadata
+    CMake forwards native compiler \c -ffile-prefix-map options to \c qpp, which applies them to
+    JSON source filenames, builtin reflection locations, and generated stub comments. The new
+    \c qpp option \c --file-prefix-map=OLD=NEW can also be used directly; the last matching map
+    wins. C++ line directives retain their original paths for the compiler's separate debug maps.
+    The installed \c qcc compiler fingerprint uses stable input names and normalized build roots
+    while continuing to detect source, configuration, and input-list changes.
+
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
 \if QORE_LANG_FINAL
