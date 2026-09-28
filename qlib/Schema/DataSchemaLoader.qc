@@ -102,7 +102,10 @@ public class DataSchemaLoader {
     #! Validates a raw schema hash against the meta-schema
     /** @param raw the schema hash to validate
 
-        @throw DATA-SCHEMA-VALIDATION-ERROR if validation fails
+        @throw DATA-SCHEMA-VALIDATION-ERROR if validation fails; a table, its \c auto_triggers configuration, or
+        the reference data carrying an unknown key fails validation with a message naming the key and, for a key
+        that belongs elsewhere (such as \c sequence_columns, which belongs under \c auto_triggers), where it
+        belongs
     */
     static validate(hash<auto> raw) {
         # Basic structural validation (always available)
@@ -114,6 +117,20 @@ public class DataSchemaLoader {
         }
         if (!raw.schema.hasKey("version")) {
             throw "DATA-SCHEMA-VALIDATION-ERROR", "missing required 'schema.version' key";
+        }
+
+        # Unknown keys in tables, auto_triggers and reference data are reported here, before the meta-schema is
+        # applied, so the error names the key and where it belongs; the meta-schema rejects them as well, but its
+        # error names only the enclosing object (e.g. "/tables: Additional property 't' found but was invalid")
+        if (raw.tables.typeCode() == NT_HASH) {
+            foreach hash<auto> pair in (raw.tables.pairIterator()) {
+                if (pair.value.typeCode() == NT_HASH) {
+                    DataSchemaLoader::checkTableKeys("DATA-SCHEMA-VALIDATION-ERROR", pair.key, pair.value);
+                }
+            }
+        }
+        if (raw.reference_data.typeCode() == NT_HASH) {
+            DataSchemaLoader::checkReferenceDataKeys("DATA-SCHEMA-VALIDATION-ERROR", raw.reference_data);
         }
 
         # Full JSON Schema validation if available
@@ -288,14 +305,137 @@ public class DataSchemaLoader {
         return base + (def - DataSchemaLoader::SharedDefinitionKey);
     }
 
+    #! The keys a table definition may carry
+    /** Any other key is rejected by @ref Schema::DataSchemaLoader::normalizeTable() "normalizeTable()" rather
+        than dropped, as a dropped key silently loses what it describes.
+
+        @since Schema 1.9
+    */
+    public const TableKeys = ("columns", "primary_key", "indexes", "unique_constraints", "foreign_constraints",
+        "partition_strategy", "partitions", "auto_triggers", "triggers", "driver");
+
+    #! The keys a table's \c auto_triggers configuration may carry
+    /** @since Schema 1.9
+    */
+    public const AutoTriggerKeys = ("created", "modified", "sequence_columns", "insert_only");
+
+    #! The keys a column may carry when it is written with the \c type shorthand or as a pure driver override
+    /** A column written in the GenericColumnInfo form (with \c qore_type or \c native_type and no \c type) is kept
+        verbatim and is validated by SqlUtil when the table is created.
+
+        @since Schema 1.9
+    */
+    public const ColumnShorthandKeys = ("type", "size", "scale", "notnull", "default_value", "populate", "comment",
+        "driver");
+
+    #! The keys of a reference data section
+    /** @since Schema 1.9
+    */
+    public const ReferenceDataCategories = ("strict", "normal", "create_only", "insert_only");
+
+    #! The keys of one table's reference data
+    /** @since Schema 1.9
+    */
+    public const ReferenceDataTableKeys = ("columns", "rows");
+
+    #! Throws \a err for the first key of \a def that is not in \a valid
+    /** @param err the exception code to throw
+        @param what the object being checked, as the error message names it
+        @param def the definition whose keys are checked
+        @param valid the keys \a def may carry
+        @param hints optional hints keyed by unknown key, each saying where the key belongs
+
+        @throw err \a def carries a key that is not in \a valid
+    */
+    private static checkKeys(string err, string what, hash<auto> def, list<string> valid,
+            *hash<string, string> hints) {
+        foreach string key in (keys def) {
+            if (inlist(key, valid)) {
+                continue;
+            }
+            *string hint = hints{key};
+            throw err, sprintf("%s: unknown key %y%s; valid keys: %y", what, key, hint ? "; " + hint : "",
+                valid);
+        }
+    }
+
+    #! Checks that a table and its \c auto_triggers configuration carry only known keys
+    /** @param err the exception code to throw
+        @param table_name the table name (for error messages)
+        @param table_def the table definition
+
+        @throw err the table carries a key that is not in @ref Schema::DataSchemaLoader::TableKeys "TableKeys", or
+        its \c auto_triggers configuration is not a hash or carries a key that is not in
+        @ref Schema::DataSchemaLoader::AutoTriggerKeys "AutoTriggerKeys"
+    */
+    private static checkTableKeys(string err, string table_name, hash<auto> table_def) {
+        DataSchemaLoader::checkKeys(err, sprintf("table %y", table_name), table_def, TableKeys,
+            DataSchemaLoader::getTableKeyHints(table_name));
+        if (exists table_def.auto_triggers) {
+            if (table_def.auto_triggers.typeCode() != NT_HASH) {
+                throw err, sprintf("table %y: \"auto_triggers\" must be a hash with keys %y; got type %y",
+                    table_name, AutoTriggerKeys, table_def.auto_triggers.type());
+            }
+            DataSchemaLoader::checkKeys(err, sprintf("table %y auto_triggers", table_name),
+                table_def.auto_triggers, AutoTriggerKeys);
+        }
+    }
+
+    #! Checks that reference data carries only known categories, and each table in them only known keys
+    /** @param err the exception code to throw
+        @param ref_data the raw reference data
+
+        @throw err \a ref_data carries a key that is not in
+        @ref Schema::DataSchemaLoader::ReferenceDataCategories "ReferenceDataCategories", or a table's reference
+        data carries a key that is not in
+        @ref Schema::DataSchemaLoader::ReferenceDataTableKeys "ReferenceDataTableKeys"
+    */
+    private static checkReferenceDataKeys(string err, hash<auto> ref_data) {
+        DataSchemaLoader::checkKeys(err, "reference_data", ref_data, ReferenceDataCategories);
+        foreach string category in (ReferenceDataCategories) {
+            if (ref_data{category}.typeCode() != NT_HASH) {
+                continue;
+            }
+            foreach hash<auto> pair in (ref_data{category}.pairIterator()) {
+                if (pair.value.typeCode() == NT_HASH) {
+                    DataSchemaLoader::checkKeys(err, sprintf("reference_data.%s table %y", category, pair.key),
+                        pair.value, ReferenceDataTableKeys);
+                }
+            }
+        }
+    }
+
+    #! Returns hints for the unknown keys of a table, saying where each belongs
+    private static hash<string, string> getTableKeyHints(string table_name) {
+        hash<string, string> hints();
+        foreach string key in (AutoTriggerKeys) {
+            hints{key} = sprintf("%y belongs under \"auto_triggers\" (tables.%s.auto_triggers.%s)", key,
+                table_name, key);
+        }
+        hints.constraints = "constraints are declared with \"primary_key\", \"unique_constraints\" and "
+            "\"foreign_constraints\"";
+        return hints;
+    }
+
     #! Normalizes a single table definition
     /** Converts column type shorthand to GenericColumnInfo format.
 
         @param table_name the table name (for error messages)
         @param table_def the raw table definition hash
         @return the normalized table definition hash
+
+        @throw DATA-SCHEMA-ERROR the table carries a key that is not in
+        @ref Schema::DataSchemaLoader::TableKeys "TableKeys", or its \c auto_triggers configuration is not a hash
+        or carries a key that is not in @ref Schema::DataSchemaLoader::AutoTriggerKeys "AutoTriggerKeys"; the
+        message names the key and, for a key that belongs elsewhere (such as \c sequence_columns, which belongs
+        under \c auto_triggers), where it belongs
     */
     static hash<auto> normalizeTable(string table_name, hash<auto> table_def) {
+        # an unknown key is rejected rather than dropped: normalization copies only the keys it knows, so a
+        # misplaced key -- e.g. sequence_columns on the table instead of under auto_triggers -- would otherwise be
+        # lost without a trace, and with it what it describes
+        DataSchemaLoader::checkTableKeys("DATA-SCHEMA-ERROR", table_name, table_def);
+
         hash<auto!> result();
 
         # Normalize columns
@@ -382,10 +522,26 @@ public class DataSchemaLoader {
 
         Any user-provided \c driver hash is recursively merged on top of the base type's driver
         block so the two forms can be combined (e.g. \c {type: int, driver: {pgsql: {identity: true}}}).
+
+        @throw DATA-SCHEMA-ERROR the column has an unknown type, sets neither a type nor a driver override, or is
+        written with the \c type shorthand or as a pure driver override and carries a key that is not in
+        @ref Schema::DataSchemaLoader::ColumnShorthandKeys "ColumnShorthandKeys"
     */
     static hash<auto> normalizeColumn(string table_name, string col_name, hash<auto> col_def) {
         # Build result as a generic hash to avoid type narrowing issues
         hash<auto!> result();
+
+        # the shorthand and pure driver-override forms are rebuilt from the keys they know, so any other key
+        # would be dropped: it is rejected instead
+        if (col_def.type.val() || !(exists col_def.qore_type || col_def.native_type)) {
+            hash<string, string> hints();
+            foreach string key in (("qore_type", "native_type")) {
+                hints{key} = sprintf("a column is written either with the \"type\" shorthand or in the "
+                    "GenericColumnInfo form with %y, not both", key);
+            }
+            DataSchemaLoader::checkKeys("DATA-SCHEMA-ERROR", sprintf("table %y column %y", table_name, col_name),
+                col_def, ColumnShorthandKeys, hints);
+        }
 
         if (col_def.type.val()) {
             *hash<auto> base_type = ColumnTypeMap{col_def.type};
@@ -505,11 +661,20 @@ public class DataSchemaLoader {
         @param ref_data the raw reference_data hash
         @return a hash with strict/normal/create_only/insert_only keys, each mapping
             table names to list-of-lists data
+
+        @throw DATA-SCHEMA-ERROR \a ref_data carries a key that is not in
+        @ref Schema::DataSchemaLoader::ReferenceDataCategories "ReferenceDataCategories", or a table's reference
+        data carries a key that is not in
+        @ref Schema::DataSchemaLoader::ReferenceDataTableKeys "ReferenceDataTableKeys"
     */
     static hash<auto> normalizeReferenceData(hash<auto> ref_data) {
+        # only the known categories and table keys are converted; anything else would be dropped, and with it
+        # the rows it holds, so it is rejected
+        DataSchemaLoader::checkReferenceDataKeys("DATA-SCHEMA-ERROR", ref_data);
+
         hash<auto!> result();
 
-        foreach string category in (("strict", "normal", "create_only", "insert_only")) {
+        foreach string category in (ReferenceDataCategories) {
             if (ref_data{category}) {
                 hash<auto!> cat_data();
                 foreach hash<auto> pair in (ref_data{category}.pairIterator()) {

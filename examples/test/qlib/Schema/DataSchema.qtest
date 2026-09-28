@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/Schema/Schema.qmod
 %requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires json
 
 %requires ../../../../qlib/QUnit.qmod
 
@@ -29,6 +30,7 @@ class DataSchemaTest inherits QUnit::Test {
         addTestCase("loader error paths", \loaderErrorPathTests());
         addTestCase("DPQL expression error paths", \dpqlErrorPathTests());
         addTestCase("loadHash tests", \loadHashTests());
+        addTestCase("unknown keys are rejected, not dropped", \unknownKeyTests());
         addTestCase("DataSchema class tests", \dataSchemaClassTests());
         set_return_value(main());
     }
@@ -676,6 +678,164 @@ class DataSchemaTest inherits QUnit::Test {
         # loadHash without validation
         result = Schema::DataSchemaLoader::loadHash(raw, False);
         assertEq("TestAppSchema", result.schema.name);
+    }
+
+    private hash<auto> getSequenceSchema(hash<auto> table) {
+        return {
+            "schema": {"name": "SeqSchema", "version": "1.0"},
+            "sequences": {"t_seq": {}},
+            "tables": {"t": table},
+        };
+    }
+
+    unknownKeyTests() {
+        hash<auto> ms = Schema::DataSchemaJsonSchema;
+        # the meta-schema closes the objects whose unknown keys the loader would otherwise drop
+        assertEq(False, ms."$defs".tableDefinition.additionalProperties);
+        assertEq(False, ms."$defs".autoTriggerConfig.additionalProperties);
+        assertEq(False, ms."$defs".referenceData.additionalProperties);
+        assertEq(False, ms."$defs".referenceDataTable.additionalProperties);
+        # and each closed object still accepts every key the loader knows
+        assertEq(sort(Schema::DataSchemaLoader::TableKeys), sort(keys ms."$defs".tableDefinition.properties));
+        assertEq(sort(Schema::DataSchemaLoader::AutoTriggerKeys),
+            sort(keys ms."$defs".autoTriggerConfig.properties));
+        assertEq(sort(Schema::DataSchemaLoader::ReferenceDataCategories),
+            sort(keys ms."$defs".referenceData.properties));
+        assertEq(sort(Schema::DataSchemaLoader::ReferenceDataTableKeys),
+            sort(keys ms."$defs".referenceDataTable.properties));
+
+        hash<auto> columns = {"id": {"type": "int"}, "name": {"type": "varchar", "size": 40}};
+
+        # sequence_columns directly on the table: rejected with the path it belongs under, both when the
+        # schema is validated and when it is only normalized
+        hash<auto> misplaced = getSequenceSchema({
+            "columns": columns,
+            "sequence_columns": {"id": "t_seq"},
+        });
+        string hint = "unknown key \"sequence_columns\"; \"sequence_columns\" belongs under \"auto_triggers\" "
+            "\\(tables\\.t\\.auto_triggers\\.sequence_columns\\)";
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^table \"t\": " + hint,
+            \Schema::DataSchemaLoader::loadHash(), (misplaced,));
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^table \"t\": " + hint,
+            \Schema::DataSchemaLoader::validate(), (misplaced,));
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": " + hint,
+            \Schema::DataSchemaLoader::loadHash(), (misplaced, False));
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": " + hint,
+            \Schema::DataSchemaLoader::normalize(), (misplaced,));
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": " + hint,
+            \Schema::DataSchemaLoader::normalizeTable(), ("t", misplaced.tables.t));
+        # the meta-schema rejects it on its own, too
+        Qore::Json::JsonSchema js(ms);
+        hash<auto> result = js.validateWithErrors(misplaced);
+        assertFalse(result.valid);
+        assertEq("/tables", result.errors[0].path);
+
+        # every auto_triggers key misplaced on the table names its path
+        foreach string key in (Schema::DataSchemaLoader::AutoTriggerKeys) {
+            assertThrows("DATA-SCHEMA-ERROR", sprintf("belongs under \"auto_triggers\" "
+                "\\(tables\\.t\\.auto_triggers\\.%s\\)", key),
+                \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, key: True}));
+        }
+
+        # correctly nested sequence_columns is accepted and carried through to the generated trigger
+        hash<auto> nested = getSequenceSchema({
+            "columns": columns,
+            "primary_key": {"name": "t_pk", "columns": ("id",)},
+            "auto_triggers": {"sequence_columns": {"id": "t_seq"}},
+        });
+        foreach bool validate in ((True, False)) {
+            hash<auto> loaded = Schema::DataSchemaLoader::loadHash(nested, validate);
+            assertEq({"sequence_columns": {"id": "t_seq"}}, loaded.tables.t.auto_triggers);
+            hash<auto> expanded = Schema::DataSchemaLoader::expandAutoTriggers(loaded.tables, "pgsql");
+            assertTrue(expanded.t.driver.pgsql.functions."trig_t()" =~ /nextval\('t_seq'\)/);
+        }
+
+        # an unknown key inside auto_triggers is rejected
+        hash<auto> bad_trigger = getSequenceSchema({
+            "columns": columns,
+            "auto_triggers": {"sequence_column": {"id": "t_seq"}},
+        });
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR",
+            "^table \"t\" auto_triggers: unknown key \"sequence_column\"; valid keys: ",
+            \Schema::DataSchemaLoader::loadHash(), (bad_trigger,));
+        assertThrows("DATA-SCHEMA-ERROR",
+            "^table \"t\" auto_triggers: unknown key \"sequence_column\"; valid keys: ",
+            \Schema::DataSchemaLoader::loadHash(), (bad_trigger, False));
+        # as is an auto_triggers value that is not a hash
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": \"auto_triggers\" must be a hash",
+            \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, "auto_triggers": True}));
+        # and the migration action's auto_triggers share the closed definition
+        hash<auto> migration_trigger = getSequenceSchema({"columns": columns}) + {
+            "migrations": ({
+                "version": "1.0",
+                "post_align": ({
+                    "action": "add_trigger",
+                    "table": "t",
+                    "auto_triggers": {"sequence_colums": {"id": "t_seq"}},
+                },),
+            },),
+        };
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "/migrations/0/post_align/0",
+            \Schema::DataSchemaLoader::validate(), (migration_trigger,));
+
+        # any other unknown table key is rejected and names the valid keys
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": unknown key \"comment\"; valid keys: \\[\"columns\"",
+            \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, "comment": "x"}));
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^table \"t\": unknown key \"comment\"",
+            \Schema::DataSchemaLoader::validate(), (getSequenceSchema({"columns": columns, "comment": "x"}),));
+        # "constraints" says how constraints are declared
+        assertThrows("DATA-SCHEMA-ERROR", "unknown key \"constraints\"; constraints are declared with "
+            "\"primary_key\", \"unique_constraints\" and \"foreign_constraints\"",
+            \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, "constraints": {}}));
+        # a table drawing on shared definitions is checked after they are resolved
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": unknown key \"sequence_columns\"",
+            \Schema::DataSchemaLoader::normalize(), ({
+                "schema": {"name": "S", "version": "1.0"},
+                "columns": {"id_col": {"type": "int"}},
+                "tables": {"t": {"columns": {"id": {"$use": "id_col"}}, "sequence_columns": {"id": "s"}}},
+            },));
+
+        # a shorthand column's unknown key is rejected, not dropped
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\" column \"c\": unknown key \"default_value_native\"; "
+            "valid keys: ",
+            \Schema::DataSchemaLoader::normalizeColumn(), ("t", "c", {"type": "timestamp",
+                "default_value": "current_timestamp", "default_value_native": True}));
+        # so is one on a pure driver-override column
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\" column \"c\": unknown key \"nullable\"",
+            \Schema::DataSchemaLoader::normalizeColumn(), ("t", "c",
+                {"driver": {"pgsql": {"native_type": "text"}}, "nullable": True}));
+        # a column mixing the shorthand with the GenericColumnInfo form says so
+        assertThrows("DATA-SCHEMA-ERROR", "unknown key \"qore_type\"; a column is written either with the "
+            "\"type\" shorthand or in the GenericColumnInfo form with \"qore_type\", not both",
+            \Schema::DataSchemaLoader::normalizeColumn(), ("t", "c", {"type": "int", "qore_type": "integer"}));
+        # the GenericColumnInfo form is still kept verbatim, including keys the shorthand does not have
+        hash<auto> generic = {"qore_type": Type::Date, "default_value": "current_timestamp",
+            "default_value_native": True};
+        assertEq(generic, Schema::DataSchemaLoader::normalizeColumn("t", "c", generic));
+        # every shorthand key is still accepted
+        hash<auto> col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "number", "size": 10,
+            "scale": 2, "notnull": True, "default_value": 0, "populate": 1, "comment": "c",
+            "driver": {"pgsql": {"native_type": "numeric"}}});
+        assertEq({"qore_type": SqlUtil::NUMERIC, "size": 10, "scale": 2, "notnull": True, "default_value": 0,
+            "populate": 1, "comment": "c", "driver": {"pgsql": {"native_type": "numeric"}}}, col);
+
+        # reference data: an unknown category or table key is rejected, not dropped with its rows
+        hash<auto> ref_schema = getSequenceSchema({"columns": columns}) + {
+            "reference_data": {"stricct": {"t": {"columns": ("id",), "rows": ((1,),)}}},
+        };
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^reference_data: unknown key \"stricct\"; valid keys: ",
+            \Schema::DataSchemaLoader::loadHash(), (ref_schema,));
+        assertThrows("DATA-SCHEMA-ERROR", "^reference_data: unknown key \"stricct\"",
+            \Schema::DataSchemaLoader::loadHash(), (ref_schema, False));
+        ref_schema.reference_data = {"strict": {"t": {"columns": ("id",), "rows": ((1,),), "row": (2,)}}};
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^reference_data\\.strict table \"t\": unknown key \"row\"",
+            \Schema::DataSchemaLoader::validate(), (ref_schema,));
+        assertThrows("DATA-SCHEMA-ERROR", "^reference_data\\.strict table \"t\": unknown key \"row\"",
+            \Schema::DataSchemaLoader::normalizeReferenceData(), (ref_schema.reference_data,));
+        # valid reference data still loads
+        ref_schema.reference_data = {"strict": {"t": {"columns": ("id",), "rows": ((1,),)}}};
+        assertEq({"strict": {"t": (("id",), (1,))}},
+            Schema::DataSchemaLoader::loadHash(ref_schema).reference_data);
     }
 
     metaSchemaMigrationFieldTests() {

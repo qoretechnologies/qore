@@ -881,8 +881,17 @@ module Schema {
       \c clob, \c binary, \c bool, \c float, \c text
     - Migration action types: all 18 supported actions with their field definitions
     - Reference data categories: \c strict, \c normal, \c create_only, \c insert_only
-    - Auto-trigger configuration: \c created, \c modified, \c sequence_columns
+    - Auto-trigger configuration: \c created, \c modified, \c sequence_columns, \c insert_only
     - Shared definitions: top-level \c columns and \c indexes, drawn from with \c $use
+
+    A table, its \c auto_triggers configuration, the \c reference_data section and each of its tables, and a
+    column written with the \c type shorthand or as a pure driver override accept only the keys listed above;
+    any other key is an error rather than being ignored, and the error names the key and, where it belongs
+    elsewhere, its correct place (\c sequence_columns, for example, belongs under \c auto_triggers, not on the
+    table).  This holds whether or not the schema is validated, as
+    @ref Schema::DataSchemaLoader::normalize() "DataSchemaLoader::normalize()" rejects these keys as well.  A
+    column in the GenericColumnInfo form (with \c qore_type or \c native_type) is kept as written and checked by
+    SqlUtil when the table is created.
 
     @section schema_relnotes Schema Module Release History
 
@@ -890,6 +899,10 @@ module Schema {
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
+    - a data schema table, its \c auto_triggers, reference data, and shorthand columns no longer ignore
+      unknown keys: they are rejected with an error that names the key and where it belongs, where it belongs
+      elsewhere (e.g. \c sequence_columns on a table instead of under \c auto_triggers, which previously lost the
+      sequence binding silently)
 
     @subsection schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a

@@ -291,6 +291,8 @@ public const DataSchemaJsonSchema = {
         },
         "autoTriggerConfig": {
             "type": "object",
+            # a key the trigger generator does not know would be ignored, losing what it asks for
+            "additionalProperties": False,
             "properties": {
                 "created": {
                     "type": "boolean",
@@ -426,6 +428,9 @@ public const DataSchemaJsonSchema = {
         "tableDefinition": {
             "type": "object",
             "required": ("columns",),
+            # a key the loader does not know would be dropped; e.g. sequence_columns belongs under
+            # auto_triggers, and on the table itself it would silently lose the sequence binding
+            "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "object",
@@ -490,6 +495,7 @@ public const DataSchemaJsonSchema = {
         "referenceDataTable": {
             "type": "object",
             "required": ("columns", "rows"),
+            "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
@@ -506,6 +512,7 @@ public const DataSchemaJsonSchema = {
         },
         "referenceData": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "strict": {
                     "type": "object",
