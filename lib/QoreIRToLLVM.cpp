@@ -3081,36 +3081,43 @@ llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
     auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
             llvm::FunctionType::get(void_type, {i64_type}, false));
 
-    for (const auto& [local, ir_slot] : current_ir_func->local_var_slots) {
-        if (!local || ir_slot >= static_cast<uint32_t>(slot_count)) {
+    // Emit in the same stable registration order as ordinary local-cache maintenance.
+    // local_var_slots is pointer-keyed and is only a lookup table, not an emission order.
+    size_t checked = 0;
+    for (const auto& [key, alloca] : local_allocas) {
+        if (++checked % 10 == 0
+                && qore_check_cancel(nullptr, "LLVM native handler slot cache setup")) {
+            native_handler_cache_cancelled = true;
+            return guard;
+        }
+        const auto* local = static_cast<const LocalVar*>(key);
+        auto slot = current_ir_func->local_var_slots.find(local);
+        if (!local || slot == current_ir_func->local_var_slots.end()
+                || slot->second >= static_cast<uint32_t>(slot_count)) {
             continue;
         }
+        uint32_t ir_slot = slot->second;
         if (local->closureUse()) {
-            // Closure-use locals live on the cvstack / closure environment.  Their
+            // Closure-use locals live on the cvstack / closure environment. Their
             // LLVM allocas are not authoritative, so publishing them through the
             // native handler slot cache can overwrite the real CVV value.
             continue;
         }
 
-        const void* key = reinterpret_cast<const void*>(local);
-        auto it = local_allocas.find(key);
-        if (it == local_allocas.end()) {
-            continue;
-        }
         ensureLocalCacheFresh(key, module, builder->GetInsertBlock()->getParent());
 
         llvm::Value* val;
         bool boxed_temp = false;
         if (native_int_locals.count(key)) {
-            val = boxInt(builder->CreateLoad(i64_type, it->second));
+            val = boxInt(builder->CreateLoad(i64_type, alloca));
             boxed_temp = true;
         } else if (native_float_locals.count(key)) {
-            val = boxFloat(builder->CreateLoad(double_type, it->second));
+            val = boxFloat(builder->CreateLoad(double_type, alloca));
             boxed_temp = true;
         } else if (native_bool_locals.count(key)) {
-            val = boxBool(builder->CreateLoad(i1_type, it->second));
+            val = boxBool(builder->CreateLoad(i1_type, alloca));
         } else {
-            val = builder->CreateLoad(i64_type, it->second);
+            val = builder->CreateLoad(i64_type, alloca);
         }
 
         if (aot_mode) {
@@ -9582,6 +9589,7 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 }
 
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
+    native_handler_cache_cancelled = false;
     current_ir_func = &func;
     current_module = &module;
     initTypes();
@@ -11602,6 +11610,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
 
         for (const auto& inst_ptr : block->instructions) {
+            if (native_handler_cache_cancelled) {
+                error = "cancelled during LLVM native handler slot cache setup";
+                return false;
+            }
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst) {
                 continue;
@@ -12174,6 +12186,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    if (native_handler_cache_cancelled) {
+        error = "cancelled during LLVM native handler slot cache setup";
+        return false;
+    }
+
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {
         // Shared mode: don't finalize or destroy — caller handles that
@@ -12358,7 +12375,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
     };
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
-            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            LocalAllocaMap::iterator alloca_it,
             const char* name) -> llvm::Value* {
         if (local && local->closureUse()) {
             llvm::Value* boxed;
@@ -12436,7 +12453,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     // heap node, so the new reference must go to whatever owns the alloca's value, as
     // StoreLocal does; storing it unowned leaks it on every update.
     auto publish_fused_int = [&](const void* key,
-            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            LocalAllocaMap::iterator alloca_it,
             llvm::Value* result, bool alloca_owns) -> llvm::Value* {
         if (native_int_locals.count(key)) {
             builder->CreateStore(result, alloca_it->second);
@@ -12487,7 +12504,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     };
 
     auto assign_local_int_for_fused = [&](LocalVar* local, const void* key,
-            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            LocalAllocaMap::iterator alloca_it,
             llvm::Value* result) {
         if (local && local->closureUse()) {
             llvm::Value* boxed = boxIntInline(result);
@@ -12551,7 +12568,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     };
 
     auto add_assign_runtime_local_int = [&](LocalVar* local, const void* key,
-            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            LocalAllocaMap::iterator alloca_it,
             llvm::Value* delta, const QoreIRInstruction* source_inst) -> llvm::Value* {
         llvm::Value* result;
         if (aot_mode) {

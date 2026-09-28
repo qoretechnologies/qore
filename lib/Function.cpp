@@ -1526,6 +1526,16 @@ void AbstractFunctionSignature::addDefaultArgument(std::string& str, QoreValue a
         str.append(" object>");
         return;
     }
+    if (t == NT_BINARY) {
+        // Signatures also identify AOT call variants across processes.  The
+        // ordinary binary description includes its allocation address.
+        QoreString literal;
+        literal.concatHex(arg.get<const BinaryNode>());
+        str.append("<");
+        str.append(literal.c_str());
+        str.append(">");
+        return;
+    }
     if (!arg.needsEval()) {
         QoreNodeAsStringHelper sh(arg, FMT_NONE, 0);
         str.append(sh->c_str());

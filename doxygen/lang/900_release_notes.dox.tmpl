@@ -539,6 +539,11 @@ val = "string";      # OK
     remain unchanged. Mapped source files retain content hashes without embedding a build-machine
     mtime shortcut. CMake forwards native file-prefix maps to whole-module compilation.
     Incremental object and object-link modes retain physical source identities and reject this option.
+    Native local-cache cleanup and exit-handler instructions use stable registration order.
+    Closure captures and serialized expression/local slots use stable lexical or numeric identities,
+    so allocator layout no longer changes these emitted instructions or metadata records.
+    Binary default arguments use hexadecimal values in function signatures, allowing stable
+    metadata and exact variant matching across compiler and runtime processes.
     Native AOT links honor CMake's \c CMAKE_SKIP_RPATH and \c CMAKE_SKIP_INSTALL_RPATH policies;
     package builds omit the build-directory RPATH at link time. Output and library paths containing
     spaces, quotes or commas are passed as individual linker arguments.

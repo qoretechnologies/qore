@@ -105,6 +105,155 @@ class AotPrefixMapsTest(unittest.TestCase):
         self.assertNotIn("source-mtime-ns", info)
         return artifact
 
+    def test_local_cleanup_order_is_independent_of_allocator_layout(self):
+        # Recursive schema traversal exercises reload trackers and boxed local cleanup.
+        # Different allocator layouts must not change emitted instruction order.
+        source = self.root / "ReproLocals.qm"
+        source.write_text('''%modern
+module ReproLocals {
+    version = "1.0";
+    desc = "Local cache reproducibility test";
+    author = "Qore";
+    license = "MIT";
+}
+class Node {
+    public {
+        *string name;
+        *string summary;
+        *hash<auto> payload;
+    }
+    constructor(*string n) { name = n; }
+}
+class Probe {
+    public { string operation = "send"; }
+    public hash<auto> inspect(list<Node> nodes) {
+        hash<auto> rv;
+        string operation_name = operation;
+        int seen = 0;
+        on_exit {
+            if (seen != nodes.size() || operation_name != operation || !rv) {
+                throw "CACHE-ERROR", "Exit handler read stale locals";
+            }
+        }
+        foreach Node item in (nodes) {
+            string name = item.name ?? operation;
+            *hash<auto> type;
+            if (item.payload) {
+                type = expand(item.payload, name);
+            }
+            rv{name} = {"desc": item.summary ?? sprintf("Message %s", name),
+                       "type": type ?? {"kind": "auto"}};
+            ++seen;
+        }
+        return rv;
+    }
+    private hash<auto> expand(hash<auto> schema, *string name) {
+        string type = schema.type ?? "object";
+        switch (type) {
+            case "object": {
+                hash<auto> rv;
+                rv.name = name;
+                if (schema.properties) {
+                    foreach hash<auto> item in (schema.properties.pairIterator()) {
+                        bool required = schema.required{item.key} ?? False;
+                        hash<auto> property = expand(item.value, item.key);
+                        rv{item.key} = {"type": property, "required": required};
+                    }
+                }
+                return rv;
+            }
+            case "array":
+                if (schema.items) {
+                    *hash<auto> element = expand(schema.items, name ? name + " item" : "item");
+                    if (element) {
+                        return {"element": element};
+                    }
+                }
+                return {"kind": "list"};
+            default:
+                return {"kind": type};
+        }
+    }
+}
+public hash<auto> sub probe() {
+    Node item("sample");
+    item.payload = {"properties": {"child": {"type": "array", "items": {"type": "string"}}}};
+    Probe p();
+    return p.inspect((item,));
+}
+''')
+        artifact = self.root / "ReproLocals.qmod"
+        outputs = []
+        for tcache in (7, 0, 2, 12):
+            # glibc varies allocation reuse; other allocators harmlessly ignore this setting.
+            self.env["GLIBC_TUNABLES"] = f"glibc.malloc.tcache_count={tcache}"
+            self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={self.root}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            outputs.append(artifact.read_bytes())
+            self.env["QORE_MODULE_DIR"] = str(self.root)
+            self.assertEqual("string\n", self.run_tool(QORE, "-l", "ReproLocals", "-e",
+                'printf("%s\\n", probe().sample.type.child.type.element.kind);'))
+        for output in outputs[1:]:
+            self.assertEqual(outputs[0], output)
+
+    def test_closure_capture_metadata_is_independent_of_allocator_layout(self):
+        source = self.root / "ReproProbe.qm"
+        # A delayed closure keeps multiple bindings alive after the defining function returns.
+        locals_code = "".join(f'    string part{i} = prefix + "-{i}";\n' for i in range(12))
+        expression = ' + ":" + '.join(f"part{i}" for i in range(12))
+        source.write_text(HEADER + 'public code<string()> sub make_closure(string prefix) {\n'
+                          + locals_code + '    return string sub () { return ' + expression + '; };\n}\n')
+        artifact = self.root / "ReproProbe.qmod"
+        outputs = []
+        for tcache in (7, 0, 2, 12):
+            self.env["GLIBC_TUNABLES"] = f"glibc.malloc.tcache_count={tcache}"
+            self.env.pop("QORE_DISABLE_AOT_NATIVE_CLOSURES", None)
+            self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={self.root}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            outputs.append(artifact.read_bytes())
+            self.env["QORE_MODULE_DIR"] = str(self.root)
+            for native_disabled in (False, True):
+                if native_disabled:
+                    self.env["QORE_DISABLE_AOT_NATIVE_CLOSURES"] = "1"
+                else:
+                    self.env.pop("QORE_DISABLE_AOT_NATIVE_CLOSURES", None)
+                self.assertEqual(":".join(f"value-{i}" for i in range(12)) + "\n",
+                    self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                        'code<string()> fn = make_closure("value"); printf("%s\\n", fn());'))
+        for output in outputs[1:]:
+            self.assertEqual(outputs[0], output)
+
+    def test_binary_default_signatures_are_stable_across_processes(self):
+        source = self.root / "ReproProbe.qm"
+        source.write_text(HEADER + '''
+public binary sub binary_default(binary value = <0001ff>) { return value; }
+public binary sub binary_default(string value) { return binary(value); }
+public binary sub empty_default(binary value = binary()) { return value; }
+public binary sub encrypt_probe() {
+    return encrypt("aes-128-cbc", "plain", <000102030405060708090a0b0c0d0e0f>,
+                   <00000000000000000000000000000000>);
+}
+public string sub probe() {
+    return binary_default().toHex() + ":" + empty_default().toHex() + ":"
+        + binary_default("x").toHex() + ":" + encrypt_probe().toHex();
+}
+''')
+        artifact = self.root / "ReproProbe.qmod"
+        source_value = self.run_tool(QORE, "-l", source, "-e", 'printf("%s\\n", probe());')
+        self.assertTrue(source_value.startswith("0001ff::78:"), source_value)
+        outputs = []
+        for tcache in (7, 0, 2, 12):
+            self.env["GLIBC_TUNABLES"] = f"glibc.malloc.tcache_count={tcache}"
+            self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={self.root}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            outputs.append(artifact.read_bytes())
+            # Loading the artifact in another process must resolve the same variants.
+            self.env["QORE_MODULE_DIR"] = str(self.root)
+            self.assertEqual(source_value, self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                'printf("%s\\n", probe());'))
+        for output in outputs[1:]:
+            self.assertEqual(outputs[0], output)
+
     def test_single_module_artifacts_and_inline_locations(self):
         first = self.compile_module("first")
         second = self.compile_module("different-second")

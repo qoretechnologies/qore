@@ -257,6 +257,11 @@ bool qore_ir_get_readonly_scalar_closure_captures(
         result.clear();
         return false;
     }
+    // This vector defines native closure argument order, not just set membership.
+    // The eligibility limit above bounds the sort to at most four captures.
+    std::sort(result.begin(), result.end(), [](const LocalVar* lhs, const LocalVar* rhs) {
+        return strcmp(lhs->getName(), rhs->getName()) < 0;
+    });
     return true;
 }
 

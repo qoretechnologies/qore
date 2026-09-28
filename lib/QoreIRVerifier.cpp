@@ -2155,6 +2155,12 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 std::vector<const LocalVar*> expr_locals;
                 std::unordered_set<const void*> seen;
                 collectLocalSlotsFromExpr(expr, expr_locals, seen);
+                // Embedded closures contribute a pointer-ordered capture set. Slot allocation
+                // must use lexical names rather than allocator-dependent collection order.
+                std::stable_sort(expr_locals.begin(), expr_locals.end(),
+                    [](const LocalVar* lhs, const LocalVar* rhs) {
+                        return strcmp(lhs->getName(), rhs->getName()) < 0;
+                    });
                 for (const LocalVar* lv : expr_locals) {
                     assign_slot(lv);
                 }

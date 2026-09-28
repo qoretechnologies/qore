@@ -11989,7 +11989,14 @@ bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSig
         }
     }
     if (vlist) {
-        for (LocalVar* lv : *vlist) {
+        // Parser capture sets are ordered by pointer. Captures missing from the IR must
+        // receive stable slot identities as well; names identify lexical capture bindings.
+        std::vector<LocalVar*> ordered_captures(vlist->begin(), vlist->end());
+        std::sort(ordered_captures.begin(), ordered_captures.end(),
+            [](const LocalVar* lhs, const LocalVar* rhs) {
+                return strcmp(lhs->getName(), rhs->getName()) < 0;
+            });
+        for (LocalVar* lv : ordered_captures) {
             if (!reserve(lv)) {
                 return false;
             }
@@ -12036,6 +12043,14 @@ bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vli
     if (captures.size() > UINT16_MAX) {
         return false;
     }
+    // Capture records carry their parent slot explicitly; their wire order must not depend
+    // on the parser's pointer-ordered set. Names disambiguate captures without a parent slot.
+    std::sort(captures.begin(), captures.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.parent_slot != rhs.parent_slot) {
+            return lhs.parent_slot < rhs.parent_slot;
+        }
+        return strcmp(lhs.lv->getName(), rhs.lv->getName()) < 0;
+    });
     writer.writeU16(static_cast<uint16_t>(captures.size()));
     for (const QoreAOTClosureCaptureInfo& capture : captures) {
         writer.writeStringRef(capture.lv->getName() ? capture.lv->getName() : "");

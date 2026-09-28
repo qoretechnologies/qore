@@ -39,6 +39,9 @@ qore (3.0.0-1) unstable; urgency=medium
     zone.
   * Retry stale HTTP connections when protocol closure precedes the pooled
     state update, and prevent UDP test endpoint port collisions.
+  * Make native AOT cleanup, handler caches, closure captures and serialized
+    slot identities independent of allocator addresses.
+  * Render binary default arguments as stable values in function signatures.
   * Detect platform features before configuring conditional documentation.
   * Avoid executable-archive probes for generated Doxygen text while retaining
     image and archive normalization.

@@ -35706,6 +35706,11 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         if (expr_snapshot.empty()) {
             break;
         }
+        // Classification can register additional expression/local slots. Process the snapshot
+        // by its stable slot IDs so pointer-hash iteration cannot change those new identities.
+        std::sort(expr_snapshot.begin(), expr_snapshot.end(), [](const auto& lhs, const auto& rhs) {
+            return lhs.second < rhs.second;
+        });
         for (auto& [bits, slot] : expr_snapshot) {
             // Grow the output on demand: classifyExpression may run an
             // ExprTreeSerializer dry-run that calls getExprSlot() and

@@ -45,6 +45,7 @@
 class LocalVar;
 class FunctionEntry;
 
+#include <llvm/ADT/MapVector.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IRBuilder.h>
@@ -354,7 +355,10 @@ private:
     size_t assigned_hash_guard_elisions = 0;
 
     // Local variable allocas (LocalVar* address → alloca)
-    std::unordered_map<const void*, llvm::Value*> local_allocas;
+    // These maps drive instruction emission, so iterate in registration order rather than pointer-hash order.
+    // Pointer values vary with allocator layout, even for identical source and prefix mappings.
+    using LocalAllocaMap = llvm::MapVector<const void*, llvm::Value*>;
+    LocalAllocaMap local_allocas;
 
     // Track LocalVars that underwent COW in HashKeyStore/ListIndexStore
     // These need fresh reload from runtime stack on next LoadLocal to get updated value
@@ -387,7 +391,7 @@ private:
     // UninstantiateLocal (pop-only).  Set to true by StoreLocal (conditional re-push).
     // Used by emitPreInstClosureReInstantiation() at function exit to re-push any
     // remaining popped CVVs so evalTiered's cleanup can pop exactly one per variable.
-    std::unordered_map<const void*, llvm::AllocaInst*> closure_pre_inst_flags;
+    llvm::MapVector<const void*, llvm::AllocaInst*> closure_pre_inst_flags;
 
     // Track which value IDs already contain NaN-boxed i64 (from Invoke, Call, CatchException,
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
@@ -452,8 +456,10 @@ private:
     // the function epoch; LoadLocal reloads only the specific stale local it
     // reads. This keeps LLVM IR size O(calls + local reads), not O(calls * locals).
     llvm::AllocaInst* local_reload_epoch = nullptr;
-    std::unordered_map<const void*, llvm::AllocaInst*> local_valid_epochs;
+    llvm::MapVector<const void*, llvm::AllocaInst*> local_valid_epochs;
     bool local_reload_boundary_cleanup_pending = false;
+    // Propagate cancellation from native handler cache emission to lowerFunction().
+    bool native_handler_cache_cancelled = false;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -668,7 +674,7 @@ private:
     // Reload tracker allocas for local variables modified by lvalue operations.
     // Each tracker alloca holds the most recent qore_rt_load_local reload value
     // (+1 ref) so it can be decref'd before being replaced or at function exit.
-    std::unordered_map<const void*, llvm::Value*> local_reload_trackers;
+    llvm::MapVector<const void*, llvm::Value*> local_reload_trackers;
 
     // Deferred decref allocas for reload trackers.  When a reload replaces the
     // tracker value, the old value is moved here instead of being decrefd
@@ -677,7 +683,7 @@ private:
     // immediately, any live SSA value from LoadLocal becomes a dangling pointer.
     // Deferring by one cycle ensures the old value survives until the next
     // reload, by which time the SSA value has been consumed.
-    std::unordered_map<const void*, llvm::Value*> local_reload_deferred;
+    llvm::MapVector<const void*, llvm::Value*> local_reload_deferred;
 
     // Release reload tracker refs that survived a side-effecting statement.
     // Deferred reload refs keep pre-call SSA values alive through the rest of
