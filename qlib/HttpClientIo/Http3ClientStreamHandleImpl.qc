@@ -68,6 +68,9 @@ while (True) {
 */
 public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     private {
+        #! Trailers that end the request body; see @ref setTrailers()
+        *hash<string, string> send_trailers;
+
         #! Typed reference to the H3 connection (for streaming and datagram methods)
         Http3ClientConnection h3conn;
 
@@ -356,6 +359,28 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         return queue;
     }
 
+    #! Sets trailers that end the request body of a streaming-send request
+    /** The trailers are sent when @ref sendData() is called with \c end_stream = \c True: after the data given,
+        in a HEADERS frame that ends the request stream.  Each call replaces any previously-set trailers.
+
+        @param trailers map of trailer header name to value; pass \c NOTHING to clear
+
+        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, or the request body is not streamed
+
+        @since HttpClientIo 1.0
+    */
+    setTrailers(*hash<string, string> trailers) {
+        AutoLock al(lock);
+        if (!streaming) {
+            throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+        }
+        if (!request_body_streaming) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                "trailers require body_streaming=True";
+        }
+        send_trailers = trailers;
+    }
+
     #! Sends data on a streaming connection
     /** @param data the data to send
         @param end_stream if True, signals end of stream; if the stream is
@@ -416,8 +441,21 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     h3conn.getConnectionState());
         }
 
+        # trailers end the request body in place of an empty end-of-stream DATA frame
+        *hash<string, string> trailers;
+        if (end_stream) {
+            AutoLock al(lock);
+            trailers = remove send_trailers;
+        }
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
         try {
+            if (trailers) {
+                if (data) {
+                    h3conn.sendStreamData(sid, data, False);
+                }
+                h3conn.sendTrailers(sid, trailers);
+                return;
+            }
             # a half-close on a stream the server has already closed is a no-op in sendStreamData()
             h3conn.sendStreamData(sid, data, end_stream);
         } catch (hash<ExceptionInfo> ex) {

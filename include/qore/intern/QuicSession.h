@@ -85,6 +85,8 @@ struct QuicStreamInfo {
     std::string scheme;
     int status_code = 0;
     std::map<std::string, std::vector<std::string>, ltstrcase> headers;
+    //! The trailers received after the body (RFC 9114 section 4.1)
+    std::map<std::string, std::vector<std::string>, ltstrcase> trailers;
     std::vector<char> body;
     bool headers_complete = false;
     bool body_complete = false;
@@ -572,6 +574,11 @@ public:
         @return true if body_complete or stream not found (treat as complete)
     */
     DLLLOCAL bool isStreamComplete(int64_t stream_id) const;
+
+    //! Returns the trailers received for a stream, or nullptr if none were received
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* getStreamTrailers(int64_t stream_id) const;
 
     //! Check if a stream has been fully closed by ngtcp2 (all data ACKed by peer)
     /** The ngtcp2 stream_close callback fires only after ALL stream data (including
@@ -1402,6 +1409,12 @@ private:
     //! HTTP/3 begin headers
     DLLLOCAL static int h3BeginHeadersCallback(nghttp3_conn* conn, int64_t stream_id,
                                       void* conn_user_data, void* stream_user_data);
+
+    //! HTTP/3 receive trailer field
+    DLLLOCAL static int h3RecvTrailerCallback(nghttp3_conn* conn, int64_t stream_id,
+                                    int32_t token, nghttp3_rcbuf* name,
+                                    nghttp3_rcbuf* value, uint8_t flags,
+                                    void* conn_user_data, void* stream_user_data);
 
     //! HTTP/3 receive header
     DLLLOCAL static int h3RecvHeaderCallback(nghttp3_conn* conn, int64_t stream_id,

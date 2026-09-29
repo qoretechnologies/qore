@@ -561,6 +561,14 @@ public:
     */
     DLLLOCAL bool isStreamEndStreamReceived(int32_t stream_id) const;
 
+    //! Returns the trailers received for a stream, or nullptr if none were received
+    /** Server streams keep the trailers of the request until the stream is cleaned up, so that a handler can read
+        them once the request body is complete
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* getStreamTrailers(int32_t stream_id) const;
+
     //! Asks the client to stop sending its request after the server sent the complete response (server)
     /** Called when the frame that carries the response's END_STREAM flag has been sent; submits
         RST_STREAM(NO_ERROR) if the client has not yet sent its complete request (RFC 9113 section 8.1).  Extended

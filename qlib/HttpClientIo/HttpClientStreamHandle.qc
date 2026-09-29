@@ -461,6 +461,21 @@ public class HttpClientStreamHandle {
         }
     }
 
+    #! Sets trailers that end the request body of a streaming-send request
+    /** Implemented for HTTP/1.1 (chunked-transfer trailers), HTTP/2, and HTTP/3; the trailers are sent when
+        \c sendData() is called with \c end_stream = \c True
+
+        @param trailers map of trailer header name to value; pass \c NOTHING to clear
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED the protocol of the stream does not support request trailers
+
+        @since HttpClientIo 1.0
+    */
+    setTrailers(*hash<string, string> trailers) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED", sprintf("request trailers are not supported for %s streams",
+            conn.getProtocol());
+    }
+
     #! Returns the underlying connection
     HttpClientConnection getConnection() {
         return conn;

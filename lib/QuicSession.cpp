@@ -1156,6 +1156,7 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     nghttp3_callbacks h3_cbs{};
     h3_cbs.begin_headers = h3BeginHeadersCallback;
     h3_cbs.recv_header = h3RecvHeaderCallback;
+    h3_cbs.recv_trailer = h3RecvTrailerCallback;
     h3_cbs.end_headers = h3EndHeadersCallback;
     h3_cbs.recv_data = h3RecvDataCallback;
     h3_cbs.end_stream = h3EndStreamCallback;
@@ -3078,6 +3079,27 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
     return nullptr;
 }
 
+QoreHashNode* QuicSession::getStreamTrailers(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end() || it->second->trailers.empty()) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    for (const auto& i : it->second->trailers) {
+        if (i.second.size() == 1) {
+            rv->setKeyValue(i.first.c_str(), new QoreStringNode(i.second[0]), nullptr);
+        } else {
+            QoreListNode* l = new QoreListNode(stringTypeInfo);
+            for (const auto& v : i.second) {
+                l->push(new QoreStringNode(v), nullptr);
+            }
+            rv->setKeyValue(i.first.c_str(), l, nullptr);
+        }
+    }
+    return rv.release();
+}
+
 bool QuicSession::isStreamComplete(int64_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
@@ -4389,6 +4411,29 @@ int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_i
             }
         } else {
             stream->headers[name_str].push_back(value_str);
+        }
+    } catch (...) {
+        return NGHTTP3_ERR_CALLBACK_FAILURE;
+    }
+
+    return 0;
+}
+
+int QuicSession::h3RecvTrailerCallback(nghttp3_conn* /* conn */, int64_t stream_id,
+                                       int32_t /* token */, nghttp3_rcbuf* name,
+                                       nghttp3_rcbuf* value, uint8_t /* flags */,
+                                       void* conn_user_data, void* /* stream_user_data */) {
+    try {
+        auto* session = static_cast<QuicSession*>(conn_user_data);
+        auto* stream = session->getOrCreateStream(stream_id);
+
+        nghttp3_vec name_vec = nghttp3_rcbuf_get_buf(name);
+        nghttp3_vec value_vec = nghttp3_rcbuf_get_buf(value);
+
+        std::string name_str(reinterpret_cast<const char*>(name_vec.base), name_vec.len);
+        // trailers carry no pseudo-header fields (RFC 9114 section 4.1)
+        if (!name_str.empty() && name_str[0] != ':') {
+            stream->trailers[name_str].emplace_back(reinterpret_cast<const char*>(value_vec.base), value_vec.len);
         }
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;

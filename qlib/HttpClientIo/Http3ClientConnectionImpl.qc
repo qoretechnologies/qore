@@ -257,6 +257,40 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.installSseState(stream_id, queue, notifier, initial_body);
     }
 
+    #! Sends trailers that end the request body of a streaming request
+    /** @param stream_id the HTTP/3 stream ID
+        @param trailers the trailer fields
+
+        @throw HTTP3-STATE-ERROR if not in ready state
+        @throw HTTP3-CONNECTION-CLOSED if the QUIC session is closed
+        @throw QUIC-ERROR if the trailers cannot be sent
+
+        @since HttpClientIo 1.0
+    */
+    sendTrailers(int stream_id, hash<string, string> trailers) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR",
+                sprintf("cannot send trailers in state: %y", self.getConnectionState());
+        }
+        Socket sock = poll_op.getSocket();
+        if (sock.isQuicSessionClosed()) {
+            self.setClosed();
+            throw "HTTP3-CONNECTION-CLOSED",
+                "QUIC session closed; connection evicted from pool";
+        }
+        *AsyncSocketIoController ctl;
+        {
+            AutoLock al(lock);
+            touchActivityLocked();
+            ctl = controller_ref;
+        }
+        log(LoggerLevel::DEBUG, "sending trailers on stream %d", stream_id);
+        sock.sendQuicClientTrailers(stream_id, trailers);
+        if (ctl) {
+            ctl.wakeSocket(sock: sock);
+        }
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)

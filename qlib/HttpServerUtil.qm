@@ -121,6 +121,7 @@ module HttpServerUtil {
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
     |\c socket|string|the bind address used to bind the listener (\c "socket-info" provides more detailed information)
     |\c socket-info|hash|information about the listening socket as returned by @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()"
+    |\c trailers|*hash|the trailer fields that the client sent after the request body (chunked HTTP/1.1, HTTP/2, and HTTP/3), with lower-case names; set for handlers that receive the whole body once it has been read; stream handlers receive them in the \c hdr key of the last call of \c recv()
     |\c ssl|*bool|@ref True "True" if the request was encrypted with HTTPS
     |\c url|hash|a hash with a \c path key giving the URI path in the request after URL decoding the resource path
     |\c user|*string|set by the authenticator if the request was authenticated to a specific user
@@ -129,6 +130,9 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - request handlers receive the trailer fields that a client sends after the request body (chunked HTTP/1.1,
+      HTTP/2, and HTTP/3) in \c cx.trailers, and stream handlers receive them in the \c hdr key of the last call of
+      \c recv() for HTTP/2 and HTTP/3 as well as for HTTP/1.1
     - documented the \c Content-Type of a response body without one in
       @ref HttpServer::HttpResponseInfo::hdr "HttpResponseInfo::hdr"
     - a request handler receives the effective maximum request body size of the listener in
@@ -2017,11 +2021,11 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
-    - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any message
-      trailer.  If data is sent non-chunked, then this method is called with the monolithic message body and then
-      again with @ref nothing to signify the end of the transfer and to simulate a chunked transfer.  The simulation
-      of a chunked transfer or the actual chunked receive with the callbacks is made by the handleRequest() method.
-      Subclasses should re-implement recvImpl() which is called by this method
+    - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any trailer fields
+      sent after the body (also for HTTP/2 and HTTP/3).  If data is sent non-chunked, then this method is called with
+      the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate
+      a chunked transfer.  The simulation of a chunked transfer or the actual chunked receive with the callbacks is
+      made by the handleRequest() method. Subclasses should re-implement recvImpl() which is called by this method
     - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers
       and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by
       this method
@@ -2171,8 +2175,8 @@ public class AbstractStreamRequest {
                 dh.deserialized = True;
             }
             recv(dh);
-            # signal end of data
-            recvImpl({"hdr": NOTHING});
+            # signal end of data with any trailers received with the buffered body
+            recvImpl({"hdr": cx.trailers});
         } else if (cx."header-info".body_streaming) {
             # Opt-in interactive bidirectional streaming on HTTP/2 / HTTP/3: instead of
             # reading all inbound DATA before replying, interleave read -> reply on the
@@ -2318,8 +2322,10 @@ public class AbstractStreamRequest {
                     }
                 }
             }
-            # signal end of data
-            recvImpl({"hdr": NOTHING});
+            # signal end of data with any trailers sent after the body
+            recvImpl({"hdr": cx."header-info".http3
+                ? s.getQuicStreamTrailers(cx."header-info".session_id, sid)
+                : s.getHttp2StreamTrailers(sid)});
         } else {
             if (hdr."transfer-encoding" == "chunked") {
                 # HTTP/1.1 chunked reading: the native socket library controls
@@ -2467,7 +2473,8 @@ public class AbstractStreamRequest {
     /** Submits early \c 200 streaming response headers, then for each inbound DATA frame calls
         @ref recv() (which calls @ref recvImpl()) and immediately drains @ref send() (which calls
         @ref sendImpl()) to write reply frame(s) for that operation back on the same stream.  At
-        END_STREAM, signals end-of-data via @c recvImpl({"hdr": NOTHING}), flushes any final reply,
+        END_STREAM, signals end-of-data via @c recvImpl({"hdr": trailers}) with any trailers the client sent,
+        flushes any final reply,
         and half-closes the stream.
 
         Outbound DATA is submitted through the socket's thread-safe APIs and flushed by the I/O
@@ -2587,8 +2594,9 @@ public class AbstractStreamRequest {
                 break;
             }
         }
-        # signal end of data, flush any final reply, then half-close the stream
-        recvImpl({"hdr": NOTHING});
+        # signal end of data with any trailers sent after the body, flush any final reply, then half-close the
+        # stream
+        recvImpl({"hdr": http3 ? s.getQuicStreamTrailers(session_id, sid) : s.getHttp2StreamTrailers(sid)});
         drainInteractiveReplies(sid, session_id, http3, io_wake);
         sendInteractiveData(sid, session_id, http3, binary(), True, io_wake);
 
@@ -2753,16 +2761,15 @@ private logChunk(bool send, int size) {
         @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and then
         with any message body in the \c "data"; if a chunked HTTP message is received, then this method is called once
         for each chunk; when the message has been received, then this method is called with a hash representing any
-        trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body
-        or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data
-        calls have the following keys:
+        trailer fields sent after the body (in a chunked HTTP/1.1 transfer, or with HTTP/2 or HTTP/3), or @ref nothing
+        if there were no trailers.  The argument to this callback is always a hash; data calls have the following
+        keys:
         - \c "data": the string or binary data
         - \c "chunked": @ref True "True" if the data was received with chunked transfer encoding, @ref False "False"
           if not
         .
         Header or trailer data is placed in a hash with the following keys:
-        - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no
-          trailers were included in a chunked message
+        - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
         - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as,
           for example, socket character encoding)
     */
@@ -3189,6 +3196,10 @@ public class AbstractHttpRequestHandler {
           \c cx."header-info".  The handler thread drives the TCP socket directly.
 
         Check \c cx."header-info".http3 to determine which protocol is in use.
+
+        Any trailer fields that the client sends after the body are available once the body has ended from
+        @ref Qore::Socket::getQuicStreamTrailers() "Socket::getQuicStreamTrailers()" (HTTP/3) or
+        @ref Qore::Socket::getHttp2StreamTrailers() "Socket::getHttp2StreamTrailers()" (HTTP/2).
 
         @par Context Keys Available to Streaming Handlers
         When \c body_streaming is \c True, the following keys are available in \c cx."header-info":
@@ -3699,7 +3710,15 @@ public class AbstractHttpRequestHandler {
             *data body) {
         # classic, non-streaming interface
         if (!stream) {
-            auto rv = handleRequest(cx, hdr, body ?? getMessageBody(s, hdr, body, True, listener));
+            *hash<auto> trailers;
+            # not declared as *data: the handleRequest() variant is selected at runtime, so the variant of a
+            # subclass declared with untyped hash parameters is called
+            auto msg_body = body ?? getMessageBody(s, hdr, body, True, listener, \trailers);
+            # trailers received after a chunked request body
+            if (trailers) {
+                cx.trailers = trailers;
+            }
+            auto rv = handleRequest(cx, hdr, msg_body);
             switch (rv.typeCode()) {
                 case NT_HASH: {
                     hash<auto!> hrv = rv;
@@ -3849,20 +3868,26 @@ public class AbstractHttpRequestHandler {
         @param decode if the body should be decompressed according to its content encoding
         @param listener the listener that received the request, which gives the maximum size of a decompressed body
         unless the handler sets one; see getMaxDecodedBodySize()
+        @param trailers set to the trailer fields sent after a chunked request body, if any
 
         @return the request body
 
         @throw HTTP-BODY-TOO-LARGE the decompressed body exceeds the maximum size
 
-        @since HttpServerUtil 1.6 added the \a listener parameter
+        @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters
     */
     *data getMessageBody(Socket s, hash<auto> hdr, *data body, bool decode = True,
-            *HttpListenerInterface listener) {
+            *HttpListenerInterface listener, *reference<*hash<auto>> trailers) {
         if (!body && hdr."transfer-encoding" == "chunked") {
-            hdr += (hdr."content-encoding"
+            hash<auto> chunked = hdr."content-encoding"
                 ? s.readHTTPChunkedBodyBinary(timeout_ms)
-                : s.readHTTPChunkedBody(timeout_ms));
-            body = remove hdr.body;
+                : s.readHTTPChunkedBody(timeout_ms);
+            body = remove chunked.body;
+            # the other keys are the trailers
+            if (chunked) {
+                trailers = chunked;
+            }
+            hdr += chunked;
         }
 
         if (decode && body && hdr."content-encoding" && decompress) {

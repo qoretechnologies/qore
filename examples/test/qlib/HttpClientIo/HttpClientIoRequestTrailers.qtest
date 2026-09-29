@@ -1,0 +1,385 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for request trailers sent by HttpClientIo stream handles and received by HttpServer handlers over
+    HTTP/1.1, HTTP/2, and HTTP/3
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires HttpClientIo
+%requires json
+
+%exec-class HttpClientIoRequestTrailersTest
+
+#! formats a body and the trailers received with it as the response text
+string sub describe(string body, *hash<auto> trailers) {
+    list<string> l = map sprintf("%s=%s", $1, trailers{$1}), sort(trailers.keys());
+    return sprintf("%s|%s", body, l.join(","));
+}
+
+#! a handler that receives the complete request body and returns the body and its trailers
+class BufferedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string text = exists body ? (body.typeCode() == NT_BINARY ? body.toString() : body) : "";
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200,
+            describe(text, cx.hasKey("trailers") ? cx.trailers : NOTHING));
+    }
+}
+
+#! a stream request that records the trailers given in the last call of recv()
+class TrailerStreamRequest inherits AbstractStreamRequest {
+    private {
+        string received = "";
+        *hash<auto> trailers;
+        int eod = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.hasKey("data")) {
+            received += v.data.typeCode() == NT_BINARY ? v.data.toString() : v.data;
+        } else if (v.hasKey("hdr")) {
+            trailers = v.hdr;
+            ++eod;
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "hdr": {"Content-Type": "text/plain;charset=utf-8"},
+            # the server gives the complete body when it read it before calling the handler
+            "body": sprintf("%seod=%d:%s", exists body ? "buffered:" : "", eod, describe(received, trailers)),
+        };
+    }
+}
+
+#! a handler that receives the request body as a stream
+class StreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new TrailerStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! an interactive stream request that replies with the body and trailers once the body has ended
+/** Interactive streaming is used for HTTP/2 and HTTP/3; HTTP/1.1 sends the reply after the body as for other stream
+    requests
+*/
+class InteractiveTrailerRequest inherits AbstractStreamRequest {
+    private {
+        string received = "";
+        Queue replies();
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    bool wantsInteractiveStreaming() {
+        return True;
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.hasKey("data")) {
+            received += v.data.typeCode() == NT_BINARY ? v.data.toString() : v.data;
+        } else if (v.hasKey("hdr")) {
+            replies.push("eod=1:" + describe(received, v.hdr));
+        }
+    }
+
+    #! the reply is sent with sendImpl(); HTTP/1.1 sends it as a chunked body
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "hdr": {"Content-Type": "text/plain;charset=utf-8", "Transfer-Encoding": "chunked"},
+        };
+    }
+
+    private auto sendImpl() {
+        return replies.empty() ? NOTHING : replies.get();
+    }
+}
+
+#! a handler for interactive stream requests
+class InteractiveHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new InteractiveTrailerRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a REST class that returns the deserialized request body and its trailers
+class TrailerRestClass inherits AbstractRestClass {
+    string name() {
+        return "rest";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, describe(cx.body, cx.hasKey("trailers") ? cx.trailers : NOTHING));
+    }
+}
+
+#! a stream handler that receives the request body as it arrives, before the server has read all of it
+class LiveStreamHandler inherits StreamHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+}
+
+public class HttpClientIoRequestTrailersTest inherits QUnit::Test {
+    private {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+
+        const Trailers = {"X-Checksum": "abc123", "x-count": "2"};
+
+        HttpServer server;
+        hash<string, string> urls;
+    }
+
+    constructor() : Test("HttpClientIoRequestTrailersTest", "1.0") {
+        addTestCase("trailers received by a handler with the complete body", \testBuffered());
+        addTestCase("trailers received by a stream handler", \testStream());
+        addTestCase("trailers received by a REST handler", \testRest());
+        addTestCase("requests without trailers", \testNoTrailers());
+        addTestCase("setTrailers() errors", \testErrors());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        server.setHandler("stream", "^stream", NOTHING, new StreamHandler());
+        server.setHandler("live", "^live", NOTHING, new LiveStreamHandler());
+        server.setHandler("interactive", "^interactive", NOTHING, new InteractiveHandler());
+        RestHandler rest();
+        rest.addClass(new TrailerRestClass());
+        server.setHandler("rest", "^rest", NOTHING, rest);
+        server.setDefaultHandler("buffered", new BufferedHandler());
+        urls.h1 = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        urls.h2 = sprintf("https://localhost:%d", server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port);
+        server.waitForAsyncIo();
+        try {
+            int quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+            server.waitForAsyncIo();
+            # the QUIC listener is bound to an IPv4 address
+            urls.h3 = sprintf("https://127.0.0.1:%d", quic_port);
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("no HTTP/3 listener: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    testBuffered() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            assertEq("part1-part2|x-checksum=abc123,x-count=2", send(i.key, i.value, "/buffered", Trailers),
+                i.key);
+        }
+    }
+
+    testStream() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            # the server reads an HTTP/2 or HTTP/3 body before calling a handler that does not want body streaming
+            string buffered = i.key == "h1" ? "" : "buffered:";
+            assertEq(buffered + "eod=1:part1-part2|x-checksum=abc123,x-count=2",
+                send(i.key, i.value, "/stream", Trailers), i.key);
+            assertEq("eod=1:part1-part2|x-checksum=abc123,x-count=2", send(i.key, i.value, "/live", Trailers),
+                i.key);
+            assertEq("eod=1:part1-part2|x-checksum=abc123,x-count=2",
+                send(i.key, i.value, "/interactive", Trailers), i.key);
+        }
+    }
+
+    testRest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            string body = send(i.key, i.value, "/rest", Trailers, False, MimeTypeJson, ("\"part1-", "part2\""),
+                {"Accept": MimeTypeJson});
+            assertEq("part1-part2|x-checksum=abc123,x-count=2", parse_json(body), i.key);
+            body = send(i.key, i.value, "/rest", NOTHING, False, MimeTypeJson, ("\"part1-", "part2\""),
+                {"Accept": MimeTypeJson});
+            assertEq("part1-part2|", parse_json(body), i.key);
+        }
+    }
+
+    testNoTrailers() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            assertEq("part1-part2|", send(i.key, i.value, "/buffered"), i.key);
+            assertEq((i.key == "h1" ? "" : "buffered:") + "eod=1:part1-part2|", send(i.key, i.value, "/stream"),
+                i.key);
+            assertEq("eod=1:part1-part2|", send(i.key, i.value, "/live"), i.key);
+            assertEq("eod=1:part1-part2|", send(i.key, i.value, "/interactive"), i.key);
+            # trailers cleared before the end of the body are not sent
+            assertEq("part1-part2|", send(i.key, i.value, "/buffered", Trailers, True), i.key);
+        }
+    }
+
+    testErrors() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            HttpClientConnectionManager mgr(getOptions(i.key));
+            on_exit mgr.closeAll();
+            HttpClientStreamHandle sh = mgr.acquireStream(i.value);
+            on_exit sh.cancel();
+            # not streaming
+            assertThrows("HTTPCLIENT-STATE-ERROR", "not in streaming mode", \sh.setTrailers(), Trailers, i.key);
+            # the request body is not streamed
+            sh.startStreaming("GET", "/buffered");
+            assertThrows("HTTPCLIENT-STATE-ERROR", "body_streaming", \sh.setTrailers(), Trailers, i.key);
+        }
+    }
+
+    #! sends a streamed request body with the given trailers and returns the response body
+    /** @param parts the parts of the body; the trailers follow the data sent with the last part, which ends the body
+    */
+    private string send(string proto, string url, string path, *hash<string, string> trailers,
+            bool clear = False, string content_type = MimeTypeText, list<string> parts = ("part1-", "part2"),
+            *hash<auto> headers) {
+        HttpClientConnectionManager mgr(getOptions(proto));
+        on_exit mgr.closeAll();
+        HttpClientStreamHandle sh = mgr.acquireStream(url);
+        sh.startStreaming("POST", path, {"Content-Type": content_type} + headers, True);
+        if (trailers) {
+            sh.setTrailers(trailers);
+        }
+        if (clear) {
+            sh.setTrailers();
+        }
+        foreach string part in (parts) {
+            sh.sendData(part, $# == (parts.size() - 1));
+        }
+        string rv;
+        date deadline = now_us() + 30s;
+        while (True) {
+            if (now_us() > deadline) {
+                fail(sprintf("%s: timed out reading the response", proto));
+            }
+            auto chunk = sh.readData(5s);
+            if (!exists chunk) {
+                continue;
+            }
+            if (chunk.typeCode() == NT_HASH) {
+                if (chunk.error) {
+                    fail(sprintf("%s: stream error: %y", proto, chunk));
+                }
+                if (chunk.end_stream) {
+                    break;
+                }
+                continue;
+            }
+            rv += chunk.typeCode() == NT_BINARY ? chunk.toString() : chunk;
+        }
+        return rv;
+    }
+
+    private hash<HttpClientConnectionManagerOptions> getOptions(string proto) {
+        return <HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_encoding": "",
+        };
+    }
+}

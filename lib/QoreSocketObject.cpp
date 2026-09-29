@@ -1062,6 +1062,7 @@ public:
         CipherName,
         CipherVersion,
         StreamComplete,
+        StreamTrailers,
         MaxDatagramSize,
         DatagramSupported,
     };
@@ -1130,6 +1131,10 @@ public:
 
             case Action::StreamComplete:
                 setStreamComplete();
+                break;
+
+            case Action::StreamTrailers:
+                setStreamTrailers();
                 break;
 
             case Action::MaxDatagramSize:
@@ -1261,6 +1266,13 @@ private:
     DLLLOCAL void setStreamComplete() {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
         output = !session || session->isStreamComplete(stream_id);
+    }
+
+    DLLLOCAL void setStreamTrailers() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        if (session) {
+            output = session->getStreamTrailers(stream_id);
+        }
     }
 
     DLLLOCAL void setMaxDatagramSize(ExceptionSink* xsink) {
@@ -5950,6 +5962,11 @@ bool QoreSocketObject::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) 
     return h2 && h2->isStreamBodyTooLarge(stream_id);
 }
 
+QoreHashNode* QoreSocketObject::getHttp2StreamTrailers(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 ? h2->getStreamTrailers(stream_id) : nullptr;
+}
+
 bool QoreSocketObject::isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return h2 && h2->isStreamEndStreamReceived(stream_id);
@@ -6834,6 +6851,18 @@ bool QoreSocketObject::isQuicStreamComplete(int64_t session_id, int64_t stream_i
         return true;
     }
     return rv->getAsBool();
+}
+
+QoreHashNode* QoreSocketObject::getQuicStreamTrailers(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) const {
+    ValueHolder rv(qore_socket_object_exec_quic_query(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectQuicQueryPollOperation(const_cast<QoreSocketObject*>(this),
+            QoreSocketObjectQuicQueryPollOperation::Action::StreamTrailers, session_id, stream_id),
+        "getQuicStreamTrailers", xsink), xsink);
+    if (*xsink || rv->getType() != NT_HASH) {
+        return nullptr;
+    }
+    return rv.release().get<QoreHashNode>();
 }
 
 void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,

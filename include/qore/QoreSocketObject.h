@@ -692,6 +692,13 @@ public:
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
+    //! Returns the trailers received for an HTTP/2 stream, or nullptr if none were received
+    /** Can be called from any thread
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* getHttp2StreamTrailers(int32_t stream_id) const;
+
     //! Drains stream IDs reset by the peer since the last call (I/O thread only)
     /** Used by the HTTP/2 server poll operation to surface peer RST_STREAMs for
         persistent-session teardown.  Returns an empty vector if there is no
@@ -1284,6 +1291,11 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT bool isQuicStreamComplete(int64_t session_id, int64_t stream_id) const;
+
+    //! Returns the trailers received for an HTTP/3 stream, or nullptr if none were received
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* getQuicStreamTrailers(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) const;
 
     //! Remove a dispatched HTTP/3 stream from the session map
     /** @param session_id the QUIC session ID

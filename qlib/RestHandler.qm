@@ -398,6 +398,10 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
+    - a chunked HTTP/1.1 request body sent to a REST method without a stream handler is deserialized and validated
+      as other request bodies are, and a hash body is reflected in the method arguments; before, the method received
+      the raw body
+    - REST methods receive the trailer fields sent after a chunked request body in \c cx.trailers
     - the resource name \c "0" is routed as a nonempty path segment in HTTP and internal dispatch
     - REST resource names preserve percent-encoded separators such as slashes and question marks;
       URI path segments are decoded individually after routing boundaries and query arguments are parsed
@@ -529,7 +533,7 @@ public namespace RestHandler {
     /**
         The calling order is as follows:
         - constructor(): this is called when the request is received; then context argument contains the request header along with other information
-        - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any message trailer.  If data is sent non-chunked, then this method is called with the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate a chunked transfer.  Subclasses should re-implement recvImpl() which is called by this method
+        - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any trailer fields sent after the body (also for HTTP/2 and HTTP/3).  If data is sent non-chunked, then this method is called with the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate a chunked transfer.  Subclasses should re-implement recvImpl() which is called by this method
         - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by this method
         - send(): this is called if no message body is returned by getResponseHeaderMessage(); each time this method returns data, the data is sent in a response chunk; when this method returns @ref nothing, then no more data is sent.  Subclasses should re-implement sendImpl() which is called by this method
     */
@@ -597,9 +601,9 @@ public namespace RestHandler {
             @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and
             then with any message body in the \c "data"; if a chunked HTTP message is received, then this method is
             called once for each chunk; when the message has been received, then this method is called with a hash
-            representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a
-            normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback
-            is always a hash; data calls have the following keys:
+            representing any trailer fields sent after the body (in a chunked HTTP/1.1 transfer, or with HTTP/2 or
+            HTTP/3), or @ref nothing if there were no trailers.  The argument to this callback is always a hash; data
+            calls have the following keys:
             - \c "data": the string or binary data, or, in the case of a non-chunked request, the already decoded and
               deserialized request body, in which case the \c "deserialized" key will be @ref True
             - \c "chunked": @ref True if the data was received with chunked transfer encoding, @ref False if not
@@ -607,8 +611,7 @@ public namespace RestHandler {
               already been deserialized
             .
             Header or trailer data is placed in a hash with the following keys:
-            - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or
-              no trailers were included in a chunked message
+            - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
             - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such
               as, for example, socket character encoding)
         */
@@ -759,13 +762,13 @@ public namespace RestHandler {
 
         #! abstract callback method for receiving chunked data
         /**
-            @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and then with any message body in the \c "data"; if a chunked HTTP message is received, then this method is called once for each chunk; when the message has been received, then this method is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+            @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and then with any message body in the \c "data"; if a chunked HTTP message is received, then this method is called once for each chunk; when the message has been received, then this method is called with a hash representing any trailer fields sent after the body (in a chunked HTTP/1.1 transfer, or with HTTP/2 or HTTP/3), or @ref nothing if there were no trailers.  The argument to this callback is always a hash; data calls have the following keys:
             - \c "data": the string or binary data, or, in the case of a non-chunked request, the already decoded and deserialized request body, in which case the \c "deserialized" key will be @ref True
             - \c "chunked": @ref True if the data was received with chunked transfer encoding, @ref False if not
             - \c "deserialized": present and set to @ref True if a non-chunked request was received, and the body has already been deserialized
             .
             Header or trailer data is placed in a hash with the following keys:
-            - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
+            - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
             - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
         */
         abstract nothing recvImpl(hash<auto> v);
@@ -865,13 +868,13 @@ public namespace RestHandler {
 
         #! callback method for receiving chunked data; this calls @ref RestHandler::AbstractRestStreamRequestHandler::recv() with the argument
         /**
-            @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and then with any message body in the \c "data"; if a chunked HTTP message is received, then this method is called once for each chunk; when the message has been received, then this method is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+            @param v the first time this method is called with a hash of the message headers in the \c "hdr" key, and then with any message body in the \c "data"; if a chunked HTTP message is received, then this method is called once for each chunk; when the message has been received, then this method is called with a hash representing any trailer fields sent after the body (in a chunked HTTP/1.1 transfer, or with HTTP/2 or HTTP/3), or @ref nothing if there were no trailers.  The argument to this callback is always a hash; data calls have the following keys:
             - \c "data": the string or binary data, or, in the case of a non-chunked request, the already decoded and deserialized request body, in which case the \c "deserialized" key will be @ref True
             - \c "chunked": True if the data was received with chunked transfer encoding, False if not
             - \c "deserialized": present and set to @ref True if a non-chunked request was received, and the body has already been deserialized
             .
             Header or trailer data is placed in a hash with the following keys:
-            - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
+            - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
             - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
         */
         private nothing recvImpl(hash<auto> v) {
@@ -1019,7 +1022,24 @@ public namespace RestHandler {
                     bool found = (ex.desc.find(sn) != -1);
                     if (found) {
                         if (cx.hdr."transfer-encoding" == "chunked") {
-                            cx.body = rh.getMessageBody(s, cx.hdr, NOTHING, True, listener);
+                            *hash<auto> trailers;
+                            *data body = rh.getMessageBody(s, cx.hdr, NOTHING, True, listener, \trailers);
+                            # trailers received after the chunked request body
+                            if (trailers) {
+                                cx.trailers = trailers;
+                            }
+                            # the body is read after the request was dispatched; it is deserialized and validated
+                            # here as a body read before dispatching is
+                            if (exists body) {
+                                *hash<HttpHandlerResponseInfo> err = rh.processRequestBody(\cx, body);
+                                if (err) {
+                                    return err;
+                                }
+                                # reflect the body in the arguments if it is a hash
+                                if (cx.body.typeCode() == NT_HASH) {
+                                    map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
+                                }
+                            }
                         }
 
                         return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));
@@ -1516,16 +1536,8 @@ public namespace RestHandler {
                 body = NOTHING;
             }
 
-            # Preserve URI component boundaries until after query parsing and path splitting.
-            # HttpServer's decoded display path can turn an encoded slash into a routing
-            # separator or an encoded question mark into a query delimiter.
             bool encoded_path = exists cx.raw_path;
-            string path = cx.raw_path ?? cx.url.path ?? "";
-            if (encoded_path && path.startsWith("/")) {
-                splice path, 0, 1;
-            }
-
-            removeRootPath(\path);
+            string path = getRequestPath(cx);
 
             hash<RestRequestServerInfo> req;
             try {
@@ -1538,10 +1550,7 @@ public namespace RestHandler {
             } catch (hash<ExceptionInfo> ex) {
                 logDebug("REST DBG: %s", get_exception_string(ex));
                 # return a 400 Bad Request response to encoding, serialization, or validation errors
-                if (ex.err == "INVALID-ENCODING"
-                    || ex.err == "ENCODING-CONVERSION-ERROR"
-                    || ex.err == "DESERIALIZATION-ERROR"
-                    || ex.err == "SCHEMA-VALIDATION-ERROR")
+                if (isRequestBodyError(ex.err))
                     return AbstractHttpRequestHandler::makeResponse(400, sprintf("%s: %s", ex.err, ex.desc),
                         errorResponseHeaders(cx));
                 if (ex.err == "INVALID-METHOD") {
@@ -1838,6 +1847,55 @@ public namespace RestHandler {
 
         #! default implementation is empty
         removeRootPath(reference<string> path) {
+        }
+
+        #! Deserializes and validates a request body that was read after the request was dispatched
+        /** A chunked HTTP/1.1 request body sent to a REST method without a stream handler is read when the method is
+            called; this method processes it as a request body read before dispatching is processed: \c cx.body is
+            set to the deserialized body, and \c cx."orig-request-body" to the body as received
+
+            @param cx the call context hash of the request, updated with the body
+            @param body the request body as received
+
+            @return @ref nothing if the body was processed, or a 400 Bad Request response if the body cannot be
+            decoded, deserialized, or validated
+
+            @since RestHandler 1.6.7
+        */
+        *hash<HttpHandlerResponseInfo> processRequestBody(reference<hash<auto>> cx, data body) {
+            hash<auto> hdr = cx.hdr;
+            try {
+                cx.body = validator.parseRequest(hdr.method, getRequestPath(cx), body, \hdr).body;
+            } catch (hash<ExceptionInfo> ex) {
+                logDebug("REST DBG: %s", get_exception_string(ex));
+                if (isRequestBodyError(ex.err)) {
+                    return cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(400,
+                        sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
+                }
+                rethrow;
+            }
+            cx."orig-request-body" = body;
+        }
+
+        #! Returns @ref True "True" if the given error code is an error processing a request body
+        private static bool isRequestBodyError(string err) {
+            return err == "INVALID-ENCODING"
+                || err == "ENCODING-CONVERSION-ERROR"
+                || err == "DESERIALIZATION-ERROR"
+                || err == "SCHEMA-VALIDATION-ERROR";
+        }
+
+        #! Returns the path of the request relative to the root path of the handler, with any query arguments
+        private string getRequestPath(hash<auto> cx) {
+            # Preserve URI component boundaries until after query parsing and path splitting.
+            # HttpServer's decoded display path can turn an encoded slash into a routing
+            # separator or an encoded question mark into a query delimiter.
+            string path = cx.raw_path ?? cx.url.path ?? "";
+            if (exists cx.raw_path && path.startsWith("/")) {
+                splice path, 0, 1;
+            }
+            removeRootPath(\path);
+            return path;
         }
 
         #! Called before request dispatching to allow subclasses to perform authorization checks

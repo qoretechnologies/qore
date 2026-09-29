@@ -176,6 +176,33 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
     }
 
+    #! Sends trailers that end the request body of a streaming request
+    /** @param stream_id the HTTP/2 stream ID
+        @param trailers the trailer fields
+
+        @throw HTTP2-STATE-ERROR if not in ready state
+        @throw HTTP2-ERROR if the trailers cannot be sent
+
+        @since HttpClientIo 1.0
+    */
+    sendTrailers(int stream_id, hash<string, string> trailers) {
+        if (!self.isReady()) {
+            throw "HTTP2-STATE-ERROR",
+                sprintf("cannot send trailers in state: %y", self.getConnectionState());
+        }
+        *AsyncSocketIoController ctl;
+        {
+            AutoLock al(lock);
+            touchActivityLocked();
+            ctl = controller_ref;
+        }
+        log(LoggerLevel::DEBUG, "sending trailers on stream %d", stream_id);
+        getSocket().sendHttp2Trailers(stream_id, trailers);
+        if (ctl) {
+            ctl.wakeSocket(sock: getSocket());
+        }
+    }
+
     #! Registers a Queue for async stream data delivery
     /** @param stream_id the HTTP/2 stream ID
         @param queue the unlimited Queue for data delivery

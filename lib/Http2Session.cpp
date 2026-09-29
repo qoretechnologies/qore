@@ -1645,6 +1645,15 @@ bool Http2Session::isStreamBodyTooLarge(int32_t stream_id) const {
     return it != streams.end() && it->second->body_too_large;
 }
 
+QoreHashNode* Http2Session::getStreamTrailers(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it == streams.end() || it->second->trailers.empty()) {
+        return nullptr;
+    }
+    return httpMultiHeadersToQoreHash(it->second->trailers, true);
+}
+
 bool Http2Session::isStreamEndStreamReceived(int32_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);

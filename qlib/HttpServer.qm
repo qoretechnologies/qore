@@ -3705,6 +3705,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         # until then were delivered first
                         hit_max_body = True;
                     }
+                    # trailers sent after the body
+                    if (*hash<auto> trailers = s.getQuicStreamTrailers(session_id, sid)) {
+                        cx.trailers = trailers;
+                    }
                     # NOTE: cleanupQuicStream is called by the controller's on_exit handler
                 } else {
                     # HTTP/2: drive inbound DATA frames through register_body_queue.
@@ -3753,6 +3757,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         if (max_body > 0 && body_data.size() > max_body) {
                             hit_max_body = True;
                             break;
+                        }
+                    }
+                    # trailers sent after the body
+                    if (h2_complete) {
+                        if (*hash<auto> trailers = s.getHttp2StreamTrailers(sid)) {
+                            cx.trailers = trailers;
                         }
                     }
                     if (!h2_complete && !hit_max_body) {

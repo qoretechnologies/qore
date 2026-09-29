@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for chunked HTTP/1.1 request bodies sent to REST methods without a stream handler
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires HttpClientIo
+%requires json
+
+%exec-class RestHandlerChunkedBodyTest
+
+#! returns the body, the arguments, and the trailers of a request
+class EchoRestClass inherits AbstractRestClass {
+    string name() {
+        return "echo";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {
+            "body": cx.body,
+            "args": ah,
+            "orig": cx."orig-request-body",
+            "trailers": cx.hasKey("trailers") ? cx.trailers : NOTHING,
+        });
+    }
+}
+
+public class RestHandlerChunkedBodyTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("RestHandlerChunkedBodyTest", "1.0") {
+        addTestCase("chunked request bodies are deserialized", \testDeserialized());
+        addTestCase("invalid chunked request bodies", \testInvalid());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        RestHandler rest();
+        rest.addClass(new EchoRestClass());
+        server.setHandler("rest", "^echo", NOTHING, rest);
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    testDeserialized() {
+        # a hash body is reflected in the arguments; query arguments take precedence
+        hash<auto> resp = send("/echo?b=query", ("{\"a\": 1, ", "\"b\": \"body\"}"), {"x-sum": "1"});
+        assertEq(200, resp.status_code);
+        hash<auto> rv = parse_json(resp.body);
+        assertEq({"a": 1, "b": "body"}, rv.body);
+        assertEq({"a": 1, "b": "query"}, rv.args);
+        assertEq("{\"a\": 1, \"b\": \"body\"}", rv.orig);
+        assertEq({"x-sum": "1"}, rv.trailers);
+        # a body that is not a hash
+        resp = send("/echo", ("[1, ", "2]"));
+        assertEq(200, resp.status_code);
+        rv = parse_json(resp.body);
+        assertEq((1, 2), rv.body);
+        assertNothing(rv.trailers);
+    }
+
+    testInvalid() {
+        hash<auto> resp = send("/echo", ("{\"a\": ", "}"));
+        assertEq(400, resp.status_code);
+        assertRegex("DESERIALIZATION-ERROR", resp.body);
+    }
+
+    #! sends a chunked JSON request body and returns the response status code and body
+    private hash<auto> send(string path, list<string> parts, *hash<string, string> trailers) {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "accept_encoding": "",
+        });
+        on_exit mgr.closeAll();
+        HttpClientStreamHandle sh = mgr.acquireStream(url);
+        sh.startStreaming("POST", path, {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, True);
+        if (trailers) {
+            sh.setTrailers(trailers);
+        }
+        foreach string part in (parts) {
+            sh.sendData(part, $# == (parts.size() - 1));
+        }
+        string body;
+        date deadline = now_us() + 30s;
+        while (True) {
+            if (now_us() > deadline) {
+                fail("timed out reading the response");
+            }
+            auto chunk = sh.readData(5s);
+            if (!exists chunk) {
+                continue;
+            }
+            if (chunk.typeCode() == NT_HASH) {
+                if (chunk.error) {
+                    fail(sprintf("stream error: %y", chunk));
+                }
+                if (chunk.end_stream) {
+                    break;
+                }
+                continue;
+            }
+            body += chunk.typeCode() == NT_BINARY ? chunk.toString() : chunk;
+        }
+        return {"status_code": sh.getResponse().status_code, "body": body};
+    }
+}
