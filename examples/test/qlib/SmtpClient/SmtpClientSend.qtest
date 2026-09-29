@@ -364,7 +364,7 @@ public class SmtpClientSendTest inherits QUnit::Test {
         string dir = sprintf("%s/qore-smtp-cert-%d", ENV.TMPDIR ?? "/tmp", getpid());
         mkdir(dir, 0700);
         on_exit {
-            foreach string name in (("key.pem", "cert.pem")) {
+            foreach string name in (("key.pem", "req.cnf", "cert.pem")) {
                 if (stat(dir + "/" + name)) {
                     unlink(dir + "/" + name);
                 }
@@ -375,9 +375,17 @@ public class SmtpClientSendTest inherits QUnit::Test {
         key.open2(dir + "/key.pem", O_CREAT | O_EXCL | O_WRONLY, 0600);
         key.write(MockSmtpServer::KeyPem);
         key.close();
-        Process cert("openssl", ("req", "-config", "/dev/null", "-new", "-x509", "-key", dir + "/key.pem",
-            "-out", dir + "/cert.pem", "-days", "2", "-subj", "/CN=localhost",
-            "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "subjectAltName=DNS:localhost"));
+        # the request configuration is written out rather than given as "-config /dev/null" with "-subj" and
+        # "-addext": LibreSSL (the macOS openssl) requires a [req] section with a distinguished name in the
+        # configuration and fails without one
+        File cnf();
+        cnf.open2(dir + "/req.cnf", O_CREAT | O_EXCL | O_WRONLY, 0600);
+        cnf.write("[req]\ndistinguished_name = dn\nx509_extensions = v3_ca\nprompt = no\n"
+            "[dn]\nCN = localhost\n"
+            "[v3_ca]\nbasicConstraints = critical,CA:TRUE\nsubjectAltName = DNS:localhost\n");
+        cnf.close();
+        Process cert("openssl", ("req", "-config", dir + "/req.cnf", "-new", "-x509", "-key", dir + "/key.pem",
+            "-out", dir + "/cert.pem", "-days", "2"));
         cert.wait();
         if (cert.exitCode()) {
             throw "TEST-CERTIFICATE-ERROR", cert.readStderr(65536);
