@@ -274,6 +274,8 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in table
+      alignment: the column is now given in parentheses, since Oracle otherwise fails with \c ORA-03050
     - added temporary-table support: pre-created global temporary tables (the \c "precreated" option; no runtime
       DDL, supported on all Oracle versions) and, on Oracle 18c and later, runtime private temporary tables
       (\c "ORA$PTT_" name prefix; \c NOT \c NULL column constraints are not supported and are dropped); see
@@ -507,7 +509,10 @@ list<string> l = col.getModifySql(t, newcol);
         OracleColumn c = col;
 
         bool modified;
-        string sql = sprintf("alter table %s modify %s", t.getSqlName(), ddl_name);
+        # the column is given in parentheses: without them, a column named like an ALTER TABLE MODIFY keyword
+        # (for example "scope", as in MODIFY SCOPE FOR (ref_column)) is parsed as that clause and fails with
+        # ORA-03050
+        string sql = sprintf("alter table %s modify (%s", t.getSqlName(), ddl_name);
 
         # get new native type declaration string
         string nts = c.getNativeTypeString();
@@ -525,8 +530,9 @@ list<string> l = col.getModifySql(t, newcol);
             sql += sprintf(" %snull", c.nullable ? "" : "not ");
             modified = True;
         }
-        if (modified)
-            l += sql;
+        if (modified) {
+            l += sql + ")";
+        }
 
         # to remove a comment we set it to the empty string ('')
         # http://docs.oracle.com/cd/B28359_01/server.111/b28286/statements_4009.htm

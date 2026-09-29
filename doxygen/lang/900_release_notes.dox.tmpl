@@ -2304,6 +2304,10 @@ while (*binary chunk = input.read(65536)) {
         name (Azure, which routes by deployment) return @ref nothing rather than
         inheriting the OpenAI default
 
+    - @ref oraclesqlutilbaseintro "OracleSqlUtilBase" module
+      - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in
+        table alignment, which failed with \c ORA-03050
+
     - @ref perplexityrestclientintro "PerplexityRestClient" module
       - fixed the synchronous @ref PerplexityRestClient::PerplexityChatSseStream "PerplexityChatSseStream" class: it
         read the whole event stream before returning, so no event could be read, and it failed for a request given as a

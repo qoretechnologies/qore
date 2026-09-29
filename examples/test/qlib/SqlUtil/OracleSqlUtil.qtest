@@ -262,6 +262,7 @@ class OracleTest inherits SqlTestBase {
             addTestCase("default values", \testDefaultValues());
             addTestCase("named types to align", \testNTYAlignment());
             addTestCase("bug 1684 'driver' column name", \testDriverColumnName());
+            addTestCase("a column named like a MODIFY keyword is aligned", \testModifyKeywordColumn());
             addTestCase("issue 2163", \issue2163());
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
@@ -603,6 +604,43 @@ class OracleTest inherits SqlTestBase {
         AbstractDatasource ds = table.getDatasource();
         *hash c = ds.selectRow("select * from user_tab_columns where table_name = %v and column_name = %v", "ORACLE_TEST", "DRIVER");
         assertEq(True, exists c, "column 'driver' must exist in the table");
+    }
+
+    #! "scope" also starts the MODIFY SCOPE FOR clause of ALTER TABLE, so an unparenthesized MODIFY of such a
+    #! column fails with ORA-03050
+    testModifyKeywordColumn() {
+        if (!table)
+            testSkip("no DB connection");
+
+        AbstractDatasource ds = table.getDatasource();
+        string name = "oracle_modify_keyword_test";
+        code drop = sub () {
+            if (ds.selectRow("select table_name from user_tables where table_name = %v", name.upr())) {
+                ds.execRaw("drop table " + name);
+            }
+            ds.commit();
+        };
+        drop();
+        on_exit drop();
+        ds.execRaw("create table " + name + " (id number(14) not null, scope varchar2(10 byte))");
+        ds.commit();
+
+        OracleTable actual(ds, name);
+        OracleTable template(ds, name);
+        template.setupTable({"columns": {
+            "id": {"native_type": "number", "size": 14, "notnull": True},
+            "scope": {"native_type": "varchar2", "size": 20, "notnull": True},
+        }});
+        list<string> sql = actual.getAlignSql(template);
+        assertEq(1, (select sql, $1 =~ /modify \(scope varchar2\(20/).size(), "the column is modified in parentheses");
+        map ds.execRaw($1), sql;
+        ds.commit();
+
+        hash<auto> c = ds.selectRow("select data_length, nullable from user_tab_columns where table_name = %v "
+            "and column_name = %v", name.upr(), "SCOPE");
+        assertEq(20, int(c.data_length), "the column is widened");
+        assertEq("N", c.nullable, "the column is made not null");
+        assertEq((), (new OracleTable(ds, name)).getAlignSql(template), "the table is aligned");
     }
 
     issue2163() {
