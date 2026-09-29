@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -70,26 +70,28 @@ public:
         return waiting;
     }
 
+    //! Returns true if the calling thread holds the lock for reading or writing
+    /** The lock state is read under the lock's internal mutex: the owner and reader count are changed by other
+        threads, so reading them without it is a data race even though the caller only asks about itself.
+    */
     DLLLOCAL bool lockOwner() const {
-        if (writeLockOwner())
-            return true;
-
-        return readLockOwner();
-    }
-
-    DLLLOCAL bool writeLockOwner() const {
-        return tid == q_gettid();
-    }
-
-    DLLLOCAL bool readLockOwner() const {
-        // if the write lock is held or the lock is deleted or nobody has the read lock, then return false
-        if (tid > -1 || tid == Lock_Deleted || !num_readers)
-            return false;
-
-        // to check the read lock status, er have to acquire the asl_lock
         int mtid = q_gettid();
         AutoLocker al(&asl_lock);
-        return tmap.find(mtid) == tmap.end() ? false : true;
+        return tid == mtid || readLockOwnerIntern(mtid);
+    }
+
+    //! Returns true if the calling thread holds the write lock
+    DLLLOCAL bool writeLockOwner() const {
+        int mtid = q_gettid();
+        AutoLocker al(&asl_lock);
+        return tid == mtid;
+    }
+
+    //! Returns true if the calling thread holds the read lock
+    DLLLOCAL bool readLockOwner() const {
+        int mtid = q_gettid();
+        AutoLocker al(&asl_lock);
+        return readLockOwnerIntern(mtid);
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -103,6 +105,15 @@ private:
     tid_map_t tmap;     // map of TIDs to read lock counts
     vlock_map_t vmap;   // map of TIDs to VLock data structures
     int num_readers;    // number of threads holding the read lock
+
+    //! Returns true if \a mtid holds the read lock; called with asl_lock held
+    DLLLOCAL bool readLockOwnerIntern(int mtid) const {
+        // if the write lock is held or the lock is deleted or nobody has the read lock, then return false
+        if (tid > -1 || tid == Lock_Deleted || !num_readers) {
+            return false;
+        }
+        return tmap.find(mtid) != tmap.end();
+    }
 
     // 0 = last read lock in this thread released
     DLLLOCAL int cleanup_read_lock_intern(tid_map_t::iterator i);

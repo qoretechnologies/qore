@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -72,7 +72,11 @@ public:
 
     DLLEXPORT int extern_wait(QoreCondition* cond, ExceptionSink* xsink, int64 timeout_ms = 0);
 
-    DLLEXPORT int get_tid() const { return tid; }
+    //! Returns the TID of the thread holding the lock, or a negative lock status; read under the internal mutex
+    DLLEXPORT int get_tid() const {
+        AutoLocker al(&asl_lock);
+        return tid;
+    }
     DLLEXPORT int get_waiting() const { return waiting; }
     DLLEXPORT virtual const char* getName() const = 0;
     DLLLOCAL int cond_count(QoreCondition *cond) const {

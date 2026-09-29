@@ -35,6 +35,8 @@ public class RwlockTest inherits QUnit::Test {
 
     constructor() : Test("Rwlock test", "1.0") {
         addTestCase("Rwlock test", \testRwlock(), NOTHING);
+        addTestCase("owner checks under contention", \testOwnerChecksUnderContention());
+        addTestCase("mutex owner checks under contention", \testMutexOwnerChecksUnderContention());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -123,5 +125,75 @@ public class RwlockTest inherits QUnit::Test {
         }
         assertTrue(pass, "write check");
         writec.dec();
+    }
+
+    # The owner checks read lock state that other threads change; each thread checks what it holds itself while the
+    # others take and release the same lock, which is where an unlocked read of that state races
+    testOwnerChecksUnderContention() {
+        RWLock lock();
+        int thread_count = 8;
+        int rounds = 2000;
+        Counter done(thread_count);
+        hash<string, int> bad_state = {};
+        Mutex bad_lock();
+        code check = sub (string state, bool expected_read, bool expected_write) {
+            bool read = lock.readLockOwner();
+            bool write = lock.writeLockOwner();
+            bool any = lock.lockOwner();
+            if (read != expected_read || write != expected_write || any != (expected_read || expected_write)) {
+                bad_lock.lock();
+                on_exit bad_lock.unlock();
+                ++bad_state{state};
+            }
+        };
+        for (int t = 0; t < thread_count; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < rounds; ++i) {
+                    check("unlocked", False, False);
+                    if (i % 2) {
+                        lock.readLock();
+                        check("read", True, False);
+                        lock.readUnlock();
+                    } else {
+                        lock.writeLock();
+                        check("write", False, True);
+                        lock.writeUnlock();
+                    }
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq({}, bad_state);
+        assertFalse(lock.lockOwner());
+        assertEq(0, lock.numReaders());
+    }
+
+    testMutexOwnerChecksUnderContention() {
+        Mutex m();
+        int thread_count = 8;
+        int rounds = 2000;
+        Counter done(thread_count);
+        int bad = 0;
+        Mutex bad_lock();
+        for (int t = 0; t < thread_count; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < rounds; ++i) {
+                    bool before = m.lockOwner();
+                    m.lock();
+                    bool during = m.lockOwner() && m.lockTID() == gettid();
+                    m.unlock();
+                    if (before || !during) {
+                        bad_lock.lock();
+                        on_exit bad_lock.unlock();
+                        ++bad;
+                    }
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(0, bad);
+        assertFalse(m.lockOwner());
     }
 }
