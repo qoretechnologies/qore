@@ -327,18 +327,18 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         assertEq(200, mgr.request(cred_url, "GET", "/basic").status_code);
         assertEq((basic,), handler.getReceived("/basic"));
         # explicit credentials
-        assertEq(200, mgr.request(url, "GET", "/basic", NOTHING, NOTHING, NOTHING, True, creds).status_code);
+        assertEq(200, mgr.request(url, "GET", "/basic", NOTHING, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds}).status_code);
         # rejected credentials are not sent again
         handler.clear();
         hash<auto> resp = mgr.request(url, "GET", "/basic", NOTHING, NOTHING, NOTHING, True,
-            <HttpClientCredentials>{"username": "user", "password": "wrong"});
+            <HttpClientRequestOptions>{"credentials": <HttpClientCredentials>{"username": "user", "password": "wrong"}});
         assertEq(401, resp.status_code);
         assertEq(1, handler.getReceived("/basic").size());
         # without credentials, the challenge is returned
         assertEq(401, mgr.request(url, "GET", "/basic").status_code);
         # a caller Authorization header is sent instead of the credentials
         handler.clear();
-        resp = mgr.request(url, "GET", "/basic", {"Authorization": "Bearer x"}, NOTHING, NOTHING, True, creds);
+        resp = mgr.request(url, "GET", "/basic", {"Authorization": "Bearer x"}, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds});
         assertEq(401, resp.status_code);
         assertEq(("Bearer x",), handler.getReceived("/basic"));
     }
@@ -348,7 +348,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         on_exit mgr.closeAll();
         handler.clear();
         # the Basic credentials sent first are answered with a Digest challenge
-        hash<auto> resp = mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds);
+        hash<auto> resp = mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds});
         assertEq(200, resp.status_code);
         list<auto> received = handler.getReceived("/digest/SHA-256/auth");
         assertEq(2, received.size());
@@ -356,7 +356,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         assertRegex("^Digest .*nc=00000001", received[1]);
         # the challenge authenticates the following requests with an incremented nonce count
         handler.clear();
-        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds})
             .status_code);
         received = handler.getReceived("/digest/SHA-256/auth");
         assertEq(1, received.size());
@@ -364,7 +364,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         # wrong credentials are answered once, and the challenge is returned
         handler.clear();
         resp = mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True,
-            <HttpClientCredentials>{"username": "user", "password": "wrong"});
+            <HttpClientRequestOptions>{"credentials": <HttpClientCredentials>{"username": "user", "password": "wrong"}});
         assertEq(401, resp.status_code);
         assertEq(2, handler.getReceived("/digest/SHA-256/auth").size());
     }
@@ -382,11 +382,11 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
             HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
             on_exit mgr.closeAll();
             assertEq(200, mgr.request(url, "POST", path, {"Content-Type": "text/plain"}, "body", NOTHING, True,
-                creds).status_code, path);
+                <HttpClientRequestOptions>{"credentials": creds}).status_code, path);
             # the cached challenge authenticates the next request
             handler.clear();
             assertEq(200, mgr.request(url, "POST", path, {"Content-Type": "text/plain"}, "other body", NOTHING,
-                True, creds).status_code, path);
+                True, <HttpClientRequestOptions>{"credentials": creds}).status_code, path);
             assertEq(1, handler.getReceived(path).size(), path);
         }
     }
@@ -394,12 +394,12 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
     testStale() {
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
         on_exit mgr.closeAll();
-        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds})
             .status_code);
         handler.verifier.expireNonces();
         handler.clear();
         # a stale nonce is answered with the new challenge
-        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds})
             .status_code);
         assertEq(2, handler.getReceived("/digest/SHA-256/auth").size());
     }
@@ -408,7 +408,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
         on_exit mgr.closeAll();
         string path = "/digest/SHA-256/auth";
-        assertEq(200, mgr.requestAsync(url, "GET", path, NOTHING, NOTHING, True, creds).get(30s).status_code);
+        assertEq(200, mgr.requestAsync(url, "GET", path, NOTHING, NOTHING, True, <HttpClientRequestOptions>{"credentials": creds}).get(30s).status_code);
         HttpClientRequestPollOperation op(mgr, url + path, "GET", NOTHING, NOTHING,
             <HttpClientRequestPollOptions>{"credentials": creds});
         assertEq(200, op.startAsync().get(30s).status_code);
@@ -431,7 +431,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         on_exit mgr.closeAll();
         other.clear();
         hash<auto> resp = mgr.request(url, "GET", "/redirect-other", {"X-Target": other_url + "/open"}, NOTHING,
-            NOTHING, True, creds);
+            NOTHING, True, <HttpClientRequestOptions>{"credentials": creds});
         assertEq(200, resp.status_code);
         # the credentials are not sent to another origin
         assertEq((NOTHING,), other.getReceived("/open"));

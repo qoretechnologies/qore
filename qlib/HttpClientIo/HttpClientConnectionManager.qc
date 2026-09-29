@@ -911,7 +911,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
 
-        @param credentials credentials for HTTP authentication, as with @ref request()
+        @param options options of the request; see @ref HttpClientRequestOptions
 
         @return a @ref HttpCancellableFuture that resolves to the @ref HttpClientResponseInfo hash of the final
         response and supports cancel(); errors of the request, including \c HTTPCLIENT-TIMEOUT when the response
@@ -926,14 +926,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         method follows redirects, so the request can be sent on more than one stream
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body, bool decode_text = True, *hash<HttpClientCredentials> credentials) {
+            *hash<auto> headers, *data body, bool decode_text = True, *hash<HttpClientRequestOptions> options) {
         check_http_request_body(method, headers, body);
         hash<UrlInfo> url_info = parseRequestUrl(url);
         HttpClientRequestPollOperation op(self, HttpRedirectFollower::getOriginUrl(url_info)
             + (path =~ /^\// ? path : "/" + path), method, headers, body, <HttpClientRequestPollOptions>{
             "goal": sprintf("%s %s", method, path),
             "decode_text": decode_text,
-            "credentials": credentials ?? getUrlCredentials(url),
+            "credentials": options.credentials ?? getUrlCredentials(url),
+            "cookie_jar": options.cookie_jar,
+            "cookies": options.cookies ?? True,
         });
         return op.startAsync();
     }
@@ -950,11 +952,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
-        @param credentials credentials for HTTP authentication; if not set, any user information in the URL is used.
-        The credentials are sent with the Basic scheme, and with the Digest scheme after a Digest challenge, only to
-        the origin of \a url; a 401 challenge is answered once for each request sent.  The credentials in the proxy
-        URL answer a 407 challenge of the proxy the same way.  An \c Authorization header given in \a headers is
-        sent instead.
+        @param options options of the request: credentials for HTTP authentication, and the cookie jar used; see
+        @ref HttpClientRequestOptions.  Without credentials, any user information in the URL is used.  The
+        credentials in the proxy URL answer a 407 challenge of the proxy the same way.  An \c Authorization header
+        given in \a headers is sent instead.
 
         @return the response hash
 
@@ -987,7 +988,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
-            *data body, *timeout timeout_ms, bool decode_text = True, *hash<HttpClientCredentials> credentials) {
+            *data body, *timeout timeout_ms, bool decode_text = True, *hash<HttpClientRequestOptions> options) {
         check_http_request_body(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
@@ -996,15 +997,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         on_exit in_flight.dec();
 
         HttpRedirectFollower rf = newRedirectFollower(url, path, method, headers, body);
-        *HttpAuthenticator auth = getRequestAuthenticator(url, credentials);
-        hash<auto> auth_state = {};
+        *HttpAuthenticator auth = getRequestAuthenticator(url, options.credentials);
+        hash<auto> auth_state = newRequestState(options);
         while (True) {
             hash<auto> resp = requestIntern(rf.getOrigin(), rf.getMethod(), rf.getPath(),
                 prepareRequestHeaders(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
             string request_url = rf.getRequestUrl();
 
             # Process Set-Cookie before checking redirect
-            storeResponseCookies(rf.getOrigin(), rf.getPath(), resp.headers);
+            storeStateCookies(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request
             if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
@@ -1070,7 +1071,10 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         }
         HttpRedirectFollower rf = newRedirectFollower(url, path, o.method, headers, o.body);
         *HttpAuthenticator auth = getRequestAuthenticator(url, o.credentials);
-        hash<auto> auth_state = {};
+        hash<auto> auth_state = newRequestState(<HttpClientRequestOptions>{
+            "cookie_jar": o.cookie_jar,
+            "cookies": o.cookies,
+        });
         while (True) {
             HttpClientStreamHandle sh = acquireAndStartStreaming(rf.getOrigin(), rf.getMethod(), rf.getPath(),
                 prepareRequestHeaders(rf, auth, \auth_state, o.decode), False, rf.getBody());
@@ -1130,7 +1134,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 pending += d.typeCode() == NT_BINARY ? d : binary(d);
             }
             string request_url = rf.getRequestUrl();
-            storeResponseCookies(rf.getOrigin(), rf.getPath(), resp.headers);
+            storeStateCookies(auth_state, rf, resp.headers);
 
             # authentication challenges are answered once for each request; the body of the challenge response is
             # discarded
@@ -1266,7 +1270,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @param rf the redirect state of the request
         @param auth the authenticator for the origin of the original request, if any; see
         @ref getRequestAuthenticator()
-        @param auth_state the authentication state of the request, initially an empty hash; updated with the
+        @param auth_state the state of the request, initially returned by @ref newRequestState(); updated with the
         credentials sent
         @param decoded @ref True if the response body is decoded; see @ref addDefaultHeaders()
 
@@ -1278,7 +1282,9 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             reference<hash<auto>> auth_state, bool decoded = True) {
         string origin = rf.getOrigin();
         string path = rf.getPath();
-        hash<auto> hdr = addDefaultHeaders(addCookieHeaders(origin, path, rf.getHeaders()), decoded);
+        hash<auto> hdr = addDefaultHeaders(auth_state.cookies ?? True
+            ? addCookieHeaders(origin, path, rf.getHeaders(), auth_state.cookie_jar)
+            : rf.getHeaders(), decoded);
         remove auth_state.sent;
         remove auth_state.sent_proxy;
         # credentials are sent only to the origin of the original request, and never instead of the caller's
@@ -1391,18 +1397,20 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @param url the URL of the target; the scheme and host are used
         @param path the request target
         @param headers the request headers
+        @param jar the cookie jar to use; if not given, the cookie jar of the manager
 
         @return the request headers with any cookies from the jar
 
         @since HttpClientIo 1.0
     */
-    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers) {
+    hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar) {
         hash<auto> req_headers = headers ?? {};
-        if (!cookie_jar) {
+        jar = jar ?? cookie_jar;
+        if (!jar) {
             return req_headers;
         }
         hash<UrlInfo> url_info = parseRequestUrl(url);
-        *string cookie_hdr = cookie_jar.getCookieHeader(url_info.host, path, url_info.protocol == "https");
+        *string cookie_hdr = jar.getCookieHeader(url_info.host, path, url_info.protocol == "https");
         if (!cookie_hdr) {
             return req_headers;
         }
@@ -1421,13 +1429,43 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @param url the URL of the request that received the response; the scheme and host are used
         @param path the request target of the request that received the response
         @param resp_headers the response headers with lower-case names
+        @param jar the cookie jar to use; if not given, the cookie jar of the manager
 
         @since HttpClientIo 1.0
     */
-    storeResponseCookies(string url, string path, *hash<auto> resp_headers) {
-        if (cookie_jar && resp_headers) {
+    storeResponseCookies(string url, string path, *hash<auto> resp_headers, *CookieJar jar) {
+        jar = jar ?? cookie_jar;
+        if (jar && resp_headers) {
             hash<UrlInfo> url_info = parseRequestUrl(url);
-            cookie_jar.processResponseHeaders(url_info.host, path, url_info.protocol == "https", resp_headers);
+            jar.processResponseHeaders(url_info.host, path, url_info.protocol == "https", resp_headers);
+        }
+    }
+
+    #! Returns the initial state of a request for @ref prepareRequestHeaders() and @ref processAuthChallenge()
+    /** @param options the options of the request; the \c cookie_jar and \c cookies options are used
+
+        @return the state of the request
+
+        @since HttpClientIo 1.0
+    */
+    hash<auto> newRequestState(*hash<HttpClientRequestOptions> options) {
+        # the state holds values of any type; a hash literal would be typed by its values
+        hash<auto> rv();
+        rv.cookie_jar = options.cookie_jar;
+        rv.cookies = options.cookies ?? True;
+        return rv;
+    }
+
+    #! Stores the cookies of a response in the cookie jar of a request, unless the request uses no cookies
+    /** @param state the state of the request; see @ref newRequestState()
+        @param rf the redirect state of the request
+        @param resp_headers the response headers with lower-case names
+
+        @since HttpClientIo 1.0
+    */
+    storeStateCookies(hash<auto> state, HttpRedirectFollower rf, *hash<auto> resp_headers) {
+        if (state.cookies ?? True) {
+            storeResponseCookies(rf.getOrigin(), rf.getPath(), resp_headers, state.cookie_jar);
         }
     }
 
@@ -1928,9 +1966,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     }
 
     #! Returns @ref True if the parsed URL names a UNIX domain socket
-    /** A \c socket= host (e.g. <tt>http://socket=%2Ftmp%2Fapp.sock</tt>) is decoded by @ref Qore::parse_url() "parse_url()" to the
-        socket path and has no port; this is also how @ref Qore::HTTPClient "HTTPClient" identifies a UNIX domain
-        socket target.
+    /** A \c socket= host (e.g. <tt>http://socket=%2Ftmp%2Fapp.sock</tt>) is decoded by
+        @ref Qore::parse_url() "parse_url()" to the socket path and has no port; this is also how
+        @ref Qore::HTTPClient "HTTPClient" identifies a UNIX domain socket target.
 
         @param url_info the parsed URL
 

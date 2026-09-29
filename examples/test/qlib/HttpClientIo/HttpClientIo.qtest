@@ -770,14 +770,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(HttpClientIo::DefaultMaxRequestRetries, default_opts.max_request_retries,
             "default max request retries");
 
-        # Unified request options hashdecl
+        # Request options hashdecl
         hash<HttpClientIo::HttpClientRequestOptions> req_opts =
                 <HttpClientIo::HttpClientRequestOptions>{
-            "timeout": 5s,
-            "priority_weight": 128,
+            "credentials": <HttpClientIo::HttpClientCredentials>{"username": "u"},
         };
-        assertEq(5000, int(req_opts.timeout), "unified req opts timeout");
-        assertEq(128, req_opts.priority_weight, "unified req opts priority_weight");
+        assertEq("u", req_opts.credentials.username, "req opts credentials");
+        assertEq("", req_opts.credentials.password, "req opts default password");
+        assertTrue(req_opts.cookies, "req opts cookies default");
+        assertNothing(req_opts.cookie_jar, "req opts cookie jar default");
 
         # Unified response info hashdecl
         hash<HttpClientIo::HttpClientResponseInfo> resp = <HttpClientIo::HttpClientResponseInfo>{

@@ -87,6 +87,17 @@ public hashdecl HttpClientRequestPollOptions {
         sent.  See @ref HttpUtil::HttpAuthenticator "HttpAuthenticator".
     */
     *hash<HttpClientCredentials> credentials;
+
+    #! The cookie jar that supplies and stores the cookies of the request; if not set, the cookie jar of the
+    #! connection manager
+    /** @since HttpClientIo 1.0
+    */
+    *CookieJar cookie_jar;
+
+    #! If @ref False, no cookies are sent or stored for the request
+    /** @since HttpClientIo 1.0
+    */
+    bool cookies = True;
 }
 
 #! A non-blocking HTTP request with an @ref HttpClientConnectionManager that follows redirects
@@ -161,7 +172,7 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         #! Answers the authentication challenges of the origin of the request, if the request has credentials
         *HttpAuthenticator auth;
         #! The authentication state of the current request; see HttpClientConnectionManager::prepareRequestHeaders()
-        hash<auto> auth_state = {};
+        hash<auto> auth_state;
         #! True if the current response is an authentication challenge that is answered
         bool auth_retry = False;
         #! True once a proxy authentication challenge for a CONNECT request was answered
@@ -485,6 +496,10 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     private HttpRedirectFollower getFollower() {
         if (!rf) {
             auth = mgr.getRequestAuthenticator(url, opts.credentials);
+            auth_state = mgr.newRequestState(<HttpClientRequestOptions>{
+                "cookie_jar": opts.cookie_jar,
+                "cookies": opts.cookies,
+            });
             rf = new HttpRedirectFollower(url, path, method, headers, body,
                 opts.max_redirects ?? mgr.getMaxRedirects(), opts.redirect_passthru ?? mgr.getRedirectPassthru());
         }
@@ -645,7 +660,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         response.processed = True;
         # cookies set by a response are stored before a redirect is followed
-        mgr.storeResponseCookies(rf.getOrigin(), rf.getPath(), response.headers);
+        mgr.storeStateCookies(auth_state, rf, response.headers);
         # an authentication challenge is answered once for each request; the body of the response is discarded
         if (mgr.processAuthChallenge(response.status_code, response.headers, auth, \auth_state)) {
             redirecting = True;

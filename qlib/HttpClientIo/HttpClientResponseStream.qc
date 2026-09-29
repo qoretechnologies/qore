@@ -43,6 +43,17 @@ public hashdecl HttpClientOpenStreamOptions {
     /** @since HttpClientIo 1.0
     */
     *hash<HttpClientCredentials> credentials;
+
+    #! The cookie jar that supplies and stores the cookies of the request; if not set, the cookie jar of the
+    #! connection manager
+    /** @since HttpClientIo 1.0
+    */
+    *CookieJar cookie_jar;
+
+    #! If @ref False, no cookies are sent or stored for the request
+    /** @since HttpClientIo 1.0
+    */
+    bool cookies = True;
 }
 
 #! The range of a partial response (206), as given by its \c Content-Range header (RFC 9110 section 14.4)

@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Cookie jars of requests and clients: HttpClientRequestOptions and RestClientIo cookie isolation
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+
+%exec-class RestClientIoCookiesTest
+
+#! "/set/<name>=<value>" sets a cookie; every response returns the cookies received
+class CookieHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> rh = {"Content-Type": "text/plain"};
+        *list<*string> m = (cx.raw_path =~ x/^\/set\/([^=]+)=(.*)$/);
+        if (m) {
+            rh."Set-Cookie" = sprintf("%s=%s; Path=/", m[0], m[1]);
+        }
+        return makeResponse(rh, 200, binary("cookie=" + (hdr.cookie ?? "")));
+    }
+}
+
+public class RestClientIoCookiesTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("RestClientIoCookiesTest", "1.0") {
+        addTestCase("request cookie jars", \testRequestJars());
+        addTestCase("RestClientIo cookie isolation", \testRestClientIo());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelError()),
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("cookies", new CookieHandler());
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    testRequestJars() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        CookieJar a();
+        CookieJar b();
+        hash<HttpClientRequestOptions> ao = <HttpClientRequestOptions>{"cookie_jar": a};
+        hash<HttpClientRequestOptions> bo = <HttpClientRequestOptions>{"cookie_jar": b};
+        # each jar keeps its own cookies; the manager's jar is not used
+        mgr.request(url, "GET", "/set/s=a", NOTHING, NOTHING, NOTHING, True, ao);
+        mgr.request(url, "GET", "/set/s=b", NOTHING, NOTHING, NOTHING, True, bo);
+        assertEq("cookie=s=a", mgr.request(url, "GET", "/", NOTHING, NOTHING, NOTHING, True, ao).body);
+        assertEq("cookie=s=b", mgr.requestAsync(url, "GET", "/", NOTHING, NOTHING, True, bo).get(30s).body);
+        assertEq("cookie=", mgr.request(url, "GET", "/").body);
+        assertEq("cookie=s=a", new HttpClientRequestPollOperation(mgr, url + "/", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"cookie_jar": a}).startAsync().get(30s).body);
+        HttpClientResponseStream s = mgr.openStream(url + "/", NOTHING, <HttpClientOpenStreamOptions>{
+            "cookie_jar": b,
+        });
+        assertEq(binary("cookie=s=b"), s.read(10s));
+        # the manager's jar
+        mgr.request(url, "GET", "/set/m=1");
+        assertEq("cookie=m=1", mgr.request(url, "GET", "/").body);
+        # no cookies at all
+        hash<HttpClientRequestOptions> none = <HttpClientRequestOptions>{"cookies": False};
+        assertEq("cookie=", mgr.request(url, "GET", "/set/x=1", NOTHING, NOTHING, NOTHING, True, none).body);
+        assertEq("cookie=m=1", mgr.request(url, "GET", "/").body);
+        assertEq("cookie=", mgr.requestAsync(url, "GET", "/", NOTHING, NOTHING, True, none).get(30s).body);
+        assertEq("cookie=", new HttpClientRequestPollOperation(mgr, url + "/", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"cookies": False}).startAsync().get(30s).body);
+        s = mgr.openStream(url + "/", NOTHING, <HttpClientOpenStreamOptions>{"cookies": False});
+        assertEq(binary("cookie="), s.read(10s));
+    }
+
+    testRestClientIo() {
+        HttpClientConnectionManager shared(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit shared.closeAll();
+        RestClientIo a({"url": url, "data": "text"}, shared);
+        on_exit a.close();
+        RestClientIo b({"url": url, "data": "text"}, shared);
+        on_exit b.close();
+        # clients that share a connection manager do not share cookies
+        a.restGet("/set/tenant=a");
+        b.restGetAsync("/set/tenant=b").get();
+        assertEq("cookie=tenant=a", a.restGet("/").body);
+        assertEq("cookie=tenant=a", a.restGetAsync("/").get().body);
+        assertEq("cookie=tenant=b", b.restGet("/").body);
+        assertEq("cookie=tenant=b", b.restGetAsync("/").get().body);
+        # the manager's own jar is not used
+        assertEq("cookie=", shared.request(url, "GET", "/").body);
+        # a copy shares the cookies of the original
+        RestClientIo c = cast<RestClientIo>(a.copyWithUrl(url + "/"));
+        on_exit c.close();
+        assertEq(a.getCookieJar(), c.getCookieJar());
+        assertEq("cookie=tenant=a", c.restGet("/").body);
+        # a client that owns its manager uses the manager's jar
+        RestClientIo own({"url": url, "data": "text"});
+        on_exit own.close();
+        assertEq(own.getConnectionManager().getCookieJar(), own.getCookieJar());
+        own.restGet("/set/own=1");
+        assertEq("cookie=own=1", own.restGet("/").body);
+        # cookies can be disabled
+        RestClientIo nocookies({"url": url, "data": "text", "enable_cookies": False}, shared);
+        on_exit nocookies.close();
+        assertNothing(nocookies.getCookieJar());
+        nocookies.restGet("/set/n=1");
+        assertEq("cookie=", nocookies.restGet("/").body);
+        assertEq("cookie=", nocookies.restGetAsync("/").get().body);
+        RestClientIo nocookies2({"url": url, "data": "text", "enable_cookies": False});
+        on_exit nocookies2.close();
+        nocookies2.restGet("/set/n=1");
+        assertEq("cookie=", nocookies2.restGet("/").body);
+    }
+}

@@ -487,19 +487,27 @@ public namespace HttpClientIo {
         *bool ssl;
     }
 
-    #! Unified request options for HTTP client requests
+    #! Options of a request of @ref HttpClientConnectionManager::request() and
+    #! @ref HttpClientConnectionManager::requestAsync()
+    /** @since HttpClientIo 1.0
+    */
     public hashdecl HttpClientRequestOptions {
-        #! Request timeout
-        *timeout timeout;
+        #! Credentials for HTTP authentication; if not set, any user information in the URL
+        /** The credentials are sent with the Basic scheme, and with the Digest scheme after a Digest challenge, only
+            to the origin of the request; a 401 challenge is answered once for each request sent.  See
+            @ref HttpUtil::HttpAuthenticator "HttpAuthenticator".
+        */
+        *hash<HttpClientCredentials> credentials;
 
-        #! HTTP/2-only: priority weight (1-256)
-        *int priority_weight;
+        #! The cookie jar that supplies and stores the cookies of the request; if not set, the cookie jar of the
+        #! connection manager
+        /** A client that shares a connection manager with other clients can keep its cookies apart with a cookie jar
+            of its own
+        */
+        *CookieJar cookie_jar;
 
-        #! HTTP/2-only: stream dependency (stream ID)
-        *int depends_on;
-
-        #! HTTP/2-only: exclusive dependency flag
-        *bool exclusive_dependency;
+        #! If @ref False, no cookies are sent or stored for the request
+        bool cookies = True;
     }
 
     #! Credentials for HTTP authentication

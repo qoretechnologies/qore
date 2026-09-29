@@ -477,6 +477,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Answers Basic and Digest challenges for the user name and password, if set
             *HttpAuthenticator basic_auth;
 
+            #! The cookie jar of the client; @ref nothing if cookies are disabled
+            /** A client that owns its connection manager uses the manager's cookie jar; a client created with a
+                shared connection manager has a cookie jar of its own, so that clients sharing a manager do not share
+                cookies, and a copy made with @ref copyWithUrl() shares the cookie jar of the original
+            */
+            *HttpClientIo::CookieJar cookie_jar;
+
             #! Default headers to send with each request
             hash<auto> headers = {};
 
@@ -1168,9 +1175,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 # Use shared manager — caller retains ownership
                 mgr = shared_mgr;
                 owns_mgr = False;
+                # clients that share a connection manager do not share cookies
+                if (!exists opts.enable_cookies || opts.enable_cookies) {
+                    cookie_jar = new HttpClientIo::CookieJar();
+                }
             } else {
                 mgr = buildConnectionManager(opts);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
+                cookie_jar = mgr.getCookieJar();
             }
 
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
@@ -1286,8 +1298,54 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # propagate this lifetime owner when the manager itself was actually shared.
             if (copy.getConnectionManager() == mgr) {
                 copy.setConnectionManagerOwner(mgr_owner);
+                # the copy is the same client for another URL, and keeps its cookies
+                copy.setCookieJar(cookie_jar);
             }
             return copy;
+        }
+
+        #! Returns the cookie jar of the client, or @ref nothing if cookies are disabled
+        /** @since RestClientIo 1.0
+        */
+        *HttpClientIo::CookieJar getCookieJar() {
+            return cookie_jar;
+        }
+
+        #! Returns the request options for the cookie jar of the client
+        private hash<HttpClientIo::HttpClientRequestOptions> getCookieRequestOptions() {
+            return <HttpClientIo::HttpClientRequestOptions>{
+                "cookie_jar": cookie_jar,
+                "cookies": exists cookie_jar,
+            };
+        }
+
+        #! Returns request headers with the cookies of the client's cookie jar
+        /** @param url the URL of the target
+            @param path the request target
+            @param hdr the request headers
+
+            @since RestClientIo 1.0
+        */
+        hash<auto> addClientCookies(string url, string path, *hash<auto> hdr) {
+            return cookie_jar ? mgr.addCookieHeaders(url, path, hdr, cookie_jar) : (hdr ?? {});
+        }
+
+        #! Stores the cookies of a response in the client's cookie jar
+        /** @param url the URL of the request that received the response
+            @param path the request target of the request that received the response
+            @param resp_headers the response headers with lower-case names
+
+            @since RestClientIo 1.0
+        */
+        storeClientCookies(string url, string path, *hash<auto> resp_headers) {
+            if (cookie_jar) {
+                mgr.storeResponseCookies(url, path, resp_headers, cookie_jar);
+            }
+        }
+
+        #! Shares the cookie jar of a copied client
+        private setCookieJar(*HttpClientIo::CookieJar cookie_jar) {
+            self.cookie_jar = cookie_jar;
         }
 
         #! Shares the internally created manager's lifetime owner with a copied client
@@ -1788,7 +1846,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 # the cookie jar of the connection manager supplies cookies as with other requests
                 HttpClientIo::HttpClientStreamHandle stream =
                     mgr.acquireAndStartStreaming(origin, redirected ? rf.getMethod() : method, req_path,
-                        mgr.addCookieHeaders(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
+                        addClientCookies(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
                         redirected ? rf.getBody() : prepared.serialized_body);
                 try {
                     hash<auto> response_start = readSseResponseStart(stream, method,
@@ -1807,7 +1865,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                             processFinalNegotiateResponse(response.headers,
                                 negotiate_context);
                         }
-                        mgr.storeResponseCookies(origin, req_path, response.headers);
+                        storeClientCookies(origin, req_path, response.headers);
                     }
 
                     if (response && response.status_code) {
@@ -2015,7 +2073,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             # 2. Make HTTP request via multiplexed connection manager
             hash<auto> raw_resp = mgr.request(url, method, path, hdr,
-                prepared.serialized_body, req_to, False);
+                prepared.serialized_body, req_to, False, getCookieRequestOptions());
 
             # 3. If 401 and Negotiate is configured, run one SPNEGO challenge retry
             if (raw_resp.status_code == 401 && negotiate_retry
@@ -2025,7 +2083,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False);
+                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
             }
 
             # 3b. If 401 and the client has a user name and password, answer a Basic or Digest challenge once
@@ -2034,7 +2092,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False);
+                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
             }
 
             # 4. If 401 and OAuth2 configured, try to refresh token and retry once
@@ -2056,7 +2114,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False);
+                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
             }
 
             processFinalNegotiateResponse(raw_resp.headers, negotiate_context);
@@ -2079,7 +2137,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False);
+                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
                 resp = buildResponse(raw_resp, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
                     prepared.serialized_body);
@@ -2354,7 +2412,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             stream.setDecodeText(False);
             # the cookie jar of the connection manager supplies cookies as with synchronous requests
             hash<auto> result = stream.submitAsyncWithNotifier(method, path,
-                mgr.addDefaultHeaders(mgr.addCookieHeaders(url, path, hdr)), prepared.serialized_body, notifier);
+                mgr.addDefaultHeaders(addClientCookies(url, path, hdr)), prepared.serialized_body, notifier);
             return result + {
                 "stream": stream,
                 "request_headers": hdr,
@@ -2382,7 +2440,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
             stream.setDecodeText(False);
             return stream.submitAsyncWithNotifier(method, path,
-                mgr.addDefaultHeaders(mgr.addCookieHeaders(origin, path, hdr)), body, notifier) + {
+                mgr.addDefaultHeaders(addClientCookies(origin, path, hdr)), body, notifier) + {
                 "stream": stream,
             };
         }
@@ -2847,7 +2905,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             log(LoggerLevel::DEBUG, "doSignedRequest() %s %s%s", method, url, path);
 
             # 3. Make HTTP request
-            hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False);
+            hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
+                    getCookieRequestOptions());
 
             # 4. If 401 and Negotiate is configured, run one SPNEGO challenge retry
             if (raw.status_code == 401 && negotiate_retry
@@ -2857,7 +2916,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False);
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
+                    getCookieRequestOptions());
             }
 
             # 5. If 401 and OAuth2 configured, try to refresh token and retry once
@@ -2876,7 +2936,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False);
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
+                    getCookieRequestOptions());
             }
 
             processFinalNegotiateResponse(raw.headers, negotiate_context);
@@ -2898,7 +2959,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False);
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
+                    getCookieRequestOptions());
                 resp = buildResponse(raw, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
                     prepared.serialized_body);
@@ -3978,7 +4040,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             log(LoggerLevel::DEBUG, "doOAuth2TokenRequest() POST %s%s", base_url, req_path);
 
             # Make the token request — no locks held during network I/O
-            hash<auto> raw = mgr.request(base_url, "POST", req_path, hdr, body);
+            hash<auto> raw = mgr.request(base_url, "POST", req_path, hdr, body, NOTHING, True,
+                getCookieRequestOptions());
 
             # Check for errors
             if (raw.status_code >= 300) {
@@ -4270,7 +4333,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # Direct HTTP request via connection manager — no restDoRequest recursion,
             # no OAuth2 auth injection, no REST schema validation
             log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, url, c_path);
-            hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str);
+            hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str, NOTHING, True,
+                getCookieRequestOptions());
             if (raw.status_code < 200 || raw.status_code >= 300) {
                 throw "REST-TOKEN-ERROR",
                     sprintf("HTTP %d returned from custom token refresh %s %s",
@@ -5181,7 +5245,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
                 # cookies set by a response are stored before a redirect is followed, like with synchronous requests
                 HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
-                mgr.storeResponseCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
+                rcio.storeClientCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
                     resp.headers);
                 if (!rf) {
                     # redirects are followed with the request as it was sent
@@ -5548,7 +5612,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             # the request was prepared for the original request; it is sent as changed by the redirects
             pending_stream = mgr.acquireStream(rf.getOrigin());
             pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
-                mgr.addCookieHeaders(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
+                rcio.addClientCookies(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
                 stream_notifier, True);
             connector.submitted();
             state = SPS_STREAM_WAITING;
@@ -5563,7 +5627,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
         # The cookie jar of the connection manager supplies cookies as with other requests.
-        pending_stream.startStreaming(method, path, mgr.addCookieHeaders(rcio.getUrl(), path, hdr), False,
+        pending_stream.startStreaming(method, path, rcio.addClientCookies(rcio.getUrl(), path, hdr), False,
             prepared_attempt.serialized_body, stream_notifier, True);
         connector.submitted();
         request_body = prepared_attempt.serialized_body;
@@ -5663,7 +5727,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
         # cookies set by a response are stored before a redirect is followed
         HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
-        mgr.storeResponseCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
+        rcio.storeClientCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
             response_headers);
         if (!rf) {
             # redirects are followed with the request as it was sent
