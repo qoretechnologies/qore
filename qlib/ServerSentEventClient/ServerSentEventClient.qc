@@ -429,6 +429,10 @@ sse.connect();
         }
 
         hash<auto> h;
+        # the event thread raises the stream's events only once the connected event has been raised below, on every
+        # exit path; otherwise the connected event could follow the first data event
+        Counter connected(1);
+        on_exit connected.dec();
         {
             m.lock();
             on_exit m.unlock();
@@ -456,7 +460,7 @@ sse.connect();
             # return from @ref start until the strong→weak conversion is
             # complete.
             Counter started(1);
-            code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started);
+            code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started, connected);
 %ifdef PO_NO_THREAD_CONTROL
             updateTid(start_thread(fn));
 %else
@@ -978,17 +982,19 @@ sse.setEventQueue();
         @since ServerSentEventClient 1.1
     */
     private static code<nothing()> makeEventLoopClosure(ServerSentEventClient w,
-            Counter started) {
+            Counter started, Counter connected) {
         return sub () {
-            ServerSentEventClient::runEventLoop(remove w, started);
+            ServerSentEventClient::runEventLoop(remove w, started, connected);
         };
     }
 
-    private static runEventLoop(ServerSentEventClient client0, Counter started) {
+    private static runEventLoop(ServerSentEventClient client0, Counter started, Counter connected) {
         ServerSentEventClient client := remove client0;
         # Background thread now holds only a weak reference; signal the
         # caller that it is safe to return from start().
         started.dec();
+        # the stream's events follow the connected event
+        connected.waitForZero();
 
         # Main loop — each iteration is a short instance method call
         # that lets the destructor fire between iterations.

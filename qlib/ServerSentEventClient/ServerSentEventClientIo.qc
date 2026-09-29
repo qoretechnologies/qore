@@ -314,6 +314,10 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             setConnectedUnlocked(reader);
         }
 
+        # the connection is reported before the event thread is started, which raises the stream's events: raised
+        # after it, the connected event could follow the first data event
+        notifyObservers(EVENT_SSE_CONNECTED, {});
+
         code<nothing()> fn = sub () {
             try {
                 eventLoop(reader);
@@ -337,7 +341,6 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
 
         self.logDebug("SSE I/O thread started: TID %d", new_tid);
-        notifyObservers(EVENT_SSE_CONNECTED, {});
     }
 
     #! Disconnects from the SSE endpoint and stops the event loop

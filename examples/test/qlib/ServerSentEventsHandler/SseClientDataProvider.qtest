@@ -151,6 +151,44 @@ class EventObserver inherits DataProvider::Observer {
     }
 }
 
+#! An SSE server that sends an event as soon as a connection is registered, while the client may still be connecting
+class ImmediateSseHandler inherits ServerSentEventHandler {
+    constructor(*hash<auto> opts) : ServerSentEventHandler(opts) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{"id": 1, "data": {"a": 1}});
+    }
+}
+
+#! Records the order of the events raised, and reports the first data event
+class OrderObserver inherits DataProvider::Observer {
+    public {
+        #! the IDs of the events raised, in order
+        list<string> events = ();
+        Mutex m();
+        #! decremented when the first data event is raised
+        Counter first_data(1);
+        #! decremented when the stream is closed
+        Counter closed(1);
+    }
+
+    update(string event_id, hash<auto> data_) {
+        AutoLock al(m);
+        events += event_id;
+        if (event_id == EVENT_SSE_DATA && first_data.getCount()) {
+            first_data.dec();
+        } else if (event_id == EVENT_SSE_CLOSED && closed.getCount()) {
+            closed.dec();
+        }
+    }
+
+    list<string> getEvents() {
+        AutoLock al(m);
+        return events;
+    }
+}
+
 public class Main inherits QUnit::Test {
     private {
         HttpServer http;
@@ -166,6 +204,8 @@ public class Main inherits QUnit::Test {
         addTestCase("connection data provider", \connectionTest());
         addTestCase("live stream and stop", \stopTest());
         addTestCase("disconnect from the event thread", \eventThreadDisconnectTest());
+        addTestCase("connected event before the stream's events", \connectedFirstIoTest());
+        addTestCase("legacy client: connected event before the stream's events", \connectedFirstLegacyTest());
 
         http = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -432,5 +472,58 @@ public class Main inherits QUnit::Test {
         assertEq(0, observer.q.size());
         # no reconnect was made
         assertEq(0, handler.requests.size());
+    }
+
+    # The event thread raises the stream's events; the connected event must precede them.  The client starts the
+    # event thread with a start_thread callable that returns only once the first data event has been raised, so
+    # a connected event raised by connect() after starting the thread would follow it every time.
+    connectedFirstIoTest() {
+        OrderObserver observer();
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/order",
+            "data": "json",
+            "start_thread": int sub (code<nothing()> fn) {
+                int tid = background fn();
+                observer.first_data.waitForZero(30s);
+                return tid;
+            },
+        });
+        client.registerObserver(observer);
+        client.connect();
+        assertEq(0, observer.closed.waitForZero(30s), "the stream was closed");
+        client.disconnect();
+        list<string> events = observer.getEvents();
+        assertEq(EVENT_SSE_CONNECTED, events[0], "first event");
+        assertEq(EVENT_SSE_DATA, events[1], "second event");
+        handler.requests.get(30s);
+    }
+
+    # The legacy client raises the connected event after starting its event thread, which waits for it before
+    # raising the stream's events.  The server sends an event as soon as the connection is registered, so the event
+    # can reach the client while connect() is still running; the order is checked over repeated connections.
+    connectedFirstLegacyTest() {
+        ImmediateSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("sse-immediate", "", NOTHING, sse);
+        server.setDefaultHandler("sse-immediate", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        for (int i = 0; i < 20; ++i) {
+            OrderObserver observer();
+            ServerSentEventClient client({
+                "url": "sse://localhost:" + sse_port,
+                "data": "json",
+            });
+            client.registerObserver(observer);
+            client.connect();
+            assertEq(0, observer.first_data.waitForZero(30s), sprintf("connection %d: data received", i));
+            client.disconnect();
+            list<string> events = observer.getEvents();
+            assertEq(EVENT_SSE_CONNECTED, events[0], sprintf("connection %d: first event", i));
+            assertEq(EVENT_SSE_DATA, events[1], sprintf("connection %d: second event", i));
+        }
     }
 }
