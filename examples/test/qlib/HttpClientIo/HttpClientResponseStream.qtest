@@ -214,7 +214,7 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
             assertEq(i.value + "/redirect", redirects[0].target_url, msg);
             assertEq(StreamTestHandler::Body, readAll(stream), msg);
 
-            assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects", \mgr.openStream(), i.value + "/redirect-loop",
+            assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects", \mgr.openStream(), i.value + "/redirect-loop",
                 msg);
 
             # redirects are returned with redirect_passthru

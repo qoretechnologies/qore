@@ -151,6 +151,11 @@ class HttpIoTestHandler inherits AbstractHttpRequestHandler {
                 return makeResponse({"Content-Type": "text/plain"}, 404, binary("not here"));
             case "/to-text":
                 return makeResponse({"Location": "/text"}, 302, binary());
+            case "/set-cookie-redirect":
+                return makeResponse({"Location": "/echo-cookie", "Set-Cookie": "fl=1; Path=/"}, 302, binary());
+            case "/echo-cookie":
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200,
+                    binary("cookie=" + (hdr.cookie ?? "")));
             case "/post-307":
                 return makeResponse({"Location": "/echo/307"}, 307, binary());
             case "/post-303":
@@ -525,6 +530,16 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         # the shared connection manager is not closed by the handler
         delete h;
         assertEq(200, mgr.request(url, "GET", "/text").status_code);
+
+        # the cookie jar of a bound connection manager supplies cookies across redirects
+        h = FileLocationHandler::getHttpHandlerForClient(mgr, url);
+        assertEq("cookie=fl=1", h.getTextFile("http", "/set-cookie-redirect"));
+        assertEq("cookie=fl=1", h.getTextFile("http", "/echo-cookie"));
+        assertEq(binary("cookie=fl=1"), runPoller(h.getResourcePoller("http", "/echo-cookie")).data);
+        # a caller cookie is merged into the same header
+        assertEq("cookie=own=2; fl=1", h.getTextFile("http", "/echo-cookie", {"headers": {"Cookie": "own=2"}}));
+        # a handler that creates its own connection manager does not keep cookies
+        assertEq("cookie=", FileLocationHandler::getTextFileFromLocation(url + "/set-cookie-redirect"));
 
         # max_redirects and error_passthru
         h = FileLocationHandler::getHttpHandlerForClient(mgr, url, {"max_redirects": 0, "error_passthru": True});

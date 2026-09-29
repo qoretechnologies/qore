@@ -1,0 +1,315 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Unit tests for HttpUtil::HttpRedirectFollower
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpUtil
+
+%exec-class HttpRedirectFollowerTest
+
+public class HttpRedirectFollowerTest inherits QUnit::Test {
+    constructor() : Test("HttpRedirectFollowerTest", "1.0") {
+        addTestCase("initial state", \testInitialState());
+        addTestCase("status codes", \testStatusCodes());
+        addTestCase("location resolution", \testLocationResolution());
+        addTestCase("method and body rules", \testMethodRules());
+        addTestCase("origin-bound headers", \testOriginBoundHeaders());
+        addTestCase("origins", \testOrigins());
+        addTestCase("limits", \testLimits());
+        addTestCase("invalid locations", \testLocationErrors());
+        addTestCase("UNIX domain sockets", \testUnixSockets());
+        addTestCase("request targets", \testEncodeTarget());
+        addTestCase("invalid arguments", \testInvalidArguments());
+        set_return_value(main());
+    }
+
+    testInitialState() {
+        HttpRedirectFollower rf("HTTPS://user:pw@Example.com:443/ignored?q", "a b", "POST", {"X-A": "1"}, "body");
+        # user information, the path of the URL, and the default port are not part of the origin
+        assertEq("https://Example.com", rf.getOrigin());
+        assertEq("/a%20b", rf.getPath());
+        assertEq("https://Example.com/a%20b", rf.getRequestUrl());
+        assertEq("POST", rf.getMethod());
+        assertEq({"X-A": "1"}, rf.getHeaders());
+        assertEq("body", rf.getBody());
+        assertEq((), rf.getRedirects());
+        assertEq(5, rf.getMaxRedirects());
+        assertTrue(rf.isOriginalOrigin());
+
+        # a URL without a scheme is an https URL; a non-default port is kept
+        rf = new HttpRedirectFollower("example.com:8443", "/", "GET");
+        assertEq("https://example.com:8443", rf.getOrigin());
+        rf = new HttpRedirectFollower("http://example.com:80", "/", "GET");
+        assertEq("http://example.com", rf.getOrigin());
+        # IPv6 address literals are enclosed in brackets
+        rf = new HttpRedirectFollower("http://[::1]:8080", "/x", "GET");
+        assertEq("http://[::1]:8080/x", rf.getRequestUrl());
+
+        # headers can be replaced for the next request
+        rf.setHeaders({"X-B": "2"});
+        assertEq({"X-B": "2"}, rf.getHeaders());
+    }
+
+    testStatusCodes() {
+        foreach int code in ((301, 302, 303, 307, 308)) {
+            assertTrue(HttpRedirectFollower::isFollowedStatus(code), sprintf("%d", code));
+        }
+        foreach int code in ((200, 300, 304, 305, 306, 309, 400)) {
+            assertFalse(HttpRedirectFollower::isFollowedStatus(code), sprintf("%d", code));
+        }
+        HttpRedirectFollower rf("http://a", "/", "GET");
+        assertTrue(rf.isFollowed(302));
+        assertFalse(rf.isFollowed(304));
+        # with redirect passthru, no redirect is followed
+        rf = new HttpRedirectFollower("http://a", "/", "GET", NOTHING, NOTHING, 5, True);
+        foreach int code in ((301, 302, 303, 307, 308)) {
+            assertFalse(rf.isFollowed(code), sprintf("%d", code));
+        }
+    }
+
+    testLocationResolution() {
+        list<list<string>> cases = (
+            ("/abs", "http://a.example/abs"),
+            ("rel", "http://a.example/p/rel"),
+            ("../up?q=1", "http://a.example/up?q=1"),
+            ("?only", "http://a.example/p/q?only"),
+            ("x#frag", "http://a.example/p/x"),
+            ("//b.example/net", "http://b.example/net"),
+            ("https://c.example:8443/tls", "https://c.example:8443/tls"),
+            ("HTTP://D.example/upper", "http://D.example/upper"),
+            ("/sp ace/ü", "http://a.example/sp%20ace/%C3%BC"),
+            ("/enc%2Fkept", "http://a.example/enc%2Fkept"),
+            ("http://b.example", "http://b.example/"),
+        );
+        foreach list<string> c in (cases) {
+            HttpRedirectFollower rf("http://a.example", "/p/q", "GET");
+            rf.follow(302, "Found", {"location": c[0]});
+            assertEq(c[1], rf.getRequestUrl(), c[0]);
+            hash<HttpRedirectInfo> r = rf.getRedirects()[0];
+            assertEq("http://a.example/p/q", r.request_url, c[0]);
+            assertEq(302, r.status_code, c[0]);
+            assertEq("Found", r.status_message, c[0]);
+            assertEq(c[0], r.location, c[0]);
+            assertEq(c[1], r.target_url, c[0]);
+            assertEq({"location": c[0]}, r.headers, c[0]);
+        }
+
+        # user information in a location is never used
+        HttpRedirectFollower rf("http://a.example", "/", "GET");
+        rf.follow(301, NOTHING, {"location": "http://evil:pw@b.example/x"});
+        assertEq("http://b.example/x", rf.getRequestUrl());
+        assertEq("http://b.example/x", rf.getRedirects()[0].target_url);
+
+        # a chain is recorded in order
+        rf = new HttpRedirectFollower("http://a.example", "/1", "GET");
+        rf.follow(301, NOTHING, {"location": "/2"});
+        rf.follow(308, NOTHING, {"location": "http://b.example/3"});
+        rf.follow(307, NOTHING, {"location": "/4"});
+        assertEq(("http://a.example/1", "http://a.example/2", "http://b.example/3"),
+            (map $1.request_url, rf.getRedirects()));
+        assertEq("http://b.example/4", rf.getRequestUrl());
+    }
+
+    testMethodRules() {
+        list<list<auto>> cases = (
+            ("POST", 303, "GET", False),
+            ("PUT", 303, "GET", False),
+            ("DELETE", 303, "GET", False),
+            ("HEAD", 303, "HEAD", False),
+            ("head", 303, "head", False),
+            ("POST", 301, "GET", False),
+            ("post", 302, "GET", False),
+            ("PUT", 301, "PUT", True),
+            ("PATCH", 302, "PATCH", True),
+            ("POST", 307, "POST", True),
+            ("POST", 308, "POST", True),
+        );
+        foreach list<auto> c in (cases) {
+            string msg = sprintf("%s %d", c[0], c[1]);
+            HttpRedirectFollower rf("http://a", "/", c[0], {"Content-Type": "text/plain", "content-length": "7",
+                "Transfer-Encoding": "chunked", "X-Keep": "1"}, "payload");
+            rf.follow(c[1], NOTHING, {"location": "/next"});
+            assertEq(c[2], rf.getMethod(), msg);
+            if (c[3]) {
+                assertEq("payload", rf.getBody(), msg);
+                assertEq({"Content-Type": "text/plain", "content-length": "7", "Transfer-Encoding": "chunked",
+                    "X-Keep": "1"}, rf.getHeaders(), msg);
+            } else {
+                assertNothing(rf.getBody(), msg);
+                # content headers are removed with the body; other headers are kept
+                assertEq({"X-Keep": "1"}, rf.getHeaders(), msg);
+            }
+        }
+    }
+
+    testOriginBoundHeaders() {
+        hash<auto> hdr = {"authorization": "Bearer t", "COOKIE": "c=1", "Host": "vhost", "X-Other": "o"};
+        HttpRedirectFollower rf("http://a.example", "/", "GET", hdr);
+        # to another origin: origin-bound headers are removed, whatever the case of their names
+        rf.follow(302, NOTHING, {"location": "http://b.example/"});
+        assertEq({"X-Other": "o"}, rf.getHeaders());
+        assertFalse(rf.isOriginalOrigin());
+        # a header set for the other origin is removed when leaving it
+        rf.setHeaders(rf.getHeaders() + {"Authorization": "for-b"});
+        # back to the original origin, written differently: the original headers are sent again
+        rf.follow(307, NOTHING, {"location": "HTTP://A.EXAMPLE:80/back"});
+        assertEq(hdr, rf.getHeaders());
+        assertTrue(rf.isOriginalOrigin());
+
+        # another port or scheme is another origin
+        foreach string loc in (("http://a.example:8080/", "https://a.example/")) {
+            rf = new HttpRedirectFollower("http://a.example", "/", "GET", hdr);
+            rf.follow(302, NOTHING, {"location": loc});
+            assertEq({"X-Other": "o"}, rf.getHeaders(), loc);
+        }
+        # the default port is the same origin as no port
+        rf = new HttpRedirectFollower("https://a.example:443", "/", "GET", hdr);
+        rf.follow(302, NOTHING, {"location": "https://a.example/x"});
+        assertEq(hdr, rf.getHeaders());
+        rf = new HttpRedirectFollower("https://a.example", "/", "GET", hdr);
+        rf.follow(302, NOTHING, {"location": "https://a.example:443/x"});
+        assertEq(hdr, rf.getHeaders());
+
+        foreach string name in (("Authorization", "cookie", "HOST")) {
+            assertTrue(HttpRedirectFollower::isOriginBoundHeader(name), name);
+        }
+        foreach string name in (("Proxy-Authorization", "X-Cookie", "Hosts")) {
+            assertFalse(HttpRedirectFollower::isOriginBoundHeader(name), name);
+        }
+    }
+
+    testOrigins() {
+        assertTrue(HttpRedirectFollower::isSameOrigin("https://Ex.com", "HTTPS://ex.COM:443/path"));
+        assertTrue(HttpRedirectFollower::isSameOrigin("ex.com", "https://ex.com"));
+        assertTrue(HttpRedirectFollower::isSameOrigin("http://u:p@ex.com:80", "http://ex.com/"));
+        assertFalse(HttpRedirectFollower::isSameOrigin("http://ex.com", "https://ex.com"));
+        assertFalse(HttpRedirectFollower::isSameOrigin("http://ex.com", "http://ex.com:8080"));
+        assertFalse(HttpRedirectFollower::isSameOrigin("http://ex.com", "http://ex.org"));
+        # a socket path is case-sensitive
+        assertFalse(HttpRedirectFollower::isSameOrigin("http://socket=%2Ftmp%2Fa", "http://socket=%2FTMP%2Fa"));
+        assertTrue(HttpRedirectFollower::isSameOrigin("http://socket=%2Ftmp%2Fa", "socket=%2Ftmp%2Fa"));
+
+        hash<UrlInfo> info = HttpRedirectFollower::parseOrigin("HTTPS://u:p@Ex.com/path?q");
+        assertEq({"protocol": "https", "host": "Ex.com", "port": 443}, info);
+        assertEq("https://Ex.com", HttpRedirectFollower::getOriginUrl(info));
+        assertEq("https://ex.com:443", HttpRedirectFollower::getOriginKey(info));
+        info = HttpRedirectFollower::parseOrigin("socket=%2Ftmp%2Fs.sock");
+        assertEq({"protocol": "http", "host": "/tmp/s.sock", "port": 0}, info);
+        assertTrue(HttpRedirectFollower::isUnixSocket(info));
+        assertEq("http://socket=%2Ftmp%2Fs.sock", HttpRedirectFollower::getOriginUrl(info));
+        assertEq("socket:/tmp/s.sock", HttpRedirectFollower::getOriginKey(info));
+        assertFalse(HttpRedirectFollower::isUnixSocket(HttpRedirectFollower::parseOrigin("http://h")));
+
+        # URLs without a host; user information is never included in the error message
+        assertThrows("HTTP-CLIENT-URL-ERROR", "missing host", \HttpRedirectFollower::parseOrigin(), "/only/path");
+        try {
+            HttpRedirectFollower::parseOrigin("http://user:secret@");
+            assertTrue(False, "no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+            assertFalse(ex.desc =~ /secret/, ex.desc);
+        }
+    }
+
+    testLimits() {
+        HttpRedirectFollower rf("http://a", "/0", "GET", NOTHING, NOTHING, 2);
+        rf.follow(302, NOTHING, {"location": "/1"});
+        rf.follow(302, NOTHING, {"location": "/2"});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
+            "maximum redirects \\(2\\) exceeded; redirect 302 from \"http://a/2\" to \"/3\" ignored", \rf.follow(),
+            (302, NOTHING, {"location": "/3"}));
+        # the state is unchanged by a failed redirect
+        assertEq("http://a/2", rf.getRequestUrl());
+        assertEq(2, rf.getRedirects().size());
+
+        rf = new HttpRedirectFollower("http://a", "/", "GET", NOTHING, NOTHING, 0);
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(0\\) exceeded", \rf.follow(),
+            (301, NOTHING, {"location": "/x"}));
+    }
+
+    testLocationErrors() {
+        list<list<auto>> cases = (
+            (NOTHING, "HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code 302"),
+            ("", "HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code 302"),
+            (("/a", "/b"), "HTTP-CLIENT-REDIRECT-ERROR", "has 2 Location headers"),
+            ("ftp://h/x", "HTTP-CLIENT-UNKNOWN-PROTOCOL", "unsupported scheme \"ftp\""),
+            ("mailto:x@y", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("http:///x", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("http://user@/x", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("http://a b/x", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+            ("http://a%zzb/x", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+            ("http://a<b>/x", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+        );
+        foreach list<auto> c in (cases) {
+            HttpRedirectFollower rf("http://a", "/start", "POST", {"Authorization": "x"}, "body");
+            *hash<auto> hdr = exists c[0] ? {"location": c[0]} : {};
+            assertThrows(c[1], c[2], \rf.follow(), (302, NOTHING, hdr), sprintf("%y", c[0]));
+            # a failed redirect does not change the next request
+            assertEq("http://a/start", rf.getRequestUrl());
+            assertEq("POST", rf.getMethod());
+            assertEq("body", rf.getBody());
+            assertEq({"Authorization": "x"}, rf.getHeaders());
+            assertEq((), rf.getRedirects());
+        }
+    }
+
+    testUnixSockets() {
+        # a network server can never redirect to a local socket
+        HttpRedirectFollower rf("http://a", "/", "GET");
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "names a UNIX domain socket", \rf.follow(),
+            (302, NOTHING, {"location": "http://socket=%2Ftmp%2Fx/y"}));
+        # a request on a socket can be redirected to a socket
+        rf = new HttpRedirectFollower("http://socket=%2Ftmp%2Fa", "/", "GET", {"Authorization": "x"});
+        rf.follow(302, NOTHING, {"location": "/same"});
+        assertEq("http://socket=%2Ftmp%2Fa/same", rf.getRequestUrl());
+        assertEq({"Authorization": "x"}, rf.getHeaders());
+        rf.follow(302, NOTHING, {"location": "http://socket=%2Ftmp%2Fb/other"});
+        assertEq("http://socket=%2Ftmp%2Fb/other", rf.getRequestUrl());
+        # another socket is another origin
+        assertEq({}, rf.getHeaders());
+    }
+
+    testEncodeTarget() {
+        assertEq("/plain?q=1&r=%2F", HttpRedirectFollower::encodeTarget("/plain?q=1&r=%2F"));
+        assertEq("/a%20b%22%3C%3E%5C%5E%60%7B%7C%7D", HttpRedirectFollower::encodeTarget("/a b\"<>\\^`{|}"));
+        assertEq("/%C3%BC%09", HttpRedirectFollower::encodeTarget("/ü\t"));
+        # a relative target gets a leading slash in the follower
+        HttpRedirectFollower rf("http://a", "x?y", "GET");
+        assertEq("/x?y", rf.getPath());
+        rf = new HttpRedirectFollower("http://a", "", "GET");
+        assertEq("/", rf.getPath());
+    }
+
+    testInvalidArguments() {
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "invalid maximum number of redirects -1",
+            sub () { new HttpRedirectFollower("http://a", "/", "GET", NOTHING, NOTHING, -1); });
+        assertThrows("HTTP-CLIENT-URL-ERROR", "missing host",
+            sub () { new HttpRedirectFollower("/relative", "/", "GET"); });
+    }
+}

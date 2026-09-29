@@ -33,6 +33,7 @@
 %requires AsyncSocketIo
 %requires FtpClientIo
 %requires HttpClientIo
+%requires HttpUtil
 %requires reflection
 %requires ProviderIndexUtil
 

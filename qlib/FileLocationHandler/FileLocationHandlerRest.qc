@@ -550,7 +550,7 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         #! The path of the current request, once known
         *string path;
         #! Follows and records redirects
-        *HttpIoRedirectState redirects;
+        *HttpRedirectFollower redirects;
         #! The maximum number of redirects to follow
         int max_redirects;
         #! If error responses are returned instead of raising an exception
@@ -655,10 +655,10 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
             }
             string request_url = origin + (resp.request_path ?? op.getPath());
             if (!redirects) {
-                # the redirect state is created with the headers of the first request as sent
+                # the redirect state is created with the first request as sent
                 path = resp.request_path ?? op.getPath();
-                redirects = new HttpIoRedirectState(origin, op.getRequestHeaders(), max_redirects,
-                    redirect_passthru);
+                redirects = new HttpRedirectFollower(origin, path, method, op.getRequestHeaders(),
+                    op.getRequestBody(), max_redirects, redirect_passthru);
             }
             if (!redirects.isFollowed(resp.status_code)) {
                 output = resp + {
@@ -667,25 +667,26 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
                 };
                 return;
             }
-            hash<auto> hdr = op.getRequestHeaders() ?? {};
-            *data body = op.getRequestBody();
-            hash<auto> next;
             try {
-                next = redirects.follow(resp + {"headers": resp.headers ?? {}}, request_url, \method, \body, \hdr);
+                # a REST response has no status message; the standard reason phrase is used
+                redirects.follow(resp.status_code, HttpIoSupport::getStatusMessage({} + resp), resp.headers ?? {});
             } catch (hash<ExceptionInfo> ex) {
                 aborted = True;
                 rethrow;
             }
-            origin = next.origin;
-            path = next.path;
+            origin = redirects.getOrigin();
+            path = redirects.getPath();
+            method = redirects.getMethod();
+            *hash<auto> hdr = redirects.getHeaders();
+            *data body = redirects.getBody();
             # a redirect is sent with a client for its origin on the same connection manager; the request was
             # prepared already, so the token check is skipped
             object hop = RestIoSupport::createClient({
-                "url": next.origin,
+                "url": origin,
                 "error_passthru": True,
                 "allow_any_response": True,
             }, rest.getConnectionManager());
-            op = hop.startPollRawRetry(method, next.path, body, hdr);
+            op = hop.startPollRawRetry(method, path, body, hdr);
         }
     }
 

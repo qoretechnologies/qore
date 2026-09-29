@@ -198,6 +198,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         addTestCase("origin-bound headers", \testOriginBoundHeaders());
         addTestCase("effective URL and redirect metadata", \testEffectiveUrl());
         addTestCase("redirects and UNIX domain sockets", \testUnixSocket());
+        addTestCase("cookie header merge", \testCookieHeaderMerge());
+        addTestCase("openStream GET body", \testOpenStreamGetBody());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -271,14 +273,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
             "max_redirects": 2,
         });
 
-        try {
-            mgr.request(url, "GET", "/redirect/5");
-            assertTrue(False, "should have thrown HTTP-REDIRECT-ERROR");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("HTTP-REDIRECT-ERROR", ex.err, "should throw HTTP-REDIRECT-ERROR");
-            assertRegex("maximum redirects.*2.*exceeded", ex.desc,
-                "error should mention max redirect count");
-        }
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects.*2.*exceeded", \mgr.request(),
+            (url, "GET", "/redirect/5"));
 
         mgr.closeAll();
     }
@@ -375,7 +371,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
             "max_redirects": 2,
         });
         on_exit mgr2.closeAll();
-        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(2\\) exceeded", \mgr2.request(),
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(2\\) exceeded", \mgr2.request(),
             (url_a, "GET", "/loop"));
         assertEq(3, peer_a.getRequests().size());
     }
@@ -403,11 +399,11 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         }
         # a followed redirect status without a location cannot be followed, as with the native client
         peer_a.setRoute("/status", 302);
-        assertThrows("HTTP-REDIRECT-ERROR", "no redirect location given for status code 302", \mgr.request(),
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code 302", \mgr.request(),
             (url_a, "GET", "/status"));
         peer_a.setRoute("/status", 307, {"Location": ""});
         peer_a.clear();
-        assertThrows("HTTP-REDIRECT-ERROR", "no redirect location given for status code 307", \mgr.request(),
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code 307", \mgr.request(),
             (url_a, "POST", "/status", NOTHING, "body"));
         # the request is not repeated
         assertEq(1, peer_a.getRequests().size());
@@ -462,15 +458,16 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         hash<auto> resp = mgr.request(url, "GET", "/redirect/3");
         assertEq(200, resp.status_code);
         assertEq(3, resp.redirects.size());
-        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(3\\) exceeded; redirect 302 from .* to "
-            "\"/redirect/0\"", \mgr.request(), (url, "GET", "/redirect/4"));
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
+            "maximum redirects \\(3\\) exceeded; redirect 302 from .* to \"/redirect/0\"", \mgr.request(),
+            (url, "GET", "/redirect/4"));
 
         HttpClientIo::HttpClientConnectionManager mgr0(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
             "max_redirects": 0,
         });
         on_exit mgr0.closeAll();
-        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(0\\) exceeded", \mgr0.request(),
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(0\\) exceeded", \mgr0.request(),
             (url, "GET", "/redirect/1"));
         assertEq(200, mgr0.request(url, "GET", "/redirect/0").status_code);
     }
@@ -489,17 +486,17 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         peer_a.setRoute("/badhost-space", 302, {"Location": "http://a b/x"});
         peer_a.setRoute("/badhost-pct", 302, {"Location": "http://a%zzb/x"});
         peer_a.setRoute("/badhost-char", 302, {"Location": "http://a<b>/x"});
-        assertThrows("HTTP-REDIRECT-ERROR", "2 Location headers", \mgr.request(), (url_a, "GET", "/multiloc"));
-        assertThrows("HTTP-REDIRECT-ERROR", "unsupported scheme \"ftp\"", \mgr.request(),
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "2 Location headers", \mgr.request(), (url_a, "GET", "/multiloc"));
+        assertThrows("HTTP-CLIENT-UNKNOWN-PROTOCOL", "unsupported scheme \"ftp\"", \mgr.request(),
             (url_a, "GET", "/badscheme"));
-        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost"));
-        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost2"));
-        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/userinfo-only"));
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost"));
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost2"));
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/userinfo-only"));
         # a server can never send a request to a local UNIX domain socket
-        assertThrows("HTTP-REDIRECT-ERROR", "names a UNIX domain socket", \mgr.request(), (url_a, "GET", "/unix"));
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "names a UNIX domain socket", \mgr.request(), (url_a, "GET", "/unix"));
         # a host that could inject data into a request
         foreach string path in (("/badhost-space", "/badhost-pct", "/badhost-char")) {
-            assertThrows("HTTP-REDIRECT-ERROR", "has an invalid host", \mgr.request(), (url_a, "GET", path), path);
+            assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host", \mgr.request(), (url_a, "GET", path), path);
         }
         # the manager remains usable
         assertEq("GET /ok", mgr.request(url_a, "GET", "/ok").body);
@@ -663,4 +660,76 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
 
         mgr.closeAll();
     }
+
+    testCookieHeaderMerge() {
+        # the cookie is stored from the redirect response and sent with the next request
+        peer_a.setRoute("/set-cookie", 302, {"Location": "/cookie-target", "Set-Cookie": "jar=1; Path=/"});
+        foreach string name in (("Cookie", "cookie", "COOKIE")) {
+            # a new manager has an empty cookie jar
+            HttpClientIo::HttpClientConnectionManager m(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+            });
+            on_exit m.closeAll();
+            peer_a.clear();
+            hash<auto> resp = m.request(url_a, "GET", "/set-cookie", {name: "own=2"});
+            assertEq(200, resp.status_code, name);
+            list<hash<RoutePeerRequest>> reqs = peer_a.getRequests();
+            assertEq(2, reqs.size(), name);
+            # one Cookie header with the caller's cookie and the cookie from the jar (RFC 6265 section 5.4)
+            assertEq("own=2", reqs[0].cookie, name);
+            assertEq("own=2; jar=1", reqs[1].cookie, name);
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        mgr.request(url_a, "GET", "/set-cookie");
+        # without a caller cookie, the jar supplies the header
+        peer_a.clear();
+        hash<auto> resp = mgr.request(url_a, "GET", "/cookie-target");
+        assertEq(200, resp.status_code);
+        assertEq("jar=1", peer_a.getRequests()[0].cookie);
+        # an empty caller value is replaced
+        peer_a.clear();
+        resp = mgr.request(url_a, "GET", "/cookie-target", {"Cookie": ""});
+        assertEq(200, resp.status_code);
+        assertEq("jar=1", peer_a.getRequests()[0].cookie);
+
+        # the public helpers add and store cookies the same way; cookies are bound to a host, not a port
+        hash<auto> hdr = mgr.addCookieHeaders(url_a, "/x", {"cookie": "a=b"});
+        assertEq({"cookie": "a=b; jar=1"}, hdr);
+        assertEq({"Cookie": "jar=1"}, mgr.addCookieHeaders(url_b, "/x"));
+        assertEq({}, mgr.addCookieHeaders("http://other.example", "/x"));
+        mgr.storeResponseCookies("http://other.example", "/x", {"set-cookie": "b=2; Path=/"});
+        assertEq({"Cookie": "b=2"}, mgr.addCookieHeaders("http://other.example", "/x"));
+        assertEq({"X": "1"}, mgr.addCookieHeaders("http://third.example", "/x", {"X": "1"}));
+        # a manager without a cookie jar changes nothing
+        HttpClientIo::HttpClientConnectionManager nojar(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "enable_cookies": False,
+        });
+        on_exit nojar.closeAll();
+        nojar.storeResponseCookies("http://other.example", "/x", {"set-cookie": "b=2; Path=/"});
+        assertEq({"Cookie": "c=3"}, nojar.addCookieHeaders("http://other.example", "/x", {"Cookie": "c=3"}));
+        assertEq({}, nojar.addCookieHeaders("http://other.example", "/x"));
+    }
+
+    testOpenStreamGetBody() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        peer_a.clear();
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \mgr.openStream(), (url_a + "/x", NOTHING,
+            <HttpClientOpenStreamOptions>{"method": "GET", "body": "x"}));
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \mgr.openStream(), (url_a + "/x", NOTHING,
+            <HttpClientOpenStreamOptions>{"body": ""}));
+        # no request was sent
+        assertEq((), peer_a.getRequests());
+        # a POST can have a body
+        HttpClientResponseStream stream = mgr.openStream(url_a + "/x", NOTHING,
+            <HttpClientOpenStreamOptions>{"method": "POST", "body": "x"});
+        assertEq(200, stream.getStatusCode());
+        assertEq("x", peer_a.getRequests()[0].body);
+    }
+
 }

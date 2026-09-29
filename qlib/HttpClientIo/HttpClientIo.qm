@@ -628,17 +628,18 @@ public namespace HttpClientIo {
         bool enable_cookies = True;
 
         #! Maximum number of HTTP redirects to follow (default: 5)
-        /** A redirect response beyond this limit raises \c HTTP-REDIRECT-ERROR; with 0, any redirect response
-            that would be followed raises the error.  Use \c redirect_passthru to receive redirect responses
-            instead.
+        /** A redirect response beyond this limit raises \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED; with 0, any
+            redirect response that would be followed raises the error.  Use \c redirect_passthru to receive redirect
+            responses instead.
 
-            Redirects with status 301, 302, 303, 307, and 308 are followed; the \c Location value is resolved
-            against the URL of the request that received it according to RFC 3986 section 5.2, and any fragment
-            is removed.  A 303 redirect is retrieved with \c GET, a \c POST redirected with 301 or 302 is
-            changed to \c GET, and 307 and 308 repeat the request; a request that changes to \c GET is sent
-            without its body and content headers.  The \c Authorization, \c Cookie, and \c Host request headers
-            are sent only to the origin (scheme, host, and port) of the original request, and user information in
-            a redirect location is never used.  Set-Cookie headers in redirect responses are processed before
+            Redirects are followed with the rules of @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower", the
+            same as with @ref Qore::HTTPClient "HTTPClient": redirects with status 301, 302, 303, 307, and 308 are
+            followed; the \c Location value is resolved against the URL of the request that received it according
+            to RFC 3986 section 5.2, and any fragment is removed.  A 303 redirect is retrieved with \c GET, a \c POST
+            redirected with 301 or 302 is changed to \c GET, and 307 and 308 repeat the request; a request that
+            changes to \c GET is sent without its body and content headers.  The \c Authorization, \c Cookie, and
+            \c Host request headers are sent only to the origin (scheme, host, and port) of the original request,
+            and user information in a redirect location is never used.  Set-Cookie headers in redirect responses are processed before
             following the redirect (when cookies are enabled), and the cookie jar supplies the cookies for each
             target.
         */

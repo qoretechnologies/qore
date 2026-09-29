@@ -30,6 +30,8 @@
 # enable all warnings
 
 %requires Util
+# for following HTTP redirects; HttpUtil requires nothing from this module, so there is no cycle
+%requires HttpUtil
 # for creating HttpClientIo options at runtime; HttpClientIo is loaded dynamically, see FileLocationHandlerHttp.qc
 %requires reflection
 # for non-blocking FTP retrieval; FtpClientIo requires nothing from this module, so there is no cycle

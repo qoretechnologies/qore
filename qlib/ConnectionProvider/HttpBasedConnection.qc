@@ -114,22 +114,6 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
 
         #! The maximum time in milliseconds between two wakes of the operation while waiting for an event
         const PollTimeoutMs = 1000;
-
-        #! Redirect status codes that are followed
-        const FollowedRedirects = {
-            "301": True,
-            "302": True,
-            "303": True,
-            "307": True,
-            "308": True,
-        };
-
-        #! Headers sent only to the origin of the original request
-        const OriginBoundHeaders = {
-            "authorization": True,
-            "cookie": True,
-            "host": True,
-        };
     }
 
     private {
@@ -151,12 +135,8 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
         #! The body of the current request
         *data body;
 
-        #! The origin of the original request
-        string original_origin;
-        #! Origin-bound headers of the original request
-        hash<auto> origin_headers = {};
-        #! The redirects followed
-        list<hash<auto>> redirects = ();
+        #! Follows and records redirects
+        HttpUtil::HttpRedirectFollower rf;
 
         #! The deadline for the response
         date deadline;
@@ -208,12 +188,13 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
         self.method = method;
         self.body = body;
         hash<auto> target = HttpClientIoPollOperation::splitUrl(url);
-        origin = original_origin = target.origin;
+        origin = target.origin;
         path = target.path;
         if (headers) {
             self.headers = headers;
         }
-        origin_headers = map {$1.key: $1.value}, self.headers.pairIterator(), OriginBoundHeaders{$1.key.lwr()};
+        rf = new HttpUtil::HttpRedirectFollower(origin, path, method, self.headers, body, self.opts.max_redirects,
+            self.opts.redirect_passthru);
         deadline = now_us() + milliseconds(self.opts.timeout_ms > 0 ? self.opts.timeout_ms
             : mgr.getRequestTimeout());
     }
@@ -436,21 +417,7 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
         @return the request target with invalid characters percent-encoded
     */
     static string encodeRequestTarget(string target) {
-        if (target !~ /[^\x21-\x7e]|["<>\\^`{|}]/) {
-            return target;
-        }
-        binary octets = target.toBinary();
-        string rv;
-        for (int i = 0; i < octets.size(); ++i) {
-            int c = octets[i];
-            if (c <= 0x20 || c >= 0x7f || c == 0x22 || c == 0x3c || c == 0x3e || c == 0x5c || c == 0x5e
-                    || c == 0x60 || c == 0x7b || c == 0x7c || c == 0x7d) {
-                rv += sprintf("%%%02X", c);
-            } else {
-                rv += chr(c);
-            }
-        }
-        return rv;
+        return HttpUtil::HttpRedirectFollower::encodeTarget(target);
     }
 
     #! Raises an error of the transport with the error code documented for HTTP clients
@@ -613,7 +580,7 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
             return True;
         }
         response.processed = True;
-        if (!opts.redirect_passthru && FollowedRedirects{response.status_code}) {
+        if (rf.isFollowed(response.status_code)) {
             redirecting = True;
             return True;
         }
@@ -694,6 +661,7 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
                 info.charset = charset;
             }
         }
+        list<hash<HttpRedirectInfo>> redirects = rf.getRedirects();
         if (redirects) {
             info.redirects = redirects;
         }
@@ -730,84 +698,12 @@ public class HttpClientIoPollOperation inherits Qore::AbstractPollOperation<auto
     private followRedirect() {
         int code = response.status_code;
         string request_url = origin + path;
-        auto location = response.headers.location;
-        if (location.typeCode() == NT_LIST) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect response %d from %y has %d Location headers; "
-                "expecting one", code, request_url, location.size());
-        }
-        if (!location.val()) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("no redirect location given for status code %d from %y",
-                code, request_url);
-        }
-        if (redirects.size() >= opts.max_redirects) {
-            throw "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", sprintf("maximum redirects (%d) exceeded; redirect %d "
-                "from %y to %y ignored", opts.max_redirects, code, request_url, location);
-        }
-
-        # resolve the location against the URL of the request that received it (RFC 3986 section 5.2) and remove
-        # any fragment, which is never sent
-        string target = resolve_url(request_url, location);
-        target =~ s/#.*//s;
-        *list<*string> parts = (target =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)(.*)$/s);
-        if (!parts) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
-                location, request_url, code);
-        }
-        string scheme = parts[0].lwr();
-        if (scheme != "http" && scheme != "https") {
-            throw "HTTP-CLIENT-UNKNOWN-PROTOCOL", sprintf("redirect location %y from %y (code %d) has unsupported "
-                "scheme %y", location, request_url, code, scheme);
-        }
-        # user information in a redirect location is never used as credentials
-        string authority = parts[1];
-        authority =~ s/^.*@//s;
-        if (!authority.val() || authority =~ /[\x00-\x20\x7f"<>\\^`{|}]|%(?![0-9a-fA-F]{2})/) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
-                "host", location, request_url, code);
-        }
-        # a network server must never be able to send the request to a local UNIX domain socket
-        if (authority =~ /^socket=/i && request_url !~ /^[a-z]+:\/\/socket=/i) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
-                "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
-                request_url, code);
-        }
-        string next_origin = scheme + "://" + authority;
-        string next_path = HttpClientIoPollOperation::encodeRequestTarget(parts[2] ?? "");
-        if (next_path !~ /^\//) {
-            next_path = "/" + next_path;
-        }
-
-        # RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301 or 302 is
-        # changed to GET; 307 and 308 repeat the request
-        bool drop_body;
-        if (code == 303) {
-            if (method != "HEAD") {
-                method = "GET";
-            }
-            drop_body = True;
-        } else if ((code == 301 || code == 302) && method == "POST") {
-            method = "GET";
-            drop_body = True;
-        }
-        if (drop_body) {
-            remove body;
-            headers -= (map $1, keys headers, $1 =~ /^(content-|transfer-encoding$)/i);
-        }
-
-        # origin-bound headers are sent only to the origin of the original request
-        headers -= (map $1, keys headers, OriginBoundHeaders{$1.lwr()});
-        if (next_origin.lwr() == original_origin.lwr()) {
-            headers += origin_headers;
-        }
-
-        redirects += {
-            "request_url": request_url,
-            "status_code": code,
-            "status_message": response.status_message,
-            "location": location,
-            "target_url": next_origin + next_path,
-            "headers": response.headers_raw ?? response.headers,
-        };
+        rf.follow(code, response.status_message, response.headers ?? {});
+        string next_origin = rf.getOrigin();
+        string next_path = rf.getPath();
+        method = rf.getMethod();
+        headers = rf.getHeaders() ?? {};
+        body = rf.getBody();
         if (logger) {
             logger.debug("%s: following redirect %d from %y to %y", opts.goal, code, request_url,
                 next_origin + next_path);

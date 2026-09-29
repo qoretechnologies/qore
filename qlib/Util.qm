@@ -2578,17 +2578,7 @@ public data sub get_file_from_http(string url, *string path, *hash<UrlRetrievalO
     object mgr = create_object("HttpClientIo::HttpClientConnectionManager", mgr_opts);
     on_exit mgr.closeAll();
 
-    hash<auto> resp;
-    try {
-        resp = mgr.request(url, "GET", target, hdr);
-    } catch (hash<ExceptionInfo> ex) {
-        if (ex.err == "HTTP-REDIRECT-ERROR") {
-            throw ex.desc =~ /^maximum redirects/
-                ? "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED"
-                : "HTTP-CLIENT-REDIRECT-ERROR", ex.desc, ex.arg;
-        }
-        rethrow;
-    }
+    hash<auto> resp = mgr.request(url, "GET", target, hdr);
     if (resp.status_code < 100 || resp.status_code >= 300) {
         throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %s", resp.status_code,
             resp.status_message ?? "<no message>"), (resp.headers ?? {}) + resp{"status_code", "status_message",

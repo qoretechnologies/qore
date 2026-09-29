@@ -388,18 +388,11 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
     /** @param ex the exception raised by the connection manager
 
         @throw SOCKET-TIMEOUT the request timed out
-        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED the maximum number of redirects was exceeded
-        @throw HTTP-CLIENT-REDIRECT-ERROR a redirect response cannot be followed
     */
     static rethrowRequestError(hash<ExceptionInfo> ex) {
         switch (ex.err) {
             case "HTTPCLIENT-TIMEOUT":
                 throw "SOCKET-TIMEOUT", ex.desc, ex.arg;
-            case "HTTP-REDIRECT-ERROR":
-                if (ex.desc =~ /^maximum redirects/) {
-                    throw "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", ex.desc, ex.arg;
-                }
-                throw "HTTP-CLIENT-REDIRECT-ERROR", ex.desc, ex.arg;
         }
         throw ex.err, ex.desc, ex.arg;
     }

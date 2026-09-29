@@ -793,22 +793,6 @@ class HttpIoSupport {
             "zstd": COMPRESSION_ALG_ZSTD,
         };
 
-        #! Redirect status codes that are followed
-        const FollowedRedirects = {
-            "301": True,
-            "302": True,
-            "303": True,
-            "307": True,
-            "308": True,
-        };
-
-        #! Headers sent only to the origin of the original request
-        const OriginBoundHeaders = {
-            "authorization": True,
-            "cookie": True,
-            "host": True,
-        };
-
         #! Reason phrases for responses that do not carry one (HTTP/2 and HTTP/3)
         const ReasonPhrases = {
             "100": "Continue",
@@ -981,21 +965,7 @@ class HttpIoSupport {
         decoded
     */
     static string encodeRequestTarget(string target) {
-        if (target !~ /[^\x21-\x7e]|["<>\\^`{|}]/) {
-            return target;
-        }
-        binary octets = target.toBinary();
-        string rv;
-        for (int i = 0; i < octets.size(); ++i) {
-            int c = octets[i];
-            if (c <= 0x20 || c >= 0x7f || c == 0x22 || c == 0x3c || c == 0x3e || c == 0x5c || c == 0x5e
-                    || c == 0x60 || c == 0x7b || c == 0x7c || c == 0x7d) {
-                rv += sprintf("%%%02X", c);
-            } else {
-                rv += chr(c);
-            }
-        }
-        return rv;
+        return HttpRedirectFollower::encodeTarget(target);
     }
 
     #! Returns the first content coding of a \c Content-Encoding value if the body is to be decoded
@@ -1099,151 +1069,6 @@ class HttpIoSupport {
     }
 }
 
-#! Follows HTTP redirects like the \c HttpClientIo connection manager and records them
-/** Redirect errors are raised with the error codes of @ref Qore::HTTPClient "HTTPClient"
-
-    @since FileLocationHandler 3.0
-*/
-class HttpIoRedirectState {
-    private {
-        #! The origin of the original request
-        string original_origin;
-        #! Origin-bound headers of the original request
-        hash<auto> origin_headers = {};
-        #! The maximum number of redirects to follow
-        int max_redirects;
-        #! If redirects are returned instead of followed
-        bool redirect_passthru;
-        #! The redirects followed
-        list<hash<auto>> redirects = ();
-    }
-
-    #! Creates the object
-    /** @param origin the origin of the original request
-        @param headers the headers of the original request
-        @param max_redirects the maximum number of redirects to follow
-        @param redirect_passthru if @ref True, redirects are returned instead of followed
-    */
-    constructor(string origin, *hash<auto> headers, int max_redirects, bool redirect_passthru) {
-        original_origin = origin;
-        origin_headers = map {$1.key: $1.value}, headers.pairIterator(),
-            HttpIoSupport::OriginBoundHeaders{$1.key.lwr()};
-        self.max_redirects = max_redirects;
-        self.redirect_passthru = redirect_passthru;
-    }
-
-    #! Returns @ref True if a response with the given status code is a redirect to follow
-    bool isFollowed(int status_code) {
-        return !redirect_passthru && HttpIoSupport::FollowedRedirects{status_code};
-    }
-
-    #! Returns the redirects followed
-    list<hash<auto>> getRedirects() {
-        return redirects;
-    }
-
-    #! Follows a redirect
-    /** @param resp the redirect response with the \c status_code and \c headers keys (lower-case header names),
-        and optionally \c status_message and \c headers_raw
-        @param request_url the URL of the request that received the response
-        @param method the request method; updated for the next request
-        @param body the request body; updated for the next request
-        @param headers the request headers; updated for the next request
-
-        @return a hash with the \c origin and \c path keys of the next request
-
-        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED the maximum number of redirects was exceeded
-        @throw HTTP-CLIENT-REDIRECT-ERROR the redirect cannot be followed
-        @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the redirect location has an unsupported scheme
-    */
-    hash<auto> follow(hash<auto> resp, string request_url, reference<string> method, reference<*data> body,
-            reference<hash<auto>> headers) {
-        int code = resp.status_code;
-        auto location = resp.headers.location;
-        if (location.typeCode() == NT_LIST) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect response %d from %y has %d Location headers; "
-                "expecting one", code, request_url, location.size());
-        }
-        if (!location.val()) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("no redirect location given for status code %d from %y",
-                code, request_url);
-        }
-        if (redirects.size() >= max_redirects) {
-            throw "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", sprintf("maximum redirects (%d) exceeded; redirect %d "
-                "from %y to %y ignored", max_redirects, code, request_url, location);
-        }
-
-        # resolve the location against the URL of the request that received it (RFC 3986 section 5.2) and remove
-        # any fragment, which is never sent
-        string target = resolve_url(request_url, location);
-        target =~ s/#.*//s;
-        *list<*string> parts = (target =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)(.*)$/s);
-        if (!parts) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
-                location, request_url, code);
-        }
-        string scheme = parts[0].lwr();
-        if (scheme != "http" && scheme != "https") {
-            throw "HTTP-CLIENT-UNKNOWN-PROTOCOL", sprintf("redirect location %y from %y (code %d) has unsupported "
-                "scheme %y", location, request_url, code, scheme);
-        }
-        # user information in a redirect location is never used as credentials
-        string authority = parts[1];
-        authority =~ s/^.*@//s;
-        if (!authority.val() || authority =~ /[\x00-\x20\x7f"<>\\^`{|}]|%(?![0-9a-fA-F]{2})/) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
-                "host", location, request_url, code);
-        }
-        # a network server must never be able to send the request to a local UNIX domain socket
-        if (authority =~ /^socket=/i && request_url !~ /^[a-z]+:\/\/socket=/i) {
-            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
-                "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
-                request_url, code);
-        }
-        string next_origin = scheme + "://" + authority;
-        string next_path = HttpIoSupport::encodeRequestTarget(parts[2] ?? "");
-        if (next_path !~ /^\//) {
-            next_path = "/" + next_path;
-        }
-
-        # RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301 or 302 is
-        # changed to GET; 307 and 308 repeat the request
-        bool drop_body;
-        if (code == 303) {
-            if (method != "HEAD") {
-                method = "GET";
-            }
-            drop_body = True;
-        } else if ((code == 301 || code == 302) && method == "POST") {
-            method = "GET";
-            drop_body = True;
-        }
-        if (drop_body) {
-            body = NOTHING;
-            headers -= (map $1, keys headers, $1 =~ /^(content-|transfer-encoding$)/i);
-        }
-
-        # origin-bound headers are sent only to the origin of the original request
-        headers -= (map $1, keys headers, HttpIoSupport::OriginBoundHeaders{$1.lwr()});
-        if (next_origin.lwr() == original_origin.lwr()) {
-            headers += origin_headers;
-        }
-
-        redirects += {
-            "request_url": request_url,
-            "status_code": code,
-            "status_message": resp.status_message,
-            "location": location,
-            "target_url": next_origin + next_path,
-            "headers": resp.headers_raw ?? resp.headers,
-        };
-        return {
-            "origin": next_origin,
-            "path": next_path,
-        };
-    }
-}
-
 #! A non-blocking HTTP request made with \c HttpClientIo; follows and reports redirects
 /** The output is a hash with the \c status_code, \c status_message, \c http_version, \c protocol, \c headers
     (lower-case names), \c headers_raw, \c body, \c effective_url, and \c redirects keys; the body is decoded
@@ -1277,7 +1102,7 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         bool stream_mode;
 
         #! Follows and records redirects
-        HttpIoRedirectState redirects;
+        HttpRedirectFollower redirects;
 
         #! The current state
         string state = ST_CONNECTING;
@@ -1316,7 +1141,8 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         self.mgr = mgr;
         self.info = info;
         self.stream_mode = stream_mode;
-        redirects = new HttpIoRedirectState(info.origin, info.headers, info.max_redirects, info.redirect_passthru);
+        redirects = new HttpRedirectFollower(info.origin, info.path, info.method, info.headers, info.body,
+            info.max_redirects, info.redirect_passthru);
     }
 
     #! Returns the goal
@@ -1411,7 +1237,11 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
                     }
                     try {
                         stream = mgr.acquireStream(info.origin);
-                        stream.startStreaming(info.method, info.path, info.headers, False, info.body, io_notifier);
+                        # the cookie jar of a bound connection manager supplies the cookies for each target; a
+                        # manager created by the handler has cookie handling disabled
+                        stream.startStreaming(info.method, info.path,
+                            mgr.addCookieHeaders(info.origin, info.path, info.headers), False, info.body,
+                            io_notifier);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "HTTPCLIENT-NOT-READY") {
                             # the connection reported itself ready and refused the request; retry the acquisition
@@ -1491,6 +1321,7 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
             return True;
         }
         response.processed = True;
+        mgr.storeResponseCookies(info.origin, info.path, response.headers);
         if (redirects.isFollowed(response.status_code)) {
             redirecting = True;
             return True;
@@ -1555,10 +1386,12 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
 
     #! Follows a redirect
     private followRedirect() {
-        hash<auto> next = redirects.follow(response + {"headers": response.headers ?? {}}, info.origin + info.path,
-            \info.method, \info.body, \info.headers);
-        info.origin = next.origin;
-        info.path = next.path;
+        redirects.follow(response.status_code, response.status_message, response.headers ?? {});
+        info.origin = redirects.getOrigin();
+        info.path = redirects.getPath();
+        info.method = redirects.getMethod();
+        info.headers = redirects.getHeaders() ?? {};
+        info.body = redirects.getBody();
         remove stream;
         remove response;
         body_chunks = ();

@@ -29,7 +29,7 @@
 
 module HttpUtil {
     version = "1.0";
-    desc = "Shared HTTP utility functions for cookie handling (RFC 6265)";
+    desc = "Shared HTTP client and server utilities: cookies (RFC 6265) and redirects (RFC 9110)";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -54,10 +54,15 @@ module HttpUtil {
     - @ref HttpUtil::path_matches() "path_matches()" for RFC 6265 path matching
     - @ref HttpUtil::compute_default_path() "compute_default_path()" for computing default cookie paths
 
+    It also provides @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower", which implements the redirect rules
+    that all HTTP clients follow (RFC 9110 section 15.4), so that every client that follows redirects handles them the
+    same way.
+
     @section httputilrelnotes Release Notes
 
     @subsection httputil_1_0 HttpUtil 1.0
     - initial release
+    - added @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower"
 */
 
 #! Main namespace for shared HTTP utilities
@@ -308,6 +313,414 @@ public string sub compute_default_path(string request_path) {
         return "/";
     }
     return request_path.substr(0, last_slash);
+}
+
+#! Follows HTTP redirects for a request and records them (RFC 9110 section 15.4)
+/** An object of this class holds the state of one request that follows redirects: the origin, method, request
+    target, headers, and body of the next request to send, and the redirects followed so far.  A client sends the
+    request described by the object; when the response is a redirect to follow (see @ref isFollowed()), it calls
+    @ref follow() and sends the request described by the object again.
+
+    Redirects are followed with the following rules:
+    - redirects with status 301, 302, 303, 307, and 308 are followed; 300 (no single target), 304 (not a redirect),
+      305 (deprecated for security reasons), and 306 (unused) are not
+    - the \c Location value is resolved against the URL of the request that received it according to RFC 3986
+      section 5.2, and any fragment is removed
+    - a 303 redirect is retrieved with \c GET (a \c HEAD request stays \c HEAD), a \c POST redirected with 301 or
+      302 is changed to \c GET, and 307 and 308 repeat the request; a request that changes to \c GET is sent without
+      its body and content headers
+    - the \c Authorization, \c Cookie, and \c Host request headers are sent only to the origin (scheme, host, and
+      port) of the original request; origins are compared case-insensitively and with default ports applied, so
+      \c https://example.com and \c HTTPS://EXAMPLE.COM:443 are the same origin
+    - user information in a redirect location is never used as credentials
+    - only \c http and \c https locations are followed, and only a request on a UNIX domain socket can be
+      redirected to a UNIX domain socket
+
+    @par Example:
+    @code{.py}
+HttpRedirectFollower rf("https://example.com", "/docs", "GET", NOTHING, NOTHING, 5);
+while (True) {
+    hash<auto> resp = send(rf.getOrigin(), rf.getMethod(), rf.getPath(), rf.getHeaders(), rf.getBody());
+    if (!rf.isFollowed(resp.status_code)) {
+        break;
+    }
+    rf.follow(resp.status_code, resp.status_message, resp.headers);
+}
+    @endcode
+
+    @since HttpUtil 1.0
+*/
+public class HttpRedirectFollower {
+    public {
+        #! Redirect status codes that are followed
+        const FollowedStatusCodes = {
+            "301": True,
+            "302": True,
+            "303": True,
+            "307": True,
+            "308": True,
+        };
+    }
+
+    private {
+        #! The origin of the next request: a URL without user information or a path
+        string origin;
+        #! The parsed URL of the origin of the next request
+        hash<UrlInfo> origin_info;
+        #! The request target of the next request
+        string path;
+        #! The method of the next request
+        string method;
+        #! The headers of the next request
+        *hash<auto> headers;
+        #! The body of the next request
+        *data body;
+        #! The origin key of the original request
+        string original_key;
+        #! Origin-bound headers of the original request
+        hash<auto> origin_headers = {};
+        #! The maximum number of redirects to follow
+        int max_redirects;
+        #! If redirects are returned to the caller instead of being followed
+        bool redirect_passthru;
+        #! The redirects followed
+        list<hash<HttpRedirectInfo>> redirects = ();
+    }
+
+    #! Creates the object for a request
+    /** @param url the URL of the request; only the scheme, host, and port are used; user information and any path
+        are ignored.  A URL without a scheme is an \c https URL, except for a UNIX domain socket (a
+        <tt>socket=</tt> host with a URL-encoded absolute path), which is an \c http URL.
+        @param path the request target of the request; percent-encoded if necessary
+        @param method the request method
+        @param headers the request headers
+        @param body the request body
+        @param max_redirects the maximum number of redirects to follow; with 0, any redirect that would be followed
+        raises an exception
+        @param redirect_passthru if @ref True, redirects are not followed; see @ref isFollowed()
+
+        @throw HTTP-CLIENT-URL-ERROR the URL is invalid or has no host
+        @throw HTTP-CLIENT-REDIRECT-ERROR \a max_redirects is negative
+    */
+    constructor(string url, string path, string method, *hash<auto> headers, *data body, int max_redirects = 5,
+            bool redirect_passthru = False) {
+        if (max_redirects < 0) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("invalid maximum number of redirects %d", max_redirects);
+        }
+        origin_info = HttpRedirectFollower::parseOrigin(url);
+        origin = HttpRedirectFollower::getOriginUrl(origin_info);
+        original_key = HttpRedirectFollower::getOriginKey(origin_info);
+        self.path = HttpRedirectFollower::encodeTarget(path);
+        if (self.path !~ /^\//) {
+            self.path = "/" + self.path;
+        }
+        self.method = method;
+        self.headers = headers;
+        self.body = body;
+        origin_headers = (map {$1.key: $1.value}, headers.pairIterator(),
+            HttpRedirectFollower::isOriginBoundHeader($1.key)) ?? {};
+        self.max_redirects = max_redirects;
+        self.redirect_passthru = redirect_passthru;
+    }
+
+    #! Returns the origin of the next request: a URL with a scheme, host, and port (if not the default port)
+    string getOrigin() {
+        return origin;
+    }
+
+    #! Returns the request target of the next request
+    string getPath() {
+        return path;
+    }
+
+    #! Returns the absolute URL of the next request, without user information
+    string getRequestUrl() {
+        return origin + path;
+    }
+
+    #! Returns the method of the next request
+    string getMethod() {
+        return method;
+    }
+
+    #! Returns the headers of the next request
+    *hash<auto> getHeaders() {
+        return headers;
+    }
+
+    #! Replaces the headers of the next request
+    /** For example, to add a header computed for the next target; origin-bound headers set here are sent only to
+        the target of the next request, as they are removed again when a redirect leads to another origin
+    */
+    setHeaders(*hash<auto> headers) {
+        self.headers = headers;
+    }
+
+    #! Returns the body of the next request
+    *data getBody() {
+        return body;
+    }
+
+    #! Returns @ref True if the next request goes to the origin of the original request
+    bool isOriginalOrigin() {
+        return HttpRedirectFollower::getOriginKey(origin_info) == original_key;
+    }
+
+    #! Returns the redirects followed, in the order followed
+    list<hash<HttpRedirectInfo>> getRedirects() {
+        return redirects;
+    }
+
+    #! Returns the maximum number of redirects to follow
+    int getMaxRedirects() {
+        return max_redirects;
+    }
+
+    #! Returns @ref True if a response with the given status code is a redirect to follow
+    /** @return @ref False if redirects are returned to the caller, otherwise the result of
+        @ref isFollowedStatus()
+    */
+    bool isFollowed(int status_code) {
+        return !redirect_passthru && HttpRedirectFollower::isFollowedStatus(status_code);
+    }
+
+    #! Updates the object for the next request to follow a redirect response
+    /** @param status_code the status code of the redirect response
+        @param status_message the status message of the redirect response
+        @param resp_headers the headers of the redirect response with lower-case names
+
+        @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED the maximum number of redirects was reached
+        @throw HTTP-CLIENT-REDIRECT-ERROR the redirect cannot be followed: the response has no \c Location value or
+        more than one, or the location has no host or an invalid host, or it names a UNIX domain socket and the
+        request is not on one
+        @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the location has a scheme other than \c http or \c https
+    */
+    follow(int status_code, *string status_message, *hash<auto> resp_headers) {
+        string request_url = getRequestUrl();
+        auto location = resp_headers.location;
+        if (location.typeCode() == NT_LIST) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect response %d from %y has %d Location headers; "
+                "expecting one", status_code, request_url, location.size());
+        }
+        if (!location.val()) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("no redirect location given for status code %d from %y",
+                status_code, request_url);
+        }
+        if (redirects.size() >= max_redirects) {
+            throw "HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", sprintf("maximum redirects (%d) exceeded; redirect %d "
+                "from %y to %y ignored", max_redirects, status_code, request_url, location);
+        }
+
+        # resolve the location against the URL of the request that received it (RFC 3986 section 5.2) and remove
+        # any fragment, which is never sent
+        string target = resolve_url(request_url, location);
+        target =~ s/#.*//s;
+        *list<*string> parts = (target =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)(.*)$/s);
+        if (!parts) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
+                location, request_url, status_code);
+        }
+        string scheme = parts[0].lwr();
+        if (scheme != "http" && scheme != "https") {
+            throw "HTTP-CLIENT-UNKNOWN-PROTOCOL", sprintf("redirect location %y from %y (code %d) has unsupported "
+                "scheme %y", location, request_url, status_code, scheme);
+        }
+        # user information in a redirect location is never used as credentials
+        string authority = parts[1];
+        authority =~ s/^.*@//s;
+        if (!authority.val()) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has no host",
+                location, request_url, status_code);
+        }
+        # the host is sent in the Host header and, through a proxy, in the request line
+        if (authority =~ /[\x00-\x20\x7f"<>\\^`{|}]|%(?![0-9a-fA-F]{2})/) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
+                "host", location, request_url, status_code);
+        }
+        hash<UrlInfo> next_info;
+        try {
+            next_info = HttpRedirectFollower::parseOrigin(scheme + "://" + authority);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
+                "host: %s", location, request_url, status_code, ex.desc);
+        }
+        if (next_info.host =~ /[\x00-\x20\x7f]/) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
+                "host", location, request_url, status_code);
+        }
+        # the server chooses the location, so a network server must never be able to send the request (and a
+        # repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and can be
+        # redirected to another socket
+        if (HttpRedirectFollower::isUnixSocket(next_info) && !HttpRedirectFollower::isUnixSocket(origin_info)) {
+            throw "HTTP-CLIENT-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
+                "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
+                request_url, status_code);
+        }
+        string next_origin = HttpRedirectFollower::getOriginUrl(next_info);
+        string next_path = HttpRedirectFollower::encodeTarget(parts[2] ?? "");
+        if (next_path !~ /^\//) {
+            next_path = "/" + next_path;
+        }
+
+        # RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301 or 302 is
+        # changed to GET as all common user agents do; 307 and 308 repeat the request
+        bool drop_body;
+        if (status_code == 303) {
+            if (method.upr() != "HEAD") {
+                method = "GET";
+            }
+            drop_body = True;
+        } else if ((status_code == 301 || status_code == 302) && method.upr() == "POST") {
+            method = "GET";
+            drop_body = True;
+        }
+        if (drop_body) {
+            body = NOTHING;
+            headers -= (map $1, keys headers, $1 =~ /^(content-|transfer-encoding$)/i);
+        }
+
+        # origin-bound headers are sent only to the origin of the original request
+        headers -= (map $1, keys headers, HttpRedirectFollower::isOriginBoundHeader($1));
+        if (HttpRedirectFollower::getOriginKey(next_info) == original_key && origin_headers) {
+            headers += origin_headers;
+        }
+
+        redirects += <HttpRedirectInfo>{
+            "request_url": request_url,
+            "status_code": status_code,
+            "status_message": status_message,
+            "location": location,
+            "target_url": next_origin + next_path,
+            "headers": resp_headers ?? {},
+        };
+
+        origin = next_origin;
+        origin_info = next_info;
+        path = next_path;
+    }
+
+    #! Returns @ref True if the given response status code is a redirect that is followed
+    /** The redirects followed are 301, 302, 303, 307, and 308 (RFC 9110 section 15.4); 300 (no single target),
+        304 (not a redirect), 305 (deprecated for security reasons), and 306 (unused) are returned to the caller
+    */
+    static bool isFollowedStatus(int status_code) {
+        return FollowedStatusCodes{status_code}.toBool();
+    }
+
+    #! Returns @ref True if the given request header is bound to the origin of the request
+    /** \c Authorization, \c Cookie, and \c Host name or authenticate the origin of a request; when a redirect leads
+        to another origin, they are not sent there
+
+        @param name the header name, compared case-insensitively
+    */
+    static bool isOriginBoundHeader(string name) {
+        return name =~ /^(authorization|cookie|host)$/i;
+    }
+
+    #! Returns the parsed origin of a URL with the default scheme and port applied
+    /** A URL without a scheme is an \c https URL, except for a UNIX domain socket (a <tt>socket=</tt> host with a
+        URL-encoded absolute path), which is an \c http URL and has port 0; the default port of \c https is 443,
+        and 80 for any other scheme
+
+        @param url the URL
+
+        @return the parsed URL; the \c protocol and \c port keys are always set, and \c username, \c password, and
+        \c path are removed
+
+        @throw HTTP-CLIENT-URL-ERROR the URL is invalid or has no host
+    */
+    static hash<UrlInfo> parseOrigin(string url) {
+        hash<UrlInfo> info;
+        try {
+            info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of parse_url() is not included, as it contains the URL with any user information
+            throw "HTTP-CLIENT-URL-ERROR", sprintf("invalid URL %y", HttpRedirectFollower::removeUserInfo(url));
+        }
+        if (!info.host) {
+            throw "HTTP-CLIENT-URL-ERROR", sprintf("invalid URL %y: missing host",
+                HttpRedirectFollower::removeUserInfo(url));
+        }
+        info -= ("username", "password", "path");
+        if (HttpRedirectFollower::isUnixSocket(info)) {
+            if (!info.protocol) {
+                info.protocol = "http";
+            }
+            info.port = 0;
+            return info;
+        }
+        info.protocol = info.protocol ? info.protocol.lwr() : "https";
+        if (!info.port) {
+            info.port = info.protocol == "https" ? 443 : 80;
+        }
+        return info;
+    }
+
+    #! Returns the origin of a URL parsed by @ref parseOrigin() as a URL without user information or a path
+    /** The port is included only if it is not the default port of the scheme
+    */
+    static string getOriginUrl(hash<UrlInfo> info) {
+        if (HttpRedirectFollower::isUnixSocket(info)) {
+            return sprintf("%s://socket=%s", info.protocol, encode_url(info.host, True));
+        }
+        # an IPv6 address literal must be enclosed in brackets (RFC 3986 section 3.2.2)
+        string rv = info.protocol + "://" + (info.host =~ /:/ ? "[" + info.host + "]" : info.host);
+        if (info.port != (info.protocol == "https" ? 443 : 80)) {
+            rv += ":" + info.port;
+        }
+        return rv;
+    }
+
+    #! Returns a key that is equal for two URLs parsed by @ref parseOrigin() with the same origin
+    /** Scheme and host names are case-insensitive (RFC 3986 section 6.2.2.1); a UNIX domain socket path is not
+    */
+    static string getOriginKey(hash<UrlInfo> info) {
+        if (HttpRedirectFollower::isUnixSocket(info)) {
+            return "socket:" + info.host;
+        }
+        return sprintf("%s://%s:%d", info.protocol.lwr(), info.host.lwr(), info.port);
+    }
+
+    #! Returns @ref True if two URLs have the same origin
+    /** @throw HTTP-CLIENT-URL-ERROR a URL is invalid or has no host
+    */
+    static bool isSameOrigin(string url1, string url2) {
+        return HttpRedirectFollower::getOriginKey(HttpRedirectFollower::parseOrigin(url1))
+            == HttpRedirectFollower::getOriginKey(HttpRedirectFollower::parseOrigin(url2));
+    }
+
+    #! Returns @ref True if a parsed URL names a UNIX domain socket
+    static bool isUnixSocket(hash<auto> info) {
+        return !info.port && info.host =~ /^\//;
+    }
+
+    #! Percent-encodes the octets that cannot appear in an HTTP request target
+    /** Control characters, space, octets outside of ASCII (non-ASCII text is encoded in UTF-8), and the characters
+        <tt>&quot; &lt; &gt; \\ ^ &#96; { | }</tt> are percent-encoded; percent-encoded octets and URI delimiters are
+        kept exactly as given, so an encoded delimiter is never decoded
+    */
+    static string encodeTarget(string target) {
+        if (target !~ /[^\x21-\x7e]|["<>\\^`{|}]/) {
+            return target;
+        }
+        binary octets = target.toBinary();
+        string rv;
+        for (int i = 0; i < octets.size(); ++i) {
+            int c = octets[i];
+            if (c <= 0x20 || c >= 0x7f || c == 0x22 || c == 0x3c || c == 0x3e || c == 0x5c || c == 0x5e
+                    || c == 0x60 || c == 0x7b || c == 0x7c || c == 0x7d) {
+                rv += sprintf("%%%02X", c);
+            } else {
+                rv += chr(c);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the URL with any user information removed, for error messages
+    private static string removeUserInfo(string url) {
+        return url =~ x/^([^:\/?#]+:\/\/)[^\/?#]*@/ ? regex_subst(url, "^([^:/?#]+://)[^/?#]*@", "$1") : url;
+    }
 }
 
 } # namespace HttpUtil
