@@ -38,6 +38,7 @@
 #endif
 #include <dlfcn.h>
 #include <execinfo.h>
+#include <link.h>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -139,8 +140,36 @@ static uint64_t capture_backtrace(void** out_frames, int* out_count) {
     return XXH64(out_frames, count * sizeof(void*), 0);
 }
 
-static void track_alloc(void* ptr, size_t size) {
-    if (!ptr || !tracking_active.load(std::memory_order_relaxed) || in_hook) {
+// The executable segment of the unwinder library (libgcc_s).  An allocation made by the unwinder itself, as
+// __register_frame() does for code generated at runtime, happens while the unwinder's frame registry is locked;
+// capturing a backtrace for it would wait for that registry forever, so such allocations are not tracked.
+static std::atomic<uintptr_t> unwinder_text_start{0};
+static std::atomic<uintptr_t> unwinder_text_end{0};
+
+static int find_unwinder_text(struct dl_phdr_info* info, size_t, void*) {
+    if (!info->dlpi_name || !strstr(info->dlpi_name, "libgcc_s")) {
+        return 0;
+    }
+    for (int i = 0; i < info->dlpi_phnum; ++i) {
+        const ElfW(Phdr)& ph = info->dlpi_phdr[i];
+        if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X)) {
+            uintptr_t start = info->dlpi_addr + ph.p_vaddr;
+            unwinder_text_start.store(start, std::memory_order_relaxed);
+            unwinder_text_end.store(start + ph.p_memsz, std::memory_order_relaxed);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static bool called_from_unwinder(const void* caller) {
+    uintptr_t addr = reinterpret_cast<uintptr_t>(caller);
+    return addr >= unwinder_text_start.load(std::memory_order_relaxed)
+        && addr < unwinder_text_end.load(std::memory_order_relaxed);
+}
+
+static void track_alloc(void* ptr, size_t size, const void* caller) {
+    if (!ptr || !tracking_active.load(std::memory_order_relaxed) || in_hook || called_from_unwinder(caller)) {
         return;
     }
     HookGuard guard;
@@ -227,6 +256,11 @@ void qore_alloc_tracking_start() {
     // this thread's frees of the previous tracking data and allocations of the new data must bypass the hooks:
     // when tracking is already active, track_free() would otherwise lock ptrs_mutex, which is held here
     HookGuard guard;
+
+    // found before any allocation is tracked; dl_iterate_phdr() is not called from an allocation hook
+    if (!unwinder_text_end.load(std::memory_order_relaxed)) {
+        dl_iterate_phdr(find_unwinder_text, nullptr);
+    }
 
     std::lock_guard<std::mutex> lg1(sites_mutex);
     std::lock_guard<std::mutex> lg2(ptrs_mutex);
@@ -363,7 +397,7 @@ void* malloc(size_t size) {
         init_real_functions();
     }
     void* ptr = real_malloc(size);
-    track_alloc(ptr, size);
+    track_alloc(ptr, size, __builtin_return_address(0));
     return ptr;
 }
 
@@ -391,7 +425,7 @@ void* calloc(size_t nmemb, size_t size) {
         return nullptr;
     }
     void* ptr = real_calloc(nmemb, size);
-    track_alloc(ptr, nmemb * size);
+    track_alloc(ptr, nmemb * size, __builtin_return_address(0));
     return ptr;
 }
 
@@ -405,7 +439,7 @@ void* realloc(void* ptr, size_t size) {
         if (new_ptr && ptr) {
             memcpy(new_ptr, ptr, size); // May over-read, but bootstrap buf is safe
         }
-        track_alloc(new_ptr, size);
+        track_alloc(new_ptr, size, __builtin_return_address(0));
         return new_ptr;
     }
     if (!real_funcs_resolved.load(std::memory_order_acquire)) {
@@ -415,7 +449,7 @@ void* realloc(void* ptr, size_t size) {
     track_free(ptr);
     void* new_ptr = real_realloc(ptr, size);
     // Track alloc of new pointer
-    track_alloc(new_ptr, size);
+    track_alloc(new_ptr, size, __builtin_return_address(0));
     return new_ptr;
 }
 

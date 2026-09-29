@@ -7,6 +7,10 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+
+%try-module process
+%define NoProcess
+%endtry
 %exec-class ProgramMemoryTest
 
 class ProgramMemoryImportedBaseClass {
@@ -42,6 +46,7 @@ class ProgramMemoryTest inherits QUnit::Test {
         addTestCase("imported classes can be used as base classes with constructor arguments",
             \importedBaseClassConstructorArgTest());
         addTestCase("tracking can be started again while it is active", \restartTrackingTest());
+        addTestCase("tracking does not hang when the JIT registers generated code", \jitTrackingTest());
         set_return_value(main());
     }
 
@@ -60,6 +65,50 @@ class ProgramMemoryTest inherits QUnit::Test {
         assertEq(1000, before.size());
         assertEq(1000, after.size());
         assertGt(0, getLiveBytes(result), "allocations made after the restart are tracked");
+    }
+
+    #! The JIT registers the unwind information of generated code with the unwinder, which allocates memory while
+    #! its frame registry is locked; tracking that allocation captured a backtrace, which waited for the registry
+    #! forever
+    jitTrackingTest() {
+        if (!hasAllocTracking()) {
+            testSkip("allocation-tracking build required");
+        }
+        if (!inlist("JIT", get_feature_list())) {
+            testSkip("JIT support required");
+        }
+%ifdef NoProcess
+        testSkip("the process module is required");
+%else
+
+        # JIT execution is chosen when the process starts, so the code runs in a child process; enough separately
+        # compiled functions are registered that the unwinder's frame registry allocates while it is locked
+        string code = "%modern\n"
+            + "string src = \"%modern\\n\";\n"
+            + "for (int i = 0; i < 2000; ++i) { src += sprintf(\"int sub f%d(int x) { return x * %d + 1; }\\n\", i, i); }\n"
+            + "Program p();\n"
+            + "p.parse(src, \"jit-tracking\");\n"
+            + "call_function(\"start_alloc_tracking\");\n"
+            + "int total = 0;\n"
+            + "for (int k = 0; k < 3; ++k) { for (int i = 0; i < 2000; ++i) { total += p.callFunction(\"f\" + i, k); } }\n"
+            + "hash<auto> result = call_function(\"stop_alloc_tracking\");\n"
+            + "printf(\"%d %d\\n\", total, result.size());\n";
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        StringOutputStream out();
+        StringOutputStream err();
+        Process p(qore, ("--exec-mode=jit", "-e", code), {
+            "stdout": out,
+            "stderr": err,
+        });
+        bool done = p.wait(300s);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        assertTrue(done, "tracking while the JIT registers generated code completes");
+        assertEq(0, p.exitCode(), err.getData());
+        assertEq("6003000", (out.getData() =~ x/^([0-9]+) /)[0], "the JIT-compiled code ran");
+%endif
     }
 
     classHandleReclamationTest() {
