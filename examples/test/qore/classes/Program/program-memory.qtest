@@ -41,7 +41,25 @@ class ProgramMemoryTest inherits QUnit::Test {
             \aotModuleProgramReclamationTest());
         addTestCase("imported classes can be used as base classes with constructor arguments",
             \importedBaseClassConstructorArgTest());
+        addTestCase("tracking can be started again while it is active", \restartTrackingTest());
         set_return_value(main());
+    }
+
+    #! Starting tracking again replaces the previous data; it deadlocked when the previous data was freed through
+    #! the tracking hooks while their lock was held
+    restartTrackingTest() {
+        if (!hasAllocTracking()) {
+            testSkip("allocation-tracking build required");
+        }
+
+        call_function("start_alloc_tracking");
+        list<string> before = map sprintf("before %d", $1), xrange(1000);
+        call_function("start_alloc_tracking");
+        list<string> after = map sprintf("after %d", $1), xrange(1000);
+        hash<auto> result = call_function("stop_alloc_tracking");
+        assertEq(1000, before.size());
+        assertEq(1000, after.size());
+        assertGt(0, getLiveBytes(result), "allocations made after the restart are tracked");
     }
 
     classHandleReclamationTest() {

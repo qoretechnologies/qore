@@ -224,6 +224,10 @@ void qore_alloc_tracking_object_destroyed(const char* class_name) {
 void qore_alloc_tracking_start() {
     init_real_functions();
 
+    // this thread's frees of the previous tracking data and allocations of the new data must bypass the hooks:
+    // when tracking is already active, track_free() would otherwise lock ptrs_mutex, which is held here
+    HookGuard guard;
+
     std::lock_guard<std::mutex> lg1(sites_mutex);
     std::lock_guard<std::mutex> lg2(ptrs_mutex);
     std::lock_guard<std::mutex> lg3(obj_mutex);
