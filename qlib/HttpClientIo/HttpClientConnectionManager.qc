@@ -731,14 +731,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param method HTTP method (e.g., "POST")
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
-        @param body_streaming if True, enables bidirectional streaming (HTTP/2 and HTTP/3 only;
-        HTTP/1.1 supports response-only streaming)
+        @param body_streaming if True, the request body is sent with @ref HttpClientStreamHandle::sendData()
+        "sendData()" while the response is read (with chunked transfer encoding over HTTP/1.1)
         @param body request body (optional)
 
         @return the stream handle ready for reading
 
         @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
-        @throw HTTP1-STREAMING-ERROR if body_streaming is True on HTTP/1.1
 
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
@@ -2794,7 +2793,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @param key the host:port pool key
 
         @throw SOCKET-CONNECT-ERROR the underlying TCP-refused error (fast-fail)
-        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
+        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected; the argument has the \c err and \c desc of the
+        HTTP/2 connection's error, or of the HTTP/3 connection's if the HTTP/2 connection reported none, as for a
+        connection that is not raced
     */
     private heThrowConnectError(Http3ClientConnection h3conn, Http2ClientConnection h2conn,
             string key) {
@@ -2824,7 +2825,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             throw h2_err.err, desc;
         }
 
-        throw "HTTPCLIENT-CONNECT-ERROR", desc;
+        throw "HTTPCLIENT-CONNECT-ERROR", desc, h2_err ?? h3_err;
     }
 
     #! Internal: happy eyeballs parallel H3 + H2 connection race

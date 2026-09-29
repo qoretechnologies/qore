@@ -1,0 +1,233 @@
+/** @page http_client_migration Migrating to HttpClientIo and RestClientIo
+
+    @tableofcontents
+
+    @section http_client_migration_overview Overview
+
+    The @ref httpclientiointro "HttpClientIo" and @ref restclientiointro "RestClientIo" modules are the
+    asynchronous successors of the built-in @ref Qore::HTTPClient "HTTPClient" class and of the
+    @ref restclientintro "RestClient" module.  They speak HTTP/1.1, HTTP/2, and HTTP/3 behind one API,
+    multiplex concurrent requests over shared connections, and perform all I/O on the process-wide
+    asynchronous I/O controller, so that many requests can be in progress without a thread for each one.
+
+    This page lists what corresponds to what when an application moves from the synchronous clients to the
+    asynchronous ones, and where the new modules deliberately behave differently.  The new modules do not copy
+    every detail of the old API: where the old behavior was a historical accident (for example a timeout that
+    limits each read instead of the request, or a GET request body that is sent without comment), the new
+    modules keep their own semantics, and this page describes how to get the result the application needs.
+
+    |!Synchronous API|!Asynchronous API|!Notes
+    |@ref Qore::HTTPClient "HTTPClient"|@ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"|one manager serves any number of origins; the URL is given with each request
+    |\c HTTPClient::startPollSendRecv()|@ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation"|a request for poll loops and async I/O controllers; \c ConnectionProvider::HttpClientIoPollOperation keeps the output format of the old poll operation
+    |@ref restclientintro "RestClient"|@ref restclientiointro "RestClientIo"|the same data serialization and schema validation; the OAuth2 client credentials and password grants
+    |\c RestClient::RestConnection::get()|\c RestClient::RestConnection::getAsync()|returns a \c RestClientIo object
+    |\c ConnectionProvider::HttpConnection::get()|\c ConnectionProvider::HttpConnection::getAsync()|returns a connection manager
+
+    @section http_client_migration_requests Making Requests
+
+    A connection manager is created once and shared; each request names its URL.  Unlike
+    @ref Qore::HTTPClient "HTTPClient", the manager never raises an exception for an HTTP error status: the
+    response is returned, and the caller checks \c status_code.
+
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+    "connect_timeout": 10s,
+    "request_timeout": 60s,
+});
+hash<auto> resp = mgr.request("https://api.example.com", "GET", "/orders/42");
+if (resp.status_code != 200) {
+    throw "ORDER-ERROR", sprintf("HTTP %d: %s", resp.status_code, resp.status_message);
+}
+    @endcode
+
+    |!HTTPClient|!HttpClientConnectionManager
+    |\c send(), \c get(), \c head(), \c post()|@ref HttpClientIo::HttpClientConnectionManager::request() "request()": the response hash has \c status_code, \c status_message, \c headers (lower-case names), \c body, \c effective_url, and \c redirects
+    |the \c info reference argument|the response hash: \c effective_url, \c redirects, \c protocol, \c headers_raw
+    |\c sendWithRecvCallback(), \c sendAndStream(), receiving into an output stream|@ref HttpClientIo::HttpClientConnectionManager::openStream() "openStream()" and @ref HttpClientIo::HttpClientResponseStream::read() "HttpClientResponseStream::read()"
+    |\c sendWithSendCallback(), \c sendChunked()|@ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming() "acquireAndStartStreaming()" with request-body streaming and @ref HttpClientIo::HttpClientStreamHandle::sendData() "HttpClientStreamHandle::sendData()"; see @ref http_client_migration_trailers for trailers
+    |\c startPollSendRecv() and the other poll APIs|@ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation", or @ref HttpClientIo::HttpClientConnectionManager::requestAsync() "requestAsync()", which returns a cancellable Future
+    |\c setUserPassword()|the \c credentials request option (@ref HttpClientIo::HttpClientRequestOptions "HttpClientRequestOptions") or user information in the URL
+    |\c setURL(), \c setProxyURL(), \c setTimeout(), and other setters|options given when the manager is created; a manager is not reconfigured while it is in use
+
+    A text response body is decoded to a string in its character encoding by the rules shared by all HTTP
+    clients (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"); a request can receive the
+    octets of the body instead (the \c decode_text argument).
+
+    @section http_client_migration_options Options
+
+    |!HTTPClient / RestClient option|!HttpClientIo / RestClientIo option|!Notes
+    |\c http_version|\c protocol: \c "auto", \c "h1", \c "h2", or \c "h3"|\c RestClientIo also accepts \c http_version; \c "1.0" and \c "1.1" select HTTP/1.1
+    |\c http3_mode \c "disabled"|\c enable_http3 = @ref False|HTTP/3 is not used in \c "auto" mode
+    |\c http3_mode \c "required"|\c protocol \c "h3"|only HTTP/3 is used
+    |\c timeout|\c request_timeout (manager) or \c timeout (\c RestClientIo)|see @ref http_client_migration_timeouts
+    |\c connect_timeout|\c connect_timeout|the same
+    |\c max_redirects, \c redirect_passthru|\c max_redirects, \c redirect_passthru|the same rules; see @ref http_client_migration_redirects
+    |\c ssl_verify_cert|\c ssl_verify_mode (\c RestClientIo also accepts \c ssl_verify_cert)|the certificate of an HTTPS proxy is verified with the same options
+    |\c ssl_ca_file, \c ssl_ca_path|\c ssl_ca_file, \c ssl_ca_path|the same
+    |\c ssl_cert_path, \c ssl_cert_data, \c ssl_key_path, \c ssl_key_data, \c ssl_key_password|\c client_cert, \c client_pk (manager); the same options in \c RestClientIo|the client certificate is sent to the server, never to a proxy
+    |\c proxy|\c proxy_url (manager) or \c proxy (\c RestClientIo)|see @ref http_client_migration_proxies
+    |\c assume_encoding|\c assume_encoding|the same
+    |\c encoding|\c encoding (\c RestClientIo)|the character encoding of string request bodies
+    |\c encoding_passthru|\c encoding_passthru|the same
+    |\c max_response_body_size|\c max_response_body_size|also a request option; see @ref HttpClientIo::HttpClientRequestOptions "HttpClientRequestOptions"
+    |\c headers|\c headers (\c RestClientIo)|the manager sends \c User-Agent and \c Accept-Encoding by default
+    |\c username, \c password|\c credentials request option (manager); \c username, \c password (\c RestClientIo)|see @ref http_client_migration_auth
+    |\c pre_encoded_urls, \c encode_chars|\c pre_encoded_urls, \c encode_chars (\c RestClientIo); @ref HttpClientIo::encode_http_request_target() "encode_http_request_target()"|the same encoding rules
+    |\c default_path|\c default_path (\c RestClientIo)|the same
+    |\c protocols, \c default_port|none|a URL gives its scheme and port; a URL without a scheme is an \c https URL, and other schemes than \c http and \c https raise \c HTTP-CLIENT-UNKNOWN-PROTOCOL
+    |\c additional_methods|none|every request method is allowed
+
+    Options that \c RestClientIo does not know are ignored, so that subclasses and connections can pass options
+    of their own in the same hash.
+
+    @section http_client_migration_timeouts Timeouts
+
+    The \c timeout of @ref Qore::HTTPClient "HTTPClient" limits each read and write on the socket, so a slow
+    download that keeps receiving data never times out.  The \c request_timeout option of
+    @ref HttpClientIo::HttpClientConnectionManagerOptions "HttpClientConnectionManagerOptions" (the \c timeout
+    option of \c RestClientIo) is instead the deadline for the whole response, including its body.
+
+    |!Need|!Configuration
+    |a bounded response time (APIs)|\c request_timeout, as by default (60 seconds)
+    |a long transfer that must keep making progress|\c request_timeout 0 (no deadline) and \c io_timeout, the maximum time without receiving data
+    |both|\c request_timeout and \c io_timeout
+
+    The \c timeout option of \c RestClientIo sets a deadline; 0 or no value keeps the manager's.  A
+    \c RestClientIo object without a deadline is created with a shared connection manager whose
+    \c request_timeout is 0, given as the second argument of the constructor.  \c RestClientIo also has an
+    \c io_timeout option.
+
+    A timeout raises \c HTTPCLIENT-TIMEOUT instead of \c SOCKET-TIMEOUT.
+
+    @section http_client_migration_redirects Redirects
+
+    All request APIs that return a whole response follow redirects with the rules of
+    @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower", which are the rules of
+    @ref Qore::HTTPClient "HTTPClient": 301, 302, 303, 307, and 308 are followed; a 303 (except for a \c HEAD
+    request) and a \c POST redirected with 301 or 302 are retrieved with \c GET; the \c Authorization, \c Cookie,
+    and \c Host headers are sent only to the origin of the original request.  This includes the asynchronous and
+    poll APIs of \c RestClientIo, its SSE APIs,
+    @ref HttpClientIo::HttpClientConnectionManager::requestAsync() "requestAsync()",
+    @ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation", and
+    @ref HttpClientIo::HttpClientConnectionManager::openStream() "openStream()".  The lower-level stream APIs
+    (@ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming() "acquireAndStartStreaming()",
+    @ref HttpClientIo::HttpClientConnectionManager::submitRequestAsync() "submitRequestAsync()", and the methods
+    of @ref HttpClientIo::HttpClientStreamHandle "HttpClientStreamHandle") send a single request.
+
+    The response has the final URL in \c effective_url and the redirects followed in \c redirects; the errors
+    are those of @ref Qore::HTTPClient "HTTPClient": \c HTTP-CLIENT-REDIRECT-ERROR,
+    \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED, and \c HTTP-CLIENT-UNKNOWN-PROTOCOL.
+
+    @section http_client_migration_auth Authentication
+
+    Credentials are given with each request, or as user information in the request URL, and are sent only to
+    the origin of the request.  They are sent with the Basic scheme; a Digest challenge (RFC 7616) is answered,
+    and later requests to the origin are authenticated with Digest without another challenge.  The credentials
+    in the proxy URL answer the challenges of the proxy, also for \c CONNECT requests.  See
+    @ref HttpUtil::HttpAuthenticator "HttpAuthenticator".
+
+    @code{.py}
+hash<auto> resp = mgr.request("https://files.example.com", "GET", "/reports/q3.pdf", NOTHING, NOTHING,
+    NOTHING, False, <HttpClientRequestOptions>{
+        "credentials": <HttpClientCredentials>{"username": "reports", "password": pwd},
+    });
+    @endcode
+
+    \c RestClientIo sends its \c username and \c password the same way, with every request API, unless an
+    OAuth2 grant type is set.
+
+    @section http_client_migration_cookies Cookies
+
+    @ref Qore::HTTPClient "HTTPClient" does not keep cookies.  A connection manager has a cookie jar that stores
+    the cookies of responses and sends them with requests (RFC 6265), unless \c enable_cookies is @ref False.
+    A request can use a cookie jar of its own, or no cookies (see
+    @ref HttpClientIo::HttpClientRequestOptions "HttpClientRequestOptions").  A \c RestClientIo object created
+    with a shared connection manager has a cookie jar of its own, so that clients sharing a manager do not share
+    cookies.
+
+    @section http_client_migration_encodings Compression and Character Encodings
+
+    The connection manager sends an \c Accept-Encoding header with the content codings it decodes (gzip,
+    deflate, br, zstd, and bzip2) for requests whose response body it decodes, so servers can compress
+    responses; set the \c accept_encoding option to an empty string to send none.  With \c encoding_passthru,
+    a compressed body is returned as received.
+
+    @section http_client_migration_proxies Proxies
+
+    A proxy is given with the \c proxy_url option.  HTTPS targets are reached through a \c CONNECT tunnel, and
+    the TLS connection through the tunnel is made for the target server: its host name is sent with SNI and
+    verified in the server's certificate.  Plain HTTP requests are sent to the proxy with absolute URIs.
+
+    With an \c https proxy URL (an HTTPS proxy), the connection to the proxy uses TLS: the proxy's certificate is
+    verified against the proxy's host name, plain HTTP requests are sent to the proxy over TLS, and the TLS
+    connection to an HTTPS target is carried by the TLS connection to the proxy.  Other proxy URL schemes raise
+    \c HTTPCLIENT-OPTION-ERROR.
+
+    Credentials in the proxy URL are sent with Basic authentication and answer Digest challenges; they are never
+    sent through a tunnel.  HTTP/3 is not used through a proxy: in \c "auto" mode HTTP/2 is used instead, and the
+    \c "h3" protocol raises an error.
+
+    @section http_client_migration_trailers Request Trailers
+
+    A request body streamed with
+    @ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming() "acquireAndStartStreaming()" can
+    end with trailer fields, for example a checksum of the body, over HTTP/1.1 (chunked transfer encoding),
+    HTTP/2, and HTTP/3: @ref HttpClientIo::HttpClientStreamHandle::setTrailers() "HttpClientStreamHandle::setTrailers()"
+    sets them before the call of @ref HttpClientIo::HttpClientStreamHandle::sendData() "sendData()" that ends the
+    body.
+
+    @code{.py}
+HttpClientStreamHandle sh = mgr.acquireAndStartStreaming("https://upload.example.com", "PUT", "/files/data.bin",
+    {"Content-Type": "application/octet-stream"}, True);
+sh.setTrailers({"x-checksum": checksum});
+sh.sendData(data, True);
+    @endcode
+
+    A handler of the @ref httpserverintro "HttpServer" module receives the trailers in \c cx.trailers, and a stream
+    handler in the \c hdr key of the last call of \c recv().
+
+    @section http_client_migration_get_body GET Request Bodies
+
+    A GET request body has no defined semantics (RFC 9110 section 9.3.1); @ref Qore::HTTPClient "HTTPClient"
+    sends one, and the new modules raise \c HTTPCLIENT-REQUEST-BODY-ERROR unless the \c allow_get_body option
+    is set, for APIs that require a body with GET requests.
+
+    @section http_client_migration_errors Exceptions
+
+    |!HTTPClient / RestClient|!HttpClientIo / RestClientIo
+    |\c HTTP-CLIENT-RECEIVE-ERROR for an HTTP error status (\c HTTPClient)|none: the response is returned
+    |\c HTTP-CLIENT-RECEIVE-ERROR, \c REST-RESPONSE-ERROR, or a server-defined error (\c RestClient)|\c REST-RESPONSE-ERROR with the @ref RestClient::RestResponseInfo "RestResponseInfo" hash as the argument, or the server-defined error of a body with \c err and \c desc keys; \c error_passthru returns the response instead
+    |\c SOCKET-TIMEOUT|\c HTTPCLIENT-TIMEOUT
+    |\c SOCKET-CONNECT-ERROR, \c SOCKET-SSL-ERROR when connecting|\c HTTPCLIENT-CONNECT-ERROR; the argument has the \c err and \c desc of the transport error; when HTTP/3 and HTTP/2 connections are raced in \c "auto" mode and the TCP connection is refused, \c SOCKET-CONNECT-ERROR
+    |\c SOCKET-SEND-ERROR, \c SOCKET-RECV-ERROR, and other transport errors of a request|\c HTTPCLIENT-REQUEST-ERROR
+    |\c HTTP-CLIENT-REDIRECT-ERROR, \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED, \c HTTP-CLIENT-UNKNOWN-PROTOCOL|the same
+    |\c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE|the same
+    |\c HTTP-CLIENT-URL-ERROR|\c HTTPCLIENT-URL-ERROR
+
+    Two modules that moved to the new transport keep errors of @ref Qore::HTTPClient "HTTPClient" for code
+    written against them: the poll operations of the \c ConnectionProvider module raise \c SOCKET-TIMEOUT for a
+    timeout and the \c SOCKET-* error of a failed connection, and the data providers of the
+    \c HttpClientDataProvider module raise \c SOCKET-TIMEOUT for a timeout and \c HTTP-CLIENT-RECEIVE-ERROR for
+    an HTTP error status; other errors are those of the connection manager.
+
+    @section http_client_migration_restclient RestClient to RestClientIo
+
+    |!RestClient|!RestClientIo
+    |\c get(), \c post(), \c put(), \c patch(), \c del(), and the inherited \c HTTPClient::head()|\c restGet(), \c restPost(), \c restPut(), \c restPatch(), \c restDel(), \c restHead(), and \c restOptions(), which return a @ref RestClient::RestResponseInfo "RestResponseInfo" hash
+    |\c doRequest(), \c doValidatedRequest()|\c restDoRequest(), \c restDoRawRequest()
+    |\c doRequestWithResponseLimit()|\c restDoRequestWithResponseLimit()
+    |\c startPollDoRequest(), \c startPollGet(), and the other \c startPoll*() methods|\c startPollRequest(); also \c restGetAsync() and the other \c rest*Async() methods, and the SSE APIs
+    |\c setTimeout()|\c setTimeout(): the deadline of a response; see @ref http_client_migration_timeouts
+
+    @section http_client_migration_not_supported Differences That Remain
+
+    - HTTP/1.0 requests are not sent; HTTP/1.1 is used instead
+    - event and warning queues (\c HTTPClient::setEventQueue(), \c HTTPClient::setWarningQueue()) are not
+      supported; use a logger (\c logger option)
+    - a connection manager is configured when it is created; the \c set*() methods of
+      @ref Qore::HTTPClient "HTTPClient" have no counterpart
+    - per-socket statistics are replaced by @ref HttpClientIo::HttpClientConnectionManager::getStats() "getStats()"
+      and @ref HttpClientIo::HttpClientConnectionManager::getConnectionInfo() "getConnectionInfo()"
+*/

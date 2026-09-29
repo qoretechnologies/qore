@@ -491,6 +491,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testAsyncHeNonBlockingAndSyncParity());
         addTestCase("HE connect-error message reports both legs",
             \testHeConnectErrorMessageReportsBothLegs());
+        addTestCase("HE connect error has the transport error", \testHeConnectErrorArgument());
 
         # H3 end-to-end tests
         addTestCase("H3 end-to-end basic request", \testH3EndToEndBasic());
@@ -1820,6 +1821,78 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             NOTHING, NOTHING, key);
         assertEq("could not connect to " + key, neither,
             "no-error case: bare message with no trailing separator");
+    }
+
+    #! When neither raced leg connects, HTTPCLIENT-CONNECT-ERROR has the transport error in its argument
+    /** As for a connection that is not raced: the TCP port answers the TLS handshake with plain HTTP, so the HTTP/2
+        leg fails its TLS handshake, and nothing answers on the UDP port, so the HTTP/3 leg times out
+    */
+    testHeConnectErrorArgument() {
+        # a TCP listener and a UDP socket with the same port number; another process may already use the port for
+        # UDP, in which case another port is chosen
+        const int MaxPortAttempts = 20;
+        Socket listener;
+        Socket udp_hold;
+        for (int attempt = 1; ; ++attempt) {
+            listener = new Socket();
+            listener.bindINET("127.0.0.1", "0", True);
+            int port = listener.getSocketInfo().port;
+            udp_hold = new Socket();
+            try {
+                udp_hold.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
+        on_exit delete udp_hold;
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Counter done(1);
+        bool stop;
+        background sub () {
+            on_exit done.dec();
+            # answers every TLS handshake with an HTTP error response
+            while (!stop) {
+                *Socket s = listener.accept(100ms);
+                if (!s) {
+                    continue;
+                }
+                try {
+                    s.recvBinary(-1, 10s);
+                    s.send("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                }
+                s.close();
+            }
+        }();
+        on_exit {
+            stop = True;
+            done.waitForZero();
+            listener.close();
+        }
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "connect_timeout": 2s,
+            "max_request_retries": 1,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+        try {
+            mgr.request("https://127.0.0.1:" + port, "GET", "/");
+            fail("the connection must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
+            assertEq(Type::Hash, ex.arg.type());
+            assertRegex("SSL", ex.arg.err);
+            assertEq(Type::String, ex.arg.desc.type());
+        }
     }
 
     testAsyncHeConnectRefusedFastFail() {

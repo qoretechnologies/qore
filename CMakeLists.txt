@@ -477,6 +477,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/224_plugin_types.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/226_ai_model_deployment.dox.tmpl
+    doxygen/lang/227_http_client_migration.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
     doxygen/lang/240_command_line_processing.dox.tmpl
