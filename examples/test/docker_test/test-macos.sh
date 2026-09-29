@@ -3,6 +3,9 @@
 set -e
 set -x
 
+# authenticate the clones CMake makes from github.com (see github-auth.sh)
+. "$(dirname "$0")/github-auth.sh"
+
 # macOS CI test script for GitLab Runner.
 #
 # Package manager preference: MacPorts (/opt/local) is preferred and used by

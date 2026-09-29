@@ -3,6 +3,9 @@
 set -e
 set -x
 
+# authenticate the clones CMake makes from github.com (see github-auth.sh)
+. "$(dirname "$0")/github-auth.sh"
+
 # Build script - compiles Qore and produces build artifacts.
 # Used by the CI build stage; test jobs download the build/ artifact
 # and skip compilation.

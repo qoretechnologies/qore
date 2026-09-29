@@ -3,6 +3,9 @@
 set -e
 set -x
 
+# authenticate the clones CMake makes from github.com (see github-auth.sh)
+. "$(dirname "$0")/github-auth.sh"
+
 ENV_FILE=/tmp/env.sh
 
 # setup QORE_SRC_DIR env var

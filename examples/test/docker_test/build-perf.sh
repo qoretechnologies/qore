@@ -3,6 +3,9 @@
 set -e
 set -x
 
+# authenticate the clones CMake makes from github.com (see github-auth.sh)
+. "$(dirname "$0")/github-auth.sh"
+
 # Build script for performance tests - compiles Qore with Release optimization.
 # Used by the CI build stage; test-perf downloads the build/ artifact.
 
