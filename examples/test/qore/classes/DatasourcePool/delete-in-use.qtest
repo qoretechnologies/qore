@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class DatasourcePoolDeleteInUseTest
+
+# Regression test: deleting a DatasourcePool while another thread is inside one of its methods released the pool's
+# configuration twice.
+#
+# An explicit delete runs the pool's destructor, which released the pool's options, event queue and queue argument;
+# the thread still inside a method holds a reference to the pool's private data, and when that reference was the last
+# one, the pool released the same configuration again.  The pointers were only cleared in debug builds, so a release
+# build dereferenced the freed options hash, queue and argument a second time: a use-after-free that corrupted the
+# heap (in Qorus, a portable group's runtime pool released while a SqlUtil call was still using it).
+class DatasourcePoolDeleteInUseTest inherits QUnit::Test {
+    public {
+        const PoolStr = "dbitest:u/p@db{min=1,max=4}";
+
+        const OpInfo = <SqlMutationInfo>{
+            "op_id": "delete-in-use",
+            "path_id": "pool.delete-in-use",
+            "op_code": 1,
+            "effect": SQL_MUTATION_EFFECT_MAY_GROW,
+            "max_growth_bytes": 4096,
+        };
+    }
+
+    constructor() : Test("DatasourcePoolDeleteInUseTest", "1.0", \ARGV) {
+        addTestCase("a pool deleted while another thread uses it releases its configuration once",
+            \deleteInUseTest());
+        addTestCase("repeated deletes while in use leave the heap intact", \repeatedDeleteInUseTest());
+        set_return_value(main());
+    }
+
+    private *DatasourcePool getPool() {
+        try {
+            DatasourcePool dsp(PoolStr);
+            dsp.getServerVersion();
+            return dsp;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("dbitest driver not available: " + ex.err + ": " + ex.desc);
+        }
+    }
+
+    #! Deletes a pool while another thread is inside exec(), then lets that thread finish
+    /** @return the other thread's outcome: "ok" or the exception it raised
+    */
+    private string deleteWhileInUse() {
+        *DatasourcePool dsp = getPool();
+        if (!dsp) {
+            return "skipped";
+        }
+        # the configuration that is released: options (from the connection string), the event queue and its argument
+        Queue events();
+        dsp.setEventQueue(events, {"tag": "queue-argument"});
+
+        # the worker reports "inside" from the observer, then "done" when its call returns
+        Queue progress();
+        Counter release(1);
+        dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+            if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC) {
+                # the worker is now inside a pool method, holding a reference to its private data
+                progress.push("inside");
+                release.waitForZero();
+            }
+        }, SQL_MUTATION_MASK_ALL);
+
+        string outcome;
+        background sub () {
+            on_exit progress.push("done");
+            try {
+                SqlMutationDeclaration decl(dsp, OpInfo);
+                dsp.exec("insert into t values (1)");
+                outcome = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                outcome = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }();
+
+        string first = progress.get();
+        if (first != "inside") {
+            # the worker never reached the pool method; the scenario did not happen
+            release.dec();
+            return "not-inside: " + outcome;
+        }
+        try {
+            delete dsp;
+        } catch (hash<ExceptionInfo> ex) {
+            # a delete while another thread holds a connection may report it; the release still happens
+        }
+        release.dec();
+        assertEq("done", progress.get(), "the worker finished");
+        return outcome;
+    }
+
+    deleteInUseTest() {
+        string outcome = deleteWhileInUse();
+        if (outcome == "skipped") {
+            return;
+        }
+        # the method either completes or reports the deleted pool; it must never reach freed configuration
+        assertEq(-1, outcome.find("not-inside"), "the worker was inside the pool method when it was deleted: " + outcome);
+        # allocations of the size of the released nodes would reuse a doubly freed block
+        list<hash<auto>> l = map ("i": $1, "s": sprintf("v%d", $1)), xrange(10000);
+        assertEq(10000, l.size());
+    }
+
+    repeatedDeleteInUseTest() {
+        for (int i = 0; i < 20; ++i) {
+            string outcome = deleteWhileInUse();
+            if (outcome == "skipped") {
+                return;
+            }
+            assertEq(-1, outcome.find("not-inside"), "the worker was inside the pool method: " + outcome);
+        }
+        list<hash<auto>> l = map ("i": $1, "s": sprintf("v%d", $1)), xrange(10000);
+        assertEq(10000, l.size(), "the heap is intact after repeated deletes");
+    }
+}

@@ -812,7 +812,8 @@ void DatasourcePool::setEventQueue(Queue* q, QoreValue arg, ExceptionSink* xsink
             pool[i]->setEventQueue(q ? q->queueRefSelf() : nullptr, arg.refSelf(), xsink);
     }
 
-    config.setQueue(q, arg, xsink);
+    // the configuration keeps its own references; the ones passed in went to the first connection
+    config.setQueue(q ? q->queueRefSelf() : nullptr, arg.refSelf(), xsink);
 }
 
 SqlMutationContext* DatasourcePool::getOrCreateMutationContext() {

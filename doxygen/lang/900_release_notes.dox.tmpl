@@ -3816,6 +3816,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::SQL::DatasourcePool "DatasourcePool" memory corruption: deleting a pool while another thread
+      was still inside one of its methods released the pool's options, event queue and queue argument twice, which
+      could crash the process later at an unrelated allocation; @ref Qore::SQL::DatasourcePool::setEventQueue()
+      "DatasourcePool::setEventQueue()" also kept the event queue and its argument without its own reference, so they
+      were released once more than they were referenced when the pool was destroyed
     - Fixed the TLS connection to an HTTPS server through a proxy tunnel with @ref Qore::HTTPClient "HTTPClient":
       it was made for the proxy's host name, which was sent with SNI and against which the server's certificate was
       verified, so a verified connection failed, and a server that selects its certificate with SNI could present

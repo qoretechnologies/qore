@@ -95,22 +95,21 @@ public:
         assert(!mctx);
     }
 
+    //! Releases the configuration; may be called more than once
+    /** An explicit delete of a pool releases it in the destructor, and the last reference to the pool's private
+        data - which a thread still inside a pool method can hold - releases it again, so every member is cleared
+        once released.
+    */
     DLLLOCAL void del(ExceptionSink* xsink) {
         if (q) {
             q->deref(xsink);
-#ifdef DEBUG
             q = nullptr;
-#endif
         }
         arg.discard(xsink);
-#ifdef DEBUG
         arg = QoreValue();
-#endif
         if (opts) {
             opts->deref(xsink);
-#ifdef DEBUG
             opts = nullptr;
-#endif
         }
         if (mctx) {
             mctx->deref(xsink);
