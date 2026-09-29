@@ -8987,6 +8987,59 @@ static bool validate_script_object_body_contracts(
     return valid;
 }
 
+//! Returns the parse options a Program running the given script-context `.qo` fragments needs
+/** Each fragment records the parse options it was compiled with, including the Program-level directives in its source
+    (e.g. \c %allow-debugger, \c %new-style, or a \c %no-... restriction).  In a shared parse a directive in any file
+    applies to the whole Program, so the linked Program gets the union of the fragments' options.
+
+    @param object_paths the fragments
+    @param po receives the parse options
+    @param error receives the reason on failure
+
+    @return true on success
+*/
+static bool collect_script_object_parse_options(const std::vector<std::string>& object_paths,
+        QoreParseOptions& po, std::string& error) {
+    po = QoreParseOptions();
+    for (const std::string& path : object_paths) {
+        std::string contents;
+        if (!read_file(path.c_str(), contents)) {
+            error = "cannot read input object: " + path;
+            return false;
+        }
+        auto binary_or = llvm::object::createBinary(path);
+        if (!binary_or) {
+            error = "cannot read object file '" + path + "': " + llvm::toString(binary_or.takeError());
+            return false;
+        }
+        auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary_or->getBinary());
+        if (!obj) {
+            error = "input is not a relocatable object file: " + path;
+            return false;
+        }
+        std::vector<AOTDumpMetadataBlob> blobs;
+        std::set<std::string> seen_blobs;
+        extract_aot_metadata_from_object(*obj, blobs, seen_blobs);
+        scan_aot_metadata_blobs(contents, blobs, seen_blobs);
+        if (blobs.empty()) {
+            error = "input has no AOT metadata blob: " + path;
+            return false;
+        }
+        for (const AOTDumpMetadataBlob& blob : blobs) {
+            QoreAOTBinaryReader reader;
+            std::string reader_error;
+            if (!reader.open(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), reader_error)) {
+                error = "invalid AOT metadata in '" + path + "' (" + blob.source + "): " + reader_error;
+                return false;
+            }
+            const QoreAOTBinaryHeader& hdr = reader.getHeader();
+            po |= QoreParseOptions(static_cast<int64>(hdr.parse_options_lo),
+                static_cast<int64>(hdr.parse_options_hi));
+        }
+    }
+    return true;
+}
+
 //! Link script-context `.qo` fragments into an executable.
 static int link_script_objects_to_executable(const std::string& output,
         const std::vector<std::string>& object_paths,
@@ -9000,6 +9053,16 @@ static int link_script_objects_to_executable(const std::string& output,
     }
     if (!validate_script_object_body_contracts(object_paths)) {
         return 1;
+    }
+    // the Program runs with the options the fragments were compiled with, not a fixed set
+    QoreParseOptions link_po;
+    {
+        std::string po_error;
+        if (!collect_script_object_parse_options(object_paths, link_po, po_error)) {
+            fprintf(stderr, "error: %s link failed for output '%s': %s\n", mode_label, output.c_str(),
+                po_error.c_str());
+            return 1;
+        }
     }
 
     FILE* glue = fopen(glue_path.c_str(), "w");
@@ -9033,14 +9096,15 @@ static int link_script_objects_to_executable(const std::string& output,
     fprintf(glue,
         "int main(int /*argc*/, char** /*argv*/) {\n"
         "    qore_init(QL_GPL, \"UTF-8\", true);\n"
-        "    QoreProgram* pgm = qore_create_program(\n"
-        "        PO_NEW_STYLE | PO_STRICT_ARGS);\n"
+        "    QoreProgram* pgm = qore_create_program_ext(\n"
+        "        (int64_t)0x%016llxULL, (int64_t)0x%016llxULL);\n"
         "    if (!pgm) {\n"
         "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
         "        qore_cleanup();\n"
         "        return 1;\n"
         "    }\n"
-        "    qore_aot_script_begin_batch(pgm);\n");
+        "    qore_aot_script_begin_batch(pgm);\n",
+        static_cast<unsigned long long>(link_po.getLo()), static_cast<unsigned long long>(link_po.getHi()));
     for (const auto& san : sans) {
         fprintf(glue,
             "    qore_%s_%s_script_register(pgm);\n",

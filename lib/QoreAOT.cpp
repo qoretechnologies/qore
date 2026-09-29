@@ -36095,6 +36095,10 @@ extern "C" DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options) {
     return new QoreProgram(QoreParseOptions(parse_options));
 }
 
+extern "C" DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi) {
+    return new QoreProgram(QoreParseOptions(parse_options_lo, parse_options_hi));
+}
+
 extern "C" DLLEXPORT void qore_destroy_program(QoreProgram* pgm) {
     if (!pgm) {
         return;

@@ -98,6 +98,20 @@ extern "C" {
  */
 DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options);
 
+//! Create a fresh QoreProgram with the full 128-bit parse options
+/** Like @ref qore_create_program(), but also takes the high 64 bits, which hold the extended parse options that
+    `qore_create_program()` cannot express.  `qcc` link mode uses it to create the Program with the parse options its
+    `.qo` inputs were compiled with.
+
+    @param parse_options_lo the low 64 bits of the parse options (the `PO_*` flags)
+    @param parse_options_hi the high 64 bits of the parse options (the extended options)
+    @return a new QoreProgram, or NULL if libqore has not been initialized; the caller owns the returned pointer and
+            must call `qore_destroy_program` exactly once
+
+    @since %Qore 3.0
+ */
+DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi);
+
 //! Destroy a QoreProgram created by `qore_create_program`.
 /** Blocks until all threads running in the program have terminated
     and then frees the program.  Safe to pass NULL (no-op).  Any

@@ -31,6 +31,11 @@
 # edge), in a plain block, and inside a try block, with constructor args evaluated from locals, directly (native
 # code) and through call_static_method() (the artifact's IR, with the debugger attached), in every execution mode.
 # A class in a functional domain the executing Program excludes must raise CREATE-OBJECT-ERROR in all of them.
+#
+# A class in a domain that a Program has to allow explicitly - DEBUGGER, which PO_ALLOW_DEBUGGER grants - must be
+# constructed where the Program allows it and refused where it does not.  The by-name check treated every domain
+# as a restriction, so a deferred class inheriting DebugProgram was refused in exactly the Programs that allow the
+# debugger, e.g. every %allow-debugger executable compiled with per-file objects.
 class AOTDeferredClassImpliedConstructorTest inherits QUnit::Test {
     public {
         #! the class constructed through the deferred implied constructor call
@@ -46,6 +51,23 @@ class Restor {
 class Guarded inherits Qore::Thread::Counter {
     public { string id; }
     constructor(string n_id) { id = n_id; }
+}
+";
+
+        #! a class in the DEBUGGER functional domain, which a Program must allow with PO_ALLOW_DEBUGGER
+        const WatcherCode = "%modern
+%allow-debugger
+
+class Watcher inherits DebugProgram {
+    public { string id; }
+    constructor(string n_id) { id = n_id; }
+    onAttach(ProgramControl pgm, reference rs, reference rtn) {}
+    onDetach(ProgramControl pgm, reference rs, reference rtn) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bpid, reference flow, reference rs, reference rtn) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rtn) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+    onException(ProgramControl pgm, int sid, hash ex, reference dismiss, reference rs, reference rtn) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
 }
 ";
 
@@ -130,6 +152,12 @@ class Eng {
         }
         return g.id;
     }
+
+    static string watcherPlain(string pfx) {
+        string id = pfx + \"w\";
+        Watcher w(id);
+        return w.id;
+    }
 }
 
 string sub attempt(code c) {
@@ -154,6 +182,9 @@ string sub runShapes(string label) {
         attempt(string sub () { return Eng::guardedInvoke(\"i\", (1, 2)); }),
         attempt(string sub () { return call_static_method(\"Eng\", \"guardedPlain\", \"dp\"); }),
         attempt(string sub () { return call_static_method(\"Eng\", \"guardedInvoke\", \"di\", (1,)); }));
+    rv += sprintf(\"%s watcher: %s | %s\\n\", label,
+        attempt(string sub () { return Eng::watcherPlain(\"p\"); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"watcherPlain\", \"d\"); }));
     return rv;
 }
 
@@ -183,13 +214,18 @@ int sub main() {
         const Expected = "native direct: inv-2 pl!-8 try-3
 native dynamic: inv-3 dy!-10 try-3
 native guarded: pg | ig | dpg | dig
+native watcher: pw | dw
 debug direct: inv-2 pl!-8 try-3
 debug dynamic: inv-3 dy!-10 try-3
 debug guarded: pg | ig | dpg | dig
+debug watcher: pw | dw
 ";
 
         const SandboxError = "CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to "
             "the 'Guarded' class";
+
+        const DebuggerError = "CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to "
+            "the 'Watcher' class";
 
         #! a C++ host that registers the objects in a Program with the requested restrictions and execution mode
         const HostCode = "#include <qore/Qore.h>
@@ -200,12 +236,13 @@ debug guarded: pg | ig | dpg | dig
 extern \"C\" {
     void qore_restor_restor_script_register(QoreProgram*);
     void qore_guarded_guarded_script_register(QoreProgram*);
+    void qore_watcher_watcher_script_register(QoreProgram*);
     void qore_eng_eng_script_register(QoreProgram*);
 }
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        fprintf(stderr, \"usage: %s ast|ir|jit|tiered sandbox|open\\n\", argv[0]);
+        fprintf(stderr, \"usage: %s ast|ir|jit|tiered sandbox|open|nodebugger\\n\", argv[0]);
         return 2;
     }
     qore_exec_mode_t mode;
@@ -222,9 +259,11 @@ int main(int argc, char** argv) {
         return 2;
     }
     bool sandbox = !strcmp(argv[2], \"sandbox\");
+    // the objects are compiled with %allow-debugger; a \"nodebugger\" Program does not allow the debugger domain
+    bool debugger = strcmp(argv[2], \"nodebugger\");
     qore_init(QL_GPL, \"UTF-8\", true);
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS
-        | (sandbox ? PO_NO_THREAD_CLASSES : 0));
+        | (sandbox ? PO_NO_THREAD_CLASSES : 0) | (debugger ? PO_ALLOW_DEBUGGER : 0));
     if (!pgm) {
         qore_cleanup();
         return 1;
@@ -232,6 +271,7 @@ int main(int argc, char** argv) {
     qore_aot_script_begin_batch(pgm);
     qore_restor_restor_script_register(pgm);
     qore_guarded_guarded_script_register(pgm);
+    qore_watcher_watcher_script_register(pgm);
     qore_eng_eng_script_register(pgm);
     int rc = qore_aot_script_end_batch(pgm);
     if (!rc) {
@@ -270,6 +310,8 @@ int main(int argc, char** argv) {
         addTestCase("a deferred class is constructed in a qcc-linked executable", \testLinkedExecutable());
         addTestCase("a deferred class is constructed in every execution mode", \testEveryExecMode());
         addTestCase("a sandboxed Program refuses a deferred class in every execution mode", \testSandbox());
+        addTestCase("a deferred class in a domain a Program must allow is checked in every execution mode",
+            \testAllowedDomain());
 
         set_return_value(main());
     }
@@ -280,10 +322,22 @@ int main(int argc, char** argv) {
         return sprintf("native direct: inv-2 pl!-8 try-3
 native dynamic: inv-3 dy!-10 try-3
 native guarded: %s
+native watcher: pw | dw
 debug direct: inv-2 pl!-8 try-3
 debug dynamic: inv-3 dy!-10 try-3
 debug guarded: %s
+debug watcher: pw | dw
 ", guarded, guarded);
+    }
+
+    #! The output of every run in a Program that does not allow the DEBUGGER domain
+    private static string noDebuggerExpected() {
+        string watcher = (DebuggerError, DebuggerError).join(" | ");
+        return sprintf("native direct: inv-2 pl!-8 try-3
+native dynamic: inv-3 dy!-10 try-3
+native guarded: pg | ig | dpg | dig
+native watcher: %s
+", watcher);
     }
 
     #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
@@ -314,21 +368,24 @@ debug guarded: %s
     private string compileObjects(string root) {
         string restor = root + "/restor.qr";
         string guarded = root + "/guarded.qr";
+        string watcher = root + "/watcher.qr";
         string eng = root + "/eng.qr";
         write(restor, RestorCode);
         write(guarded, GuardedCode);
+        write(watcher, WatcherCode);
         write(eng, EngineCode);
         string manifest = root + "/source-symbols.manifest";
-        write(manifest, sprintf("format=1\nclass\tRestor\t%s\nclass\tGuarded\t%s\n", restor, guarded));
+        write(manifest, sprintf("format=1\nclass\tRestor\t%s\nclass\tGuarded\t%s\nclass\tWatcher\t%s\n", restor,
+            guarded, watcher));
 
         string qo_dir = root + "/qo";
         mkdir(qo_dir);
-        foreach string src in ((restor, guarded)) {
+        foreach string src in ((restor, guarded, watcher)) {
             string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
                 "--source-symbol-manifest=%s --output-dir=%s %s", env, qcc_bin, manifest, qo_dir, src));
             assertTrue(out.find("script-context .qo") != -1, "compiled " + basename(src) + ": " + out);
         }
-        # the consumer is compiled against the providers' objects, and defers both classes
+        # the consumer is compiled against the providers' objects, and defers their classes
         string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER --source-symbol-manifest=%s "
             "-L %s --output-dir=%s %s", env, qcc_bin, manifest, qo_dir, qo_dir, eng));
         assertTrue(out.find("script-context .qo") != -1, "compiled the deferring consumer: " + out);
@@ -341,9 +398,9 @@ debug guarded: %s
         write(host, HostCode);
         string exe = root + "/deferred-class-host";
         string cxx = ENV.CXX ?? "g++";
-        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s/restor.qo %s/guarded.qo %s/eng.qo -L%s "
-            "-Wl,-rpath,%s -lqore -o %s %s", cxx, source_root + "/include", libqore_dir + "/include", host, qo_dir,
-            qo_dir, qo_dir, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
+        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s/restor.qo %s/guarded.qo %s/watcher.qo %s/eng.qo "
+            "-L%s -Wl,-rpath,%s -lqore -o %s %s", cxx, source_root + "/include", libqore_dir + "/include", host,
+            qo_dir, qo_dir, qo_dir, qo_dir, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
         if (!is_file(exe)) {
             if (out =~ /not found/) {
                 testSkip("no C++ compiler to build the host: " + out);
@@ -358,7 +415,7 @@ debug guarded: %s
         TmpDir tmp("qore-aot-deferred-class-vrn-src-");
         # one file: the classes are bound at parse time; this is the behavior the deferred compile must match
         string runner = tmp.path + "/runner.q";
-        write(runner, RestorCode + "\n" + GuardedCode + "\n" + EngineCode + "\nmain();\n");
+        write(runner, RestorCode + "\n" + GuardedCode + "\n" + WatcherCode + "\n" + EngineCode + "\nmain();\n");
         foreach string mode in (Modes) {
             string out = runStatus(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, runner));
             assertEq(Expected + "exit=0\n", out, mode + " source mode");
@@ -407,6 +464,26 @@ debug guarded: %s
             # the AST fallback raised INVALID-FUNCTION-ACCESS from the base class constructor instead
             assertEq(-1, out.find("INVALID-FUNCTION-ACCESS"), mode + " mode checks the class, not its base: " + out);
             assertEq(sandboxExpected() + "exit=0\n", out, mode + " mode in a sandboxed Program");
+        }
+    }
+
+    testAllowedDomain() {
+        TmpDir tmp("qore-aot-deferred-class-vrn-debugger-");
+        string qo_dir = compileObjects(tmp.path);
+        *string exe = buildHost(tmp.path, qo_dir);
+        if (!exe) {
+            return;
+        }
+        foreach string mode in (Modes) {
+            # a Program that allows the debugger constructs the deferred DebugProgram subclass
+            string out = runStatus(sprintf("%s %s %s open", env, exe, mode));
+            assertEq(-1, out.find(DebuggerError), mode + " mode allows the debugger domain: " + out);
+            assertEq(Expected + "exit=0\n", out, mode + " mode in a Program that allows the debugger");
+
+            # one that does not refuses it; main() then fails attaching its own debugger, which it may not use either
+            out = runStatus(sprintf("%s %s %s nodebugger", env, exe, mode));
+            assertEq(noDebuggerExpected(), out.substr(0, noDebuggerExpected().length()),
+                mode + " mode in a Program that does not allow the debugger");
         }
     }
 }

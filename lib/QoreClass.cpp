@@ -3368,10 +3368,17 @@ int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
 int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, const QoreProgram* pgm,
         ExceptionSink* xsink) {
     assert(xsink);
-    if (pgm && (pgm->getParseOptions() & qc.getDomain())) {
-        xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow access "
-            "to the '%s' class", qc.getName());
-        return -1;
+    if (pgm) {
+        // as at parse time (qore_program_private::parseAddDomain()): a restricting domain must not be set in the
+        // Program, and a domain the Program has to allow explicitly (e.g. DEBUGGER) must be set
+        QoreParseOptions dom(qc.getDomain());
+        QoreParseOptions po = pgm->getParseOptions();
+        QoreParseOptions allow = dom & QoreParseOptions::POSITIVE_OPTIONS;
+        if ((dom & ~QoreParseOptions::POSITIVE_OPTIONS & po) || ((allow & po) != allow)) {
+            xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                "access to the '%s' class", qc.getName());
+            return -1;
+        }
     }
     return qc.priv->runtimeCheckInstantiateClass(xsink);
 }

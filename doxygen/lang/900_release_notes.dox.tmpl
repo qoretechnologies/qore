@@ -3889,6 +3889,16 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::Program "Program"'s sandboxing restrictions.  Such a construction now behaves identically in
       every execution mode, and a class excluded by the Program's sandboxing restrictions always raises
       \c CREATE-OBJECT-ERROR
+    - Fixed constructing a class from a domain that a Program has to allow explicitly, such as a
+      @ref Qore::DebugProgram "DebugProgram" subclass (allowed with \c %%allow-debugger), where the class is resolved
+      by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
+      name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
+      exactly the Programs that allow the domain
+    - Fixed executables that <tt>qcc -o</tt> links from <tt>.qo</tt> objects: the Program always ran with the parse
+      options \c PO_NEW_STYLE and \c PO_STRICT_ARGS instead of those the objects were compiled with, so, for example,
+      an \c %%allow-debugger program could not use the debugger; it now runs with every parse option any of its
+      objects was compiled with, and the new \c qore_create_program_ext() C API function creates a Program with the
+      full parse options
     - Fixed declaring a variable with an implied typed hash constructor (<tt>hash<MyHashDecl> h({...})</tt>) in
       code compiled to a <tt>.qo</tt> object separately from the file declaring the hashdecl: with a debugger
       attached, the hash was silently created with the hashdecl's default values instead of the initializer's, or
