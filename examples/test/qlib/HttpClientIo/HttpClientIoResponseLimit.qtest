@@ -192,6 +192,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_response_body_size": max_size,
             "request_timeout": 30s,
             "ssl_verify_mode": SSL_VERIFY_NONE,
+            # the limits are tested with bodies as sent; the server would otherwise compress them
+            "accept_encoding": "",
         });
         if (opts.protocol) {
             mgr_opts.protocol = opts.protocol;

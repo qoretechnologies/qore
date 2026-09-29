@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for the default request headers of HttpClientIo: Accept-Encoding and User-Agent
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+
+%exec-class HttpClientIoDefaultHeadersTest
+
+#! Echoes the Accept-Encoding and User-Agent headers; the reply is compressed with gzip if the client accepts it
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string text = sprintf("ae=%s ua=%s", hdr."accept-encoding" ?? "-", hdr."user-agent" ?? "-");
+        if (hdr."accept-encoding" =~ /gzip/) {
+            hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "text/plain;charset=utf-8",
+                "Content-Encoding": "gzip"}, 200, gzip(binary(text)));
+            rv.no_content_encoding = True;
+            return rv;
+        }
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary(text));
+    }
+}
+
+public class HttpClientIoDefaultHeadersTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+        const Expected = sprintf("ae=%s ua=%s", DefaultAcceptEncoding, DefaultUserAgent);
+    }
+
+    constructor() : Test("HttpClientIoDefaultHeadersTest", "1.0") {
+        addTestCase("default headers", \testDefaults());
+        addTestCase("caller headers and options", \testOverrides());
+        addTestCase("undecoded bodies", \testUndecoded());
+        addTestCase("RestClientIo", \testRestClientIo());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelError()),
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("echo", new EchoHandler());
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    testDefaults() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        # the compressed response is decoded by every API that sends the default headers
+        assertEq(Expected, mgr.request(url, "GET", "/").body);
+        assertEq(Expected, mgr.requestAsync(url, "GET", "/").get(30s).body);
+        assertEq(Expected, mgr.submitRequestAsync(url, "GET", "/").future.get(30s).body);
+        assertEq(Expected, new HttpClientRequestPollOperation(mgr, url + "/").startAsync().get(30s).body);
+        HttpClientResponseStream s = mgr.openStream(url + "/");
+        assertEq(binary(Expected), s.read(10s));
+        assertTrue(s.isDecoded());
+        assertEq(DefaultAcceptEncoding, mgr.addDefaultHeaders().("Accept-Encoding"));
+        assertEq({"User-Agent": DefaultUserAgent}, mgr.addDefaultHeaders(NOTHING, False));
+    }
+
+    testOverrides() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        # caller headers are sent instead, in any case
+        assertEq("ae=identity ua=me", mgr.request(url, "GET", "/", {"accept-encoding": "identity",
+            "USER-AGENT": "me"}).body);
+        # options
+        HttpClientConnectionManager custom(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "accept_encoding": "",
+            "user_agent": "custom/1",
+        });
+        on_exit custom.closeAll();
+        assertEq("ae=- ua=custom/1", custom.request(url, "GET", "/").body);
+        HttpClientConnectionManager none(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "accept_encoding": "gzip",
+            "user_agent": "",
+        });
+        on_exit none.closeAll();
+        assertEq("ae=gzip ua=-", none.request(url, "GET", "/").body);
+    }
+
+    testUndecoded() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        # a body that is not decoded is not requested with a content coding
+        HttpClientResponseStream s = mgr.openStream(url + "/", NOTHING, <HttpClientOpenStreamOptions>{
+            "decode": False,
+        });
+        assertEq(binary("ae=- ua=" + DefaultUserAgent), s.read(10s));
+        HttpClientRequestPollOperation op(mgr, url + "/", "GET", NOTHING, NOTHING, <HttpClientRequestPollOptions>{
+            "keep_stream": True,
+        });
+        op.startAsync().get(30s);
+        binary b;
+        map b += $1, op.getInitialBody();
+        HttpClientStreamHandle sh = op.getStream();
+        on_exit sh.cancel();
+        while (!op.isStreamComplete()) {
+            auto d = sh.readData(10s);
+            if (!exists d || (d.typeCode() == NT_HASH && d.end_stream)) {
+                if (d.body) {
+                    b += binary(d.body);
+                }
+                break;
+            }
+            b += d.typeCode() == NT_HASH ? binary(d.body ?? binary()) : binary(d);
+        }
+        assertEq(binary("ae=- ua=" + DefaultUserAgent), b);
+        # the lower-level stream APIs send the headers as given
+        HttpClientStreamHandle raw = mgr.acquireStream(url);
+        hash<auto> resp = raw.request("GET", "/");
+        assertEq("ae=- ua=-", resp.body);
+    }
+
+    testRestClientIo() {
+        RestClientIo rest({"url": url, "data": "text"});
+        on_exit rest.close();
+        string expected = sprintf("ae=%s ua=%s", DefaultAcceptEncoding, RestClientIo::VersionString);
+        assertEq(expected, rest.restGet("/").body);
+        assertEq(expected, rest.restGetAsync("/").get().body);
+        assertEq(expected, rest.restGet("/").body);
+    }
+}

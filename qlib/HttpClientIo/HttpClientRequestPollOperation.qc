@@ -536,8 +536,9 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     try {
                         stream = mgr.acquireStream(origin);
                         # the cookie jar supplies the cookies for each target
+                        # the body is decoded unless the stream is handed over
                         stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,
-                            \auth_state), opts.body_streaming, rf.getBody(), io_notifier);
+                            \auth_state, !opts.keep_stream), opts.body_streaming, rf.getBody(), io_notifier);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "HTTPCLIENT-NOT-READY") {
                             # the connection reported itself ready and refused the request; retry the acquisition

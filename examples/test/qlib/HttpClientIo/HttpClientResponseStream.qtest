@@ -145,6 +145,8 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
         return new HttpClientConnectionManager(cast<hash<HttpClientConnectionManagerOptions>>({
             "protocol": protocol,
             "accept_all_certs": True,
+            # bodies are tested as sent; the server would otherwise compress them
+            "accept_encoding": "",
         } + opts));
     }
 

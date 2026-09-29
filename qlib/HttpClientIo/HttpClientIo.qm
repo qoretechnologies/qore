@@ -217,6 +217,12 @@ public namespace HttpClientIo {
     #! Default request timeout (60 seconds)
     public const DefaultRequestTimeout = 60s;
 
+    #! The default \c Accept-Encoding request header: the content codings that responses are decoded from
+    public const DefaultAcceptEncoding = "gzip, deflate, br, zstd, bzip2";
+
+    #! The default \c User-Agent request header
+    public const DefaultUserAgent = "Qore-HttpClientIo/1.0";
+
     #! Default maximum request retries for retryable connection and capacity errors
     public const DefaultMaxRequestRetries = 3;
 
@@ -643,6 +649,26 @@ public namespace HttpClientIo {
             @since HttpClientIo 1.0
         */
         bool encoding_passthru = False;
+
+        #! The \c Accept-Encoding header sent with requests whose response body is decoded; an empty string sends
+        #! none
+        /** The header lets the server compress the response; it is added to the requests of
+            @ref HttpClientConnectionManager::request(), @ref HttpClientConnectionManager::requestAsync(),
+            @ref HttpClientConnectionManager::submitRequestAsync(), @ref HttpClientConnectionManager::openStream()
+            (unless the body is not decoded), and @ref HttpClientRequestPollOperation (unless the stream is handed
+            over), unless the request has an \c Accept-Encoding header.  Requests made with the lower-level stream
+            APIs, whose body is delivered as received, are sent as given.
+
+            @since HttpClientIo 1.0
+        */
+        string accept_encoding = DefaultAcceptEncoding;
+
+        #! The \c User-Agent header sent with requests that have none; an empty string sends none
+        /** Added to the requests of the APIs that add the \c Accept-Encoding header
+
+            @since HttpClientIo 1.0
+        */
+        string user_agent = DefaultUserAgent;
 
         #! Proxy URL (e.g., "http://proxy:8080")
         /** When set, all connections are routed through this HTTP proxy.

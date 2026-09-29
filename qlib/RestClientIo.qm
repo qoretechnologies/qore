@@ -2353,8 +2353,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # the body is received as octets for response_body_raw; buildResponse() decodes text
             stream.setDecodeText(False);
             # the cookie jar of the connection manager supplies cookies as with synchronous requests
-            hash<auto> result = stream.submitAsyncWithNotifier(method, path, mgr.addCookieHeaders(url, path, hdr),
-                prepared.serialized_body, notifier);
+            hash<auto> result = stream.submitAsyncWithNotifier(method, path,
+                mgr.addDefaultHeaders(mgr.addCookieHeaders(url, path, hdr)), prepared.serialized_body, notifier);
             return result + {
                 "stream": stream,
                 "request_headers": hdr,
@@ -2381,8 +2381,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, origin, path);
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
             stream.setDecodeText(False);
-            return stream.submitAsyncWithNotifier(method, path, mgr.addCookieHeaders(origin, path, hdr), body,
-                notifier) + {
+            return stream.submitAsyncWithNotifier(method, path,
+                mgr.addDefaultHeaders(mgr.addCookieHeaders(origin, path, hdr)), body, notifier) + {
                 "stream": stream,
             };
         }

@@ -834,8 +834,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
         in_flight.inc();
         on_exit in_flight.dec();
-        # Inject cookies from jar into request headers
-        headers = addCookieHeaders(url, path, headers);
+        # Inject cookies from jar into request headers; the response body is decoded by the Future
+        headers = addDefaultHeaders(addCookieHeaders(url, path, headers));
 
         int retries = 0;
         int max_retries = opts.max_request_retries;
@@ -1073,7 +1073,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         hash<auto> auth_state = {};
         while (True) {
             HttpClientStreamHandle sh = acquireAndStartStreaming(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                prepareRequestHeaders(rf, auth, \auth_state), False, rf.getBody());
+                prepareRequestHeaders(rf, auth, \auth_state, o.decode), False, rf.getBody());
             # the stream is cancelled if the response cannot be returned
             bool keep = False;
             on_exit if (!keep) {
@@ -1268,16 +1268,17 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @ref getRequestAuthenticator()
         @param auth_state the authentication state of the request, initially an empty hash; updated with the
         credentials sent
+        @param decoded @ref True if the response body is decoded; see @ref addDefaultHeaders()
 
         @return the request headers to send
 
         @since HttpClientIo 1.0
     */
     hash<auto> prepareRequestHeaders(HttpRedirectFollower rf, *HttpAuthenticator auth,
-            reference<hash<auto>> auth_state) {
+            reference<hash<auto>> auth_state, bool decoded = True) {
         string origin = rf.getOrigin();
         string path = rf.getPath();
-        hash<auto> hdr = addCookieHeaders(origin, path, rf.getHeaders());
+        hash<auto> hdr = addDefaultHeaders(addCookieHeaders(origin, path, rf.getHeaders()), decoded);
         remove auth_state.sent;
         remove auth_state.sent_proxy;
         # credentials are sent only to the origin of the original request, and never instead of the caller's
@@ -1357,6 +1358,29 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     private logRedirect(HttpRedirectFollower rf, int status_code, *hash<auto> resp_headers) {
         log(LoggerLevel::DEBUG, "redirect %d/%d: %d -> %s", rf.getRedirects().size() + 1, rf.getMaxRedirects(),
             status_code, resp_headers.location);
+    }
+
+    #! Returns request headers with the default headers of the manager added
+    /** The \c User-Agent header, and for a response body that is decoded the \c Accept-Encoding header, are added
+        from the \c user_agent and \c accept_encoding options unless the headers have them, in any case
+
+        @param headers the request headers
+        @param decoded @ref True if the response body is decoded by the manager, so that a compressed response can be
+        accepted
+
+        @return the request headers with the default headers
+
+        @since HttpClientIo 1.0
+    */
+    hash<auto> addDefaultHeaders(*hash<auto> headers, bool decoded = True) {
+        hash<auto> rv = headers ?? {};
+        if (opts.user_agent.val() && !(select keys rv, $1 =~ /^user-agent$/i)) {
+            rv."User-Agent" = opts.user_agent;
+        }
+        if (decoded && opts.accept_encoding.val() && !(select keys rv, $1 =~ /^accept-encoding$/i)) {
+            rv."Accept-Encoding" = opts.accept_encoding;
+        }
+        return rv;
     }
 
     #! Returns request headers with the cookies from the cookie jar for the given target added
