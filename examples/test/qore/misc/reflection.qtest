@@ -1356,7 +1356,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "onStreamData", ("stream_id",));
         assertNamedConstructorVariantCount("Http1ClientPollOperationBase",
             ("socket", "connect_target", "target_host", "target_port", "ssl_required", "proxy_tunnel",
-                "plain_proxy", "connection"));
+                "plain_proxy", "connection", "proxy_ssl"));
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setIdleTimeout",
             ("idle_timeout_ms",));
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setProtocolSwitchedListener",
@@ -1377,7 +1377,7 @@ class ReflectionTest inherits QUnit::Test {
             ("stream_id", "queue", "notifier", "initial_body"));
         assertNamedConstructorVariantCount("Http2ClientPollOperationBase",
             ("socket", "connect_target", "target_host", "target_port", "ssl_required", "proxy_tunnel",
-                "connection"));
+                "connection", "proxy_ssl"));
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setIdleTimeout",
             ("idle_timeout_ms",));
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setPingInterval",
