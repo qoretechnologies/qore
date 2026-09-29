@@ -244,6 +244,14 @@ public hashdecl LlmRequestOptions {
     *int max_retries;
     #! JSON schema to request structured output when the backend supports it
     *hash<auto> output_schema;
+    #! Send @c system messages in the provider's dedicated system field
+    /** Only honored by providers that have such a field.  The default is to
+        place system content as the leading conversation turn instead,
+        because implicit context caching keys on the head of the
+        conversation: content in a dedicated system field is never cached,
+        and input tokens dominate agent workloads.
+    */
+    *bool system_instruction_field;
     #! Provider-specific request body fields merged into the generated body
     *hash<auto> body_options;
     #! Optional per-call telemetry observer
