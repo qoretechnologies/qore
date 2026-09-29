@@ -35,6 +35,7 @@
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ql_debug.h"
 
 #include <algorithm>
 #include <chrono>
@@ -661,6 +662,10 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
     return rv_refs;
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_deref_wait_hook_t> qore_dbg_deref_wait_hook{nullptr};
+#endif
+
 void RObject::derefDone(bool del, bool wait_only) {
     AutoLocker al(rlck);
     // decrement the in progress count, if it's the last thread, and there are waiting threads, then wake one up
@@ -677,6 +682,13 @@ void RObject::derefDone(bool del, bool wait_only) {
         // this object on this thread is still on the stack below us and cannot make progress until
         // we return, so waiting for it would deadlock (see t_deref_inprogress)
         unsigned own = deref_inprogress_own(this);
+#ifdef DEBUG
+        if (ref_inprogress > own) {
+            if (qore_dbg_deref_wait_hook_t hook = qore_dbg_deref_wait_hook.load()) {
+                hook(getName());
+            }
+        }
+#endif
         while (ref_inprogress > own) {
             ++ref_waiting;
             rcond.wait(rlck);
@@ -1225,7 +1237,13 @@ robject_dereference_helper::~robject_dereference_helper() {
     // concurrent deref and trigger deleteObject() while another thread is mid-access
     o->derefDone(del && !handed_off, handed_off);
 
-    if (del && qo) {
+    // A dereference that finds the object already deleted or being deleted releases the object's base weak
+    // reference only if it released the last reference itself: that release is owed by exactly one dereference,
+    // the one that takes the count to zero once the object is deleted.  A dereference that decided to collect the
+    // object (willDelete()) while references remained, and then found another thread deleting it, owes nothing: the
+    // references it counted as recursive are released later, and the last of them releases the base reference;
+    // releasing it here as well freed the object while those dereferences still used it.
+    if (qo && !refs) {
         qo->tDeref();
     }
 }

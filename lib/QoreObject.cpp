@@ -48,6 +48,7 @@
 #include "qore/intern/QC_DelegatingPollOperation.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -1307,6 +1308,10 @@ void qore_object_private::unsetRealReference() {
     derefRealIntern();
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
+#endif
+
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
 
@@ -1469,6 +1474,16 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                 break;
             }
         }
+
+#ifdef DEBUG
+        // a dereference that decided to collect the object takes its lock only now, so another thread can start
+        // deleting the object in between; tests hold this thread here to make that deterministic
+        if (rrf) {
+            if (qore_dbg_deref_collect_hook_t hook = qore_dbg_deref_collect_hook.load()) {
+                hook(getClassName());
+            }
+        }
+#endif
 
         QoreSafeVarRWWriteLocker sl(rml);
 

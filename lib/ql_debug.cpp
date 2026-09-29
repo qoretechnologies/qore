@@ -5166,6 +5166,142 @@ static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeCo
     return QoreValue();
 }
 
+namespace {
+//! the armed hold of dbg_hold_deref_collect(); one at a time
+struct DerefCollectHold {
+    std::mutex m;
+    std::string class_name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+DerefCollectHold deref_collect_hold;
+
+//! runs in the thread that decided to collect an object; disarms itself, so it holds that thread once
+void dbg_hold_deref_collect_hook(const char* class_name) {
+    DerefCollectHold& h = deref_collect_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.class_name != class_name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_deref_collect_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is dereferencing an object; a Counter deleted meanwhile is the test's error, not the dereference's
+    if (xsink) {
+        printd(0, "dbg_hold_deref_collect(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+}
+
+//! holds the next thread that decides to collect an object of the given class as part of a recursive set
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has decided to collect the
+    object and before it takes the object's lock to start deleting it; another thread can start deleting the object
+    in between, and tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_collect(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* class_name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    DerefCollectHold& h = deref_collect_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for class '%s'",
+            h.class_name.c_str());
+        return QoreValue();
+    }
+    h.class_name = class_name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_deref_collect_hook.store(dbg_hold_deref_collect_hook);
+    return QoreValue();
+}
+
+namespace {
+//! the armed notification of dbg_deref_wait_notify(); one at a time
+struct DerefWaitNotify {
+    std::mutex m;
+    std::string name;
+    Counter* waiting = nullptr;
+};
+
+DerefWaitNotify deref_wait_notify;
+
+//! runs with the object's rlck held in the thread that starts waiting; disarms itself and does not block
+void dbg_deref_wait_notify_hook(const char* name) {
+    DerefWaitNotify& h = deref_wait_notify;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> waiting(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.waiting || h.name != name) {
+            return;
+        }
+        waiting = h.waiting;
+        h.waiting = nullptr;
+        qore_dbg_deref_wait_hook.store(nullptr);
+    }
+    waiting->dec(&xsink);
+    if (xsink) {
+        printd(0, "dbg_deref_wait_notify(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+}
+
+//! decrements a Counter when a thread next waits for other threads' dereferences of an object of the given class
+/** The notification is made once, in RObject::derefDone(), when a dereference that deletes the object, or that
+    handed its deletion off, starts waiting for the dereferences of the object that other threads still have in
+    progress; tests use it to know that a thread has reached that wait.
+
+    @param name the name of the object's class
+    @param waiting decremented once a thread starts waiting
+
+    @throw DBG-ARGUMENT-ERROR a notification is already armed
+*/
+static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> waiting(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    DerefWaitNotify& h = deref_wait_notify;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.waiting) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a notification is already armed for class '%s'",
+            h.name.c_str());
+        return QoreValue();
+    }
+    h.name = name->c_str();
+    h.waiting = waiting.release();
+    qore_dbg_deref_wait_hook.store(dbg_deref_wait_notify_hook);
+    return QoreValue();
+}
+
 //! makes the next c-ares lookups find that c-ares lost their query
 /** Each time an unfinished c-ares lookup (a name, reverse or name-info lookup) checks whether c-ares lost its
     query, it finds it lost while the count is positive, and the count is decremented; the lookup then recovers
@@ -5241,6 +5377,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_deref_collect", f_dbg_hold_deref_collect,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
     qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,

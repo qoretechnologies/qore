@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcCollectDeleteRaceTest
+
+/*  A dereference that decides to collect an object as part of a recursive set takes the object's lock only after
+    the decision.  In between, another thread can release the object's last reference -- the one from the other
+    member of the set, which the collecting dereference counted as recursive -- and start deleting the object
+    itself.  The collecting dereference then finds the object being deleted and hands the deletion off to that
+    thread; it released the object's base weak reference as well, which the deleting thread's own final
+    dereference releases too, so the object was freed while the collecting thread still used it: a debug build
+    aborted in RObject::tDeref() on a weak reference count of zero (CI job 205323, AssemblyAiStreaming.qtest in the
+    IR mode), a release build freed the object's memory twice.
+
+    A debug hook (dbg_hold_deref_collect()) holds the collecting thread between its decision and its lock, so the
+    test only runs against a debug build.
+*/
+
+#! the object whose collection races its deletion
+class DgcRaceB {
+    public {
+        *DgcRaceC c;
+        static Counter destroyed();
+    }
+
+    destructor() {
+        DgcRaceB::destroyed.inc();
+    }
+}
+
+#! the other member of the recursive set; its reference to DgcRaceB is the one released by the deleting thread
+class DgcRaceC {
+    public {
+        *DgcRaceB b;
+        static Counter destroyed();
+    }
+
+    destructor() {
+        DgcRaceC::destroyed.inc();
+    }
+}
+
+public class DgcCollectDeleteRaceTest inherits QUnit::Test {
+    public {
+        #! a wait that runs out means the interleaving was not reached; a failure, never a retry
+        const HoldTimeout = 30s;
+    }
+
+    constructor() : QUnit::Test("dgc-collect-delete-race", "1.0") {
+        addTestCase("collection decided while another thread deletes the object", \collectDuringDeleteTest());
+        set_return_value(main());
+    }
+
+    #! Makes the pair and passes B to the collecting thread in \a q; returns C
+    static DgcRaceC makePair(Queue q) {
+        DgcRaceB b();
+        DgcRaceC c();
+        b.c = c;
+        c.b = b;
+        q.push(b);
+        return c;
+    }
+
+    collectDuringDeleteTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the collecting thread is only in debug builds");
+        }
+
+        int b_destroyed = DgcRaceB::destroyed.getCount();
+        int c_destroyed = DgcRaceC::destroyed.getCount();
+
+        Counter held(1);
+        Counter release(1);
+        Counter waiting(1);
+
+        # the only strong references to the pair are B's reference from the collecting thread and the references
+        # of the pair to each other: a weak reference to C lets the deleting thread reach it without keeping the set
+        # from being collected
+        # the pair is made in another method, so no local variable of this frame holds it
+        Queue q();
+        *DgcRaceC cw;
+        cw := DgcCollectDeleteRaceTest::makePair(q);
+
+        call_function("dbg_hold_deref_collect", "DgcRaceB", held, release);
+
+        Counter done(2);
+        # the collecting thread: releasing the reference of its local variable leaves only the recursive reference
+        # from C, so the dereference decides to collect the set, and the hook holds it there
+        background sub () {
+            on_exit done.dec();
+            {
+                DgcRaceB b = q.get();
+                remove b;
+            }
+        }();
+
+        if (held.waitForZero(HoldTimeout)) {
+            release.dec();
+            done.waitForZero();
+            fail("the releasing thread did not decide to collect the pair");
+        }
+
+        # the deleting thread: releasing C's reference to B releases B's last reference, so this thread starts
+        # deleting B, and waits for the collecting thread's dereference of B to finish before running the destructor
+        call_function("dbg_deref_wait_notify", "DgcRaceB", waiting);
+        background sub () {
+            on_exit done.dec();
+            *DgcRaceC c = cw;
+            c.b = NOTHING;
+        }();
+
+        # the deleting thread has marked B as being deleted, so the collecting thread finds it so and hands the
+        # deletion off
+        int rc = waiting.waitForZero(HoldTimeout);
+        release.dec();
+        assertEq(0, rc, "the deleting thread waits for the collecting thread");
+
+        done.waitForZero();
+
+        assertEq(1, DgcRaceB::destroyed.getCount() - b_destroyed);
+        assertEq(1, DgcRaceC::destroyed.getCount() - c_destroyed);
+    }
+}

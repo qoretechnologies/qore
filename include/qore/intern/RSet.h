@@ -1137,8 +1137,9 @@ public:
     // mark for final dereferencing
     // another thread is already destroying the object: we hand off deletion responsibility
     // and the destructor will report del=false to derefDone so the waiter-vs-deleter invariant
-    // in RObject::derefDone() is not tripped; the tDeref() still owes the original weak-ref
-    // release and is unchanged
+    // in RObject::derefDone() is not tripped; the destructor releases the object's base weak
+    // reference only if this dereference released the last reference (refs == 0), not when
+    // del was set by willDelete() while references remained
     DLLLOCAL void finalDeref(qore_object_private* obj) {
         assert(!qo);
         qo = obj;
