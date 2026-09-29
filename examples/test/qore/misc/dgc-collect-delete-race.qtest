@@ -113,6 +113,9 @@ public class DgcCollectDeleteRaceTest inherits QUnit::Test {
             on_exit done.dec();
             *DgcRaceC c = cw;
             c.b = NOTHING;
+            # the reference to C is released before the main thread counts the destructors: a block's own locals
+            # are released only after its on_exit handler has signalled the main thread
+            remove c;
         }();
 
         # the deleting thread has marked B as being deleted, so the collecting thread finds it so and hands the
