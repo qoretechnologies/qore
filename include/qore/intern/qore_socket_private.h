@@ -734,6 +734,9 @@ public:
     }
 
 private:
+    //! Receives data; continuePoll() records received data on the socket
+    DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
@@ -765,6 +768,9 @@ public:
     }
 
 private:
+    //! Receives data; continuePoll() records received data on the socket
+    DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
@@ -796,6 +802,9 @@ public:
     }
 
 private:
+    //! Receives data; continuePoll() records received data on the socket
+    DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     bool io = false;
@@ -828,6 +837,9 @@ public:
     }
 
 private:
+    //! Receives data; continuePoll() records received data on the socket
+    DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
     SimpleRefHolder<QoreStringNode> bin;
@@ -1223,6 +1235,23 @@ struct qore_socket_private : public QoreReferenceCounter {
         streaming consumer is not limited.
     */
     std::atomic<int64> max_response_body_size{0};
+
+    //! The monotonic time in microseconds when data was last received on the socket; 0 if no data was received
+    /** Set by the non-blocking receive poll states, and by HTTP/2 and QUIC sessions when they receive data, so that
+        an HTTP client can detect a connection that stopped delivering data (an inactivity timeout)
+    */
+    std::atomic<int64> last_data_recv_us{0};
+
+    //! Records that data was received on the socket
+    DLLLOCAL void markDataReceived() {
+        last_data_recv_us.store(q_get_monotonic_us(), std::memory_order_relaxed);
+    }
+
+    //! Returns the time in microseconds since data was last received on the socket, or -1 if no data was received
+    DLLLOCAL int64 getDataIdleUs() const {
+        int64 last = last_data_recv_us.load(std::memory_order_relaxed);
+        return last ? q_get_monotonic_us() - last : -1;
+    }
 
     //! The encoding assumed for text HTTP/2 client response bodies whose encoding is not determined otherwise
     /** nullptr means ISO-8859-1; set by the HTTP client connection that owns the socket and read by the session when

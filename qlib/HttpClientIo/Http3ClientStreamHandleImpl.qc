@@ -242,7 +242,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-NOT-READY",
                     "connection is not ready for async streaming request";
             }
-            if (!conn.waitForReady(timeout_ms: request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
@@ -315,7 +315,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
@@ -461,7 +461,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         and no more data is available
     */
     auto readData(*timeout timeout_ms) {
-        timeout wait_timeout = timeout_ms ?? request_timeout;
+        # no timeout blocks until data is available, as documented for HttpClientStreamHandle::readData()
+        timeout wait_timeout = timeout_ms ?? -1;
 
         {
             AutoLock al(lock);

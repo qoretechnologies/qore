@@ -1324,6 +1324,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
 
     ngtcp2_pkt_info pi{};
 
+    // data was received on the connection; see qore_socket_private::last_data_recv_us
+    if (len > 0 && sock_) {
+        sock_->markDataReceived();
+    }
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, timestamp());
     if (rv != 0) {
         // Handle specific error codes
@@ -1370,6 +1374,10 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
         return -1;
     }
 
+    // data was received on the connection; see qore_socket_private::last_data_recv_us
+    if (count > 0 && sock_) {
+        sock_->markDataReceived();
+    }
     for (int i = 0; i < count; ++i) {
         ngtcp2_pkt_info pi{};
 

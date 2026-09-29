@@ -1329,6 +1329,10 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     // without holding it to avoid the lock-order deadlock with worker-
     // thread submitHttp2Request (see the comment at entry of this
     // function).
+    // data was received on the connection; see qore_socket_private::last_data_recv_us
+    if (len > 0 && sock) {
+        sock->markDataReceived();
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     ssize_t rv = nghttp2_session_mem_recv(session,
         reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr())), len);

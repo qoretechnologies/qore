@@ -310,7 +310,12 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c error_passthru: if \c True, HTTP error responses are returned rather than throwing
           exceptions (default: \c False)
         - \c connect_timeout: connection timeout
-        - \c timeout: request timeout
+        - \c timeout: the overall deadline for a response, including its body; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout
+          "HttpClientConnectionManagerOptions::request_timeout"
+        - \c io_timeout: the maximum time without receiving data for a request; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::io_timeout
+          "HttpClientConnectionManagerOptions::io_timeout"
         - \c protocol: protocol selection: \c "auto" (default), \c "h2", or \c "h3"
         - \c max_connections_per_host: maximum connections per host (0 = unlimited)
         - \c max_streams_per_connection: maximum streams per connection (0 = unlimited)
@@ -770,6 +775,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "http_version": True,
                 "connect_timeout": True,
                 "enable_http3": True,
+                "io_timeout": True,
                 "encoding": True,
                 "encoding_passthru": True,
                 "timeout": True,
@@ -1327,8 +1333,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             instead of the connection manager's default.  Setting it to 0 clears the
             override and restores the manager default.
 
-            Matches the semantics of @ref Qore::HTTPClient::setTimeout() on the
-            synchronous client.
+            The timeout is the overall deadline for a response, including its body, like the \c request_timeout
+            option of @ref HttpClientIo::HttpClientConnectionManagerOptions "HttpClientConnectionManagerOptions";
+            unlike the timeout of @ref Qore::HTTPClient "HTTPClient", it does not limit each read.  Use the
+            \c io_timeout option to limit the time without receiving data.
 
             @param timeout_ms new per-request timeout; 0 clears the override
         */
@@ -3220,8 +3228,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, *date deadline = NOTHING) {
-            timeout response_timeout = remainingSseTimeout(deadline,
-                milliseconds(getTimeout()));
+            # a request timeout of 0 means no deadline
+            int to = getTimeout();
+            *timeout response_timeout = remainingSseTimeout(deadline, to > 0 ? milliseconds(to) : NOTHING);
             auto first_data = stream.readData(response_timeout);
             if (!exists first_data) {
                 throw "HTTPCLIENT-TIMEOUT",
@@ -3250,7 +3259,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
-                timeout response_timeout, *date deadline = NOTHING) {
+                *timeout response_timeout, *date deadline = NOTHING) {
             if (response && response.status_code) {
                 hash<auto> raw_response;
                 raw_response += response;
@@ -3317,7 +3326,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.
         private *data drainSseErrorBody(HttpClientIo::HttpClientStreamHandle stream,
-                auto first_data, timeout read_timeout, *date deadline = NOTHING) {
+                auto first_data, *timeout read_timeout, *date deadline = NOTHING) {
             string error_body = "";
             bool got_body = False;
             bool done = False;
@@ -3369,7 +3378,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         }
 
         #! Resolves a call-local opening deadline without changing shared state
-        private static timeout remainingSseTimeout(*date deadline, timeout fallback) {
+        #! Returns the time to wait for SSE data: the time left until the deadline, if any, else the fallback, where
+        #! @ref nothing means no limit
+        private static *timeout remainingSseTimeout(*date deadline, *timeout fallback) {
             if (!deadline) { return fallback; }
             int remaining = (deadline - now_us()).durationMilliseconds();
             if (remaining <= 0) {
@@ -4348,6 +4359,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             if (opts.timeout) {
                 mgr_opts.request_timeout = opts.timeout;
             }
+            if (opts.io_timeout) {
+                mgr_opts.io_timeout = opts.io_timeout;
+            }
             if (opts.protocol) {
                 mgr_opts.protocol = opts.protocol;
             }
@@ -4836,6 +4850,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Follows redirects; created with the first request as it was sent
         *HttpRedirectFollower rf;
 
+        #! The time the current request attempt was sent, for the inactivity timeout
+        *date sent;
+
         #! Current operation state
         string state;
 
@@ -4911,7 +4928,8 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         controller.submit(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
             "spop": self,
-            "to": milliseconds(rcio.getTimeout()),
+            # a request timeout of 0 means no deadline; a negative controller timeout means none
+            "to": rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1,
             "owner": "restclientio-async:" + self.uniqueHash(),
             "has_on_complete": True,
         });
@@ -5072,6 +5090,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
             if (state == SPS_IO_WAITING) {
                 if (!pending_future.isDone()) {
+                    checkInactivity();
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": io_notifier,
@@ -5166,6 +5185,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             connector.submitted();
             pending_future = result.future;
             pending_stream = result.stream;
+            sent = now_us();
             return;
         }
         if (!prepared_attempt) {
@@ -5177,6 +5197,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         delete prepared_attempt;
         pending_future = result.future;
         pending_stream = result.stream;
+        sent = now_us();
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
         request_allow_any_response = result.allow_any_response;
@@ -5185,6 +5206,17 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! Returns @ref True if a redirect was followed
     private bool isRedirected() {
         return rf && rf.getRedirects();
+    }
+
+    #! Raises \c HTTPCLIENT-TIMEOUT if no data was received for the request for the \c io_timeout option of the
+    #! connection manager; the stream is canceled
+    private checkInactivity() {
+        timeout io_timeout = rcio.getConnectionManager().getIoTimeout();
+        if (io_timeout > 0 && pending_stream && sent && pending_stream.getInactiveTime(sent) >= io_timeout * 1000) {
+            cancelPendingStream();
+            throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for REST %s %s for %d ms (io_timeout)", method, path,
+                io_timeout);
+        }
     }
 
     private prepareAttempt() {
@@ -5302,7 +5334,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             controller.submit(<SocketPollOperationInfo>{
                 "sock": poll_info.socket,
                 "spop": self,
-                "to": milliseconds(rcio.getTimeout()),
+                # a request timeout of 0 means no deadline; a negative controller timeout means none
+            "to": rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1,
                 "owner": "restclientio-sse-observable:" + self.uniqueHash(),
                 "has_on_complete": True,
             });

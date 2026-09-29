@@ -6351,6 +6351,10 @@ void QoreSocketObject::setMaxResponseBodySize(int64 size) {
     priv->socket->priv->max_response_body_size.store(size, std::memory_order_relaxed);
 }
 
+int64 QoreSocketObject::getDataIdleUs() const {
+    return priv->socket->priv->getDataIdleUs();
+}
+
 void QoreSocketObject::setHttpAssumedEncoding(const QoreEncoding* enc) {
     priv->socket->priv->http_assumed_encoding.store(enc, std::memory_order_relaxed);
 }

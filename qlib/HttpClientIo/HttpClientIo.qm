@@ -556,8 +556,24 @@ public namespace HttpClientIo {
         */
         timeout connect_timeout = DefaultConnectTimeout;
 
-        #! Default request timeout
+        #! The overall deadline for a response, including its body; 0 means no deadline
+        /** A request that does not receive its whole response within this time fails with \c HTTPCLIENT-TIMEOUT.
+            A long transfer that keeps receiving data can use \c io_timeout instead, with this option set to 0, so
+            that it fails only if its connection stops delivering data.
+        */
         timeout request_timeout = DefaultRequestTimeout;
+
+        #! The maximum time without receiving data for a request; 0 (the default) means no inactivity timeout
+        /** A request fails with \c HTTPCLIENT-TIMEOUT if no data is received on its connection for this time, from
+            the time the request is sent; data received on the connection for another request multiplexed on it
+            (HTTP/2 and HTTP/3) also shows that the connection is working.  Applies to the response of
+            @ref HttpClientConnectionManager::request(), @ref HttpClientConnectionManager::requestAsync(),
+            @ref HttpClientRequestPollOperation, and to the response headers of
+            @ref HttpClientConnectionManager::openStream(), in addition to \c request_timeout.
+
+            @since HttpClientIo 1.0
+        */
+        timeout io_timeout = 0;
 
         #! Maximum request retries for retryable connection and capacity errors
         /** Set to 0 to disable automatic request retries.  This applies to

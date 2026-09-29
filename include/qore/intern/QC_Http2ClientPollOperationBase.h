@@ -284,6 +284,13 @@ public:
         }
     }
 
+    //! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
+    /** Can be called from any thread
+    */
+    DLLLOCAL int64_t getDataIdleUs() const {
+        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+    }
+
     //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
     /** The session reads the value from the socket when a response is complete; see
         qore_socket_private::http_assumed_encoding

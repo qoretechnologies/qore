@@ -296,6 +296,13 @@ public:
         }
     }
 
+    //! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
+    /** Can be called from any thread
+    */
+    DLLLOCAL int64_t getDataIdleUs() const {
+        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+    }
+
     DLLLOCAL int64_t getSessionId() const {
         return session_id.load(std::memory_order_acquire);
     }

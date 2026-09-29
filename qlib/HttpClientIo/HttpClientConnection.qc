@@ -536,6 +536,16 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     private handlePollResultImpl() {
     }
 
+    #! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
+    /** Used for the inactivity timeout of requests; see the \c io_timeout option of
+        @ref HttpClientConnectionManagerOptions
+
+        @since HttpClientIo 1.0
+    */
+    int getIdleTime() {
+        return getPollOperation().getIdleTime();
+    }
+
     #! Waits for the connection to become ready
     /** Delegates to the C++ base class waitForReady() for the condition wait,
         then checks for errors (the C++ base returns False for both timeout

@@ -789,6 +789,13 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64 size);
 
+    //! Returns the time in microseconds since data was last received on the socket, or -1 if no data was received
+    /** Can be called from any thread; see qore_socket_private::last_data_recv_us
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int64 getDataIdleUs() const;
+
     //! Sets the encoding assumed for text HTTP/2 response bodies whose encoding is not determined otherwise
     /** Can be called from any thread; client sessions on this socket read the value when a response is complete.
 

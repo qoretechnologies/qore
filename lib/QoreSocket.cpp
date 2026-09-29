@@ -8357,6 +8357,15 @@ SocketRecvPacketPollState::SocketRecvPacketPollState(ExceptionSink* xsink, qore_
     - < 0 = error (exception raised)
 */
 int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
+    size_t before = getBytesReceived();
+    int rc = continuePollIntern(xsink);
+    if (getBytesReceived() > before) {
+        sock->markDataReceived();
+    }
+    return rc;
+}
+
+int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
     if (io) {
         return 0;
     }
@@ -8519,6 +8528,15 @@ SocketRecvPollState::SocketRecvPollState(ExceptionSink* xsink, qore_socket_priva
     - < 0 = error (exception raised)
 */
 int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
+    size_t before = getBytesReceived();
+    int rc = continuePollIntern(xsink);
+    if (getBytesReceived() > before) {
+        sock->markDataReceived();
+    }
+    return rc;
+}
+
+int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     if (received == size) {
         return 0;
     }
@@ -8662,6 +8680,15 @@ SocketRecvSomePollState::SocketRecvSomePollState(ExceptionSink* xsink, qore_sock
     - < 0 = error (exception raised)
 */
 int SocketRecvSomePollState::continuePoll(ExceptionSink* xsink) {
+    size_t before = getBytesReceived();
+    int rc = continuePollIntern(xsink);
+    if (getBytesReceived() > before) {
+        sock->markDataReceived();
+    }
+    return rc;
+}
+
+int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
     if (io) {
         return 0;
     }
@@ -8734,6 +8761,15 @@ SocketRecvUntilBytesPollState::SocketRecvUntilBytesPollState(ExceptionSink* xsin
     - < 0 = error (exception raised)
 */
 int SocketRecvUntilBytesPollState::continuePoll(ExceptionSink* xsink) {
+    size_t before = getBytesReceived();
+    int rc = continuePollIntern(xsink);
+    if (getBytesReceived() > before) {
+        sock->markDataReceived();
+    }
+    return rc;
+}
+
+int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
     if (matched == size) {
         return 0;
     }

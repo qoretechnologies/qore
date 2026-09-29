@@ -309,6 +309,13 @@ public:
         max_response_body_size = max_size;
     }
 
+    //! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
+    /** Can be called from any thread
+    */
+    DLLLOCAL int64_t getDataIdleUs() const {
+        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+    }
+
     //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
     /** @param enc the assumed encoding; nullptr means ISO-8859-1; see qore_get_http_body_charset()
     */

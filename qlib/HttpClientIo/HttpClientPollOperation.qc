@@ -149,6 +149,15 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
         return sock;
     }
 
+    #! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
+    /** Implemented by the protocol-specific poll operations
+
+        @since HttpClientIo 1.0
+    */
+    int getIdleTime() {
+        return -1;
+    }
+
     #! Returns the number of active streams
     int getActiveStreamCount() {
         AutoLock al(stream_lock);

@@ -1416,6 +1416,19 @@ bool Http3ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
     return priv->getErrorInfo();
 }
 
+//! Returns the time since data was last received on the connection
+/** Used to implement an inactivity timeout: data received on the connection for any request shows that the
+    connection and its peer are working
+
+    @return the time in microseconds since data was last received on the socket of the connection, or -1 if no data
+    was received
+
+    @since %Qore 3.0
+*/
+int Http3ClientPollOperationBase::getIdleTime() [flags=CONSTANT] {
+    return priv->getDataIdleUs();
+}
+
 //! Returns the number of active streams (lock-free)
 /** @return active stream count
 */

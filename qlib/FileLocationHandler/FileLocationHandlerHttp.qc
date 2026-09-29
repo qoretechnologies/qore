@@ -1036,7 +1036,7 @@ class HttpIoSupport {
 
     #! Drives a poll operation on the calling thread and returns its output
     /** @param op the poll operation
-        @param timeout_ms the maximum time to wait for any I/O event
+        @param timeout_ms the maximum time to wait for any I/O event; 0 means no limit
 
         @return the output of the poll operation
 
@@ -1052,11 +1052,15 @@ class HttpIoSupport {
             if (!info) {
                 throw "HTTP-IO-ERROR", sprintf("the request %y ended without a response", op.getGoal());
             }
-            int remaining = timeout_ms - (now_us() - last).durationMilliseconds();
-            if (remaining <= 0) {
-                op.abort();
-                throw "SOCKET-TIMEOUT", sprintf("timeout waiting %d ms for a response to %s", timeout_ms,
-                    op.getGoal());
+            # a timeout of 0 means no limit; the operation enforces the deadlines of its connection manager
+            int remaining = 1000;
+            if (timeout_ms > 0) {
+                remaining = timeout_ms - (now_us() - last).durationMilliseconds();
+                if (remaining <= 0) {
+                    op.abort();
+                    throw "SOCKET-TIMEOUT", sprintf("timeout waiting %d ms for a response to %s", timeout_ms,
+                        op.getGoal());
+                }
             }
             if (Socket::poll((info,), remaining)) {
                 last = now_us();
@@ -1107,6 +1111,8 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     */
     constructor(object mgr, hash<HttpIoRequestInfo> info, bool stream_mode = False) {
         self.stream_mode = stream_mode;
+        # a handler bound to a connection manager did not load the module yet
+        load_module(HttpIoSupport::ModuleName);
         TypedHash th(OptionsType);
         op = create_object(OperationClass, mgr, info.origin + info.path, info.method, info.headers, info.body,
             th.doCast({

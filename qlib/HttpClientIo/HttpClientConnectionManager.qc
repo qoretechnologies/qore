@@ -670,6 +670,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         stream.setMaxResponseBodySize(opts.max_response_body_size);
         stream.setAssumedEncoding(opts.assume_encoding);
         stream.setDecodeContent(!opts.encoding_passthru);
+        stream.setIoTimeout(opts.io_timeout);
         if (from_pool) {
             stream.markConnectionReused();
         }
@@ -1050,15 +1051,36 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 sh.cancel();
             }
 
-            # the response headers; body data can arrive with them
+            # the response headers; body data can arrive with them; the wait is limited by the timeout and by the
+            # io_timeout option, and 0 means no limit
             list<binary> pending = ();
             bool ended = False;
             *hash<auto> resp;
+            date sent = now_us();
+            *date header_deadline = wait > 0 ? sent + milliseconds(wait) : NOTHING;
             while (!(resp = sh.getResponse()).status_code) {
-                auto d = sh.readData(wait);
+                *timeout slice;
+                if (header_deadline) {
+                    slice = (header_deadline - now_us()).durationMilliseconds();
+                    if (slice <= 0) {
+                        throw "HTTPCLIENT-TIMEOUT", sprintf("no response received from %y within %d ms",
+                            rf.getRequestUrl(), wait);
+                    }
+                }
+                if (opts.io_timeout > 0) {
+                    int io_ms = opts.io_timeout - sh.getInactiveTime(sent) / 1000;
+                    if (io_ms <= 0) {
+                        throw "HTTPCLIENT-TIMEOUT", sprintf("no data received from %y for %d ms (io_timeout)",
+                            rf.getRequestUrl(), opts.io_timeout);
+                    }
+                    if (!exists slice || io_ms < slice) {
+                        slice = io_ms;
+                    }
+                }
+                auto d = sh.readData(slice);
                 if (!exists d) {
-                    throw "HTTPCLIENT-TIMEOUT", sprintf("no response received from %y within %d ms", rf.getRequestUrl(),
-                        wait);
+                    # the limits are checked again
+                    continue;
                 }
                 if (d.typeCode() == NT_HASH) {
                     if (d.error) {
@@ -1213,7 +1235,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         if (per_attempt_ms + retry_overhead_ms > total_budget_ms) {
             total_budget_ms = per_attempt_ms + retry_overhead_ms;
         }
-        date budget_deadline = now_us() + milliseconds(total_budget_ms);
+        # without a request timeout there is no overall deadline (see the io_timeout option), and no budget
+        *date budget_deadline = per_attempt_ms > 0 ? now_us() + milliseconds(total_budget_ms) : NOTHING;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -1223,7 +1246,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # because that would pre-empt the per-attempt timeout (e.g.
                 # the test pattern that expects request_timeout to fire then
                 # connect_timeout to retry on a fresh connection).
-                if (now_us() >= budget_deadline) {
+                if (budget_deadline && now_us() >= budget_deadline) {
                     throw "HTTPCLIENT-TIMEOUT",
                         sprintf("total request budget of %d ms exceeded across "
                             "%d attempt%s", total_budget_ms, retries + 1,
@@ -1258,7 +1281,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     "effective_timeout=%y budget_remaining=%dms",
                     method, path, stream.wasConnectionReused(), timeout_retried,
                     effective_timeout,
-                    (budget_deadline - now_us()).durationMilliseconds());
+                    budget_deadline ? (budget_deadline - now_us()).durationMilliseconds() : -1);
                 stream.setDecodeText(decode_text);
                 hash<auto> resp = stream.request(method, path, headers, body,
                     effective_timeout);
@@ -4042,6 +4065,15 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     int getMaxRequestRetries() {
         return opts.max_request_retries;
+    }
+
+    #! Returns the inactivity timeout of requests; 0 means no inactivity timeout
+    /** @return the \c io_timeout option
+
+        @since HttpClientIo 1.0
+    */
+    timeout getIoTimeout() {
+        return opts.io_timeout;
     }
 
     #! Returns the character encoding assumed for text response bodies whose encoding is not determined otherwise

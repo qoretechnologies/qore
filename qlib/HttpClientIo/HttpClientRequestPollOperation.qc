@@ -56,6 +56,8 @@ public hashdecl HttpClientRequestPollOptions {
 
     #! The time to wait for the response, including all redirects; 0 means the \c request_timeout option of the
     #! connection manager
+    /** The \c io_timeout option of the connection manager applies as well
+    */
     timeout timeout = 0;
 
     #! The number of failed connection attempts retried; the \c max_request_retries option of the connection
@@ -150,8 +152,10 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         *data body;
         #! Follows redirects and holds the next request; created with the first request when the operation starts
         *HttpRedirectFollower rf;
-        #! The deadline for the response
-        date deadline;
+        #! The deadline for the response, if any
+        *date deadline;
+        #! The time the current request was sent, for the inactivity timeout
+        *date sent;
 
         #! The current state
         string state = ST_CONNECTING;
@@ -233,7 +237,11 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
             self.headers = headers;
         }
         self.body = body;
-        deadline = now_us() + milliseconds(self.opts.timeout > 0 ? self.opts.timeout : mgr.getRequestTimeout());
+        # 0 means no overall deadline; see the io_timeout option of the connection manager
+        timeout to = self.opts.timeout > 0 ? self.opts.timeout : mgr.getRequestTimeout();
+        if (to > 0) {
+            deadline = now_us() + milliseconds(to);
+        }
     }
 
     #! Returns the goal
@@ -345,12 +353,11 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         }
         *hash<SocketPollInfo> info = continuePoll();
         if (info) {
-            int remaining = (deadline - now_us()).durationMilliseconds();
             mgr.getController().submit(<SocketPollOperationInfo>{
                 "sock": info.socket,
                 "spop": self,
-                # the operation raises its own timeout error first
-                "to": max(1, remaining) + PollTimeoutMs,
+                # the operation raises its own timeout errors first; a negative value means no timeout
+                "to": deadline ? max(1, (deadline - now_us()).durationMilliseconds()) + PollTimeoutMs : -1,
                 "owner": "httpclient-request:" + self.uniqueHash(),
                 "has_on_complete": True,
             });
@@ -529,6 +536,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     }
                     # a used connection that closes later is not a failed connection attempt
                     remove tracked;
+                    sent = now_us();
                     state = ST_RECEIVING;
                     continue;
                 }
@@ -725,11 +733,18 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         state = ST_CONNECTING;
     }
 
-    #! Raises \c HTTPCLIENT-TIMEOUT if the deadline has passed
+    #! Raises \c HTTPCLIENT-TIMEOUT if the deadline has passed, or if no data was received for the request for the
+    #! \c io_timeout option of the connection manager
     private checkDeadline() {
-        if (now_us() >= deadline) {
+        if (deadline && now_us() >= deadline) {
             throw "HTTPCLIENT-TIMEOUT", sprintf("timed out waiting for the %s from %s", state == ST_CONNECTING
                 ? "connection" : "response", opts.connect_only ? rf.getOrigin() : rf.getRequestUrl());
+        }
+        timeout io_timeout = mgr.getIoTimeout();
+        if (io_timeout > 0 && state == ST_RECEIVING && stream
+                && stream.getInactiveTime(sent) >= io_timeout * 1000) {
+            throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for %d ms from %s (io_timeout)", io_timeout,
+                rf.getRequestUrl());
         }
     }
 
@@ -774,11 +789,14 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
 
     #! Returns poll information for the given notifier
     private hash<SocketPollInfo> getPollInfo(EventNotifier notifier) {
-        int remaining = (deadline - now_us()).durationMilliseconds();
+        int wait_ms = PollTimeoutMs;
+        if (deadline) {
+            wait_ms = min(wait_ms, (deadline - now_us()).durationMilliseconds());
+        }
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
             "socket": notifier,
-            "poll_timeout_ms": max(1, min(PollTimeoutMs, remaining)),
+            "poll_timeout_ms": max(1, wait_ms),
         };
     }
 

@@ -128,6 +128,9 @@ public class HttpClientStreamHandle {
 
         #! If the content encoding of a whole response body is decoded; see @ref setDecodeContent()
         bool decode_content = True;
+
+        #! The maximum time without receiving data for a request; 0 means no inactivity timeout
+        timeout io_timeout = 0;
     }
 
     #! Creates a new stream handle
@@ -192,6 +195,39 @@ public class HttpClientStreamHandle {
     */
     bool getDecodeText() {
         return decode_text;
+    }
+
+    #! Sets the inactivity timeout of requests
+    /** A request fails with \c HTTPCLIENT-TIMEOUT if no data is received on its connection for this time; see the
+        \c io_timeout option of @ref HttpClientIo::HttpClientConnectionManagerOptions
+        "HttpClientConnectionManagerOptions"
+
+        @param io_timeout the inactivity timeout; 0 means no inactivity timeout
+
+        @since HttpClientIo 1.0
+    */
+    setIoTimeout(timeout io_timeout) {
+        self.io_timeout = io_timeout;
+    }
+
+    #! Returns the inactivity timeout of requests; 0 means no inactivity timeout
+    /** @since HttpClientIo 1.0
+    */
+    timeout getIoTimeout() {
+        return io_timeout;
+    }
+
+    #! Returns the time without data received on the connection of the stream since the given time
+    /** @param since the time the wait started; the time without data is never longer than the time since then
+
+        @return the time in microseconds without data received on the connection
+
+        @since HttpClientIo 1.0
+    */
+    int getInactiveTime(date since) {
+        int since_us = (now_us() - since).durationMicroseconds();
+        int idle_us = conn.getIdleTime();
+        return idle_us < 0 || idle_us > since_us ? since_us : idle_us;
     }
 
     #! Sets whether the content encoding of a whole response body is decoded
@@ -430,6 +466,57 @@ public class HttpClientStreamHandle {
         return conn;
     }
 
+    #! Returns the time to wait for the connection of the stream to become ready
+    /** The request timeout if set; without a request timeout (0 means no deadline), the connection's own connect
+        deadline ends the wait, and the wait is bounded by twice the connect timeout
+    */
+    private timeout getConnectWait() {
+        return request_timeout > 0 ? request_timeout : connect_timeout * 2;
+    }
+
+    #! Waits for the response of a request
+    /** @param f the Future of the response
+        @param end_time the overall deadline, if any
+        @param wait_timeout the overall timeout, for the error message
+        @param submitted the time the request was submitted
+
+        @return the response
+
+        @throw HTTPCLIENT-TIMEOUT the response was not received before the deadline, or no data was received on the
+        connection for the inactivity timeout; the stream is canceled
+    */
+    private auto waitForResponse(Future f, *date end_time, timeout wait_timeout, date submitted) {
+        while (True) {
+            # the wait is bounded by the deadline and by the inactivity timeout, if any; 0 waits indefinitely
+            int wait_us = 0;
+            if (end_time) {
+                wait_us = (end_time - now_us()).durationMicroseconds();
+                if (wait_us <= 0) {
+                    cancel();
+                    throw "HTTPCLIENT-TIMEOUT", sprintf("request timed out after %d ms", wait_timeout);
+                }
+            }
+            if (io_timeout > 0) {
+                int io_us = io_timeout * 1000 - getInactiveTime(submitted);
+                if (io_us <= 0) {
+                    cancel();
+                    throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for %d ms (io_timeout)", io_timeout);
+                }
+                if (!wait_us || io_us < wait_us) {
+                    wait_us = io_us;
+                }
+            }
+            try {
+                # at least 1ms: a timeout of 0 means an infinite wait
+                return f.get(wait_us ? max(1, wait_us / 1000) : 0);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "FUTURE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     #! Performs a synchronous request and returns the response
     /** @param method HTTP method (GET, POST, etc.)
         @param path request path
@@ -448,8 +535,9 @@ public class HttpClientStreamHandle {
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
         check_http_request_body(method, headers, body);
+        # 0 means no overall deadline
         timeout wait_timeout = timeout_ms ?? request_timeout;
-        date end_time = now_us() + wait_timeout;
+        *date end_time = wait_timeout > 0 ? now_us() + milliseconds(wait_timeout) : NOTHING;
 
         # Wait for connection to become ready
         if (!conn.isReady()) {
@@ -465,7 +553,8 @@ public class HttpClientStreamHandle {
             # protocol-specific connect failures would be masked by a generic
             # timeout and the connection manager's connection-error
             # retry/fallback logic would never fire.
-            date remaining = end_time - now_us();
+            # without an overall deadline, the transport's own connect deadline ends the wait
+            date remaining = end_time ? end_time - now_us() : milliseconds(connect_timeout * 2);
             if (remaining <= 0us) {
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
@@ -499,18 +588,7 @@ public class HttpClientStreamHandle {
         reservation_held = False;
 
         try {
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
-                cancel();
-                throw "HTTPCLIENT-TIMEOUT",
-                    sprintf("request timed out after %d ms", wait_timeout);
-            }
-            # Ensure at least 1ms to prevent QPP timeout type from truncating
-            # sub-millisecond dates to 0 (which means infinite wait)
-            if (remaining < 1ms) {
-                remaining = 1ms;
-            }
-            auto rv = f.get(remaining);
+            auto rv = waitForResponse(f, end_time, wait_timeout, now_us());
             {
                 AutoLock al(lock);
                 state = HttpClientStreamState::Complete;
@@ -519,11 +597,6 @@ public class HttpClientStreamHandle {
             return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding, decode_text,
                 decode_content);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "FUTURE-TIMEOUT") {
-                cancel();
-                throw "HTTPCLIENT-TIMEOUT",
-                    sprintf("request timed out after %d ms", wait_timeout);
-            }
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
             }
@@ -585,7 +658,7 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -797,7 +870,7 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
