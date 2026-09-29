@@ -508,6 +508,13 @@ public namespace HttpClientIo {
 
         #! If @ref False, no cookies are sent or stored for the request
         bool cookies = True;
+
+        #! The maximum size in bytes of the response body of this request, as received and after its content
+        #! encoding is decoded; if not set, the \c max_response_body_size option of the connection manager
+        /** 0 means no limit.  A larger body fails the request with \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as
+            the limit is exceeded.  The request is made with a @ref HttpClientRequestPollOperation.
+        */
+        *int max_response_body_size;
     }
 
     #! Credentials for HTTP authentication
@@ -677,6 +684,15 @@ public namespace HttpClientIo {
             @since HttpClientIo 1.0
         */
         string user_agent = DefaultUserAgent;
+
+        #! If @ref True, GET requests can have a body
+        /** A GET request body has no defined semantics (RFC 9110 section 9.3.1), so by default a GET request with a
+            body raises \c HTTPCLIENT-REQUEST-BODY-ERROR; some APIs require one, for example search APIs that take a
+            query document
+
+            @since HttpClientIo 1.0
+        */
+        bool allow_get_body = False;
 
         #! Proxy URL (e.g., "http://proxy:8080")
         /** When set, all connections are routed through this HTTP proxy.

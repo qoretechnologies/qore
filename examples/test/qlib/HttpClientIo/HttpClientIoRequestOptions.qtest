@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for GET request bodies (allow_get_body) and per-request response body limits
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+
+%exec-class HttpClientIoRequestOptionsTest
+
+#! "/echo" echoes the method and body; "/sized/<n>" sends n octets; "/bomb/<n>" sends n zero octets compressed
+class TestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        list<string> parts = cx.raw_path.split("/");
+        switch (parts[1]) {
+            case "sized":
+                return makeResponse({"Content-Type": "application/octet-stream"}, 200,
+                    get_random_bytes(parts[2].toInt()));
+            case "bomb": {
+                hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "application/octet-stream",
+                    "Content-Encoding": "gzip"}, 200, gzip(binary(strmul("\0", parts[2].toInt()))));
+                rv.no_content_encoding = True;
+                return rv;
+            }
+        }
+        string text = hdr.method + ":" + (exists body ? (body.typeCode() == NT_BINARY ? body.toString() : body) : "");
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary(text));
+    }
+}
+
+public class HttpClientIoRequestOptionsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("HttpClientIoRequestOptionsTest", "1.0") {
+        addTestCase("GET request bodies", \testGetBody());
+        addTestCase("per-request response body limits", \testLimits());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelError()),
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("test", new TestHandler());
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    testGetBody() {
+        # rejected by default
+        HttpClientConnectionManager def(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit def.closeAll();
+        assertFalse(def.getAllowGetBody());
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \def.request(), (url, "GET", "/echo", NOTHING, "q"));
+        # allowed with the option
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "allow_get_body": True,
+        });
+        on_exit mgr.closeAll();
+        assertTrue(mgr.getAllowGetBody());
+        assertEq("GET:q", mgr.request(url, "GET", "/echo", NOTHING, "q").body);
+        assertEq("GET:q", mgr.requestAsync(url, "GET", "/echo", NOTHING, "q").get(30s).body);
+        assertEq("GET:q", mgr.submitRequestAsync(url, "GET", "/echo", NOTHING, "q").future.get(30s).body);
+        assertEq("GET:q", new HttpClientRequestPollOperation(mgr, url + "/echo", "GET", NOTHING, "q")
+            .startAsync().get(30s).body);
+        HttpClientResponseStream s = mgr.openStream(url + "/echo", NOTHING, <HttpClientOpenStreamOptions>{
+            "body": "q",
+        });
+        assertEq(binary("GET:q"), s.read(10s));
+        HttpClientStreamHandle sh = mgr.acquireStream(url);
+        assertEq("GET:q", sh.request("GET", "/echo", NOTHING, "q").body);
+
+        RestClientIo rest({"url": url, "data": "text", "allow_get_body": True});
+        on_exit rest.close();
+        assertEq("GET:q", rest.restDoRequest("GET", "/echo", "q").body);
+        assertEq("GET:q", rest.restDoRequestAsync("GET", "/echo", "q").get().body);
+        RestClientIo restdef({"url": url, "data": "text"});
+        on_exit restdef.close();
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \restdef.restDoRequest(), ("GET", "/echo", "q"));
+    }
+
+    testLimits() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        hash<HttpClientRequestOptions> lim = <HttpClientRequestOptions>{"max_response_body_size": 1000};
+        # a request limit below the manager's (none)
+        assertEq(1000, mgr.request(url, "GET", "/sized/1000", NOTHING, NOTHING, NOTHING, True, lim).body.size());
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "1000 bytes", \mgr.request(),
+            (url, "GET", "/sized/100000", NOTHING, NOTHING, NOTHING, True, lim));
+        HttpCancellableFuture f = mgr.requestAsync(url, "GET", "/sized/100000", NOTHING, NOTHING, True, lim);
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \f.get(), 30s);
+        f = new HttpClientRequestPollOperation(mgr, url + "/sized/100000", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"max_response_body_size": 1000}).startAsync();
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \f.get(), 30s);
+        # a compressed body is limited as it is decoded
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \mgr.request(),
+            (url, "GET", "/bomb/100000", NOTHING, NOTHING, NOTHING, True, lim));
+        # a request limit above the manager's
+        HttpClientConnectionManager small(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_response_body_size": 1000,
+        });
+        on_exit small.closeAll();
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \small.request(), (url, "GET", "/sized/5000"));
+        assertEq(5000, small.request(url, "GET", "/sized/5000", NOTHING, NOTHING, NOTHING, True,
+            <HttpClientRequestOptions>{"max_response_body_size": 10000}).body.size());
+        # 0 means no limit
+        assertEq(5000, small.request(url, "GET", "/sized/5000", NOTHING, NOTHING, NOTHING, True,
+            <HttpClientRequestOptions>{"max_response_body_size": 0}).body.size());
+
+        RestClientIo rest({"url": url, "data": "bin"});
+        on_exit rest.close();
+        assertEq(1000, rest.restDoRequestWithResponseLimit("GET", "/sized/1000", NOTHING, 1000).body.size());
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \rest.restDoRequestWithResponseLimit(),
+            ("GET", "/sized/100000", NOTHING, 1000));
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "greater than zero", \rest.restDoRequestWithResponseLimit(),
+            ("GET", "/sized/1", NOTHING, 0));
+    }
+}

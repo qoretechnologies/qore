@@ -534,7 +534,7 @@ public class HttpClientStreamHandle {
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         # 0 means no overall deadline
         timeout wait_timeout = timeout_ms ?? request_timeout;
         *date end_time = wait_timeout > 0 ? now_us() + milliseconds(wait_timeout) : NOTHING;
@@ -642,7 +642,7 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsync(string method, string path, *hash<auto> headers, *data body) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -721,7 +721,7 @@ public class HttpClientStreamHandle {
     */
     hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -791,7 +791,7 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -854,7 +854,7 @@ public class HttpClientStreamHandle {
     */
     hash<auto> submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
             binary datagram) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {

@@ -215,7 +215,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body, *EventNotifier notifier,
             bool sse_install_eligible = False) {
-        check_http_request_body(method, headers, body, body_streaming);
+        conn.checkRequestBody(method, headers, body, body_streaming);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -300,7 +300,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     */
     Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
             *EventNotifier notifier) {
-        check_http_request_body(method, headers, body);
+        conn.checkRequestBody(method, headers, body);
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {

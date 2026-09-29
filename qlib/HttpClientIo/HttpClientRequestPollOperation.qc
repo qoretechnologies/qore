@@ -98,6 +98,12 @@ public hashdecl HttpClientRequestPollOptions {
     /** @since HttpClientIo 1.0
     */
     bool cookies = True;
+
+    #! The maximum size in bytes of the response body, as received and after its content encoding is decoded; if
+    #! not set, the \c max_response_body_size option of the connection manager; 0 means no limit
+    /** @since HttpClientIo 1.0
+    */
+    *int max_response_body_size;
 }
 
 #! A non-blocking HTTP request with an @ref HttpClientConnectionManager that follows redirects
@@ -237,7 +243,9 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
             *data body, *hash<HttpClientRequestPollOptions> opts) {
         self.mgr = mgr;
         self.opts = opts ?? <HttpClientRequestPollOptions>{};
-        check_http_request_body(method, headers, body, self.opts.body_streaming);
+        if (!mgr.getAllowGetBody()) {
+            check_http_request_body(method, headers, body, self.opts.body_streaming);
+        }
         *list<*string> parts = (url =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)([^#]*)/s);
         if (!parts || !parts[1].val()) {
             throw "HTTPCLIENT-URL-ERROR", sprintf("URL %y has no host", HttpClientRequestPollOperation::safeUrl(url));
@@ -643,10 +651,10 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         binary bin = chunk.typeCode() == NT_BINARY ? chunk : binary(chunk);
         body_size += bin.size();
         # a body that is kept in memory whole is limited as it arrives
-        int max_size = mgr.getMaxResponseBodySize();
+        int max_size = opts.max_response_body_size ?? mgr.getMaxResponseBodySize();
         if (max_size > 0 && !opts.keep_stream && !opts.headers_only && body_size > max_size) {
             throw "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", sprintf("the response body from %y exceeds the maximum "
-                "size of %d bytes", rf.getRequestUrl(), max_size);
+                "response body size of %d bytes", rf.getRequestUrl(), max_size);
         }
         body_chunks += bin;
     }
@@ -709,7 +717,8 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                 resp.body = HttpClientStreamHandle::normalizeResponseBody({
                     "headers": resp.headers,
                     "body": bin,
-                }, mgr.getMaxResponseBodySize(), opts.assume_encoding ?? mgr.getAssumeEncoding(),
+                }, opts.max_response_body_size ?? mgr.getMaxResponseBodySize(),
+                    opts.assume_encoding ?? mgr.getAssumeEncoding(),
                     opts.decode_text).body;
             } else {
                 resp.body = bin;

@@ -338,6 +338,9 @@ hash<RestResponseInfo> resp = f.get(30s);
           returned as received and not deserialized; see
           @ref HttpClientIo::HttpClientConnectionManagerOptions::encoding_passthru
           "HttpClientConnectionManagerOptions::encoding_passthru"
+        - \c allow_get_body: if \c True, GET requests can have a body, for APIs that require one; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::allow_get_body
+          "HttpClientConnectionManagerOptions::allow_get_body"
         - \c enable_http3: if \c False, HTTP/3 is never used; see
           @ref HttpClientIo::HttpClientConnectionManagerOptions::enable_http3
           "HttpClientConnectionManagerOptions::enable_http3"
@@ -786,6 +789,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "http_version": True,
                 "connect_timeout": True,
                 "enable_http3": True,
+                "allow_get_body": True,
                 "io_timeout": True,
                 "encoding": True,
                 "encoding_passthru": True,
@@ -2021,6 +2025,40 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 milliseconds(timeout_ms));
         }
 
+        #! Sends a generic REST request whose response body is limited to the given size
+        /** Like @ref restDoRequest(), but the response body of this request is limited to \a max_response_bytes, as
+            received and after its content encoding is decoded, instead of the \c max_response_body_size option of
+            the client; the request fails as soon as the limit is exceeded
+
+            @param method HTTP method
+            @param path request path
+            @param body request body
+            @param max_response_bytes the maximum size of the response body in bytes; must be greater than zero
+            @param hdr optional request headers
+
+            @return the REST response
+
+            @throw RESTCLIENTIO-OPTION-ERROR \a max_response_bytes is not greater than zero
+            @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds \a max_response_bytes
+
+            @par Example
+            @code{.py}
+# a preview of a document of any size is never read into memory beyond 64 KiB
+hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit("GET", "/documents/42/preview",
+    NOTHING, 64 * 1024);
+            @endcode
+
+            @since RestClientIo 1.0
+        */
+        hash<RestClient::RestResponseInfo> restDoRequestWithResponseLimit(string method, string path, auto body,
+                int max_response_bytes, *hash<auto> hdr) {
+            if (max_response_bytes <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", sprintf("max_response_bytes must be greater than zero; got %d",
+                    max_response_bytes);
+            }
+            return restDoRequestIntern(method, path, body, hdr, False, NOTHING, max_response_bytes);
+        }
+
         #! Sends a REST request with a pre-serialized body; skips validator \c processRequest
         /** Mirrors @ref RestClient::RestClient::doValidatedRequest() semantics: the
             caller has already prepared and serialized the request body (and set the
@@ -2048,7 +2086,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Internal: shared request path for @ref restDoRequest() and @ref restDoRawRequest()
         private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path,
                 auto body, *hash<auto> hdr, bool raw,
-                *timeout request_timeout_ms) {
+                *timeout request_timeout_ms, *int max_response_bytes) {
+            hash<HttpClientIo::HttpClientRequestOptions> req_opts = getCookieRequestOptions();
+            if (max_response_bytes) {
+                req_opts.max_response_body_size = max_response_bytes;
+            }
             ensureToken();
 
             # 1. Snapshot config state and serialize body (or skip serialization for raw)
@@ -2073,7 +2115,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             # 2. Make HTTP request via multiplexed connection manager
             hash<auto> raw_resp = mgr.request(url, method, path, hdr,
-                prepared.serialized_body, req_to, False, getCookieRequestOptions());
+                prepared.serialized_body, req_to, False, req_opts);
 
             # 3. If 401 and Negotiate is configured, run one SPNEGO challenge retry
             if (raw_resp.status_code == 401 && negotiate_retry
@@ -2083,7 +2125,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
+                    prepared.serialized_body, req_to, False, req_opts);
             }
 
             # 3b. If 401 and the client has a user name and password, answer a Basic or Digest challenge once
@@ -2092,7 +2134,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
+                    prepared.serialized_body, req_to, False, req_opts);
             }
 
             # 4. If 401 and OAuth2 configured, try to refresh token and retry once
@@ -2114,7 +2156,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
+                    prepared.serialized_body, req_to, False, req_opts);
             }
 
             processFinalNegotiateResponse(raw_resp.headers, negotiate_context);
@@ -2137,7 +2179,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
                 raw_resp = mgr.request(url, method, path, hdr,
-                    prepared.serialized_body, req_to, False, getCookieRequestOptions());
+                    prepared.serialized_body, req_to, False, req_opts);
                 resp = buildResponse(raw_resp, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
                     prepared.serialized_body);
@@ -4512,6 +4554,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             if (exists opts.enable_cookies && !opts.enable_cookies) {
                 mgr_opts.enable_cookies = False;
+            }
+            if (opts.allow_get_body) {
+                mgr_opts.allow_get_body = opts.allow_get_body.toBool();
             }
             if (opts.ssl_ca_file) {
                 mgr_opts.ssl_ca_file = opts.ssl_ca_file;

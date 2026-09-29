@@ -559,6 +559,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # stream reservation held by getConnection() blocks concurrent reuse until leased is set
         # (an HTTP/1.1 connection has exactly one stream slot), so there is no reuse window.
         conn.setLeased(True);
+        conn.setAllowGetBody(opts.allow_get_body);
         conn.releaseStreamReservation();
         log(LoggerLevel::DEBUG, "leased %s connection %d to %s:%d for a persistent session",
             conn.getProtocol(), conn.getConnectionId(), url_info.host, url_info.port);
@@ -680,6 +681,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             rethrow;
         }
         stream.markReservationHeld();
+        conn.setAllowGetBody(opts.allow_get_body);
         stream.setMaxResponseBodySize(opts.max_response_body_size);
         stream.setAssumedEncoding(opts.assume_encoding);
         stream.setDecodeContent(!opts.encoding_passthru);
@@ -740,7 +742,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
             *hash<auto> headers, bool body_streaming = False, *data body) {
-        check_http_request_body(method, headers, body, body_streaming);
+        checkRequestBody(method, headers, body, body_streaming);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -828,7 +830,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, bool decode_text = True) {
-        check_http_request_body(method, headers, body);
+        checkRequestBody(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -927,7 +929,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, bool decode_text = True, *hash<HttpClientRequestOptions> options) {
-        check_http_request_body(method, headers, body);
+        checkRequestBody(method, headers, body);
         hash<UrlInfo> url_info = parseRequestUrl(url);
         HttpClientRequestPollOperation op(self, HttpRedirectFollower::getOriginUrl(url_info)
             + (path =~ /^\// ? path : "/" + path), method, headers, body, <HttpClientRequestPollOptions>{
@@ -936,6 +938,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             "credentials": options.credentials ?? getUrlCredentials(url),
             "cookie_jar": options.cookie_jar,
             "cookies": options.cookies ?? True,
+            "max_response_body_size": options.max_response_body_size,
         });
         return op.startAsync();
     }
@@ -989,13 +992,29 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms, bool decode_text = True, *hash<HttpClientRequestOptions> options) {
-        check_http_request_body(method, headers, body);
+        checkRequestBody(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
         in_flight.inc();
         on_exit in_flight.dec();
 
+        # a request with a limit of its own is made with a poll operation, which limits the body as it arrives
+        if (exists options.max_response_body_size) {
+            hash<UrlInfo> url_info = parseRequestUrl(url);
+            HttpClientRequestPollOperation op(self, HttpRedirectFollower::getOriginUrl(url_info)
+                + (path =~ /^\// ? path : "/" + path), method, headers, body, <HttpClientRequestPollOptions>{
+                "goal": sprintf("%s %s", method, path),
+                "timeout": timeout_ms ?? 0,
+                "decode_text": decode_text,
+                "credentials": options.credentials ?? getUrlCredentials(url),
+                "cookie_jar": options.cookie_jar,
+                "cookies": options.cookies ?? True,
+                "max_response_body_size": options.max_response_body_size,
+            });
+            # the operation raises its own timeout error
+            return op.startAsync().get();
+        }
         HttpRedirectFollower rf = newRedirectFollower(url, path, method, headers, body);
         *HttpAuthenticator auth = getRequestAuthenticator(url, options.credentials);
         hash<auto> auth_state = newRequestState(options);
@@ -1062,7 +1081,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         on_exit in_flight.dec();
 
         hash<HttpClientOpenStreamOptions> o = stream_opts ?? <HttpClientOpenStreamOptions>{};
-        check_http_request_body(o.method, headers, o.body);
+        checkRequestBody(o.method, headers, o.body);
         timeout wait = o.timeout ?? opts.request_timeout;
         hash<UrlInfo> info = parseRequestUrl(url);
         string path = encodeRequestTarget((info.path ?? "/") + (exists info.query ? "?" + info.query : ""));
@@ -4405,6 +4424,22 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     int getMaxResponseBodySize() {
         return opts.max_response_body_size;
+    }
+
+    #! Returns @ref True if GET requests can have a body
+    /** @return the \c allow_get_body option
+
+        @since HttpClientIo 1.0
+    */
+    bool getAllowGetBody() {
+        return opts.allow_get_body;
+    }
+
+    #! Rejects a GET request body unless the \c allow_get_body option is set
+    private checkRequestBody(string method, *hash<auto> headers, *data body, bool body_streaming = False) {
+        if (!opts.allow_get_body) {
+            check_http_request_body(method, headers, body, body_streaming);
+        }
     }
 
     #! Returns the maximum number of redirects that requests follow

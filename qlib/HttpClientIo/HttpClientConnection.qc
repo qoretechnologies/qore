@@ -104,6 +104,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! Proxy connection info (if using a proxy)
         *hash<auto> proxy_info;
 
+        #! If GET requests can have a body; see @ref setAllowGetBody()
+        bool allow_get_body = False;
+
         #! Reference to the connection manager (for completion dispatch)
         *HttpClientConnectionManager manager_ref;
 
@@ -190,6 +193,34 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         self.last_activity_mono_us = clock_get_monotonic_us();
         self.created_mono_us = self.last_activity_mono_us;
         connection_id = allocateConnectionId();
+    }
+
+    #! Sets whether GET requests on this connection can have a body
+    /** Set by the connection manager from its \c allow_get_body option
+
+        @since HttpClientIo 1.0
+    */
+    setAllowGetBody(bool allow) {
+        allow_get_body = allow;
+    }
+
+    #! Returns @ref True if GET requests on this connection can have a body
+    /** @since HttpClientIo 1.0
+    */
+    bool getAllowGetBody() {
+        return allow_get_body;
+    }
+
+    #! Rejects a GET request body unless GET request bodies are allowed on this connection
+    /** @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming, and
+        the \c allow_get_body option of the connection manager is not set
+
+        @since HttpClientIo 1.0
+    */
+    checkRequestBody(string method, *hash<auto> headers, *data body, bool body_streaming = False) {
+        if (!allow_get_body) {
+            check_http_request_body(method, headers, body, body_streaming);
+        }
     }
 
     #! Sets the connection manager context for completion dispatch
@@ -376,7 +407,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     hash<auto> submitRequest(string method, string path, *hash<auto> headers, *data body,
             bool suppress_wake = False) {
-        check_http_request_body(method, headers, body);
+        checkRequestBody(method, headers, body);
         *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
@@ -444,7 +475,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     hash<auto> submitRequestWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
-        check_http_request_body(method, headers, body);
+        checkRequestBody(method, headers, body);
         *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
