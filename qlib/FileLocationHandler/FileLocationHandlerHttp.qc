@@ -772,9 +772,6 @@ class HttpIoSupport {
         #! The default I/O timeout in milliseconds
         const DefaultTimeout = 45000;
 
-        #! The poll timeout for event notifiers in milliseconds
-        const PollTimeoutMs = 1000;
-
         #! The maximum size of an error response body read for an exception
         const MaxErrorBodySize = 64 * 1024;
 
@@ -1070,7 +1067,10 @@ class HttpIoSupport {
 }
 
 #! A non-blocking HTTP request made with \c HttpClientIo; follows and reports redirects
-/** The output is a hash with the \c status_code, \c status_message, \c http_version, \c protocol, \c headers
+/** The request is made with an \c HttpClientIo::HttpClientRequestPollOperation, which follows redirects with the
+    rules shared by all HTTP clients and uses the cookie jar of the connection manager.
+
+    The output is a hash with the \c status_code, \c status_message, \c http_version, \c protocol, \c headers
     (lower-case names), \c headers_raw, \c body, \c effective_url, and \c redirects keys; the body is decoded
     according to its content encoding unless the \c encoding_passthru option is set.  In stream mode the output is
     available once the final response headers have been received, and it has the \c stream, \c initial_body, and
@@ -1083,51 +1083,19 @@ class HttpIoSupport {
 */
 class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
-        #! Waiting for a connection
-        const ST_CONNECTING = "connecting";
-        #! Waiting for the response
-        const ST_RECEIVING = "receiving";
-        #! Complete
-        const ST_COMPLETE = "complete";
-        #! Aborted
-        const ST_ABORTED = "aborted";
+        #! The class of the request operation
+        const OperationClass = "HttpClientIo::HttpClientRequestPollOperation";
+        #! The type of the options of the request operation
+        const OptionsType = "HttpClientIo::HttpClientRequestPollOptions";
     }
 
     private {
-        #! The connection manager
-        object mgr;
-        #! The request settings; updated for each redirect
-        hash<HttpIoRequestInfo> info;
+        #! The request operation
+        object op;
         #! If the output is available once the final response headers have been received
         bool stream_mode;
-
-        #! Follows and records redirects
-        HttpRedirectFollower redirects;
-
-        #! The current state
-        string state = ST_CONNECTING;
-        #! The connection handed back by the last acquisition step
-        *object tracked;
-        #! Failed connection attempts
-        int failures = 0;
-        #! The connection readiness notifier
-        *EventNotifier conn_notifier;
-        #! True if @ref conn_notifier was signaled by this object
-        bool self_signaled = False;
-        #! The response notifier
-        EventNotifier io_notifier();
-        #! The current stream
-        *object stream;
-        #! The response headers of the current request
-        *hash<auto> response;
-        #! The body received for the current request
-        list<binary> body_chunks = ();
-        #! True if the current response is a redirect to follow
-        bool redirecting = False;
-
         #! The output
         *hash<auto> output;
-
         #! Serializes the caller and an async I/O controller worker
         Mutex m();
     }
@@ -1138,33 +1106,61 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         @param stream_mode if @ref True, the output is available once the final response headers have been received
     */
     constructor(object mgr, hash<HttpIoRequestInfo> info, bool stream_mode = False) {
-        self.mgr = mgr;
-        self.info = info;
         self.stream_mode = stream_mode;
-        redirects = new HttpRedirectFollower(info.origin, info.path, info.method, info.headers, info.body,
-            info.max_redirects, info.redirect_passthru);
+        TypedHash th(OptionsType);
+        op = create_object(OperationClass, mgr, info.origin + info.path, info.method, info.headers, info.body,
+            th.doCast({
+                "goal": sprintf("HTTP %s %s%s", info.method, info.origin, info.path),
+                "keep_stream": stream_mode,
+                "timeout": info.timeout,
+                "max_redirects": info.max_redirects,
+                "redirect_passthru": info.redirect_passthru,
+                "decode_content": !info.encoding_passthru,
+                "decode_text": info.decode_text,
+                "assume_encoding": info.assume_encoding,
+            }));
     }
 
     #! Returns the goal
     string getGoal() {
-        return sprintf("HTTP %s %s%s", info.method, info.origin, info.path);
+        return op.getGoal();
     }
 
     #! Returns the state
     string getState() {
-        AutoLock al(m);
-        return state;
+        return op.getState();
     }
 
     #! Returns @ref True once the output is available
     bool goalReached() {
-        AutoLock al(m);
-        return exists output;
+        return op.goalReached();
     }
 
     #! Returns the output, or @ref nothing if the request is not complete
     auto getOutput() {
         AutoLock al(m);
+        if (!exists output && op.goalReached()) {
+            hash<auto> resp = op.getOutput();
+            output = {
+                "status_code": resp.status_code,
+                "status_message": resp.status_message,
+                "http_version": resp.http_version,
+                "protocol": resp.protocol,
+                "headers": resp.headers,
+                "headers_raw": resp.headers_raw,
+                "effective_url": resp.effective_url,
+                "redirects": resp.redirects ?? (),
+            };
+            if (stream_mode) {
+                output += {
+                    "stream": op.getStream(),
+                    "initial_body": op.getInitialBody(),
+                    "complete": op.isStreamComplete(),
+                };
+            } else if (exists resp.body) {
+                output.body = resp.body;
+            }
+        }
         return output;
     }
 
@@ -1179,272 +1175,23 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         @note Other errors of the transport are raised as well, for example \c HTTPCLIENT-CONNECT-ERROR
     */
     *hash<SocketPollInfo> continuePoll() {
-        AutoLock al(m);
         try {
-            return continuePollIntern();
+            return op.continuePoll();
         } catch (hash<ExceptionInfo> ex) {
-            cancelStream();
-            state = ST_ABORTED;
             HttpIoSupport::rethrowError(ex);
         }
     }
 
     #! Aborts the request
     abort() {
-        AutoLock al(m);
-        cancelStream();
-        if (!exists output) {
-            state = ST_ABORTED;
-        }
+        op.abort();
     }
 
     #! Aborts the request if it was canceled or failed in an async I/O controller
     nothing onComplete(hash<SocketPollResultInfo> result) {
         if (result.canceled || result.ex) {
-            abort();
+            op.abort();
         }
-    }
-
-    #! Continues the request; called with the lock held
-    private *hash<SocketPollInfo> continuePollIntern() {
-        while (True) {
-            switch (state) {
-                case ST_COMPLETE:
-                case ST_ABORTED:
-                    return;
-
-                case ST_CONNECTING: {
-                    if (conn_notifier) {
-                        # one acquisition step per readiness notification; see the HttpClientIo design
-                        if (!self_signaled && connectionPending()) {
-                            return getPollInfo(conn_notifier);
-                        }
-                        conn_notifier.acknowledge();
-                        remove conn_notifier;
-                    }
-                    checkConnectionFailure();
-                    self_signaled = False;
-                    *EventNotifier notifier = mgr.acquireConnectionAsync(info.origin, \tracked);
-                    if (!notifier && tracked && HttpIoRequestPollOperation::failed(tracked)
-                        && !mgr.isUnresolvedRaceLeg(tracked)) {
-                        # the connection closed synchronously; the next step counts the failure
-                        notifier = new EventNotifier();
-                        notifier.notify();
-                    }
-                    if (notifier) {
-                        conn_notifier = notifier;
-                        return getPollInfo(notifier);
-                    }
-                    try {
-                        stream = mgr.acquireStream(info.origin);
-                        # the cookie jar of a bound connection manager supplies the cookies for each target; a
-                        # manager created by the handler has cookie handling disabled
-                        stream.startStreaming(info.method, info.path,
-                            mgr.addCookieHeaders(info.origin, info.path, info.headers), False, info.body,
-                            io_notifier);
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err == "HTTPCLIENT-NOT-READY") {
-                            # the connection reported itself ready and refused the request; retry the acquisition
-                            remove stream;
-                            conn_notifier = new EventNotifier();
-                            conn_notifier.notify();
-                            self_signaled = True;
-                            return getPollInfo(conn_notifier);
-                        }
-                        rethrow;
-                    }
-                    # a used connection that closes later is not a failed connection attempt
-                    remove tracked;
-                    state = ST_RECEIVING;
-                    continue;
-                }
-
-                case ST_RECEIVING: {
-                    io_notifier.acknowledge();
-                    while (True) {
-                        auto data = stream.readData(0);
-                        if (!exists data) {
-                            if (!response) {
-                                response = stream.getResponse();
-                            }
-                            if (response && !processHeaders()) {
-                                return;
-                            }
-                            if (stream.isDone()) {
-                                # the end of the stream was delivered together with the last body chunk
-                                if (processEnd()) {
-                                    return;
-                                }
-                                break;
-                            }
-                            return getPollInfo(io_notifier);
-                        }
-                        bool end;
-                        if (data.typeCode() == NT_HASH) {
-                            if (data.error) {
-                                throw data.error.err ?? "HTTP-IO-ERROR", data.error.desc ?? sprintf("%y", data.error),
-                                    data.error;
-                            }
-                            if (!response && (data.status_code || data.headers)) {
-                                response = data;
-                            }
-                            if (exists data.body) {
-                                body_chunks += binary(data.body);
-                            }
-                            end = data.end_stream.toBool();
-                        } else {
-                            body_chunks += binary(data);
-                        }
-                        if (!response) {
-                            response = stream.getResponse();
-                        }
-                        if (response && !processHeaders()) {
-                            return;
-                        }
-                        if (end) {
-                            if (processEnd()) {
-                                return;
-                            }
-                            # a redirect was followed
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-        }
-    }
-
-    #! Processes the response headers once; returns @ref False if the output is available
-    private bool processHeaders() {
-        if (redirecting || response.processed) {
-            return True;
-        }
-        response.processed = True;
-        mgr.storeResponseCookies(info.origin, info.path, response.headers);
-        if (redirects.isFollowed(response.status_code)) {
-            redirecting = True;
-            return True;
-        }
-        if (stream_mode) {
-            output = getResponseOutput() + {
-                "stream": stream,
-                "initial_body": body_chunks,
-                "complete": False,
-            };
-            state = ST_COMPLETE;
-            return False;
-        }
-        return True;
-    }
-
-    #! Processes the end of a response; returns @ref True if the output is available, @ref False if a redirect is
-    #! followed
-    private bool processEnd() {
-        if (redirecting) {
-            followRedirect();
-            return False;
-        }
-        hash<auto> rv = getResponseOutput();
-        binary body;
-        map body += $1, body_chunks;
-        if (stream_mode) {
-            # the whole response arrived with the headers
-            rv += {
-                "stream": stream,
-                "initial_body": body_chunks,
-                "complete": True,
-            };
-        } else if (body) {
-            if (info.encoding_passthru) {
-                rv.body = body;
-            } else {
-                hash<auto> decoded = call_static_method("HttpClientIo::HttpClientStreamHandle",
-                    "normalizeResponseBody", {"headers": response.headers ?? {}, "body": body}, 0,
-                    info.assume_encoding, info.decode_text);
-                rv.body = decoded.body;
-            }
-        }
-        output = rv;
-        state = ST_COMPLETE;
-        return True;
-    }
-
-    #! Returns the output without the body
-    private hash<auto> getResponseOutput() {
-        return {
-            "status_code": response.status_code,
-            "status_message": response.status_message,
-            "http_version": response.http_version,
-            "protocol": response.protocol,
-            "headers": response.headers ?? {},
-            "headers_raw": response.headers_raw,
-            "effective_url": info.origin + info.path,
-            "redirects": redirects.getRedirects(),
-        };
-    }
-
-    #! Follows a redirect
-    private followRedirect() {
-        redirects.follow(response.status_code, response.status_message, response.headers ?? {});
-        info.origin = redirects.getOrigin();
-        info.path = redirects.getPath();
-        info.method = redirects.getMethod();
-        info.headers = redirects.getHeaders() ?? {};
-        info.body = redirects.getBody();
-        remove stream;
-        remove response;
-        body_chunks = ();
-        redirecting = False;
-        failures = 0;
-        state = ST_CONNECTING;
-    }
-
-    #! Returns @ref True while the tracked connection is still connecting
-    private bool connectionPending() {
-        return exists tracked && !HttpIoRequestPollOperation::failed(tracked) && !tracked.isReady()
-            && !mgr.isUnresolvedRaceLeg(tracked);
-    }
-
-    #! Counts the tracked connection as a failed attempt if it failed before it could be used
-    /** @throw HTTPCLIENT-CONNECT-ERROR the connection attempts failed more often than the connection manager's
-        \c max_request_retries option allows
-    */
-    private checkConnectionFailure() {
-        *object conn = remove tracked;
-        if (!conn || !HttpIoRequestPollOperation::failed(conn) || mgr.isUnresolvedRaceLeg(conn)) {
-            return;
-        }
-        if (++failures <= mgr.getMaxRequestRetries()) {
-            return;
-        }
-        *hash<auto> err = conn.getPollOperation().getError();
-        throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN",
-            err.desc ?? "unknown"), err;
-    }
-
-    #! Returns @ref True if a pending connection failed
-    private static bool failed(object conn) {
-        return conn.isClosed() || conn.getPollOperation().hasError();
-    }
-
-    #! Cancels the current stream, unless it was handed over in the output
-    private cancelStream() {
-        if (stream && !exists output) {
-            try {
-                stream.cancel();
-            } catch () {
-            }
-        }
-    }
-
-    #! Returns poll information for the given notifier
-    private static hash<SocketPollInfo> getPollInfo(EventNotifier notifier) {
-        return <SocketPollInfo>{
-            "events": SOCK_POLLIN,
-            "socket": notifier,
-            "poll_timeout_ms": HttpIoSupport::PollTimeoutMs,
-        };
     }
 }
 

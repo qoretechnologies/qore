@@ -783,7 +783,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Submits an async request and returns a Future for the response
-    /** @param url the target URL; only scheme, host, and port are used for connection
+    /** The request is sent once, on the returned stream; a redirect response is returned and not followed.  Use
+        @ref requestAsync() to follow redirects.
+
+        @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
         @param method HTTP method
         @param path the full request path to send (must include any base path from the URL)
@@ -888,10 +891,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
     }
 
-    #! Submits an async request and returns a cancellable Future
-    /** Unlike @ref submitRequestAsync(), this method returns an
-        @ref HttpCancellableFuture that the caller can cancel to abort the
-        in-flight HTTP request at the protocol level.
+    #! Sends a request in the background and returns a cancellable Future for the response
+    /** The request is made with a @ref HttpClientRequestPollOperation started on the async I/O controller of the
+        manager, so no I/O is performed on the calling thread.  Redirects are followed and cookies are handled as
+        with @ref request(); the response has the \c effective_url and \c redirects keys.  Canceling the Future
+        cancels the request at the protocol level.
 
         @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
@@ -903,90 +907,28 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
 
-        @return a @ref HttpCancellableFuture that resolves to the raw response hash and
-        supports cancel()
+        @return a @ref HttpCancellableFuture that resolves to the @ref HttpClientResponseInfo hash of the final
+        response and supports cancel(); errors of the request, including \c HTTPCLIENT-TIMEOUT when the response
+        is not received within the \c request_timeout option, and the redirect errors documented for
+        @ref request(), are raised by its \c get() method
 
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
-        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
-        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
-        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+        @throw HTTPCLIENT-PROXY-ERROR if the URL addresses a UNIX domain socket and a proxy is configured
+        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body
 
-        @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
+        @note Unlike @ref submitRequestAsync(), which sends a single request on a stream that it returns, this
+        method follows redirects, so the request can be sent on more than one stream
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body, bool decode_text = True) {
         check_http_request_body(method, headers, body);
-        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
-        RWLock pool_lock_pin = pool_lock;
-        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
-        in_flight.inc();
-        on_exit in_flight.dec();
-        # Inject cookies from jar into request headers
-        hash<UrlInfo> url_info;
-        if (cookie_jar) {
-            url_info = parse_url(url);
-            *string cookie_hdr = cookie_jar.getCookieHeader(
-                url_info.host, path, url_info.protocol == "https");
-            if (cookie_hdr) {
-                headers = headers ?? {};
-                if (headers.Cookie) {
-                    headers.Cookie += "; " + cookie_hdr;
-                } else {
-                    headers.Cookie = cookie_hdr;
-                }
-            }
-        }
-
-        int retries = 0;
-        int max_retries = opts.max_request_retries;
-        bool h3_close_retried = False;
-        while (True) {
-            *HttpClientStreamHandle stream;
-            try {
-                stream = acquireStream(url);
-                stream.setDecodeText(decode_text);
-                hash<auto> result = stream.submitAsync(method, path, headers, body);
-                Future raw_future = result.future;
-                # Wrap with cookie extraction if needed
-                if (cookie_jar) {
-                    if (!url_info) {
-                        url_info = parse_url(url);
-                    }
-                    raw_future = new CookieExtractingFuture(raw_future,
-                        cookie_jar, url_info.host, path,
-                        url_info.protocol == "https");
-                }
-                return new HttpCancellableFuture(raw_future, stream);
-            } catch (hash<ExceptionInfo> ex) {
-                if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
-                        h3_close_retried = True;
-                        ++retries;
-                        log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection (%d/%d)",
-                            ex.err, retries, max_retries);
-                        evictDeadConnections(url);
-                        continue;
-                    }
-                    rethrow;
-                }
-                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && retries < max_retries && canRetryRequest(method, stream)) {
-                    ++retries;
-                    if (isConnectionError(ex.err)) {
-                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
-                            ex.err, retries, max_retries);
-                        evictDeadConnections(url);
-                        handleProtocolFallback(url, ex.err, ex.arg);
-                    } else {
-                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
-                            ex.err, retries, max_retries);
-                    }
-                    continue;
-                }
-                rethrow;
-            }
-        }
+        hash<UrlInfo> url_info = parseRequestUrl(url);
+        HttpClientRequestPollOperation op(self, HttpRedirectFollower::getOriginUrl(url_info)
+            + (path =~ /^\// ? path : "/" + path), method, headers, body, <HttpClientRequestPollOptions>{
+            "goal": sprintf("%s %s", method, path),
+            "decode_text": decode_text,
+        });
+        return op.startAsync();
     }
 
     #! Performs a synchronous request
@@ -4097,6 +4039,24 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     int getMaxRequestRetries() {
         return opts.max_request_retries;
+    }
+
+    #! Returns the character encoding assumed for text response bodies whose encoding is not determined otherwise
+    /** @return the \c assume_encoding option
+
+        @since HttpClientIo 1.0
+    */
+    string getAssumeEncoding() {
+        return opts.assume_encoding;
+    }
+
+    #! Returns the maximum size of a response body that is returned whole; 0 means no limit
+    /** @return the \c max_response_body_size option
+
+        @since HttpClientIo 1.0
+    */
+    int getMaxResponseBodySize() {
+        return opts.max_response_body_size;
     }
 
     #! Returns the maximum number of redirects that requests follow

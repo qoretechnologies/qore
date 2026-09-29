@@ -177,7 +177,11 @@ manager.closeAll();
       protocols, selecting H3 only after its handshake succeeds
     - HTTP/1.1 serial request/response with keep-alive; the connection manager
       creates multiple connections for concurrent requests
-    - @ref HttpClientIo::HttpClientConnectionManager::request() "HttpClientConnectionManager::request()" follows
+    - @ref HttpClientIo::HttpClientConnectionManager::request() "HttpClientConnectionManager::request()",
+      @ref HttpClientIo::HttpClientConnectionManager::requestAsync() "requestAsync()",
+      @ref HttpClientIo::HttpClientConnectionManager::openStream() "openStream()", and
+      @ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation" (a non-blocking request
+      for poll loops and async I/O controllers, like the poll API of @ref Qore::HTTPClient "HTTPClient") follow
       301, 302, 303, 307, and 308 redirects: \c Location values are resolved according to RFC 3986 with
       @ref Qore::resolve_url() "resolve_url()" and fragments are removed; \c Authorization, \c Cookie, and
       \c Host request headers are only sent to the origin of the original request; and the response reports the
@@ -419,15 +423,16 @@ public namespace HttpClientIo {
             The URL never contains user information or a fragment.  It has the same meaning as the
             \c effective-url key of the @ref Qore::HTTPClient "HTTPClient" request information hash.
 
-            @note Only set by @ref HttpClientConnectionManager::request(), the API that follows redirects; the
+            @note Only set by the APIs that follow redirects: @ref HttpClientConnectionManager::request(),
+            @ref HttpClientConnectionManager::requestAsync(), and @ref HttpClientRequestPollOperation; the
             lower-level request, streaming, and asynchronous APIs send a single request to the URL given and leave
             this field unset
         */
         *string effective_url;
 
         #! The redirects followed to produce this response, from the first response to the last redirect
-        /** Only set by @ref HttpClientConnectionManager::request(), and only if at least one redirect was
-            followed
+        /** Only set by the APIs that follow redirects (see @ref effective_url), and only if at least one redirect
+            was followed
 
             @since HttpClientIo 1.0
         */

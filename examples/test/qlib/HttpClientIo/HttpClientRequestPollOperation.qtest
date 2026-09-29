@@ -1,0 +1,446 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HttpClientIo::HttpClientRequestPollOperation and HttpClientConnectionManager::requestAsync()
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientRequestPollOperationTest
+
+#! A request received by a route peer
+hashdecl PeerRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string body;
+}
+
+#! Handler with configurable routes that records every request
+class RoutePeer inherits AbstractHttpRequestHandler {
+    public {
+        #! Requests to "/block" wait until this counter is zero
+        Counter block();
+        #! Signaled when a request to "/block" arrives
+        Queue blocked();
+    }
+
+    private {
+        hash<string, hash<auto>> routes;
+        list<hash<PeerRequest>> requests;
+        Mutex m();
+    }
+
+    setRoute(string target, int code, *hash<auto> headers, *data body) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers, "body": body};
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<PeerRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        {
+            AutoLock al(m);
+            requests += <PeerRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "cookie": hdr.cookie,
+                "body": exists body ? (body.typeCode() == NT_BINARY ? body.toString() : body) : NOTHING,
+            };
+            route = routes{cx.raw_path};
+        }
+        if (cx.raw_path == "/block") {
+            blocked.push(cx.raw_path);
+            block.waitForZero();
+            return makeResponse({"Content-Type": "text/plain"}, 200, binary("released"));
+        }
+        if (route) {
+            hash<HttpResponseInfo> rv = makeResponse(route.headers ?? {}, route.code,
+                exists route.body ? binary(route.body) : binary());
+            if (route.headers."Content-Encoding") {
+                rv.no_content_encoding = True;
+            }
+            return rv;
+        }
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200,
+            binary(sprintf("%s %s", hdr.method, cx.raw_path)));
+    }
+}
+
+public class HttpClientRequestPollOperationTest inherits QUnit::Test {
+    private {
+        HttpServer server_a;
+        HttpServer server_b;
+        RoutePeer peer_a();
+        RoutePeer peer_b();
+        string url_a;
+        string url_b;
+    }
+
+    constructor() : Test("HttpClientRequestPollOperationTest", "1.0") {
+        addTestCase("poll-driven requests", \testPoll());
+        addTestCase("redirects", \testRedirects());
+        addTestCase("requestAsync()", \testRequestAsync());
+        addTestCase("cookies", \testCookies());
+        addTestCase("response modes", \testModes());
+        addTestCase("body decoding and limits", \testBody());
+        addTestCase("timeouts and cancellation", \testTimeoutCancel());
+        addTestCase("errors", \testErrors());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        server_a = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        server_b = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        server_a.setDefaultHandler("a", peer_a);
+        server_b.setDefaultHandler("b", peer_b);
+        url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        # server b is reached with another host name, so that cookies of server a are not sent to it
+        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "service": 0}).port);
+        on_exit {
+            peer_a.block.dec();
+            server_a.stop();
+            server_b.stop();
+        }
+        # requests to "/block" wait until the counter is decremented
+        peer_a.block.inc();
+        set_return_value(main());
+    }
+
+    testPoll() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        HttpClientRequestPollOperation op(mgr, url_a + "/plain?q=1", "POST", {"Content-Type": "text/plain"},
+            "payload", <HttpClientRequestPollOptions>{"goal": "test-post"});
+        assertEq("test-post", op.getGoal());
+        assertEq("connecting", op.getState());
+        assertFalse(op.goalReached());
+        assertNothing(op.getOutput());
+        hash<HttpClientResponseInfo> resp = runPoller(op);
+        assertEq("complete", op.getState());
+        assertEq(200, resp.status_code);
+        assertEq("POST /plain?q=1", resp.body);
+        assertEq(url_a + "/plain?q=1", resp.effective_url);
+        assertNothing(resp.redirects);
+        assertEq("text/plain;charset=utf-8", resp.content_type);
+        assertEq("payload", peer_a.getRequests().last().body);
+        # the operation does not own the manager
+        assertEq(mgr, op.getConnectionManager());
+        # a completed operation is not canceled
+        assertFalse(op.cancel());
+    }
+
+    testRedirects() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        # a -> b -> a
+        peer_a.setRoute("/xo", 302, {"Location": url_b + "/xo-b"});
+        peer_b.setRoute("/xo-b", 307, {"Location": url_a + "/xo-final"});
+        peer_a.clear();
+        peer_b.clear();
+        hash<HttpClientResponseInfo> resp = runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/xo", "GET",
+            {"Authorization": "Bearer tok"}));
+        assertEq(200, resp.status_code);
+        assertEq("GET /xo-final", resp.body);
+        assertEq(url_a + "/xo-final", resp.effective_url);
+        assertEq((302, 307), (map $1.status_code, resp.redirects));
+        assertEq(("Bearer tok", "Bearer tok"), (map $1.authorization, peer_a.getRequests()));
+        assertNothing(peer_b.getRequests()[0].authorization);
+
+        # 303 changes a POST to GET without its body
+        peer_a.setRoute("/see-other", 303, {"Location": "/landed"});
+        peer_a.clear();
+        resp = runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/see-other", "POST", NOTHING, "x"));
+        assertEq("GET /landed", resp.body);
+        assertNothing(peer_a.getRequests()[1].body);
+
+        # the options override the redirect options of the manager
+        peer_a.setRoute("/loop", 302, {"Location": "/loop"});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(2\\) exceeded", \runPoller(),
+            new HttpClientRequestPollOperation(mgr, url_a + "/loop", "GET", NOTHING, NOTHING,
+                <HttpClientRequestPollOptions>{"max_redirects": 2}));
+        resp = runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/xo", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"redirect_passthru": True}));
+        assertEq(302, resp.status_code);
+        assertEq(url_b + "/xo-b", resp.headers.location);
+        assertEq(url_a + "/xo", resp.effective_url);
+        # the options of the manager are used otherwise
+        HttpClientConnectionManager pt(<HttpClientConnectionManagerOptions>{"redirect_passthru": True});
+        on_exit pt.closeAll();
+        assertEq(302, runPoller(new HttpClientRequestPollOperation(pt, url_a + "/xo")).status_code);
+        peer_a.setRoute("/ftp", 302, {"Location": "ftp://127.0.0.1/x"});
+        assertThrows("HTTP-CLIENT-UNKNOWN-PROTOCOL", \runPoller(),
+            new HttpClientRequestPollOperation(mgr, url_a + "/ftp"));
+    }
+
+    testRequestAsync() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        peer_a.setRoute("/async-redirect", 301, {"Location": url_b + "/async-target"});
+        HttpCancellableFuture f = mgr.requestAsync(url_a + "/ignored-path", "GET", "/async-redirect");
+        hash<auto> resp = f.get(30s);
+        assertTrue(f.isDone());
+        assertFalse(f.isError());
+        assertEq(200, resp.status_code);
+        assertEq("GET /async-target", resp.body);
+        assertEq(url_b + "/async-target", resp.effective_url);
+        assertEq(1, resp.redirects.size());
+        # a relative path gets a leading slash; the body can be returned as octets
+        resp = mgr.requestAsync(url_a, "GET", "rel", NOTHING, NOTHING, False).get(30s);
+        assertEq(binary("GET /rel"), resp.body);
+        # startAsync() on an operation
+        resp = new HttpClientRequestPollOperation(mgr, url_a + "/async-redirect").startAsync().get(30s);
+        assertEq("GET /async-target", resp.body);
+        # redirect errors are raised by the Future
+        peer_a.setRoute("/async-loop", 302, {"Location": "/async-loop"});
+        HttpClientConnectionManager one(<HttpClientConnectionManagerOptions>{"max_redirects": 1});
+        on_exit one.closeAll();
+        f = one.requestAsync(url_a, "GET", "/async-loop");
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \f.get(), 30s);
+        assertTrue(f.isError());
+        # an operation can only be started once
+        HttpClientRequestPollOperation op(mgr, url_a + "/plain");
+        op.startAsync().get(30s);
+        assertThrows("HTTPCLIENT-STATE-ERROR", \op.startAsync());
+        # argument errors are raised by the call
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", \mgr.requestAsync(), (url_a, "GET", "/x", NOTHING, "b"));
+        assertThrows("HTTPCLIENT-URL-ERROR", \mgr.requestAsync(), ("http://", "GET", "/x"));
+    }
+
+    testCookies() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        peer_a.setRoute("/set-cookie", 302, {"Location": "/cookie-target", "Set-Cookie": "op=1; Path=/"});
+        peer_a.clear();
+        runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/set-cookie"));
+        assertEq("op=1", peer_a.getRequests()[1].cookie);
+        # the cookie is sent with later requests
+        mgr.requestAsync(url_a, "GET", "/x", {"Cookie": "own=2"}).get(30s);
+        assertEq("own=2; op=1", peer_a.getRequests().last().cookie);
+        assertEq(200, mgr.request(url_a, "GET", "/x").status_code);
+        assertEq("op=1", peer_a.getRequests().last().cookie);
+    }
+
+    testModes() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        peer_a.setRoute("/big", 200, {"Content-Type": "application/octet-stream"}, strmul("x", 200000));
+
+        # headers only
+        HttpClientRequestPollOperation op(mgr, url_a + "/big", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"headers_only": True});
+        hash<HttpClientResponseInfo> resp = runPoller(op);
+        assertEq(200, resp.status_code);
+        assertNothing(resp.body);
+        assertNothing(op.getStream());
+
+        # the stream is handed over
+        op = new HttpClientRequestPollOperation(mgr, url_a + "/big", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"keep_stream": True});
+        resp = runPoller(op);
+        assertEq(200, resp.status_code);
+        assertNothing(resp.body);
+        *HttpClientStreamHandle stream = op.getStream();
+        assertTrue(exists stream);
+        binary body;
+        map body += $1, op.getInitialBody();
+        if (!op.isStreamComplete()) {
+            while (True) {
+                auto d = stream.readData(10s);
+                if (!exists d) {
+                    break;
+                }
+                if (d.typeCode() == NT_HASH) {
+                    if (exists d.body) {
+                        body += binary(d.body);
+                    }
+                    if (d.end_stream) {
+                        break;
+                    }
+                    continue;
+                }
+                body += binary(d);
+            }
+        }
+        assertEq(200000, body.size());
+
+        # connect only
+        op = new HttpClientRequestPollOperation(mgr, url_a + "/ignored", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"connect_only": True});
+        hash<auto> out = runPoller(op);
+        assertEq(url_a, out.url);
+        assertEq("h1", out.protocol);
+    }
+
+    testBody() {
+        peer_a.setRoute("/gzip", 200, {"Content-Type": "text/plain;charset=utf-8", "Content-Encoding": "gzip"},
+            gzip(binary("äöü")));
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        assertEq("äöü", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/gzip")).body);
+        # the content coding is kept
+        assertEq(gzip(binary("äöü")), runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/gzip", "GET",
+            NOTHING, NOTHING, <HttpClientRequestPollOptions>{"decode_content": False})).body);
+        # octets of a text body
+        assertEq(binary("äöü"), runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/gzip", "GET",
+            NOTHING, NOTHING, <HttpClientRequestPollOptions>{"decode_text": False})).body);
+        # an assumed encoding for text without a charset
+        peer_a.setRoute("/latin1", 200, {"Content-Type": "text/plain"}, <e4>);
+        assertEq("ä", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/latin1")).body);
+        assertEq("ä", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/latin1", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"assume_encoding": "ISO-8859-1"})).body);
+
+        # the body size limit is enforced as the body arrives
+        HttpClientConnectionManager small(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_response_body_size": 1000,
+        });
+        on_exit small.closeAll();
+        peer_a.setRoute("/big", 200, {"Content-Type": "application/octet-stream"}, strmul("x", 200000));
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \runPoller(),
+            new HttpClientRequestPollOperation(small, url_a + "/big"));
+        HttpCancellableFuture f = small.requestAsync(url_a, "GET", "/big");
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \f.get(), 30s);
+        # a decompressed body is limited as well
+        peer_a.setRoute("/bomb", 200, {"Content-Type": "application/octet-stream", "Content-Encoding": "gzip"},
+            gzip(binary(strmul("x", 200000))));
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \runPoller(),
+            new HttpClientRequestPollOperation(small, url_a + "/bomb"));
+        # a small body is returned
+        assertEq("GET /plain", runPoller(new HttpClientRequestPollOperation(small, url_a + "/plain")).body);
+    }
+
+    testTimeoutCancel() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        # poll-driven timeout
+        assertThrows("HTTPCLIENT-TIMEOUT", "timed out waiting for the response", \runPoller(),
+            new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
+                <HttpClientRequestPollOptions>{"timeout": 300}));
+        assertEq("/block", peer_a.blocked.get(10s));
+        # a timeout of an async operation rejects the Future
+        HttpCancellableFuture f = new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"timeout": 300}).startAsync();
+        assertThrows("HTTPCLIENT-TIMEOUT", \f.get(), 30s);
+        assertEq("/block", peer_a.blocked.get(10s));
+        # canceling the Future cancels the request
+        f = mgr.requestAsync(url_a, "GET", "/block");
+        assertEq("/block", peer_a.blocked.get(10s));
+        assertTrue(f.cancel());
+        assertThrows("HTTPCLIENT-CANCELLED", \f.get(), 30s);
+        assertFalse(f.cancel());
+        # an aborted poll operation stops
+        HttpClientRequestPollOperation op(mgr, url_a + "/block");
+        op.continuePoll();
+        op.abort();
+        assertEq("aborted", op.getState());
+        assertNothing(op.continuePoll());
+        assertFalse(op.goalReached());
+    }
+
+    testErrors() {
+        HttpClientConnectionManager mgr();
+        on_exit mgr.closeAll();
+        assertThrows("HTTPCLIENT-URL-ERROR", "has no host", sub () {
+            new HttpClientRequestPollOperation(mgr, "http:///x");
+        });
+        assertThrows("HTTPCLIENT-URL-ERROR", "has no host", sub () {
+            new HttpClientRequestPollOperation(mgr, "/relative");
+        });
+        assertThrows("HTTP-CLIENT-UNKNOWN-PROTOCOL", "unsupported scheme \"ftp\"", sub () {
+            new HttpClientRequestPollOperation(mgr, "ftp://h/x");
+        });
+        # user information is never included in errors
+        try {
+            new HttpClientRequestPollOperation(mgr, "ftp://user:secret@h/x");
+            assertTrue(False, "no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-UNKNOWN-PROTOCOL", ex.err);
+            assertFalse(ex.desc =~ /secret/, ex.desc);
+        }
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", sub () {
+            new HttpClientRequestPollOperation(mgr, url_a + "/x", "GET", NOTHING, "body");
+        });
+        assertThrows("HTTPCLIENT-REQUEST-BODY-ERROR", sub () {
+            new HttpClientRequestPollOperation(mgr, url_a + "/x", "GET", NOTHING, NOTHING,
+                <HttpClientRequestPollOptions>{"body_streaming": True});
+        });
+
+        # a refused connection fails the operation once the retries are used up
+        int port;
+        {
+            Socket probe();
+            probe.bindINET("127.0.0.1", 0, True);
+            port = probe.getSocketInfo().port;
+            probe.close();
+        }
+        HttpClientConnectionManager h1(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit h1.closeAll();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \runPoller(), new HttpClientRequestPollOperation(h1,
+            sprintf("http://127.0.0.1:%d/x", port), "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"max_connect_retries": 0, "timeout": 10000}));
+        HttpCancellableFuture f = h1.requestAsync(sprintf("http://127.0.0.1:%d", port), "GET", "/x");
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \f.get(), 30s);
+    }
+
+    static auto runPoller(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (op.goalReached()) {
+                break;
+            }
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            } else if (!op.goalReached()) {
+                throw "TEST-ERROR", sprintf("poll operation %y stopped without output", op.getGoal());
+            }
+        }
+        return op.getOutput();
+    }
+}
