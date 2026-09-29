@@ -36,7 +36,19 @@
     notifications in a pending flag instead of blocking on them.  This test pins both
     halves of that contract: the pool stays usable while a handler is busy, and the
     skipped notifications are lossless - every frame is still delivered, in order.
+
+    The HTTP/1.1 async path (HttpWebSocketPollOperation) had the same defect in two places:
+    the handler-pool drainer held the connection's dispatch mutex while gotMessage() ran,
+    so every frame notification that arrived meanwhile parked a callback worker in
+    onPollComplete(), and onComplete() waited on the callback worker for a running
+    handler when the peer disconnected.  With the pool parked, no accept completion could
+    run, so every listener in the process stopped accepting new connections until the
+    handler returned.  The HTTP/1.1 cases pin that a fresh connection is still served
+    while handlers are busy, that no frame is lost or reordered, and that a connection
+    whose peer disconnects during a busy handler is finished once the handler returns.
 */
+
+%modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
@@ -68,6 +80,9 @@ our *Mutex ws_recv_lock;
 #! Every message in the order gotMessage() saw it
 our *list<string> ws_messages;
 
+#! Decremented once per connection closed on the server side
+our *Counter ws_closed;
+
 #! Holds the first message's dispatch until the test releases it
 class SlowWsConnection inherits WebSocketConnection {
     private {
@@ -90,6 +105,22 @@ class SlowWsConnection inherits WebSocketConnection {
             ws_hold.waitForZero(120s);
         }
         ws_handled.dec();
+    }
+
+    connectionClosed() {
+        if (ws_closed) {
+            ws_closed.dec();
+        }
+    }
+}
+
+#! Answers the probe request that shows the server still accepts and serves new connections
+class ProbeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "ok",
+        };
     }
 }
 
@@ -184,6 +215,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         addTestCase("a slow WS handler neither starves the pool nor loses frames",
             \testSlowHandlerDoesNotStarvePool());
+        addTestCase("a slow HTTP/1.1 WS handler neither stops accepts nor loses frames",
+            \testH1SlowHandlerDoesNotStopAccepts());
+        addTestCase("an HTTP/1.1 WS peer that disconnects during a slow handler is finished after it",
+            \testH1DisconnectDuringSlowHandler());
         set_return_value(main());
     }
 
@@ -196,6 +231,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mWsHandler = new SlowWsHandler({"logger": mLogger});
         mServer = new HttpServer(<HttpServerOptionInfo>{"logger": mLogger, "debug": True});
         mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+        mServer.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
         mPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
             "cert": new SSLCertificate(CertPem),
@@ -265,5 +301,139 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "frames that arrived while the handler was busy were never delivered");
         assertEq(expected, ws_messages,
             "every frame sent during the slow handler was delivered exactly once, in order");
+    }
+
+    #! Sends a request on a new connection, which needs the accept path and the async I/O callback workers
+    private probeNewConnection(string msg) {
+        HTTPClient hc({
+            "url": sprintf("https://localhost:%d", mPort),
+            "ssl_verify_cert": False,
+            "timeout": HangTimeout,
+            "connect_timeout": HangTimeout,
+        });
+        hash<auto> info;
+        hash<auto> resp;
+        try {
+            resp = hc.send(NOTHING, "GET", "/probe", NOTHING, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: %s: %s", msg, ex.err, ex.desc));
+        }
+        assertEq(200, resp.status_code, msg);
+        assertEq("ok", resp.body, msg);
+    }
+
+    testH1SlowHandlerDoesNotStopAccepts() {
+        ws_hold = new Counter(1);
+        ws_holding = new Counter(1);
+        ws_handled = new Counter(BusyMessages + 1);
+        ws_recv_lock = new Mutex();
+        ws_messages = ();
+        ws_closed = NOTHING;
+
+        Queue pongs();
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": mWsUrl,
+            "logger": mLogger,
+            "http_version": "1.1",
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "pong_callback": sub (*data msg) {
+                pongs.push(True);
+            },
+        });
+        on_exit {
+            # never leave the handler parked, even on a failed assertion
+            if (ws_hold.getCount()) {
+                ws_hold.dec();
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+
+        # park the handler inside gotMessage()
+        list<string> expected = ("hold",);
+        wsc.send("hold");
+        assertEq(0, ws_holding.waitForZero(HangTimeout), "the WS handler never started");
+
+        # keep the peer sending while user code runs; the pong to each ping proves that the server has read
+        # the message before it, so every message arrives in its own I/O cycle and produces its own frame
+        # notification on a callback worker
+        for (int i = 0; i < BusyMessages; ++i) {
+            string msg = sprintf("busy-%03d", i);
+            expected += msg;
+            wsc.send(msg);
+            wsc.ping();
+            # the client shares the process's callback workers with the server, so parked workers also
+            # stop the pong callback
+            assertTrue(pongs.get(HangTimeout), sprintf("no pong for %y: the callback workers are parked", msg));
+        }
+
+        # a new connection must still be accepted and served: accept completions run on the same callback
+        # workers that the frame notifications for the busy connection used to park
+        probeNewConnection("a slow HTTP/1.1 WebSocket handler stopped the server from serving new connections");
+
+        # release the handler: every frame must still be delivered, in order
+        ws_hold.dec();
+        assertEq(0, ws_handled.waitForZero(HangTimeout),
+            "frames that arrived while the handler was busy were never delivered");
+        assertEq(expected, ws_messages,
+            "every frame sent during the slow handler was delivered exactly once, in order");
+    }
+
+    #! Opens an HTTP/1.1 WebSocket connection on a raw socket so that it can be dropped without a close frame
+    private Socket rawWsConnect() {
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", mPort), HangTimeout);
+        string key = make_base64_string(sprintf("%016d", mPort));
+        sock.send(sprintf("GET /ws HTTP/1.1\r\nHost: localhost:%d\r\nUpgrade: websocket\r\n"
+            "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", mPort, key));
+        hash<auto> hdr = sock.readHTTPHeader(HangTimeout);
+        assertEq(101, hdr.status_code, "WebSocket upgrade");
+        return sock;
+    }
+
+    testH1DisconnectDuringSlowHandler() {
+        # one more parked connection than there are callback workers
+        int conns = Workers + 1;
+        ws_hold = new Counter(1);
+        ws_holding = new Counter(conns);
+        ws_handled = new Counter(conns);
+        ws_closed = new Counter(conns);
+        ws_recv_lock = new Mutex();
+        ws_messages = ();
+
+        list<Socket> socks = ();
+        on_exit {
+            # never leave the handlers parked, even on a failed assertion
+            if (ws_hold.getCount()) {
+                ws_hold.dec();
+            }
+            map $1.close(), socks, $1.isOpen();
+        }
+
+        list<string> expected = ();
+        for (int i = 0; i < conns; ++i) {
+            Socket sock = rawWsConnect();
+            socks += sock;
+            string msg = sprintf("hold-%03d", i);
+            expected += msg;
+            sock.send(ws_encode_message(msg, WSOP_Text, True));
+        }
+        assertEq(0, ws_holding.waitForZero(HangTimeout), "the WS handlers never started");
+
+        # drop every connection without a close frame while its handler is busy: the server's operation for
+        # each one completes on a callback worker, which must not wait for the handler
+        map $1.close(), socks;
+
+        probeNewConnection("HTTP/1.1 WebSocket peers that disconnected during slow handlers stopped the server "
+            "from serving new connections");
+
+        # release the handlers: every connection is then finished
+        ws_hold.dec();
+        assertEq(0, ws_handled.waitForZero(HangTimeout), "a held message was never handled");
+        assertEq(0, ws_closed.waitForZero(HangTimeout),
+            "a connection whose peer disconnected during a slow handler was never finished");
+        assertEq(sort(expected), sort(ws_messages), "every held message was handled exactly once");
     }
 }
