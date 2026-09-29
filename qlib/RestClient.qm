@@ -143,6 +143,8 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - added the \c status_message, \c effective_url, and \c redirects keys to
+      @ref RestClient::RestResponseInfo "RestResponseInfo"
     - a REST schema read from a location (the \c openapi3 and \c swagger options) is decoded by the encoding rules
       of JSON and YAML: a byte order mark gives its character encoding, which is UTF-8 otherwise, and is not part of
       the text; added @ref RestClient::RestClient::getSchemaText() "RestClient::getSchemaText()"
@@ -538,6 +540,27 @@ public hashdecl RestResponseInfo {
     /** @since RestClient 2.5
     */
     *auto deserialized_body;
+
+    #! The status message (reason phrase) of the response, if known
+    /** HTTP/2 and HTTP/3 carry no reason phrase; set by \c RestClientIo
+
+        @since RestClient 2.7
+    */
+    *string status_message;
+
+    #! The absolute URL of the request that produced the response, after any redirects, without user information
+    /** Set by \c RestClientIo, which follows redirects with all of its request APIs
+
+        @since RestClient 2.7
+    */
+    *string effective_url;
+
+    #! The redirects followed to get the response, in the order followed; not set if no redirect was followed
+    /** Set by \c RestClientIo
+
+        @since RestClient 2.7
+    */
+    *list<hash<HttpRedirectInfo>> redirects;
 }
 
 #! Abstract interface for REST clients

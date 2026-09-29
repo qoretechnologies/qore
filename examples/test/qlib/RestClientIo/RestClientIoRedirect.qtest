@@ -1,0 +1,451 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Redirect following with every request API of RestClientIo
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires DataProvider
+%requires RestClient
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires RestClientIo
+%requires FileLocationHandler
+
+%exec-class RestClientIoRedirectTest
+
+#! A request received by a route peer
+hashdecl RoutePeerRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string custom;
+    *string content_type;
+    *string body;
+}
+
+#! Handler with configurable routes that records every request and echoes it as JSON
+class RoutePeer inherits AbstractHttpRequestHandler {
+    private {
+        hash<string, hash<auto>> routes;
+        list<hash<RoutePeerRequest>> requests;
+        Mutex m();
+    }
+
+    setRoute(string target, int code, *hash<auto> headers) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers};
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<RoutePeerRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        hash<RoutePeerRequest> req({
+            "method": hdr.method,
+            "target": cx.raw_path,
+            "authorization": hdr.authorization,
+            "cookie": hdr.cookie,
+            "custom": hdr."x-custom",
+            "content_type": hdr."content-type",
+            "body": exists body ? (body.typeCode() == NT_BINARY ? body.toString() : body) : NOTHING,
+        });
+        {
+            AutoLock al(m);
+            requests += req;
+            route = routes{cx.raw_path};
+        }
+        if (route) {
+            return makeResponse(route.headers ?? {}, route.code, binary());
+        }
+        return makeResponse({"Content-Type": "application/json"}, 200, binary(make_json(req)));
+    }
+}
+
+#! Sends one event to each new connection
+class RedirectSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "landed",
+            "data": "ok",
+        });
+    }
+}
+
+#! Collects observable events
+class RedirectObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+        int expected;
+    }
+
+    constructor(int expected) {
+        self.expected = expected;
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        events += {"event_id": event_id, "data": data};
+        cond.broadcast();
+    }
+
+    bool waitForEvents(timeout t) {
+        AutoLock al(m);
+        date end = now_us() + t;
+        while (events.size() < expected) {
+            date remaining = end - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
+
+public class RestClientIoRedirectTest inherits QUnit::Test {
+    private {
+        HttpServer server_a;
+        HttpServer server_b;
+        RoutePeer peer_a();
+        RoutePeer peer_b();
+        string url_a;
+        string url_b;
+    }
+
+    constructor() : Test("RestClientIoRedirectTest", "1.0") {
+        addTestCase("synchronous requests", \testSync());
+        addTestCase("asynchronous requests across origins", \testAsyncCrossOrigin());
+        addTestCase("asynchronous method rules", \testAsyncMethodRules());
+        addTestCase("caller-driven poll requests", \testPollRequest());
+        addTestCase("redirect limits and errors", \testErrors());
+        addTestCase("redirect passthru", \testPassthru());
+        addTestCase("cookies", \testCookies());
+        addTestCase("SSE reader", \testSseReader());
+        addTestCase("SSE observable", \testSseObservable());
+        addTestCase("REST location handler", \testLocationHandler());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        server_a = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        server_b = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        server_a.setDefaultHandler("a", peer_a);
+        server_a.setHandler("sse", "/sse-events", NOTHING, new RedirectSseHandler());
+        server_b.setDefaultHandler("b", peer_b);
+        url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        # server b is reached with another host name, so that cookies of server a are not sent to it
+        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "service": 0}).port);
+        on_exit {
+            server_a.stop();
+            server_b.stop();
+        }
+        set_return_value(main());
+    }
+
+    testSync() {
+        peer_a.setRoute("/sync", 302, {"Location": "/sync-final"});
+        RestClientIo rest({"url": url_a, "data": "json"});
+        on_exit rest.close();
+        hash<RestResponseInfo> resp = rest.restGet("/sync");
+        assertEq(200, resp.status_code);
+        assertEq("/sync-final", resp.body.target);
+        assertEq(url_a + "/sync-final", resp.effective_url);
+        assertEq(1, resp.redirects.size());
+        assertEq(url_a + "/sync", resp.redirects[0].request_url);
+        assertEq(302, resp.redirects[0].status_code);
+        assertEq("OK", resp.status_message);
+        # a response without redirects has no redirect information
+        resp = rest.restGet("/plain");
+        assertEq(url_a + "/plain", resp.effective_url);
+        assertNothing(resp.redirects);
+    }
+
+    testAsyncCrossOrigin() {
+        # a -> b -> a
+        peer_a.setRoute("/xo", 302, {"Location": url_b + "/xo-b"});
+        peer_b.setRoute("/xo-b", 307, {"Location": url_a + "/xo-final"});
+        RestClientIo rest({"url": url_a, "data": "json", "headers": {"Authorization": "Bearer tok"}});
+        on_exit rest.close();
+        peer_a.clear();
+        peer_b.clear();
+        hash<RestResponseInfo> resp = rest.restGetAsync("/xo", {"X-Custom": "v"}).get();
+        assertEq(200, resp.status_code);
+        assertEq("/xo-final", resp.body.target);
+        assertEq(url_a + "/xo-final", resp.effective_url);
+        assertEq((url_a + "/xo", url_b + "/xo-b"), (map $1.request_url, resp.redirects));
+        assertEq((302, 307), (map $1.status_code, resp.redirects));
+        # the request method and path of the response are those of the original request
+        assertEq("GET", resp.request_method);
+        assertEq("/xo", resp.request_path);
+        list<hash<RoutePeerRequest>> a = peer_a.getRequests();
+        list<hash<RoutePeerRequest>> b = peer_b.getRequests();
+        assertEq(("/xo", "/xo-final"), (map $1.target, a));
+        # the Authorization header is sent only to the origin of the original request
+        assertEq(("Bearer tok", "Bearer tok"), (map $1.authorization, a));
+        assertEq(1, b.size());
+        assertNothing(b[0].authorization);
+        # other headers are sent to every target
+        assertEq("v", b[0].custom);
+        assertEq(("v", "v"), (map $1.custom, a));
+
+        # the other async APIs follow redirects as well
+        peer_a.setRoute("/xo2", 301, {"Location": "/xo2-final"});
+        assertEq("/xo2-final", rest.restDoRequestAsync("GET", "/xo2").get().body.target);
+        # the Future variant resolves to the raw HTTP response
+        hash<auto> raw = rest.restDoRequestAsync("GET", "/xo2", NOTHING, NOTHING, True).get();
+        assertEq(200, raw.status_code);
+        assertEq(url_a + "/xo2-final", raw.effective_url);
+        EventNotifier notifier();
+        hash<auto> info = rest.restDoRequestAsyncWithNotifier("GET", "/xo2", NOTHING, NOTHING, notifier);
+        raw = info.future.get();
+        assertEq(200, raw.status_code);
+        assertEq(url_a + "/xo2-final", raw.effective_url);
+        assertEq(1, raw.redirects.size());
+    }
+
+    testAsyncMethodRules() {
+        RestClientIo rest({"url": url_a, "data": "json"});
+        on_exit rest.close();
+        peer_a.setRoute("/p303", 303, {"Location": "/landed-303"});
+        peer_a.setRoute("/p302", 302, {"Location": "/landed-302"});
+        peer_a.setRoute("/p307", 307, {"Location": "/landed-307"});
+        peer_a.setRoute("/p308", 308, {"Location": "/landed-308"});
+        list<list<auto>> cases = (
+            ("/p303", "GET", False),
+            ("/p302", "GET", False),
+            ("/p307", "POST", True),
+            ("/p308", "POST", True),
+        );
+        foreach list<auto> c in (cases) {
+            peer_a.clear();
+            hash<RestResponseInfo> resp = rest.restPostAsync(c[0], {"a": 1}).get();
+            assertEq(200, resp.status_code, c[0]);
+            list<hash<RoutePeerRequest>> reqs = peer_a.getRequests();
+            assertEq(2, reqs.size(), c[0]);
+            assertEq(c[1], reqs[1].method, c[0]);
+            if (c[2]) {
+                # the serialized body is repeated
+                assertEq(make_json({"a": 1}), reqs[1].body, c[0]);
+                assertRegex("^application/json", reqs[1].content_type, c[0]);
+            } else {
+                assertNothing(reqs[1].body, c[0]);
+                assertNothing(reqs[1].content_type, c[0]);
+            }
+        }
+    }
+
+    testPollRequest() {
+        RestClientIo rest({"url": url_a, "data": "json"});
+        on_exit rest.close();
+        peer_a.setRoute("/poll", 302, {"Location": url_b + "/poll-b"});
+        hash<RestResponseInfo> resp = runPoller(rest.startPollRequest("GET", "/poll", NOTHING));
+        assertEq(200, resp.status_code);
+        assertEq("/poll-b", resp.body.target);
+        assertEq(url_b + "/poll-b", resp.effective_url);
+        assertEq(1, resp.redirects.size());
+        resp = runPoller(rest.startPollRawRequest("POST", "/poll", "raw", {"Content-Type": "text/plain"}));
+        # a POST redirected with 302 is retrieved with GET
+        assertEq("GET", resp.body.method);
+    }
+
+    testErrors() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_redirects": 1});
+        on_exit mgr.closeAll();
+        RestClientIo rest({"url": url_a, "data": "json"}, mgr);
+        on_exit rest.close();
+        peer_a.setRoute("/loop", 302, {"Location": "/loop"});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(1\\) exceeded",
+            \rest.restGet(), "/loop");
+        RestFuture f = rest.restGetAsync("/loop");
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(1\\) exceeded", \f.get());
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirects \\(1\\) exceeded",
+            \runPoller(), rest.startPollRequest("GET", "/loop", NOTHING));
+        peer_a.setRoute("/ftp", 302, {"Location": "ftp://127.0.0.1/x"});
+        f = rest.restGetAsync("/ftp");
+        assertThrows("HTTP-CLIENT-UNKNOWN-PROTOCOL", "unsupported scheme", \f.get());
+        peer_a.setRoute("/noloc", 302);
+        f = rest.restGetAsync("/noloc");
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given", \f.get());
+        # the SSE reader reports redirect errors as well
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \rest.restSseReader(), ("GET", "/loop"));
+    }
+
+    testPassthru() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"redirect_passthru": True});
+        on_exit mgr.closeAll();
+        RestClientIo rest({"url": url_a, "data": "json", "error_passthru": True}, mgr);
+        on_exit rest.close();
+        peer_a.setRoute("/pt", 302, {"Location": "/pt-final"});
+        peer_a.clear();
+        hash<RestResponseInfo> resp = rest.restGetAsync("/pt").get();
+        assertEq(302, resp.status_code);
+        assertEq("/pt-final", resp.headers.location);
+        assertEq(url_a + "/pt", resp.effective_url);
+        assertNothing(resp.redirects);
+        assertEq(1, peer_a.getRequests().size());
+        resp = rest.restGet("/pt");
+        assertEq(302, resp.status_code);
+
+        # without error_passthru, the redirect is an error response
+        RestClientIo rest2({"url": url_a, "data": "json"}, mgr);
+        on_exit rest2.close();
+        RestFuture f = rest2.restGetAsync("/pt");
+        assertThrows("REST-RESPONSE-ERROR", "HTTP 302", \f.get());
+    }
+
+    testCookies() {
+        RestClientIo rest({"url": url_a, "data": "json"});
+        on_exit rest.close();
+        # the cookie set by the redirect response is sent to its target
+        peer_a.setRoute("/set-cookie", 302, {"Location": "/cookie-target", "Set-Cookie": "sess=1; Path=/"});
+        hash<RestResponseInfo> resp = rest.restGetAsync("/set-cookie").get();
+        assertEq("sess=1", resp.body.cookie);
+        # and to later requests, whatever API is used
+        assertEq("sess=1", rest.restGetAsync("/x").get().body.cookie);
+        assertEq("sess=1", runPoller(rest.startPollRequest("GET", "/x", NOTHING)).body.cookie);
+        assertEq("sess=1", rest.restGet("/x").body.cookie);
+        # a caller cookie is merged into the same header
+        assertEq("own=2; sess=1", rest.restGetAsync("/x", {"Cookie": "own=2"}).get().body.cookie);
+        # cookies are not sent to another host
+        peer_a.setRoute("/to-b", 302, {"Location": url_b + "/b-target"});
+        assertNothing(rest.restGetAsync("/to-b").get().body.cookie);
+
+        # a response to an async request stores its cookies
+        RestClientIo rest2({"url": url_a, "data": "json"});
+        on_exit rest2.close();
+        peer_a.setRoute("/set-only", 204, {"Set-Cookie": "only=3; Path=/"});
+        rest2.restGetAsync("/set-only").get();
+        assertEq("only=3", rest2.restGet("/x").body.cookie);
+    }
+
+    testSseReader() {
+        peer_a.setRoute("/sse-redirect", 302, {"Location": "/sse-events"});
+        RestClientIo rest({"url": url_a});
+        on_exit rest.close();
+        SseStreamReader reader = rest.restSseReader("GET", "/sse-redirect");
+        on_exit reader.cancel();
+        *hash<SseMessageInfo> evt = reader.readEvent(10s);
+        assertEq("landed", evt.event);
+
+        # an error response after a redirect is reported with its location
+        peer_a.setRoute("/sse-missing", 302, {"Location": "/sse-gone"});
+        peer_a.setRoute("/sse-gone", 404, {"Content-Type": "text/plain"});
+        try {
+            rest.restSseReader("GET", "/sse-missing");
+            assertTrue(False, "no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq(url_a + "/sse-gone", ex.arg.effective_url);
+            assertEq(1, ex.arg.redirects.size());
+        }
+    }
+
+    testSseObservable() {
+        peer_a.setRoute("/sse-redirect-obs", 307, {"Location": "/sse-events"});
+        RestClientIo rest({"url": url_a});
+        on_exit rest.close();
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET", "/sse-redirect-obs", NOTHING,
+            NOTHING, {"serialization": "none"});
+        RedirectObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        assertTrue(observer.waitForEvents(10s));
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("landed", observer.events[1].data.event);
+    }
+
+    testLocationHandler() {
+        peer_a.setRoute("/loc", 302, {"Location": url_b + "/loc-b"});
+        # a handler bound to a client uses the redirect options of the client
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"redirect_passthru": True});
+        on_exit mgr.closeAll();
+        RestClientIo rest({"url": url_a, "data": "json"}, mgr);
+        on_exit rest.close();
+        AbstractFileLocationHandler h = FileLocationHandler::getRestHandlerForClient(rest);
+        # the redirect is returned, and it is an error status for the handler
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 302", \h.getResource(), ("rest", "/loc"));
+        # a client that follows redirects
+        RestClientIo rest2({"url": url_a, "data": "json"});
+        on_exit rest2.close();
+        h = FileLocationHandler::getRestHandlerForClient(rest2);
+        hash<FileResourceResult> r = h.getResource("rest", "/loc");
+        assertEq(url_b + "/loc-b", r.info.effective_location);
+        assertEq(1, r.info.http.redirects.size());
+        # a location with redirect options creates a client with them
+        string loc = url_a.substr(7) + "/loc";
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \FileLocationHandler::getTextFileFromLocation(),
+            "rest://" + loc + "{max_redirects=0}");
+        r = FileLocationHandler::getResourceFromLocation("rest://" + loc);
+        assertEq(url_b + "/loc-b", r.info.effective_location);
+    }
+
+    static auto runPoller(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (op.goalReached()) {
+                break;
+            }
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+}

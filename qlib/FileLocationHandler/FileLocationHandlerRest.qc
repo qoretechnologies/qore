@@ -441,8 +441,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             }
             # the client already targets the right host; the location is a URI path on it
             string path = HttpIoSupport::encodeRequestTarget(AbstractFileLocationHandler::getUriPath(location));
-            return new RestIoRequestPollOperation(bound_rest, method, path, body, opts.headers, False,
-                HttpIoSupport::DefaultMaxRedirects);
+            # the client follows redirects with its own options
+            return new RestIoRequestPollOperation(bound_rest, method, path, body, opts.headers, False);
         }
 
         string url = (scheme == "rests" ? "https" : "http") + "://" + location;
@@ -454,9 +454,9 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         # the request path is everything after the authority, including any query
         *list<*string> parts = (url =~ x/^([a-z]+:\/\/[^\/?#]*)([^#]*)/);
         string path = HttpIoSupport::encodeRequestTarget(parts[1]);
-        hash<auto> client_opts = opts - ("method", "max_redirects", "error_passthru", "redirect_passthru") + {
+        hash<auto> client_opts = opts - ("method", "error_passthru") + {
             "url": parts[0],
-            # the handler follows and reports redirects and checks the response status itself
+            # the client follows redirects; the handler checks the response status itself
             "error_passthru": True,
             "allow_any_response": True,
         };
@@ -466,8 +466,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         }
         object rest = RestIoSupport::createClient(client_opts);
         return new RestIoRequestPollOperation(rest, method, path, body, opts.headers, False,
-            opts.max_redirects ?? HttpIoSupport::DefaultMaxRedirects, opts.error_passthru.toBool(),
-            opts.redirect_passthru.toBool());
+            opts.error_passthru.toBool());
     }
 }
 
@@ -487,15 +486,14 @@ class RestIoSupport {
     }
 
     #! Creates a REST client
-    static object createClient(hash<auto> opts, *object mgr) {
+    static object createClient(hash<auto> opts) {
         load_module(ModuleName);
-        return exists mgr ? create_object(ClientClass, opts, mgr) : create_object(ClientClass, opts);
+        return create_object(ClientClass, opts);
     }
 
     #! Returns @ref True if the object provides the asynchronous request API of \c RestClientIo::RestClientIo
     static bool isAsyncClient(object client) {
-        return client.hasCallableMethod("startPollRawRequest") && client.hasCallableMethod("startPollRawRetry")
-            && client.hasCallableMethod("getConnectionManager");
+        return client.hasCallableMethod("startPollRequest") && client.hasCallableMethod("startPollRawRequest");
     }
 
     #! Returns the asynchronous client to use for a bound handler, or @ref nothing if the client is not supported
@@ -530,33 +528,25 @@ class RestIoSupport {
 }
 
 #! A non-blocking REST request that follows and reports redirects
-/** The first request is made with the REST client's request processing (authentication and token refresh, body
-    serialization, and its connection path); redirects are followed with requests on the same connection manager,
-    sending the headers of the first request to its origin only.  The output is the
+/** The request is made with the REST client's request processing (authentication and token refresh, body
+    serialization, and its connection path); the client follows redirects with its \c max_redirects and
+    \c redirect_passthru options, sending the headers of the first request to its origin only.  The output is the
     \c RestClient::RestResponseInfo hash of the final response with the \c effective_url and \c redirects keys.
 
     @since FileLocationHandler 3.0
 */
 class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
-        #! The client of the first request
+        #! The client
         object rest;
-        #! The current request operation
+        #! The request operation
         object op;
-        #! The origin of the current request
+        #! The origin of the request
         string origin;
-        #! The method of the current request
+        #! The method of the request
         string method;
-        #! The path of the current request, once known
-        *string path;
-        #! Follows and records redirects
-        *HttpRedirectFollower redirects;
-        #! The maximum number of redirects to follow
-        int max_redirects;
         #! If error responses are returned instead of raising an exception
         bool error_passthru;
-        #! If redirects are returned instead of followed
-        bool redirect_passthru;
         #! The output
         *hash<auto> output;
         #! True once aborted
@@ -565,25 +555,21 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
         Mutex m();
     }
 
-    #! Creates the operation and prepares the first request
+    #! Creates the operation and prepares the request
     /** @param rest the \c RestClientIo::RestClientIo client
         @param method the request method
         @param path the encoded request path
         @param body the request body, if any; serialized according to the client's data serialization setting
         @param hdr request headers, if any
         @param raw if @ref True, the body is sent as-is
-        @param max_redirects the maximum number of redirects to follow
         @param error_passthru if @ref True, error responses are returned by the handler instead of raising an
         exception
-        @param redirect_passthru if @ref True, redirects are returned instead of followed
     */
-    constructor(object rest, string method, string path, auto body, *hash<auto> hdr, bool raw, int max_redirects,
-            bool error_passthru = False, bool redirect_passthru = False) {
+    constructor(object rest, string method, string path, auto body, *hash<auto> hdr, bool raw,
+            bool error_passthru = False) {
         self.rest = rest;
         self.method = method;
-        self.max_redirects = max_redirects;
         self.error_passthru = error_passthru;
-        self.redirect_passthru = redirect_passthru;
         origin = RestIoSupport::getOrigin(rest.getUrl());
         op = raw || !exists body
             ? rest.startPollRawRequest(method, path, body, hdr)
@@ -602,7 +588,7 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
 
     #! Returns the goal
     string getGoal() {
-        return sprintf("REST %s %s%s", method, origin, path ?? op.getPath());
+        return sprintf("REST %s %s%s", method, origin, op.getPath());
     }
 
     #! Returns the state
@@ -634,60 +620,31 @@ class RestIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     */
     *hash<SocketPollInfo> continuePoll() {
         AutoLock al(m);
-        while (!exists output && !aborted) {
-            *hash<auto> resp;
-            try {
-                *hash<SocketPollInfo> info = op.continuePoll();
-                if (info) {
-                    return info;
-                }
-                if (!op.goalReached()) {
-                    return;
-                }
-                resp = op.getOutput();
-            } catch (hash<ExceptionInfo> ex) {
-                # a client that does not pass errors through reports an error response with its response info
-                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.typeCode() != NT_HASH || !ex.arg.status_code.intp()) {
-                    aborted = True;
-                    HttpIoSupport::rethrowError(ex);
-                }
-                resp = ex.arg;
+        if (exists output || aborted) {
+            return;
+        }
+        *hash<auto> resp;
+        try {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (info) {
+                return info;
             }
-            string request_url = origin + (resp.request_path ?? op.getPath());
-            if (!redirects) {
-                # the redirect state is created with the first request as sent
-                path = resp.request_path ?? op.getPath();
-                redirects = new HttpRedirectFollower(origin, path, method, op.getRequestHeaders(),
-                    op.getRequestBody(), max_redirects, redirect_passthru);
-            }
-            if (!redirects.isFollowed(resp.status_code)) {
-                output = resp + {
-                    "effective_url": request_url,
-                    "redirects": redirects.getRedirects(),
-                };
+            if (!op.goalReached()) {
                 return;
             }
-            try {
-                # a REST response has no status message; the standard reason phrase is used
-                redirects.follow(resp.status_code, HttpIoSupport::getStatusMessage({} + resp), resp.headers ?? {});
-            } catch (hash<ExceptionInfo> ex) {
+            resp = op.getOutput();
+        } catch (hash<ExceptionInfo> ex) {
+            # a client that does not pass errors through reports an error response with its response info
+            if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.typeCode() != NT_HASH || !ex.arg.status_code.intp()) {
                 aborted = True;
-                rethrow;
+                HttpIoSupport::rethrowError(ex);
             }
-            origin = redirects.getOrigin();
-            path = redirects.getPath();
-            method = redirects.getMethod();
-            *hash<auto> hdr = redirects.getHeaders();
-            *data body = redirects.getBody();
-            # a redirect is sent with a client for its origin on the same connection manager; the request was
-            # prepared already, so the token check is skipped
-            object hop = RestIoSupport::createClient({
-                "url": origin,
-                "error_passthru": True,
-                "allow_any_response": True,
-            }, rest.getConnectionManager());
-            op = hop.startPollRawRetry(method, path, body, hdr);
+            resp = ex.arg;
         }
+        output = resp + {
+            "effective_url": resp.effective_url ?? origin + (resp.request_path ?? op.getPath()),
+            "redirects": resp.redirects ?? (),
+        };
     }
 
     #! Aborts the request

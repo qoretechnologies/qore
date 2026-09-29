@@ -336,6 +336,10 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c content_encoding: content encoding option (e.g., \c "auto", \c "gzip")
         - \c default_path: connection path prepended to all request paths
         - \c proxy: proxy URL (e.g., \c "http://proxy:port")
+        - \c max_redirects: the maximum number of redirects to follow (default: 5); see @ref restclientio_redirects
+        - \c redirect_passthru: if \c True, redirect responses are returned instead of being followed
+        - \c enable_cookies: if \c False, the cookie jar of the connection manager is disabled; cookies are
+          enabled by default and are shared by all clients that use the same connection manager
         - \c validator: a @ref RestSchemaValidator::AbstractRestSchemaValidator instance for
           request/response processing
         - \c oauth2_grant_type: OAuth2 grant type (\c "client_credentials", \c "password",
@@ -371,6 +375,20 @@ hash<RestResponseInfo> resp = f.get(30s);
           \c HTTP service name is derived from the connection URL
         - \c username: username for \c password grant type
         - \c password: password for \c password grant type
+
+        @anchor restclientio_redirects
+        @par Redirects
+        All request APIs follow redirects the same way: the synchronous \c rest*() methods, the asynchronous
+        \c rest*Async() methods, the caller-driven poll operations (@ref startPollRequest() and related methods),
+        and the SSE APIs (@ref restSseReader(), @ref restSseStream(), and @ref restObserveSse()).  Redirects are
+        followed with the rules of @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower", the same as with
+        @ref Qore::HTTPClient "HTTPClient", up to the \c max_redirects option of the connection manager, unless
+        its \c redirect_passthru option is set.  The request is prepared once (serialization, authentication,
+        and signing); a redirect repeats it as prepared, sending the \c Authorization, \c Cookie, and \c Host
+        headers only to the origin of the original request.  The response hash gives the final URL in
+        \c effective_url and the redirects followed in \c redirects; a redirect that cannot be followed raises
+        \c HTTP-CLIENT-REDIRECT-ERROR, \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED, or
+        \c HTTP-CLIENT-UNKNOWN-PROTOCOL.
 
         @par Shared Connection Manager
         An optional @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" can
@@ -1670,20 +1688,30 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
 
             *auto negotiate_context;
             bool negotiate_retried = False;
+            hash<auto> prepared;
+            # follows redirects; created with the first request as it was sent
+            *HttpRedirectFollower rf;
             while (True) {
-                hash<auto> prepared = prepareRawRequest(method, \path, body, \hdr);
-                if (exists prepared.negotiate_context) {
-                    negotiate_context = prepared.negotiate_context;
+                bool redirected = rf && rf.getRedirects();
+                if (!redirected) {
+                    prepared = prepareRawRequest(method, \path, body, \hdr);
+                    if (exists prepared.negotiate_context) {
+                        negotiate_context = prepared.negotiate_context;
+                    }
                 }
+                string origin = redirected ? rf.getOrigin() : url;
+                string req_path = redirected ? rf.getPath() : path;
 
+                # the cookie jar of the connection manager supplies cookies as with other requests
                 HttpClientIo::HttpClientStreamHandle stream =
-                    mgr.acquireAndStartStreaming(url, method, path, hdr, False,
-                        prepared.serialized_body);
+                    mgr.acquireAndStartStreaming(origin, redirected ? rf.getMethod() : method, req_path,
+                        mgr.addCookieHeaders(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
+                        redirected ? rf.getBody() : prepared.serialized_body);
                 try {
                     hash<auto> response_start = readSseResponseStart(stream, method,
                         path, deadline);
                     *hash<auto> response = response_start.response;
-                    if (!negotiate_retried && response && response.status_code == 401
+                    if (!redirected && !negotiate_retried && response && response.status_code == 401
                             && tryNegotiateAuthRetry(response.headers ?? {}, \hdr,
                                 \negotiate_context)) {
                         negotiate_retried = True;
@@ -1692,8 +1720,28 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                     }
 
                     if (response && response.headers) {
-                        processFinalNegotiateResponse(response.headers,
-                            negotiate_context);
+                        if (!redirected) {
+                            processFinalNegotiateResponse(response.headers,
+                                negotiate_context);
+                        }
+                        mgr.storeResponseCookies(origin, req_path, response.headers);
+                    }
+
+                    if (response && response.status_code) {
+                        if (!rf) {
+                            rf = mgr.getRedirectFollower(url, path, method, hdr, prepared.serialized_body);
+                        }
+                        if (rf.isFollowed(response.status_code)) {
+                            # the body of the redirect response is discarded
+                            stream.cancel();
+                            rf.follow(response.status_code, response.status_message, response.headers ?? {});
+                            continue;
+                        }
+                        # an error response reports where it came from
+                        response.effective_url = rf.getRequestUrl();
+                        if (list<hash<HttpRedirectInfo>> redirects = rf.getRedirects()) {
+                            response.redirects = redirects;
+                        }
                     }
 
                     list<auto> initial_data = validateSseResponseStart(stream,
@@ -2212,7 +2260,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             # the body is received as octets for response_body_raw; buildResponse() decodes text
             stream.setDecodeText(False);
-            hash<auto> result = stream.submitAsyncWithNotifier(method, path, hdr,
+            # the cookie jar of the connection manager supplies cookies as with synchronous requests
+            hash<auto> result = stream.submitAsyncWithNotifier(method, path, mgr.addCookieHeaders(url, path, hdr),
                 prepared.serialized_body, notifier);
             return result + {
                 "stream": stream,
@@ -2220,6 +2269,29 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 "request_body": prepared.serialized_body,
                 "error_passthru": prepared.error_passthru,
                 "allow_any_response": prepared.allow_any_response,
+            };
+        }
+
+        #! Submits a request that follows a redirect for RestClientIoAsyncRequestOperation
+        /** The request was prepared for the original request already, so it is sent as given
+
+            @param origin the origin of the redirect target
+            @param method the HTTP method
+            @param path the request target
+            @param hdr the request headers
+            @param body the serialized request body
+            @param notifier signaled when the response arrives
+
+            @return a hash with the \c future and \c stream keys
+        */
+        hash<auto> submitRedirectAttemptWithNotifier(string origin, string method, string path,
+                *hash<auto> hdr, *data body, EventNotifier notifier) {
+            log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, origin, path);
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
+            stream.setDecodeText(False);
+            return stream.submitAsyncWithNotifier(method, path, mgr.addCookieHeaders(origin, path, hdr), body,
+                notifier) + {
+                "stream": stream,
             };
         }
 
@@ -3051,6 +3123,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         "request_headers": RestClientIo::redactHeaders(request_headers),
                         "request_body": request_body,
                         "protocol": raw.protocol,
+                        "status_message": raw.status_message,
+                        "effective_url": raw.effective_url,
+                        "redirects": raw.redirects,
                     };
             }
 
@@ -3065,6 +3140,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 "request_headers": RestClientIo::redactHeaders(request_headers),
                 "request_body": request_body,
                 "protocol": raw.protocol,
+                "status_message": raw.status_message,
+                "effective_url": raw.effective_url,
+                "redirects": raw.redirects,
             };
         }
 
@@ -3159,6 +3237,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                             "request_headers": RestClientIo::redactHeaders(request_headers),
                             "request_body": request_body,
                             "protocol": raw_response.protocol,
+                            "status_message": raw_response.status_message,
+                            "effective_url": raw_response.effective_url,
+                            "redirects": raw_response.redirects,
                         };
                 }
             }
@@ -4527,11 +4608,12 @@ class RestClientIoAsyncConnector {
     }
 
     #! Creates the connector for the given client
-    /** @param rcio the client whose connection manager and URL are used
+    /** @param rcio the client whose connection manager is used
+        @param url the URL to connect to; if not given, the URL of the client
     */
-    constructor(RestClientIo rcio) {
+    constructor(RestClientIo rcio, *string url) {
         mgr = rcio.getConnectionManager();
-        url = rcio.getUrl();
+        self.url = url ?? rcio.getUrl();
     }
 
     #! Advances connection acquisition
@@ -4686,6 +4768,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
         #! Whether Negotiate challenge retry was already attempted
         bool negotiate_retried = False;
+
+        #! Follows redirects; created with the first request as it was sent
+        *HttpRedirectFollower rf;
 
         #! Current operation state
         string state;
@@ -4935,7 +5020,8 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                 delete pending_future;
                 delete pending_stream;
 
-                if (resp.status_code == 401 && !negotiate_retried
+                # Negotiate authenticates the original request; a redirect target is not challenged
+                if (resp.status_code == 401 && !negotiate_retried && !isRedirected()
                         && rcio.tryPingNegotiateAuthRetry(resp.headers, \hdr,
                             \negotiate_context)) {
                     negotiate_retried = True;
@@ -4943,7 +5029,31 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                     continue;
                 }
 
-                rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                if (!isRedirected()) {
+                    rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                }
+
+                # cookies set by a response are stored before a redirect is followed, like with synchronous requests
+                HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
+                mgr.storeResponseCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
+                    resp.headers);
+                if (!rf) {
+                    # redirects are followed with the request as it was sent
+                    rf = mgr.getRedirectFollower(rcio.getUrl(), path, method, hdr, request_body);
+                }
+                if (rf.isFollowed(resp.status_code)) {
+                    rf.follow(resp.status_code, resp.status_message, resp.headers ?? {});
+                    # the next request goes to the origin of the redirect target
+                    connector = new RestClientIoAsyncConnector(rcio, rf.getOrigin());
+                    waiting_for_connection = False;
+                    self_signaled_notifier = False;
+                    state = SPS_CONNECTING;
+                    continue;
+                }
+                resp.effective_url = rf.getRequestUrl();
+                if (list<hash<HttpRedirectInfo>> redirects = rf.getRedirects()) {
+                    resp.redirects = redirects;
+                }
                 if (caller_driven) {
                     # deserialize here rather than in getOutput(), so that an HTTP error status leaves this
                     # method as an exception and ends the caller's poll loop; getOutput() is only reached
@@ -4985,6 +5095,15 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
     private doSubmitRequest() {
         state = SPS_IO_WAITING;
+        if (isRedirected()) {
+            # the request was prepared for the original request; it is sent as changed by the redirects
+            hash<auto> result = rcio.submitRedirectAttemptWithNotifier(rf.getOrigin(), rf.getMethod(),
+                rf.getPath(), rf.getHeaders(), rf.getBody(), io_notifier);
+            connector.submitted();
+            pending_future = result.future;
+            pending_stream = result.stream;
+            return;
+        }
         if (!prepared_attempt) {
             prepareAttempt();
         }
@@ -4997,6 +5116,11 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
         request_allow_any_response = result.allow_any_response;
+    }
+
+    #! Returns @ref True if a redirect was followed
+    private bool isRedirected() {
+        return rf && rf.getRedirects();
     }
 
     private prepareAttempt() {
@@ -5074,6 +5198,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         *HttpClientIo::HttpClientStreamHandle pending_stream;
         *auto negotiate_context;
         bool negotiate_retried = False;
+        #! Follows redirects; created with the first request as it was sent
+        *HttpRedirectFollower rf;
 
         *hash<auto> prepared_attempt;
         *data request_body;
@@ -5257,14 +5383,27 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     }
 
     private doSubmitStreaming() {
+        HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
+        if (isRedirected()) {
+            # the request was prepared for the original request; it is sent as changed by the redirects
+            pending_stream = mgr.acquireStream(rf.getOrigin());
+            pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
+                mgr.addCookieHeaders(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
+                stream_notifier, True);
+            connector.submitted();
+            state = SPS_STREAM_WAITING;
+            waiting_for_stream = False;
+            return;
+        }
         if (!prepared_attempt) {
             prepareAttempt();
         }
-        pending_stream = rcio.getConnectionManager().acquireStream(rcio.getUrl());
+        pending_stream = mgr.acquireStream(rcio.getUrl());
         # sse_install_eligible=True: this flow always completes with installSseState()
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
-        pending_stream.startStreaming(method, path, hdr, False,
+        # The cookie jar of the connection manager supplies cookies as with other requests.
+        pending_stream.startStreaming(method, path, mgr.addCookieHeaders(rcio.getUrl(), path, hdr), False,
             prepared_attempt.serialized_body, stream_notifier, True);
         connector.submitted();
         request_body = prepared_attempt.serialized_body;
@@ -5272,6 +5411,11 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         delete prepared_attempt;
         state = SPS_STREAM_WAITING;
         waiting_for_stream = False;
+    }
+
+    #! Returns @ref True if a redirect was followed
+    private bool isRedirected() {
+        return rf && rf.getRedirects();
     }
 
     private prepareAttempt() {
@@ -5346,7 +5490,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         hash<auto> response_headers = response.headers ?? {};
         int status_code = response.status_code.toInt();
 
-        if (status_code == 401 && !negotiate_retried
+        # Negotiate authenticates the original request; a redirect target is not challenged
+        if (status_code == 401 && !negotiate_retried && !isRedirected()
                 && rcio.tryPingNegotiateAuthRetry(response_headers, \hdr,
                     \negotiate_context)) {
             negotiate_retried = True;
@@ -5354,6 +5499,33 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             remove pending_stream;
             doStartConnecting();
             return;
+        }
+
+        # cookies set by a response are stored before a redirect is followed
+        HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
+        mgr.storeResponseCookies(rf ? rf.getOrigin() : rcio.getUrl(), rf ? rf.getPath() : path,
+            response_headers);
+        if (!rf) {
+            # redirects are followed with the request as it was sent
+            rf = mgr.getRedirectFollower(rcio.getUrl(), path, method, hdr, request_body);
+        }
+        if (rf.isFollowed(status_code)) {
+            rf.follow(status_code, response.status_message, response_headers);
+            # the body of the redirect response is discarded, and the next request goes to the origin of the
+            # redirect target
+            cancelPendingStream();
+            remove pending_stream;
+            remove response;
+            connector = new RestClientIoAsyncConnector(rcio, rf.getOrigin());
+            waiting_for_connection = False;
+            self_signaled_notifier = False;
+            state = SPS_CONNECTING;
+            return;
+        }
+        # an error response reports where it came from
+        response.effective_url = rf.getRequestUrl();
+        if (list<hash<HttpRedirectInfo>> redirects = rf.getRedirects()) {
+            response.redirects = redirects;
         }
 
         if (status_code >= 300) {
@@ -5365,8 +5537,10 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             return;
         }
 
-        rcio.processPingFinalNegotiateResponse(response_headers,
-            negotiate_context);
+        if (!isRedirected()) {
+            rcio.processPingFinalNegotiateResponse(response_headers,
+                negotiate_context);
+        }
         *data initial_body = getInitialBody(item);
         pending_stream.installSseState(sse_queue, stream_notifier,
             initial_body);

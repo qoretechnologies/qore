@@ -1173,8 +1173,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             *data body) {
         # the URL is validated with the errors of this module before the follower parses it
         parseRequestUrl(url);
-        return new HttpRedirectFollower(url, path, method, headers, body, opts.max_redirects,
-            opts.redirect_passthru);
+        return getRedirectFollower(url, path, method, headers, body);
     }
 
     #! Logs a redirect that is about to be followed
@@ -4098,6 +4097,46 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     int getMaxRequestRetries() {
         return opts.max_request_retries;
+    }
+
+    #! Returns the maximum number of redirects that requests follow
+    /** @return the \c max_redirects option
+
+        @since HttpClientIo 1.0
+    */
+    int getMaxRedirects() {
+        return opts.max_redirects;
+    }
+
+    #! Returns @ref True if redirect responses are returned to the caller instead of being followed
+    /** @return the \c redirect_passthru option
+
+        @since HttpClientIo 1.0
+    */
+    bool getRedirectPassthru() {
+        return opts.redirect_passthru;
+    }
+
+    #! Returns a redirect follower for a request with the redirect options of this manager
+    /** Used by clients that send requests with the lower-level APIs of the manager and follow redirects
+        themselves, so that they follow them with the same rules and limits as @ref request()
+
+        @param url the URL of the request; only the scheme, host, and port are used
+        @param path the request target
+        @param method the HTTP method
+        @param headers the request headers as sent
+        @param body the request body as sent
+
+        @return a redirect follower for the request
+
+        @throw HTTP-CLIENT-URL-ERROR the URL is invalid or has no host
+
+        @since HttpClientIo 1.0
+    */
+    HttpRedirectFollower getRedirectFollower(string url, string path, string method, *hash<auto> headers,
+            *data body) {
+        return new HttpRedirectFollower(url, path, method, headers, body, opts.max_redirects,
+            opts.redirect_passthru);
     }
 
     #! Returns the configured protocol mode (@c "auto", @c "h1", @c "h2", @c "h3")
