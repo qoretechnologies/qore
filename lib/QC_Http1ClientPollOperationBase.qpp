@@ -41,6 +41,7 @@
 #include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/ql_debug.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -2577,6 +2578,12 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, c
     {
         AutoLocker al(stream_lock);
         if (connection_priv) {
+#ifdef DEBUG
+            // tests defer marking the connection closed to hold open the window in which the failure is published
+            // but the pooled connection still looks reusable
+            qore_dbg_http1_defer_close_hook_t hook = qore_dbg_http1_defer_close_hook.load();
+            if (!hook || !hook(connection_priv))
+#endif
             connection_priv->setClosed();
         }
         connection_priv = nullptr;

@@ -82,6 +82,8 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
     }
 
     constructor() : Test("HttpClientStaleConnectionTest", "1.0") {
+        # first: the hook it arms reacts to the next connection failure in the process
+        addTestCase("streamed request repeated when the pool has not seen the close", \streamedUnreflectedCloseTest());
         addTestCase("buffered requests", \bufferedTest());
         addTestCase("streamed responses", \streamedTest());
         set_return_value(main());
@@ -109,5 +111,38 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
             assertEq(binary("ok"), os.getData(), sprintf("request %d", i));
         }
         assertEq(Requests, server.getRequests());
+    }
+
+    # The poll operation of a connection that the server closed while it was idle publishes its failure before the
+    # connection is marked closed in the pool.  A streamed request submitted in between fails at once; it is repeated,
+    # and the repeat must not be handed the same connection again, which would fail the same way and be reported.
+    # A debug hook holds that window open.
+    streamedUnreflectedCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that defers marking a failed connection closed is only in debug builds");
+        }
+        ClosingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", server.getPort()), "timeout": 10s});
+
+        Counter deferred(1);
+        call_function("dbg_defer_http1_connection_close", deferred);
+        on_exit call_function("dbg_release_http1_connection_close");
+
+        BinaryOutputStream os();
+        hc.send(os, NOTHING, "GET", "/");
+        assertEq(binary("ok"), os.getData(), "first request");
+
+        # the server closed the connection after the response; wait until the idle connection has failed
+        if (deferred.waitForZero(10s)) {
+            fail("the failure of the idle connection was not seen");
+        }
+
+        # the connection still looks reusable; the request fails on it and is repeated on a new connection
+        os = new BinaryOutputStream();
+        hc.send(os, NOTHING, "GET", "/");
+        assertEq(binary("ok"), os.getData(), "request after the unreflected close");
+        assertTrue(call_function("dbg_release_http1_connection_close"), "a connection close was deferred");
+        assertEq(2, server.getRequests());
     }
 }

@@ -5302,6 +5302,98 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     return QoreValue();
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook{nullptr};
+#endif
+
+namespace {
+struct Http1DeferClose {
+    std::mutex m;
+    //! decremented when a connection's close is deferred; set while the hook is armed
+    Counter* deferred = nullptr;
+    //! the connection whose close was deferred, with a reference of its own
+    AbstractHttpPollConnectionPriv* conn = nullptr;
+};
+
+Http1DeferClose http1_defer_close;
+
+//! runs in the I/O thread under the poll operation's stream lock; disarms itself and does not block
+bool dbg_http1_defer_close_hook(AbstractHttpPollConnectionPriv* conn) {
+    Http1DeferClose& h = http1_defer_close;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> deferred(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.deferred || h.conn) {
+            return false;
+        }
+        conn->ref();
+        h.conn = conn;
+        deferred = h.deferred;
+        h.deferred = nullptr;
+        qore_dbg_http1_defer_close_hook.store(nullptr);
+    }
+    deferred->dec(&xsink);
+    if (xsink) {
+        printd(0, "dbg_defer_http1_connection_close(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+    return true;
+}
+}
+
+//! makes the next HTTP/1 client connection that fails leave marking itself closed to the caller
+/** When an HTTP/1 client poll operation fails (for example because the server closed an idle keep-alive
+    connection), it publishes the failure and then marks its connection closed.  Once armed, the next such failure
+    publishes the failure but leaves the connection looking open until dbg_release_http1_connection_close() is
+    called: tests use it to hold open the window in which a request can be submitted to a connection whose poll
+    operation has already failed while the connection manager still considers it reusable.
+
+    @param deferred decremented once a connection's close has been deferred
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed, or a deferred close has not been released
+*/
+static QoreValue f_dbg_defer_http1_connection_close(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> deferred(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    Http1DeferClose& h = http1_defer_close;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.deferred || h.conn) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "an HTTP/1 connection close is already deferred or armed");
+        return QoreValue();
+    }
+    h.deferred = deferred.release();
+    qore_dbg_http1_defer_close_hook.store(dbg_http1_defer_close_hook);
+    return QoreValue();
+}
+
+//! marks the connection whose close dbg_defer_http1_connection_close() deferred closed, and disarms the hook
+/** @return True if a deferred connection was marked closed, False if none had been deferred
+*/
+static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Http1DeferClose& h = http1_defer_close;
+    AbstractHttpPollConnectionPriv* conn;
+    ReferenceHolder<Counter> deferred(xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        qore_dbg_http1_defer_close_hook.store(nullptr);
+        conn = h.conn;
+        h.conn = nullptr;
+        deferred = h.deferred;
+        h.deferred = nullptr;
+    }
+    if (!conn) {
+        return false;
+    }
+    conn->setClosed();
+    conn->deref(xsink);
+    return true;
+}
+
 //! makes the next c-ares lookups find that c-ares lost their query
 /** Each time an unfinished c-ares lookup (a name, reverse or name-info lookup) checks whether c-ares lost its
     query, it finds it lost while the count is positive, and the count is decremented; the lookup then recovers
@@ -5384,6 +5476,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_defer_http1_connection_close", f_dbg_defer_http1_connection_close,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred");
+    qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,

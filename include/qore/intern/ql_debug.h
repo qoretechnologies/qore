@@ -74,6 +74,13 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collec
 typedef void (*qore_dbg_deref_wait_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_wait_hook_t> qore_dbg_deref_wait_hook;
 
+class AbstractHttpPollConnectionPriv;
+//! called by the HTTP/1 client poll operation when it fails and is about to mark its connection closed; returns
+//! true if the hook took over marking it closed (holding its own reference); set by
+//! dbg_defer_http1_connection_close()
+typedef bool (*qore_dbg_http1_defer_close_hook_t)(AbstractHttpPollConnectionPriv* conn);
+DLLLOCAL extern std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook;
+
 //! the number of times the next c-ares lookups report their query as lost; set by dbg_cares_lose_query()
 DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
 #endif

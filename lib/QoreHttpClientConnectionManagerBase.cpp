@@ -1419,10 +1419,25 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
     if (reused) {
         *reused = conn->hasServedRequest();
     }
+    // a strong reference for the duration of the call: evicting the connection below releases the pool's
+    // reference, and the I/O thread can release the connection's own at any time
+    conn->ref();
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
         body, body_len, channel_out, xsink, event_sink);
     if (*xsink || stream_id < 0) {
         releaseConnection(conn);
+        // As in requestOnce(): a connection that refused the request because it is closed must not stay in the
+        // pool.  The protocol poll operation publishes its closed error before its callback marks the pooled
+        // connection closed, so a submit in that window fails while the connection still looks reusable; the
+        // caller repeats an idempotent request on a reused connection, and without the eviction that repeat can
+        // be handed the same dead connection, fail the same way and be reported as final.
+        if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
+            ExceptionSink evict_xsink;
+            closeAndEvict(conn, &evict_xsink);
+            evict_xsink.clear();
+        }
         return -1;
     }
     // the response is read from the channel by the caller; a connection that a request has been submitted on is
