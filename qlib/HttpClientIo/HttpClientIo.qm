@@ -595,6 +595,24 @@ public namespace HttpClientIo {
         */
         string protocol = "auto";
 
+        #! If @ref False, HTTP/3 is never used
+        /** With the default \c "auto" protocol, HTTPS connections then use HTTP/2 negotiated with ALPN, with a
+            fallback to HTTP/1.1, and Alt-Svc advertisements of HTTP/3 are ignored, as with the \c "disabled"
+            \c http3_mode option of @ref Qore::HTTPClient "HTTPClient".  The \c "h3" protocol cannot be used then.
+
+            @since HttpClientIo 1.0
+        */
+        bool enable_http3 = True;
+
+        #! If @ref True, response bodies with a content coding (\c Content-Encoding) are returned as received
+        /** The body is then binary data, and a text body is not converted to a string, as with the
+            \c encoding_passthru option of @ref Qore::HTTPClient "HTTPClient"; the \c max_response_body_size option
+            limits the body as received.  Streaming consumers receive the body as received in any case.
+
+            @since HttpClientIo 1.0
+        */
+        bool encoding_passthru = False;
+
         #! Proxy URL (e.g., "http://proxy:8080")
         /** When set, all connections are routed through this HTTP proxy.
             For HTTPS targets, the proxy tunnel is established via HTTP CONNECT.

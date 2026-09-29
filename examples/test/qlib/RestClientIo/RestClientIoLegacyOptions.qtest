@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    RestClientIo and HttpClientIo support for the options of HTTPClient and RestClient
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ConnectionProvider
+%requires RestClient
+%requires HttpClientIo
+%requires RestClientIo
+
+%exec-class RestClientIoLegacyOptionsTest
+
+#! Echoes the request, or sends a gzip-encoded JSON document
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/gzip-json") {
+            hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "application/json",
+                "Content-Encoding": "gzip"}, 200, gzip(binary(make_json({"a": 1}))));
+            rv.no_content_encoding = True;
+            return rv;
+        }
+        binary octets = exists body ? (body.typeCode() == NT_BINARY ? body : binary(body)) : binary();
+        return makeResponse({"Content-Type": "application/json"}, 200, binary(make_json({
+            "method": hdr.method,
+            # the server moves the charset parameter to another header
+            "content_type": hdr._qore_orig_content_type ?? hdr."content-type",
+            "octets": octets.toHex(),
+        })));
+    }
+}
+
+public class RestClientIoLegacyOptionsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("RestClientIoLegacyOptionsTest", "1.0") {
+        addTestCase("all HTTPClient options are known", \testKnownOptions());
+        addTestCase("encoding", \testEncoding());
+        addTestCase("encoding_passthru", \testEncodingPassthru());
+        addTestCase("http3_mode", \testHttp3Mode());
+        addTestCase("additional_methods", \testAdditionalMethods());
+        addTestCase("HttpConnection async options", \testHttpConnection());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("echo", new EchoHandler());
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    testKnownOptions() {
+        # every option of HTTPClient is known to RestClientIo, so none is dropped without a word
+        list<string> http_client_options = ("additional_methods", "assume_encoding", "connect_timeout",
+            "default_path", "default_port", "encode_chars", "encoding", "encoding_passthru", "error_passthru",
+            "headers", "http3_mode", "http_version", "max_redirects", "max_response_body_size", "password",
+            "pre_encoded_urls", "protocols", "proxy", "redirect_passthru", "ssl_ca_file", "ssl_ca_path",
+            "ssl_cert_data", "ssl_cert_path", "ssl_key_data", "ssl_key_password", "ssl_key_path", "ssl_verify_cert",
+            "timeout", "url", "username");
+        foreach string opt in (http_client_options) {
+            # default_port and protocols are supported when the scheme handling of HttpClientIo is extended
+            if (opt == "default_port" || opt == "protocols") {
+                continue;
+            }
+            assertTrue(RestClientIo::KnownOptions{opt}, opt);
+        }
+    }
+
+    testEncoding() {
+        RestClientIo rest({"url": url, "data": "json", "encoding": "ISO-8859-1"});
+        on_exit rest.close();
+        assertEq("ISO-8859-1", rest.getEncoding());
+        hash<RestResponseInfo> resp = rest.restPost("/x", "ä");
+        # the JSON string "ä" in ISO-8859-1
+        assertEq("22e422", resp.body.octets);
+        assertRegex("charset=ISO-8859-1", resp.body.content_type);
+        # the async API as well
+        resp = rest.restPostAsync("/x", "ä").get();
+        assertEq("22e422", resp.body.octets);
+        # a raw string body is converted
+        resp = rest.restDoRawRequest("POST", "/x", "ä", {"Content-Type": "text/plain"});
+        assertEq("e4", resp.body.octets);
+        assertRegex("charset=ISO-8859-1", resp.body.content_type);
+        # a binary body is sent as-is
+        resp = rest.restDoRawRequest("POST", "/x", <c3a4>, {"Content-Type": "application/octet-stream"});
+        assertEq("c3a4", resp.body.octets);
+        # the setter changes the encoding
+        rest.setEncoding("UTF-8");
+        assertEq("22c3a422", rest.restPost("/x", "ä").body.octets);
+        # without the option, strings are sent in their own encoding
+        RestClientIo utf8({"url": url, "data": "json"});
+        on_exit utf8.close();
+        assertNothing(utf8.getEncoding());
+        assertEq("22c3a422", utf8.restPost("/x", "ä").body.octets);
+    }
+
+    testEncodingPassthru() {
+        RestClientIo rest({"url": url, "data": "json", "encoding_passthru": True});
+        on_exit rest.close();
+        assertTrue(rest.getConnectionManager().getEncodingPassthru());
+        hash<RestResponseInfo> resp = rest.restGet("/gzip-json");
+        # the body is returned as received and is not deserialized
+        assertEq(gzip(binary(make_json({"a": 1}))), resp.body);
+        assertEq(resp.body, resp.response_body_raw);
+        assertEq(gzip(binary(make_json({"a": 1}))), rest.restGetAsync("/gzip-json").get().body);
+        # the body is decoded and deserialized by default
+        RestClientIo dec({"url": url, "data": "json"});
+        on_exit dec.close();
+        assertEq({"a": 1}, dec.restGet("/gzip-json").body);
+
+        # the connection manager option
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"encoding_passthru": True});
+        on_exit mgr.closeAll();
+        assertEq(gzip(binary(make_json({"a": 1}))), mgr.request(url, "GET", "/gzip-json").body);
+        assertEq(gzip(binary(make_json({"a": 1}))), mgr.requestAsync(url, "GET", "/gzip-json").get(30s).body);
+        assertEq(gzip(binary(make_json({"a": 1}))), mgr.submitRequestAsync(url, "GET", "/gzip-json").future.get(30s)
+            .body);
+        # a decoded body is a string
+        assertEq(make_json({"a": 1}), new HttpClientConnectionManager().request(url, "GET", "/gzip-json").body);
+    }
+
+    testHttp3Mode() {
+        list<list<auto>> cases = (
+            ("disabled", False, "auto"),
+            ("DISABLED", False, "auto"),
+            (HTTP3Mode::Disabled, False, "auto"),
+            ("auto", True, "auto"),
+            (HTTP3Mode::Auto, True, "auto"),
+            ("required", True, "h3"),
+            (HTTP3Mode::Required, True, "h3"),
+        );
+        foreach list<auto> c in (cases) {
+            RestClientIo rest({"url": "https://localhost", "http3_mode": c[0]});
+            on_exit rest.close();
+            HttpClientConnectionManager mgr = rest.getConnectionManager();
+            assertEq(c[1], mgr.getEnableHttp3(), sprintf("%y", c[0]));
+            assertEq(c[2], mgr.getProtocolMode(), sprintf("%y", c[0]));
+        }
+        # HTTP/3 disabled uses HTTP/1.1 for plain HTTP as always
+        RestClientIo rest({"url": url, "http3_mode": "disabled", "data": "json"});
+        on_exit rest.close();
+        assertEq(200, rest.restGet("/x").status_code);
+
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "invalid http3_mode", sub () {
+            new RestClientIo({"url": url, "http3_mode": "sometimes"});
+        });
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "invalid http3_mode", sub () {
+            new RestClientIo({"url": url, "http3_mode": 7});
+        });
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "conflicts with protocol \"h3\"", sub () {
+            new RestClientIo({"url": url, "http3_mode": "disabled", "protocol": "h3"});
+        });
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "conflicts with protocol \"h1\"", sub () {
+            new RestClientIo({"url": url, "http3_mode": "required", "protocol": "h1"});
+        });
+        # the connection manager rejects HTTP/3 when it is disabled
+        assertThrows("HTTPCLIENT-OPTION-ERROR", "HTTP/3 is disabled", sub () {
+            new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "enable_http3": False,
+            });
+        });
+    }
+
+    testAdditionalMethods() {
+        # every request method is allowed; the option is accepted for compatibility; the test server does not
+        # implement these methods, so its error response shows that they were sent
+        RestClientIo rest({"url": url, "data": "json", "additional_methods": {"PROPFIND": True},
+            "error_passthru": True, "allow_any_response": True});
+        on_exit rest.close();
+        foreach string method in (("PROPFIND", "REPORT")) {
+            hash<RestResponseInfo> resp = rest.restDoRequest(method, "/x", NOTHING);
+            assertEq(501, resp.status_code, method);
+            assertRegex(method, resp.body, method);
+        }
+    }
+
+    testHttpConnection() {
+        HttpConnection conn("test", "test", url, {}, {"assume_encoding": "ISO-8859-2"});
+        HttpClientConnectionManager mgr = conn.getAsync();
+        on_exit mgr.closeAll();
+        assertEq("ISO-8859-2", mgr.getAssumeEncoding());
+    }
+}

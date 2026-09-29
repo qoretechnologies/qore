@@ -13,6 +13,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires HttpClientIo
+%requires RestClientIo
 
 %exec-class HttpClientTlsVerifyTest
 
@@ -173,6 +174,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HTTPClient CA with HTTP/3", \http3Test());
         addTestCase("HTTP/3 session tickets", \http3TicketTest());
         addTestCase("HttpClientIo CA options", \httpClientIoTest());
+        addTestCase("RestClientIo CA options", \restClientIoTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
         set_return_value(main());
     }
@@ -370,6 +372,39 @@ WKEuKQ7xuGuAiIESuSDBsSg=
                 assertEq("verified", resp.body, msg + sprintf(" %y", opt));
             }
         }
+    }
+
+    restClientIoTest() {
+        # the options of HTTPClient and RestClient configure the connection manager of RestClientIo
+        hash<string, int> targets = {
+            "h1": good_port,
+            "h2": good_port,
+            "h3": quic_good_port,
+        };
+        foreach hash<auto> i in (targets.pairIterator()) {
+            string url = sprintf("https://localhost:%d", i.value);
+            string msg = "RestClientIo " + i.key;
+            # not trusted by the default CAs
+            {
+                RestClientIo rest({"url": url, "protocol": i.key, "ssl_verify_cert": True, "data": "text"});
+                on_exit rest.close();
+                assertRejected(\rest.restGet(), "/", msg + " (default CAs)");
+            }
+            foreach hash<auto> opt in ({"ssl_ca_file": ca_file}, {"ssl_ca_path": ca_dir}) {
+                RestClientIo rest({"url": url, "protocol": i.key, "ssl_verify_cert": True, "data": "text"} + opt);
+                on_exit rest.close();
+                hash<RestResponseInfo> resp = rest.restGet("/");
+                assertEq(200, resp.status_code, msg + sprintf(" %y", opt));
+                assertEq("verified", resp.body, msg + sprintf(" %y", opt));
+            }
+        }
+        # HTTP/3 disabled: the TCP listener is used
+        RestClientIo rest({"url": sprintf("https://localhost:%d", good_port), "ssl_verify_cert": True,
+            "ssl_ca_file": ca_file, "http3_mode": "disabled", "data": "text"});
+        on_exit rest.close();
+        hash<RestResponseInfo> resp = rest.restGet("/");
+        assertEq(200, resp.status_code);
+        assertNeq("h3", resp.protocol);
     }
 
     optionErrorTest() {

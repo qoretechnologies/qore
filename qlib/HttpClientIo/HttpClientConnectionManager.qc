@@ -381,6 +381,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
+        if (self.opts.protocol == "h3" && !self.opts.enable_http3) {
+            throw "HTTPCLIENT-OPTION-ERROR", "protocol \"h3\" cannot be used when HTTP/3 is disabled with "
+                "enable_http3 = False";
+        }
         if (self.opts.max_request_retries < 0) {
             throw "HTTPCLIENT-OPTION-ERROR",
                 sprintf("max_request_retries must be >= 0 (0 = disabled), got %d",
@@ -665,6 +669,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         stream.markReservationHeld();
         stream.setMaxResponseBodySize(opts.max_response_body_size);
         stream.setAssumedEncoding(opts.assume_encoding);
+        stream.setDecodeContent(!opts.encoding_passthru);
         if (from_pool) {
             stream.markConnectionReused();
         }
@@ -1805,18 +1810,18 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after the HTTP/1.1 "
                     "fallback interval elapsed", key);
                 # QUIC cannot tunnel through HTTP proxies — probe H2 only there
-                return proxy_info ? "h2" : "happy-eyeballs";
+                return canUseHttp3() ? "happy-eyeballs" : "h2";
             }
             if (cached == "h3") {
                 # QUIC cannot tunnel through HTTP proxies — downgrade to H2
-                if (proxy_info) {
+                if (!canUseHttp3()) {
                     return "h2";
                 }
                 return "happy-eyeballs";
             }
             # Cached as "h2" after a race or H3 fallback — re-probe both protocols
             # after H3_REPROBE_INTERVAL without delaying TCP behind a QUIC timeout
-            if (!proxy_info && h3_probe_times.hasKey(key)) {
+            if (canUseHttp3() && h3_probe_times.hasKey(key)) {
                 date elapsed = now_us() - h3_probe_times{key};
                 if (elapsed >= H3_REPROBE_INTERVAL) {
                     log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after %y elapsed", key, elapsed);
@@ -1827,11 +1832,16 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
 
         # No cache and no proxy: happy eyeballs — try H3 + H2 in parallel
-        if (!proxy_info) {
+        if (canUseHttp3()) {
             return "happy-eyeballs";
         }
-        # Proxy: H3 (QUIC) can't tunnel through proxies, use H2
+        # Proxy or HTTP/3 disabled: H3 (QUIC) can't tunnel through proxies, use H2 with a fallback to HTTP/1.1
         return "h2";
+    }
+
+    #! Returns @ref True if HTTP/3 can be used in auto mode: it is enabled and no proxy is configured
+    private bool canUseHttp3() {
+        return !proxy_info && opts.enable_http3;
     }
 
     #! Internal: gets or creates a connection for the given URL info
@@ -3616,8 +3626,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         if (opts.protocol != "auto") {
             return;
         }
-        # QUIC cannot tunnel through HTTP proxies — ignore Alt-Svc when proxied
-        if (proxy_info) {
+        # QUIC cannot tunnel through HTTP proxies — ignore Alt-Svc when proxied or when HTTP/3 is disabled
+        if (!canUseHttp3()) {
             return;
         }
         # HTTP/2 headers are lowercase; HTTP/1.1 headers preserve case — check both.
@@ -4048,6 +4058,24 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     string getAssumeEncoding() {
         return opts.assume_encoding;
+    }
+
+    #! Returns @ref True if response bodies with a content coding are returned as received
+    /** @return the \c encoding_passthru option
+
+        @since HttpClientIo 1.0
+    */
+    bool getEncodingPassthru() {
+        return opts.encoding_passthru;
+    }
+
+    #! Returns @ref True if HTTP/3 can be used
+    /** @return the \c enable_http3 option
+
+        @since HttpClientIo 1.0
+    */
+    bool getEnableHttp3() {
+        return opts.enable_http3;
     }
 
     #! Returns the maximum size of a response body that is returned whole; 0 means no limit

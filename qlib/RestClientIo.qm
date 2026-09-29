@@ -328,7 +328,23 @@ hash<RestResponseInfo> resp = f.get(30s);
           "encode_http_request_target()"), as with the synchronous @ref RestClient::RestClient "RestClient", except
           that percent-encoded octets are kept
         - \c encode_chars: additional characters to percent-encode in request paths
+        - \c encoding: the character encoding of string request bodies; see @ref setEncoding()
+        - \c encoding_passthru: if \c True, response bodies with a content coding (\c Content-Encoding) are
+          returned as received and not deserialized; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::encoding_passthru
+          "HttpClientConnectionManagerOptions::encoding_passthru"
+        - \c http3_mode: \c "disabled" (HTTP/3 is never used), \c "auto" (the default), or \c "required" (the same
+          as the \c "h3" protocol), or a @ref Qore::HTTP3Mode "HTTP3Mode" value, as with
+          @ref Qore::HTTPClient "HTTPClient"
+        - \c additional_methods: accepted for compatibility with @ref Qore::HTTPClient "HTTPClient"; every request
+          method is allowed
         - \c ssl_verify_mode: SSL verification mode
+        - \c ssl_verify_cert: if \c True, the server certificate is verified (\c SSL_VERIFY_PEER), as with
+          @ref RestClient::RestClient "RestClient"; ignored if \c ssl_verify_mode is set
+        - \c ssl_ca_file: a file with one or more CA certificates in PEM format used to verify the server
+          certificate instead of the default CA certificates of the system
+        - \c ssl_ca_path: a directory of CA certificates in PEM format used to verify the server certificate
+          instead of the default CA certificates of the system
         - \c accept_all_certs: if \c True, accept all certificates including self-signed
         - \c no_charset: if \c True, do not add charset to Content-Type header
         - \c allow_any_response: if \c True, return raw body on deserialization errors instead
@@ -428,6 +444,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Target URL
             string url;
+
+            #! The character encoding of string request bodies, if set; see @ref setEncoding()
+            *string body_encoding;
 
             #! Schema validator for serialization/deserialization
             RestSchemaValidator::AbstractRestSchemaValidator validator;
@@ -740,16 +759,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             };
 
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
-            /** Unknown keys cause a @c RESTCLIENTIO-OPTION-ERROR at construction time. This set
-                intentionally mirrors the options declared by @ref RestClient::RestConnection
-                "RestConnection" so that @ref RestClient::RestConnection::getAsyncImpl()
-                "getAsyncImpl()" can pass its full options hash verbatim. Keys marked "accepted
-                but not honored" are valid options that RestClientIo has not yet implemented and
-                silently ignores — Phase 2 (TLS client certs) and Phase 3 (OAuth2 PKCE, custom
-                token refresh, etc.) will wire them up.
-
-                Subclasses that add their own options (e.g. \c AwsRestClientIo) must strip those keys
-                before calling the base constructor.
+            /** Other keys are ignored, so that a subclass or a connection can pass options of its own in the same
+                hash.  This set includes every option of @ref RestClient::RestClient "RestClient" and of
+                @ref Qore::HTTPClient "HTTPClient", so that @ref RestClient::RestConnection::getAsyncImpl()
+                "getAsyncImpl()" can pass its full options hash verbatim, and a client created with the options of
+                a @ref RestClient::RestClient "RestClient" behaves the same.
             */
             const hash<string, bool> KnownOptions = {
                 # Core transport / URL
@@ -758,6 +772,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "protocol": True,
                 "http_version": True,
                 "connect_timeout": True,
+                "http3_mode": True,
+                "additional_methods": True,
+                "encoding": True,
+                "encoding_passthru": True,
                 "timeout": True,
                 "proxy": True,
                 "max_connections_per_host": True,
@@ -781,6 +799,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "ssl_key_data": True,
                 "ssl_key_der": True,
                 "ssl_key_password": True,
+                "ssl_ca_file": True,
+                "ssl_ca_path": True,
                 # Logging
                 "logger": True,
                 # Serialization / encoding
@@ -983,6 +1003,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             if (opts.assume_encoding) {
                 assume_encoding = opts.assume_encoding;
+            }
+            if (opts.encoding) {
+                setEncoding(opts.encoding);
             }
             pre_encoded_urls = opts.pre_encoded_urls.toBool();
             if (opts.encode_chars) {
@@ -1512,6 +1535,28 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
         #! Clears the connection path
         clearConnectionPath() {
             setConnectionPath();
+        }
+
+        #! Sets the character encoding of string request bodies
+        /** A string request body is converted to this encoding before it is sent, and the \c charset parameter of
+            its \c Content-Type gives this encoding, as with @ref Qore::HTTPClient::setEncoding()
+            "HTTPClient::setEncoding()"; the same as the \c encoding constructor option
+
+            @param encoding the character encoding
+
+            @since RestClientIo 1.0
+        */
+        setEncoding(string encoding) {
+            AutoWriteLock al(config_lock);
+            body_encoding = encoding;
+        }
+
+        #! Returns the character encoding of string request bodies, if set with @ref setEncoding()
+        /** @since RestClientIo 1.0
+        */
+        *string getEncoding() {
+            AutoReadLock al(config_lock);
+            return body_encoding;
         }
 
         #! Sets the username and password for HTTP Basic authentication
@@ -2942,10 +2987,12 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             bool req_error_passthru;
             bool req_allow_any_response;
             *string req_connection_path;
+            *string req_body_encoding;
             RestSchemaValidator::AbstractRestSchemaValidator req_validator;
             {
                 AutoReadLock al(config_lock);
                 hdr = {} + headers + hdr;
+                req_body_encoding = body_encoding;
                 req_sct = sct;
                 req_seh = seh;
                 req_no_charset = noCharset;
@@ -2993,6 +3040,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     if (!hdr."content-type") {
                         hdr."content-type" = req.content;
                     }
+                }
+                # a string body is sent in the character encoding set with the encoding option, like with HTTPClient
+                if (req_body_encoding && serialized_body.typeCode() == NT_STRING
+                        && serialized_body.encoding() != req_body_encoding) {
+                    serialized_body = convert_encoding(serialized_body, req_body_encoding);
                 }
                 # NOTE a "charset" parameter is not defined for "multipart/*" types, and
                 # appending one after the "boundary" parameter breaks strict parsers;
@@ -3075,11 +3127,15 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             *string content_type = RestClient::getSingleHeaderValue(raw.headers."content-type");
             # a binary text body is decoded by the rules shared by all HTTP clients; requests are made for the
             # octets of the body, which are kept in response_body_raw
-            if (resp_body && resp_body.typeCode() == NT_BINARY) {
+            # a body with a content coding that was not decoded (the encoding_passthru option) is returned as
+            # received, without deserialization
+            bool content_encoded = resp_body.typeCode() == NT_BINARY && mgr.getEncodingPassthru()
+                && HttpClientIo::HttpClientStreamHandle::getContentCoding(raw.headers."content-encoding");
+            if (resp_body && resp_body.typeCode() == NT_BINARY && !content_encoded) {
                 resp_body = HttpClientIo::HttpClientStreamHandle::decodeResponseText(raw, assume_encoding).body;
             }
             *data response_body_raw = raw.body;
-            if (exists resp_body && content_type) {
+            if (exists resp_body && content_type && !content_encoded) {
                 try {
                     hash<RestSchemaValidator::RestResponseClientInfo> parsed =
                         resp_validator.parseResponse(
@@ -4332,6 +4388,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             if (exists opts.enable_cookies && !opts.enable_cookies) {
                 mgr_opts.enable_cookies = False;
             }
+            if (opts.ssl_ca_file) {
+                mgr_opts.ssl_ca_file = opts.ssl_ca_file;
+            }
+            if (opts.ssl_ca_path) {
+                mgr_opts.ssl_ca_path = opts.ssl_ca_path;
+            }
+            if (opts.encoding_passthru) {
+                mgr_opts.encoding_passthru = opts.encoding_passthru.toBool();
+            }
+            if (exists opts.http3_mode) {
+                RestClientIo::applyHttp3Mode(\mgr_opts, opts.http3_mode, opts.protocol);
+            }
             # Load TLS client cert + private key for mutual TLS (mTLS)
             *SSLCertificate client_cert = RestClientIo::loadSslCertificate(opts);
             *SSLPrivateKey client_pk = RestClientIo::loadSslPrivateKey(opts);
@@ -4342,6 +4410,49 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 mgr_opts.client_pk = client_pk;
             }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+
+        #! Applies the \c http3_mode option of @ref Qore::HTTPClient "HTTPClient" to connection manager options
+        /** @param mgr_opts the connection manager options to update
+            @param mode \c "disabled", \c "auto", or \c "required", or a @ref Qore::HTTP3Mode "HTTP3Mode" value
+            @param protocol the \c protocol option, if given
+
+            @throw RESTCLIENTIO-OPTION-ERROR the mode is invalid, or conflicts with the \c protocol option
+
+            @since RestClientIo 1.0
+        */
+        static applyHttp3Mode(reference<hash<HttpClientIo::HttpClientConnectionManagerOptions>> mgr_opts, auto mode,
+                *string protocol) {
+            *string m;
+            switch (mode.typeCode()) {
+                case NT_STRING: m = mode.lwr(); break;
+                case NT_INT:
+                    switch (mode) {
+                        case HTTP3Mode::Disabled: m = "disabled"; break;
+                        case HTTP3Mode::Auto: m = "auto"; break;
+                        case HTTP3Mode::Required: m = "required"; break;
+                    }
+                    break;
+            }
+            switch (m) {
+                case "disabled":
+                    if (protocol == "h3") {
+                        throw "RESTCLIENTIO-OPTION-ERROR", "http3_mode \"disabled\" conflicts with protocol \"h3\"";
+                    }
+                    mgr_opts.enable_http3 = False;
+                    return;
+                case "auto":
+                    return;
+                case "required":
+                    if (protocol && protocol != "auto" && protocol != "h3") {
+                        throw "RESTCLIENTIO-OPTION-ERROR", sprintf("http3_mode \"required\" conflicts with protocol "
+                            "%y", protocol);
+                    }
+                    mgr_opts.protocol = "h3";
+                    return;
+            }
+            throw "RESTCLIENTIO-OPTION-ERROR", sprintf("invalid http3_mode %y; expecting \"disabled\", \"auto\", "
+                "or \"required\", or an HTTP3Mode value", mode);
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data

@@ -69,8 +69,9 @@ public hashdecl HttpClientRequestPollOptions {
     #! connection manager if not set
     *bool redirect_passthru;
 
-    #! If @ref False, a body with a content coding (\c Content-Encoding) is returned as received
-    bool decode_content = True;
+    #! If @ref False, a body with a content coding (\c Content-Encoding) is returned as received; if not set, the
+    #! body is decoded unless the \c encoding_passthru option of the connection manager is set
+    *bool decode_content;
 
     #! If @ref False, a text body is returned as binary data after its content encoding is decoded
     bool decode_text = True;
@@ -653,7 +654,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         binary bin;
         map bin += $1, body_chunks;
         if (bin) {
-            if (opts.decode_content) {
+            if (opts.decode_content ?? !mgr.getEncodingPassthru()) {
                 resp.body = HttpClientStreamHandle::normalizeResponseBody({
                     "headers": resp.headers,
                     "body": bin,

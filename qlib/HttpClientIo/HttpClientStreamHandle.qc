@@ -125,6 +125,9 @@ public class HttpClientStreamHandle {
 
         #! If a whole text response body is decoded to a string; see @ref setDecodeText()
         bool decode_text = True;
+
+        #! If the content encoding of a whole response body is decoded; see @ref setDecodeContent()
+        bool decode_content = True;
     }
 
     #! Creates a new stream handle
@@ -189,6 +192,26 @@ public class HttpClientStreamHandle {
     */
     bool getDecodeText() {
         return decode_text;
+    }
+
+    #! Sets whether the content encoding of a whole response body is decoded
+    /** By default a body with a content coding (\c Content-Encoding) is decompressed; if not, the body is returned
+        as received, as binary data; see the \c encoding_passthru option of
+        @ref HttpClientIo::HttpClientConnectionManagerOptions "HttpClientConnectionManagerOptions"
+
+        @param decode @ref False to return response bodies as received
+
+        @since HttpClientIo 1.0
+    */
+    setDecodeContent(bool decode) {
+        decode_content = decode;
+    }
+
+    #! Returns @ref True if the content encoding of a whole response body is decoded; see @ref setDecodeContent()
+    /** @since HttpClientIo 1.0
+    */
+    bool getDecodeContent() {
+        return decode_content;
     }
 
     #! Releases any unreleased stream reservation
@@ -493,7 +516,8 @@ public class HttpClientStreamHandle {
                 state = HttpClientStreamState::Complete;
                 response = rv;
             }
-            return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding, decode_text);
+            return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding, decode_text,
+                decode_content);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
@@ -906,7 +930,7 @@ public class HttpClientStreamHandle {
     private hash<auto> decodeResultFuture(hash<auto> result) {
         if (result.future) {
             result.future = new DecodingResponseFuture(result.future, max_response_body_size, assumed_encoding,
-                decode_text);
+                decode_text, decode_content);
         }
         return result;
     }
@@ -927,13 +951,24 @@ public class HttpClientStreamHandle {
         @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
         @param decode_text if @ref False, the body is returned as binary data after its content encoding is
         decompressed: the octets of the resource
+        @param decode_content if @ref False, a body with a content coding is returned as received, as binary data,
+        and its text is not decoded
 
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds \a max_size
     */
     static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0,
-            string assumed_encoding = "ISO-8859-1", bool decode_text = True) {
+            string assumed_encoding = "ISO-8859-1", bool decode_text = True, bool decode_content = True) {
         if (resp.body) {
             *string coding = getContentCoding(resp.headers."content-encoding");
+            if (coding && !decode_content) {
+                # the body is returned as received
+                *string ct = getResponseContentType(resp);
+                resp.content_type = ct ? mime_get_base_type(ct) : NOTHING;
+                if (resp.body.typeCode() != NT_BINARY) {
+                    resp.body = binary(resp.body);
+                }
+                return resp;
+            }
             if (coding) {
                 binary body = resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body);
                 int limit = max_size > 0 ? max_size : 0;
@@ -1023,12 +1058,17 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
         }
     }
 
-    #! Internal: returns the first coding of a Content-Encoding value if the body is to be decoded
-    /** @return \c gzip, \c deflate, \c bzip2, \c br, or \c zstd (an \c x- alias is returned without its
+    #! Returns the first coding of a \c Content-Encoding value if the body is to be decoded
+    /** @param content_encoding the value of the \c Content-Encoding header; a list if the header was sent more than
+        once
+
+        @return \c gzip, \c deflate, \c bzip2, \c br, or \c zstd (an \c x- alias is returned without its
         prefix), or @ref nothing if the body is not to be decoded: no coding, \c identity, a charset given as a
         coding, or an unknown coding
+
+        @since HttpClientIo 1.0
     */
-    private static *string getContentCoding(auto content_encoding) {
+    static *string getContentCoding(auto content_encoding) {
         # a header sent more than once arrives as a list; the first value gives the first coding
         if (content_encoding.typeCode() == NT_LIST) {
             content_encoding = content_encoding[0];
@@ -1418,16 +1458,19 @@ class DecodingResponseFuture inherits Future<auto> {
         int max_size;
         string assumed_encoding;
         bool decode_text;
+        bool decode_content;
         Mutex m();
         bool decoded;
         auto rv;
     }
 
-    constructor(Future real_future, int max_size, string assumed_encoding, bool decode_text = True) {
+    constructor(Future real_future, int max_size, string assumed_encoding, bool decode_text = True,
+            bool decode_content = True) {
         self.real_future = real_future;
         self.max_size = max_size;
         self.assumed_encoding = assumed_encoding;
         self.decode_text = decode_text;
+        self.decode_content = decode_content;
     }
 
     #! Blocks until the response is available, then decodes and returns it
@@ -1438,7 +1481,8 @@ class DecodingResponseFuture inherits Future<auto> {
         AutoLock al(m);
         if (!decoded) {
             rv = resp.typeCode() == NT_HASH
-                ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size, assumed_encoding, decode_text)
+                ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size, assumed_encoding, decode_text,
+                    decode_content)
                 : resp;
             decoded = True;
         }

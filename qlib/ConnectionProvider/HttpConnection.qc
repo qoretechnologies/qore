@@ -626,7 +626,10 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         (\c http_version), connect and request timeouts (\c connect_timeout and \c timeout), proxy and redirect
         handling (\c proxy, \c max_redirects, and \c redirect_passthru), TLS verification (\c ssl_verify_cert),
         mutual TLS credentials (\c ssl_cert_data, \c ssl_cert_path, \c ssl_key_data, \c ssl_key_path, and
-        \c ssl_key_password), and \c max_response_body_size; other options are ignored.
+        \c ssl_key_password), \c max_response_body_size, and \c assume_encoding.  The request options
+        \c headers, \c username, \c password, \c error_passthru, and \c pre_encoded_urls apply to requests and
+        are used by the data provider (see @ref DataProviderRequestOptions) and by the poll operations of this
+        module; other options are ignored.
 
         @param opts @ref HttpConnection options
         @param logger an optional logger for the connection manager
@@ -667,6 +670,9 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         }
         if (exists opts.max_response_body_size) {
             async_opts.max_response_body_size = opts.max_response_body_size;
+        }
+        if (opts.assume_encoding) {
+            async_opts.assume_encoding = opts.assume_encoding;
         }
         if (opts.proxy.val()) {
             async_opts.proxy_url = opts.proxy;
