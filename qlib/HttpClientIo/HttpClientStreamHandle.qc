@@ -276,7 +276,7 @@ public class HttpClientStreamHandle {
         *hash<auto> err = conn.getPollOperation().getError();
         if (err) {
             throw "HTTPCLIENT-CONNECT-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;
         }
         throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
     }

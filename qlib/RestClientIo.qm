@@ -392,8 +392,9 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c negotiate_preemptive: if \c True, send the initial Negotiate token before receiving a 401 challenge
         - \c negotiate_service_principal: optional Kerberos service principal; if omitted, a host-based
           \c HTTP service name is derived from the connection URL
-        - \c username: username for \c password grant type
-        - \c password: password for \c password grant type
+        - \c username: username for HTTP authentication (Basic, and Digest after a Digest challenge; see
+          @ref setUserPassword()) when no OAuth2 grant type is configured, and for the \c password grant type
+        - \c password: password for HTTP authentication and for the \c password grant type
 
         @anchor restclientio_redirects
         @par Redirects
@@ -472,6 +473,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Basic auth password
             *string basic_auth_pass;
+
+            #! Answers Basic and Digest challenges for the user name and password, if set
+            *HttpAuthenticator basic_auth;
 
             #! Default headers to send with each request
             hash<auto> headers = {};
@@ -1563,23 +1567,53 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
             return body_encoding;
         }
 
-        #! Sets the username and password for HTTP Basic authentication
-        /** @param user the username
+        #! Sets the username and password for HTTP authentication
+        /** The credentials are sent with the Basic scheme; a Digest challenge (RFC 7616) received for a request is
+            answered, and later requests are then authenticated with the Digest scheme; see
+            @ref HttpUtil::HttpAuthenticator "HttpAuthenticator"
+
+            @param user the username
             @param pass the password (optional)
         */
         setUserPassword(string user, *string pass) {
             AutoWriteLock al(config_lock);
             basic_auth_user = user;
             basic_auth_pass = pass ?? "";
-            headers."authorization" = "Basic " + make_base64_string(user + ":" + (pass ?? ""));
+            basic_auth = new HttpAuthenticator(user, pass ?? "");
+            headers."authorization" = basic_auth.getBasicCredentials();
         }
 
-        #! Clears the username and password for HTTP Basic authentication
+        #! Clears the username and password for HTTP authentication
         clearUserPassword() {
             AutoWriteLock al(config_lock);
             remove basic_auth_user;
             remove basic_auth_pass;
+            remove basic_auth;
             remove headers."authorization";
+        }
+
+        #! Processes an authentication challenge of a 401 response for the user name and password
+        /** @param response_headers the headers of the 401 response
+            @param hdr the headers of the request that received it; the \c authorization header is removed if the
+            request is to be sent again, so that the next preparation adds the answer
+
+            @return @ref True if the request should be prepared and sent again to answer the challenge
+
+            @since RestClientIo 1.0
+        */
+        bool tryHttpAuthRetry(*hash<auto> response_headers, reference<*hash<auto>> hdr) {
+            *HttpAuthenticator auth;
+            {
+                AutoReadLock al(config_lock);
+                auth = basic_auth;
+            }
+            # only the credentials of the client are answered, not a token or a header of the caller
+            *string sent = hdr.authorization;
+            if (!auth || sent !~ /^(Basic|Digest) /i || !auth.processChallenge(response_headers, sent)) {
+                return False;
+            }
+            remove hdr.authorization;
+            return True;
         }
 
         #! Returns connection pool statistics
@@ -1987,6 +2021,15 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             if (raw_resp.status_code == 401 && negotiate_retry
                     && tryNegotiateAuthRetry(raw_resp.headers, \hdr, \negotiate_context)) {
                 negotiate_retry = False;
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr,
+                    prepared.serialized_body, req_to, False);
+            }
+
+            # 3b. If 401 and the client has a user name and password, answer a Basic or Digest challenge once
+            if (raw_resp.status_code == 401 && tryHttpAuthRetry(raw_resp.headers, \hdr)) {
                 prepared = raw
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
@@ -2992,11 +3035,13 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             bool req_allow_any_response;
             *string req_connection_path;
             *string req_body_encoding;
+            *HttpAuthenticator req_basic_auth;
             RestSchemaValidator::AbstractRestSchemaValidator req_validator;
             {
                 AutoReadLock al(config_lock);
                 hdr = {} + headers + hdr;
                 req_body_encoding = body_encoding;
+                req_basic_auth = basic_auth;
                 req_sct = sct;
                 req_seh = seh;
                 req_no_charset = noCharset;
@@ -3064,6 +3109,12 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     hdr."content-encoding" = req_seh.ce;
                     serialized_body = req_seh.func(serialized_body);
                 }
+            }
+
+            # the credentials of the client answer a Digest challenge received earlier
+            if (req_basic_auth && req_basic_auth.hasDigestChallenge()
+                    && hdr.authorization == req_basic_auth.getBasicCredentials()) {
+                hdr.authorization = req_basic_auth.getAuthorization(method, path, serialized_body);
             }
 
             hash<auto> rv = {
@@ -4847,6 +4898,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Whether Negotiate challenge retry was already attempted
         bool negotiate_retried = False;
 
+        #! Whether a Basic or Digest challenge was already answered
+        bool http_auth_retried = False;
+
         #! Follows redirects; created with the first request as it was sent
         *HttpRedirectFollower rf;
 
@@ -5114,6 +5168,15 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
                 if (!isRedirected()) {
                     rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                }
+
+                # the user name and password of the client answer a Basic or Digest challenge once
+                if (resp.status_code == 401 && !http_auth_retried && !isRedirected()
+                        && rcio.tryHttpAuthRetry(resp.headers, \hdr)) {
+                    http_auth_retried = True;
+                    delete prepared_attempt;
+                    doSubmitRequest();
+                    continue;
                 }
 
                 # cookies set by a response are stored before a redirect is followed, like with synchronous requests

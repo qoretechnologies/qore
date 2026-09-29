@@ -38,6 +38,11 @@ public hashdecl HttpClientOpenStreamOptions {
 
     #! the maximum time to wait for the response headers; the \c request_timeout option of the manager if not set
     *timeout timeout;
+
+    #! credentials for HTTP authentication; if not set, any user information in the URL
+    /** @since HttpClientIo 1.0
+    */
+    *hash<HttpClientCredentials> credentials;
 }
 
 #! The range of a partial response (206), as given by its \c Content-Range header (RFC 9110 section 14.4)

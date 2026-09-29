@@ -1,0 +1,540 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP authentication with HttpClientIo: Basic and Digest (RFC 7616) for servers and proxies
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpUtil
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+
+%exec-class HttpClientIoAuthTest
+
+#! Verifies Digest credentials independently of the client implementation
+class DigestVerifier {
+    public {
+        const User = "user";
+        const Pass = "pässword";
+    }
+
+    private {
+        string realm;
+        #! nonce -> last nonce count used
+        hash<string, int> nonces;
+        #! nonces that are reported as stale
+        hash<string, bool> stale;
+        Mutex m();
+    }
+
+    constructor(string realm) {
+        self.realm = realm;
+    }
+
+    #! Returns a new challenge
+    string challenge(string algorithm, *string qop, bool userhash = False, bool is_stale = False) {
+        string nonce = get_random_bytes(12).toHex();
+        {
+            AutoLock al(m);
+            nonces{nonce} = 0;
+        }
+        string rv = sprintf("Digest realm=\"%s\", nonce=\"%s\", algorithm=%s, opaque=\"opq\"", realm, nonce,
+            algorithm);
+        if (qop) {
+            rv += sprintf(", qop=\"%s\"", qop);
+        }
+        if (userhash) {
+            rv += ", userhash=true";
+        }
+        if (is_stale) {
+            rv += ", stale=true";
+        }
+        return rv;
+    }
+
+    #! Marks all current nonces as stale
+    expireNonces() {
+        AutoLock al(m);
+        map stale{$1} = True, keys nonces;
+    }
+
+    #! Returns "ok", "stale", or "bad"
+    string verify(*string authorization, string method, string uri, *data body) {
+        if (authorization !~ /^Digest /) {
+            return "bad";
+        }
+        hash<auto> p = HttpAuthenticator::parseChallenges(authorization)[0].params;
+        string alg = (p.algorithm ?? "MD5").upr();
+        code h = alg =~ /^SHA-256/ ? string sub (data d) { return SHA256(d); } : string sub (data d) { return MD5(d); };
+        string user = p.userhash == "true" ? h(User + ":" + realm) : User;
+        if (p.username != user || p.realm != realm || p.uri != uri || p.opaque != "opq") {
+            return "bad";
+        }
+        string ha1 = h(User + ":" + realm + ":" + Pass);
+        if (alg =~ /-SESS$/) {
+            ha1 = h(ha1 + ":" + p.nonce + ":" + p.cnonce);
+        }
+        string ha2 = p.qop == "auth-int" ? h(method + ":" + uri + ":" + h(body ?? "")) : h(method + ":" + uri);
+        string expected = p.qop
+            ? h(ha1 + ":" + p.nonce + ":" + p.nc + ":" + p.cnonce + ":" + p.qop + ":" + ha2)
+            : h(ha1 + ":" + p.nonce + ":" + ha2);
+        if (p.response != expected) {
+            return "bad";
+        }
+        AutoLock al(m);
+        if (!nonces.hasKey(p.nonce)) {
+            return "bad";
+        }
+        if (stale{p.nonce}) {
+            return "stale";
+        }
+        # a nonce count is never used twice
+        if (p.qop) {
+            int nc = ("0x" + p.nc).toInt(16);
+            if (nc <= nonces{p.nonce}) {
+                return "bad";
+            }
+            nonces{p.nonce} = nc;
+        }
+        return "ok";
+    }
+}
+
+#! A server that requires authentication
+class AuthServerHandler inherits AbstractHttpRequestHandler {
+    public {
+        DigestVerifier verifier("server@test");
+    }
+
+    private {
+        #! the Authorization headers received, per path
+        hash<string, list<auto>> received = {};
+        Mutex m();
+    }
+
+    list<auto> getReceived(string path) {
+        AutoLock al(m);
+        return received{path} ?? ();
+    }
+
+    clear() {
+        AutoLock al(m);
+        received = {};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = cx.raw_path;
+        {
+            AutoLock al(m);
+            received{path} += hdr.authorization;
+        }
+        if (path == "/basic") {
+            if (hdr.authorization == "Basic " + make_base64_string(binary(DigestVerifier::User + ":"
+                    + DigestVerifier::Pass))) {
+                return makeResponse({"Content-Type": "text/plain"}, 200, binary("ok"));
+            }
+            return makeResponse({"WWW-Authenticate": "Basic realm=\"server@test\"", "Content-Type": "text/plain"},
+                401, binary("unauthorized"));
+        }
+        if (path == "/open") {
+            return makeResponse({"Content-Type": "text/plain"}, 200, binary("open"));
+        }
+        # /digest/<algorithm>/<qop>[/userhash]
+        *list<*string> parts = (path =~ x/^\/digest\/([^\/]+)\/([^\/]+)(\/userhash)?/);
+        if (parts) {
+            string alg = parts[0];
+            *string qop = parts[1] == "none" ? NOTHING : parts[1];
+            bool userhash = exists parts[2];
+            string result = verifier.verify(hdr.authorization, hdr.method, path, body);
+            if (result == "ok") {
+                return makeResponse({"Content-Type": "text/plain"}, 200, binary("ok"));
+            }
+            return makeResponse({"WWW-Authenticate": verifier.challenge(alg, qop, userhash, result == "stale"),
+                "Content-Type": "text/plain"}, 401, binary("unauthorized"));
+        }
+        if (path == "/redirect-other") {
+            return makeResponse({"Location": hdr."x-target"}, 302, binary());
+        }
+        return makeResponse({"Content-Type": "text/plain"}, 404, binary("not found"));
+    }
+}
+
+#! A proxy that requires Digest authentication; answers plain HTTP requests itself, and refuses CONNECT requests
+#! with valid credentials with 403
+class TestProxy {
+    public {
+        DigestVerifier verifier("proxy@test");
+        const User = DigestVerifier::User;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running(1);
+        #! the requests received: method, target, and Proxy-Authorization
+        list<hash<auto>> requests = ();
+        Mutex m();
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    list<hash<auto>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    stop() {
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket peer;
+            try {
+                peer = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            background handle(peer);
+        }
+    }
+
+    private handle(Socket peer) {
+        on_exit peer.close();
+        try {
+            hash<auto> hdr = peer.readHTTPHeader(10s);
+            {
+                AutoLock al(m);
+                requests += {"method": hdr.method, "target": hdr.path, "authorization": hdr."proxy-authorization"};
+            }
+            string result = verifier.verify(hdr."proxy-authorization", hdr.method, hdr.path);
+            if (result != "ok") {
+                string challenge = verifier.challenge("SHA-256", "auth", False, result == "stale");
+                peer.send(sprintf("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: %s\r\n"
+                    "Content-Length: 0\r\nConnection: close\r\n\r\n", challenge));
+                return;
+            }
+            if (hdr.method == "CONNECT") {
+                peer.send("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                return;
+            }
+            string body = "proxied " + hdr.path;
+            peer.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n"
+                "Connection: close\r\n\r\n%s", body.size(), body));
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }
+}
+
+public class HttpClientIoAuthTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        AuthServerHandler handler();
+        HttpServer other_server;
+        AuthServerHandler other();
+        TestProxy proxy();
+        string url;
+        string other_url;
+        hash<HttpClientCredentials> creds = <HttpClientCredentials>{
+            "username": DigestVerifier::User,
+            "password": DigestVerifier::Pass,
+        };
+    }
+
+    constructor() : Test("HttpClientIoAuthTest", "1.0") {
+        addTestCase("Basic", \testBasic());
+        addTestCase("Digest", \testDigest());
+        addTestCase("Digest variants", \testDigestVariants());
+        addTestCase("stale nonce", \testStale());
+        addTestCase("request APIs", \testApis());
+        addTestCase("origin-bound credentials", \testOrigin());
+        addTestCase("plain HTTP proxy", \testProxyPlain());
+        addTestCase("CONNECT proxy", \testProxyConnect());
+        addTestCase("RestClientIo", \testRestClientIo());
+
+        Logger logger("test", LoggerLevel::getLevelError());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        server.setDefaultHandler("auth", handler);
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        other_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
+        other_server.setDefaultHandler("other", other);
+        other_url = sprintf("http://localhost:%d", other_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0}).port);
+        on_exit {
+            server.stop();
+            other_server.stop();
+            proxy.stop();
+        }
+        set_return_value(main());
+    }
+
+    testBasic() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        string basic = HttpAuthenticator::getBasicAuthorization(DigestVerifier::User, DigestVerifier::Pass);
+        # credentials in the URL are sent with the Basic scheme, encoded in UTF-8
+        handler.clear();
+        string cred_url = sprintf("http://%s:%s@%s", DigestVerifier::User, encode_url(DigestVerifier::Pass, True),
+            url.substr(7));
+        assertEq(200, mgr.request(cred_url, "GET", "/basic").status_code);
+        assertEq((basic,), handler.getReceived("/basic"));
+        # explicit credentials
+        assertEq(200, mgr.request(url, "GET", "/basic", NOTHING, NOTHING, NOTHING, True, creds).status_code);
+        # rejected credentials are not sent again
+        handler.clear();
+        hash<auto> resp = mgr.request(url, "GET", "/basic", NOTHING, NOTHING, NOTHING, True,
+            <HttpClientCredentials>{"username": "user", "password": "wrong"});
+        assertEq(401, resp.status_code);
+        assertEq(1, handler.getReceived("/basic").size());
+        # without credentials, the challenge is returned
+        assertEq(401, mgr.request(url, "GET", "/basic").status_code);
+        # a caller Authorization header is sent instead of the credentials
+        handler.clear();
+        resp = mgr.request(url, "GET", "/basic", {"Authorization": "Bearer x"}, NOTHING, NOTHING, True, creds);
+        assertEq(401, resp.status_code);
+        assertEq(("Bearer x",), handler.getReceived("/basic"));
+    }
+
+    testDigest() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        handler.clear();
+        # the Basic credentials sent first are answered with a Digest challenge
+        hash<auto> resp = mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds);
+        assertEq(200, resp.status_code);
+        list<auto> received = handler.getReceived("/digest/SHA-256/auth");
+        assertEq(2, received.size());
+        assertRegex("^Basic ", received[0]);
+        assertRegex("^Digest .*nc=00000001", received[1]);
+        # the challenge authenticates the following requests with an incremented nonce count
+        handler.clear();
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+            .status_code);
+        received = handler.getReceived("/digest/SHA-256/auth");
+        assertEq(1, received.size());
+        assertRegex("nc=00000002", received[0]);
+        # wrong credentials are answered once, and the challenge is returned
+        handler.clear();
+        resp = mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True,
+            <HttpClientCredentials>{"username": "user", "password": "wrong"});
+        assertEq(401, resp.status_code);
+        assertEq(2, handler.getReceived("/digest/SHA-256/auth").size());
+    }
+
+    testDigestVariants() {
+        list<string> paths = (
+            "/digest/MD5/auth",
+            "/digest/MD5-sess/auth",
+            "/digest/SHA-256-sess/auth",
+            "/digest/SHA-256/auth-int",
+            "/digest/MD5/none",
+            "/digest/SHA-256/auth/userhash",
+        );
+        foreach string path in (paths) {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+            on_exit mgr.closeAll();
+            assertEq(200, mgr.request(url, "POST", path, {"Content-Type": "text/plain"}, "body", NOTHING, True,
+                creds).status_code, path);
+            # the cached challenge authenticates the next request
+            handler.clear();
+            assertEq(200, mgr.request(url, "POST", path, {"Content-Type": "text/plain"}, "other body", NOTHING,
+                True, creds).status_code, path);
+            assertEq(1, handler.getReceived(path).size(), path);
+        }
+    }
+
+    testStale() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+            .status_code);
+        handler.verifier.expireNonces();
+        handler.clear();
+        # a stale nonce is answered with the new challenge
+        assertEq(200, mgr.request(url, "GET", "/digest/SHA-256/auth", NOTHING, NOTHING, NOTHING, True, creds)
+            .status_code);
+        assertEq(2, handler.getReceived("/digest/SHA-256/auth").size());
+    }
+
+    testApis() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        string path = "/digest/SHA-256/auth";
+        assertEq(200, mgr.requestAsync(url, "GET", path, NOTHING, NOTHING, True, creds).get(30s).status_code);
+        HttpClientRequestPollOperation op(mgr, url + path, "GET", NOTHING, NOTHING,
+            <HttpClientRequestPollOptions>{"credentials": creds});
+        assertEq(200, op.startAsync().get(30s).status_code);
+        HttpClientResponseStream s = mgr.openStream(url + path, NOTHING,
+            <HttpClientOpenStreamOptions>{"credentials": creds});
+        assertEq(200, s.getStatusCode());
+        s.cancel();
+        # credentials in the URL
+        string cred_url = sprintf("http://%s:%s@%s%s", DigestVerifier::User, encode_url(DigestVerifier::Pass, True),
+            url.substr(7), path);
+        assertEq(200, new HttpClientRequestPollOperation(mgr, cred_url).startAsync().get(30s).status_code);
+        assertEq(200, mgr.openStream(cred_url).getStatusCode());
+        # the authenticators are shared per origin and user name
+        assertEq(mgr.getAuthenticator(url, creds), mgr.getAuthenticator(url + "/x", creds));
+        assertTrue(mgr.getAuthenticator(url, creds).hasDigestChallenge());
+    }
+
+    testOrigin() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        other.clear();
+        hash<auto> resp = mgr.request(url, "GET", "/redirect-other", {"X-Target": other_url + "/open"}, NOTHING,
+            NOTHING, True, creds);
+        assertEq(200, resp.status_code);
+        # the credentials are not sent to another origin
+        assertEq((NOTHING,), other.getReceived("/open"));
+    }
+
+    testProxyPlain() {
+        string proxy_url = sprintf("http://%s:%s@127.0.0.1:%d", TestProxy::User,
+            encode_url(DigestVerifier::Pass, True), proxy.getPort());
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "proxy_url": proxy_url,
+        });
+        on_exit mgr.closeAll();
+        assertTrue(exists mgr.getProxyAuthenticator());
+        proxy.clear();
+        hash<auto> resp = mgr.request("http://example.invalid:8080", "GET", "/x");
+        assertEq(200, resp.status_code);
+        assertEq("proxied http://example.invalid:8080/x", resp.body);
+        list<hash<auto>> reqs = proxy.getRequests();
+        assertEq(2, reqs.size());
+        assertRegex("^Basic ", reqs[0].authorization);
+        assertRegex("^Digest ", reqs[1].authorization);
+        # the next request answers the challenge at once
+        proxy.clear();
+        assertEq(200, mgr.request("http://example.invalid:8080", "GET", "/y").status_code);
+        assertEq(1, proxy.getRequests().size());
+        # the poll operation as well
+        assertEq("proxied http://example.invalid/z",
+            new HttpClientRequestPollOperation(mgr, "http://example.invalid/z").startAsync().get(30s).body);
+    }
+
+    testProxyConnect() {
+        string proxy_url = sprintf("http://%s:%s@127.0.0.1:%d", TestProxy::User,
+            encode_url(DigestVerifier::Pass, True), proxy.getPort());
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "proxy_url": proxy_url,
+            "max_request_retries": 0,
+        });
+        on_exit mgr.closeAll();
+        proxy.clear();
+        # the proxy accepts the Digest answer of the second CONNECT request, and then refuses the target
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "HTTP 403", \mgr.request(), ("https://example.invalid", "GET",
+            "/x"));
+        list<hash<auto>> reqs = proxy.getRequests();
+        assertEq(("CONNECT", "CONNECT"), (map $1.method, reqs));
+        assertEq("example.invalid:443", reqs[0].target);
+        assertRegex("^Basic ", reqs[0].authorization);
+        assertRegex("^Digest ", reqs[1].authorization);
+        # the poll operation as well
+        proxy.clear();
+        HttpCancellableFuture f = new HttpClientRequestPollOperation(mgr, "https://example.invalid:8443/x")
+            .startAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "HTTP 403", \f.get(), 30s);
+        assertEq(1, (select proxy.getRequests(), $1.authorization =~ /^Digest /).size());
+        # wrong credentials are answered once
+        HttpClientConnectionManager bad(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "proxy_url": sprintf("http://%s:wrong@127.0.0.1:%d", TestProxy::User, proxy.getPort()),
+            "max_request_retries": 0,
+        });
+        on_exit bad.closeAll();
+        proxy.clear();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "HTTP 407", \bad.request(), ("https://example.invalid", "GET",
+            "/x"));
+        assertEq(2, proxy.getRequests().size());
+    }
+
+    testRestClientIo() {
+        string path = "/digest/SHA-256/auth";
+        RestClientIo rest({"url": url, "data": "text", "username": DigestVerifier::User,
+            "password": DigestVerifier::Pass});
+        on_exit rest.close();
+        handler.clear();
+        # the Basic credentials are answered with a Digest challenge, which the client answers
+        hash<RestResponseInfo> resp = rest.restGet(path);
+        assertEq(200, resp.status_code);
+        assertEq(2, handler.getReceived(path).size());
+        # the following requests use the Digest challenge with every request API
+        handler.clear();
+        assertEq(200, rest.restGet(path).status_code);
+        assertEq(200, rest.restGetAsync(path).get().status_code);
+        assertEq(200, rest.restPost(path, "x").status_code);
+        list<auto> received = handler.getReceived(path);
+        assertEq(3, received.size());
+        foreach auto a in (received) {
+            assertRegex("^Digest ", a);
+        }
+        # the async API answers the challenge as well
+        RestClientIo rest2({"url": url, "data": "text", "username": DigestVerifier::User,
+            "password": DigestVerifier::Pass});
+        on_exit rest2.close();
+        assertEq(200, rest2.restGetAsync("/digest/MD5/auth").get().status_code);
+        # wrong credentials are answered once
+        RestClientIo bad({"url": url, "data": "text", "username": "user", "password": "wrong",
+            "error_passthru": True});
+        on_exit bad.close();
+        handler.clear();
+        assertEq(401, bad.restGet(path).status_code);
+        assertEq(2, handler.getReceived(path).size());
+        handler.clear();
+        assertEq(401, bad.restGetAsync(path).get().status_code);
+        assertEq(2, handler.getReceived(path).size());
+    }
+
+}

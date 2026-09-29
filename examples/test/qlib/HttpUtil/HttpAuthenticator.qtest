@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Unit tests for HttpUtil::HttpAuthenticator
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpUtil
+
+%exec-class HttpAuthenticatorTest
+
+public class HttpAuthenticatorTest inherits QUnit::Test {
+    public {
+        # RFC 7616 section 3.9.1
+        const Challenge = "Digest realm=\"http-auth@example.org\", qop=\"auth, auth-int\", algorithm=%s, "
+            "nonce=\"7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v\", opaque=\"FQhe/qaU925kfnzjCev0ciny7QMkPqMAFRtzCUYo5tdS\"";
+        const CNonce = "f2/wE4q74E6zIJEtWaHKaf5wv/H5QzzpXusqGemxURZJ";
+    }
+
+    constructor() : Test("HttpAuthenticatorTest", "1.0") {
+        addTestCase("RFC 7616 examples", \testRfcExamples());
+        addTestCase("challenge parsing", \testParse());
+        addTestCase("Basic", \testBasic());
+        addTestCase("challenge processing", \testProcess());
+        addTestCase("Digest variants", \testVariants());
+        set_return_value(main());
+    }
+
+    testRfcExamples() {
+        hash<HttpAuthChallengeInfo> c = HttpAuthenticator::parseChallenges(sprintf(Challenge, "SHA-256"))[0];
+        string rv = HttpAuthenticator::getDigestResponse(c, "SHA-256", "Mufasa", "Circle of Life", "GET",
+            "/dir/index.html", 1, CNonce);
+        assertRegex("response=\"753927fa0e85d155564e2e272a28d1802ca10daf4496794697cf8db5856cb6c1\"", rv);
+        assertRegex("nc=00000001", rv);
+        assertRegex("qop=auth,", rv);
+        assertRegex("opaque=\"FQhe/qaU925kfnzjCev0ciny7QMkPqMAFRtzCUYo5tdS\"", rv);
+        assertRegex("algorithm=SHA-256,", rv);
+        rv = HttpAuthenticator::getDigestResponse(c, "MD5", "Mufasa", "Circle of Life", "GET", "/dir/index.html", 1,
+            CNonce);
+        assertRegex("response=\"8ca523f5e9506fed4657c9700eebdbec\"", rv);
+    }
+
+    testParse() {
+        list<hash<HttpAuthChallengeInfo>> l = HttpAuthenticator::parseChallenges("Newauth realm=\"apps\", type=1, "
+            "title=\"Login to \\\"apps\\\"\", Basic realm=\"simple\"");
+        assertEq(("newauth", "basic"), (map $1.scheme, l));
+        assertEq({"realm": "apps", "type": "1", "title": "Login to \"apps\""}, l[0].params);
+        assertEq({"realm": "simple"}, l[1].params);
+        # token68 and a header received more than once
+        l = HttpAuthenticator::parseChallenges(("Bearer abc===", "BASIC Realm=x"));
+        assertEq("abc===", l[0].token68);
+        assertEq("basic", l[1].scheme);
+        assertEq({"realm": "x"}, l[1].params);
+        # a scheme without parameters, and empty values
+        assertEq(({"scheme": "negotiate", "params": {}},), HttpAuthenticator::parseChallenges("Negotiate"));
+        assertEq((), HttpAuthenticator::parseChallenges(""));
+        assertEq((), HttpAuthenticator::parseChallenges(NOTHING));
+        # an unterminated quoted string ends the list; the malformed challenge is not returned
+        assertEq((), HttpAuthenticator::parseChallenges("Digest realm=\"x"));
+        assertEq(("basic",), (map $1.scheme, HttpAuthenticator::parseChallenges("Basic realm=a, Digest realm=\"x")));
+    }
+
+    testBasic() {
+        assertEq("Basic dXNlcjpwYXNz", HttpAuthenticator::getBasicAuthorization("user", "pass"));
+        # UTF-8
+        assertEq("Basic " + make_base64_string(<757365723a70c3a47373>),
+            HttpAuthenticator::getBasicAuthorization("user", "päss"));
+        HttpAuthenticator a("user", "pass");
+        assertEq("Authorization", a.getHeaderName());
+        assertEq("www-authenticate", a.getChallengeHeaderName());
+        assertEq(401, a.getChallengeStatus());
+        assertEq("Basic dXNlcjpwYXNz", a.getAuthorization("GET", "/"));
+        assertEq("Basic dXNlcjpwYXNz", a.getBasicCredentials());
+        assertTrue(a.hasCredentials("user", "pass"));
+        assertFalse(a.hasCredentials("user", "other"));
+        HttpAuthenticator p("user", "pass", True);
+        assertEq("Proxy-Authorization", p.getHeaderName());
+        assertEq("proxy-authenticate", p.getChallengeHeaderName());
+        assertEq(407, p.getChallengeStatus());
+    }
+
+    testProcess() {
+        HttpAuthenticator a("Mufasa", "Circle of Life");
+        # no supported challenge
+        assertFalse(a.processChallenge({"www-authenticate": "Bearer realm=x"}, "Basic x"));
+        assertFalse(a.processChallenge({}, NOTHING));
+        # a Basic challenge after other credentials; the same credentials are not sent again
+        assertTrue(a.processChallenge({"www-authenticate": "Basic realm=x"}, "Bearer y"));
+        assertFalse(a.processChallenge({"www-authenticate": "Basic realm=x"}, a.getBasicCredentials()));
+        # the strongest Digest challenge is used
+        hash<auto> hdr = {"www-authenticate": (sprintf(Challenge, "MD5"), sprintf(Challenge, "SHA-256"),
+            "Basic realm=x")};
+        assertTrue(a.processChallenge(hdr, a.getBasicCredentials()));
+        assertTrue(a.hasDigestChallenge());
+        string d1 = a.getAuthorization("GET", "/dir/index.html");
+        assertRegex("^Digest .*algorithm=SHA-256.*nc=00000001", d1);
+        assertRegex("nc=00000002", a.getAuthorization("GET", "/dir/index.html"));
+        # a rejected Digest answer for the same nonce is not sent again
+        assertFalse(a.processChallenge(hdr, d1));
+        # unless the nonce is stale
+        assertTrue(a.processChallenge({"www-authenticate": sprintf(Challenge, "SHA-256") + ", stale=true"}, d1));
+        assertRegex("nc=00000001", a.getAuthorization("GET", "/"));
+        # a Basic challenge replaces the Digest challenge
+        assertTrue(a.processChallenge({"www-authenticate": "Basic realm=x"}, "Digest x"));
+        assertFalse(a.hasDigestChallenge());
+        # unsupported Digest challenges are ignored
+        assertFalse(a.processChallenge({"www-authenticate": "Digest realm=x, nonce=y, algorithm=SHA-512-256"},
+            NOTHING));
+        assertFalse(a.processChallenge({"www-authenticate": "Digest realm=x, nonce=y, qop=auth-conf"}, NOTHING));
+        assertFalse(a.processChallenge({"www-authenticate": "Digest realm=x"}, NOTHING));
+        # proxy challenges
+        HttpAuthenticator p("u", "p", True);
+        assertFalse(p.processChallenge({"www-authenticate": sprintf(Challenge, "MD5")}, NOTHING));
+        assertTrue(p.processChallenge({"proxy-authenticate": sprintf(Challenge, "MD5")}, NOTHING));
+    }
+
+    testVariants() {
+        hash<HttpAuthChallengeInfo> c = <HttpAuthChallengeInfo>{
+            "scheme": "digest",
+            "params": {"realm": "r", "nonce": "n"},
+        };
+        # RFC 2069: no quality of protection
+        string rv = HttpAuthenticator::getDigestResponse(c, "MD5", "u", "p", "GET", "/x", 1, "cn");
+        string ha1 = MD5("u:r:p");
+        string ha2 = MD5("GET:/x");
+        assertRegex("response=\"" + MD5(ha1 + ":n:" + ha2) + "\"", rv);
+        assertNRegex("nc=|qop=|cnonce=", rv);
+        # -sess and auth-int
+        c.params.qop = "auth-int";
+        rv = HttpAuthenticator::getDigestResponse(c, "SHA-256-SESS", "u", "p", "POST", "/x", 3, "cn", "body");
+        ha1 = SHA256(SHA256("u:r:p") + ":n:cn");
+        ha2 = SHA256("POST:/x:" + SHA256("body"));
+        assertRegex("response=\"" + SHA256(ha1 + ":n:00000003:cn:auth-int:" + ha2) + "\"", rv);
+        assertRegex("algorithm=SHA-256-sess", rv);
+        assertRegex("qop=auth-int", rv);
+        # userhash
+        c.params += {"userhash": "true", "qop": "auth"};
+        rv = HttpAuthenticator::getDigestResponse(c, "SHA-256", "u", "p", "GET", "/", 1, "cn");
+        assertRegex("username=\"" + SHA256("u:r") + "\"", rv);
+        assertRegex("userhash=true", rv);
+        # quoted values are escaped
+        c.params.realm = "a\"b";
+        assertRegex("realm=\"a\\\\\"b\"", HttpAuthenticator::getDigestResponse(c, "MD5", "u", "p", "GET", "/", 1,
+            "cn"));
+        # errors
+        assertThrows("HTTP-AUTH-ERROR", "not supported", \HttpAuthenticator::getDigestResponse(),
+            (c, "SHA-512-256", "u", "p", "GET", "/", 1, "cn"));
+        c.params.qop = "auth-conf";
+        assertThrows("HTTP-AUTH-ERROR", "quality of protection", \HttpAuthenticator::getDigestResponse(),
+            (c, "MD5", "u", "p", "GET", "/", 1, "cn"));
+    }
+}

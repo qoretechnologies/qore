@@ -219,6 +219,18 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Parsed proxy info (host, port, protocol, ssl)
         *hash<auto> proxy_info;
 
+        #! Answers the authentication challenges of the proxy, if the proxy URL has credentials
+        *HttpAuthenticator proxy_auth;
+
+        #! The Proxy-Authorization value sent with the last CONNECT request for each pool key
+        hash<string, string> connect_auth = {};
+
+        #! Authenticators for server credentials, keyed by origin and user name
+        hash<string, HttpAuthenticator> authenticators = {};
+
+        #! Protects @ref authenticators and @ref connect_auth
+        Mutex auth_lock();
+
         #! Shutdown flag
         bool shutdown = False;
 
@@ -416,11 +428,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 "protocol": purl.protocol ?? "http",
                 "ssl": proxy_ssl,
             };
-            # credentials in the proxy URL are sent to the proxy with Basic authentication (RFC 7617); a user
-            # name and password in a URL are percent-encoded
+            # credentials in the proxy URL are sent to the proxy with Basic authentication (RFC 7617), or with
+            # Digest authentication (RFC 7616) after a Digest challenge; a user name and password in a URL are
+            # percent-encoded
             if (purl.username.val()) {
-                proxy_info.authorization = "Basic " + make_base64_string(sprintf("%s:%s",
-                    decode_url(purl.username), decode_url(purl.password ?? "")));
+                proxy_auth = new HttpAuthenticator(decode_url(purl.username), decode_url(purl.password ?? ""),
+                    True);
             }
         }
 
@@ -898,6 +911,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
 
+        @param credentials credentials for HTTP authentication, as with @ref request()
+
         @return a @ref HttpCancellableFuture that resolves to the @ref HttpClientResponseInfo hash of the final
         response and supports cancel(); errors of the request, including \c HTTPCLIENT-TIMEOUT when the response
         is not received within the \c request_timeout option, and the redirect errors documented for
@@ -911,13 +926,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         method follows redirects, so the request can be sent on more than one stream
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body, bool decode_text = True) {
+            *hash<auto> headers, *data body, bool decode_text = True, *hash<HttpClientCredentials> credentials) {
         check_http_request_body(method, headers, body);
         hash<UrlInfo> url_info = parseRequestUrl(url);
         HttpClientRequestPollOperation op(self, HttpRedirectFollower::getOriginUrl(url_info)
             + (path =~ /^\// ? path : "/" + path), method, headers, body, <HttpClientRequestPollOptions>{
             "goal": sprintf("%s %s", method, path),
             "decode_text": decode_text,
+            "credentials": credentials ?? getUrlCredentials(url),
         });
         return op.startAsync();
     }
@@ -934,6 +950,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
+        @param credentials credentials for HTTP authentication; if not set, any user information in the URL is used.
+        The credentials are sent with the Basic scheme, and with the Digest scheme after a Digest challenge, only to
+        the origin of \a url; a 401 challenge is answered once for each request sent.  The credentials in the proxy
+        URL answer a 407 challenge of the proxy the same way.  An \c Authorization header given in \a headers is
+        sent instead.
 
         @return the response hash
 
@@ -966,7 +987,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
-            *data body, *timeout timeout_ms, bool decode_text = True) {
+            *data body, *timeout timeout_ms, bool decode_text = True, *hash<HttpClientCredentials> credentials) {
         check_http_request_body(method, headers, body);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
@@ -975,14 +996,20 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         on_exit in_flight.dec();
 
         HttpRedirectFollower rf = newRedirectFollower(url, path, method, headers, body);
+        *HttpAuthenticator auth = getRequestAuthenticator(url, credentials);
+        hash<auto> auth_state = {};
         while (True) {
             hash<auto> resp = requestIntern(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                addCookieHeaders(rf.getOrigin(), rf.getPath(), rf.getHeaders()), rf.getBody(), timeout_ms,
-                decode_text);
+                prepareRequestHeaders(rf, auth, \auth_state), rf.getBody(), timeout_ms, decode_text);
             string request_url = rf.getRequestUrl();
 
             # Process Set-Cookie before checking redirect
             storeResponseCookies(rf.getOrigin(), rf.getPath(), resp.headers);
+
+            # authentication challenges are answered once for each request
+            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+                continue;
+            }
 
             # Follow redirects (RFC 9110 section 15.4)
             if (rf.isFollowed(resp.status_code)) {
@@ -1042,9 +1069,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             path = "/" + path;
         }
         HttpRedirectFollower rf = newRedirectFollower(url, path, o.method, headers, o.body);
+        *HttpAuthenticator auth = getRequestAuthenticator(url, o.credentials);
+        hash<auto> auth_state = {};
         while (True) {
             HttpClientStreamHandle sh = acquireAndStartStreaming(rf.getOrigin(), rf.getMethod(), rf.getPath(),
-                addCookieHeaders(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody());
+                prepareRequestHeaders(rf, auth, \auth_state), False, rf.getBody());
             # the stream is cancelled if the response cannot be returned
             bool keep = False;
             on_exit if (!keep) {
@@ -1103,6 +1132,12 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             string request_url = rf.getRequestUrl();
             storeResponseCookies(rf.getOrigin(), rf.getPath(), resp.headers);
 
+            # authentication challenges are answered once for each request; the body of the challenge response is
+            # discarded
+            if (processAuthChallenge(resp.status_code, resp.headers, auth, \auth_state)) {
+                continue;
+            }
+
             # Follow redirects (RFC 9110 section 15.4); the body of the redirect response is discarded
             if (rf.isFollowed(resp.status_code)) {
                 logRedirect(rf, resp.status_code, resp.headers);
@@ -1113,6 +1148,193 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             return new HttpClientResponseStream(sh, resp, request_url,
                 rf.getRedirects(), pending, ended, o.decode);
         }
+    }
+
+    #! Returns the authenticator for credentials for the origin of a URL
+    /** Authenticators are kept for each origin and user name, so that a Digest challenge answered for one request
+        authenticates the following requests to the origin without another challenge; see
+        @ref HttpUtil::HttpAuthenticator "HttpAuthenticator"
+
+        @param url the URL; only the scheme, host, and port are used
+        @param credentials the credentials
+
+        @return the authenticator
+
+        @throw HTTP-CLIENT-URL-ERROR the URL is invalid or has no host
+
+        @since HttpClientIo 1.0
+    */
+    HttpAuthenticator getAuthenticator(string url, hash<HttpClientCredentials> credentials) {
+        string key = HttpRedirectFollower::getOriginKey(HttpRedirectFollower::parseOrigin(url)) + "\n"
+            + credentials.username;
+        AutoLock al(auth_lock);
+        *HttpAuthenticator auth = authenticators{key};
+        if (!auth || !auth.hasCredentials(credentials.username, credentials.password)) {
+            auth = authenticators{key} = new HttpAuthenticator(credentials.username, credentials.password);
+        }
+        return auth;
+    }
+
+    #! Returns the authenticator for the credentials in the proxy URL, if any
+    /** @since HttpClientIo 1.0
+    */
+    *HttpAuthenticator getProxyAuthenticator() {
+        return proxy_auth;
+    }
+
+    #! Processes the error of a connection that failed because the proxy refused the \c CONNECT request
+    /** A proxy that requires authentication answers a \c CONNECT request with a 407 response and a challenge; the
+        challenge is processed with the credentials in the proxy URL, so that the next connection answers it.
+
+        @param url the URL of the request whose connection failed
+        @param err the error of the connection (see @ref HttpClientPollOperation::getError())
+
+        @return @ref True if a new connection can answer the challenge; @ref False if the error is not an
+        authentication challenge of the proxy, the proxy URL has no credentials, or the credentials were rejected
+
+        @since HttpClientIo 1.0
+    */
+    bool processProxyConnectFailure(string url, *hash<auto> err) {
+        if (!proxy_auth || err.status_code != 407) {
+            return False;
+        }
+        *string sent;
+        {
+            AutoLock al(auth_lock);
+            sent = connect_auth{getPoolKey(parseRequestUrl(url))};
+        }
+        return proxy_auth.processChallenge(err.headers, sent);
+    }
+
+    #! Returns the proxy information for a new connection to the given target, with the credentials for the proxy
+    private *hash<auto> getConnectionProxyInfo(hash<auto> url_info) {
+        if (!proxy_info || !proxy_auth) {
+            return proxy_info;
+        }
+        string authorization;
+        if (url_info.protocol == "https") {
+            # the CONNECT request line has the target as sent by the connection
+            authorization = proxy_auth.getAuthorization("CONNECT", sprintf("%s:%d", url_info.host, url_info.port));
+            AutoLock al(auth_lock);
+            connect_auth{getPoolKey(url_info)} = authorization;
+        } else {
+            # plain HTTP requests through the proxy carry Digest credentials in each request; see
+            # prepareRequestHeaders()
+            authorization = proxy_auth.getBasicCredentials();
+        }
+        return proxy_info + {"authorization": authorization};
+    }
+
+    #! Returns the credentials in the user information of a URL, if any
+    private *hash<HttpClientCredentials> getUrlCredentials(string url) {
+        hash<UrlInfo> info;
+        try {
+            info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            # the URL is validated by the request
+            return;
+        }
+        if (info.username.val()) {
+            return <HttpClientCredentials>{
+                "username": decode_url(info.username),
+                "password": decode_url(info.password ?? ""),
+            };
+        }
+    }
+
+    #! Returns the authenticator for a request: for the given credentials, else for the user information in the URL
+    /** @param url the URL of the request
+        @param credentials the credentials of the request, if any
+
+        @return the authenticator, or @ref nothing if the request has no credentials
+
+        @since HttpClientIo 1.0
+    */
+    *HttpAuthenticator getRequestAuthenticator(string url, *hash<HttpClientCredentials> credentials) {
+        if (!credentials) {
+            credentials = getUrlCredentials(url);
+        }
+        if (credentials) {
+            return getAuthenticator(url, credentials);
+        }
+    }
+
+    #! Returns the headers of the next request of a redirect chain, with cookies and credentials
+    /** Used by clients that send requests with the lower-level APIs of the manager, so that they send cookies and
+        credentials like @ref request(); see @ref processAuthChallenge()
+
+        @param rf the redirect state of the request
+        @param auth the authenticator for the origin of the original request, if any; see
+        @ref getRequestAuthenticator()
+        @param auth_state the authentication state of the request, initially an empty hash; updated with the
+        credentials sent
+
+        @return the request headers to send
+
+        @since HttpClientIo 1.0
+    */
+    hash<auto> prepareRequestHeaders(HttpRedirectFollower rf, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state) {
+        string origin = rf.getOrigin();
+        string path = rf.getPath();
+        hash<auto> hdr = addCookieHeaders(origin, path, rf.getHeaders());
+        remove auth_state.sent;
+        remove auth_state.sent_proxy;
+        # credentials are sent only to the origin of the original request, and never instead of the caller's
+        if (auth && rf.isOriginalOrigin() && !(select keys hdr, $1 =~ /^authorization$/i)) {
+            auth_state.sent = hdr.Authorization = auth.getAuthorization(rf.getMethod(), path, rf.getBody());
+        }
+        if (proxy_auth) {
+            hash<UrlInfo> info = parseRequestUrl(origin);
+            if (info.protocol == "http" && !isUnixSocketTarget(info)
+                    && !(select keys hdr, $1 =~ /^proxy-authorization$/i)) {
+                if (proxy_auth.hasDigestChallenge()) {
+                    # the request target of a request through a proxy is the absolute URL
+                    string target = sprintf("http://%s%s%s", info.host, info.port == 80 ? "" : ":" + info.port,
+                        path);
+                    auth_state.sent_proxy = hdr."Proxy-Authorization" = proxy_auth.getAuthorization(rf.getMethod(),
+                        target, rf.getBody());
+                } else {
+                    # the connection sends Basic credentials
+                    auth_state.sent_proxy = proxy_auth.getBasicCredentials();
+                }
+            }
+        }
+        return hdr;
+    }
+
+    #! Processes an authentication challenge (401 or 407) of a response
+    /** A challenge of the server (401) is answered with the credentials of the request, and a challenge of the proxy
+        (407) with the credentials in the proxy URL; each is answered once for each request of a redirect chain.
+
+        @param status_code the status code of the response
+        @param resp_headers the response headers with lower-case names
+        @param auth the authenticator for the origin of the original request, if any
+        @param auth_state the authentication state of the request, as updated by @ref prepareRequestHeaders()
+
+        @return @ref True if the request should be sent again, with the headers returned by
+        @ref prepareRequestHeaders(), to answer the challenge
+
+        @since HttpClientIo 1.0
+    */
+    bool processAuthChallenge(int status_code, *hash<auto> resp_headers, *HttpAuthenticator auth,
+            reference<hash<auto>> auth_state) {
+        if (status_code == 401 && auth && auth_state.sent && !auth_state.answered
+                && auth.processChallenge(resp_headers, auth_state.sent)) {
+            auth_state.answered = True;
+            return True;
+        }
+        if (status_code == 407 && proxy_auth && auth_state.sent_proxy && !auth_state.proxy_answered
+                && proxy_auth.processChallenge(resp_headers, auth_state.sent_proxy)) {
+            auth_state.proxy_answered = True;
+            return True;
+        }
+        # the next request of a redirect chain can answer its own challenge
+        if (status_code != 401 && status_code != 407) {
+            remove auth_state.answered;
+            remove auth_state.proxy_answered;
+        }
+        return False;
     }
 
     #! Returns the redirect state of a request
@@ -1214,6 +1436,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
+        bool proxy_connect_retried = False;
         # Wall-clock fail-safe across the entire retry loop.  Without this, a
         # bug in per-stream wait handling (incorrect deadline, non-firing
         # future, cancel deadlock) could cause infinite hangs even when each
@@ -1335,6 +1558,15 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                         continue;
                     }
                     rethrow;
+                }
+                # a proxy that refused the CONNECT request with an authentication challenge is answered once with a
+                # new connection
+                if (ex.err == "HTTPCLIENT-CONNECT-ERROR" && !proxy_connect_retried
+                        && processProxyConnectFailure(url, ex.arg)) {
+                    proxy_connect_retried = True;
+                    log(LoggerLevel::DEBUG, "answering the authentication challenge of the proxy for %s", url);
+                    evictDeadConnections(url);
+                    continue;
                 }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && retries < max_retries && canRetryRequest(method, stream)) {
@@ -2204,7 +2436,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
             HttpClientConnection conn = new Http1ClientConnection(url_info, opts.connect_timeout, logger,
-                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
+                1, opts.ssl_verify_mode, opts.accept_all_certs, getConnectionProxyInfo(url_info),
                 opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
             applyTcpUserTimeout(conn);
             return conn;
@@ -2223,7 +2455,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         HttpClientConnection h2 = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2);
         return h2;
     }
@@ -2585,7 +2817,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
         Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
@@ -3061,7 +3293,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             "happy eyeballs (async): starting H2 for %s (H3 still pending)", race.key);
         Http2ClientConnection h2conn(race.url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            getConnectionProxyInfo(race.url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file,
+            opts.ssl_ca_path);
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, race.key);

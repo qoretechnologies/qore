@@ -496,6 +496,21 @@ public namespace HttpClientIo {
         *bool exclusive_dependency;
     }
 
+    #! Credentials for HTTP authentication
+    /** Credentials are sent only to the origin (scheme, host, and port) of the request they are given for, with the
+        Basic scheme, or with the Digest scheme after a Digest challenge; see @ref HttpUtil::HttpAuthenticator
+        "HttpAuthenticator"
+
+        @since HttpClientIo 1.0
+    */
+    public hashdecl HttpClientCredentials {
+        #! The user name
+        string username;
+
+        #! The password
+        string password = "";
+    }
+
     #! Unified connection manager options
     public hashdecl HttpClientConnectionManagerOptions {
         #! Maximum connections per host

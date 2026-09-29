@@ -56,13 +56,15 @@ module HttpUtil {
 
     It also provides @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower", which implements the redirect rules
     that all HTTP clients follow (RFC 9110 section 15.4), so that every client that follows redirects handles them the
-    same way.
+    same way, and @ref HttpUtil::HttpAuthenticator "HttpAuthenticator", which answers Basic (RFC 7617) and Digest
+    (RFC 7616) authentication challenges.
 
     @section httputilrelnotes Release Notes
 
     @subsection httputil_1_0 HttpUtil 1.0
     - initial release
-    - added @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower"
+    - added @ref HttpUtil::HttpRedirectFollower "HttpRedirectFollower" and
+      @ref HttpUtil::HttpAuthenticator "HttpAuthenticator"
 */
 
 #! Main namespace for shared HTTP utilities
@@ -720,6 +722,399 @@ public class HttpRedirectFollower {
     #! Returns the URL with any user information removed, for error messages
     private static string removeUserInfo(string url) {
         return url =~ x/^([^:\/?#]+:\/\/)[^\/?#]*@/ ? regex_subst(url, "^([^:/?#]+://)[^/?#]*@", "$1") : url;
+    }
+}
+
+#! An authentication challenge from a \c WWW-Authenticate or \c Proxy-Authenticate header (RFC 9110 section 11.6)
+/** @since HttpUtil 1.0
+*/
+public hashdecl HttpAuthChallengeInfo {
+    #! The authentication scheme in lower case, for example \c "basic" or \c "digest"
+    string scheme;
+
+    #! The auth-params of the challenge; names are in lower case, and quoted values are unquoted
+    hash<string, string> params = {};
+
+    #! The token68 of the challenge, if it has one instead of auth-params
+    *string token68;
+}
+
+#! Answers HTTP authentication challenges with the Basic and Digest schemes for one set of credentials
+/** An object of this class holds the credentials of a user for one origin (or for a proxy) and the last
+    challenge received from it, and returns the value of the \c Authorization (or \c Proxy-Authorization) request
+    header for each request:
+    - before a challenge was received, and after a \c Basic challenge, the credentials are sent with the \c Basic
+      scheme (RFC 7617)
+    - after a \c Digest challenge, requests are authenticated with the \c Digest scheme (RFC 7616) with the nonce of
+      the challenge and an incremented nonce count, so that a server that accepts the nonce does not challenge each
+      request again; the algorithms \c SHA-256, \c SHA-256-sess, \c MD5, and \c MD5-sess, the quality of protection
+      values \c auth and \c auth-int, the absence of a quality of protection (RFC 2069), and \c userhash are
+      supported
+
+    A client calls @ref processChallenge() with the headers of a 401 (or 407) response; if it returns @ref True, the
+    request is sent again with the value returned by @ref getAuthorization().  Credentials that were sent and
+    rejected are not sent again, unless the server reports that the nonce was stale.
+
+    @note The credentials must only be sent to the origin they belong to; see
+    @ref HttpRedirectFollower "HttpRedirectFollower" for the origin-bound headers of a request
+
+    @par Example:
+    @code{.py}
+HttpAuthenticator auth("user", "pass");
+hash<auto> hdr = {"Authorization": auth.getAuthorization("GET", "/data")};
+hash<auto> resp = send("GET", "/data", hdr);
+if (resp.status_code == 401 && auth.processChallenge(resp.headers, hdr.Authorization)) {
+    hdr.Authorization = auth.getAuthorization("GET", "/data");
+    resp = send("GET", "/data", hdr);
+}
+    @endcode
+
+    @since HttpUtil 1.0
+*/
+public class HttpAuthenticator {
+    public {
+        #! Digest algorithms supported, from the most preferred to the least preferred
+        const DigestAlgorithms = ("SHA-256", "SHA-256-SESS", "MD5", "MD5-SESS");
+    }
+
+    private {
+        #! The user name
+        string username;
+        #! The password
+        string password;
+        #! True for proxy authentication
+        bool proxy;
+        #! The last Digest challenge accepted, if any
+        *hash<HttpAuthChallengeInfo> challenge;
+        #! The algorithm of the Digest challenge, in upper case
+        *string algorithm;
+        #! The nonce count of the Digest challenge
+        int nc = 0;
+        #! Serializes requests that share the nonce count
+        Mutex m();
+    }
+
+    #! Creates the object
+    /** @param username the user name
+        @param password the password
+        @param proxy @ref True for proxy authentication (the \c Proxy-Authenticate and \c Proxy-Authorization
+        headers)
+    */
+    constructor(string username, string password = "", bool proxy = False) {
+        self.username = username;
+        self.password = password;
+        self.proxy = proxy;
+    }
+
+    #! Returns the user name
+    string getUsername() {
+        return username;
+    }
+
+    #! Returns the value of an authorization header with the credentials of this object in the Basic scheme
+    string getBasicCredentials() {
+        return HttpAuthenticator::getBasicAuthorization(username, password);
+    }
+
+    #! Returns @ref True if the object has the given credentials
+    bool hasCredentials(string username, string password) {
+        return self.username == username && self.password == password;
+    }
+
+    #! Returns the name of the request header with the credentials: \c "Authorization" or \c "Proxy-Authorization"
+    string getHeaderName() {
+        return proxy ? "Proxy-Authorization" : "Authorization";
+    }
+
+    #! Returns the lower-case name of the response header with challenges: \c "www-authenticate" or
+    #! \c "proxy-authenticate"
+    string getChallengeHeaderName() {
+        return proxy ? "proxy-authenticate" : "www-authenticate";
+    }
+
+    #! Returns the status code of a challenge response: 401, or 407 for proxy authentication
+    int getChallengeStatus() {
+        return proxy ? 407 : 401;
+    }
+
+    #! Returns @ref True if requests are authenticated with a Digest challenge
+    bool hasDigestChallenge() {
+        AutoLock al(m);
+        return exists challenge;
+    }
+
+    #! Returns the value of the authorization header for a request
+    /** @param method the request method
+        @param uri the request target, as sent in the request line (for a \c CONNECT request, the authority)
+        @param body the request body, for the \c auth-int quality of protection
+
+        @return the header value: a \c Digest response after a Digest challenge, otherwise \c Basic credentials
+    */
+    string getAuthorization(string method, string uri, *data body) {
+        AutoLock al(m);
+        if (!challenge) {
+            return HttpAuthenticator::getBasicAuthorization(username, password);
+        }
+        return HttpAuthenticator::getDigestResponse(challenge, algorithm, username, password, method, uri, ++nc,
+            get_random_bytes(16).toHex(), body);
+    }
+
+    #! Processes the challenges of a 401 (or 407) response
+    /** @param resp_headers the response headers with lower-case names
+        @param sent the value of the authorization header sent with the request that received the response, if any
+
+        @return @ref True if the request should be sent again with the value returned by @ref getAuthorization();
+        @ref False if no supported challenge was received, or if the credentials were sent already and rejected
+    */
+    bool processChallenge(*hash<auto> resp_headers, *string sent) {
+        list<hash<HttpAuthChallengeInfo>> challenges =
+            HttpAuthenticator::parseChallenges(resp_headers{getChallengeHeaderName()});
+        # the strongest Digest challenge supported, else Basic
+        *hash<HttpAuthChallengeInfo> best;
+        *string best_alg;
+        int best_rank = elements DigestAlgorithms;
+        bool basic;
+        foreach hash<HttpAuthChallengeInfo> c in (challenges) {
+            if (c.scheme == "basic") {
+                basic = True;
+                continue;
+            }
+            if (c.scheme != "digest" || !c.params.nonce.val() || !exists c.params.realm) {
+                continue;
+            }
+            string alg = (c.params.algorithm ?? "MD5").upr();
+            int rank = HttpAuthenticator::getAlgorithmRank(alg);
+            if (rank < best_rank && HttpAuthenticator::getQop(c)) {
+                best = c;
+                best_alg = alg;
+                best_rank = rank;
+            }
+        }
+        AutoLock al(m);
+        if (best) {
+            bool stale = best.params.stale =~ /^true$/i;
+            # credentials rejected for the same nonce are not sent again
+            if (!stale && sent =~ /^Digest /i && challenge && challenge.params.nonce == best.params.nonce) {
+                return False;
+            }
+            challenge = best;
+            algorithm = best_alg;
+            nc = 0;
+            return True;
+        }
+        remove challenge;
+        remove algorithm;
+        if (basic) {
+            # Basic credentials that were rejected are not sent again
+            return sent != HttpAuthenticator::getBasicAuthorization(username, password);
+        }
+        return False;
+    }
+
+    #! Returns the value of an authorization header with Basic credentials (RFC 7617)
+    /** The user name and password are encoded in UTF-8
+
+        @param username the user name
+        @param password the password
+    */
+    static string getBasicAuthorization(string username, string password = "") {
+        return "Basic " + make_base64_string(binary(convert_encoding(username + ":" + password, "UTF-8")));
+    }
+
+    #! Returns the value of an authorization header answering a Digest challenge (RFC 7616)
+    /** @param challenge the Digest challenge
+        @param algorithm the algorithm in upper case: \c "SHA-256", \c "SHA-256-SESS", \c "MD5", or \c "MD5-SESS"
+        @param username the user name
+        @param password the password
+        @param method the request method
+        @param uri the request target
+        @param nc the nonce count
+        @param cnonce the client nonce
+        @param body the request body, for the \c auth-int quality of protection
+
+        @return the header value
+
+        @throw HTTP-AUTH-ERROR the algorithm or the quality of protection of the challenge is not supported
+    */
+    static string getDigestResponse(hash<HttpAuthChallengeInfo> challenge, string algorithm, string username,
+            string password, string method, string uri, int nc, string cnonce, *data body) {
+        code h = HttpAuthenticator::getHashFunction(algorithm);
+        string realm = challenge.params.realm ?? "";
+        string nonce = challenge.params.nonce ?? "";
+        *string qop = HttpAuthenticator::getQop(challenge);
+        if (!qop) {
+            throw "HTTP-AUTH-ERROR", sprintf("the quality of protection %y of the Digest challenge is not "
+                "supported", challenge.params.qop);
+        }
+        string ncs = sprintf("%08x", nc);
+        string ha1 = h(username + ":" + realm + ":" + password);
+        if (algorithm =~ /-SESS$/) {
+            ha1 = h(ha1 + ":" + nonce + ":" + cnonce);
+        }
+        string ha2 = qop == "auth-int"
+            ? h(method + ":" + uri + ":" + h(body ?? ""))
+            : h(method + ":" + uri);
+        string response = qop == "none"
+            ? h(ha1 + ":" + nonce + ":" + ha2)
+            : h(ha1 + ":" + nonce + ":" + ncs + ":" + cnonce + ":" + qop + ":" + ha2);
+        bool userhash = challenge.params.userhash =~ /^true$/i;
+        string user = userhash ? h(username + ":" + realm) : username;
+        string rv = sprintf("Digest username=%s, realm=%s, uri=%s, algorithm=%s, nonce=%s",
+            HttpAuthenticator::quote(user), HttpAuthenticator::quote(realm), HttpAuthenticator::quote(uri),
+            algorithm =~ /-SESS$/ ? algorithm.substr(0, -5) + "-sess" : algorithm, HttpAuthenticator::quote(nonce));
+        if (qop != "none") {
+            rv += sprintf(", nc=%s, cnonce=%s, qop=%s", ncs, HttpAuthenticator::quote(cnonce), qop);
+        }
+        rv += ", response=" + HttpAuthenticator::quote(response);
+        if (exists challenge.params.opaque) {
+            rv += ", opaque=" + HttpAuthenticator::quote(challenge.params.opaque);
+        }
+        if (userhash) {
+            rv += ", userhash=true";
+        }
+        return rv;
+    }
+
+    #! Parses the challenges of a \c WWW-Authenticate or \c Proxy-Authenticate header (RFC 9110 section 11.6.1)
+    /** @param value the header value; a list for a header received more than once
+
+        @return the challenges in the order received; a malformed challenge ends the list
+    */
+    static list<hash<HttpAuthChallengeInfo>> parseChallenges(auto value) {
+        list<hash<HttpAuthChallengeInfo>> rv = ();
+        if (value.typeCode() == NT_LIST) {
+            foreach auto v in (value) {
+                rv += HttpAuthenticator::parseChallenges(v);
+            }
+            return rv;
+        }
+        if (value.typeCode() != NT_STRING) {
+            return rv;
+        }
+        string s = value;
+        int len = s.length();
+        int i = 0;
+        *hash<HttpAuthChallengeInfo> cur;
+        while (True) {
+            # skip separators
+            while (i < len && (s[i] == " " || s[i] == "\t" || s[i] == ",")) {
+                ++i;
+            }
+            if (i >= len) {
+                break;
+            }
+            # a token: an auth scheme, an auth-param name, or a token68
+            int start = i;
+            while (i < len && s[i] !~ /[ \t,=]/) {
+                ++i;
+            }
+            string token = s.substr(start, i - start);
+            int j = i;
+            while (j < len && (s[j] == " " || s[j] == "\t")) {
+                ++j;
+            }
+            if (j < len && s[j] == "=" && cur) {
+                # a token followed by "=" and then "=" or the end is a token68; otherwise an auth-param
+                int k = j + 1;
+                while (k < len && s[k] == "=") {
+                    ++k;
+                }
+                int m2 = k;
+                while (m2 < len && (s[m2] == " " || s[m2] == "\t")) {
+                    ++m2;
+                }
+                if (k > j + 1 || m2 >= len || s[m2] == ",") {
+                    if (!cur.params && !exists cur.token68) {
+                        cur.token68 = s.substr(start, k - start);
+                    }
+                    i = k;
+                    continue;
+                }
+                i = m2;
+                string val;
+                if (s[i] == "\"") {
+                    ++i;
+                    while (i < len && s[i] != "\"") {
+                        if (s[i] == "\\" && i + 1 < len) {
+                            ++i;
+                        }
+                        val += s[i];
+                        ++i;
+                    }
+                    if (i >= len) {
+                        # an unterminated quoted string ends the list; the malformed challenge is not returned
+                        remove cur;
+                        break;
+                    }
+                    ++i;
+                } else {
+                    int vs = i;
+                    while (i < len && s[i] !~ /[ \t,]/) {
+                        ++i;
+                    }
+                    val = s.substr(vs, i - vs);
+                }
+                cur.params{token.lwr()} = val;
+                continue;
+            }
+            # a new challenge
+            if (cur) {
+                rv += cur;
+            }
+            cur = <HttpAuthChallengeInfo>{"scheme": token.lwr()};
+            i = j;
+        }
+        if (cur) {
+            rv += cur;
+        }
+        return rv;
+    }
+
+    #! Returns the quality of protection used for a Digest challenge: \c "auth", \c "auth-int", or \c "none" if the
+    #! challenge has none (RFC 2069), or @ref nothing if none of the values offered is supported
+    static *string getQop(hash<HttpAuthChallengeInfo> challenge) {
+        if (!exists challenge.params.qop) {
+            return "none";
+        }
+        list<string> offered = map trim($1).lwr(), challenge.params.qop.split(",");
+        if (inlist("auth", offered)) {
+            return "auth";
+        }
+        if (inlist("auth-int", offered)) {
+            return "auth-int";
+        }
+    }
+
+    #! Returns the rank of a Digest algorithm: 0 for the most preferred, and the number of algorithms for one that
+    #! is not supported
+    private static int getAlgorithmRank(string algorithm) {
+        for (int i = 0; i < elements DigestAlgorithms; ++i) {
+            if (DigestAlgorithms[i] == algorithm) {
+                return i;
+            }
+        }
+        return elements DigestAlgorithms;
+    }
+
+    #! Returns the hash function of a Digest algorithm
+    /** @throw HTTP-AUTH-ERROR the algorithm is not supported
+    */
+    private static code getHashFunction(string algorithm) {
+        switch (algorithm) {
+            case "SHA-256":
+            case "SHA-256-SESS":
+                return string sub (data d) { return SHA256(d); };
+            case "MD5":
+            case "MD5-SESS":
+                return string sub (data d) { return MD5(d); };
+        }
+        throw "HTTP-AUTH-ERROR", sprintf("the Digest algorithm %y is not supported; supported algorithms: %y",
+            algorithm, DigestAlgorithms);
+    }
+
+    #! Returns a quoted string (RFC 9110 section 5.6.4)
+    private static string quote(string str) {
+        return "\"" + regex_subst(str, "([\"\\\\])", "\\\\$1", RE_Global) + "\"";
     }
 }
 

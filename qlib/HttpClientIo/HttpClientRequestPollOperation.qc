@@ -81,6 +81,12 @@ public hashdecl HttpClientRequestPollOptions {
     #! The encoding assumed for text response bodies whose encoding is not determined otherwise; the
     #! \c assume_encoding option of the connection manager if not set
     *string assume_encoding;
+
+    #! Credentials for HTTP authentication; if not set, any user information in the URL
+    /** The credentials are sent only to the origin of the URL; a 401 challenge is answered once for each request
+        sent.  See @ref HttpUtil::HttpAuthenticator "HttpAuthenticator".
+    */
+    *hash<HttpClientCredentials> credentials;
 }
 
 #! A non-blocking HTTP request with an @ref HttpClientConnectionManager that follows redirects
@@ -152,6 +158,14 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         *data body;
         #! Follows redirects and holds the next request; created with the first request when the operation starts
         *HttpRedirectFollower rf;
+        #! Answers the authentication challenges of the origin of the request, if the request has credentials
+        *HttpAuthenticator auth;
+        #! The authentication state of the current request; see HttpClientConnectionManager::prepareRequestHeaders()
+        hash<auto> auth_state = {};
+        #! True if the current response is an authentication challenge that is answered
+        bool auth_retry = False;
+        #! True once a proxy authentication challenge for a CONNECT request was answered
+        bool proxy_connect_answered = False;
         #! The deadline for the response, if any
         *date deadline;
         #! The time the current request was sent, for the inactivity timeout
@@ -470,6 +484,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     #! Returns the redirect follower, creating it with the first request if necessary
     private HttpRedirectFollower getFollower() {
         if (!rf) {
+            auth = mgr.getRequestAuthenticator(url, opts.credentials);
             rf = new HttpRedirectFollower(url, path, method, headers, body,
                 opts.max_redirects ?? mgr.getMaxRedirects(), opts.redirect_passthru ?? mgr.getRedirectPassthru());
         }
@@ -521,8 +536,8 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     try {
                         stream = mgr.acquireStream(origin);
                         # the cookie jar supplies the cookies for each target
-                        stream.startStreaming(rf.getMethod(), target, mgr.addCookieHeaders(origin, target,
-                            rf.getHeaders()), opts.body_streaming, rf.getBody(), io_notifier);
+                        stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,
+                            \auth_state), opts.body_streaming, rf.getBody(), io_notifier);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "HTTPCLIENT-NOT-READY") {
                             # the connection reported itself ready and refused the request; retry the acquisition
@@ -630,6 +645,14 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         response.processed = True;
         # cookies set by a response are stored before a redirect is followed
         mgr.storeResponseCookies(rf.getOrigin(), rf.getPath(), response.headers);
+        # an authentication challenge is answered once for each request; the body of the response is discarded
+        if (mgr.processAuthChallenge(response.status_code, response.headers, auth, \auth_state)) {
+            redirecting = True;
+            auth_retry = True;
+            body_chunks = ();
+            body_size = 0;
+            return True;
+        }
         if (rf.isFollowed(response.status_code)) {
             # the body of the redirect response is discarded
             redirecting = True;
@@ -655,7 +678,11 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     #! followed
     private bool processEnd() {
         if (redirecting) {
-            followRedirect();
+            if (auth_retry) {
+                resendRequest();
+            } else {
+                followRedirect();
+            }
             return False;
         }
         hash<HttpClientResponseInfo> resp = getResponseInfo();
@@ -724,11 +751,17 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     */
     private followRedirect() {
         rf.follow(response.status_code, response.status_message, response.headers ?? {});
+        resendRequest();
+    }
+
+    #! Sends the current request of the redirect state again
+    private resendRequest() {
         remove stream;
         remove response;
         body_chunks = ();
         body_size = 0;
         redirecting = False;
+        auth_retry = False;
         failures = 0;
         state = ST_CONNECTING;
     }
@@ -760,6 +793,12 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     private checkConnectionFailure() {
         *HttpClientConnection conn = remove tracked;
         if (!conn || !HttpClientRequestPollOperation::failed(conn) || mgr.isUnresolvedRaceLeg(conn)) {
+            return;
+        }
+        # a proxy authentication challenge of a CONNECT request is answered once with a new connection
+        if (!proxy_connect_answered
+                && mgr.processProxyConnectFailure(rf.getOrigin(), conn.getPollOperation().getError())) {
+            proxy_connect_answered = True;
             return;
         }
         if (++failures <= (opts.max_connect_retries ?? mgr.getMaxRequestRetries())) {

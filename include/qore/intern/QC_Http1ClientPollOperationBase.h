@@ -724,6 +724,14 @@ private:
 
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
 
+    //! Sets the error of the operation with additional keys for the error information hash
+    /** @param err the error code
+        @param desc the error description
+        @param extra additional keys for the error information hash; the keys are copied
+        @param xsink for Qore-language exceptions
+    */
+    DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink);
+
     //! Fails the response if a response body of the given size exceeds the maximum response body size
     /** @param size the size of the response body in bytes
         @param desc what the size refers to, for the error message

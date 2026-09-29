@@ -425,7 +425,12 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
                     const char* msg = msg_val.getType() == NT_STRING
                         ? msg_str->c_str() : "unknown";
                     desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
-                    setError("HTTP1-CONNECT-ERROR", desc->c_str(), xsink);
+                    // the status code and headers of the response let the client answer a proxy authentication
+                    // challenge (407) and connect again
+                    ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
+                    extra->setKeyValue("status_code", status, xsink);
+                    extra->setKeyValue("headers", hdr->refSelf(), xsink);
+                    setError("HTTP1-CONNECT-ERROR", desc->c_str(), *extra, xsink);
                     return nullptr;
                 }
             }
@@ -2462,12 +2467,23 @@ int Http1ClientPollOperationPriv::checkResponseBodySize(int64_t size, const char
 
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
         ExceptionSink* xsink) {
+    setError(err, desc, nullptr, xsink);
+}
+
+void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, const QoreHashNode* extra,
+        ExceptionSink* xsink) {
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
             error_info = new QoreHashNode(autoTypeInfo);
             error_info->setKeyValue("err", new QoreStringNode(err), xsink);
             error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            if (extra) {
+                ConstHashIterator hi(extra);
+                while (hi.next()) {
+                    error_info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+                }
+            }
         }
     }
     h1_state.store(H1State::CLOSED, std::memory_order_release);
@@ -3151,7 +3167,8 @@ bool Http1ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns error information if an error occurred
-/** @return error hash or NOTHING
+/** @return error hash or NOTHING: the \c err and \c desc keys; when a proxy refused a \c CONNECT request, also
+    the \c status_code and \c headers (lower-case names) of its response
 */
 *hash<auto> Http1ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
     return priv->getErrorInfo();
