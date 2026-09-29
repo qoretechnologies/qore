@@ -1878,7 +1878,9 @@ public namespace RestHandler {
         }
 
         #! Returns @ref True "True" if the given error code is an error processing a request body
-        private static bool isRequestBodyError(string err) {
+        /** private:internal, so that it cannot clash with a method of a subclass
+        */
+        private:internal static bool isRequestBodyError(string err) {
             return err == "INVALID-ENCODING"
                 || err == "ENCODING-CONVERSION-ERROR"
                 || err == "DESERIALIZATION-ERROR"
@@ -1886,7 +1888,10 @@ public namespace RestHandler {
         }
 
         #! Returns the path of the request relative to the root path of the handler, with any query arguments
-        private string getRequestPath(hash<auto> cx) {
+        /** private:internal, so that it cannot clash with a method of a subclass, such as a \c getRequestPath()
+            method with another signature
+        */
+        private:internal string getRequestPath(hash<auto> cx) {
             # Preserve URI component boundaries until after query parsing and path splitting.
             # HttpServer's decoded display path can turn an encoded slash into a routing
             # separator or an encoded question mark into a query delimiter.

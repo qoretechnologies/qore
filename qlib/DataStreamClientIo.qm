@@ -218,6 +218,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         @ref DataStreamUtil::ds_get_recv() can drive this client via the
         same @c hdr event shape without throwing
         \c METHOD-DOES-NOT-EXIST on its @c obj.setEncoding() call.
+
+        This overrides @ref RestClientIo::RestClientIo::setEncoding() "RestClientIo::setEncoding()", so the
+        \c encoding option of @ref RestClientIo::RestClientIo "RestClientIo" has no effect either: DataStream
+        request bodies are serialized binary data.
     */
     setEncoding(string enc) {
         # no-op

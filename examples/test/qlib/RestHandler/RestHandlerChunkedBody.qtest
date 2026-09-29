@@ -54,19 +54,44 @@ class EchoRestClass inherits AbstractRestClass {
     }
 }
 
+#! a request handler with methods whose names RestHandler uses internally, with other signatures
+class OtherHttpHandler inherits AbstractHttpRequestHandler {
+    #! returns the request path without the handler's URL prefix
+    string getRequestPath(string hpath) {
+        return "custom:" + hpath;
+    }
+
+    static bool isRequestBodyError(int code) {
+        return code == 400;
+    }
+}
+
+#! a REST handler that also inherits another handler, like the REST handlers of Qorus services
+/** RestHandler's own helpers must not clash with the methods of the other base class
+*/
+class SubclassRestHandler inherits OtherHttpHandler, RestHandler {
+    #! requests are handled by RestHandler
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return RestHandler::handleRequest(listener, s, cx, hdr, body);
+    }
+}
+
 public class RestHandlerChunkedBodyTest inherits QUnit::Test {
     private {
         HttpServer server;
+        SubclassRestHandler rest;
         string url;
     }
 
     constructor() : Test("RestHandlerChunkedBodyTest", "1.0") {
         addTestCase("chunked request bodies are deserialized", \testDeserialized());
         addTestCase("invalid chunked request bodies", \testInvalid());
+        addTestCase("subclass methods", \testSubclass());
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
-        RestHandler rest();
+        rest = new SubclassRestHandler();
         rest.addClass(new EchoRestClass());
         server.setHandler("rest", "^echo", NOTHING, rest);
         url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
@@ -98,6 +123,16 @@ public class RestHandlerChunkedBodyTest inherits QUnit::Test {
         hash<auto> resp = send("/echo", ("{\"a\": ", "}"));
         assertEq(400, resp.status_code);
         assertRegex("DESERIALIZATION-ERROR", resp.body);
+    }
+
+    testSubclass() {
+        # the requests of the other test cases are handled by a subclass with methods named like RestHandler's
+        # internal helpers; the subclass's methods are its own
+        assertEq("custom:x", rest.getRequestPath("x"));
+        assertTrue(SubclassRestHandler::isRequestBodyError(400));
+        hash<auto> resp = send("/echo", ("{\"a\": ", "1}"));
+        assertEq(200, resp.status_code);
+        assertEq({"a": 1}, parse_json(resp.body).body);
     }
 
     #! sends a chunked JSON request body and returns the response status code and body
