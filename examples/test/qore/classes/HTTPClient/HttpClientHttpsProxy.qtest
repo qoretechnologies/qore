@@ -1,0 +1,383 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HTTPS proxies (TLS connections to the proxy) and for TLS connections through proxy tunnels
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%include ../TestConnectProxy.qc
+
+%exec-class HttpClientHttpsProxyTest
+
+#! returns the Host header of the request
+class HostHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "host:" + hdr.host, {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpClientHttpsProxyTest inherits QUnit::Test {
+    public {
+        #! a test CA; the certificates below are issued by it and are valid until 2126
+        const CaCert = "-----BEGIN CERTIFICATE-----
+MIIDADCCAeigAwIBAgIUR2sLyK+bBRz7slg+Z7BV+NmPp6wwDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAXMRUwEwYDVQQDDAxRb3JlIFRlc3QgQ0EwggEiMA0GCSqG
+SIb3DQEBAQUAA4IBDwAwggEKAoIBAQDNQ33+AdkQ1e+95ebIvJJnLQvcElmccCFM
+S6NmRPTgycf/AELEY9kYlGriaGHv9HmbIkawi0JS5+SBAQlJEgkMziHoPWPVEYAQ
+oLEP+iYcJICIiHCyuZ/ViJvna5SqT5k2XpT+ztqgYxrFlAsyWc0VpUU3Ke1kSxBQ
+z4LJz+shcqZHbBdYOBFanSK71fFUN4Otx5eAOD8Fnp9V2GRvYPpawOWyhIjL2JpA
+A4WxxVSDee+dZZqgrYBzofoNnOUTp47MDOkLappFVy6CLl5NDqLfcEbApftSsYHD
+hrb7MyC+zujTAhc+MkdBcitYRum1uTXIRrNoligEuJGmEWsg3LGVAgMBAAGjQjBA
+MA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBQ2CBUE
+L5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAjp2bBTTdUdBawMyh
+FzLEU0cOpTtUs2+RhrWIji6elFzvgkG7PttC8eGXgv8hqe8ZTa9ws4WvIFhMdDJQ
+vexnWjWtz1j5txp2RewHqKm2pCn9VfG3HegwDPaa1eWhc9jfPvix6noOPJSoosky
++bofotpipnmK0hWQkGM1Lr1UVBCAFkhJwt7kvCz8YkxqvCjZrcUIhMpbINVMDvg/
+upJuI3MLGgHxZN8LS7gEiA7iqVfd+TIQGcrbBPKOwHblmkYWE3RWdPhkd0z/8y9Q
+ZcD8HKkXG/XGRPLa1MfbikECRSfI+xAa1YJ3bkAxw3+ReumG4R8dAirVkVCd8gA1
+MveKGQ==
+-----END CERTIFICATE-----";
+
+        #! a certificate for localhost and 127.0.0.1
+        const GoodCert = "-----BEGIN CERTIFICATE-----
+MIIDOTCCAiGgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK4wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3
+DQEBAQUAA4IBDwAwggEKAoIBAQCV1xww09YCd0nlSlHTcSvmd2+w+iECqGYJZ0LC
+yMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTuoN2qDfC+bV1iDezfH3wjW2Mi
+woWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGDaA78dfuKMfjVgouQq0j36xct
+Qp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQsnbyj3qWQb4OSH9r3MDqkCNA
+cPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwHP1x9R7zsMctD2utLzg8uE7PC
+xhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+DhMqer1HAgMBAAGjfjB8MBoG
+A1UdEQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMBMGA1UdJQQMMAoG
+CCsGAQUFBwMBMB0GA1UdDgQWBBRrykHXWldynutxb8kegXI2TDL/wjAfBgNVHSME
+GDAWgBQ2CBUEL5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAICu/
+eAbP2pLfzfg2OehX2Md42ESOal0UMpXrfX5Y5FZuk7zbz4YhEUGlOTcayhkzJywt
+eO1a04VCpwhOhKMg47/d/sKaZ6s2y9kXG28nt/EtBSB1jlgyd1bETJTmqTAuLnUT
+qgZgZwmYJ+/UQJNySQQg2oi3hJsTfaK1VLe1+Eo1XwDocUsTZZy3h2hBKQgByMja
+Rwtsu7UOGp2wmXPpXcJIsX6lj/vY15f0EwbWBnUY2TN02TLQUaJmN1o4o1kOQe0H
+BruWF8zd4JEPIHXXq/5WJVF5UPDOktEsK+z4CTZmNxHPJyUrNrlKQBYNZkXIaM3M
+cT/QPnxjlFfMh4oBxA==
+-----END CERTIFICATE-----";
+
+        const GoodKey = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCV1xww09YCd0nl
+SlHTcSvmd2+w+iECqGYJZ0LCyMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTu
+oN2qDfC+bV1iDezfH3wjW2MiwoWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGD
+aA78dfuKMfjVgouQq0j36xctQp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQ
+snbyj3qWQb4OSH9r3MDqkCNAcPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwH
+P1x9R7zsMctD2utLzg8uE7PCxhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+
+DhMqer1HAgMBAAECggEAEuBGbOBC1YyxgnEaXcij/ySMrX7VKcCNGiIoBuHE0TgA
+2F1RLhSsJN8ejRXmhgfIdtcPjiqsn15TDLy3L/URnuuoF/IpJPKScOHSW06mBa0N
+Zjx+xiG6hpQphv9R7iWNPPlyDxZ8ItrEngk92hAC4CXrcvo/Grp5NsIm6Uy7RWdv
+hTyoL3EWBg6dLHzEGJJprmOh4t+2o5FF3Kt3Rckaw755ALw0sFwdPEnooAjF6ZE3
+rGt4b1GvGH157gzjGwav2ORYUQtcVlfr/+aSsKe6+Jl4OzlGopXF5Gfxcthlb0Ci
+NIswH9/Jaqou0gv8yYLPcld5wuxfXhlTiCPbC2++AQKBgQDSUjHpEn4SruKDNN4g
+rwxHHc2LL7HlrQLTre37sRF6xudsOp9LL7IFImX+Z9Vscp/OyzNEsRu+dwuWyBQd
+aeU9fjKh3A49hA7aL7Wirh88KlRvYyzuL+1YJQO4Lqr1ExLk4ZZtxervcFSV53Wl
+d48gApbBDFmRESlmge65Pkbf8wKBgQC2YjIzFRwbvi9Ph+OTM2auYl8SLXaDve8g
+JDb2wHz9bVR3jonHsLsuIEDQMlzXP1pF3jjL1+y/8eOz0AQ2B4S8bqa1FLCFrfdr
+pVmFffeFtVLqHqX+Or+1Ozzyz1XwGprSFBS2O7utgA4p32ivJPjaFwj9CYV5PjVU
+uuaxwjGWXQKBgD7N0J2aqg8GLhmkBdiYrP/nhGNVwLem7Dstqu0HuQKCtsR41Oxs
+t6oU1YQcmXyi1dm4j/ypLnG3trw1ztvhrVSphJEU1yPDdXPt3z1O5YDf2wrQALC3
+mxZBJ1UuilpYccHrIzJwcXFCh9+jmFvq0dBrNX08JNrO1yAHGLQ0RpHFAoGAI3zX
+57ijz4IiEoeOcIX/5M6fURonhVrfvJFPYJPzvhwX42uIw6JPyZndAqXKCtf46L9k
+rcVF+9NFSyeeqiSsXz3okjOEZX6ENh3mXWM1Vn8BsyxjgCROSSVNprFRN3b1yQq/
+PPZCfm/8UYl3BR1cjpMM3K+NmRnRprr3SH9QxsECgYEAgTR94CDtYFnOf6fYlKrS
+LS2vudPAPnPgvnMyoXqkdMVXPFaGt2H0jZbqJNeZ4rDD+F7xKw7Bh7dobks+nTpE
+DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
++QCcroH4V1WH5zPROGJoPVc=
+-----END PRIVATE KEY-----";
+
+        #! a certificate for wrong.example, a name that is resolved only by the test proxies
+        const WrongHostCert = "-----BEGIN CERTIFICATE-----
+MIIDOzCCAiOgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK8wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAYMRYwFAYDVQQDDA13cm9uZy5leGFtcGxlMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwO+qaTPK6GbIZQbX8o2X+/Mhxk7HVqSx
+816E+UnDLMip4bIqLqvIoJ5hGDxQ0a7sMgYBOukt3RZIFYcsf/l/C7CvjRb8XWDg
+VSBnww/55/r91KS+7EGyXy8wmoS9vhp+iaYQlMmF2aHHZKd4bt/9Ijd4rvGkczY8
+DHuoTKVdtqcjactDLPVH6N6DD4aGyvCCnMZlKWTZlm7o1VtlH6sIY5CzahvU7k2p
++u0RYeaCWezp5nXI1M+gxJEfwmG9jMJxNqmQZZIyGXulkwfoy1VZTDW63+fPXkZw
+I+Lla+qLdz9Av3GxpyRwG5l0/Cvngi2fSvoIUzag5SHm07Fq4IcjNwIDAQABo3ww
+ejAYBgNVHREEETAPgg13cm9uZy5leGFtcGxlMAkGA1UdEwQCMAAwEwYDVR0lBAww
+CgYIKwYBBQUHAwEwHQYDVR0OBBYEFNqjH4kxDaMdPkQ8wUal1KINH4+sMB8GA1Ud
+IwQYMBaAFDYIFQQvmu4ohXtBjX26E+WtWq17MA0GCSqGSIb3DQEBCwUAA4IBAQBt
+mva8AxwROjl35RMm0m9zdyqlF39eOtQzz1c0TDLPQFS8E6RwPZnCxuRTcOz6vudI
+XAwkiLRZotpe40IE/n2R/r6MDkrBBOHc2KtIBFIN5IlqyFILPsjoH+7uHPdxjmkl
+D888ngNQL6uoLp8qLJWji9Nj+b2YLyzFOT0QhQfov8Ys6lnqkzvfDeI2k8yRCIcg
+K5DSSS4xhgHAimoAgAHYAl0DomZnAWR0lKurPpAztpuXhsh4ZUuVBXxT5SXKKebS
+q93zma4tfuQ2dEPADe4ByiXtbIYNmnE++3r7mVVoTddz9w44yJWWYYUdFA+ups4E
+4oPyUfNoP1pLBnjJpT6J
+-----END CERTIFICATE-----";
+
+        const WrongHostKey = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDA76ppM8roZshl
+BtfyjZf78yHGTsdWpLHzXoT5ScMsyKnhsiouq8ignmEYPFDRruwyBgE66S3dFkgV
+hyx/+X8LsK+NFvxdYOBVIGfDD/nn+v3UpL7sQbJfLzCahL2+Gn6JphCUyYXZocdk
+p3hu3/0iN3iu8aRzNjwMe6hMpV22pyNpy0Ms9Ufo3oMPhobK8IKcxmUpZNmWbujV
+W2UfqwhjkLNqG9TuTan67RFh5oJZ7OnmdcjUz6DEkR/CYb2MwnE2qZBlkjIZe6WT
+B+jLVVlMNbrf589eRnAj4uVr6ot3P0C/cbGnJHAbmXT8K+eCLZ9K+ghTNqDlIebT
+sWrghyM3AgMBAAECggEARY8i1UMDCL7lyOaqvJwoC4Igzypf2/EM5z1Qm7/oSiEe
+fmyJoMH2V1JCl0ZHrRFvvqlDkEW5b1g1LO3LMWh2UXSmFiwPWGsw9f/06PK9mtF2
+6k9rNiqJcJ/G2i65aeyLan0gxUPSqiAVj0iBtxeyX7+4Fvqv24nWJHoAt4F3Q/5m
+FpPGogA+O1caU2WAGU3VahW94f9akPr9EBgB8wn8VYram77mdBao1vEH7x1NxC8s
+8qMa3F4JlkyQ7qTcpbee7n6W3qWcSQMSH+u9mkNpCneK1+fyD0XoW1junXStDmQC
+JdrYNXIQvy1KWP0DLyczr3v2yczyKmdd96Bult2vwQKBgQDg8wxsuavBo1/UAWar
+l3pZ7Tt8YST61USg8tzE0B1K1Du8qemre+QCJDa/qigsuQ6JYwv8tJCRUA5KiLUN
+CaXpduk6zsEub9g0Ya3p4VatbnVrF1+QDOBEJ19Cf9WIq4R/G6U/igG3OXHQgeYX
+SHnbNpIPXbzAE+xB6jNGGtVGmQKBgQDbkWDd7br7YFmnngKFiK/xYwQgj8QiAxwA
+FTt5DnXH91pWES3Y+nu3ugB7wSJvyeZh4WnpQU3GNaWkWR5qy8l8oahwqYiQZbvw
+DiP6xnJDLwEhuHd/VlcM/F7HCmIgRqtHXKtmR373Rvs0P/I2MupiigfHqfvDhwp5
+oL6xoTNqTwKBgAeRheB+mr3IHmhGp8qsLQyrg63aouDhng6APVdN3T5wR5ZAbUE8
+yN4dk839Dp76lveeYn/dH2QUOnbdhKHsqi1ht9Unsa47Sx3wD2boEv+A0OiKf8eb
+90uzu2vEW03e33VbW8L4hLhCcYbfZ/tuj9MFUgK8V6ZqxS8ujw0TyAs5AoGAM6UL
+SsgbHft4uxNQdoZDFBz9IIeQU4u1r1NPLNc43vMQXYQm641nQjzO1k0EQ5USyl0R
+41qH56JAttp7bBVI7Da9/tnxlD1Jqlo5HkhFIgZRVtQjz2DIkvZdeKW5lOvqZ5ul
+eSZB9/nLJmwQFa1+MfVThSQ3YrNFxHwJvpAzHsMCgYEApTLnfEFcIXMdDeseDAGf
+wizI/j/Ai3ZonZNJ1u22DXsfVGKvpkYlgw+anjqgqmXMC3Jfuba5lTCx+R6O2SmW
+czUixLJ966g4AJiHp4pFPkKsSxgEcq/yyrkH3Ji5VZmvcz2C6Wd0X4v9CVNib5Sq
+WKEuKQ7xuGuAiIESuSDBsSg=
+-----END PRIVATE KEY-----";
+
+        #! maps the names of the test certificates to the address of the test servers
+        const HostMap = {"wrong.example": "127.0.0.1", "other.example": "127.0.0.1"};
+    }
+
+    private {
+        TmpDir tmp;
+        string ca_file;
+        HttpServer server;
+        #! TLS listener with a certificate for wrong.example
+        int tls_port;
+        #! plain HTTP listener
+        int plain_port;
+        #! a plain HTTP proxy
+        TestConnectProxy http_proxy;
+        #! an HTTPS proxy with a certificate for 127.0.0.1
+        TestConnectProxy https_proxy;
+        #! an HTTPS proxy with a certificate for another host
+        TestConnectProxy wrong_proxy;
+    }
+
+    constructor() : Test("HttpClientHttpsProxyTest", "1.0") {
+        addTestCase("TLS through a proxy tunnel is made for the target", \tunnelTargetTest());
+        addTestCase("TLS through an HTTPS proxy tunnel", \httpsProxyTunnelTest());
+        addTestCase("plain HTTP through an HTTPS proxy", \httpsProxyPlainTest());
+        addTestCase("certificate verification through proxies", \verifyTest());
+        addTestCase("proxy option errors", \optionErrorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("https-proxy-");
+        ca_file = tmp.path + "/ca.pem";
+        File f();
+        f.open2(ca_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(CaCert + "\n");
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        server.setDefaultHandler("host", new HostHandler());
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(WrongHostCert),
+            "key": new SSLPrivateKey(WrongHostKey),
+        }).port;
+        plain_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port;
+        server.waitForAsyncIo();
+
+        http_proxy = new TestConnectProxy(NOTHING, NOTHING, NOTHING, HostMap);
+        https_proxy = new TestConnectProxy(NOTHING, new SSLCertificate(GoodCert), new SSLPrivateKey(GoodKey), HostMap);
+        wrong_proxy = new TestConnectProxy(NOTHING, new SSLCertificate(WrongHostCert),
+            new SSLPrivateKey(WrongHostKey), HostMap);
+    }
+
+    globalTearDown() {
+        map $1.shutdown(), (http_proxy, https_proxy, wrong_proxy), $1;
+        if (server) {
+            server.stop();
+        }
+        delete tmp;
+    }
+
+    tunnelTargetTest() {
+        # the server's certificate is issued for wrong.example, the name of the target, not for the proxy at
+        # 127.0.0.1; the TLS connection through the tunnel is made and verified for the target
+        string url = sprintf("https://wrong.example:%d", tls_port);
+        string proxy = sprintf("http://127.0.0.1:%d", http_proxy.getPort());
+        assertEq("host:wrong.example:" + tls_port, httpClientGet(url, proxy, "1.1"));
+        assertEq("host:wrong.example:" + tls_port, httpClientGet(url, proxy, "2"));
+        foreach string proto in ("h1", "h2") {
+            assertEq("host:wrong.example:" + tls_port, ioGet(url, proxy, proto), proto);
+        }
+    }
+
+    httpsProxyTunnelTest() {
+        # the TLS connection to the target is carried by the TLS connection to the proxy
+        string url = sprintf("https://wrong.example:%d", tls_port);
+        string proxy = sprintf("https://127.0.0.1:%d", https_proxy.getPort());
+        int start = https_proxy.getRequests().size();
+        assertEq("host:wrong.example:" + tls_port, httpClientGet(url, proxy, "1.1"));
+        assertEq("host:wrong.example:" + tls_port, httpClientGet(url, proxy, "2"));
+        foreach string proto in ("h1", "h2") {
+            assertEq("host:wrong.example:" + tls_port, ioGet(url, proxy, proto), proto);
+        }
+        list<hash<auto>> reqs = https_proxy.getRequests()[start..];
+        assertEq(4, reqs.size());
+        foreach hash<auto> req in (reqs) {
+            assertTrue(req.ssl);
+            assertEq(sprintf("CONNECT wrong.example:%d HTTP/1.1", tls_port), req.line);
+        }
+    }
+
+    httpsProxyPlainTest() {
+        # a plain HTTP request is sent to the proxy with an absolute URI over the TLS connection to the proxy
+        string url = sprintf("http://wrong.example:%d", plain_port);
+        string proxy = sprintf("https://127.0.0.1:%d", https_proxy.getPort());
+        int start = https_proxy.getRequests().size();
+        assertEq("host:wrong.example:" + plain_port, httpClientGet(url, proxy, "1.1"));
+        assertEq("host:wrong.example:" + plain_port, ioGet(url, proxy, "h1"));
+        list<hash<auto>> reqs = https_proxy.getRequests()[start..];
+        assertEq(2, reqs.size());
+        foreach hash<auto> req in (reqs) {
+            assertTrue(req.ssl);
+            assertRegex(sprintf("^GET http://wrong.example:%d/ ", plain_port), req.line);
+        }
+    }
+
+    verifyTest() {
+        # the certificate of the target is verified against the name of the target through the tunnel
+        string url = sprintf("https://other.example:%d", tls_port);
+        foreach string proxy in (sprintf("http://127.0.0.1:%d", http_proxy.getPort()),
+                sprintf("https://127.0.0.1:%d", https_proxy.getPort())) {
+            assertThrows("SOCKET-SSL-ERROR", \httpClientGet(), (url, proxy, "1.1"), proxy);
+            foreach string proto in ("h1", "h2") {
+                assertThrows("HTTPCLIENT-CONNECT-ERROR", "hostname mismatch.*other|hostname mismatch", \ioGet(),
+                    (url, proxy, proto), proxy + " " + proto);
+            }
+        }
+        # the certificate of an HTTPS proxy is verified against the name of the proxy
+        url = sprintf("https://wrong.example:%d", tls_port);
+        string proxy = sprintf("https://127.0.0.1:%d", wrong_proxy.getPort());
+        assertThrows("SOCKET-SSL-ERROR", "TLS connection to the proxy failed.*mismatch", \httpClientGet(),
+            (url, proxy, "1.1"));
+        foreach string proto in ("h1", "h2") {
+            assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed.*mismatch",
+                \ioGet(), (url, proxy, proto), proto);
+        }
+        # ... unless all certificates are accepted
+        assertEq("host:wrong.example:" + tls_port, ioGet(url, proxy, "h1", {"accept_all_certs": True}));
+        # a TLS connection to a proxy that does not use TLS fails
+        Socket plain();
+        plain.bindINET("127.0.0.1", "0", True);
+        plain.listen();
+        Counter done(1);
+        bool stop;
+        background sub () {
+            on_exit done.dec();
+            # answers the TLS handshake with an HTTP error response, as a plain HTTP proxy does; the client retries
+            # a failed connection, so every connection is answered
+            while (!stop) {
+                *Socket s = plain.accept(100ms);
+                if (!s) {
+                    continue;
+                }
+                s.recvBinary(-1, 20s);
+                s.send("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                s.close();
+            }
+        }();
+        on_exit {
+            stop = True;
+            done.waitForZero();
+            plain.close();
+        }
+        proxy = sprintf("https://127.0.0.1:%d", plain.getSocketInfo().port);
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
+    }
+
+    optionErrorTest() {
+        assertThrows("HTTPCLIENT-OPTION-ERROR", "unsupported scheme", sub () {
+            new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+                "proxy_url": "socks5://127.0.0.1:1080",
+            });
+        });
+        # a proxy URL that cannot be parsed is not given in the error, since it can contain a password
+        try {
+            new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+                "proxy_url": "http://user:secret@host:abc",
+            });
+            fail("the proxy URL is not valid");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-OPTION-ERROR", ex.err);
+            assertNRegex("secret", ex.desc);
+        }
+    }
+
+    #! makes a GET request with HTTPClient through the given proxy, verifying the certificates with the test CA
+    private string httpClientGet(string url, string proxy, string http_version) {
+        HTTPClient hc({
+            "url": url,
+            "proxy": proxy,
+            "http_version": http_version,
+            "ssl_verify_cert": True,
+            "ssl_ca_file": ca_file,
+            "timeout": 20s,
+            "connect_timeout": 20s,
+        });
+        on_exit hc.disconnect();
+        return hc.get("/");
+    }
+
+    #! makes a GET request with HttpClientIo through the given proxy, verifying the certificates with the test CA
+    private string ioGet(string url, string proxy, string protocol, *hash<auto> opts) {
+        HttpClientConnectionManager mgr(cast<hash<HttpClientConnectionManagerOptions>>({
+            "protocol": protocol,
+            "proxy_url": proxy,
+            "ssl_verify_mode": SSL_VERIFY_PEER,
+            "ssl_ca_file": ca_file,
+            "accept_encoding": "",
+        } + opts));
+        on_exit mgr.closeAll();
+        return mgr.request(url, "GET", "/").body;
+    }
+}

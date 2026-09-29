@@ -70,6 +70,7 @@ public:
     //! HTTP/2 client connection states
     enum class H2State {
         CONNECTING,
+        PROXY_SSL_UPGRADE,  //!< TLS handshake with an HTTPS proxy
         SSL_UPGRADE,
         PROXY_CONNECT_SEND,
         PROXY_CONNECT_RECV,
@@ -90,7 +91,7 @@ public:
     DLLLOCAL Http2ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
             SocketPollOperationBase* connect_op, bool ssl_required, bool proxy_tunnel,
             std::string target_host, int target_port,
-            AbstractHttpPollConnectionPriv* connection_priv);
+            AbstractHttpPollConnectionPriv* connection_priv, bool proxy_ssl = false);
 
     //! Creates the poll operation by adopting an already-connected and
     //! TLS-handshook socket (ALPN has already confirmed "h2").
@@ -483,6 +484,9 @@ private:
     //! True when HTTPS target through proxy (requires CONNECT tunnel)
     bool proxy_tunnel;
 
+    //! True when the connection to the proxy uses TLS (an HTTPS proxy)
+    bool proxy_ssl = false;
+
     //! Target host for :authority pseudo-header and proxy CONNECT
     std::string target_host;
 
@@ -598,6 +602,7 @@ private:
 
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleSslUpgrade(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleProxySslUpgrade(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectSend(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectRecv(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
@@ -628,8 +633,9 @@ private:
 
     //! Returns True if \a state is part of the connect phase (not yet multiplexing)
     DLLLOCAL static bool isConnectPhase(H2State state) {
-        return state == H2State::CONNECTING || state == H2State::SSL_UPGRADE
-            || state == H2State::PROXY_CONNECT_SEND || state == H2State::PROXY_CONNECT_RECV;
+        return state == H2State::CONNECTING || state == H2State::PROXY_SSL_UPGRADE
+            || state == H2State::SSL_UPGRADE || state == H2State::PROXY_CONNECT_SEND
+            || state == H2State::PROXY_CONNECT_RECV;
     }
 
     //! Returns True if the connection is still being established in \a state
@@ -666,6 +672,7 @@ private:
     DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
+    DLLLOCAL void startProxySslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);
     DLLLOCAL void startMultiplex(ExceptionSink* xsink);
 

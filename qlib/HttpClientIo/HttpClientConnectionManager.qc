@@ -414,12 +414,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             try {
                 purl = parse_url(self.opts.proxy_url);
             } catch (hash<ExceptionInfo> ex) {
-                throw "HTTPCLIENT-OPTION-ERROR",
-                    sprintf("invalid proxy URL %y: %s", self.opts.proxy_url, ex.desc);
+                # the URL is not given in the error, since it can contain the password for the proxy
+                throw "HTTPCLIENT-OPTION-ERROR", "the proxy URL cannot be parsed";
             }
             if (!purl.host) {
                 throw "HTTPCLIENT-OPTION-ERROR",
-                    sprintf("proxy URL %y has no host", self.opts.proxy_url);
+                    sprintf("proxy URL %y has no host", get_safe_url(self.opts.proxy_url));
+            }
+            # an HTTP proxy is reached with plain HTTP or with TLS (an HTTPS proxy)
+            if (purl.protocol && purl.protocol != "http" && purl.protocol != "https") {
+                throw "HTTPCLIENT-OPTION-ERROR", sprintf("proxy URL %y has unsupported scheme %y; expecting "
+                    "\"http\" or \"https\"", get_safe_url(self.opts.proxy_url), purl.protocol);
             }
             bool proxy_ssl = (purl.protocol == "https");
             proxy_info = {

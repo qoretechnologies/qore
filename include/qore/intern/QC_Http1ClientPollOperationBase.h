@@ -65,6 +65,7 @@ public:
     //! HTTP/1.1 connection states
     enum class H1State {
         CONNECTING,
+        PROXY_SSL_UPGRADE,  //!< TLS handshake with an HTTPS proxy
         SSL_UPGRADE,
         PROXY_CONNECT_SEND,
         PROXY_CONNECT_RECV,
@@ -123,7 +124,7 @@ public:
     DLLLOCAL Http1ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
             SocketPollOperationBase* connect_op, bool ssl_required, bool proxy_tunnel,
             bool is_proxy_plain, std::string target_host, int target_port,
-            AbstractHttpPollConnectionPriv* connection_priv);
+            AbstractHttpPollConnectionPriv* connection_priv, bool proxy_ssl = false);
 
     //! Creates the poll operation by adopting an already-connected (and
     //! TLS-handshook, if SSL is in use) socket.
@@ -417,6 +418,9 @@ private:
     //! True when using plain HTTP through a proxy (absolute URI in request line)
     bool is_proxy_plain;
 
+    //! True when the connection to the proxy uses TLS (an HTTPS proxy)
+    bool proxy_ssl = false;
+
     //! Target host for Host header and proxy CONNECT
     std::string target_host;
 
@@ -643,6 +647,7 @@ private:
 
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleSslUpgrade(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleProxySslUpgrade(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectSend(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectRecv(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
@@ -701,6 +706,7 @@ private:
     DLLLOCAL QoreHashNode* abandonBufferedSendAndDeliver(ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
+    DLLLOCAL void startProxySslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);
     DLLLOCAL void startReady(ExceptionSink* xsink);
 
@@ -752,8 +758,9 @@ private:
 
     //! Returns True if \a state is part of the connect phase (not yet ready for requests)
     DLLLOCAL static bool isConnectPhase(H1State state) {
-        return state == H1State::CONNECTING || state == H1State::SSL_UPGRADE
-            || state == H1State::PROXY_CONNECT_SEND || state == H1State::PROXY_CONNECT_RECV;
+        return state == H1State::CONNECTING || state == H1State::PROXY_SSL_UPGRADE
+            || state == H1State::SSL_UPGRADE || state == H1State::PROXY_CONNECT_SEND
+            || state == H1State::PROXY_CONNECT_RECV;
     }
 
     //! Arms the connect deadline on first use and fails the operation once it expires

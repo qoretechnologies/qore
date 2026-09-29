@@ -187,6 +187,13 @@ public class parseUrlTest inherits QUnit::Test {
         # invalid characters in port
         assertThrows("PARSE-URL-ERROR", sub () { parse_url("scheme://user@host:hi/"); } );
 
+        # an IPv6 address must be closed with ']', and only a port can follow it
+        assertThrows("PARSE-URL-ERROR", "without a closing", sub () { parse_url("http://user:pass@[::1"); } );
+        assertThrows("PARSE-URL-ERROR", "without a closing", sub () { parse_url("http://[::1/path"); } );
+        assertThrows("PARSE-URL-ERROR", "after the IPv6", sub () { parse_url("http://[::1]x:80/path"); } );
+        assertEq(("protocol": "http", "host": "::1", "port": 8080, "path": "/p"), parse_url("http://[::1]:8080/p"));
+        assertEq(("protocol": "http", "username": "u", "password": "p", "host": "::1"), parse_url("http://u:p@[::1]"));
+
         # corner case: a path string should be recognized and parsed into the path key
         assertEq(("path": "/tmp/file"), parse_url("/tmp/file"));
 

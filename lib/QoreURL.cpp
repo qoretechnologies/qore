@@ -268,11 +268,26 @@ private:
         // see if the "hostname" is enclosed in square brackets, denoting an ipv6 address
         if (!sbuf.empty() && sbuf[0] == '[') {
             size_t right_bracket = sbuf.find(']');
-            if (right_bracket != std::string::npos) {
-                host = new QoreStringNode(sbuf.c_str() + (keep_brackets ? 0 : 1),
-                    right_bracket - (keep_brackets ? -1 : 1));
-                sbuf = sbuf.substr(right_bracket + 1);
+            if (right_bracket == std::string::npos) {
+                if (xsink) {
+                    xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an IPv6 address without a closing ']'",
+                        buf);
+                }
+                invalidate();
+                return;
             }
+            // only a port can follow the address
+            if (right_bracket + 1 < sbuf.size() && sbuf[right_bracket + 1] != ':') {
+                if (xsink) {
+                    xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has invalid characters after the IPv6 "
+                        "address", buf);
+                }
+                invalidate();
+                return;
+            }
+            host = new QoreStringNode(sbuf.c_str() + (keep_brackets ? 0 : 1),
+                right_bracket - (keep_brackets ? -1 : 1));
+            sbuf = sbuf.substr(right_bracket + 1);
         }
 
         bool has_port = false;

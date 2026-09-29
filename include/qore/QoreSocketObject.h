@@ -692,6 +692,15 @@ public:
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
+    //! Sets the host name of the next TLS connection made on the socket (async-poll helper)
+    /** The name is sent with SNI and the server certificate is verified against it; by default it is the host
+        that the socket connected to.  A TLS connection to a server through a proxy tunnel is made for the server,
+        not for the proxy that the socket connected to.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setSslTargetHostForAsyncPoll(const char* host);
+
     //! Returns the trailers received for an HTTP/2 stream, or nullptr if none were received
     /** Can be called from any thread
 

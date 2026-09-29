@@ -111,13 +111,15 @@ public:
         @param xsink exception sink — set on construction failure
         @param mgr optional owning manager
         @param ssl_config SSL configuration applied before submission
+        @param proxy_ssl if @c true, the connection to the proxy uses TLS (an HTTPS proxy); the TLS connection to
+            an HTTPS target is then carried by the TLS connection to the proxy
 
         @since %Qore 3.0
     */
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, const char* proxy_host, int proxy_port,
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr,
-        const Http1SslConfig& ssl_config = Http1SslConfig{});
+        const Http1SslConfig& ssl_config = Http1SslConfig{}, bool proxy_ssl = false);
 
     //! Creates a new HTTP/1.1 client connection by adopting an
     //! already-connected (and TLS-handshook, if SSL is in use) socket.
@@ -380,6 +382,9 @@ private:
 
     //! Proxy TCP port (only used when @ref proxy_host is non-empty)
     int proxy_port = 0;
+
+    //! True if the connection to the proxy uses TLS (only used when @ref proxy_host is non-empty)
+    bool proxy_ssl = false;
 
     //! SSL certificate verification mode for connections created by this object
     int ssl_verify_mode = 0;  // SSL_VERIFY_NONE

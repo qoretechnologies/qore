@@ -157,6 +157,7 @@
 #cmakedefine HAVE_SSL_SET1_HOST
 #cmakedefine HAVE_EVP_MAC_CTX_NEW
 #cmakedefine HAVE_SSL_READ_EX
+#cmakedefine HAVE_BIO_METH_NEW
 #cmakedefine HAVE_OPENSSL_ENGINE_H
 
 /* mpfr */

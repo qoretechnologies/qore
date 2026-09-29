@@ -699,6 +699,15 @@ public namespace HttpClientIo {
             For HTTPS targets, the proxy tunnel is established via HTTP CONNECT.
             For plain HTTP targets, requests use absolute URLs through the proxy.
 
+            With an \c https proxy URL (an HTTPS proxy), the connection to the proxy uses TLS: plain HTTP requests are
+            sent to the proxy over TLS, and the TLS connection to an HTTPS target server is carried by the TLS
+            connection to the proxy.  The proxy's certificate is verified against the proxy's host name with the same
+            options as a target server's certificate (\c ssl_verify_mode, \c ssl_ca_file, \c ssl_ca_path, and
+            \c accept_all_certs); the client certificate is sent only to the target server.  The TLS connection to a
+            target server through a proxy tunnel is made for the target's host name, which is sent with SNI and
+            verified in the server's certificate.  Proxy URL schemes other than \c http and \c https raise an
+            \c HTTPCLIENT-OPTION-ERROR exception.
+
             Plaintext (\c http) requests are forwarded by the proxy as HTTP/1.1 requests, also when the \c protocol
             option is \c "h2", as cleartext HTTP/2 cannot be sent through an HTTP proxy.
 

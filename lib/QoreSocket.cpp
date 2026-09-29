@@ -5578,6 +5578,10 @@ SSLSocketHelper::~SSLSocketHelper() {
     if (ctx) {
         SSL_CTX_free(ctx);
     }
+    // the connection that carried this one is released after this connection's BIO, which refers to it
+    if (outer) {
+        outer->deref();
+    }
 }
 
 int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert,
@@ -5637,8 +5641,11 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // Http2Session::sendPendingData), OpenSSL raises SSL_R_BAD_WRITE_RETRY.
     SSL_set_mode(ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 
-    // set the socket file descriptor
-    SSL_set_fd(ssl, sd);
+    // set the socket file descriptor; a connection layered over another TLS connection gets its BIO from
+    // setLayeredClient()
+    if (sd != QORE_INVALID_SOCKET) {
+        SSL_set_fd(ssl, sd);
+    }
 
 #ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
     // treat EOF as a normal shutdown
@@ -5693,6 +5700,132 @@ int SSLSocketHelper::setClient(ExceptionSink* xsink, const char* mname, const ch
     }
     return rc;
 }
+
+int SSLSocketHelper::setLayeredClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
+        SSLSocketHelper* outer_conn, QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
+    assert(!outer);
+    assert(outer_conn && outer_conn->ssl);
+    // the reference is released by the destructor in any case
+    outer = outer_conn;
+#ifndef HAVE_BIO_METH_NEW
+    xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): TLS connections through another TLS "
+        "connection are not supported by the OpenSSL library that Qore was built with", mname);
+    return -1;
+#else
+#ifdef HAVE_TLS_SERVER_METHOD
+    meth = TLS_client_method();
+#else
+    meth = SSLv23_client_method();
+#endif
+    if (setIntern(xsink, mname, QORE_INVALID_SOCKET, cert, pkey)) {
+        return -1;
+    }
+    SSLSocketReferenceHelper ssrh(this);
+    ERR_clear_error();
+    BIO_METHOD* bio_meth = getLayeredBioMethod();
+    BIO* bio = bio_meth ? BIO_new(bio_meth) : nullptr;
+    if (!bio) {
+        sslError(xsink, mname, "BIO_new", true, SslCall::Setup);
+        assert(*xsink);
+        return -1;
+    }
+    BIO_set_data(bio, outer);
+    // the SSL object takes over the reference to the BIO, used for both reading and writing
+    SSL_set_bio(ssl, bio, bio);
+
+    if (sni_target_host) {
+        // issue #3053 set TLS server name for servers that require SNI
+        if (!SSL_set_tlsext_host_name(ssl, sni_target_host)) {
+            sslError(xsink, mname, "SSL_set_tlsext_host_name", true, SslCall::Setup);
+            assert(*xsink);
+            return -1;
+        }
+    }
+    return 0;
+#endif
+}
+
+#ifdef HAVE_BIO_METH_NEW
+BIO_METHOD* SSLSocketHelper::getLayeredBioMethod() {
+    // created once and kept for the lifetime of the process
+    static BIO_METHOD* bio_meth = []() -> BIO_METHOD* {
+        BIO_METHOD* m = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "qore layered TLS");
+        if (!m) {
+            return nullptr;
+        }
+        if (!BIO_meth_set_write_ex(m, layeredBioWrite)
+                || !BIO_meth_set_read_ex(m, layeredBioRead)
+                || !BIO_meth_set_ctrl(m, layeredBioCtrl)
+                || !BIO_meth_set_create(m, layeredBioCreate)) {
+            BIO_meth_free(m);
+            return nullptr;
+        }
+        return m;
+    }();
+    return bio_meth;
+}
+
+bool SSLSocketHelper::setLayeredBioRetry(BIO* bio, SSL* outer_ssl, int rc) {
+    // the socket is readable or writable for the outer connection exactly when the layered connection can continue,
+    // so the retry reason of the outer connection is the retry reason of the layered connection
+    switch (SSL_get_error(outer_ssl, rc)) {
+        case SSL_ERROR_WANT_READ:
+            BIO_set_retry_read(bio);
+            return true;
+        case SSL_ERROR_WANT_WRITE:
+            BIO_set_retry_write(bio);
+            return true;
+        default:
+            return false;
+    }
+}
+
+int SSLSocketHelper::layeredBioWrite(BIO* bio, const char* data, size_t len, size_t* written) {
+    SSLSocketHelper* o = static_cast<SSLSocketHelper*>(BIO_get_data(bio));
+    BIO_clear_retry_flags(bio);
+    int rc = SSL_write_ex(o->ssl, data, len, written);
+    if (rc > 0) {
+        return 1;
+    }
+    *written = 0;
+    setLayeredBioRetry(bio, o->ssl, rc);
+    return 0;
+}
+
+int SSLSocketHelper::layeredBioRead(BIO* bio, char* data, size_t len, size_t* read) {
+    SSLSocketHelper* o = static_cast<SSLSocketHelper*>(BIO_get_data(bio));
+    BIO_clear_retry_flags(bio);
+    int rc = SSL_read_ex(o->ssl, data, len, read);
+    if (rc > 0) {
+        return 1;
+    }
+    // without a retry flag, this is the end of the data: the outer connection was closed or failed
+    *read = 0;
+    setLayeredBioRetry(bio, o->ssl, rc);
+    return 0;
+}
+
+long SSLSocketHelper::layeredBioCtrl(BIO* bio, int cmd, long /* num */, void* /* ptr */) {
+    SSLSocketHelper* o = static_cast<SSLSocketHelper*>(BIO_get_data(bio));
+    switch (cmd) {
+        case BIO_CTRL_FLUSH:
+            return 1;
+        case BIO_CTRL_PENDING:
+            // data already decrypted by the outer connection can be read without waiting for the socket
+            return o ? SSL_pending(o->ssl) : 0;
+        case BIO_C_GET_FD:
+            // this BIO has no file descriptor of its own
+            return -1;
+        default:
+            return 0;
+    }
+}
+
+int SSLSocketHelper::layeredBioCreate(BIO* bio) {
+    BIO_set_init(bio, 1);
+    return 1;
+}
+#endif
 
 int SSLSocketHelper::setServer(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
@@ -5790,7 +5923,13 @@ bool SSLSocketHelper::isHttp2() const {
 }
 
 int SSLSocketHelper::pending() const {
-    return ssl ? SSL_pending(ssl) : 0;
+    int rc = ssl ? SSL_pending(ssl) : 0;
+    // data decrypted by the outer connection of a layered connection is not in the socket anymore, so it must be
+    // reported as pending, or a reader would wait for the socket to become readable
+    if (!rc && outer) {
+        rc = outer->pending();
+    }
+    return rc;
 }
 
 // returns 0 = success, 1 = need SOCK_POLLIN, 2 = need SOCK_POLLOUT, < 0 = error
@@ -5923,9 +6062,12 @@ int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mnam
 
 // returns 0 for success
 int SSLSocketHelper::shutdown() {
-   if (SSL_shutdown(ssl) < 0)
-      return -1;
-   return 0;
+    int rc = SSL_shutdown(ssl) < 0 ? -1 : 0;
+    // a layered connection is shut down before the connection that carries it
+    if (outer && outer->shutdown()) {
+        rc = -1;
+    }
+    return rc;
 }
 
 // returns 0 for success
@@ -5935,6 +6077,10 @@ int SSLSocketHelper::shutdown(ExceptionSink* xsink) {
         SSLSocketReferenceHelper ssrh(this);
         sslError(xsink, "shutdownSSL", "SSL_shutdown");
         return -1;
+    }
+    // a layered connection is shut down before the connection that carries it
+    if (outer) {
+        return outer->shutdown(xsink);
     }
     return 0;
 }
@@ -8143,7 +8289,7 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
 #endif
 
 SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
-        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey, bool use_alpn) : sock(sock) {
     assert(sock->sock);
     assert(!sock->ssl);
     SSLSocketHelperHelper sshh(sock, true);
@@ -8158,7 +8304,7 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
 
     // Set ALPN protocols if configured (for HTTP/2 support).
     // This must match the async SSL poll setup paths.
-    if (!sock->alpn_protocols.empty()) {
+    if (use_alpn && !sock->alpn_protocols.empty()) {
         sock->ssl->setAlpnProtocols(sock->alpn_protocols);
     }
 }
@@ -8170,6 +8316,33 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     - < 1 = error (exception raised)
 */
 int SocketConnectSslPollState::continuePoll(ExceptionSink* xsink) {
+    return sock->ssl->startConnect(xsink);
+}
+
+SocketConnectLayeredSslPollState::SocketConnectLayeredSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
+    assert(sock->sock);
+    assert(sock->ssl);
+    SSLSocketHelper* outer = sock->ssl;
+    SSLSocketHelper* inner = new SSLSocketHelper(*sock);
+    // the new connection takes over a reference to the connection that carries it
+    outer->ref();
+    const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
+    if (inner->setLayeredClient(xsink, "connectSsl", sni_target_host, outer, cert, pkey)) {
+        // the socket keeps the outer connection
+        inner->deref();
+        return;
+    }
+    if (!sock->alpn_protocols.empty()) {
+        inner->setAlpnProtocols(sock->alpn_protocols);
+    }
+    // the socket's reference to the outer connection is now held by the new connection
+    sock->ssl = inner;
+    outer->deref();
+    sock->do_start_ssl_event();
+}
+
+int SocketConnectLayeredSslPollState::continuePoll(ExceptionSink* xsink) {
     return sock->ssl->startConnect(xsink);
 }
 
@@ -10748,6 +10921,41 @@ AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, QoreSSLCert
         return nullptr;
     }
     return new SocketConnectSslPollState(xsink, priv, cert, pkey);
+}
+
+AbstractPollState* QoreSocket::startProxySslConnect(ExceptionSink* xsink) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startSslConnect", xsink);
+        return nullptr;
+    }
+    if (priv->ssl) {
+        se_ssl_already_established("Socket", "startSslConnect", xsink);
+        return nullptr;
+    }
+    // the client certificate and the ALPN protocols of the socket are meant for the target server
+    return new SocketConnectSslPollState(xsink, priv, nullptr, nullptr, false);
+}
+
+AbstractPollState* QoreSocket::startLayeredSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pkey) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startSslConnect", xsink);
+        return nullptr;
+    }
+    if (!priv->ssl) {
+        xsink->raiseException("SOCKET-SSL-ERROR", "Socket::startSslConnect(): a TLS connection carried by another "
+            "TLS connection requires the socket to have a TLS connection");
+        return nullptr;
+    }
+    if (priv->ssl->isLayered()) {
+        se_ssl_already_established("Socket", "startSslConnect", xsink);
+        return nullptr;
+    }
+    std::unique_ptr<AbstractPollState> rv(new SocketConnectLayeredSslPollState(xsink, priv, cert, pkey));
+    if (*xsink) {
+        return nullptr;
+    }
+    return rv.release();
 }
 
 AbstractPollState* QoreSocket::startSend(ExceptionSink* xsink, const char* data, size_t size) {
@@ -13515,6 +13723,11 @@ SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(Excepti
     init(xsink, defer_init);
 }
 
+SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        bool defer_init, SslUpgradeMode mode) : SocketPollSocketOperationBase(sock), mode(mode) {
+    init(xsink, defer_init);
+}
+
 void SocketUpgradeClientSslPollOperation::init(ExceptionSink* xsink, bool defer_init) {
     controller_deferred_init = defer_init;
     controller_deferred_tid = defer_init ? q_gettid() : -1;
@@ -13539,7 +13752,8 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (sock->priv->checkOpen(xsink)) {
         return;
     }
-    if (sock->priv->socket->isSecure()) {
+    // a layered connection is made on a socket that already has a TLS connection
+    if (mode != SslUpgradeMode::Layered && sock->priv->socket->isSecure()) {
         done = true;
         return;
     }
@@ -13550,7 +13764,18 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (!rc) {
         set_non_block = true;
 
-        poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
+        switch (mode) {
+            case SslUpgradeMode::Normal:
+                poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
+                break;
+            case SslUpgradeMode::Proxy:
+                poll_state.reset(sock->priv->socket->startProxySslConnect(xsink));
+                break;
+            case SslUpgradeMode::Layered:
+                poll_state.reset(sock->priv->socket->startLayeredSslConnect(xsink, sock->priv->cert,
+                    sock->priv->pk));
+                break;
+        }
         if (*xsink) {
             sock->priv->clearNonBlock();
             set_non_block = false;

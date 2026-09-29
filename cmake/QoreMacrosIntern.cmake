@@ -213,6 +213,15 @@ return 0;
 }"
 HAVE_SSL_READ_EX)
 
+# check for BIO_meth_new(), used for TLS connections layered over another TLS connection
+check_cxx_source_compiles("
+#include <openssl/bio.h>
+int main(void) {
+BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, \"test\");
+return 0;
+}"
+HAVE_BIO_METH_NEW)
+
 # check for TLS_server_method()
 check_cxx_source_compiles("
 #include <openssl/ssl.h>

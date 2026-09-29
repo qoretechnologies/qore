@@ -73,7 +73,9 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
                 url_info.protocol == "https",
                 proxy_info && url_info.protocol == "https" ? True : False,
                 proxy_info && url_info.protocol != "https" ? True : False,
-                connection) {
+                connection,
+                # an HTTPS proxy: the connection to the proxy uses TLS
+                proxy_info.ssl ? True : False) {
         h1_logger = logger;
         # bound the connect phase independently of the caller's request budget; the
         # deadline is enforced by the I/O thread in the C++ poll operation, never by a

@@ -108,6 +108,33 @@ public:
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
     DLLLOCAL int setServer(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert = nullptr,
             QoreSSLPrivateKey* pkey = nullptr);
+
+    //! Sets up a client TLS connection whose records are carried by another TLS connection
+    /** Used for a TLS connection to a server through a tunnel of an HTTPS proxy: the outer connection is the
+        connection to the proxy.  All data of this connection is read and written through the outer connection, so
+        waiting for the socket to become readable or writable works as for a TLS connection on the socket itself.
+
+        @param xsink exception sink
+        @param mname the method name for exceptions
+        @param sni_target_host the host name to send with SNI, if any
+        @param outer the TLS connection that carries this connection; this object takes over one reference to it,
+        which is released when this object is destroyed
+        @param cert the client certificate, if any
+        @param pkey the private key of the client certificate, if any
+
+        @return 0 for success, -1 for error (exception raised); the reference to \a outer is taken over in any case
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setLayeredClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
+            SSLSocketHelper* outer, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
+
+    //! Returns true if this connection is carried by another TLS connection
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL bool isLayered() const {
+        return outer != nullptr;
+    }
     // returns 0 for success
     DLLLOCAL int shutdown();
     // returns 0 for success
@@ -174,6 +201,8 @@ private:
     SSL_CTX* ctx = nullptr;
     SSL* ssl = nullptr;
     unsigned refs = 1;
+    //! the TLS connection that carries this connection, if any; see setLayeredClient()
+    SSLSocketHelper* outer = nullptr;
 
     //! ALPN protocols for client-side negotiation (wire format)
     std::vector<unsigned char> alpn_wire_format;
@@ -182,6 +211,19 @@ private:
 
     DLLLOCAL int setIntern(ExceptionSink* xsink, const char* meth, int sd, QoreSSLCertificate* cert = nullptr,
             QoreSSLPrivateKey* pkey = nullptr);
+
+#ifdef HAVE_BIO_METH_NEW
+    //! Returns the BIO method that reads and writes through the outer connection of a layered connection
+    DLLLOCAL static BIO_METHOD* getLayeredBioMethod();
+    DLLLOCAL static int layeredBioWrite(BIO* bio, const char* data, size_t len, size_t* written);
+    DLLLOCAL static int layeredBioRead(BIO* bio, char* data, size_t len, size_t* read);
+    DLLLOCAL static long layeredBioCtrl(BIO* bio, int cmd, long num, void* ptr);
+    DLLLOCAL static int layeredBioCreate(BIO* bio);
+    //! Sets the retry flags of a layered BIO after an I/O call on the outer connection did not complete
+    /** @return true if the call can be retried
+    */
+    DLLLOCAL static bool setLayeredBioRetry(BIO* bio, SSL* outer_ssl, int rc);
+#endif
 
     //! Static callback for server-side ALPN protocol selection
     static int alpnSelectCallback(SSL* ssl, const unsigned char** out, unsigned char* outlen,

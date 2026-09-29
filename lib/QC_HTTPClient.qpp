@@ -2996,7 +2996,11 @@ nothing HTTPClient::clearProxyURL() {
 }
 
 //! Sets the SSL/TLS flag for the next connection to the proxy
-/**
+/** With the flag set, the connection to the proxy uses TLS (an HTTPS proxy): plain HTTP requests are sent to the
+    proxy over TLS, and the TLS connection to an HTTPS target server is carried by the TLS connection to the proxy.
+    The proxy's certificate is verified against the proxy's host name with the same settings as a server's
+    certificate.  A proxy URL with the \c https scheme sets the flag.
+
     @par Example:
     @code{.py}
 httpclient.setProxySecure(True);

@@ -587,7 +587,7 @@ protected:
 
     //! Pool: pool-key → list of connections.
     /** Key format is @c "host:port" for direct connections, or
-        @c "proxy_host:proxy_port|target_host:target_port" for proxied
+        @c "proxy_scheme://proxy_host:proxy_port|scheme://target_host:target_port" for proxied
         connections (so the same target reached through different proxies
         gets distinct pool entries).
 

@@ -85,7 +85,9 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
                 proxy_info && url_info.protocol == "https" ? True : False,
-                connection) {
+                connection,
+                # an HTTPS proxy: the connection to the proxy uses TLS
+                proxy_info.ssl ? True : False) {
         h2_logger = logger;
         # bound the connect phase independently of the caller's request budget; the
         # deadline is enforced by the I/O thread in the C++ poll operation, never by a

@@ -611,8 +611,11 @@ private:
 
 class SocketConnectSslPollState : public AbstractPollState {
 public:
+    /** @param use_alpn false for a connection to an HTTPS proxy, which must not negotiate the protocols meant for
+        the target server
+    */
     DLLLOCAL SocketConnectSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
-            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr, bool use_alpn = true);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -627,6 +630,29 @@ private:
 
     // returns 0 = connected, 1 = try again, -1 = error
     DLLLOCAL int checkConnection(ExceptionSink* xsink);
+};
+
+//! Starts a client TLS connection carried by the TLS connection that the socket already has
+/** The new connection replaces the socket's TLS connection, which then carries it; see
+    SSLSocketHelper::setLayeredClient()
+
+    @since %Qore 3.0
+*/
+class SocketConnectLayeredSslPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketConnectLayeredSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+private:
+    qore_socket_private* sock;
 };
 
 class SocketAcceptPollState : public AbstractPollState {

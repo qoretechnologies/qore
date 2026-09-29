@@ -3,13 +3,15 @@
 
 #! An HTTP proxy for tests: tunnels CONNECT requests and forwards plain HTTP requests
 /** Records the request line and the Proxy-Authorization header of every request it receives, and can require
-    credentials, answering requests without them with 407.
+    credentials, answering requests without them with 407.  With a certificate, it is an HTTPS proxy: clients connect
+    to it with TLS.
 
     Include it with %include; the including test must require the Util module.
 */
 class TestConnectProxy {
     public {
-        #! the requests received: request line and proxy authorization, in the order received
+        #! the requests received: request line, proxy authorization, and whether the client used TLS, in the order
+        #! received
         list<hash<auto>> requests = ();
     }
 
@@ -18,6 +20,11 @@ class TestConnectProxy {
         int port;
         #! the Proxy-Authorization value that is required, if any
         *string required_auth;
+        #! the certificate and key of an HTTPS proxy
+        *SSLCertificate cert;
+        *SSLPrivateKey key;
+        #! the addresses of target host names that cannot be resolved, such as a name in a test certificate
+        *hash<string, string> host_map;
         bool quit;
         Counter threads();
         Mutex m();
@@ -25,9 +32,15 @@ class TestConnectProxy {
 
     #! Creates the proxy and starts listening on a free port of 127.0.0.1
     /** @param required_auth the Proxy-Authorization value that is required, if any
+        @param cert the certificate of an HTTPS proxy; clients then connect to the proxy with TLS
+        @param key the private key of \a cert
+        @param host_map the addresses to connect to for target host names, such as a name in a test certificate
     */
-    constructor(*string required_auth) {
+    constructor(*string required_auth, *SSLCertificate cert, *SSLPrivateKey key, *hash<string, string> host_map) {
         self.required_auth = required_auth;
+        self.cert = cert;
+        self.key = key;
+        self.host_map = host_map;
         listener.bindINET("127.0.0.1", "0", True);
         listener.listen();
         port = listener.getSocketInfo().port;
@@ -99,6 +112,16 @@ class TestConnectProxy {
             s.close();
             threads.dec();
         }
+        if (cert) {
+            try {
+                s.setCertificate(cert);
+                s.setPrivateKey(key);
+                s.upgradeServerToSSL(10s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client failed the TLS handshake
+                return;
+            }
+        }
         *hash<auto> req;
         try {
             req = readHead(s);
@@ -114,6 +137,7 @@ class TestConnectProxy {
             requests += {
                 "line": req.line,
                 "proxy-authorization": req.hdr."proxy-authorization",
+                "ssl": s.isSecure(),
             };
         }
         if (required_auth && req.hdr."proxy-authorization" != required_auth) {
@@ -124,7 +148,7 @@ class TestConnectProxy {
         *list<*string> m = (req.line =~ x/^CONNECT ([^:]+):([0-9]+) /);
         if (m) {
             Socket target();
-            target.connectINET(m[0], m[1].toInt(), 5s);
+            target.connectINET(host_map{m[0]} ?? m[0], m[1].toInt(), 5s);
             s.send("HTTP/1.1 200 Connection established\r\n\r\n");
             relay(s, target);
             return;
@@ -136,7 +160,7 @@ class TestConnectProxy {
             return;
         }
         Socket target();
-        target.connectINET(m[1], m[2].toInt(), 5s);
+        target.connectINET(host_map{m[1]} ?? m[1], m[2].toInt(), 5s);
         # the request is forwarded without the proxy's own header
         string fwd = sprintf("%s %s %s\r\n", m[0], m[3], m[4]);
         foreach hash<auto> i in (req.hdr.pairIterator()) {

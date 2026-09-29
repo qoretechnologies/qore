@@ -524,8 +524,22 @@ private:
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
+//! The kind of TLS connection made by SocketUpgradeClientSslPollOperation
+/** @since %Qore 3.0
+*/
+enum class SslUpgradeMode : unsigned char {
+    //! A TLS connection to the peer of the socket, with the socket's client certificate and ALPN protocols
+    Normal,
+    //! A TLS connection to an HTTPS proxy, without the client certificate and ALPN protocols meant for the target
+    Proxy,
+    //! A TLS connection to a server through a tunnel of an HTTPS proxy, carried by the socket's TLS connection to
+    //! the proxy
+    Layered,
+};
+
 //! Non-blocking client-side TLS handshake upgrade
-/** Upgrades an already-connected plaintext socket to TLS.
+/** Upgrades an already-connected plaintext socket to TLS, or, with SslUpgradeMode::Layered, makes a TLS connection
+    carried by the socket's TLS connection.
 
     @since %Qore 3.0
 */
@@ -542,6 +556,14 @@ public:
         @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
     */
     DLLEXPORT SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
+    //! Creates a TLS upgrade operation of the given kind
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+        @param mode the kind of TLS connection to make
+    */
+    DLLEXPORT SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init,
+            SslUpgradeMode mode);
 
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
     DLLEXPORT void deref(ExceptionSink* xsink);
@@ -563,6 +585,7 @@ private:
     bool initialized = false;
     bool controller_deferred_init = false;
     int controller_deferred_tid = -1;
+    SslUpgradeMode mode = SslUpgradeMode::Normal;
 };
 
 //! Non-blocking HTTP header reader

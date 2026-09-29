@@ -63,9 +63,9 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
         QoreSocketObject* sock, SocketPollOperationBase* connect_op,
         bool ssl_required, bool proxy_tunnel,
         std::string target_host, int target_port,
-        AbstractHttpPollConnectionPriv* conn_priv)
+        AbstractHttpPollConnectionPriv* conn_priv, bool proxy_ssl)
     : SocketPollOperationBase(self), current_op(connect_op), sock_obj(sock),
-      ssl_required(ssl_required), proxy_tunnel(proxy_tunnel),
+      ssl_required(ssl_required), proxy_tunnel(proxy_tunnel), proxy_ssl(proxy_ssl && proxy_tunnel),
       target_host(std::move(target_host)), target_port(target_port),
       connection_priv(conn_priv) {
     // sock and connect_op are ref'd by the caller; ownership transferred
@@ -192,6 +192,7 @@ void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
 const char* Http2ClientPollOperationPriv::getStateImpl() const {
     switch (h2_state.load(std::memory_order_acquire)) {
         case H2State::CONNECTING: return "connecting";
+        case H2State::PROXY_SSL_UPGRADE: return "proxy_ssl_upgrade";
         case H2State::SSL_UPGRADE: return "ssl_upgrade";
         case H2State::PROXY_CONNECT_SEND: return "proxy_connect_send";
         case H2State::PROXY_CONNECT_RECV: return "proxy_connect_recv";
@@ -279,6 +280,9 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H2State::CONNECTING:
                 return clampConnectDeadline(handleConnecting(xsink), xsink);
 
+            case H2State::PROXY_SSL_UPGRADE:
+                return clampConnectDeadline(handleProxySslUpgrade(xsink), xsink);
+
             case H2State::SSL_UPGRADE:
                 return clampConnectDeadline(handleSslUpgrade(xsink), xsink);
 
@@ -347,7 +351,9 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         if (*xsink) {
             return nullptr;
         }
-        if (proxy_tunnel) {
+        if (proxy_ssl) {
+            startProxySslUpgrade(xsink);
+        } else if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
             startSslUpgrade(xsink);
@@ -499,13 +505,76 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
 
 void Http2ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     printd(5, "Http2ClientPollOperationPriv::startSslUpgrade()\n");
+    if (proxy_tunnel) {
+        // the socket is connected to the proxy: the TLS connection through the tunnel is made for the target server,
+        // which is the name sent with SNI and verified in the server's certificate
+        sock_obj->setSslTargetHostForAsyncPoll(target_host.c_str());
+    }
     sock_obj->ref();
-    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj);
+    // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
+    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
+        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal);
     if (*xsink) {
         op->deref(xsink);
         return;
     }
     replaceCurrentOp(op, H2State::SSL_UPGRADE, xsink);
+}
+
+void Http2ClientPollOperationPriv::startProxySslUpgrade(ExceptionSink* xsink) {
+    printd(5, "Http2ClientPollOperationPriv::startProxySslUpgrade()\n");
+    sock_obj->ref();
+    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
+        SslUpgradeMode::Proxy);
+    if (*xsink) {
+        op->deref(xsink);
+        return;
+    }
+    replaceCurrentOp(op, H2State::PROXY_SSL_UPGRADE, xsink);
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleProxySslUpgrade(ExceptionSink* xsink) {
+    SocketPollOperationBase* op = refCurrentOp();
+    if (!op) {
+        setError("HTTP2-SSL-ERROR", "proxy SSL operation not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode("TLS connection to the proxy failed: "));
+        desc->concat(*desc_str ? desc_str->c_str() : "unknown error");
+        setError(*err_str ? err_str->c_str() : "HTTP2-SSL-ERROR", desc->c_str(), xsink);
+        poll_xsink.clear();
+        op->deref(xsink);
+        return nullptr;
+    }
+
+    if (poll_info) {
+        op->deref(xsink);
+        return poll_info;
+    }
+
+    bool goal_reached = op->goalReached();
+    op->deref(xsink);
+    if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
+        return nullptr;
+    }
+
+    if (goal_reached) {
+        printd(5, "Http2ClientPollOperationPriv::handleProxySslUpgrade() proxy TLS connection established\n");
+        startProxyConnect(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    setError("HTTP2-SSL-ERROR", "TLS connection to the proxy failed", xsink);
+    return nullptr;
 }
 
 QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
@@ -1636,10 +1705,15 @@ qclass Http2ClientPollOperationBase [
     @param ssl_required True if SSL/TLS is required (HTTPS)
     @param proxy_tunnel True if a proxy CONNECT tunnel is needed
     @param connection the owning HttpClientConnection object
+    @param proxy_ssl True when the connection to the proxy uses TLS (an HTTPS proxy); the TLS connection to the
+    target server is then carried by the TLS connection to the proxy
+
+    @since %Qore 3.0 added the \a proxy_ssl parameter
 */
 Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, string connect_target,
         string target_host, int target_port, bool ssl_required, bool proxy_tunnel,
-        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection) [flags=NAMED_ARGS] {
+        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection, bool proxy_ssl = False)
+        [flags=NAMED_ARGS] {
     QoreSocketObject* sock_ptr = *socket;
 
     // Create initial TCP connect operation
@@ -1674,7 +1748,7 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     self->setPrivate(CID_HTTP2CLIENTPOLLOPERATIONBASE,
         new Http2ClientPollOperationPriv(self, sock_ptr, connect_ptr,
             ssl_required, proxy_tunnel,
-            target_host->c_str(), (int)target_port, conn_priv));
+            target_host->c_str(), (int)target_port, conn_priv, proxy_ssl));
 
     // DGC custom scanner gate — priv holds ref'd queue_obj / notifier_obj
     // in stream_queues/pending_stream_registrations that the normal

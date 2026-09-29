@@ -80,9 +80,9 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
 Http1ClientConnection::Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, const char* proxy_host, int proxy_port,
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr,
-        const Http1SslConfig& ssl_config)
+        const Http1SslConfig& ssl_config, bool proxy_ssl)
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
-      proxy_host(proxy_host), proxy_port(proxy_port) {
+      proxy_host(proxy_host), proxy_port(proxy_port), proxy_ssl(proxy_ssl) {
     ssl_verify_mode = ssl_config.verify_mode;
     accept_all_certs = ssl_config.accept_all;
     client_cert = ssl_config.cert;
@@ -284,7 +284,8 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
             /* is_proxy_plain */ use_proxy_plain,
             /* target_host */ target_host,
             /* target_port */ target_port,
-            /* conn_priv */ this),
+            /* conn_priv */ this,
+            /* proxy_ssl */ use_proxy && proxy_ssl),
         xsink);
     Http1ClientPollOperationPriv* priv_raw = *priv_holder;
     // the operation enforces the connect timeout on the I/O thread, so a stalled connect fails even when no

@@ -81,9 +81,9 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
             if (scheme == "https") {
                 ssl = true;
             } else if (scheme != "http") {
+                // the proxy URL is not given in errors, since it can contain the password for the proxy
                 xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
-                    "invalid proxy URL scheme %y in %y; must be http or https",
-                    scheme.c_str(), opts_.proxy_url.c_str());
+                    "invalid proxy URL scheme %y; must be http or https", scheme.c_str());
                 return;
             }
             host_start = scheme_end + 3;
@@ -100,8 +100,7 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
             hostport = host_start;
         }
         if (hostport.empty()) {
-            xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
-                "proxy URL %y has no host", opts_.proxy_url.c_str());
+            xsink->raiseException("HTTPCLIENT-OPTION-ERROR", "the proxy URL has no host");
             return;
         }
 
@@ -117,7 +116,7 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
                 proxy_port = std::stoi(hostport.substr(colon + 1));
             } catch (...) {
                 xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
-                    "invalid proxy port in %y", opts_.proxy_url.c_str());
+                    "invalid proxy port %y", hostport.substr(colon + 1).c_str());
                 return;
             }
         } else {
@@ -149,7 +148,7 @@ std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port,
     if (proxy_info_) {
         // Proxied: include the proxy in the key so the same target
         // reached through different proxies gets distinct entries.
-        snprintf(buf, sizeof(buf), "%s:%d|%s://%s:%d",
+        snprintf(buf, sizeof(buf), "%s://%s:%d|%s://%s:%d", proxy_info_->ssl ? "https" : "http",
             proxy_info_->host.c_str(), proxy_info_->port, scheme, host, port);
     } else {
         snprintf(buf, sizeof(buf), "%s://%s:%d", scheme, host, port);
@@ -606,7 +605,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             if (proxy_info_) {
                 conn = new Http1ClientConnection(host, port, ssl_required,
                     proxy_info_->host.c_str(), proxy_info_->port,
-                    xsink, this, ssl_cfg);
+                    xsink, this, ssl_cfg, proxy_info_->ssl);
             } else {
                 conn = new Http1ClientConnection(host, port, ssl_required,
                     xsink, this, ssl_cfg);
@@ -687,7 +686,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 ReferenceHolder<Http1ClientConnection> h1(
                     new Http1ClientConnection(host, port, ssl_required,
                         proxy_info_->host.c_str(), proxy_info_->port,
-                        xsink, this, ssl_cfg),
+                        xsink, this, ssl_cfg, proxy_info_->ssl),
                     xsink);
                 if (*xsink) {
                     return nullptr;

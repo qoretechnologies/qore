@@ -731,6 +731,16 @@ val = "string";      # OK
     - \c -v shows the protocol, status, and content type of the response instead of socket events
     @endparblock
 
+    @par HTTPS Targets Through an HTTPS Proxy Use an End-to-End TLS Tunnel
+    @parblock
+    @ref Qore::HTTPClient "HTTPClient" reaches an HTTPS server through an HTTPS proxy (a proxy URL with the
+    \c https scheme, or @ref Qore::HTTPClient::setProxySecure() "HTTPClient::setProxySecure()") through a
+    \c CONNECT tunnel, with a TLS connection to the server carried by the TLS connection to the proxy, as through an
+    HTTP proxy.  Before, the request was sent to the proxy over TLS, and the proxy made the TLS connection to the
+    server, so the proxy saw the request.  The client certificate is sent only to the server, not to the proxy, and
+    the proxy's certificate is verified against the proxy's host name.
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
@@ -3806,6 +3816,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the TLS connection to an HTTPS server through a proxy tunnel with @ref Qore::HTTPClient "HTTPClient":
+      it was made for the proxy's host name, which was sent with SNI and against which the server's certificate was
+      verified, so a verified connection failed, and a server that selects its certificate with SNI could present
+      the wrong one; the connection is now made for the server's host name
+    - Fixed @ref Qore::parse_url() "parse_url()" accepting an IPv6 address without a closing \c ']', or with
+      characters other than a port after it, which returned a wrong host and port; such a URL now raises a
+      \c PARSE-URL-ERROR exception
     - Fixed @ref Qore::HTTPClient "HTTPClient" methods that deliver a response body as it is received
       (@ref Qore::HTTPClient::send() "HTTPClient::send()" and
       @ref Qore::HTTPClient::sendChunked() "HTTPClient::sendChunked()" with an output stream, and a chunked body

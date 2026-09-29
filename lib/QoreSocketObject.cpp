@@ -5962,6 +5962,11 @@ bool QoreSocketObject::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) 
     return h2 && h2->isStreamBodyTooLarge(stream_id);
 }
 
+void QoreSocketObject::setSslTargetHostForAsyncPoll(const char* host) {
+    AutoLocker al(priv->m);
+    priv->socket->priv->client_target = host;
+}
+
 QoreHashNode* QoreSocketObject::getHttp2StreamTrailers(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return h2 ? h2->getStreamTrailers(stream_id) : nullptr;

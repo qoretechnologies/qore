@@ -215,6 +215,33 @@ public:
     DLLEXPORT AbstractPollState* startSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr,
             QoreSSLPrivateKey* pkey = nullptr);
 
+    //! Starts a non-blocking TLS connection to an HTTPS proxy
+    /** Unlike startSslConnect(), the connection is made without the socket's client certificate and ALPN protocols,
+        which are meant for the target server reached through the proxy
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL AbstractPollState* startProxySslConnect(ExceptionSink* xsink);
+
+    //! Starts a non-blocking TLS connection carried by the TLS connection that the socket already has
+    /** Used for a TLS connection to a server through a tunnel of an HTTPS proxy, where the socket's TLS connection
+        is the connection to the proxy
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param cert the client certificate to use
+        @param pkey the private key to use
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL AbstractPollState* startLayeredSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr,
+            QoreSSLPrivateKey* pkey = nullptr);
+
     //! Starts a non-blocking send operation on a connected socket
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here
