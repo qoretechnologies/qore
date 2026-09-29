@@ -333,11 +333,9 @@ hash<RestResponseInfo> resp = f.get(30s);
           returned as received and not deserialized; see
           @ref HttpClientIo::HttpClientConnectionManagerOptions::encoding_passthru
           "HttpClientConnectionManagerOptions::encoding_passthru"
-        - \c http3_mode: \c "disabled" (HTTP/3 is never used), \c "auto" (the default), or \c "required" (the same
-          as the \c "h3" protocol), or a @ref Qore::HTTP3Mode "HTTP3Mode" value, as with
-          @ref Qore::HTTPClient "HTTPClient"
-        - \c additional_methods: accepted for compatibility with @ref Qore::HTTPClient "HTTPClient"; every request
-          method is allowed
+        - \c enable_http3: if \c False, HTTP/3 is never used; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::enable_http3
+          "HttpClientConnectionManagerOptions::enable_http3"
         - \c ssl_verify_mode: SSL verification mode
         - \c ssl_verify_cert: if \c True, the server certificate is verified (\c SSL_VERIFY_PEER), as with
           @ref RestClient::RestClient "RestClient"; ignored if \c ssl_verify_mode is set
@@ -760,10 +758,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
             /** Other keys are ignored, so that a subclass or a connection can pass options of its own in the same
-                hash.  This set includes every option of @ref RestClient::RestClient "RestClient" and of
-                @ref Qore::HTTPClient "HTTPClient", so that @ref RestClient::RestConnection::getAsyncImpl()
-                "getAsyncImpl()" can pass its full options hash verbatim, and a client created with the options of
-                a @ref RestClient::RestClient "RestClient" behaves the same.
+                hash; this set includes the options of @ref RestClient::RestConnection "RestConnection", so that
+                @ref RestClient::RestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
+                verbatim.
             */
             const hash<string, bool> KnownOptions = {
                 # Core transport / URL
@@ -772,8 +769,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "protocol": True,
                 "http_version": True,
                 "connect_timeout": True,
-                "http3_mode": True,
-                "additional_methods": True,
+                "enable_http3": True,
                 "encoding": True,
                 "encoding_passthru": True,
                 "timeout": True,
@@ -4397,8 +4393,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             if (opts.encoding_passthru) {
                 mgr_opts.encoding_passthru = opts.encoding_passthru.toBool();
             }
-            if (exists opts.http3_mode) {
-                RestClientIo::applyHttp3Mode(\mgr_opts, opts.http3_mode, opts.protocol);
+            if (exists opts.enable_http3 && !opts.enable_http3) {
+                mgr_opts.enable_http3 = False;
             }
             # Load TLS client cert + private key for mutual TLS (mTLS)
             *SSLCertificate client_cert = RestClientIo::loadSslCertificate(opts);
@@ -4410,49 +4406,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 mgr_opts.client_pk = client_pk;
             }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
-        }
-
-        #! Applies the \c http3_mode option of @ref Qore::HTTPClient "HTTPClient" to connection manager options
-        /** @param mgr_opts the connection manager options to update
-            @param mode \c "disabled", \c "auto", or \c "required", or a @ref Qore::HTTP3Mode "HTTP3Mode" value
-            @param protocol the \c protocol option, if given
-
-            @throw RESTCLIENTIO-OPTION-ERROR the mode is invalid, or conflicts with the \c protocol option
-
-            @since RestClientIo 1.0
-        */
-        static applyHttp3Mode(reference<hash<HttpClientIo::HttpClientConnectionManagerOptions>> mgr_opts, auto mode,
-                *string protocol) {
-            *string m;
-            switch (mode.typeCode()) {
-                case NT_STRING: m = mode.lwr(); break;
-                case NT_INT:
-                    switch (mode) {
-                        case HTTP3Mode::Disabled: m = "disabled"; break;
-                        case HTTP3Mode::Auto: m = "auto"; break;
-                        case HTTP3Mode::Required: m = "required"; break;
-                    }
-                    break;
-            }
-            switch (m) {
-                case "disabled":
-                    if (protocol == "h3") {
-                        throw "RESTCLIENTIO-OPTION-ERROR", "http3_mode \"disabled\" conflicts with protocol \"h3\"";
-                    }
-                    mgr_opts.enable_http3 = False;
-                    return;
-                case "auto":
-                    return;
-                case "required":
-                    if (protocol && protocol != "auto" && protocol != "h3") {
-                        throw "RESTCLIENTIO-OPTION-ERROR", sprintf("http3_mode \"required\" conflicts with protocol "
-                            "%y", protocol);
-                    }
-                    mgr_opts.protocol = "h3";
-                    return;
-            }
-            throw "RESTCLIENTIO-OPTION-ERROR", sprintf("invalid http3_mode %y; expecting \"disabled\", \"auto\", "
-                "or \"required\", or an HTTP3Mode value", mode);
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data

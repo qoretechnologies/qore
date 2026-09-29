@@ -821,20 +821,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         in_flight.inc();
         on_exit in_flight.dec();
         # Inject cookies from jar into request headers
-        hash<UrlInfo> url_info;
-        if (cookie_jar) {
-            url_info = parse_url(url);
-            *string cookie_hdr = cookie_jar.getCookieHeader(
-                url_info.host, path, url_info.protocol == "https");
-            if (cookie_hdr) {
-                headers = headers ?? {};
-                if (headers.cookie) {
-                    headers.cookie += "; " + cookie_hdr;
-                } else {
-                    headers.cookie = cookie_hdr;
-                }
-            }
-        }
+        headers = addCookieHeaders(url, path, headers);
 
         int retries = 0;
         int max_retries = opts.max_request_retries;
@@ -848,9 +835,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # Wrap the Future so Set-Cookie extraction happens when
                 # the caller resolves it — no extra threads
                 if (cookie_jar) {
-                    if (!url_info) {
-                        url_info = parse_url(url);
-                    }
+                    hash<UrlInfo> url_info = parseRequestUrl(url);
                     result.future = new CookieExtractingFuture(result.future,
                         cookie_jar, url_info.host, path,
                         url_info.protocol == "https");
@@ -968,6 +953,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host, or if it addresses a UNIX domain
         socket with TLS or with a forced HTTP/2 or HTTP/3 protocol
+        @throw HTTP-CLIENT-UNKNOWN-PROTOCOL if the URL has a scheme other than \c http or \c https
         @throw HTTPCLIENT-PROXY-ERROR if the URL addresses a UNIX domain socket and a proxy is configured
         @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
@@ -1147,7 +1133,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         if (!cookie_jar) {
             return req_headers;
         }
-        hash<UrlInfo> url_info = parse_url(url);
+        hash<UrlInfo> url_info = parseRequestUrl(url);
         *string cookie_hdr = cookie_jar.getCookieHeader(url_info.host, path, url_info.protocol == "https");
         if (!cookie_hdr) {
             return req_headers;
@@ -1172,7 +1158,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     */
     storeResponseCookies(string url, string path, *hash<auto> resp_headers) {
         if (cookie_jar && resp_headers) {
-            hash<UrlInfo> url_info = parse_url(url);
+            hash<UrlInfo> url_info = parseRequestUrl(url);
             cookie_jar.processResponseHeaders(url_info.host, path, url_info.protocol == "https", resp_headers);
         }
     }
@@ -1684,6 +1670,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @return the parsed URL
 
         @throw HTTPCLIENT-URL-ERROR the URL is invalid or has no host, or requests TLS to a UNIX domain socket
+        @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme other than \c http or \c https
         @throw HTTPCLIENT-PROXY-ERROR a UNIX domain socket target was requested with a proxy configured
     */
     private hash<UrlInfo> parseRequestUrl(string url) {
@@ -1714,12 +1701,18 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
         if (!url_info.protocol) {
             url_info.protocol = "https";
+        } else if (url_info.protocol != "http" && url_info.protocol != "https") {
+            # only the scheme is reported: the URL can carry credentials
+            throw "HTTP-CLIENT-UNKNOWN-PROTOCOL", sprintf("URL scheme %y is not supported; expecting \"http\" or "
+                "\"https\"", url_info.protocol);
         }
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
         return url_info;
     }
+
+
 
     #! Returns the connection pool key for a URL parsed by @ref parseRequestUrl()
     /** @param url_info the parsed URL
