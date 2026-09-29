@@ -246,11 +246,15 @@ public class ThreadCancelTest inherits QUnit::Test {
         *hash<ExceptionInfo> err;
         int tid = background sub () {
             on_exit done.dec();
-            started.dec();
             try {
-                # RWLock waits are not cancellation points, so the first one is in the analysis of big_function()
-                rwl.readLock();
-                on_exit rwl.readUnlock();
+                # the thread waits with cancellation deferred, so the request is still pending when the deferral
+                # ends, whenever it arrives, and the first cancellation check point after that is the analysis of
+                # big_function(); an RWLock wait is itself a cancellation point, at its start and while it waits
+                defer_thread_cancel(sub () {
+                    started.dec();
+                    rwl.readLock();
+                    rwl.readUnlock();
+                });
                 pgm.callFunction("big_function", 1);
             } catch (hash<ExceptionInfo> ex) {
                 clear_thread_cancel();
