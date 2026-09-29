@@ -637,11 +637,6 @@ public hash<auto> sub parseToolResponse(*string content) {
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without
           modifying this shaper
-        - \c system_instruction_field (\c *bool): send \c system messages in
-          the \c systemInstruction field instead of as the leading
-          \c contents turn.  The default placement is the leading turn
-          because implicit context caching keys on the head of \c contents;
-          a block in \c systemInstruction is never cached
 
     @return the Gemini-shaped request body
 */
@@ -715,23 +710,10 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
     }
 
     hash<auto!> body;
-    if (system_parts) {
-        # Implicit context caching keys on the head of `contents`, not on
-        # `systemInstruction`.  A probe sending the same 28k-token block both
-        # ways cached 28,634 of 32,410 prompt tokens when the block led
-        # `contents`, and returned no cache fields at all when it sat in
-        # `systemInstruction`.  Agent workloads are almost entirely input
-        # tokens -- one measured design run billed 40.3M prompt against 162k
-        # completion -- so the system turn leads `contents` and the invariant
-        # prefix can be cached.  A caller that needs the provider's dedicated
-        # system channel asks for it with `system_instruction_field`.
-        if (resolved.system_instruction_field) {
-            body.systemInstruction = {"parts": system_parts};
-        } else {
-            contents = ({"role": "user", "parts": system_parts},) + contents;
-        }
-    }
     body.contents = contents;
+    if (system_parts) {
+        body.systemInstruction = {"parts": system_parts};
+    }
 
     hash<auto!> generation_config = {
         "maxOutputTokens": resolved.max_output_tokens,
@@ -1398,7 +1380,6 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             "max_output_tokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
             "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
-            "system_instruction_field": opts.system_instruction_field,
         };
         hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
             output_schema, resolved);
