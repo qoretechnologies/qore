@@ -1667,9 +1667,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     "cannot resolve closure lvalue root '%s'", root.name.c_str());
                 return -1;
             }
-            ClosureVarValue* cvv = thread_get_runtime_closure_var(lv);
+            // there is no runtime closure environment outside a closure body
+            ClosureVarValue* cvv = thread_try_get_runtime_closure_var(lv);
             if (!cvv) {
-                cvv = thread_find_closure_var(root.name.c_str());
+                cvv = thread_try_find_closure_var(root.name.c_str());
             }
             if (!cvv) {
                 vl.xsink->raiseException("LVALUE-ERROR",
