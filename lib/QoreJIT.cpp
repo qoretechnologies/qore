@@ -935,8 +935,9 @@ bool QoreJIT::isEnabled() const {
 }
 
 bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
-    if ((parse_options & PO_MODERN) != PO_MODERN) {
-        reason = "requires %modern (PO_MODERN)";
+    if (!qore_parse_options_support_ir(QoreParseOptions(parse_options))) {
+        reason = "requires %modern (missing " + qore_describe_missing_ir_parse_options(QoreParseOptions(parse_options))
+            + ")";
         return false;
     }
     return true;

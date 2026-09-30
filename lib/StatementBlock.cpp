@@ -860,7 +860,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         // Only %modern programs are supported by IR.
         if (exec_mode == QEM_IR || exec_mode == QEM_JIT
             || (exec_mode == QEM_TIERED
-                && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
+                && qore_parse_options_support_ir(runtime_parse_options))) {
             // Try to use cached IR if available
             QoreIRFunction* ir_func = cached_toplevel_ir;
             bool need_lower = !ir_func && !toplevel_ir_failed;

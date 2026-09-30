@@ -3844,6 +3844,14 @@ while (*binary chunk = input.read(65536)) {
       assignments worked
     - Fixed \c qcc producing an incomplete compiled object instead of a compile error when the code of a closure could
       not be serialized
+    - Fixed \c qcc silently changing the parse semantics of scripts compiled to executables: \c qcc parsed them with
+      \c %%new-style, \c %%require-types and \c %%strict-args forced on instead of the script's own parse directives
+      and the interpreter's defaults.  \c qcc now parses every source with the options the interpreter would use and
+      compiles only @ref modern "%modern" code, the same code that the IR, JIT and tiered
+      @ref execution_modes "execution modes" accept; for other code (for example a \c .q script without
+      \c %%modern) it writes no output and reports an error naming the source and the missing parse options (see
+      @ref exec_mode_requirements).  The \c EXEC-MODE-ERROR exception raised for an explicitly requested IR, JIT or
+      tiered execution mode now also lists the missing options
     - Fixed compiled (\c qcc) code binding a local variable to the wrong variable when its name was shadowed: a
       local variable declared in a function, method or closure with the same name and type as a top-level local
       variable was bound to the top-level variable, so the top-level variable's value was lost (and the process could

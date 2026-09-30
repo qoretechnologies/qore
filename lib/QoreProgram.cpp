@@ -172,6 +172,53 @@ void ParseOptionMaps::doMap(int64 code, const char* desc, const char* dom) {
     }
 }
 
+namespace {
+//! the parse options making up QORE_IR_REQUIRED_PARSE_OPTIONS, with the directives that set and clear them
+struct IrRequiredParseOption {
+    int64 code;
+    const char* name;
+    const char* directive;
+};
+
+constexpr IrRequiredParseOption ir_required_parse_options[] = {
+    {PO_ALLOW_BARE_REFS, "PO_ALLOW_BARE_REFS", "%allow-bare-refs; cleared by %require-dollar and %old-style"},
+    {PO_ASSUME_LOCAL, "PO_ASSUME_LOCAL", "%assume-local; cleared by %assume-global and %old-style"},
+    {PO_REQUIRE_TYPES, "PO_REQUIRE_TYPES", "%require-types"},
+    {PO_STRICT_ARGS, "PO_STRICT_ARGS", "%strict-args; cleared by %loose-args"},
+    {PO_STRONG_ENCAPSULATION, "PO_STRONG_ENCAPSULATION", "%strong-encapsulation"},
+};
+
+constexpr int64 ir_required_parse_option_union() {
+    int64 rv = 0;
+    for (const IrRequiredParseOption& i : ir_required_parse_options) {
+        rv |= i.code;
+    }
+    return rv;
+}
+
+// the description must name every required option
+static_assert(ir_required_parse_option_union() == QORE_IR_REQUIRED_PARSE_OPTIONS,
+    "ir_required_parse_options does not match QORE_IR_REQUIRED_PARSE_OPTIONS");
+}
+
+std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po) {
+    std::string rv;
+    for (const IrRequiredParseOption& i : ir_required_parse_options) {
+        if ((po & QoreParseOptions(i.code)) == QoreParseOptions(i.code)) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ", ";
+        }
+        rv += i.name;
+        rv += " (";
+        rv += i.directive;
+        rv += ")";
+    }
+    assert(rv.empty() == qore_parse_options_support_ir(po));
+    return rv;
+}
+
 ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_GLOBAL_VARS, "PO_NO_GLOBAL_VARS");
     doMap(PO_NO_SUBROUTINE_DEFS, "PO_NO_SUBROUTINE_DEFS");
@@ -1677,7 +1724,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // IR lowering) before the exec-mode is downgraded.
             if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
                     && standard_parse
-                    && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
+                    && qore_parse_options_support_ir(pwo.parse_options)) {
                 // Eagerly lower the program's own functions to IR (cheap, no LLVM)
                 // so they run as IR from the first call.  Native (LLVM) compilation
                 // is NOT done here: it happens on demand at runtime when a function

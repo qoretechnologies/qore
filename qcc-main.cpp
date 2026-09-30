@@ -1307,8 +1307,10 @@ static void print_usage(const char* prog) {
     printf("  %s -S -o myapp script.qr       # Static link (no libqore.so dependency)\n", prog);
     printf("\n");
     printf("Notes:\n");
-    printf("  - AOT requires %%modern; .qr and other non-.q source extensions enable it by default\n");
-    printf("  - .q remains legacy by default unless the source contains %%modern\n");
+    printf("  - AOT requires %%modern: all PO_MODERN options (PO_ALLOW_BARE_REFS, PO_ASSUME_LOCAL,\n");
+    printf("    PO_REQUIRE_TYPES, PO_STRICT_ARGS, PO_STRONG_ENCAPSULATION) must be set once the source\n");
+    printf("    is parsed, or the input is rejected; .qr and other non-.q source extensions enable\n");
+    printf("    %%modern by default, .q remains legacy unless the source contains %%modern\n");
     printf("  - Static linking requires libqore_static.a (build with -DBUILD_STATIC_LIBQORE=ON)\n");
     printf("  - Cross-compilation requires LLVM support for the target architecture\n");
 }
@@ -10940,9 +10942,11 @@ int main(int argc, char** argv) {
             }
         }
     } else {
-        // Create program and parse
-        QoreProgram* qpgm = new QoreProgram(compile_po | QoreParseOptions(PO_NEW_STYLE | PO_STRICT_ARGS
-            | PO_REQUIRE_TYPES));
+        // Create the Program and parse with the options the interpreter uses: the script's own parse
+        // directives, %modern for every extension but ".q" (see QoreProgram::parseFile()), and any --parse-option
+        // flags; options are never forced, as that would silently change the script's parse semantics.
+        // QoreAOT::compile() then rejects code that is not %modern (see qore_parse_options_support_ir()).
+        QoreProgram* qpgm = new QoreProgram(compile_po);
         ExceptionSink xsink;
         ExceptionSink wsink;
 

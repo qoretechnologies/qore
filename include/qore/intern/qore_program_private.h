@@ -934,7 +934,7 @@ public:
     }
 
     DLLLOCAL bool hasModernParseOptions() const {
-        return (pwo.parse_options & PO_MODERN) == PO_MODERN;
+        return qore_parse_options_support_ir(pwo.parse_options);
     }
 
     DLLLOCAL void applyDefaultExecMode() {
@@ -1626,20 +1626,23 @@ public:
     // caller must have grabbed the lock and put the current program on the program stack
     DLLLOCAL int internParseCommit(bool standard_parse = true);
 
-    // Validate IR/JIT execution mode requirements (must use PO_MODERN)
-    // Called at parse completion to ensure exec mode doesn't degrade silently at runtime
+    //! Validates the IR/JIT/tiered execution mode requirements at parse completion
+    /** These modes only support code accepted by qore_parse_options_support_ir() (\%modern); an explicitly requested
+        mode raises \c EXEC-MODE-ERROR for other code, and a default mode falls back to AST.  qcc applies the same
+        predicate to reject such code (see qore_aot_check_parse_options()).
+    */
     static void ensureIrExecMode(qore_program_private* priv, ExceptionSink* xsink) {
-        // JIT/IR/Tiered exec modes only support PO_MODERN; fallback to AST otherwise.
         if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
-            && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+            && !qore_parse_options_support_ir(priv->pwo.parse_options)) {
 
             // If the user explicitly requested an optimized mode, that's an error condition.
             if (priv->user_requested_exec_mode) {
                 const char* mode_str = getExecModeName(priv->exec_mode);
                 if (xsink) {
                     xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
-                        "(requires %%new-style, %%require-types, %%strict-args, and %%strong-encapsulation). "
-                        "Please add '%%modern' directive to enable optimized execution modes.", mode_str);
+                        "(requires %%new-style, %%require-types, %%strict-args, and %%strong-encapsulation; missing: "
+                        "%s). Please add '%%modern' directive to enable optimized execution modes.", mode_str,
+                        qore_describe_missing_ir_parse_options(priv->pwo.parse_options).c_str());
                 }
                 return;
             }

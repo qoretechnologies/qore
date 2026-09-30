@@ -326,6 +326,10 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     @subsection qcc_tool Qore Code Compiler (qcc)
 
+    \c qcc only compiles @ref modern "%modern" code (see @ref exec_mode_requirements); each source is parsed with
+    the default for its extension, its own parse directives and any <tt>--parse-option</tt> flags, and a source that
+    is not \c %%modern is rejected with an error naming the source and the missing parse options.
+
     Common \c qcc options:
 
     |!Option|!Description
@@ -487,9 +491,22 @@ int result = pgm.callFunction("compute");
 
     @section exec_mode_requirements Requirements
 
-    IR, JIT, tiered execution, and AOT require @ref modern "%modern" code.
-    Files whose extension is not \c .q, including \c .qr, enable modern mode by
-    default; \c .q remains legacy by default for compatibility.
+    IR, JIT, tiered execution, and AOT require @ref modern "%modern" code: all of the options that
+    \c %%modern sets must be set in the code's final parse options (after all of its parse directives):
+    - \c PO_ALLOW_BARE_REFS (\c %%allow-bare-refs; cleared by \c %%require-dollar and \c %%old-style)
+    - \c PO_ASSUME_LOCAL (\c %%assume-local; cleared by \c %%assume-global and \c %%old-style)
+    - \c PO_REQUIRE_TYPES (\c %%require-types)
+    - \c PO_STRICT_ARGS (\c %%strict-args; cleared by \c %%loose-args)
+    - \c PO_STRONG_ENCAPSULATION (\c %%strong-encapsulation)
+
+    Other parse options do not affect this rule.  Files whose extension is not \c .q, including \c .qr and
+    \c .qm, enable modern mode by default; \c .q remains legacy by default for compatibility.
+
+    Code that does not meet this rule is executed by the AST interpreter only: an explicitly requested
+    <tt>--exec-mode=ir</tt>, \c jit or \c tiered raises an \c EXEC-MODE-ERROR exception listing the missing
+    options, the default mode falls back to AST, and @ref qcc_tool "qcc" rejects it for every kind of output
+    (executables, \c .qo objects and archives, and modules) with an error naming the source file and the missing
+    options, without writing any output.
 
     LLVM 16 or later is required for JIT and AOT support.
 

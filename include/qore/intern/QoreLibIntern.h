@@ -1466,6 +1466,39 @@ public:
 
 DLLLOCAL extern ParseOptionMaps pomaps;
 
+//! The parse options that code must be parsed with to be run by IR, JIT or tiered execution or compiled by qcc
+/** This is \c PO_MODERN: \c PO_ALLOW_BARE_REFS | \c PO_ASSUME_LOCAL (together \c PO_NEW_STYLE) | \c PO_REQUIRE_TYPES |
+    \c PO_STRICT_ARGS | \c PO_STRONG_ENCAPSULATION.  \c PO_MODERN also implies the extended option
+    QoreParseOptions::NO_SUMMARIZE, but that bit is set whenever all of the bits above are (see
+    qore_program_private::applyParseOptionImplications()), so it is not tested separately.
+
+    Other options, including the \c PO_BROKEN_* compatibility options, do not affect acceptance.  Code whose final
+    parse options lack any of these bits (for example a \c .q file without \c %modern, code with only
+    \c %new-style, or \c %modern code in which a later \c %old-style, \c %require-dollar, \c %assume-global or
+    \c %loose-args directive disabled one of them) is executed by the AST interpreter only.
+*/
+static constexpr int64 QORE_IR_REQUIRED_PARSE_OPTIONS = PO_MODERN;
+
+//! Returns true if code with the given parse options may be run by IR, JIT or tiered execution or compiled by qcc
+/** This is the single acceptance rule for all of them: the interpreter's explicit \c --exec-mode=ir/jit/tiered check
+    (qore_program_private::ensureIrExecMode()), the default execution mode, IR lowering and tiered/JIT promotion, and
+    every qcc (AOT) compilation path use it.
+
+    @param po the final parse options of the code (after parse directives)
+
+    @return true if all bits of \ref QORE_IR_REQUIRED_PARSE_OPTIONS are set in @a po
+*/
+static inline bool qore_parse_options_support_ir(const QoreParseOptions& po) {
+    const QoreParseOptions required(QORE_IR_REQUIRED_PARSE_OPTIONS);
+    return (po & required) == required;
+}
+
+//! Returns a description of the required parse options missing from @a po, or an empty string if there are none
+/** Each missing option is given with its \c PO_* name and the parse directive that sets it, e.g.
+    <tt>PO_STRICT_ARGS (%strict-args)</tt>, separated by ", ".
+*/
+DLLLOCAL std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po);
+
 DLLLOCAL extern QoreString YamlNullString;
 
 DLLLOCAL extern bool q_disable_gc;

@@ -1,0 +1,426 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTScriptParseOptionsTest
+
+#! Tests that qcc accepts exactly the code that IR, JIT and tiered execution accept: %modern code
+/** qcc used to parse an executable's script with \%new-style, \%require-types and \%strict-args forced on, which
+    silently changed the parse semantics of legacy scripts, while IR, JIT and tiered execution (which AOT compilation
+    is built on) only support \%modern code.  qcc now parses with the script's own options (the defaults for its
+    extension, its parse directives and any --parse-option flags) and applies the interpreter's acceptance rule,
+    qore_parse_options_support_ir(): all \c PO_MODERN bits must be set in the final parse options, otherwise the
+    compile is rejected with a diagnostic naming the file and the missing options, and no output is written.
+
+    Every script here is valid code that the interpreter runs in AST mode.  Accepted scripts must compile at -O0,
+    -O3 and with embedded source and print exactly what the interpreter prints; rejected scripts must be rejected by
+    qcc for executables, relocatable objects (-c, also in batches) and modules, and refused by the interpreter's
+    --exec-mode=ir and jit with the same missing options.
+*/
+class AOTScriptParseOptionsTest inherits QUnit::Test {
+    public {
+        #! the \c PO_MODERN options, as named in the diagnostics
+        const ModernOptions = ("PO_ALLOW_BARE_REFS", "PO_ASSUME_LOCAL", "PO_REQUIRE_TYPES", "PO_STRICT_ARGS",
+            "PO_STRONG_ENCAPSULATION");
+
+        #! a %modern-compatible script body without parse directives
+        const ModernBody = 'list<string> log = ("a",);
+sub f(string v) {
+    push log, v;
+}
+code c = sub () { f("c"); };
+c();
+f("f");
+printf("%y\n", log);
+';
+
+        #! the output of ModernBody
+        const ModernOutput = "[\"a\", \"c\", \"f\"]\n";
+
+        #! scripts that qcc must compile, by label: the extension, the source, qcc and interpreter options
+        const Accepted = {
+            # every extension except .q is %modern by default
+            "modern_qr_default": {"ext": "qr", "src": ModernBody},
+            "modern_q_directive": {"ext": "q", "src": "%modern\n" + ModernBody},
+            # a legacy .q made %modern by the compiler's (and the interpreter's) options instead of a directive
+            "modern_q_parse_option": {"ext": "q", "src": ModernBody, "qcc_opts": "--parse-option=PO_MODERN",
+                "qore_opts": "--modern"},
+            # options other than the PO_MODERN ones do not affect acceptance
+            "modern_extra_options": {"ext": "qr", "src": "%require-our\n%no-network\n" + ModernBody,
+                "qcc_opts": "--parse-option=PO_NO_EXTERNAL_PROCESS"},
+            # a directive that clears a PO_MODERN bit followed by one that sets it again
+            "modern_restored": {"ext": "qr", "src": "%loose-args\n%strict-args\n" + ModernBody},
+        };
+
+        #! scripts that qcc must reject, by label: the extension, the source, the missing options, and options
+        const Rejected = {
+            "legacy_q": {
+                "ext": "q",
+                "src": 'my $log = ("a",);
+sub add($x, $y) {
+    return $x + $y;
+}
+push $log, "b";
+printf("%y %y\n", $log, add(1, 2));
+',
+                "missing": ModernOptions,
+            },
+            "new_style_only": {
+                "ext": "q",
+                "src": '%new-style
+my x = 1;
+sub f(a) {
+    return a + 1;
+}
+printf("%y\n", f(x));
+',
+                "missing": ("PO_REQUIRE_TYPES", "PO_STRICT_ARGS", "PO_STRONG_ENCAPSULATION"),
+            },
+            "bare_refs_only": {
+                "ext": "q",
+                "src": '%allow-bare-refs
+my list log = ("a",);
+my list log = ("b",);
+push log, "c";
+printf("%y\n", log);
+',
+                "missing": ("PO_ASSUME_LOCAL", "PO_REQUIRE_TYPES", "PO_STRICT_ARGS", "PO_STRONG_ENCAPSULATION"),
+            },
+            # what qcc used to force: %modern without strong encapsulation
+            "forced_subset": {
+                "ext": "q",
+                "src": "%new-style\n%require-types\n%strict-args\n" + ModernBody,
+                "missing": ("PO_STRONG_ENCAPSULATION",),
+            },
+            # %modern code in which a later directive clears PO_MODERN bits
+            "modern_then_loose_args": {
+                "ext": "qr",
+                "src": ModernBody + "%loose-args\n",
+                "missing": ("PO_STRICT_ARGS",),
+            },
+            "modern_then_old_style": {
+                "ext": "q",
+                "src": "%modern\n" + ModernBody + "%old-style\n",
+                "missing": ("PO_ALLOW_BARE_REFS", "PO_ASSUME_LOCAL"),
+            },
+            "modern_then_require_dollar": {
+                "ext": "qr",
+                "src": ModernBody + "%require-dollar\n",
+                "missing": ("PO_ALLOW_BARE_REFS",),
+            },
+            # adding PO_MODERN bits with the compiler's options is not enough when others are missing
+            "legacy_plus_new_style_option": {
+                "ext": "q",
+                "src": 'my list log = ("a",);
+push log, "b";
+printf("%y\n", log);
+',
+                "qcc_opts": "--parse-option=PO_NEW_STYLE",
+                "qore_opts": "--new-style",
+                "missing": ("PO_REQUIRE_TYPES", "PO_STRICT_ARGS", "PO_STRONG_ENCAPSULATION"),
+            },
+        };
+
+        #! a module (%modern by default for .qm files); the module name is inserted twice
+        const ModuleSrc = 'module %s {
+    version = "1.0";
+    desc = "AOT parse option test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace %s {
+public int sub f(int a) {
+    return a + 1;
+}
+}
+';
+
+        #! the qcc options that accepted scripts are compiled with, by label
+        const CompileOptions = {
+            "aot-O0": "-O0",
+            "aot-O3": "-O3",
+            "aot-O0-source": "-O0 --include-source",
+        };
+
+        #! the diagnostic's statement of the rule
+        const Diagnostic = "AOT compilation requires %modern parse semantics";
+    }
+
+    private {
+        string qore_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTScriptParseOptionsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the interpreter runs every script in AST mode", \testInterpreterAst());
+        addTestCase("the interpreter's IR and JIT modes use the same rule", \testInterpreterExecModes());
+        addTestCase("qcc compiles %modern scripts", \testAccepted());
+        addTestCase("negative: qcc rejects scripts that are not %modern", \testRejected());
+        addTestCase("negative: qcc rejects relocatable objects that are not %modern", \testRejectedObjects());
+        addTestCase("qcc applies the rule to modules", \testModules());
+        addTestCase("qcc applies the rule to each source of a batch", \testBatch());
+
+        set_return_value(main());
+    }
+
+    testInterpreterAst() {
+        TmpDir tmp("qore-aot-script-parse-options-");
+        foreach hash<auto> i in (Accepted.pairIterator()) {
+            string src = writeScript(tmp.path, i.key, i.value);
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
+                i.value.qore_opts ?? "", src));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertEq(ModernOutput, rv.out, i.key);
+        }
+        foreach hash<auto> i in (Rejected.pairIterator()) {
+            string src = writeScript(tmp.path, i.key, i.value);
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
+                i.value.qore_opts ?? "", src));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertTrue(rv.out.val(), i.key);
+        }
+    }
+
+    testInterpreterExecModes() {
+        TmpDir tmp("qore-aot-script-parse-options-");
+        foreach string mode in (("ir", "jit")) {
+            foreach hash<auto> i in (Accepted.pairIterator()) {
+                string src = writeScript(tmp.path, i.key, i.value);
+                hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                    i.value.qore_opts ?? "", src));
+                assertEq(0, rv.rc, sprintf("%s %s: %s", mode, i.key, rv.err));
+                assertEq(ModernOutput, rv.out, sprintf("%s %s", mode, i.key));
+            }
+            foreach hash<auto> i in (Rejected.pairIterator()) {
+                string label = sprintf("%s %s", mode, i.key);
+                string src = writeScript(tmp.path, i.key, i.value);
+                hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                    i.value.qore_opts ?? "", src));
+                assertNeq(0, rv.rc, label);
+                assertRegex("EXEC-MODE-ERROR", rv.err, label);
+                assertEq(i.value.missing, getMissing(rv.err), label);
+            }
+        }
+    }
+
+    testAccepted() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        foreach hash<auto> i in (Accepted.pairIterator()) {
+            string src = writeScript(tmp.path, i.key, i.value);
+            foreach hash<auto> opt in (CompileOptions.pairIterator()) {
+                string label = sprintf("%s %s", i.key, opt.key);
+                string exe = tmp.path + DirSep + i.key + "-" + opt.key;
+                hash<auto> rv = run(tmp.path, sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt.value,
+                    i.value.qcc_opts ?? "", exe, src));
+                assertEq(0, rv.rc, label + ": " + rv.err);
+                assertFalse(rv.err.find(Diagnostic) >= 0, label);
+                rv = run(tmp.path, sprintf("%s %s", env, exe));
+                assertEq(0, rv.rc, label + ": " + rv.err);
+                assertEq(ModernOutput, rv.out, label);
+            }
+        }
+    }
+
+    testRejected() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        foreach hash<auto> i in (Rejected.pairIterator()) {
+            string src = writeScript(tmp.path, i.key, i.value);
+            foreach string opt in (("-O0", "-O3")) {
+                string label = sprintf("%s %s", i.key, opt);
+                string exe = tmp.path + DirSep + i.key + opt;
+                hash<auto> rv = run(tmp.path, sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt,
+                    i.value.qcc_opts ?? "", exe, src));
+                checkRejection(label, rv, src, i.value.missing);
+                assertFalse(is_file(exe), label);
+            }
+        }
+    }
+
+    testRejectedObjects() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        foreach hash<auto> i in (Rejected.pairIterator()) {
+            string src = writeScript(tmp.path, i.key, i.value);
+            string obj = tmp.path + DirSep + i.key + ".qo";
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -c %s -o %s %s", env, qcc_bin, i.value.qcc_opts ?? "",
+                obj, src));
+            checkRejection(i.key + " -c", rv, src, i.value.missing);
+            assertFalse(is_file(obj), i.key + " -c");
+        }
+        # positive control: a %modern script compiles to an object
+        string src = writeScript(tmp.path, "modern_qr_default", Accepted.modern_qr_default);
+        string obj = tmp.path + DirSep + "modern_qr_default.qo";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
+        assertEq(0, rv.rc, rv.err);
+        assertTrue(is_file(obj));
+    }
+
+    testModules() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        # a .qm module is %modern by default
+        string mod = tmp.path + DirSep + "AotParseOptionsModern.qm";
+        writeFile(mod, sprintf(ModuleSrc, "AotParseOptionsModern", "AotParseOptionsModern"));
+        string out = tmp.path + DirSep + "AotParseOptionsModern.qmod";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        assertEq(0, rv.rc, rv.err);
+        assertTrue(is_file(out));
+
+        # negative: a module clearing a PO_MODERN bit is rejected
+        mod = tmp.path + DirSep + "AotParseOptionsLoose.qm";
+        writeFile(mod, "%loose-args\n" + sprintf(ModuleSrc, "AotParseOptionsLoose", "AotParseOptionsLoose"));
+        out = tmp.path + DirSep + "AotParseOptionsLoose.qmod";
+        rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        checkRejection("module", rv, mod, ("PO_STRICT_ARGS",));
+        assertFalse(is_file(out));
+
+        # negative: the same after the module block; the options at the end of the source count, not the ones the
+        # module context restores afterwards
+        mod = tmp.path + DirSep + "AotParseOptionsLoose2.qm";
+        string src = sprintf(ModuleSrc, "AotParseOptionsLoose2", "AotParseOptionsLoose2");
+        src = replace(src, "\npublic namespace", "\n%loose-args\npublic namespace");
+        writeFile(mod, src);
+        out = tmp.path + DirSep + "AotParseOptionsLoose2.qmod";
+        rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        checkRejection("module directive after the module block", rv, mod, ("PO_STRICT_ARGS",));
+        assertFalse(is_file(out));
+    }
+
+    testBatch() {
+        checkQcc();
+        TmpDir tmp("qore-aot-script-parse-options-");
+        # a declaration source for each script: a %modern .q file (by directive) and a .qr file (by default)
+        string lib_q = writeFile(tmp.path + DirSep + "batch_lib.q", "%modern\nsub g1() {\n    print(\"g1\\n\");\n}\n");
+        string lib_qr = writeFile(tmp.path + DirSep + "batch_lib2.qr", "sub g2() {\n    print(\"g2\\n\");\n}\n");
+        string main_qr = writeFile(tmp.path + DirSep + "batch_main.qr",
+            "int sub main() {\n    g1();\n    g2();\n    return 0;\n}\n");
+        string legacy = writeScript(tmp.path, "legacy_q", Rejected.legacy_q);
+
+        # each source of a batch is parsed with the default for its own extension
+        string out_dir = tmp.path + DirSep + "objs";
+        mkdir(out_dir);
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -c --output-dir=%s %s %s %s", env, qcc_bin, out_dir, lib_q,
+            lib_qr, main_qr));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(3, listFiles(out_dir).size());
+
+        # a multi-source executable
+        string exe = tmp.path + DirSep + "batch_exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s %s", env, qcc_bin, exe, lib_q, lib_qr, main_qr));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq("g1\ng2\n", rv.out);
+
+        # negative: one source that is not %modern rejects the batch; the diagnostic names that source
+        string bad_dir = tmp.path + DirSep + "bad-objs";
+        mkdir(bad_dir);
+        rv = run(tmp.path, sprintf("%s %s -c --output-dir=%s %s %s", env, qcc_bin, bad_dir, lib_qr, legacy));
+        checkRejection("batch", rv, legacy, ModernOptions);
+        assertFalse(rv.err.find(lib_qr + ":") >= 0, "batch: only the legacy source is named");
+        assertEq((), listFiles(bad_dir));
+
+        # negative: a multi-source executable
+        exe = tmp.path + DirSep + "batch_bad_exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib_qr, legacy));
+        checkRejection("multi-source executable", rv, legacy, ModernOptions);
+        assertFalse(is_file(exe));
+        # a standalone script aggregate: each source keeps its own parse options; the %modern .q file's
+        # %exec-class (which sets PO_NO_TOP_LEVEL_STATEMENTS) must not reject the top-level statement of the
+        # source after it
+        string exec_class = writeFile(tmp.path + DirSep + "batch_exec_class.q",
+            "%modern\n%exec-class BatchExecClass\nclass BatchExecClass {\n}\n");
+        string top_level = writeFile(tmp.path + DirSep + "batch_top_level.qr", "int x = 1;\nx++;\n");
+        string agg = tmp.path + DirSep + "agg.qo";
+        rv = run(tmp.path, sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, exec_class,
+            top_level));
+        assertEq(0, rv.rc, rv.err);
+        assertTrue(is_file(agg));
+
+        # negative: a standalone script aggregate with a legacy source
+        agg = tmp.path + DirSep + "bad-agg.qo";
+        rv = run(tmp.path, sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, lib_qr,
+            legacy));
+        checkRejection("script aggregate", rv, legacy, ModernOptions);
+        assertFalse(is_file(agg));
+    }
+
+    #! returns the names of the files in @a dir
+    private list<string> listFiles(string dir) {
+        Dir d();
+        d.chdir(dir);
+        return d.listFiles() ?? ();
+    }
+
+    private checkRejection(string label, hash<auto> rv, string src, list<string> missing) {
+        assertNeq(0, rv.rc, label);
+        # the diagnostic names the file, the rule, the missing options and the remedies
+        assertTrue(rv.err.find(Diagnostic) >= 0, label + ": " + rv.err);
+        assertTrue(rv.err.find(src) >= 0, label + ": file name: " + rv.err);
+        assertEq(missing, getMissing(rv.err), label);
+        assertTrue(rv.err.find("add '%modern' to the source") >= 0, label);
+        assertTrue(rv.err.find("--exec-mode=ast") >= 0, label);
+    }
+
+    #! returns the PO_MODERN options that a diagnostic lists as missing, in their standard order
+    private list<string> getMissing(string err) {
+        return (select ModernOptions, err.find($1 + " (") >= 0) ?? ();
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+    }
+
+    #! writes the script's source to a file with the script's extension and returns its path
+    private string writeScript(string dir, string label, hash<auto> script) {
+        return writeFile(dir + DirSep + label + "." + script.ext, script.src);
+    }
+
+    private string writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

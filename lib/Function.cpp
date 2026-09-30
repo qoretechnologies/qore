@@ -5875,8 +5875,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     // AST tier.  Keep them off the IR tier here too — the AST interpreter fully
     // supports legacy semantics.  Mirrors the runtime guard in evalIntern().
     if (pgm
-        && (getParseOptions(pgm->getParseOptions()) & QoreParseOptions(PO_MODERN))
-            != QoreParseOptions(PO_MODERN)) {
+        && !qore_parse_options_support_ir(getParseOptions(pgm->getParseOptions()))) {
         ir_lower_failed = true;
         pgm->recordIRFallback("lowering: non-%modern function requires the AST tier");
         return;
@@ -7020,7 +7019,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             if (statements && !has_aot
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
                 QoreParseOptions po = getParseOptions(pgm->getParseOptions());
-                if ((po & QoreParseOptions(PO_MODERN)) == QoreParseOptions(PO_MODERN)) {
+                if (qore_parse_options_support_ir(po)) {
                     return evalTiered(name, argv, self, xsink, true);
                 }
             }

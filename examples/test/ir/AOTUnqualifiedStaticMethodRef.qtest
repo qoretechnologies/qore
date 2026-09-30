@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 %no-child-restrictions
@@ -19,8 +20,10 @@
     failed with RUNTIME-OVERLOAD-ERROR even when interpreted.  Both spellings now resolve to the same call
     reference node.
 
-    Every probe is run in a module loaded from source and in the same module compiled by qcc, with and without
-    bare references (\c %new-style vs \c %old-style), from static and from non-static methods.
+    Every probe is run in a module loaded from source, with and without bare references (\c %modern vs
+    \c %old-style), and in the \c %modern module compiled by qcc, from static and from non-static methods.  qcc
+    compiles only \c %modern code: the \c %old-style module, whose \c %old-style directive clears
+    \c PO_ALLOW_BARE_REFS and \c PO_ASSUME_LOCAL, is rejected with a diagnostic and no output.
 */
 class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
     public {
@@ -41,32 +44,43 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
 
     private {
         string qore_bin;
-        string qcc_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
         string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
     }
 
     constructor() : QUnit::Test("AOTUnqualifiedStaticMethodRefTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
 
-        addTestCase("new-style module loaded from source", \testSourceModule(), "%new-style");
+        addTestCase("modern module loaded from source", \testSourceModule(), "%modern");
         addTestCase("old-style module loaded from source", \testSourceModule(), "%old-style");
-        addTestCase("new-style module compiled by qcc", \testAotModule(), "%new-style");
-        addTestCase("old-style module compiled by qcc", \testAotModule(), "%old-style");
+        addTestCase("modern module compiled by qcc", \testAotModule());
+        addTestCase("negative: old-style module rejected by qcc", \testAotOldStyleRejected());
         addTestCase("reference to an instance method from a static method", \testNegative());
         set_return_value(main());
     }
 
-    #! The module under test, parsed with the given style directive
+    #! The module under test, parsed with the given style directive (\c %modern or \c %old-style)
     /** Local variables are written with the \c $ prefix, which is removed when bare references are enabled
     */
     private string moduleSource(string style) {
         string src = style + "\n"
-            "%require-types\n"
-            "%strict-args\n"
-            "\n"
+            + (style == "%old-style" ? "%require-types\n%strict-args\n" : "")
+            + "\n"
             "module " + ModuleName + " {\n"
             "    version = \"1.0\";\n"
             "    desc = \"unqualified static method call reference probe\";\n"
@@ -107,7 +121,7 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
             "    }\n"
             "}\n"
             "}\n";
-        if (style == "%new-style") {
+        if (style == "%modern") {
             src =~ s/\$([a-z])/$1/g;
         }
         return src;
@@ -138,14 +152,21 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
 
     #! Runs the probe script with the given module directory and returns its output
     private string runProbe(string module_dir) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s 2>&1",
-            libqore_dir, libqore_dir, moduleDir(module_dir), qore_bin, module_dir + "/probe.qr"));
+        return backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s 2>&1", env, moduleDir(module_dir), qore_bin,
+            module_dir + "/probe.qr"));
     }
 
     #! Compiles the module source with qcc; returns the compiler output
     private string compile(string dir, string src, string qmod) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1",
-            libqore_dir, libqore_dir, moduleDir(dir), qcc_bin, qmod, src));
+        return backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", env, moduleDir(dir), qcc_bin,
+            qmod, src));
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
     }
 
     #! Asserts that every probe produced the expected result
@@ -163,11 +184,12 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
     }
 
     #! the qcc-compiled module must compile and behave identically
-    testAotModule(string style) {
+    testAotModule() {
+        checkQcc();
         TmpDir tmp("qore-aot-unqual-static-ref-aot-");
         string src = tmp.path + "/" + ModuleName + ".qm";
         string qmod = tmp.path + "/" + ModuleName + ".qmod";
-        write(src, moduleSource(style));
+        write(src, moduleSource("%modern"));
         write(tmp.path + "/probe.qr", scriptSource());
 
         string compile_out = compile(tmp.path, src, qmod);
@@ -180,12 +202,32 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
         checkProbes(runProbe(tmp.path));
     }
 
+    #! qcc compiles only %modern code: %old-style clears PO_ALLOW_BARE_REFS and PO_ASSUME_LOCAL
+    testAotOldStyleRejected() {
+        checkQcc();
+        TmpDir tmp("qore-aot-unqual-static-ref-old-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, moduleSource("%old-style"));
+
+        string compile_out = compile(tmp.path, src, qmod);
+        assertFalse(is_file(qmod), compile_out);
+        assertRegex("AOT compilation requires %modern parse semantics", compile_out);
+        assertTrue(compile_out.find(src) >= 0, compile_out);
+        assertTrue(compile_out.find("PO_ALLOW_BARE_REFS (") >= 0, compile_out);
+        assertTrue(compile_out.find("PO_ASSUME_LOCAL (") >= 0, compile_out);
+        # the options %old-style does not clear are not reported
+        assertEq(-1, compile_out.find("PO_REQUIRE_TYPES ("), compile_out);
+        assertEq(-1, compile_out.find("PO_STRICT_ARGS ("), compile_out);
+        assertEq(-1, compile_out.find("PO_STRONG_ENCAPSULATION ("), compile_out);
+    }
+
     #! an unqualified reference to an instance method has no object in a static method: rejected in both modes
     testNegative() {
         TmpDir tmp("qore-aot-unqual-static-ref-neg-");
         string src = tmp.path + "/" + ModuleName + ".qm";
         string qmod = tmp.path + "/" + ModuleName + ".qmod";
-        write(src, "%new-style\n%require-types\n%strict-args\n"
+        write(src, "%modern\n"
             "module " + ModuleName + " {\n"
             "    version = \"1.0\"; desc = \"negative probe\"; author = \"Qore Technologies, s.r.o.\";\n"
             "    license = \"MIT\";\n"
@@ -205,6 +247,7 @@ class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
         string out = runProbe(tmp.path);
         assertRegex("PARSE-EXCEPTION: reference to function 'instanceMethod\\(\\)' cannot be resolved", out);
 
+        checkQcc();
         string compile_out = compile(tmp.path, src, qmod);
         assertFalse(is_file(qmod), compile_out);
         assertRegex("reference to function 'instanceMethod\\(\\)' cannot be resolved", compile_out);

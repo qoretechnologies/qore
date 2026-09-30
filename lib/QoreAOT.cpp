@@ -23209,6 +23209,30 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     builder.CreateRet(rc);
 }
 
+//! Checks that code may be compiled: AOT compilation, like IR, JIT and tiered execution, requires %modern code
+/** Applies the same acceptance rule as the interpreter's execution modes, qore_parse_options_support_ir(), to the
+    parse options of the code once its source is parsed (the defaults for the source's extension, the source's parse
+    directives and any options given to qcc).  Every AOT compilation entry point calls this for each source file
+    after it is parsed and before any output is generated.
+
+    @param po the parse options of the code once its source is parsed
+    @param source the source file or label, for the diagnostic
+    @param error set to the diagnostic if the code is rejected
+
+    @return true if the code may be compiled, false if not, in which case @a error is set
+*/
+static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error) {
+    if (qore_parse_options_support_ir(po)) {
+        return true;
+    }
+    error = (source.empty() ? std::string("<unknown source>") : source)
+        + ": AOT compilation requires %modern parse semantics, but the code is parsed without: "
+        + qore_describe_missing_ir_parse_options(po)
+        + "; add '%modern' to the source (files with any extension other than '.q' are %modern by default); code "
+        "that is not %modern can only be executed by the interpreter (qore) in AST mode (--exec-mode=ast)";
+    return false;
+}
+
 bool QoreAOT::compile(QoreProgram* pgm,
                       const char* source_text, int source_len,
                       const char* label,
@@ -23219,6 +23243,14 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       const char* target_triple,
                       bool static_link,
                       bool include_source) {
+    if (!pgm) {
+        error = "no Program to compile";
+        return false;
+    }
+    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error)) {
+        return false;
+    }
+
     // Initialize LLVM targets (needed for object emission)
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -25621,6 +25653,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    QoreParseOptions parsed_po;
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
 
@@ -25631,6 +25664,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         }
+        // the module's parse options are checked as they are at the end of its source; closing the module context
+        // restores the options it was opened with
+        parsed_po = qpgm->getParseOptions();
 
         // Capture init closure before mod_ctx destroys it
         if (!xsink.isException() && mod_ctx.hasInit()) {
@@ -25651,6 +25687,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "module parsing failed";
+        return false;
+    }
+    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error)) {
         return false;
     }
 
@@ -26065,6 +26104,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+            mod_ctx.close();
+            return false;
+        }
 
         // Step 7: Glob .qc/.ql files and parse each
         QoreString regexClassesFunc(".+\\.(qc|ql)$");
@@ -26110,6 +26153,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     mod_ctx.close();
                     xsink.handleExceptions();
                     error = "parse error in component file: " + file_path;
+                    return false;
+                }
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                    mod_ctx.close();
                     return false;
                 }
 
@@ -28002,6 +28049,46 @@ struct QoreAOTSiblingPreload {
     }
 };
 
+//! Restores the program's parse options after one batch or aggregate source is parsed.
+/** A batch parses many sources into one program, and a parse directive is a
+    property of the source that wrote it, not of the batch.  `%exec-class`
+    sets PO_NO_TOP_LEVEL_STATEMENTS, so without this the first script in a
+    batch makes every declaration source parsed AFTER it reject a top-level
+    statement it accepts on its own -- a stray `;` after a hashdecl, say.
+    The whole-group parse only escaped that by the order its context happens
+    to list: with the one `.qr` last of 875 sources, nothing followed it.  A
+    parse of PART of a group orders by the plan instead, so it puts the
+    script wherever the dependency order puts it.
+
+    Only parse options are restored.  Module loads, parse defines and module
+    parse commands are batch state by construction -- the commands are already
+    tracked per entry -- and are left alone.
+*/
+namespace {
+struct AOTBatchParseOptionGuard {
+    explicit AOTBatchParseOptionGuard(QoreProgram& pgm)
+            : pgm(pgm), old(pgm.getParseOptions()) {
+    }
+    ~AOTBatchParseOptionGuard() {
+        qore_program_private::forceReplaceParseOptions(pgm, old);
+    }
+    QoreProgram& pgm;
+    QoreParseOptions old;
+};
+}
+
+//! Gives a script source parsed into a shared batch or aggregate program the default for its own extension
+/** The interpreter parses every file except a \c .q file as \%modern
+    (qore_program_private::should_auto_enable_modern()); the program's base options only include \%modern when every
+    source's extension implies it.  Called inside an AOTBatchParseOptionGuard, so the default does not carry over to
+    the next source.
+*/
+static void applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& canon) {
+    if (qore_program_private::should_auto_enable_modern(canon.c_str())) {
+        qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+    }
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -28200,31 +28287,6 @@ bool QoreAOT::compileScriptFilesBatch(
         const char* old;
     };
 
-    //! Restores the program's parse options after one batch source is parsed.
-    /** A batch parses many sources into one program, and a parse directive is a
-        property of the source that wrote it, not of the batch.  `%exec-class`
-        sets PO_NO_TOP_LEVEL_STATEMENTS, so without this the first script in a
-        batch makes every declaration source parsed AFTER it reject a top-level
-        statement it accepts on its own -- a stray `;` after a hashdecl, say.
-        The whole-group parse only escaped that by the order its context happens
-        to list: with the one `.qr` last of 875 sources, nothing followed it.  A
-        parse of PART of a group orders by the plan instead, so it puts the
-        script wherever the dependency order puts it.
-
-        Only parse options are restored.  Module loads, parse defines and module
-        parse commands are batch state by construction -- the commands are already
-        tracked per entry -- and are left alone.
-    */
-    struct AOTBatchParseOptionGuard {
-        explicit AOTBatchParseOptionGuard(QoreProgram& pgm)
-                : pgm(pgm), old(pgm.getParseOptions()) {
-        }
-        ~AOTBatchParseOptionGuard() {
-            qore_program_private::forceReplaceParseOptions(pgm, old);
-        }
-        QoreProgram& pgm;
-        QoreParseOptions old;
-    };
 
     struct AOTBatchResolvedSourceImportGuard {
         AOTBatchResolvedSourceImportGuard()
@@ -28285,6 +28347,7 @@ bool QoreAOT::compileScriptFilesBatch(
         // once with the first emitted source so linked binaries replay the
         // same setup once before batch deserialization.
         e.module_cmd_begin = i == 0 ? 0 : batch_pp->module_parse_commands.size();
+        QoreParseOptions file_po;
         {
             AOTBatchDepConsumerGuard consumer_guard(e.canon.c_str());
             AOTBatchParseOptionGuard parse_option_guard(**qpgm);
@@ -28293,12 +28356,18 @@ bool QoreAOT::compileScriptFilesBatch(
             AOTPreloadedSourceGuard preloaded_source_guard(
                 &sibling_preload.source_labels);
             AOTParseSourceGuard parse_source_guard(&batch_target_set);
+            applyAOTSourceModernDefault(**qpgm, e.canon);
             qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
+            // each source's parse options are restored when the guard goes out of scope, so they are checked here
+            file_po = qpgm->getParseOptions();
         }
         if (xsink.isException()) {
             xsink.handleExceptions();
             error = "parse error in target file: " + e.canon;
+            return false;
+        }
+        if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
             return false;
         }
         e.module_cmd_end = batch_pp->module_parse_commands.size();
@@ -28908,11 +28977,21 @@ bool QoreAOT::compileScriptAggregate(
                 return false;
             }
             const SrcEntry& e = entries[i];
-            qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
-                &xsink, &wsink, QP_WARN_DEFAULT);
+            QoreParseOptions file_po;
+            {
+                // parse directives are a property of the source that wrote them (see AOTBatchParseOptionGuard)
+                AOTBatchParseOptionGuard parse_option_guard(*qpgm);
+                applyAOTSourceModernDefault(*qpgm, e.canon);
+                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                    &xsink, &wsink, QP_WARN_DEFAULT);
+                file_po = qpgm->getParseOptions();
+            }
             if (xsink.isException()) {
                 xsink.handleExceptions();
                 error = "parse error in target file: " + e.canon;
+                return false;
+            }
+            if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
                 return false;
             }
         }
@@ -29562,6 +29641,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         error = "parse commit failed: " + target_canon;
         return false;
     }
+    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error)) {
+        return false;
+    }
 
     if (sibling_mdes) {
         ExceptionSink pch_xsink;
@@ -30075,6 +30157,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+            mod_ctx.close();
+            return false;
+        }
 
         QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_canon.c_str());
@@ -30132,6 +30218,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 mod_ctx.close();
                 xsink.handleExceptions();
                 error = "parse error in component file: " + file_path;
+                return false;
+            }
+            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                mod_ctx.close();
                 return false;
             }
             if (!combined_source.empty() && combined_source.back() != '\n') {
@@ -30632,6 +30722,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+            mod_ctx.close();
+            return false;
+        }
 
         QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
@@ -30669,6 +30763,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     mod_ctx.close();
                     xsink.handleExceptions();
                     error = "parse error in component file: " + file_path;
+                    return false;
+                }
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                    mod_ctx.close();
                     return false;
                 }
                 if (!combined_source.empty() && combined_source.back() != '\n') {
@@ -31137,6 +31235,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+            mod_ctx.close();
+            return false;
+        }
 
         QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
@@ -31174,6 +31276,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     mod_ctx.close();
                     xsink.handleExceptions();
                     error = "parse error in component file: " + file_path;
+                    return false;
+                }
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                    mod_ctx.close();
                     return false;
                 }
                 if (!combined_source.empty() && combined_source.back() != '\n') {

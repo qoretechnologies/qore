@@ -123,6 +123,22 @@
     Other non-\c .q source extensions, such as \c .qc and \c .qm, enable
     \c %%modern by default.
 
+    \c qcc parses each source with the parse options the interpreter would use (the default for its extension, the
+    source's parse directives and any <tt>--parse-option</tt> flags) and never forces parse options.  Once the
+    source is parsed, all \c %%modern options must be set: \c PO_ALLOW_BARE_REFS, \c PO_ASSUME_LOCAL,
+    \c PO_REQUIRE_TYPES, \c PO_STRICT_ARGS and \c PO_STRONG_ENCAPSULATION; this is the same rule that the
+    interpreter applies to its IR, JIT and tiered @ref execution_modes "execution modes" (see
+    @ref exec_mode_requirements).  Otherwise, for example for a \c .q file without \c %%modern, for code with only
+    \c %%new-style, or for \c %%modern code with a later \c %%loose-args, \c %%old-style, \c %%require-dollar or
+    \c %%assume-global directive, \c qcc writes no output and exits with an error such as:
+
+    @verbatim
+error: script.q: AOT compilation requires %modern parse semantics, but the code is parsed without:
+PO_REQUIRE_TYPES (%require-types), PO_STRICT_ARGS (%strict-args; cleared by %loose-args), ...; add
+'%modern' to the source (files with any extension other than '.q' are %modern by default); code that
+is not %modern can only be executed by the interpreter (qore) in AST mode (--exec-mode=ast)
+    @endverbatim
+
     A generated AOT executable invokes the Qore function named by \c --entry
     (or \c -e), which defaults to \c main. This differs from running a parsed
     script with \c qore: top-level executable statements do not replace the
