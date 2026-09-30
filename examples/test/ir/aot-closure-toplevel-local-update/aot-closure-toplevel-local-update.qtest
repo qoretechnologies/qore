@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AotClosureTopLevelLocalUpdateTest
+
+#! Tests that compiled functions called from closures update the top-level local variables they use
+/** A top-level local variable that a closure captures is stored in a closure variable container.  A qcc-compiled
+    closure calls a compiled function through its fast entry without clearing the closure's runtime environment;
+    the function's accesses to the top-level variable then looked for it in the current frame and among the
+    calling closure's captured variables only.  Reads fell back to finding the variable by name, but updates (push,
+    ++, +=, element and member assignments, remove, delete, list operators) found nothing and were silently
+    discarded.  All accesses now resolve the variable the same way.
+
+    The worker runs each case and prints one line per case; it is run in every execution mode and as qcc-compiled
+    executables (source-stripped, the default, and with embedded source), and every line must match the expected
+    (interpreter) result exactly.
+*/
+class AotClosureTopLevelLocalUpdateTest inherits QUnit::Test {
+    public {
+        #! the expected result of each case in the worker: the top-level variables and the values the case saw
+        const Expected = {
+            "push_direct_ref": "[\"top\", \"fn\"] 0 {a: 1, b: 2} []",
+            "push_in_closure": "[\"top\", \"fn\"] 0 {a: 1, b: 2} []",
+            "postinc_in_closure": "[\"top\"] 2 {a: 1, b: 2} []",
+            "preinc_in_closure": "[\"top\"] 1 {a: 1, b: 2} []",
+            "add_assign_in_closure": "[\"top\", \"plus\"] 5 {a: 1, b: 2} []",
+            "assign_in_closure": "[\"assigned\"] 100 {a: 1, b: 2} []",
+            "elem_in_closure": "[\"elem\"] 0 {a: 11, b: 2, c: 3} []",
+            "remove_in_closure": "[\"top\"] 0 {} []",
+            "remove_all_in_closure": "[\"fn\"] 0 {a: 1, b: 2} []",
+            "list_ops_in_closure": "[\"spliced\", \"top\"] 0 {a: 1, b: 2} []",
+            "ref_in_closure": "[\"top\", \"ref\"] 7 {a: 1, b: 2} []",
+            "read_after_update_in_closure": "[\"top\", \"fn\"] 1 {a: 1, b: 2} [\"top\", \"fn\", \"n=1\"]",
+            "nested_closures": "[\"top\", \"fn\", \"fn\"] 1 {a: 1, b: 2} []",
+            "capturing_closure": "[\"top\", \"cl\", \"fn\"] 3 {a: 1, b: 2} []",
+            "callee_own_local_in_closure": "[\"top\", \"fn\"] 0 {a: 1, b: 2} [\"own\", \"own-cl\", \"own-fn\"]",
+            "recursion_through_closure": "[\"top\", \"r2\", \"r1\", \"r0\"] 0 {a: 1, b: 2} "
+                "[\"d2\", \"c2\", \"d1\", \"c1\", \"d0\", \"c0\"]",
+            "method_in_closure": "[\"top\", \"method\", \"static\"] 7 {a: 1, b: 2} []",
+            "closure_arg_call": "[\"top\", \"fn\"] 0 {a: 1, b: 2} []",
+            "toplevel_capture_closure": "[\"top\", \"cap\", \"fn\"] 1001 {a: 1, b: 2, cap: 1} []",
+        };
+
+        #! the interpreted execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc options that the worker is compiled with, by label
+        const CompileOptions = {
+            "aot-O0": "-O0",
+            "aot-O3": "-O3",
+            "aot-O0-source": "-O0 --include-source",
+        };
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("AotClosureTopLevelLocalUpdateTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "aot-closure-toplevel-local-update-worker.q";
+
+        addTestCase("the expected results parse", \testExpectedParse());
+        addTestCase("negative: the output check rejects lost updates", \testCheckRejectsLostUpdates());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executables", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExpectedParse() {
+        # the parser must accept every expected line, or the mode checks below would compare nothing
+        string out = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, $1.value), Expected.pairIterator());
+        assertEq(Expected, parseOutput("expected", out));
+    }
+
+    testCheckRejectsLostUpdates() {
+        # what the defect produced: the updates made by a function called from a closure were lost
+        hash<string, string> results = Expected + {
+            "push_in_closure": "[\"top\"] 0 {a: 1, b: 2} []",
+            "postinc_in_closure": "[\"top\"] 0 {a: 1, b: 2} []",
+        };
+        list<string> mismatches = getMismatches(results);
+        assertEq(("postinc_in_closure", "push_in_closure"), sort(mismatches));
+
+        # the cases a crash never reached are reported as missing
+        mismatches = getMismatches(Expected - ("method_in_closure", "toplevel_capture_closure"));
+        assertEq(("method_in_closure", "toplevel_capture_closure"), sort(mismatches));
+
+        # and so is output the worker should not print
+        assertThrows("WORKER-OUTPUT-ERROR", \parseOutput(), ("bad", "unexpected text\n"));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("%s %s -b --exec-mode=%s %s 2>&1", env, qore_bin, mode, worker));
+            checkResults(mode, parseOutput(mode, out));
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-aot-closure-toplevel-local-update-");
+        foreach hash<auto> i in (CompileOptions.pairIterator()) {
+            string exe = tmp.path + DirSep + "aot-closure-toplevel-local-update-" + i.key;
+            string compile_out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, i.value, exe, worker));
+            assertTrue(is_file(exe), sprintf("qcc %s: %s", i.value, compile_out));
+            checkResults(i.key, parseOutput(i.key, backquote(sprintf("%s %s 2>&1", env, exe))));
+        }
+    }
+
+    #! parses the "<case>: <result>" lines printed by the worker
+    private hash<string, string> parseOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> parts = (line =~ x/^([a-z_0-9]+): (.*)$/);
+            if (!parts) {
+                throw "WORKER-OUTPUT-ERROR", sprintf("%s: unexpected worker output line %y in: %s", label, line,
+                    out);
+            }
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! returns the names of the cases whose result differs from the expected one, or that are missing or extra
+    private list<string> getMismatches(hash<string, string> results) {
+        list<string> rv = ();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            if (results{i.key} !== i.value) {
+                push rv, i.key;
+            }
+        }
+        foreach string key in (keys results) {
+            if (!Expected.hasKey(key)) {
+                push rv, key;
+            }
+        }
+        return rv;
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": cases run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq((), getMismatches(results), label + ": mismatches");
+    }
+}

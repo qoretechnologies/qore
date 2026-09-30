@@ -742,61 +742,15 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        // Lookup priority is tricky because we must handle three cases correctly:
-        //  1. Direct closure body (possibly on a worker thread): must use the
-        //     captured CVV from closure env — the worker thread's cvstack only
-        //     has what CVecInstantiator pushed.
-        //  2. Direct function body (no closure env): use cvstack (topmost =
-        //     current function's own variable).
-        //  3. Nested function call from closure body: a new CVV has been pushed
-        //     on cvstack (by the nested function's own instantiation) and sits
-        //     on top of the closure's captured CVV. We must use the NEW CVV
-        //     (the nested function's own var), NOT the captured one. This is
-        //     the key difference vs case 1.
-        //
-        // Strategy: look up both frame_cvv (by name, in the current call frame)
-        // and env_cvv (by LocalVar* in closure's cmap). If frame_cvv != env_cvv,
-        // we're in case 3 and must use frame_cvv. Otherwise use env_cvv if
-        // present. A same-named CVV from an older frame is not a nested callee's
-        // own variable and must not override the lexical closure environment.
-        ClosureVarValue* val = nullptr;
-        if (thread_has_runtime_closure_env()) {
-            ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(name.c_str());
-            ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(this);
-            if (frame_cvv && env_cvv && frame_cvv != env_cvv) {
-                // Case 3: nested function pushed its own CVV after the closure's
-                // captured one. Prefer the nested function's own variable.
-                val = frame_cvv;
-            } else if (env_cvv) {
-                // Case 1: direct closure body (or env_cvv == frame_cvv on
-                // same thread). Use the closure's captured CVV.
-                val = env_cvv;
-            } else {
-                // Closure env doesn't have this LocalVar (nested function's
-                // own local not in any outer closure's capture set).
-                val = frame_cvv;
-                if (!val) {
-                    val = thread_try_find_closure_var(name.c_str());
-                }
-            }
-        } else {
-            // Case 2: direct function body. Prefer cvstack (by name, topmost).
-            // Use try_find() to avoid crashing if the variable hasn't been
-            // instantiated yet (AOT mode skips closure-use var pre-instantiation
-            // in evalTiered, relying on LLVM codegen for lazy instantiation).
+        ClosureVarValue* val = findClosureVarValue();
+        if (!val && !thread_has_runtime_closure_env()) {
+            // Lazily instantiate when NOT inside a closure body (AOT mode skips closure-use var
+            // pre-instantiation in evalTiered, relying on LLVM codegen for lazy instantiation).  In a closure
+            // body on a worker thread, the variable must be found via the runtime closure environment —
+            // instantiating a new CVV on the worker thread would create a separate copy invisible to the
+            // declaring function's thread.
+            const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
             val = thread_try_find_closure_var(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-            if (!val) {
-                // Lazily instantiate when NOT inside a closure body.  In a
-                // closure body on a worker thread, the variable must be found
-                // via the runtime closure environment — instantiating a new CVV
-                // on the worker thread would create a separate copy invisible
-                // to the declaring function's thread.
-                const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
-                val = thread_try_find_closure_var(name.c_str());
-            }
         }
         if (!val) {
             needs_deref = false;
@@ -841,18 +795,7 @@ public:
             }
             return val->isRef();
         }
-        ClosureVarValue* val = nullptr;
-        if (thread_has_runtime_closure_env()) {
-            val = thread_try_find_closure_var_in_current_frame(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        } else {
-            val = thread_try_find_closure_var(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        }
+        ClosureVarValue* val = findClosureVarValue();
         return val ? val->isRef() : false;
     }
 
@@ -880,22 +823,7 @@ public:
             return val->getLValue(lvh, for_remove, ti, rti);
         }
 
-        ClosureVarValue* val = nullptr;
-        if (thread_has_runtime_closure_env()) {
-            // Prefer only the current frame's own CVV over the lexical closure
-            // environment; older same-named CVVs belong to outer frames.
-            val = thread_try_find_closure_var_in_current_frame(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        } else {
-            // Prefer cvstack lookup (topmost = current function's own variable).
-            // Use try_find() for AOT safety (see eval() comment).
-            val = thread_try_find_closure_var(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        }
+        ClosureVarValue* val = findClosureVarValue();
         if (!val && !thread_has_runtime_closure_env()) {
             // Only lazily instantiate when NOT inside a closure body (see eval() comment)
             const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
@@ -921,20 +849,7 @@ public:
             return val->remove(lvrh, typeInfo);
         }
 
-        ClosureVarValue* val = nullptr;
-        if (thread_has_runtime_closure_env()) {
-            val = thread_try_find_closure_var_in_current_frame(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        } else {
-            // Prefer cvstack lookup (topmost = current function's own variable).
-            // Use try_find() for AOT safety (see eval() comment).
-            val = thread_try_find_closure_var(name.c_str());
-            if (!val) {
-                val = thread_try_get_runtime_closure_var(this);
-            }
-        }
+        ClosureVarValue* val = findClosureVarValue();
         if (!val) {
             return;
         }
@@ -1128,6 +1043,29 @@ private:
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_try_find_lvar(this);
+    }
+
+    //! Returns the current value container of this closure-bound variable, or nullptr if none is instantiated
+    /** Every access to a closure-bound variable (read, lvalue, removal, reference check) resolves it here, so
+        they all reach the same container.  Three cases must be handled:
+        -# a closure body (possibly on a worker thread): the CVV captured in the closure's runtime environment;
+           the worker thread's cvstack only has what CVecInstantiator pushed
+        -# a function body with no closure environment: the topmost CVV with the variable's name on the cvstack
+        -# a function called from a closure body without clearing the closure environment (a compiled direct
+           call to a function's fast entry): a CVV the function pushed itself in the current frame takes
+           precedence over the closure's captured one, and a variable that is neither pushed in the current frame
+           nor captured by the calling closure (for example a top-level local that the function uses) is found
+           by name on the cvstack, as in case 2
+
+        The by-name fallback of the last case must apply to every kind of access: when it applied to reads only,
+        an update of such a variable found no container and was silently discarded.
+    */
+    DLLLOCAL ClosureVarValue* findClosureVarValue() const {
+        assert(closure_use);
+        if (thread_has_runtime_closure_env()) {
+            return thread_resolve_runtime_closure_var(this);
+        }
+        return thread_try_find_closure_var(name.c_str());
     }
 
     DLLLOCAL void updateTypeSubstitutionFlags() {

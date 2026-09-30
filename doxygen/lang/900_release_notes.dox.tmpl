@@ -3838,6 +3838,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed compiled (\c qcc) functions called from a closure losing their updates of a top-level local variable
+      that a closure captures: assignments with an operator (such as \c push, \c ++, \c +=, element and member
+      assignments, \c remove and \c delete) made by the function were silently discarded, while reads and plain
+      assignments worked
     - Fixed compiled (\c qcc) code binding a local variable to the wrong variable when its name was shadowed: a
       local variable declared in a function, method or closure with the same name and type as a top-level local
       variable was bound to the top-level variable, so the top-level variable's value was lost (and the process could
