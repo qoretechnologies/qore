@@ -299,6 +299,12 @@ describe an intersection nothing can satisfy, and are left unconstrained rather 
 excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead
 
     @section openapi3_relnotes OpenApi3 Module Release Notes
+    - Fixed document-level security requirements with multiple simultaneous schemes (for example Trello's
+      API key and token). @ref OpenApi3Schema::security now preserves the list of requirement hashes, matching
+      operation-level security: schemes within a hash are AND, hashes are OR, and an empty hash allows anonymous
+      access. Code inspecting this member must iterate the list instead of treating it as a flattened hash.
+      Invalid scope lists and undefined schemes are rejected.
+
 
     @subsection openapi3_1_0 OpenApi3 v1.0
     - use valid declared examples, including OpenAPI 3.1 `examples`, and generate only examples accepted by the
@@ -872,12 +878,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             requirements). Individual operations can override this definition.
 
             Individual values are hashes in the form of Security Requirement Objects.
-            See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#securityRequirementObject.
+            Multiple schemes in one requirement must all be satisfied (logical AND).
+            Empty requirements allow anonymous access.
+            See https://spec.openapis.org/oas/v3.0.3.html#security-requirement-object.
             That is, the hash keys MUST correspond to security schemes declared
             in the \c securitySchemes "Security Definitions",
             while the values are lists of scope names (strings) required for the execution.
         */
-        hash<string, softlist<string>> security;
+        list<hash<string, list<string>>> security;
 
         #! A list of @ref TagObject "tags" used by the specification with additional metadata.
         /**
@@ -1210,13 +1218,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             }
         }
 
-        optional_field(obj_type, oh, "security", OpenApi3ListToHashOfStrings, \security);
+        optional_field(obj_type, oh, "security", OpenApi3SecurityRequirements, \security);
 
         # verify security consistency
-        if (security) {
-            hash<auto> h = security - keys components.securitySchemes;
-            if (h)
+        foreach hash<string, list<string>> requirement in (security) {
+            hash<auto> h = requirement - keys components.securitySchemes;
+            if (h) {
                 throw "SECURITY-ERROR", sprintf("the following security schemes are not defined: %y", keys h);
+            }
         }
 
         {
@@ -7232,7 +7241,7 @@ namespace Priv {
     const OpenApi3ListToStringSet = -1;
     # a set of any type that can be converted to a string
     const OpenApi3ListToAnySet = -2;
-    const OpenApi3ListToHashOfStrings = -3;
+    const OpenApi3SecurityRequirements = -3;
 
     const TypeMap = (
         NT_INT: "int",
@@ -7343,8 +7352,9 @@ namespace Priv {
     *bool sub check_type_code(string obj_type, hash<auto> oh, string name, auto val, int typeCode, *int opt_flags) {
         int vtc = val.typeCode();
         if ((typeCode == OpenApi3ListToStringSet || typeCode == OpenApi3ListToAnySet
-            || typeCode == OpenApi3ListToHashOfStrings) && vtc == NT_LIST)
+            || typeCode == OpenApi3SecurityRequirements) && vtc == NT_LIST) {
             return;
+        }
         if (vtc != typeCode) {
             throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y); expecting %y",
                 obj_type, oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val, TypeMap{typeCode});
@@ -7375,33 +7385,33 @@ namespace Priv {
                         "converted to a string for this field", obj_type, name, $# + 1, val.size(), v.type());
                 target{v} = True;
             }
-        } else if (typeCode == OpenApi3ListToHashOfStrings) {
+        } else if (typeCode == OpenApi3SecurityRequirements) {
+            # Preserve OR between requirements and AND between schemes in a requirement.
+            list<hash<string, list<string>>> requirements = ();
             foreach auto v in (val) {
                 int pos = $# + 1;
-                if (v.typeCode() != NT_HASH)
+                if (v.typeCode() != NT_HASH) {
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d value has type %y; expecting "
                         "\"hash\"", obj_type, name, pos, val.size(), v.type());
-                if (v.size() > 1)
-                    throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d value has a hash with more than "
-                        "one key: %y; expecting a hash with a single key", obj_type, name, pos, val.size(), v);
-                if (!v.size()) {
-                    target += v;
-                    continue;
                 }
-                string key = v.firstKey();
-                if (target.hasKey(key))
-                    throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d has duplicate key %y", obj_type,
-                        name, pos, val.size(), key);
-                foreach auto fv in (v.firstValue()) {
-                    if (fv.typeCode() != NT_STRING)
-                        throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d in %y list value has "
-                            "type %y in position %d/%d; expecting \"string\"", obj_type, name, pos, val.size(), key,
-                            fv.type(), $# + 1, fv.lsize());
+                foreach hash<auto> item in (v.pairIterator()) {
+                    if (item.value.typeCode() != NT_LIST) {
+                        throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d scheme %y has type %y; "
+                            "expecting a list of strings", obj_type, name, pos, val.size(), item.key, item.value.type());
+                    }
+                    foreach auto scope in (item.value) {
+                        if (scope.typeCode() != NT_STRING) {
+                            throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d scheme %y scope has "
+                                "type %y; expecting string", obj_type, name, pos, val.size(), item.key, scope.type());
+                        }
+                    }
                 }
-                target += v;
+                push requirements, cast<hash<string, list<string>>>(v);
             }
-        } else
+            target = requirements;
+        } else {
             target = val;
+        }
     }
 
     #! returns the Qore type for the given schema type

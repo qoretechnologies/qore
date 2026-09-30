@@ -3430,6 +3430,8 @@ while (*binary chunk = input.read(65536)) {
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - preserves combined and alternative document security requirements, including anonymous alternatives;
+        @ref OpenApi3Schema::security is now a list of requirement hashes rather than a flattened hash
       - preserve positional arrays, boolean item constraints, response direction, and native serialization
       - retains enumeration labels and descriptions through schema adaptation and serialization,
         while preserving typed wire values and keeping code-generation symbols out of forms

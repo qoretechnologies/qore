@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/QUnit.qm
+%exec-class OpenApi3SecurityTest
+
+class OpenApi3SecurityTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI security requirements", "1.0", ARGV) {
+        addTestCase("requirements", \requirements());
+        addTestCase("invalid requirements", \invalidRequirements());
+        set_return_value(main());
+    }
+
+    private OpenApi3Schema load(auto security) {
+        return new OpenApi3Schema("synthetic", {
+            "openapi": "3.0.3",
+            "info": {"title": "Synthetic security contract", "version": "1"},
+            "paths": {},
+            "components": {"securitySchemes": {
+                "key": {"type": "apiKey", "in": "query", "name": "key"},
+                "token": {"type": "apiKey", "in": "query", "name": "token"},
+                "oauth": {"type": "oauth2", "flows": {"implicit": {
+                    "authorizationUrl": "https://example.invalid/authorize",
+                    "scopes": {"read": "Read", "write": "Write"},
+                }}},
+            }},
+            "security": security,
+        });
+    }
+
+    private OpenApi3Schema loadJson(string value) {
+        return load(parse_json(value));
+    }
+
+    private requirements() {
+        list<hash<string, list<string>>> expected = (
+            {"key": (), "token": ()},
+            {"oauth": ("read",)},
+            {"oauth": ("write",)},
+            {},
+        );
+        assertEq(expected, load(expected).security);
+        assertEq(list(), load(list()).security);
+        assertEq(({},), load(({},)).security);
+    }
+
+    private invalidRequirements() {
+        foreach auto value in ((42, (42,), ({"key": "scope"},), ({"key": (42,)},))) {
+            assertThrows("INVALID-FIELD-TYPE", \loadJson(), make_json(value));
+        }
+        assertThrows("SECURITY-ERROR", \loadJson(), make_json(({"key": (), "unknown": ()},)));
+        assertThrows("SECURITY-ERROR", \loadJson(), make_json(({"key": ()}, {"unknown": ()})));
+    }
+}

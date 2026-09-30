@@ -1089,9 +1089,9 @@ public class OpenApi3Test inherits QUnit::Test {
         assertThrows("INVALID-FIELD-TYPE", "\"security\".*type \"integer\"", loadyaml,
             my_make_yaml(base + {"security": (2, 5)}), "invalid security field value type");
         assertThrows("INVALID-FIELD-TYPE", "\"security\".*\"integer\"", loadyaml,
-            my_make_yaml(base + {"security": ({"a": "b"}, {"b": 2})}), "invalid security field value type");
+            my_make_yaml(base + {"security": ({"a": ("b",)}, {"b": 2})}), "invalid security field value type");
         assertThrows("SECURITY-ERROR", "security schemes.*not defined", loadyaml,
-            my_make_yaml(base + {"security": ({"a": "b"}, {"b": "a"})}), "invalid security values");
+            my_make_yaml(base + {"security": ({"a": ("b",)}, {"b": ("a",)})}), "invalid security values");
 
         assertThrows("INVALID-FIELD-TYPE", loadyaml, my_make_yaml(base + {"tags": 2}), "invalid tags field type");
         assertTrue(loadyaml(my_make_yaml(base + {"tags": list()})));
