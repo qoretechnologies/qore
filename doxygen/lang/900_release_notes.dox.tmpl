@@ -2379,6 +2379,7 @@ while (*binary chunk = input.read(65536)) {
         based on them, can be serialized
 
     - @ref restclientintro "RestClient" module
+      - preserves explicit authorization headers when initializing a saved token, including Trello combined credentials
       - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
         providers that make API calls with an asynchronous @ref restclientiointro "RestClientIo" client, and
         no longer connects to the server to create them

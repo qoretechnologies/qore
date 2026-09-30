@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class RestClientAuthHeadersTest
+
+class RestClientAuthHeadersTest inherits QUnit::Test {
+    constructor() : Test("RestClientAuthHeadersTest", "1.0") {
+        addTestCase("explicit authentication with saved tokens", \explicitAuth());
+        addTestCase("default token authentication and replacement", \defaultAuth());
+        set_return_value(main());
+    }
+
+    private explicitAuth() {
+        string auth = "OAuth oauth_consumer_key=\"test-key\", oauth_token=\"test-token\"";
+        foreach string spelling in (("Authorization", "authorization")) {
+            hash<auto> hdr = {spelling: auth, "X-Test": "retained"};
+            RestClient client({"url": "https://example.invalid", "token": "test-token",
+                "oauth2_refresh_token": "refresh-token", "headers": hdr}, True);
+            assertEq(auth, client.getDefaultHeaders().Authorization);
+            assertFalse(exists client.getDefaultHeaders().authorization, "only one authorization header is emitted");
+            assertEq("retained", client.getDefaultHeaders(){"X-Test"});
+            assertEq("test-token", client.getToken());
+            assertEq("refresh-token", client.getOAuth2Options().oauth2_refresh_token);
+            client.gotOAuth2LoginInfo({"token_type": "bearer", "access_token": "replacement"}, True);
+            assertEq("Bearer replacement", client.getDefaultHeaders().Authorization,
+                "a later login replaces the initial header rather than pinning a stale credential");
+            assertEq("replacement", client.getToken());
+        }
+    }
+
+    private defaultAuth() {
+        RestClient bearer({"url": "https://example.invalid", "token": "test-token",
+            "headers": {"X-Test": "retained"}}, True);
+        assertEq("Bearer test-token", bearer.getDefaultHeaders().Authorization);
+        assertEq("retained", bearer.getDefaultHeaders(){"X-Test"});
+        RestClient custom({"url": "https://example.invalid", "token": "test-token", "token_type": "Custom"}, True);
+        assertEq("Custom test-token", custom.getDefaultHeaders().Authorization);
+        RestClient key({"url": "https://example.invalid", "token": "test-key",
+            "token_api_key_header": "X-Api-Key", "headers": {"Authorization": "Custom auth"}}, True);
+        assertEq("test-key", key.getDefaultHeaders(){"X-Api-Key"});
+        assertEq("Custom auth", key.getDefaultHeaders().Authorization);
+        RestClient header({"url": "https://example.invalid", "headers": {"Authorization": "Custom auth"}}, True);
+        assertEq("Custom auth", header.getDefaultHeaders().Authorization);
+        assertNothing(header.getToken());
+    }
+}

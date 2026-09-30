@@ -143,6 +143,8 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - explicit \c Authorization headers take precedence over generated bearer headers when constructing a client
+      with a saved token, preserving combined credentials such as Trello's consumer key and token
     - added the \c status_message, \c effective_url, and \c redirects keys to
       @ref RestClient::RestResponseInfo "RestResponseInfo"
     - a REST schema read from a location (the \c openapi3 and \c swagger options) is decoded by the encoding rules
@@ -1329,8 +1331,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
           \c 30s)
         - \c token: Any bearer token to use for the connection; will be passed as <tt>Authorization: Bearer ...</tt>
-          in request headers; conflicts with username and password options or authentication credentials in the URL;
-          if this option is set then any OAuth2 options are ignored
+          in request headers unless \c headers supplies an explicit \c Authorization header; conflicts with username
+          and password options or authentication credentials in the URL; if this option is set then any OAuth2 options
+          are ignored. Later token updates replace the initial authorization header; connection post-auth callbacks
+          can supply updated custom authentication.
         - \c token_api_key_header: The name of a header to send any token in as an API key
         - \c token_type: The type of token to use for the \c Authentication header; ignored if no \c token option is
           set
@@ -2945,6 +2949,12 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 headers{opts.token_api_key_header} = opts.token;
             } else {
                 setToken(opts.token_type ?? "Bearer", opts.token, opts.oauth2_refresh_token, opts.oauth2_token_expiry);
+                # Explicit authentication headers can encode more than the stored token (for example Trello's
+                # consumer key and token). Preserve them while retaining token state for refresh and callbacks.
+                if (hasAuthorizationHeader(opts.headers)) {
+                    removeAuthorizationHeader(\headers);
+                    headers.Authorization = opts.headers.Authorization ?? opts.headers.authorization;
+                }
             }
             if (opts.custom_token_auth) {
                 setupUserPassword(opts);
