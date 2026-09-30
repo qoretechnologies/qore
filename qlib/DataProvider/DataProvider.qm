@@ -1373,6 +1373,9 @@ fetch
       whose option types are described by plain data; the fields shared with registered actions are in the new
       @ref DataProvider::DataProviderActionBaseInfo "DataProviderActionBaseInfo" and
       @ref DataProvider::ActionOptionBaseInfo "ActionOptionBaseInfo" hashdecls
+    - added @ref DataProvider::DataProviderIndexedActionSummaryInfo "DataProviderIndexedActionSummaryInfo", the
+      action-level record of an action from the data provider index, with the names of its options and whether it
+      declares expressions, which lists and selects indexed actions without restoring their types
     - added @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo", the data provider info of an action
       from the data provider index, in which the types of options, expressions, events, and messages are described
       by plain data, so an indexed action has no objects and can be serialized;

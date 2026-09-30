@@ -632,6 +632,25 @@ public hashdecl DataProviderIndexedActionInfo inherits DataProviderActionBaseInf
     *hash<IndexedDataProviderInfo> data_provider_info;
 }
 
+#! The action-level record of an action from the data provider index
+/** Holds the action-level members of an indexed action (its names, descriptions, codes, groups, metadata, and path
+    variables) without its options or data provider info, whose type descriptions are only restored when the action
+    itself is read, so the actions of every app can be listed and selected without restoring any type.
+
+    @see
+    - @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionSummariesForApp() "ProviderIndexUtil::tryGetActionSummariesForApp()"
+    - @ref DataProviderIndexedActionInfo for the complete indexed action
+
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderIndexedActionSummaryInfo inherits DataProviderActionBaseInfo {
+    #! The names of the action's options, in index order; empty if the action has no options
+    list<string> option_names = ();
+
+    #! @ref True if the action's data provider info declares expressions
+    bool has_expressions = False;
+}
+
 /** @defgroup DataProviderFileReadModes Data Provider File API Read Modes
 */
 #/@{

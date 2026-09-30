@@ -304,7 +304,20 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
 
     #! Returns the app metadata chunks in the given index directory
     private static list<string> getChunks(string dir) {
-        return sort(glob(dir + DirSep + "qore-data-index-[0-9a-f]*.msgpack"));
+        hash<string, bool> summaries = map {$1: True}, getActionSummaryFiles(dir);
+        return sort(select glob(dir + DirSep + "qore-data-index-[0-9a-f]*.msgpack"), !summaries{$1});
+    }
+
+    #! Returns the action summary files that the metadata cache manifests in the given index directory reference
+    private static list<string> getActionSummaryFiles(string dir) {
+        list<string> rv = ();
+        foreach string path in (glob(dir + DirSep + "qore-data-index-manifest-*.msgpack")) {
+            auto manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE);
+            if (*string sha256 = manifest.actions.sha256) {
+                push rv, sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256);
+            }
+        }
+        return rv;
     }
 
     #! Returns the metadata cache manifest in the given index directory
@@ -454,7 +467,9 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertFalse(is_file(dir + DirSep + "qore-data-index.yaml"), "no canonical index file is written");
         assertEq(dir + DirSep + "qore-routing-index.yaml", info.path, "the routing index identifies the index");
         int size = hstat(info.path).size + hstat(getManifest(dir)).size + (foldl $1 + $2,
-            (map hstat($1).size, getChunks(dir)));
+            (map hstat($1).size, getChunks(dir) + getActionSummaryFiles(dir)));
+        # the action summaries of every app are in one file
+        assertEq(1, getActionSummaryFiles(dir).size());
         assertEq(size, info.size, "the size is the total size of the published files");
 
         hash<auto> routing = readRouting(dir);
@@ -775,6 +790,19 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         resetIndexState();
         assertEq("creates an order", ProviderIndexUtil::tryGetActionMetadata("QoreTestOrders", "create-order").desc);
         assertEq(3, ProviderIndexUtil::getAllCachedActions().size());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+
+        # the action summaries of an index that predates them are read from the metadata of each app
+        resetIndexState();
+        hash<auto> summaries = ProviderIndexUtil::getAllActionSummaries();
+        assertEq(sort(keys actions), sort(keys summaries));
+        foreach hash<auto> app in (actions.pairIterator()) {
+            assertEq(keys app.value, keys summaries{app.key});
+            foreach hash<auto> action in (app.value.pairIterator()) {
+                assertEq(action.value.desc, summaries{app.key}{action.key}.desc);
+                assertEq((keys action.value.options) ?? (), summaries{app.key}{action.key}.option_names);
+            }
+        }
         assertNothing(ProviderIndexUtil::getIndexReadError());
 %endif
     }

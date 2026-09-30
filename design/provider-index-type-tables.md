@@ -57,3 +57,6 @@ and 14,494 distinct field descriptions. Two thirds of the distinct type descript
 their unique keys, which `ProviderIndex` numbers per option description; numbering them per app
 instead was measured and stores more distinct type descriptions, because structurally identical
 descriptions of different type objects then get different keys.
+
+Consumers that only list or select actions do not pay this cost: see
+[provider-index-action-summaries.md](provider-index-action-summaries.md).

@@ -1,0 +1,966 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+%requires Logger
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexActionSummariesTest
+
+public class ProviderIndexActionSummariesTest inherits QUnit::Test {
+    public {
+        #! The app whose actions have option types
+        const App = "QoreTestSummaries";
+
+        #! A second app
+        const OtherApp = "QoreTestSummariesOther";
+
+        #! The metadata cache format version that records action summaries
+        const SummaryVersion = 8;
+
+        #! The members of an indexed action that are not in its summary
+        const NotInSummary = ("options", "data_provider_info");
+    }
+
+    constructor() : Test("ProviderIndex action summaries test", "1.0") {
+        addTestCase("action summaries hold the action-level fields of the indexed actions", \fieldsTest());
+        addTestCase("listing action summaries never reads the metadata of an app", \noChunkReadTest());
+        addTestCase("an index published before action summaries lists them without restoring any type",
+            \earlierVersionTest());
+        addTestCase("an action is restored without restoring the other actions of its app", \singleActionTest());
+        addTestCase("actions restored one at a time equal those restored with their app, in index order",
+            \singleEquivalenceTest());
+        addTestCase("a description shared by actions restored one at a time is restored once",
+            \sharedDescriptionTest());
+        addTestCase("searching restores only the matching actions", \searchTest());
+        addTestCase("cache edits apply to the action summaries and survive a reload", \cacheEditTest());
+        addTestCase("a reloaded index has its own action summaries", \reloadTest());
+        addTestCase("an index read from its canonical file has action summaries", \canonicalTest());
+        addTestCase("an unreadable action summary file is reported and the summaries are read from each app",
+            \corruptSummaryFileTest());
+        addTestCase("an unreadable action summary is left out", \malformedSummaryTest());
+        addTestCase("the action summary file is part of the published index", \publishedFilesTest());
+        addTestCase("no action summaries are read in build mode", \buildModeTest());
+        addTestCase("concurrent lookups return complete and consistent actions", \concurrentTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    fieldsTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<auto> actions = getTestActions();
+        writeTestIndex(actions);
+
+        hash<string, hash<string, hash<auto>>> all = ProviderIndexUtil::getAllActionSummaries();
+        assertEq((App, OtherApp), keys all);
+        # index order, which is sorted
+        assertEq(("create-item", "deep", "list-items"), keys all{App});
+        assertEq(("ping",), keys all{OtherApp});
+
+        list<hash<auto>> app_summaries = ProviderIndexUtil::tryGetActionSummariesForApp(App);
+        assertEq(all{App}.values(), app_summaries);
+        foreach hash<auto> summary in (app_summaries) {
+            assertEq("hash<DataProviderIndexedActionSummaryInfo>", summary.fullType());
+            assertEq(summary, ProviderIndexUtil::tryGetActionSummary(App, summary.action));
+        }
+
+        hash<auto> create = all{App}."create-item";
+        assertEq("creates an item", create.desc);
+        assertEq(DPAT_CREATE, create.action_code);
+        assertEq(("items",), create.groups);
+        assertEq({"alert_delivery_capable": True}, create.metadata);
+        assertEq("hash<DataProviderPathVarInfo>", create.path_vars.id.fullType());
+        assertEq("the item ID", create.path_vars.id.desc);
+        assertEq(("name", "record"), create.option_names);
+        assertTrue(create.has_expressions);
+        assertFalse(all{App}."list-items".has_expressions);
+        assertEq((), all{App}."list-items".option_names);
+
+        # the action-level fields are those of the restored actions
+        foreach hash<auto> summary in (all{App}.iterator()) {
+            hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(App, summary.action);
+            assertEq(msgpack_pack({} + (action - NotInSummary), MSGPACK_QORE_MODE),
+                msgpack_pack({} + (summary - ("option_names", "has_expressions")), MSGPACK_QORE_MODE),
+                summary.action);
+            assertEq((keys action.options) ?? (), summary.option_names);
+            assertEq(action.data_provider_info.expressions ? True : False, summary.has_expressions);
+        }
+
+        # selection
+        assertEq(("create-item",), map $1.action, ProviderIndexUtil::selectActionSummaries(
+            bool sub (hash<auto> action) { return action.metadata.alert_delivery_capable ?? False; }));
+        assertEq(("ping",), map $1.action, ProviderIndexUtil::selectActionSummaries(
+            bool sub (hash<auto> action) { return True; }, OtherApp));
+        assertEq((), ProviderIndexUtil::selectActionSummaries(bool sub (hash<auto> action) { return False; }));
+        assertThrows("SELECT-ERROR", \ProviderIndexUtil::selectActionSummaries(),
+            (bool sub (hash<auto> action) { throw "SELECT-ERROR"; },));
+
+        # unknown apps and actions
+        assertNothing(ProviderIndexUtil::tryGetActionSummariesForApp("QoreTestSummariesUnknown"));
+        assertNothing(ProviderIndexUtil::tryGetActionSummary(App, "unknown"));
+        assertNothing(ProviderIndexUtil::tryGetActionSummary("QoreTestSummariesUnknown", "ping"));
+        assertEq((), ProviderIndexUtil::selectActionSummaries(bool sub (hash<auto> action) { return True; },
+            "QoreTestSummariesUnknown"));
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    noChunkReadTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        hash<auto> manifest = getManifest(dir).manifest;
+        # every app's metadata is made unreadable, keeping the names of its files
+        foreach hash<auto> chunk in (manifest.apps.iterator()) {
+            writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, chunk.sha256), "not a chunk");
+        }
+        resetIndexState();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        hash<auto> all = ProviderIndexUtil::getAllActionSummaries();
+        assertEq(("create-item", "deep", "list-items"), keys all{App});
+        assertEq(("ping",), keys all{OtherApp});
+        assertEq("creates an item", ProviderIndexUtil::tryGetActionSummary(App, "create-item").desc);
+        assertEq(3, ProviderIndexUtil::tryGetActionSummariesForApp(App).size());
+        assertEq(1, ProviderIndexUtil::selectActionSummaries(bool sub (hash<auto> action) { return True; },
+            OtherApp).size());
+        assertNothing(ProviderIndexUtil::getIndexReadError(), "no app metadata was read");
+
+        # restoring an action reads its app's metadata
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata(App, "create-item"));
+        assertRegex("PROVIDER-INDEX-ERROR.*metadata of app \"QoreTestSummaries\"",
+            ProviderIndexUtil::getIndexReadError() ?? "");
+        assertEq(1, log.getMessages("metadata of app \"QoreTestSummaries\".*does not match").size());
+%endif
+    }
+
+    earlierVersionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        hash<auto> v8 = ProviderIndexUtil::getAllActionSummaries();
+        # the same index as published by metadata cache version 7, whose manifest has no action summary file
+        makeVersion7(dir);
+        resetIndexState();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        assertEq(v8, ProviderIndexUtil::getAllActionSummaries());
+        assertEq(1, log.getMessages("published before action summaries were recorded").size());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        # read once per index
+        ProviderIndexUtil::getAllActionSummaries();
+        assertEq(1, log.getMessages("published before action summaries were recorded").size());
+
+        # an action whose option refers to a description that is not in its chunk is listed: no description is
+        # restored to list it
+        replaceChunk(dir, App, packChunk(App, {
+            "deep": getPositionAction(App, "deep", 1),
+            "other": getPositionAction(App, "other", 7),
+        }, (leafType(), getLevel(0, {"v": 0})), (getField("v", 0),)));
+        resetIndexState();
+        assertEq(("deep", "other"), keys ProviderIndexUtil::getAllActionSummaries(){App});
+        assertEq((), log.getMessages("Omitting"), "nothing is restored to list the actions");
+        assertEq(("record",), ProviderIndexUtil::tryGetActionSummary(App, "other").option_names);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    singleActionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        # "other" refers to a description that is not in its chunk, so it cannot be restored
+        replaceChunk(dir, App, packChunk(App, {
+            "deep": getPositionAction(App, "deep", 1),
+            "other": getPositionAction(App, "other", 7),
+        }, (leafType(), getLevel(0, {"v": 0})), (getField("v", 0),)));
+        resetIndexState();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        hash<auto> deep = ProviderIndexUtil::tryGetActionMetadata(App, "deep");
+        assertEq("L0", deep.options.record.type_info.name);
+        assertEq((), log.getMessages("Omitting"), "only the requested action is restored");
+
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata(App, "other"));
+        assertEq(1, log.getMessages("Omitting action \"other\" of app \"QoreTestSummaries\".*PROVIDER-INDEX-ERROR: a "
+            "type description refers to position 7 of the type description table").size());
+        # an action that cannot be restored is not restored or logged again
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata(App, "other"));
+        assertEq(("deep",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(App));
+        assertEq(1, log.getMessages("Omitting").size());
+        # it is still listed
+        assertEq(("deep", "other"), keys ProviderIndexUtil::getAllActionSummaries(){App});
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata(App, "unknown"));
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata("QoreTestSummariesUnknown", "deep"));
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    singleEquivalenceTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        list<hash<auto>> expected = ProviderIndexUtil::tryGetActionMetadataForApp(App);
+        assertEq(("create-item", "deep", "list-items"), map $1.action, expected);
+
+        # the middle action first, then the app
+        resetIndexState();
+        hash<auto> deep = ProviderIndexUtil::tryGetActionMetadata(App, "deep");
+        assertEq(msgpack_pack(expected[1], MSGPACK_QORE_MODE), msgpack_pack(deep, MSGPACK_QORE_MODE));
+        list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp(App);
+        assertEq(msgpack_pack(expected, MSGPACK_QORE_MODE), msgpack_pack(actions, MSGPACK_QORE_MODE));
+
+        # every action one at a time, then all actions
+        resetIndexState();
+        foreach hash<auto> action in (expected) {
+            assertEq(msgpack_pack(action, MSGPACK_QORE_MODE), msgpack_pack(ProviderIndexUtil::tryGetActionMetadata(
+                App, action.action), MSGPACK_QORE_MODE));
+        }
+        assertEq(msgpack_pack(expected, MSGPACK_QORE_MODE),
+            msgpack_pack(ProviderIndexUtil::tryGetActionMetadataForApp(App), MSGPACK_QORE_MODE));
+        assertEq(4, ProviderIndexUtil::getAllCachedActions().size());
+%endif
+    }
+
+    sharedDescriptionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        # 64 levels that each refer to the level below by two fields: the complete description would hold 2^64
+        # descriptions of the lowest level, so both actions can only be restored if each stored description is
+        # restored once, and shared by them
+        int depth = 64;
+        list<hash<auto>> types = (leafType(), getLevel(0, {"v": 0}));
+        list<hash<auto>> fields = (getField("v", 0),);
+        for (int i = 1; i <= depth; ++i) {
+            push fields, getField("a", i);
+            push fields, getField("b", i);
+            push types, getLevel(i, {"a": fields.size() - 2, "b": fields.size() - 1});
+        }
+        replaceChunk(dir, App, packChunk(App, {
+            "deep": getPositionAction(App, "deep", types.size() - 1),
+            "other": getPositionAction(App, "other", types.size() - 1),
+        }, types, fields));
+        resetIndexState();
+
+        hash<auto> deep = ProviderIndexUtil::tryGetActionMetadata(App, "deep");
+        hash<auto> other = ProviderIndexUtil::tryGetActionMetadata(App, "other");
+        assertEq("L" + depth, deep.options.record.type_info.name);
+        assertEq("L" + depth, other.options.record.type_info.name);
+        hash<auto> info = deep.options.record.type_info;
+        for (int i = depth; i > 0; --i) {
+            info = info.fields.a.type;
+        }
+        assertEq("L0", info.name);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    searchTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        # "other" cannot be restored; searches that do not match it never restore it
+        replaceChunk(dir, App, packChunk(App, {
+            "deep": getPositionAction(App, "deep", 1) + {"desc": "a deep record"},
+            "other": getPositionAction(App, "other", 7) + {"desc": "another record"},
+            "third": getPositionAction(App, "third", 1) + {"desc": "a third record"},
+        }, (leafType(), getLevel(0, {"v": 0})), (getField("v", 0),)));
+        resetIndexState();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        assertEq(("deep",), map $1.action, ProviderIndexUtil::searchCachedAppActionSubstr(App, "DEEP"));
+        assertEq((), ProviderIndexUtil::searchCachedAppActionSubstr(App, "DEEP", False));
+        assertEq(("deep", "third"), map $1.action, ProviderIndexUtil::searchCachedAppActionRegex(App,
+            "^a (deep|third)"));
+        assertEq(("ping",), map $1.action, ProviderIndexUtil::searchCachedActionSubstr("pings"));
+        assertEq(("third",), map $1.action, ProviderIndexUtil::searchCachedActionRegex("THIRD"));
+        assertEq((), log.getMessages("Omitting"), "only the matching actions are restored");
+        # the restored actions are returned
+        assertEq("L0", ProviderIndexUtil::searchCachedAppActionSubstr(App, "deep")[0].options.record.type_info.name);
+
+        # a matching action that cannot be restored is left out
+        assertEq(("deep", "third"), map $1.action, ProviderIndexUtil::searchCachedAppActionSubstr(App, "record"));
+        assertEq(1, log.getMessages("Omitting action \"other\"").size());
+        assertNothing(ProviderIndexUtil::searchCachedAppActionSubstr("QoreTestSummariesUnknown", "record"));
+%endif
+    }
+
+    cacheEditTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        # replaces an indexed action, and adds one
+        ProviderIndexUtil::addActionToCache({"app": App, "action": "deep", "desc": "a cached action"});
+        ProviderIndexUtil::addActionToCache({"app": App, "action": "added", "desc": "an added action"});
+        # removes an app
+        assertTrue(ProviderIndexUtil::removeCachedApp(OtherApp));
+        assertFalse(ProviderIndexUtil::removeCachedApp(OtherApp));
+
+        code check = sub () {
+            hash<auto> all = ProviderIndexUtil::getAllActionSummaries();
+            assertEq((App,), keys all);
+            assertEq(("create-item", "deep", "list-items", "added"), keys all{App});
+            assertEq("a cached action", all{App}.deep.desc);
+            assertEq((), all{App}.deep.option_names);
+            assertEq("an added action", ProviderIndexUtil::tryGetActionSummary(App, "added").desc);
+            assertEq("hash<DataProviderIndexedActionSummaryInfo>",
+                ProviderIndexUtil::tryGetActionSummary(App, "added").fullType());
+            assertNothing(ProviderIndexUtil::tryGetActionSummariesForApp(OtherApp));
+            assertNothing(ProviderIndexUtil::tryGetActionMetadata(OtherApp, "ping"));
+            # the action added to the cache wins over the indexed action, restored or not
+            assertEq("a cached action", ProviderIndexUtil::tryGetActionMetadata(App, "deep").desc);
+            assertEq(("create-item", "deep", "list-items", "added"),
+                map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(App));
+        };
+        check();
+        # the edits survive a reload of the same index, and of an index read before
+        ProviderIndexUtil::reloadIndex();
+        check();
+        hash<auto> changed = getTestActions();
+        changed{App}."list-items".desc = "lists changed items";
+        writeTestIndex(changed);
+        assertTrue(ProviderIndexUtil::reloadIndex().reloaded);
+        check();
+        assertEq("lists changed items", ProviderIndexUtil::tryGetActionSummary(App, "list-items").desc);
+%endif
+    }
+
+    reloadTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        assertEq("creates an item", ProviderIndexUtil::tryGetActionSummary(App, "create-item").desc);
+        # restored on its own before the reload
+        assertEq("creates an item", ProviderIndexUtil::tryGetActionMetadata(App, "create-item").desc);
+
+        hash<auto> changed = getTestActions();
+        changed{App}."create-item".desc = "creates a changed item";
+        remove changed{App}."list-items";
+        changed{OtherApp}.pong = changed{OtherApp}.ping + {"action": "pong", "desc": "pongs"};
+        writeTestIndex(changed);
+        # the process uses the index it read until it is reloaded
+        assertEq("creates an item", ProviderIndexUtil::tryGetActionSummary(App, "create-item").desc);
+
+        hash<ProviderIndexReloadInfo> info = ProviderIndexUtil::reloadIndex();
+        assertTrue(info.reloaded);
+        assertEq((App, OtherApp), info.changed);
+        assertEq("creates a changed item", ProviderIndexUtil::tryGetActionSummary(App, "create-item").desc);
+        assertEq("creates a changed item", ProviderIndexUtil::tryGetActionMetadata(App, "create-item").desc);
+        assertNothing(ProviderIndexUtil::tryGetActionSummary(App, "list-items"));
+        assertEq(("ping", "pong"), keys ProviderIndexUtil::getAllActionSummaries(){OtherApp});
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    canonicalTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        hash<auto> expected = ProviderIndexUtil::getAllActionSummaries();
+        writeTestIndex(getTestActions(), True);
+        # only the canonical index file is left
+        unlink(dir + DirSep + "qore-routing-index.yaml");
+        map unlink($1), glob(dir + DirSep + "qore-data-index-*.msgpack");
+        resetIndexState();
+
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        # with an app already restored
+        resetIndexState();
+        assertEq(3, ProviderIndexUtil::tryGetActionMetadataForApp(App).size());
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    corruptSummaryFileTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        hash<auto> expected = ProviderIndexUtil::getAllActionSummaries();
+        string path = getSummaryFile(dir);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        # a file that does not match its digest
+        writeFile(path, "not a summary file");
+        resetIndexState();
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertRegex("PROVIDER-INDEX-ERROR.*action summaries.*does not match the size and digest",
+            ProviderIndexUtil::getIndexReadError() ?? "");
+
+        # a missing file
+        unlink(path);
+        resetIndexState();
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertRegex("PROVIDER-INDEX-ERROR.*action summaries.*FILE-OPEN2-ERROR",
+            ProviderIndexUtil::getIndexReadError() ?? "");
+
+        # a file that matches its digest but does not hold a hash
+        replaceSummaryFile(dir, compress(msgpack_pack(("not", "a", "hash"), MSGPACK_QORE_MODE)));
+        resetIndexState();
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertRegex("PROVIDER-INDEX-ERROR.*must hold a hash", ProviderIndexUtil::getIndexReadError() ?? "");
+
+        # a file whose summaries of an app are not a hash
+        replaceSummaryFile(dir, compress(msgpack_pack({App: "not a hash"}, MSGPACK_QORE_MODE)));
+        resetIndexState();
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertRegex("PROVIDER-INDEX-ERROR.*action summaries of app \"QoreTestSummaries\" must be a hash",
+            ProviderIndexUtil::getIndexReadError() ?? "");
+
+        # each error is logged
+        assertEq(4, log.getMessages("cannot read the action summaries").size());
+
+        # the original file is read again
+        replaceSummaryFile(dir, data);
+        resetIndexState();
+        assertEq(expected, ProviderIndexUtil::getAllActionSummaries());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        assertEq(4, log.getMessages("cannot read the action summaries").size());
+%endif
+    }
+
+    malformedSummaryTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        hash<auto> summaries = unpackSummaryFile(ReadOnlyFile::readBinaryFile(getSummaryFile(dir)));
+        summaries{App}.deep.input_data_types = "not a hash";
+        summaries{App}."list-items" = "not a hash";
+        replaceSummaryFile(dir, compress(msgpack_pack(summaries, MSGPACK_QORE_MODE)));
+        resetIndexState();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        assertEq(("create-item",), keys ProviderIndexUtil::getAllActionSummaries(){App});
+        assertEq(1, log.getMessages("Omitting the summary of action \"deep\" of app \"QoreTestSummaries\"").size());
+        assertEq(1, log.getMessages("Omitting the summary of action \"list-items\" of app \"QoreTestSummaries\".*"
+            "must be a hash").size());
+        # the actions themselves are read from their app's metadata
+        assertEq("a deep record", ProviderIndexUtil::tryGetActionMetadata(App, "deep").desc);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    publishedFilesTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<ProviderIndexInfo> info = writeTestIndex(getTestActions());
+        hash<auto> manifest = getManifest(dir);
+        assertEq(SummaryVersion, manifest.routing.metadata_cache_version);
+        assertEq(SummaryVersion, manifest.manifest.version);
+        string path = getSummaryFile(dir);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        assertEq(manifest.manifest.actions.size, data.size());
+        assertEq(manifest.manifest.actions.sha256, digest("sha256", data).toHex());
+
+        # the summaries are the serialized action-level members of each action
+        hash<auto> summaries = unpackSummaryFile(data);
+        assertEq((App, OtherApp), keys summaries);
+        hash<auto> create = getTestActions(){App}."create-item";
+        assertEq(make_yaml(create - NotInSummary + {"option_names": ("name", "record"), "has_expressions": True}),
+            make_yaml(summaries{App}."create-item"));
+
+        # the file is counted and verified with the published index
+        int size = hstat(dir + DirSep + "qore-routing-index.yaml").size + hstat(manifest.path).size + data.size()
+            + (foldl $1 + $2, (map hstat(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, $1.sha256)).size,
+                manifest.manifest.apps.iterator()));
+        assertEq(size, info.size);
+        assertEq(size, ProviderIndexUtil::readSerializedDataProviderIndex(dir).size);
+        assertEq(size, ProviderIndexUtil::getSerializedDataProviderIndexSource(dir).size);
+        writeFile(path, "not a summary file");
+        assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir), "an incomplete copy is not read");
+        assertNothing(ProviderIndexUtil::getSerializedDataProviderIndexSource(dir));
+        writeFile(path, data);
+
+        # the same index is written identically
+        writeTestIndex(getTestActions());
+        assertEq(path, getSummaryFile(dir));
+        # an index with other summaries references a new file, and the previous file is removed
+        hash<auto> changed = getTestActions();
+        changed{App}.deep.desc = "a changed record";
+        writeTestIndex(changed);
+        assertNeq(path, getSummaryFile(dir));
+        assertFalse(is_file(path), "the previous action summary file is removed");
+        # an index with no actions has an empty action summary file
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {}, "appmap": {}, "schememap": {}, "appinfomap": {App: {"name": App}},
+        }, (), *hash<auto> sub (string app) {}, 0s, {});
+        assertEq({}, unpackSummaryFile(ReadOnlyFile::readBinaryFile(getSummaryFile(dir))));
+        resetIndexState();
+        assertEq({}, ProviderIndexUtil::getAllActionSummaries());
+        assertNothing(ProviderIndexUtil::tryGetActionSummariesForApp(App));
+%endif
+    }
+
+    buildModeTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions());
+        assertEq(2, ProviderIndexUtil::getAllActionSummaries().size());
+        bool build_mode = ProviderIndexUtil::setBuildMode(True);
+        on_exit ProviderIndexUtil::setBuildMode(build_mode);
+        assertEq({}, ProviderIndexUtil::getAllActionSummaries());
+        assertNothing(ProviderIndexUtil::tryGetActionSummary(App, "deep"));
+%endif
+    }
+
+    concurrentTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<auto> actions = getTestActions();
+        writeTestIndex(actions);
+        list<hash<auto>> expected = ProviderIndexUtil::tryGetActionMetadataForApp(App);
+        hash<auto> expected_summaries = ProviderIndexUtil::getAllActionSummaries();
+        binary expected_data = msgpack_pack(expected, MSGPACK_QORE_MODE);
+
+        for (int round = 0; round < 20; ++round) {
+            resetIndexState();
+            Counter c();
+            Mutex m();
+            list<string> errors = ();
+            code record = sub (string err) {
+                AutoLock al(m);
+                push errors, err;
+            };
+            for (int i = 0; i < 8; ++i) {
+                c.inc();
+                background sub () {
+                    on_exit c.dec();
+                    try {
+                        switch (i % 4) {
+                            case 0:
+                                if (expected_summaries != ProviderIndexUtil::getAllActionSummaries()) {
+                                    record("summaries differ");
+                                }
+                                break;
+                            case 1:
+                                foreach hash<auto> action in (expected) {
+                                    if (msgpack_pack(action, MSGPACK_QORE_MODE) != msgpack_pack(
+                                            ProviderIndexUtil::tryGetActionMetadata(App, action.action),
+                                            MSGPACK_QORE_MODE)) {
+                                        record("action " + action.action + " differs");
+                                    }
+                                }
+                                break;
+                            case 2:
+                                if (expected_data != msgpack_pack(ProviderIndexUtil::tryGetActionMetadataForApp(App),
+                                        MSGPACK_QORE_MODE)) {
+                                    record("the app's actions differ");
+                                }
+                                break;
+                            default:
+                                if (msgpack_pack(expected[2], MSGPACK_QORE_MODE) != msgpack_pack(
+                                        ProviderIndexUtil::tryGetActionMetadata(App, expected[2].action),
+                                        MSGPACK_QORE_MODE)) {
+                                    record("the last action differs");
+                                }
+                                break;
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        record(get_exception_string(ex));
+                    }
+                }();
+            }
+            c.waitForZero();
+            assertEq((), errors, "round " + round);
+            assertEq(expected_data, msgpack_pack(ProviderIndexUtil::tryGetActionMetadataForApp(App),
+                MSGPACK_QORE_MODE));
+        }
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    #! Returns the actions of the test apps, in the serialized form stored in the index
+    private static hash<auto> getTestActions() {
+        hash<auto> record_type = getLevel(1, {"a": getField("a", 1, getLevel(0, {"v": getField("v", 0,
+            leafType())})), "b": getField("b", 1, leafType())});
+        return {
+            App: {
+                "create-item": {
+                    "app": App,
+                    "action": "create-item",
+                    "path": "/items/{id}",
+                    "display_name": "Create Item",
+                    "short_desc": "creates an item",
+                    "desc": "creates an item",
+                    "action_code": DPAT_CREATE,
+                    "groups": ("items",),
+                    "metadata": {"alert_delivery_capable": True},
+                    "path_vars": {"id": {"display_name": "ID", "short_desc": "the item ID", "desc": "the item ID"}},
+                    "input_data_types": {"hash": True},
+                    "output_data_type": "hash",
+                    "options": {
+                        "name": {"display_name": "name", "short_desc": "the name", "desc": "the name",
+                            "type_info": leafType()},
+                        "record": {"display_name": "record", "short_desc": "the record", "desc": "the record",
+                            "type_info": record_type},
+                    },
+                    "data_provider_info": getDataProviderInfo(),
+                },
+                "deep": {
+                    "app": App,
+                    "action": "deep",
+                    "desc": "a deep record",
+                    "options": {"record": {"display_name": "record", "type_info": record_type}},
+                },
+                "list-items": {
+                    "app": App,
+                    "action": "list-items",
+                    "desc": "lists items",
+                    "action_code": DPAT_FIND,
+                },
+            },
+            OtherApp: {
+                "ping": {
+                    "app": OtherApp,
+                    "action": "ping",
+                    "desc": "pings",
+                    "options": {"text": {"display_name": "text", "type_info": leafType()}},
+                },
+            },
+        };
+    }
+
+    #! Returns data provider info with an expression, in the serialized form stored in the index
+    private static hash<auto> getDataProviderInfo() {
+        return {
+            "name": "items",
+            "type": "ItemsDataProvider",
+            "expressions": {
+                "len": {
+                    "type": DET_Operator,
+                    "name": "len",
+                    "display_name": "length",
+                    "short_desc": "the length",
+                    "desc": "the length",
+                    "symbol": "len",
+                    "args": (),
+                    "return_type": "int",
+                },
+            },
+        };
+    }
+
+    #! Returns the description of a level of a record type
+    private static hash<auto> getLevel(int level, hash<auto> fields) {
+        return {
+            "name": "L" + level,
+            "display_name": "level " + level,
+            "short_desc": "level " + level,
+            "desc": "level " + level,
+            "base_type": "hash",
+            "mandatory": True,
+            "types_accepted": ("hash",),
+            "types_returned": ("hash",),
+            "fields": fields,
+            "unique_key": "L" + level,
+            "recursive": False,
+        };
+    }
+
+    #! Returns the description of a field; if no type is given, its type is the position of the next lower level
+    private static hash<auto> getField(string name, int level, auto type = NOTHING) {
+        if (!exists type) {
+            type = level;
+        }
+        return {
+            "name": name,
+            "display_name": name,
+            "desc": sprintf("field %s of level %d", name, level),
+            "type": type,
+            "unique_key": name + level,
+        };
+    }
+
+    #! Returns the description of the string type
+    private static hash<auto> leafType() {
+        return {
+            "name": "string",
+            "display_name": "string",
+            "short_desc": "a string",
+            "desc": "a string",
+            "base_type": "string",
+            "mandatory": True,
+            "types_accepted": ("string",),
+            "types_returned": ("string",),
+            "unique_key": "string",
+            "recursive": False,
+        };
+    }
+
+    #! Returns an action whose option refers to the given position of the type table of its chunk
+    private static hash<auto> getPositionAction(string app, string name, int pos) {
+        return {"app": app, "action": name, "desc": "a record",
+            "options": {"record": {"display_name": "record", "type_info": pos}}};
+    }
+
+    #! Returns a chunk of the given app with the given actions and type description tables
+    private static binary packChunk(string app, hash<auto> actions, list<hash<auto>> types,
+            list<hash<auto>> fields) {
+        return compress(msgpack_pack({"index": {
+            "factorymap": {}, "appmap": {}, "schememap": {},
+            "appinfomap": {app: {"name": app}},
+            "actioninfomap": {app: actions},
+            "top_actioninfomap": {},
+        }, "types": types, "fields": fields}, MSGPACK_QORE_MODE));
+    }
+
+    #! Returns the routing index and manifest of the published index in the given directory, with its path
+    private static hash<auto> getManifest(string dir) {
+        hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+        string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
+        return {
+            "routing": routing,
+            "path": path,
+            "manifest": msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE),
+        };
+    }
+
+    #! Returns the path of the action summary file of the published index in the given directory
+    private static string getSummaryFile(string dir) {
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, getManifest(dir).manifest.actions.sha256);
+    }
+
+    #! Returns the serialized action summaries in the given action summary file contents
+    private static hash<auto> unpackSummaryFile(binary data) {
+        return msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE);
+    }
+
+    #! Replaces the chunk of the given app in the published index in the given directory
+    /** The app's action summaries are replaced with those of the chunk's actions, if the index records them
+    */
+    private static replaceChunk(string dir, string app, binary data) {
+        hash<auto> info = getManifest(dir);
+        string sha256 = digest("sha256", data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256), data);
+        info.manifest.apps{app}.size = data.size();
+        info.manifest.apps{app}.sha256 = sha256;
+        if (info.manifest.actions) {
+            hash<auto> summaries = unpackSummaryFile(ReadOnlyFile::readBinaryFile(getSummaryFile(dir)));
+            hash<auto> actions = msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE).index.actioninfomap{app};
+            summaries{app} = map {$1.key: $1.value - NotInSummary + {
+                "option_names": (keys $1.value.options) ?? (),
+                "has_expressions": False,
+            }}, actions.pairIterator();
+            binary summary_data = compress(msgpack_pack(summaries, MSGPACK_QORE_MODE));
+            string summary_sha256 = digest("sha256", summary_data).toHex();
+            writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, summary_sha256), summary_data);
+            info.manifest.actions = {"size": summary_data.size(), "sha256": summary_sha256};
+        }
+        writeManifest(dir, info.routing, info.manifest);
+    }
+
+    #! Replaces the action summary file of the published index in the given directory
+    private static replaceSummaryFile(string dir, binary data) {
+        hash<auto> info = getManifest(dir);
+        string sha256 = digest("sha256", data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256), data);
+        info.manifest.actions = {"size": data.size(), "sha256": sha256};
+        writeManifest(dir, info.routing, info.manifest);
+    }
+
+    #! Makes the published index in the given directory an index of metadata cache version 7
+    private static makeVersion7(string dir) {
+        hash<auto> info = getManifest(dir);
+        unlink(getSummaryFile(dir));
+        remove info.manifest.actions;
+        info.manifest.version = 7;
+        info.routing.metadata_cache_version = 7;
+        writeManifest(dir, info.routing, info.manifest);
+    }
+
+    #! Publishes the given manifest with a routing index that references it
+    private static writeManifest(string dir, hash<auto> routing, hash<auto> manifest) {
+        binary manifest_data = msgpack_pack(manifest, MSGPACK_QORE_MODE);
+        string manifest_sha256 = digest("sha256", manifest_data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256), manifest_data);
+        routing.metadata_cache_sha256 = manifest_sha256;
+        # the members of the checksum payload, in its order
+        hash<auto> payload = routing{"factorymap", "appmap", "schememap", "version"};
+        foreach string key in (("data_sha256", "data_size", "canonical_yaml", "metadata_cache_version",
+                "metadata_cache_sha256", "altmap")) {
+            if (exists routing{key}) {
+                payload{key} = routing{key};
+            }
+        }
+        routing.routing_sha256 = digest("sha256", make_yaml(payload, BlockStyle)).toHex();
+        writeFile(dir + DirSep + "qore-routing-index.yaml", make_yaml(routing, BlockStyle));
+    }
+
+    #! Publishes an index of the test apps with the given actions
+    private static hash<ProviderIndexInfo> writeTestIndex(hash<auto> actions, *bool canonical) {
+        return ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {},
+            "appmap": (map {$1: {"QoreTestModule": True}}, keys actions),
+            "schememap": {},
+            "appinfomap": (map {$1: {"name": $1}}, keys actions),
+        }, keys actions, *hash<auto> sub (string app) { return actions{app}; }, 0s, {}, canonical);
+    }
+
+    #! Captures the messages logged by the module; the caller restores the global logger
+    private static LogCapture captureLog() {
+        LogCapture log();
+        Logger logger("provider-index-action-summaries-test", LoggerLevel::LevelAll);
+        logger.addAppender(log);
+        ProviderIndexUtil::setGlobalLogger(logger);
+        return log;
+    }
+
+    #! Makes the given directory the index directory; returns code that restores the previous directory
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            # no later test case reads this index
+            resetIndexState();
+        };
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    private static writeFile(string path, data contents) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
+    }
+}
+
+#! Captures the messages logged by the module
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+
+    #! Returns the messages matching the given regular expression
+    list<string> getMessages(string pattern) {
+        AutoLock al(mtx);
+        return (map $1, messages, regex($1, pattern)) ?? ();
+    }
+}

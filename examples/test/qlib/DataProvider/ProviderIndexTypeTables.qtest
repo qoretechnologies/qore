@@ -38,6 +38,9 @@ public class ProviderIndexTypeTablesTest inherits QUnit::Test {
         #! The metadata cache format version that stores type descriptions in tables
         const TypeTableVersion = 7;
 
+        #! The metadata cache format version written
+        const CacheVersion = 8;
+
         #! The app of the test index
         const App = "QoreTestTypes";
     }
@@ -385,7 +388,7 @@ public class ProviderIndexTypeTablesTest inherits QUnit::Test {
     #! Returns the manifest of the published index in the given directory, with its path
     private static hash<auto> getManifest(string dir) {
         hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
-        assertEqStatic(TypeTableVersion, routing.metadata_cache_version);
+        assertEqStatic(CacheVersion, routing.metadata_cache_version);
         string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
         return {
             "routing": routing,
@@ -404,7 +407,7 @@ public class ProviderIndexTypeTablesTest inherits QUnit::Test {
     #! Returns the unpacked chunk of the test app in the given directory
     private static hash<auto> readChunk(string dir) {
         hash<auto> manifest = getManifest(dir).manifest;
-        assertEqStatic(TypeTableVersion, manifest.version);
+        assertEqStatic(CacheVersion, manifest.version);
         string path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.apps{App}.sha256);
         return msgpack_unpack(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)), MSGPACK_QORE_MODE);
     }

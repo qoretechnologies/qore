@@ -82,6 +82,26 @@ if (!info.reloaded) {
     returns for a published index, so a process can check whether the index has been published again since it read
     it.
 
+    @section providerindexutil_summaries Listing and Selecting Indexed Actions
+
+    Restoring an indexed action restores the descriptions of its option types and of its data provider info, which
+    for large record types is most of the cost of reading the index.  The action summaries hold the action-level
+    fields of every indexed action (\c DataProvider::DataProviderIndexedActionSummaryInfo: names, descriptions,
+    codes, groups, metadata, path variables, the names of its options, and whether it declares expressions); they are
+    read from one file of the index when first needed, without reading the metadata of any app, so actions can be
+    listed and selected with them, and only the selected actions restored:
+
+    @code{.py}
+# only the actions marked for alert delivery are restored
+list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $1.action),
+    ProviderIndexUtil::selectActionSummaries(bool sub (hash<auto> action) {
+        return action.metadata.alert_delivery_capable ?? False;
+    });
+    @endcode
+
+    @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()"
+    restores only the given action, and of the type descriptions of its app only those that it refers to.
+
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
@@ -127,10 +147,12 @@ if (!info.reloaded) {
       and the factory modules are then loaded to get it; each distinct option type description and field
       description of an app is stored once in the app's metadata, and descriptions refer to the descriptions nested in
       them, so the descriptions of record types that refer to each other, which repeat the same nested descriptions
-      many times, are read and restored in time and memory in proportion to their distinct descriptions; indexes
-      written with metadata cache versions 4 to 6 are still read, those written with versions 4 and 5 without factory
-      info; earlier versions of this module cannot read an index written in format 6 or 7, and an index must be
-      recreated after upgrading to record the factory info and to store each type description once
+      many times, are read and restored in time and memory in proportion to their distinct descriptions; the action
+      summaries of every app are in a file of their own (format version 8, see @ref providerindexutil_summaries);
+      indexes written with metadata cache versions 4 to 7 are still read, those written with versions 4 and 5
+      without factory info; earlier versions of this module cannot read an index written in format 6 or later, and
+      an index must be recreated after upgrading to record the factory info, to store each type description once,
+      and to record the action summaries
     - errors reading the routing index or the metadata cache are reported by
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()";
       the canonical index file is only read if there is one, and an app whose metadata cannot be read is
@@ -174,6 +196,14 @@ if (!info.reloaded) {
       \c DataProvider::IndexedDataProviderInfo data provider info; an indexed action has no objects, so it can be
       serialized, reading it never loads the provider modules that implement an app, and output types are not
       indexed
+    - added action summaries, the action-level fields of the indexed actions, which list and select actions without
+      reading the metadata of any app or restoring any type
+      (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionSummariesForApp() "ProviderIndexUtil::tryGetActionSummariesForApp()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionSummary() "ProviderIndexUtil::tryGetActionSummary()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::getAllActionSummaries() "ProviderIndexUtil::getAllActionSummaries()",
+      and @ref ProviderIndexUtil::ProviderIndexUtil::selectActionSummaries() "ProviderIndexUtil::selectActionSummaries()";
+      see @ref providerindexutil_summaries); the action searches match the summaries and restore only the actions
+      that match, and removing an app from the cache no longer restores its actions
     - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
       and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()";
       they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which returned

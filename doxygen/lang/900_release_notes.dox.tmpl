@@ -328,6 +328,12 @@
     whose modules have been loaded.  Indexes published by earlier versions are still read, and factory modules are
     then loaded to get their info; earlier versions of the @ref providerindexutilintro "ProviderIndexUtil" module
     cannot read an index published by this version, so rebuild the index after upgrading.
+
+    A data provider index also records the action-level fields of every indexed action in a file of its own
+    (metadata cache version 8), so that actions can be listed and selected in a fraction of a second without
+    restoring their option and data provider types, which took several seconds and hundreds of megabytes for a
+    large index; see @ref providerindexutil_summaries.  Indexes published by earlier versions are still read, and
+    their action summaries are then read from the metadata of each app; rebuild the index after upgrading.
     @endparblock
 
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
@@ -4219,6 +4225,8 @@ while (*binary chunk = input.read(65536)) {
         @ref DataProvider::IndexedDataProviderInfo "IndexedDataProviderInfo" for actions from the data provider
         index, whose option and data provider info types are described by plain data, so an indexed action can be
         serialized
+      - added @ref DataProvider::DataProviderIndexedActionSummaryInfo "DataProviderIndexedActionSummaryInfo", the
+        action-level record of an action from the data provider index
       - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
         restores types from their descriptions more faithfully, including class-backed named types in unions,
         hash types without fields, options of "or nothing" types, and union type descriptions
@@ -4284,6 +4292,13 @@ while (*binary chunk = input.read(65536)) {
         hashes; they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which
         restored action types from the index, which loaded the provider modules that define them and could take
         minutes for a large index
+      - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionSummariesForApp() "ProviderIndexUtil::tryGetActionSummariesForApp()",
+        @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionSummary() "ProviderIndexUtil::tryGetActionSummary()",
+        @ref ProviderIndexUtil::ProviderIndexUtil::getAllActionSummaries() "ProviderIndexUtil::getAllActionSummaries()",
+        and @ref ProviderIndexUtil::ProviderIndexUtil::selectActionSummaries() "ProviderIndexUtil::selectActionSummaries()",
+        which list and select indexed actions by their action-level fields without restoring any type;
+        @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()"
+        restores only the given action, and the action searches only the matching actions
       - an action whose metadata cannot be read is logged and omitted; previously the whole app's actions were
         returned with serialized \c binary values in place of type objects, causing runtime type errors in callers
       - fixed a complete load of a deferred index bringing back metadata for apps that had already been loaded,

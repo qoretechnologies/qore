@@ -71,10 +71,20 @@ const RoutingIndexVersion = 4;
 #! Version 5 names each metadata cache file after the digest of its contents, so that publishing an index never
 #! changes a file that the previous index references; version 6 records the info of the indexed data provider
 #! factories in a file of its own that the manifest references; version 7 stores each distinct option type
-#! description and field description of an app once, in tables of its chunk that the descriptions refer to by position
-const MetadataCacheVersion = 7;
+#! description and field description of an app once, in tables of its chunk that the descriptions refer to by position;
+#! version 8 records the action-level record of every action in a file of its own that the manifest references
+const MetadataCacheVersion = 8;
 #! The first metadata cache version whose chunks store the type descriptions of an app in tables
 const MetadataCacheTypeTableVersion = 7;
+#! The first metadata cache version that records the action summaries in a file of their own
+const MetadataCacheActionSummaryVersion = 8;
+
+#! The members of a serialized action that are not in its action summary
+/** The options and the data provider info hold the type descriptions of the action; the others are not indexed, or
+    only by earlier versions, or are internal to the module
+*/
+const ActionSummaryExcludedKeys = ("options", "data_provider_info", "output_type", "get_output_type",
+    "get_dynamic_options", IndexedTypeTableKey);
 
 #! The key of a restored chunk's action that holds the chunk's type description tables until the action is restored
 /** The key is removed when the action is restored, so it is never visible outside of the module
@@ -196,6 +206,7 @@ hashdecl MetadataDeserializeContext {
     TypedHash app_info_th;
     TypedHash conn_opt_th;
     TypedHash action_info_th;
+    TypedHash action_summary_th;
     TypedHash option_info_th;
     TypedHash type_info_th;
     TypedHash field_info_th;
@@ -257,6 +268,9 @@ hashdecl DataProviderMetadataCacheManifest {
     # DataProviderMetadataCacheChunkInfo; not set if the index does not record it; a nested hashdecl member is not
     # converted when the unpacked manifest is cast
     *hash<auto> factories;
+    # the size and digest of the file holding the action summaries of every app (version 8), with the members of
+    # DataProviderMetadataCacheChunkInfo; not set if the index does not record them
+    *hash<auto> actions;
 }
 
 #! A published index's routing index and metadata cache manifest, verified
@@ -445,6 +459,25 @@ public class ProviderIndexUtil {
 
         #! Apps removed from the cache by the process, whose indexed metadata stays hidden when the index is reloaded
         static hash<string, bool> removed_apps;
+
+        #! The action summaries of the indexed actions, by app and action; read when they are first needed
+        /** Actions added to the cache by the process and apps removed from it are applied when the summaries are
+            returned
+        */
+        static hash<string, hash<string, hash<auto>>> action_summaries = {};
+
+        #! Set when the action summaries of the index in use have been read
+        static bool action_summaries_loaded;
+
+        #! The action summaries of the actions added to the cache by the process, kept when the index is reloaded
+        static hash<string, hash<string, hash<auto>>> live_action_summaries = {};
+
+        #! The indexed actions of each app that have been restored on their own, or that could not be restored
+        /** Their serialized form stays in \c raw_actioninfomap until all the actions of their app are restored, so
+            that the order of the app's actions is kept, and because the actions of an app share its type
+            description tables
+        */
+        static hash<string, hash<string, bool>> action_restored = {};
     }
 
     #! Enters or leaves index build mode
@@ -583,6 +616,10 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         live_appinfomap = {};
         live_actioninfomap = {};
         removed_apps = {};
+        action_summaries = {};
+        action_summaries_loaded = False;
+        live_action_summaries = {};
+        action_restored = {};
         ++index_generation;
     }
 
@@ -607,6 +644,9 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         apps_loaded = False;
         index_sha256 = state.sha256;
         canonical_apps = state.canonical_apps;
+        action_summaries = {};
+        action_summaries_loaded = False;
+        action_restored = {};
         initialized = True;
         ++index_generation;
 
@@ -1184,23 +1224,203 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     }
 
     #! Returns the given indexed action
-    /** @param app the app name
+    /** Only this action is restored: the other actions of its app are not, and of the type descriptions of the app,
+        only those that the action refers to are restored.  Descriptions shared with the app's other actions are
+        restored once, when they are first needed.
+
+        @param app the app name
         @param action the action name
 
         @return the action as a \c DataProvider::DataProviderIndexedActionInfo hash; @ref nothing if the action is
-        not indexed
+        not indexed, or if its metadata cannot be read, in which case the error is logged once
 
         @par Example:
         @code{.py}
 *hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("OpenSearch", "search-index");
         @endcode
 
-        @see tryGetActionMetadataForApp() for how option types are described
+        @see
+        - tryGetActionMetadataForApp() for how option types are described
+        - tryGetActionSummary() for the action-level fields of an action, which restores no type
 
         @since ProviderIndexUtil 1.2
     */
     static *hash<auto> tryGetActionMetadata(string app, string action) {
-        return getAppActions(app){action};
+        return getConsistent(sub () { checkSingleActionMetadata(app, action); },
+            auto sub () { return index.actioninfomap{app}{action}; });
+    }
+
+    #! Returns the action summaries of the given app
+    /** An action summary holds the action-level fields of an indexed action (its names, descriptions, codes, groups,
+        metadata, and path variables), the names of its options, and whether its data provider info declares
+        expressions, but not its options or data provider info, so no type description is read or restored: the
+        summaries of every app are read from one file of the index when they are first needed, and the metadata of
+        the apps is not read.  Actions can be listed and selected with their summaries, and only the selected actions
+        restored with @ref tryGetActionMetadata().
+
+        Actions added to the cache with @ref addActionToCache() replace or add to the indexed actions, and the actions
+        of apps removed with @ref removeCachedApp() are not returned, as for the other action lookups.
+
+        @param app the app name
+
+        @return the app's action summaries as \c DataProvider::DataProviderIndexedActionSummaryInfo hashes, in index
+        order; @ref nothing if the app has no indexed or cached actions
+
+        @par Example:
+        @code{.py}
+# restore only the actions that send messages
+list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $1.action),
+    ProviderIndexUtil::tryGetActionSummariesForApp("Slack") ?? (), $1.action_code == DPAT_SEND_MESSAGE;
+        @endcode
+
+        @note An index published before action summaries were recorded (ProviderIndexUtil 1.2 metadata cache
+        versions 4 to 7) has its summaries read from the metadata of each of its apps, still without restoring any
+        type; this is logged once, since recreating the index makes it faster
+
+        @note An action whose metadata cannot be restored can have a summary; @ref tryGetActionMetadata() then
+        returns @ref nothing for it
+
+        @see
+        - tryGetActionSummary()
+        - getAllActionSummaries()
+        - selectActionSummaries()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *list<hash<auto>> tryGetActionSummariesForApp(string app) {
+        *hash<string, hash<auto>> actions = getActionSummaries(app){app};
+        return actions ? actions.values() : NOTHING;
+    }
+
+    #! Returns the action summary of the given action
+    /** @param app the app name
+        @param action the action name
+
+        @return the action summary as a \c DataProvider::DataProviderIndexedActionSummaryInfo hash; @ref nothing if
+        the action is not indexed or cached
+
+        @par Example:
+        @code{.py}
+*hash<auto> summary = ProviderIndexUtil::tryGetActionSummary("OpenSearch", "search-index");
+        @endcode
+
+        @see tryGetActionSummariesForApp() for what an action summary holds
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<auto> tryGetActionSummary(string app, string action) {
+        return getActionSummaries(app){app}{action};
+    }
+
+    #! Returns the action summaries of all apps
+    /** @return the action summaries as \c DataProvider::DataProviderIndexedActionSummaryInfo hashes keyed by app,
+        then by action, in index order; apps with no actions are not included
+
+        @par Example:
+        @code{.py}
+int count = foldl $1 + $2, (map $1.size(), ProviderIndexUtil::getAllActionSummaries().iterator()) ?? 0;
+        @endcode
+
+        @see tryGetActionSummariesForApp() for what an action summary holds
+
+        @since ProviderIndexUtil 1.2
+    */
+    static hash<string, hash<string, hash<auto>>> getAllActionSummaries() {
+        return getActionSummaries();
+    }
+
+    #! Returns the action summaries selected by the given code
+    /** @param selector called with each action summary; the summaries for which it returns @ref True are returned
+        @param app if given, only the summaries of this app are passed to @a selector
+
+        @return the selected action summaries as \c DataProvider::DataProviderIndexedActionSummaryInfo hashes, in
+        index order
+
+        @par Example:
+        @code{.py}
+# restore only the actions marked for alert delivery
+list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $1.action),
+    ProviderIndexUtil::selectActionSummaries(bool sub (hash<auto> action) {
+        return action.metadata.alert_delivery_capable ?? False;
+    });
+        @endcode
+
+        @note an exception thrown by @a selector propagates
+
+        @see tryGetActionSummariesForApp() for what an action summary holds
+
+        @since ProviderIndexUtil 1.2
+    */
+    static list<hash<auto>> selectActionSummaries(code<bool(hash<auto>)> selector, *string app) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> app_actions in (getActionSummaries(app).iterator()) {
+            foreach hash<auto> action in (app_actions.iterator()) {
+                if (selector(action)) {
+                    push rv, action;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the action summaries of all apps, or of the given app, keyed by app, then by action
+    static private hash<string, hash<string, hash<auto>>> getActionSummaries(*string app) {
+        return getConsistent(\ProviderIndexUtil::checkActionSummaries(),
+            auto sub () { return getActionSummariesIntern(app); });
+    }
+
+    #! Returns the action summaries of all apps, or of the given app, with the cache edits applied
+    /** Must be called with the lock held
+    */
+    static private hash<string, hash<string, hash<auto>>> getActionSummariesIntern(*string app) {
+        hash<string, hash<string, hash<auto>>> rv = {};
+        list<string> apps = exists app ? (app,) : keys (action_summaries + live_action_summaries);
+        foreach string name in (apps) {
+            hash<string, hash<auto>> actions = {};
+            # a removed app's indexed actions stay hidden
+            if (!removed_apps{name} && action_summaries{name}) {
+                actions = action_summaries{name};
+            }
+            if (live_action_summaries{name}) {
+                actions += live_action_summaries{name};
+            }
+            if (actions) {
+                rv{name} = actions;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the actions matching the given action summary code, restored, from one index state
+    /** @param app if given, only the actions of this app are matched
+        @param match called with each action summary
+
+        @return the matching actions, restored; @ref nothing if there are no actions to match; an action whose metadata
+        cannot be read is left out
+    */
+    static private *list<hash<auto>> searchActions(*string app, code<bool(hash<auto>)> match) {
+        while (True) {
+            int gen = index_generation;
+            hash<string, hash<string, hash<auto>>> summaries = getActionSummaries(app);
+            if (!summaries) {
+                return;
+            }
+            list<hash<auto>> rv = ();
+            foreach hash<auto> app_actions in (summaries.iterator()) {
+                foreach hash<auto> summary in (app_actions.iterator()) {
+                    if (!match(summary)) {
+                        continue;
+                    }
+                    if (*hash<auto> action = tryGetActionMetadata(summary.app, summary.action)) {
+                        push rv, action;
+                    }
+                }
+            }
+            # the actions of two indexes are never mixed
+            if (gen == index_generation) {
+                return rv;
+            }
+        }
     }
 
     #! Searches for cached application actions whose descriptions match a regular expression pattern
@@ -1215,8 +1435,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     */
     static *list<hash<auto>> searchCachedAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        return map $1, getAppActions(app).values(),
-            regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
+        return searchActions(app, getRegexMatch(regex_pattern, regex_options));
     }
 
     #! Searches for cached application actions whose descriptions match a substring
@@ -1230,14 +1449,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         @note If the application is not cached, no results are returned
     */
     static *list<hash<auto>> searchCachedAppActionSubstr(string app, string substr, bool ignore_case = True) {
-        *hash<string, hash<auto>> actions = getAppActions(app);
-        if (ignore_case) {
-            substr = substr.upr();
-            return map $1, actions.values(),
-                (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
-        }
-        return map $1, actions.values(),
-            (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
+        return searchActions(app, getSubstrMatch(substr, ignore_case));
     }
 
     #! Searches for cached actions whose descriptions match a regular expression pattern
@@ -1248,8 +1460,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     */
     static *list<hash<auto>> searchCachedActionRegex(string regex_pattern,
             int regex_options = RE_Caseless) {
-        return map $1, getAllActions().values(),
-            regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
+        return searchActions(NOTHING, getRegexMatch(regex_pattern, regex_options));
     }
 
     #! Searches for cached actions whose descriptions match a substring
@@ -1259,14 +1470,29 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         @return All cached actions that match the substring argument in the \c short_desc or \c desc fields
     */
     static *list<hash<auto>> searchCachedActionSubstr(string substr, bool ignore_case = True) {
-        *hash<string, hash<auto>> actions = getAllActions();
+        return searchActions(NOTHING, getSubstrMatch(substr, ignore_case));
+    }
+
+    #! Returns code that matches actions whose descriptions match the given regular expression
+    static private code<bool(hash<auto>)> getRegexMatch(string regex_pattern, int regex_options) {
+        return bool sub (hash<auto> action) {
+            return regex(action.short_desc ?? "", regex_pattern, regex_options)
+                || regex(action.desc ?? "", regex_pattern, regex_options);
+        };
+    }
+
+    #! Returns code that matches actions whose descriptions contain the given substring
+    static private code<bool(hash<auto>)> getSubstrMatch(string substr, bool ignore_case) {
         if (ignore_case) {
             substr = substr.upr();
-            return map $1, actions.values(),
-                (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
+            return bool sub (hash<auto> action) {
+                return ((action.short_desc ?? "").upr().find(substr) >= 0)
+                    || ((action.desc ?? "").upr().find(substr) >= 0);
+            };
         }
-        return map $1, actions.values(),
-            (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
+        return bool sub (hash<auto> action) {
+            return ((action.short_desc ?? "").find(substr) >= 0) || ((action.desc ?? "").find(substr) >= 0);
+        };
     }
 
     #! Returns all cached actions
@@ -1316,6 +1542,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
                 "provider index is initializing", action.action, action.app);
         }
         action = getIndexedAction(action, metadata_context);
+        hash<auto> summary = castActionSummary(getSerializedActionSummary(action), metadata_context);
         while (True) {
             int gen = index_generation;
             checkAppMetadata(action.app);
@@ -1337,6 +1564,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             remove raw_actioninfomap{action.app}{action.action};
             action_metadata_initialized{action.app} = True;
             live_actioninfomap{action.app}{action.action} = action;
+            live_action_summaries{action.app}{action.action} = summary;
             return;
         }
     }
@@ -1352,10 +1580,14 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     static bool removeCachedApp(string app) {
         while (True) {
             int gen = index_generation;
+            # the app's actions are not restored: they are discarded
             checkAppMetadata(app);
-            checkActionMetadata(app);
             m.lock();
             on_exit m.unlock();
+            # actions of the app being restored in another thread would be added after they are removed
+            while (exists action_metadata_initializing{app} && action_metadata_initializing{app} != gettid()) {
+                metadata_init_cond.wait(m);
+            }
             # the index was replaced after the app's metadata was checked
             if (gen != index_generation) {
                 continue;
@@ -1365,9 +1597,13 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             }
             map remove index.top_actioninfomap{app + "/" + $1}, keys (remove index.actioninfomap{app});
             remove raw_actioninfomap{app};
+            remove action_restored{app};
+            # the app's indexed actions are never read again
+            action_metadata_initialized{app} = True;
             remove index.altmap{app};
             remove live_appinfomap{app};
             remove live_actioninfomap{app};
+            remove live_action_summaries{app};
             removed_apps{app} = True;
             return True;
         }
@@ -1717,6 +1953,8 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         }
 
         hash<string, hash<auto>> raw_actions;
+        # the actions restored on their own
+        *hash<string, bool> restored;
         {
             m.lock();
             on_exit m.unlock();
@@ -1736,11 +1974,13 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             }
             action_metadata_initializing{app} = gettid();
             raw_actions = raw_actioninfomap{app};
+            restored = action_restored{app};
         }
 
         hash<auto> action_map;
         try {
-            action_map = deserializeActionsWithContext({app: raw_actions}, metadata_context);
+            action_map = deserializeActionsWithContext({app: getUnrestoredActions(raw_actions, restored)},
+                metadata_context);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Ignoring error deserializing actions for app %y from the data provider "
                 "index: %s", app, get_exception_string(ex));
@@ -1748,9 +1988,106 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         m.lock();
         on_exit m.unlock();
-        mergeIndexedActions(app, action_map{app});
+        mergeIndexedActions(app, getRestoredAppActions(app, raw_actions, action_map{app}));
         remove raw_actioninfomap{app};
+        remove action_restored{app};
         action_metadata_initialized{app} = True;
+        remove action_metadata_initializing{app};
+        metadata_init_cond.broadcast();
+    }
+
+    #! Returns the serialized actions of an app that have not been restored on their own
+    /** @param raw_actions the app's serialized actions
+        @param restored the app's actions restored on their own, or that could not be restored
+    */
+    static private hash<string, hash<auto>> getUnrestoredActions(hash<string, hash<auto>> raw_actions,
+            *hash<string, bool> restored) {
+        if (!restored) {
+            return raw_actions;
+        }
+        return (map {$1.key: $1.value}, raw_actions.pairIterator(), !restored{$1.key}) ?? {};
+    }
+
+    #! Returns the restored actions of an app in index order; must be called with the lock held
+    /** @param app the app name
+        @param raw_actions the app's serialized actions, in index order
+        @param restored the actions just restored
+
+        @return the actions just restored and those restored on their own before, in index order; an action that
+        could not be restored is left out
+    */
+    static private hash<auto> getRestoredAppActions(string app, hash<string, hash<auto>> raw_actions,
+            *hash<auto> restored) {
+        if (!action_restored{app}) {
+            return restored ?? {};
+        }
+        hash<auto> rv = {};
+        foreach string action in (keys raw_actions) {
+            if (exists restored{action}) {
+                rv{action} = restored{action};
+            } else if (action_restored{app}{action} && exists index.actioninfomap{app}{action}) {
+                rv{action} = index.actioninfomap{app}{action};
+            }
+        }
+        return rv;
+    }
+
+    #! Ensures that the given indexed action has been restored, without restoring the other actions of its app
+    /** Only the type descriptions that the action refers to are restored; the descriptions shared with other actions
+        of the app are restored once, when first needed by any of them.  An action that cannot be restored is logged
+        once and left out, as when all the actions of its app are restored.
+
+        @param app the app name
+        @param action the action name
+    */
+    static private checkSingleActionMetadata(string app, string action) {
+        int gen = index_generation;
+        checkRawMetadataIndex(app);
+        if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
+            return;
+        }
+
+        hash<auto> raw_action;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (exists action_metadata_initializing{app} && action_metadata_initializing{app} != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+            # the index was replaced after its raw metadata was loaded; the caller checks the replacement
+            if (gen != index_generation) {
+                return;
+            }
+            if (action_metadata_initialized{app} || exists action_metadata_initializing{app}) {
+                return;
+            }
+            if (!exists raw_actioninfomap{app}) {
+                action_metadata_initialized{app} = True;
+                return;
+            }
+            if (!exists raw_actioninfomap{app}{action} || action_restored{app}{action}) {
+                return;
+            }
+            action_metadata_initializing{app} = gettid();
+            raw_action = raw_actioninfomap{app}{action};
+        }
+
+        *hash<auto> restored;
+        try {
+            restored = getIndexedAction(raw_action, metadata_context, True);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index metadata; it "
+                "cannot be read: %s: %s", action, app, ex.err, ex.desc);
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        # an action added to the cache by the process wins over the indexed action with the same name
+        if (restored && !exists index.actioninfomap{app}{action}) {
+            index.actioninfomap{app}{action} = restored;
+            index.top_actioninfomap{app + "/" + action} = restored;
+        }
+        action_restored{app}{action} = True;
         remove action_metadata_initializing{app};
         metadata_init_cond.broadcast();
     }
@@ -1818,6 +2155,8 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         hash<string, hash<string, hash<auto>>> raw_actions;
         list<string> apps;
+        # the actions restored on their own
+        hash<string, hash<string, bool>> restored;
         {
             m.lock();
             on_exit m.unlock();
@@ -1838,11 +2177,14 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
             int tid = gettid();
             map action_metadata_initializing{$1} = tid, apps.iterator();
             raw_actions = map {$1: raw_actioninfomap{$1}}, apps.iterator();
+            restored = action_restored;
         }
 
         hash<auto> action_map;
         try {
-            action_map = deserializeActionsWithContext(raw_actions, metadata_context);
+            action_map = deserializeActionsWithContext(
+                (map {$1.key: getUnrestoredActions($1.value, restored{$1.key})}, raw_actions.pairIterator()),
+                metadata_context);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Ignoring error deserializing actions from the data provider index: %s",
                 get_exception_string(ex));
@@ -1851,13 +2193,252 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
 
         m.lock();
         on_exit m.unlock();
-        foreach hash<auto> app_actions in (action_map.pairIterator()) {
-            mergeIndexedActions(app_actions.key, app_actions.value);
+        foreach string app in (apps) {
+            mergeIndexedActions(app, getRestoredAppActions(app, raw_actions{app}, action_map{app}));
         }
         map remove raw_actioninfomap{$1}, apps.iterator();
+        map remove action_restored{$1}, apps.iterator();
         map action_metadata_initialized{$1} = True, apps.iterator();
         action_metadata_initializing = {};
         metadata_init_cond.broadcast();
+    }
+
+    #! Ensures that the action summaries of the index in use have been read
+    /** The summaries are read from the action summary file of the metadata cache; an index that predates it has
+        them read from the metadata of each of its apps, without restoring any type description, and an index
+        without a metadata cache from the metadata in memory
+    */
+    static private checkActionSummaries() {
+        int gen = index_generation;
+        checkDataIndex();
+        if (!initialized || action_summaries_loaded || !checkMetadataContext()) {
+            return;
+        }
+
+        bool from_cache;
+        {
+            m.lock();
+            on_exit m.unlock();
+            # the summaries are read like the other serialized metadata: by one thread, which a reload waits for
+            while (raw_metadata_loading && raw_metadata_loading_tid != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+            # the index was replaced; the caller checks the replacement
+            if (gen != index_generation || action_summaries_loaded || raw_metadata_loading) {
+                return;
+            }
+            from_cache = exists metadata_cache_sha256;
+            if (from_cache) {
+                raw_metadata_loading = True;
+                raw_metadata_loading_tid = gettid();
+            }
+        }
+
+        *hash<string, hash<string, hash<auto>>> summaries;
+        if (from_cache) {
+            try {
+                summaries = readCachedActionSummaries();
+            } catch (hash<ExceptionInfo> ex) {
+                m.lock();
+                on_exit m.unlock();
+                raw_metadata_loading = False;
+                remove raw_metadata_loading_tid;
+                metadata_init_cond.broadcast();
+                rethrow;
+            }
+
+            m.lock();
+            on_exit m.unlock();
+            raw_metadata_loading = False;
+            remove raw_metadata_loading_tid;
+            metadata_init_cond.broadcast();
+            if (exists summaries) {
+                if (gen == index_generation) {
+                    action_summaries = summaries;
+                    action_summaries_loaded = True;
+                }
+                return;
+            }
+        }
+
+        # there is no metadata cache, or its manifest cannot be read: the summaries are taken from the serialized
+        # and restored actions in memory, which are read from the canonical index file, if there is one
+        checkRawMetadataIndex();
+        hash<string, hash<string, hash<auto>>> serialized = {};
+        {
+            m.lock();
+            on_exit m.unlock();
+            if (gen != index_generation || action_summaries_loaded) {
+                return;
+            }
+            foreach hash<auto> app in (raw_actioninfomap.pairIterator()) {
+                serialized{app.key} = map {$1.key: getSerializedActionSummary($1.value)}, app.value.pairIterator();
+            }
+            foreach hash<auto> app in (index.actioninfomap.pairIterator()) {
+                serialized{app.key} = (serialized{app.key} ?? {})
+                    + (map {$1.key: getSerializedActionSummary($1.value)}, app.value.pairIterator());
+            }
+        }
+        summaries = castActionSummaries(serialized, metadata_context);
+
+        m.lock();
+        on_exit m.unlock();
+        if (gen == index_generation && !action_summaries_loaded) {
+            action_summaries = summaries;
+            action_summaries_loaded = True;
+        }
+    }
+
+    #! Reads the action summaries of the process's index from its metadata cache
+    /** @return the action summaries, or @ref nothing if the manifest of the metadata cache cannot be read; if the
+        action summary file cannot be read, the error is reported by @ref getIndexReadError(), and the summaries are
+        read from the metadata of each app, as for an index that predates the file
+    */
+    static private *hash<string, hash<string, hash<auto>>> readCachedActionSummaries() {
+        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
+        if (!manifest) {
+            return;
+        }
+        if (manifest.actions) {
+            *string path;
+            try {
+                path = getMetadataCacheChunkPath("", manifest.actions.sha256, manifest.version);
+                return castActionSummaries(readActionSummaryFile(path, manifest.actions), metadata_context);
+            } catch (hash<ExceptionInfo> ex) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the action summaries of the data "
+                    "provider index from %y: %s: %s", path ?? "<unknown>", ex.err, ex.desc));
+            }
+        } else {
+            log(LoggerLevel::LevelInfo, "The data provider index was published before action summaries were "
+                "recorded; they are read from the metadata of each app; recreate the index to list actions faster");
+        }
+        # the actions of each chunk are dropped as soon as their summaries are taken, and no type description is
+        # restored
+        hash<auto> serialized = {};
+        foreach hash<auto> app in (manifest.apps.pairIterator()) {
+            *hash<DataProviderIndexInfo> chunk = readMetadataCacheChunk(app.key, app.value, manifest.version);
+            if (chunk.actioninfomap{app.key}) {
+                serialized{app.key} = map {$1.key: getSerializedActionSummary($1.value)},
+                    chunk.actioninfomap{app.key}.pairIterator();
+            }
+        }
+        return castActionSummaries(serialized, metadata_context);
+    }
+
+    #! Reads and verifies an action summary file
+    /** @param path the path of the file
+        @param info the file's size and digest from the manifest
+
+        @return the serialized action summaries, keyed by app, then by action
+
+        @throw PROVIDER-INDEX-ERROR the file does not match its size or digest, or is not a hash of apps
+    */
+    static private hash<auto> readActionSummaryFile(string path, hash<auto> info) {
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
+            throw "PROVIDER-INDEX-ERROR", "the file does not match the size and digest recorded in the metadata "
+                "cache manifest";
+        }
+        return unpackActionSummaryChunk(data);
+    }
+
+    #! Returns the serialized action summary of the given action
+    /** @param action an action in the serialized form stored in the index, or an indexed action
+
+        @return the action-level members of the action, with the \c option_names and \c has_expressions members
+    */
+    static private hash<auto> getSerializedActionSummary(hash<auto> action) {
+        # a typed hash cannot lose members
+        hash<auto> rv = {} + action;
+        rv -= ActionSummaryExcludedKeys;
+        rv.option_names = action.options.typeCode() == NT_HASH ? keys action.options : ();
+        rv.has_expressions = (action.data_provider_info.typeCode() == NT_HASH
+            && action.data_provider_info.expressions) ? True : False;
+        return rv;
+    }
+
+    #! Returns the given serialized action summaries as typed hashes
+    /** @param serialized the serialized action summaries, keyed by app, then by action
+        @param ctx the prepared deserialization context
+
+        @return \c DataProvider::DataProviderIndexedActionSummaryInfo hashes keyed by app, then by action; a summary
+        that cannot be read is logged and left out
+
+        @throw PROVIDER-INDEX-ERROR the summaries of an app are not a hash
+    */
+    static private hash<string, hash<string, hash<auto>>> castActionSummaries(hash<auto> serialized,
+            hash<MetadataDeserializeContext> ctx) {
+        hash<string, hash<string, hash<auto>>> rv = {};
+        foreach hash<auto> app in (serialized.pairIterator()) {
+            if (app.value.typeCode() != NT_HASH) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("the action summaries of app %y must be a hash; got %s "
+                    "instead", app.key, app.value.type());
+            }
+            hash<string, hash<auto>> actions = {};
+            foreach hash<auto> action in (app.value.pairIterator()) {
+                try {
+                    if (action.value.typeCode() != NT_HASH) {
+                        throw "PROVIDER-INDEX-ERROR", sprintf("the action summary must be a hash; got %s instead",
+                            action.value.type());
+                    }
+                    actions{action.key} = castActionSummary(action.value, ctx);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::LevelError, "Omitting the summary of action %y of app %y from the data provider "
+                        "index; it cannot be read: %s: %s", action.key, app.key, ex.err, ex.desc);
+                }
+            }
+            if (actions) {
+                rv{app.key} = actions;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the given serialized action summary as a DataProviderIndexedActionSummaryInfo hash
+    static private hash<auto> castActionSummary(hash<auto> summary, hash<MetadataDeserializeContext> ctx) {
+        return ctx.action_summary_th.doCastWithOverrides(summary, {
+            "path_vars": (summary.path_vars
+                ? ctx.path_vars_th.doCastValues(summary.path_vars)
+                : NOTHING),
+        });
+    }
+
+    #! Packs the action summary file of a metadata cache
+    /** @param summaries the serialized action summaries, keyed by app, then by action, in sorted order
+
+        @return the compressed file contents
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+    */
+    static private binary packActionSummaryChunk(hash<auto> summaries) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
+        return compress(msgpack_pack(summaries, MSGPACK_QORE_MODE));
+%endif
+    }
+
+    #! Unpacks the action summary file of a metadata cache
+    /** @param data the compressed file contents
+
+        @return the serialized action summaries, keyed by app, then by action
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or the file does not hold a hash
+    */
+    static private hash<auto> unpackActionSummaryChunk(binary data) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
+%else
+        auto summaries = msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE);
+        switch (summaries.typeCode()) {
+            case NT_HASH:
+                return summaries;
+            case NT_NOTHING:
+                return {};
+        }
+        throw "PROVIDER-INDEX-ERROR", sprintf("the action summary file must hold a hash; got %s instead",
+            summaries.type());
+%endif
     }
 
     #! Returns an empty data provider index with all map fields initialized
@@ -2012,6 +2593,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         # the actions declaring an alternative to their app's scheme connection, recorded in the routing index so
         # that a consumer can find them without reading the metadata of every app
         hash<string, hash<string, bool>> altmap = {};
+        # the action summaries of every app, written to a file of their own so that actions can be listed without
+        # reading the metadata of any app
+        hash<auto> action_summaries = {};
         foreach string app in (sort(keys app_set)) {
             *hash<auto> actions;
             if (action_app_set{app}) {
@@ -2037,6 +2621,10 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                         "sha256": sha256,
                         "info": maps.appinfomap{app},
                     };
+                    if (actions) {
+                        action_summaries{app} = map {$1.key: getSerializedActionSummary($1.value)},
+                            actions.pairIterator();
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     if (!canonical) {
                         rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata of app %y: "
@@ -2086,15 +2674,40 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 %endif
 
+        # the action summaries of every app
+        *hash<DataProviderMetadataCacheChunkInfo> summaries;
+%ifndef NoMsgPack
+        if (write_cache) {
+            try {
+                binary data = packActionSummaryChunk(action_summaries);
+                string sha256 = digest("sha256", data).toHex();
+                writeFileAtomic(getMetadataCacheChunkPath("", sha256, MetadataCacheVersion), data);
+                summaries = <DataProviderMetadataCacheChunkInfo>{
+                    "size": data.size(),
+                    "sha256": sha256,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                if (!canonical) {
+                    rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider action summaries: %s: "
+                        "%s", ex.err, ex.desc);
+                }
+                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                    get_exception_string(ex));
+                write_cache = False;
+            }
+        }
+%endif
+        remove action_summaries;
+
         *string cache_sha256;
         int cache_size = 0;
         if (write_cache) {
             try {
-                binary manifest = packMetadataCacheManifest(chunks, factories);
+                binary manifest = packMetadataCacheManifest(chunks, factories, summaries);
                 cache_sha256 = digest("sha256", manifest).toHex();
                 writeFileAtomic(getMetadataCachePath(cache_sha256), manifest);
                 cache_size = manifest.size() + ((foldl $1 + $2, (map $1.size, chunks.iterator())) ?? 0)
-                    + (factories.size ?? 0);
+                    + (factories.size ?? 0) + (summaries.size ?? 0);
             } catch (hash<ExceptionInfo> ex) {
                 if (!canonical) {
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata cache "
@@ -2133,7 +2746,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 
         removeUnreferencedIndexFiles(cache_sha256 ? chunks : NOTHING, cache_sha256, canonical,
-            cache_sha256 ? factories.sha256 : NOTHING);
+            cache_sha256 ? factories.sha256 : NOTHING, cache_sha256 ? summaries.sha256 : NOTHING);
 
         return <ProviderIndexInfo>{
             "path": canonical ? path : getIndexPath("routing"),
@@ -2333,11 +2946,12 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     #! Packs the metadata cache manifest
     /** @param chunks the chunks written
         @param factories the size and digest of the factory info file, if the index records factory info
+        @param summaries the size and digest of the action summary file
 
         @return the packed manifest
     */
     static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks,
-            *hash<DataProviderMetadataCacheChunkInfo> factories) {
+            *hash<DataProviderMetadataCacheChunkInfo> factories, *hash<DataProviderMetadataCacheChunkInfo> summaries) {
         hash<DataProviderMetadataCacheManifest> manifest = <DataProviderMetadataCacheManifest>{
             "version": MetadataCacheVersion,
             "apps": chunks,
@@ -2345,6 +2959,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         # a manifest without the member does not record factory info
         if (factories) {
             manifest.factories = factories;
+        }
+        if (summaries) {
+            manifest.actions = summaries;
         }
         return packIndexData(manifest);
     }
@@ -2366,6 +2983,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @param manifest_sha256 the digest of the manifest, if a metadata cache was written
         @param canonical @ref True if a canonical index file was written with the routing index
         @param factories_sha256 the digest of the factory info file that the manifest references, if any
+        @param summaries_sha256 the digest of the action summary file that the manifest references, if any
 
         @par Example
         Uninstalling a provider module and rebuilding the index removes that app's chunk, so the index directory
@@ -2375,7 +2993,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         the index itself is already published at this point.
     */
     static private removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
-            *string manifest_sha256, bool canonical, *string factories_sha256) {
+            *string manifest_sha256, bool canonical, *string factories_sha256, *string summaries_sha256) {
         *string dir = tryGetIndexDir();
         if (!dir.val()) {
             return;
@@ -2387,6 +3005,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
         if (factories_sha256) {
             keep{basename(getMetadataCacheChunkPath("", factories_sha256, MetadataCacheVersion))} = True;
+        }
+        if (summaries_sha256) {
+            keep{basename(getMetadataCacheChunkPath("", summaries_sha256, MetadataCacheVersion))} = True;
         }
         try {
             Dir d();
@@ -2425,7 +3046,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         (\c qore-data-index.yaml), which holds the same metadata uncompressed and as text, and so is many times
         larger, is only published on request.  This reads the compact files and verifies them: the routing index
         against its own checksum, the metadata cache manifest against the digest recorded in the routing index, and
-        each app's metadata against the size and digest recorded in the manifest.
+        each app's metadata, the factory info, and the action summaries against the sizes and digests recorded in the
+        manifest.  The action summaries are not returned, since they are taken from the actions.
 
         @param dir the index directory
         @param per_app optional code called with each app's name, info, and actions, in app name order, as each
@@ -2627,6 +3249,16 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 if (unpack) {
                     factoryinfomap = unpackFactoryInfoChunk(data);
                 }
+            }
+            # the action summaries are not returned, since they are taken from the actions, but a copy of the index
+            # without them is incomplete
+            if (*hash<auto> summaries = compact.manifest.actions) {
+                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath("", summaries.sha256,
+                    compact.manifest.version, dir));
+                if (data.size() != summaries.size || digest("sha256", data).toHex() != summaries.sha256) {
+                    return;
+                }
+                size += data.size();
             }
             hash<auto> appinfomap = {};
             hash<auto> actioninfomap = {};
@@ -3338,6 +3970,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "app_info_th": TypedHash::forName("DataProvider::DataProviderAppInfo"),
             "conn_opt_th": TypedHash::forName("ConnectionProvider::ConnectionOptionInfo"),
             "action_info_th": TypedHash::forName("DataProvider::DataProviderIndexedActionInfo"),
+            "action_summary_th": TypedHash::forName("DataProvider::DataProviderIndexedActionSummaryInfo"),
             "option_info_th": TypedHash::forName("DataProvider::IndexedActionOptionInfo"),
             "type_info_th": TypedHash::forName("DataProvider::DataTypeInfo"),
             "field_info_th": TypedHash::forName("DataProvider::DataFieldInfo"),
