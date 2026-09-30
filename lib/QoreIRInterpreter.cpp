@@ -862,6 +862,11 @@ public:
         return id < counts.size() && counts[id];
     }
 
+    //! returns the number of pushes recorded for the id (the references the frame owns in its slot)
+    uint32_t pushCount(uint32_t id) const {
+        return id < counts.size() ? counts[id] : 0;
+    }
+
     bool empty() const {
         return entries.empty();
     }
@@ -11753,9 +11758,24 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                // When the kept value is a temp of the scope that owns its one reference and this is its only use, the
+                // reference is moved to the result instead: taking a new one and releasing the temp's would release a
+                // real reference to the value - a new object, say - which runs the recursive-reference scan that its
+                // constructor deferred (see design/dgc.md), as LValuePathAssign's hand-over of its value avoids
+                uint32_t kept_id = inst->operands.front().id;
                 QoreValue kept = getIRValue(values, inst->operands.front());
                 if (kept.hasNode()) {
-                    kept.ref();
+                    bool move = kept_id < value_use_counts.size() && value_use_counts[kept_id] == 1
+                        && !(kept_id < cross_block_slots.size() && cross_block_slots[kept_id])
+                        && !(kept_id < return_protected_slots.size() && return_protected_slots[kept_id])
+                        && weak_load_temp_slots.find(kept_id) == weak_load_temp_slots.end()
+                        && cleanup.pushCount(kept_id) == 1;
+                    if (move) {
+                        removeAllCleanupEntries(cleanup, kept_id);
+                        values[kept_id] = QoreValue();
+                    } else {
+                        kept.ref();
+                    }
                 }
                 cleanupToTempScope(inst->temp_scope_id, false, true);
                 setOwnedValueSlot(values, cleanup, inst->result.id, kept, xsink);

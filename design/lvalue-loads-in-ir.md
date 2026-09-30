@@ -50,9 +50,12 @@ discard.temps.keep -> %11 %10
 lvalue.path.assign %11
 ```
 
-`DiscardTempsKeep` takes a reference to its operand before it releases the scope's temps, since the
-operand can be one of them or be borrowed from one, and registers that reference in the enclosing scope,
-so the mutation can still take the value over.  The operand scope is used only when the operand creates
+`DiscardTempsKeep` registers a reference to its operand in the enclosing scope, so the mutation can still
+take the value over.  When the operand is a temp of the scope that owns its reference and this is its
+only use, that reference is moved; otherwise a new one is taken before the scope's temps are released,
+since the operand can be borrowed from one of them.  The move matters: releasing a real reference to a
+new object (`hub.reg{k} = new Entry(hub)`) runs the recursive-reference scan that its constructor
+deferred, which `examples/test/qore/misc/dgc-scan-avoidance` counts.  The operand scope is used only when the operand creates
 temps besides its value and the statement has a temp scope of its own; its mark has no source location, so
 it is not a debugger step.  A destructor that raises while the operand's temps are released branches to the
 exception target with the enclosing scope, which is then the innermost one: the mutation is not made, as in

@@ -30083,7 +30083,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) {
                 return false;
             }
-            llvm::Value* retained = emitHelperRef(module, boxValue(val, kept_id));
+            llvm::Value* boxed = boxValue(val, kept_id);
+            // When this function owns the kept value's reference in a cleanup slot of the scope (defined in this
+            // block, used only here, not a weak-reference load), the reference is moved to the result instead of
+            // taking a new one and releasing the slot's: releasing a real reference to a new object runs the
+            // recursive-reference scan that its constructor deferred (see design/dgc.md), as the consuming
+            // LValuePathAssign avoids
+            bool move = false;
+            {
+                auto alloca_it = invoke_alloca_map.find(kept_id);
+                auto uses_it = operand_remaining_uses.find(kept_id);
+                auto def_it = value_def_block.find(kept_id);
+                if (alloca_it != invoke_alloca_map.end()
+                        && nanboxed_values.count(kept_id)
+                        && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
+                        && !weak_load_result_ids.count(kept_id)
+                        && def_it != value_def_block.end()
+                        && def_it->second == current_lowering_block_) {
+                    llvm::Value* ca = alloca_it->second;
+                    if (!ca) {
+                        ca = promoteSsaEntryToAlloca(kept_id, module, llvm_func);
+                    }
+                    if (ca) {
+                        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+                        move = true;
+                    }
+                }
+            }
+            llvm::Value* retained = move ? boxed : emitHelperRef(module, boxed);
             emitDiscardTemps(module, inst->temp_scope_id, false);
             values[inst->result.id] = retained;
             nanboxed_values.insert(inst->result.id);
