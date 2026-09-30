@@ -1167,6 +1167,10 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
                 ctx.const_reverse_map);
         };
 
+        // the closure's references to outer variables are bound in the domain of ctx.parent_locals, like
+        // LOCAL_VARREF expression indices
+        AOTIRLocalBindingSource binding_source{&ctx.parent_locals, nullptr};
+        QoreAOTIRLocalBindingSourceHelper binding_source_helper(ctx.writer, &binding_source);
         ::serializeIRFunction(ctx.writer, *closure_ir, writeExpr);
         uint32_t end_pos = ctx.writer.position();
         ctx.writer.patchU32(size_pos, end_pos - size_pos - 4);

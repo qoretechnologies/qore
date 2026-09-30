@@ -13418,6 +13418,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                         const_reverse_map);
                 };
 
+                // the closure's references to outer variables are bound in the domain of parent_locals, like
+                // LOCAL_VARREF expression indices
+                AOTIRLocalBindingSource binding_source{&parent_locals, nullptr};
+                QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, &binding_source);
                 if (!::serializeIRFunction(writer, *closure_ir, writeExpr)) {
                     qoreAOTSetExprSerializationError("failed to serialize closure IR for "
                         + qoreAOTDescribeExpr(expr));
@@ -13841,7 +13845,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(local.flags);
             writer.writeU16(local.param_index);
             if ((writer.feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0) {
-                writer.writeU32(local.body_ordinal);
+                // the index in the top-level local list for a QORE_AOT_LOCAL_SLOT_TOP_LEVEL slot
+                writer.writeU32(local.getSerializedOrdinal());
             }
         }
         traceEntryOffset("after locals");
@@ -14022,6 +14027,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
                         func_const_reverse_map);
                 };
+                // the handler (and any handler nested in it) runs against this function's AOT context
+                AOTIRLocalBindingSource binding_source{&func.slot_ids.locals, &func.slot_ids.body_locals};
+                QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, &binding_source);
                 qoreAOTClearExprSerializationError();
                 bool handler_ok = serializeIRFunction(writer, *handler_ir, writeExpr);
                 std::string expr_error;
@@ -14126,6 +14134,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
                     func_const_reverse_map);
             };
+            // debug IR is serialized against the function's own complete slot table
+            QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, nullptr);
             qoreAOTClearExprSerializationError();
             bool debug_ir_ok = serializeIRFunction(writer, *func.debug_ir, writeExpr);
             std::string expr_error;
@@ -14737,6 +14747,30 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         body_local_ordinals[func.all_body_locals[i]] = i;
     }
 
+    // Variables of the AOT context this IR runs against, for the binding written with each slot record
+    // (QORE_AOT_LOCAL_BINDING_VERSION): the loader binds the record to exactly that variable instead of
+    // matching it by name and type, which picks the wrong variable when a name is shadowed
+    std::unordered_map<const void*, uint32_t> enclosing_slots;
+    std::unordered_map<const void*, uint32_t> enclosing_body_locals;
+    if (const AOTIRLocalBindingSource* source = writer.ir_local_binding_source) {
+        if (source->locals) {
+            for (size_t i = 0; i < source->locals->size(); ++i) {
+                if (const void* ptr = (*source->locals)[i].local_var_ptr) {
+                    enclosing_slots.emplace(ptr, static_cast<uint32_t>(i));
+                }
+            }
+        }
+        if (source->body_locals) {
+            for (size_t i = 0; i < source->body_locals->size(); ++i) {
+                if (const void* ptr = (*source->body_locals)[i].local_var_ptr) {
+                    enclosing_body_locals.emplace(ptr, static_cast<uint32_t>(i));
+                }
+            }
+        }
+    }
+    const LVList* top_level_lvars = writer.serialization_program
+        ? qore_program_private::get(*writer.serialization_program)->sb.getLVList() : nullptr;
+
     // Sort by slot_id for deterministic serialization
     std::vector<std::pair<const LocalVar*, uint32_t>> sorted_slots(
         func.local_var_slots.begin(), func.local_var_slots.end());
@@ -14747,10 +14781,40 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         std::string type_path = getLocalTypePathString(lv);
         writer.writeStringRef(type_path.c_str());
         writer.writeU32(slot_id);
+        auto ordinal_it = body_local_ordinals.find(lv);
         if ((writer.feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0) {
-            auto ordinal_it = body_local_ordinals.find(lv);
             writer.writeU32(ordinal_it != body_local_ordinals.end() ? ordinal_it->second : UINT32_MAX);
         }
+
+        // the IR function's own body locals are never bound to an outer variable
+        AOTIRLocalBinding binding = AOTIRLocalBinding::NONE;
+        uint32_t binding_index = UINT32_MAX;
+        if (ordinal_it == body_local_ordinals.end()) {
+            const void* ptr = reinterpret_cast<const void*>(lv);
+            auto slot_it = enclosing_slots.find(ptr);
+            if (slot_it != enclosing_slots.end()) {
+                binding = AOTIRLocalBinding::ENCLOSING_SLOT;
+                binding_index = slot_it->second;
+            } else {
+                auto body_it = enclosing_body_locals.find(ptr);
+                if (body_it != enclosing_body_locals.end()) {
+                    binding = AOTIRLocalBinding::ENCLOSING_BODY_LOCAL;
+                    binding_index = body_it->second;
+                } else if (lv->isTopLevel()) {
+                    binding = AOTIRLocalBinding::TOP_LEVEL;
+                    if (top_level_lvars) {
+                        for (unsigned i = 0; i < top_level_lvars->size(); ++i) {
+                            if (top_level_lvars->lv[i] == lv) {
+                                binding_index = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        writer.writeU8(static_cast<uint8_t>(binding));
+        writer.writeU32(binding_index);
     }
 
     // 3. Body locals

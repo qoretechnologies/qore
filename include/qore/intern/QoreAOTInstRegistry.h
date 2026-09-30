@@ -70,6 +70,12 @@ struct AOTInstReadCtx {
     std::string& error;
     //! Slot-indexed local variable map for disambiguation of same-named variables
     const std::unordered_map<uint32_t, LocalVar*>* slot_to_local = nullptr;
+    //! Local slot table of the enclosing AOT context (domain of AOTIRLocalBinding::ENCLOSING_SLOT records)
+    LocalVar** parent_locals_arr = nullptr;
+    //! Number of entries in parent_locals_arr
+    int num_parent_locals = 0;
+    //! Body-local table of the enclosing AOT context (domain of AOTIRLocalBinding::ENCLOSING_BODY_LOCAL records)
+    const std::vector<LocalVar*>* enclosing_body_locals = nullptr;
 
     //! Resolve local variable by slot_id (preferred, avoids name collisions)
     LocalVar* resolveLocalBySlot(uint32_t slot_id) const {

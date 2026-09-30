@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AotShadowedLocalsTest
+
+#! Tests that compiled code binds each local variable to the variable the parser bound it to when names are shadowed
+/** A qcc-compiled function's local variable slots are bound to LocalVars when the function is loaded.  A slot
+    was matched to its variable by name and type: a function-local that shadowed a top-level local with the same
+    name and type (in a nested block, a loop, a closure, a handler) was bound to the TOP-LEVEL variable, so the
+    function's block scopes instantiated and released the top-level variable, its value was lost and the
+    process could crash; the IR of on_block_exit handlers and closures could likewise bind a reference to an
+    outer variable to a same-named local of the function.  AOT metadata now records the identity of the
+    variable each slot binds to.
+
+    The worker runs each case and prints one line per case; it is run in every execution mode and as qcc-compiled
+    executables (source-stripped, the default, and with embedded source), and every line must match the expected
+    (interpreter) result exactly.
+*/
+class AotShadowedLocalsTest inherits QUnit::Test {
+    public {
+        #! the expected result of each case in the worker: the top-level variable and the shadowing variable
+        const Expected = {
+            "block_shadow": "[\"top\", \"outer\"] [\"inner\", \"x\"]",
+            "block_shadow_after": "[\"top\", \"before\"] [\"inner\", \"x\"]",
+            "sibling_blocks": "[\"top\", \"mid\"] [\"a\", \"a2\", \"b\", \"b2\"]",
+            "nested_shadow": "[\"top\", \"top-y\"] [\"l2\", \"x\", \"l1\", \"y\"]",
+            "for_shadow": "[\"top\", \"after\"] [\"f0\", \"x\", \"f1\", \"x\"]",
+            "foreach_shadow": "[\"top\", \"after\"] [\"e1\", \"x\", \"e2\", \"x\"]",
+            "while_shadow": "[\"top\", \"after\"] [\"w\", \"1\", \"w\", \"2\"]",
+            "different_type": "[\"top\", \"dt\"] [\"7\"]",
+            "param_shadow": "[\"top\"] [\"p\", \"param\"]",
+            "param_shadow_block": "[\"top\", \"outer\"] [\"p\", \"pb\"]",
+            "closure_captures_inner": "[\"top\", \"outer\"] [\"inner\", \"cl\"]",
+            "closure_refs_top": "[\"top\", \"cl-top\"] [\"inner\", \"y\"]",
+            "closure_local_shadow": "[\"top\", \"cl-outer\"] [\"cl-inner\", \"x\"]",
+            "closure_loop": "[\"top\", \"after\"] [\"l0\", \"c\", \"l1\", \"c\"]",
+            "closure_handler_shadow": "[\"top\", \"cl-h-top\"] [\"cl-inner\", \"cl-h-in\"]",
+            "handler_top": "[\"top\", \"h-top\"] [\"inner\", \"z\"]",
+            "handler_top_error": "[\"top\", \"h-err\"] [\"inner\", \"z\", \"caught:E\"]",
+            "handler_top_success": "[\"top\", \"h-ok\"] [\"inner\", \"z\"]",
+            "handler_inner": "[\"top\", \"outer\"] [\"inner\", \"body\", \"h-in\"]",
+            "handler_inner_error": "[\"top\"] [\"inner\", \"body\", \"h-in-err\", \"caught:E\"]",
+            "handler_both": "[\"top\", \"h-outer\"] [\"inner\", \"h-in\"]",
+            "nested_handler_own": "[\"top\", \"body\", \"h-outer\"] [\"h\", \"nested\"]",
+            "nested_handler_shadow": "[\"top\", \"nested-top\"] [\"inner\", \"nested-in\"]",
+            "ref_shadow": "[\"top\", \"r-top\"] [\"inner\", \"r-in\"]",
+            "ref_closure": "[\"top\", \"r2\"] [\"inner\", \"rc\"]",
+            "method": "[\"top\", \"method\"] [\"m-inner\", \"x\"]",
+            "toplevel_block": "[\"top\", \"tl-outer\"] [\"tl-inner\", \"x\"]",
+        };
+
+        #! the interpreted execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc options that the worker is compiled with, by label
+        const CompileOptions = {
+            "aot-O0": "-O0",
+            "aot-O3": "-O3",
+            "aot-O0-source": "-O0 --include-source",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("AotShadowedLocalsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        worker = get_script_dir() + DirSep + "aot-shadowed-locals-worker.q";
+
+        addTestCase("the expected results parse", \testExpectedParse());
+        addTestCase("negative: the output check rejects misbound variables", \testCheckRejectsMisbinding());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executables", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExpectedParse() {
+        # the parser must accept every expected line, or the mode checks below would compare nothing
+        string out = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, $1.value), Expected.pairIterator());
+        assertEq(Expected, parseOutput("expected", out));
+    }
+
+    testCheckRejectsMisbinding() {
+        # what the defect produced: the shadowing variable was bound to the top-level variable, whose value was
+        # lost, and a handler's reference to the top-level variable was bound to the shadowing variable
+        hash<string, string> results = Expected + {
+            "block_shadow": "[\"outer\"] [\"inner\", \"x\"]",
+            "handler_top_error": "[\"top\"] [\"inner\", \"z\", \"caught:E\"]",
+        };
+        list<string> mismatches = getMismatches(results);
+        assertEq(("block_shadow", "handler_top_error"), sort(mismatches));
+
+        # the cases a crash never reached are reported as missing
+        mismatches = getMismatches(Expected - ("method", "toplevel_block"));
+        assertEq(("method", "toplevel_block"), sort(mismatches));
+
+        # and so is output the worker should not print
+        assertThrows("WORKER-OUTPUT-ERROR", \parseOutput(), ("bad", "unexpected text\n"));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                qore_bin, mode, worker));
+            checkResults(mode, parseOutput(mode, out));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-aot-shadowed-locals-");
+        foreach hash<auto> i in (CompileOptions.pairIterator()) {
+            string exe = tmp.path + DirSep + "aot-shadowed-locals-" + i.key;
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1", libqore_dir,
+                qcc_bin, i.value, exe, worker));
+            assertTrue(is_file(exe), sprintf("qcc %s: %s", i.value, compile_out));
+            checkResults(i.key, parseOutput(i.key, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                exe))));
+        }
+    }
+
+    #! parses the "<case>: <result>" lines printed by the worker
+    private hash<string, string> parseOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> parts = (line =~ x/^([a-z_0-9]+): (.*)$/);
+            if (!parts) {
+                throw "WORKER-OUTPUT-ERROR", sprintf("%s: unexpected worker output line %y in: %s", label, line,
+                    out);
+            }
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! returns the names of the cases whose result differs from the expected one, or that are missing or extra
+    private list<string> getMismatches(hash<string, string> results) {
+        list<string> rv = ();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            if (results{i.key} !== i.value) {
+                push rv, i.key;
+            }
+        }
+        foreach string key in (keys results) {
+            if (!Expected.hasKey(key)) {
+                push rv, key;
+            }
+        }
+        return rv;
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": cases run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq((), getMismatches(results), label + ": mismatches");
+    }
+}

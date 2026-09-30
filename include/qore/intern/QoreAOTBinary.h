@@ -186,8 +186,19 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the string LENGTH (strlen * 5) -- so a folded constant came back as a different number from the one
 //!      the runtime computes and the two compared unequal (issue #5461).  A v9-v17 file carries no precision
 //!      and is read exactly as before.
+//! v19: local slot records identify the variable they bind to instead of leaving it to be matched by name and
+//!      type at load time.  An AOT context local slot of a Program top-level local carries
+//!      QORE_AOT_LOCAL_SLOT_TOP_LEVEL and its index in the top-level local list, and every IR local slot record
+//!      (handler, closure and debug IR) carries an AOTIRLocalBinding kind and index naming the variable of the
+//!      enclosing AOT context it binds to.  A function-local that shadowed a top-level local with the same name
+//!      and type was bound to the top-level variable (and a handler's or closure's reference to an outer
+//!      variable to a same-named local of the function).  A v9-v18 file carries no binding and is resolved by
+//!      name and type as before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 18;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 19;
+//! First format version identifying the variable each local slot record binds to (see
+//! QORE_AOT_LOCAL_SLOT_TOP_LEVEL and AOTIRLocalBinding).
+constexpr uint16_t QORE_AOT_LOCAL_BINDING_VERSION = 19;
 //! First format version recording a serialized number's precision beside its digits.
 constexpr uint16_t QORE_AOT_NUMBER_PRECISION_VERSION = 18;
 //! First format version recording a compile-time value beside a pending constant's init-function flag.
@@ -785,6 +796,8 @@ public:
 };
 
 //! Binary format writer for AOT metadata
+struct AOTIRLocalBindingSource;
+
 class QoreAOTBinaryWriter {
 public:
     struct PluginImportRecord {
@@ -847,6 +860,10 @@ public:
     //! from later same-blob positions or sibling `.qo` fragments are not
     //! available yet and must be serialized by value.
     const std::unordered_set<std::string>* available_const_ref_fqns = nullptr;
+
+    //! The AOT context that the handler or closure IR currently being serialized runs against; set with
+    //! QoreAOTIRLocalBindingSourceHelper.  Null when the IR has no enclosing context.
+    const AOTIRLocalBindingSource* ir_local_binding_source = nullptr;
 
     //! Program and module ownership context for distinguishing constants
     //! provided by dependencies from constants emitted by this artifact.
@@ -1995,14 +2012,43 @@ enum class AOTExprNodeKind : uint8_t {
     EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
 };
 
+//! AOT context local slot flag: the slot is a Program top-level local (from QORE_AOT_LOCAL_BINDING_VERSION)
+/** The slot record's ordinal field then holds the variable's index in the Program's top-level local list
+    (UINT32_MAX if unknown) instead of a body-local ordinal.  A slot without this flag is never bound to a
+    top-level local, so a function-local that shadows a top-level local with the same name and type keeps its
+    own identity.
+*/
+constexpr uint8_t QORE_AOT_LOCAL_SLOT_TOP_LEVEL = 0x20;
+
 //! Identity for a local variable slot
 struct AOTLocalSlotId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
-    uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only
+    //! bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only,
+    //! bit 5: top-level local (QORE_AOT_LOCAL_SLOT_TOP_LEVEL)
+    uint8_t flags = 0;
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
     uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
+    //! index in the Program's top-level local list when QORE_AOT_LOCAL_SLOT_TOP_LEVEL is set (UINT32_MAX if unknown)
+    uint32_t top_level_index = UINT32_MAX;
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
+
+    //! Returns the value of the slot record's ordinal field
+    uint32_t getSerializedOrdinal() const {
+        return (flags & QORE_AOT_LOCAL_SLOT_TOP_LEVEL) ? top_level_index : body_ordinal;
+    }
+};
+
+//! How a serialized IR local slot record binds to a variable (from QORE_AOT_LOCAL_BINDING_VERSION)
+/** Handler, closure and debug IR run against the variables of the AOT context that owns them; each IR local
+    slot record names the variable it binds to so that the loader does not have to match it by name and type,
+    which picks the wrong variable when a name is shadowed.
+*/
+enum class AOTIRLocalBinding : uint8_t {
+    NONE = 0,                  //!< the IR function's own variable, or not identified (resolved as before v19)
+    ENCLOSING_SLOT = 1,        //!< index in the enclosing AOT context's local slot table
+    ENCLOSING_BODY_LOCAL = 2,  //!< index in the enclosing AOT context's body-local table
+    TOP_LEVEL = 3,             //!< a Program top-level local; index in the top-level local list or UINT32_MAX
 };
 
 //! Identity for a global variable slot
@@ -2038,6 +2084,39 @@ struct AOTBodyLocalId {
     bool is_closure = false; //!< true if closure variable
     bool read_only = false;  //!< true if read-only binding
     uint32_t slot_id = UINT32_MAX; //!< local slot id when available
+    const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
+};
+
+//! Compile-time source of the AOTIRLocalBinding records written for handler and closure IR
+/** Describes the AOT context that the serialized IR runs against: its local slot table (the domain of
+    AOTIRLocalBinding::ENCLOSING_SLOT and of LOCAL_VARREF expression indices) and, for handler IR, the function's
+    body locals (AOTIRLocalBinding::ENCLOSING_BODY_LOCAL).
+*/
+struct AOTIRLocalBindingSource {
+    //! the enclosing context's local slot identities, indexed by slot
+    const std::vector<AOTLocalSlotId>* locals = nullptr;
+    //! the enclosing function's body locals, indexed by body-local ordinal; null if not applicable
+    const std::vector<AOTBodyLocalId>* body_locals = nullptr;
+};
+
+//! Sets the writer's IR local binding source for the lifetime of the helper and restores the previous one
+class QoreAOTIRLocalBindingSourceHelper {
+public:
+    QoreAOTIRLocalBindingSourceHelper(QoreAOTBinaryWriter& writer, const AOTIRLocalBindingSource* source)
+            : writer(writer), old_source(writer.ir_local_binding_source) {
+        writer.ir_local_binding_source = source;
+    }
+
+    ~QoreAOTIRLocalBindingSourceHelper() {
+        writer.ir_local_binding_source = old_source;
+    }
+
+    QoreAOTIRLocalBindingSourceHelper(const QoreAOTIRLocalBindingSourceHelper&) = delete;
+    QoreAOTIRLocalBindingSourceHelper& operator=(const QoreAOTIRLocalBindingSourceHelper&) = delete;
+
+private:
+    QoreAOTBinaryWriter& writer;
+    const AOTIRLocalBindingSource* old_source;
 };
 
 //! Identity for a regex case slot
@@ -3978,7 +4057,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     //! advance ptr to end without deserializing blocks or instructions.
     bool metadata_only = false,
     //! Optional sink used for cooperative cancellation during lazy runtime materialization.
-    ExceptionSink* cancel_xsink = nullptr);
+    ExceptionSink* cancel_xsink = nullptr,
+    //! Optional body-local table of the enclosing AOT context, indexed in serialized body-local order; the
+    //! domain of AOTIRLocalBinding::ENCLOSING_BODY_LOCAL records (parent_locals_arr is the domain of
+    //! AOTIRLocalBinding::ENCLOSING_SLOT records)
+    const std::vector<LocalVar*>* enclosing_body_locals = nullptr,
+    //! For a nested handler: the slot-id -> LocalVar map of the IR function containing it.  A nested
+    //! handler's slots below its parent_slot_count are the containing function's slots with the same ids.
+    const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals = nullptr);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

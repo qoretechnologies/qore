@@ -3829,6 +3829,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed compiled (\c qcc) code binding a local variable to the wrong variable when its name was shadowed: a
+      local variable declared in a function, method or closure with the same name and type as a top-level local
+      variable was bound to the top-level variable, so the top-level variable's value was lost (and the process could
+      crash), and an \c on_error, \c on_exit or \c on_success handler or a closure could use a same-named local
+      variable of the function instead of the outer variable it referred to; compiled objects now record the variable
+      each local variable reference is bound to (AOT binary format version 19; objects compiled by earlier versions
+      are still loaded)
     - Fixed \c on_error, \c on_exit and \c on_success handlers in compiled (\c qcc) code that used a variable from
       outside their function that the function body itself did not use - a top-level local variable or a variable
       captured by a closure: reads of the variable returned no value and assignments to it were lost, and for a

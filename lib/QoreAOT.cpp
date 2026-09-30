@@ -35869,6 +35869,18 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
         out.locals.resize(static_cast<size_t>(max_slot + 1));
     }
+    // Program top-level locals by identity: a slot bound to one records its index in the top-level local list,
+    // so the loader never has to match a function's slot to a top-level local by name and type (which bound a
+    // function-local shadowing a top-level local of the same name and type to the top-level variable)
+    std::unordered_map<const void*, uint32_t> top_level_indices;
+    if (pgm) {
+        if (const LVList* top_lvars = qore_program_private::get(*pgm)->sb.getLVList()) {
+            for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                top_level_indices.emplace(reinterpret_cast<const void*>(top_lvars->lv[i]), i);
+            }
+        }
+    }
+
     for (auto& [ptr, slot] : slots.local_slots) {
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(ptr);
         AOTLocalSlotId& lid = out.locals[slot];
@@ -35891,6 +35903,12 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             if (pit != param_indices.end()) {
                 lid.flags |= 0x01; // is_param
                 lid.param_index = pit->second;
+            } else if (ordinal_it == body_local_ordinals.end() && lv->isTopLevel()) {
+                lid.flags |= QORE_AOT_LOCAL_SLOT_TOP_LEVEL;
+                auto tit = top_level_indices.find(ptr);
+                if (tit != top_level_indices.end()) {
+                    lid.top_level_index = tit->second;
+                }
             }
         }
         if (lv->closureUse()) {
@@ -35925,6 +35943,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     // Extract body local identities
     for (LocalVar* lv : func.all_body_locals) {
         AOTBodyLocalId blid;
+        blid.local_var_ptr = reinterpret_cast<const void*>(lv);
         blid.name = lv->getName();
         blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();

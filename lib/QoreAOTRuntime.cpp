@@ -383,6 +383,39 @@ static void removeAOTLocalCandidate(std::unordered_map<std::string, std::deque<L
     }
 }
 
+//! Returns the Program top-level local a serialized binding names, or nullptr
+/** @param pgm the Program whose top-level locals are searched
+    @param index the variable's index in the top-level local list, or UINT32_MAX if unknown
+    @param name the variable's name
+    @param type_path the variable's serialized type path
+
+    Without an index, the last matching declaration is returned: a later top-level declaration of the same name
+    hides an earlier one for the code parsed after it.
+*/
+static LocalVar* findAOTTopLevelLocal(QoreProgram* pgm, uint32_t index, const char* name, const char* type_path,
+        QoreAOTTypeResolver* type_resolver) {
+    if (!pgm || !name || !*name) {
+        return nullptr;
+    }
+    const LVList* top_lvars = qore_program_private::get(*pgm)->sb.getLVList();
+    if (!top_lvars) {
+        return nullptr;
+    }
+    auto matches = [name, type_path, type_resolver](LocalVar* lv) -> bool {
+        return lv && lv->getName() && !strcmp(lv->getName(), name)
+            && !aotLocalTypeKnownMismatch(lv, type_path, type_resolver);
+    };
+    if (index != UINT32_MAX) {
+        return index < top_lvars->size() && matches(top_lvars->lv[index]) ? top_lvars->lv[index] : nullptr;
+    }
+    for (unsigned i = top_lvars->size(); i > 0; --i) {
+        if (matches(top_lvars->lv[i - 1])) {
+            return top_lvars->lv[i - 1];
+        }
+    }
+    return nullptr;
+}
+
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
 // toBitsNB is defined in QoreJITIncludes.h (shared with other JIT files)
@@ -4118,9 +4151,23 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
         return nullptr;
     };
+    // Returns the top-level local at the serialized index if it is the variable the slot names
+    const LVList* top_level_lvars = pp->sb.getLVList();
+    auto findTopLevelLocalAt = [top_level_lvars, ctx_type_resolver](uint32_t index, const char* lname,
+            const char* ltype) -> LocalVar* {
+        if (!top_level_lvars || index >= top_level_lvars->size() || !lname) {
+            return nullptr;
+        }
+        LocalVar* tlv = top_level_lvars->lv[index];
+        return tlv && tlv->getName() && !strcmp(tlv->getName(), lname)
+            && aotLocalTypeMatches(tlv, ltype, ctx_type_resolver) ? tlv : nullptr;
+    };
 
     // Read and resolve local slot identities
     bool has_local_decl_ordinal = (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0;
+    // From QORE_AOT_LOCAL_BINDING_VERSION, a slot bound to a top-level local is flagged as one; before it, a
+    // top-level local is recognized as a slot that is neither a parameter nor a body local
+    const bool has_local_binding = reader.getHeader().version >= QORE_AOT_LOCAL_BINDING_VERSION;
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
@@ -4160,30 +4207,43 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
             }
         } else if (!lv) {
-            // Body local — try to find the actual LocalVar* from the function's AST
-            // first, then fall back to creating a new one (toplevel case).
-            // New AOT records carry the source body-local ordinal so duplicate
-            // names in sibling switch/if blocks resolve by identity instead of
-            // depending on local slot order matching source walk order.
-            if (body_ordinal != UINT32_MAX && body_ordinal < stmt_locals.size()) {
-                LocalVar* candidate = stmt_locals[body_ordinal];
-                if (candidate && candidate->getName()
-                        && strcmp(candidate->getName(), lname ? lname : "") == 0
-                        && aotLocalTypeMatches(candidate, ltype, ctx_type_resolver)) {
-                    lv = candidate;
-                    removeAOTLocalCandidate(stmt_local_deque, lname, lv);
-                }
-            }
-            // Legacy fallback: match on both name and type when available,
-            // consuming in walk order. This is kept only for old blobs without
-            // QORE_AOT_FEAT_LOCAL_DECL_ORDINAL.
-            if (lname && *lname && !stmt_local_deque.empty()) {
+            // A local that is neither a parameter nor self/argv is either a Program top-level local or a local
+            // declared in the function body.  The two must never be confused: a body local that shadows a
+            // top-level local with the same name and type is a different variable, and binding it to the
+            // top-level local makes the function's block scopes instantiate and release the top-level variable.
+            const bool is_body_local = has_local_decl_ordinal && body_ordinal != UINT32_MAX
+                && !(lflags & QORE_AOT_LOCAL_SLOT_TOP_LEVEL);
+            const bool is_top_level = has_local_binding
+                ? (lflags & QORE_AOT_LOCAL_SLOT_TOP_LEVEL) != 0
+                : has_local_decl_ordinal && !is_body_local;
+            if (is_top_level) {
+                lv = findTopLevelLocalAt(body_ordinal, lname, ltype);
                 if (!lv) {
+                    lv = findTopLevelLocal(lname, ltype);
+                }
+            } else if (is_body_local || !has_local_decl_ordinal) {
+                // Body local — try to find the actual LocalVar* from the function's AST first, then fall back
+                // to creating a new one.  AOT records carry the source body-local ordinal so duplicate names
+                // in sibling switch/if blocks resolve by identity instead of depending on local slot order
+                // matching source walk order.
+                if (is_body_local && body_ordinal < stmt_locals.size()) {
+                    LocalVar* candidate = stmt_locals[body_ordinal];
+                    if (candidate && candidate->getName()
+                            && strcmp(candidate->getName(), lname ? lname : "") == 0
+                            && aotLocalTypeMatches(candidate, ltype, ctx_type_resolver)) {
+                        lv = candidate;
+                        removeAOTLocalCandidate(stmt_local_deque, lname, lv);
+                    }
+                }
+                // Fallback: match on both name and type when available, consuming in walk order
+                if (!lv && lname && *lname && !stmt_local_deque.empty()) {
                     lv = popMatchingAOTLocal(stmt_local_deque, lname, ltype, ctx_type_resolver);
                 }
-            }
-            if (!lv) {
-                lv = findTopLevelLocal(lname, ltype);
+                // Legacy blobs without QORE_AOT_FEAT_LOCAL_DECL_ORDINAL cannot tell a body local from a
+                // top-level local
+                if (!lv && !has_local_decl_ordinal) {
+                    lv = findTopLevelLocal(lname, ltype);
+                }
             }
             if (!lv) {
                 // Toplevel or not found in AST — create a new LocalVar
@@ -4211,6 +4271,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 lv->setReadOnly();
             }
             ctx->locals[i] = lv;
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] '%s': local[%d] '%s' type '%s' flags=0x%x ordinal=%u -> %p\n",
+                    name, i, lname ? lname : "", ltype ? ltype : "", lflags, body_ordinal, (void*)lv);
+            }
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
                 name, i, lname ? lname : "", lflags, param_idx, (void*)lv);
         } else {
@@ -7034,7 +7098,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 };
                 auto handler = deserializeIRFunction(reader, ptr, end, pgm, readExprCb,
                     &handler_local_map, ir_error,
-                    ctx->locals, num_locals, nullptr, false, nullptr, local_owner_pgm);
+                    ctx->locals, num_locals, nullptr, false, nullptr, local_owner_pgm, false, nullptr,
+                    &ctx->all_body_locals);
                 if (handler) {
                     // Compute slot IDs for the deserialized handler
                     handler->computeSlotIdsAndEmbed();
@@ -7369,7 +7434,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const AOTExprReadFunc& readExpr,
         QoreProgram* pgm,
         QoreProgram* local_owner_pgm,
-        std::string& error) {
+        std::string& error,
+        LocalVar** parent_locals_arr,
+        int num_parent_locals,
+        const std::vector<LocalVar*>* enclosing_body_locals) {
     auto need = [&ptr, end, &error](size_t bytes, const char* field) -> bool {
         if (end < ptr || static_cast<size_t>(end - ptr) < bytes) {
             error = "truncated instruction while reading ";
@@ -7453,6 +7521,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     AOTInstReadCtx rctx{
         reader, ptr, end, blocks, local_map, readExpr, pgm, local_owner_pgm, error, slot_to_local
     };
+    // a nested handler runs against the same enclosing AOT context as the function containing it
+    rctx.parent_locals_arr = parent_locals_arr;
+    rctx.num_parent_locals = num_parent_locals;
+    rctx.enclosing_body_locals = enclosing_body_locals;
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
     if (!inst) {
         const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
@@ -8497,7 +8569,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         const std::vector<LocalVar*>* direct_body_locals,
         QoreProgram* local_owner_pgm,
         bool metadata_only,
-        ExceptionSink* cancel_xsink) {
+        ExceptionSink* cancel_xsink,
+        const std::vector<LocalVar*>* enclosing_body_locals,
+        const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals) {
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -8571,7 +8645,10 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         return nullptr;
     }
     bool has_local_decl_ordinal = (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0;
-    const size_t min_local_bytes = static_cast<size_t>(num_local_slots) * (has_local_decl_ordinal ? 16 : 12);
+    // from QORE_AOT_LOCAL_BINDING_VERSION, each slot record also names the variable it binds to
+    const bool has_local_binding = reader.getHeader().version >= QORE_AOT_LOCAL_BINDING_VERSION;
+    const size_t local_record_bytes = (has_local_decl_ordinal ? 16 : 12) + (has_local_binding ? 5 : 0);
+    const size_t min_local_bytes = static_cast<size_t>(num_local_slots) * local_record_bytes;
     const size_t min_body_local_bytes = static_cast<size_t>(num_body_locals)
         * (((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) ? 12 : 8);
     const size_t min_block_bytes = static_cast<size_t>(num_blocks) * 7;
@@ -8689,7 +8766,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         if (checkCancel()) {
             return nullptr;
         }
-        if (!need(has_local_decl_ordinal ? 16 : 12, "local slot table entry")) {
+        if (!need(local_record_bytes, "local slot table entry")) {
             return nullptr;
         }
         const char* lname = reader.readStringRef(ptr);
@@ -8697,6 +8774,12 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
         uint32_t body_ordinal = has_local_decl_ordinal
             ? QoreAOTBinaryReader::readU32(ptr) : UINT32_MAX;
+        AOTIRLocalBinding binding = AOTIRLocalBinding::NONE;
+        uint32_t binding_index = UINT32_MAX;
+        if (has_local_binding) {
+            binding = static_cast<AOTIRLocalBinding>(QoreAOTBinaryReader::readU8(ptr));
+            binding_index = QoreAOTBinaryReader::readU32(ptr);
+        }
 
         if (!lname || !*lname) {
             continue;
@@ -8741,25 +8824,69 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             continue;
         }
 
-        // For handler parent slots (slot_id < parent_slot_count), use direct
-        // slot-indexed access to the parent locals array to avoid name-collision
-        // ambiguity when the parent function has same-named variables.  Full
-        // source-stripped debug IR is serialized against the enclosing AOT
-        // context's complete local slot table, so allow the same direct mapping
-        // for every slot on that path.
-        if (parent_locals_arr
-                && (use_parent_locals_for_all_slots || slot_id < (uint32_t)parent_slot_count)
-                && num_parent_locals > 0
-                && slot_id < static_cast<uint32_t>(num_parent_locals)
-                && parent_locals_arr[slot_id]) {
-            LocalVar* parent_lv = parent_locals_arr[slot_id];
+        // binds this slot to a variable owned by the enclosing scope
+        auto bindParentLocal = [&](LocalVar* parent_lv) {
             func->local_var_slots[parent_lv] = slot_id;
             local_map[lname] = parent_lv;
             if (ltype && *ltype) {
                 local_map[makeLocalKey(lname, ltype)] = parent_lv;
             }
             enclosing_local_set.insert(parent_lv);
+        };
+
+        // A nested handler's parent slots (slot_id < parent_slot_count) are the slots of the IR function that
+        // contains it, with the same slot ids; the containing function has already resolved them.
+        if (container_slot_locals && slot_id < parent_slot_count) {
+            auto cit = container_slot_locals->find(slot_id);
+            if (cit != container_slot_locals->end() && cit->second) {
+                bindParentLocal(cit->second);
+                continue;
+            }
+        }
+
+        // For handler parent slots (slot_id < parent_slot_count), use direct
+        // slot-indexed access to the parent locals array to avoid name-collision
+        // ambiguity when the parent function has same-named variables.  Full
+        // source-stripped debug IR is serialized against the enclosing AOT
+        // context's complete local slot table, so allow the same direct mapping
+        // for every slot on that path.  A nested handler's parent slots are not
+        // the AOT context's slots (see above).
+        if (parent_locals_arr && !container_slot_locals
+                && (use_parent_locals_for_all_slots || slot_id < (uint32_t)parent_slot_count)
+                && num_parent_locals > 0
+                && slot_id < static_cast<uint32_t>(num_parent_locals)
+                && parent_locals_arr[slot_id]) {
+            bindParentLocal(parent_locals_arr[slot_id]);
             continue;
+        }
+
+        // The variable the writer identified for this slot (QORE_AOT_LOCAL_BINDING_VERSION).  Each binding is
+        // checked against the slot's name and type, so a table that does not match falls back to the lookups
+        // below rather than binding a different variable.
+        if (binding != AOTIRLocalBinding::NONE) {
+            LocalVar* bound_lv = nullptr;
+            switch (binding) {
+                case AOTIRLocalBinding::ENCLOSING_SLOT:
+                    if (parent_locals_arr && binding_index < static_cast<uint32_t>(std::max(num_parent_locals, 0))) {
+                        bound_lv = parent_locals_arr[binding_index];
+                    }
+                    break;
+                case AOTIRLocalBinding::ENCLOSING_BODY_LOCAL:
+                    if (enclosing_body_locals && binding_index < enclosing_body_locals->size()) {
+                        bound_lv = (*enclosing_body_locals)[binding_index];
+                    }
+                    break;
+                case AOTIRLocalBinding::TOP_LEVEL:
+                    bound_lv = findAOTTopLevelLocal(pgm, binding_index, lname, ltype, &local_type_resolver);
+                    break;
+                default:
+                    break;
+            }
+            if (bound_lv && bound_lv->getName() && !strcmp(bound_lv->getName(), lname)
+                    && !aotLocalTypeKnownMismatch(bound_lv, ltype, &local_type_resolver)) {
+                bindParentLocal(bound_lv);
+                continue;
+            }
         }
 
         // A declaration ordinal proves that this slot belongs to the current
@@ -8956,7 +9083,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 }
             }
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
-                func.get(), &slot_to_local, *effectiveReadExpr, pgm, local_owner_pgm, error);
+                func.get(), &slot_to_local, *effectiveReadExpr, pgm, local_owner_pgm, error,
+                parent_locals_arr, num_parent_locals, enclosing_body_locals);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i)
