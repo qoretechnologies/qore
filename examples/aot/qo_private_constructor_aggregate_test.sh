@@ -24,9 +24,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/private_constructor_agg.qo"
 
 cat >"${PROVIDER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class PrivateAggregateHelper {
     private {
@@ -58,9 +56,7 @@ public class PrivateAggregateMaker {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub private_constructor_aggregate_test() {
     PrivateAggregateMaker maker();

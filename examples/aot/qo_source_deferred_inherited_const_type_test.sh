@@ -26,9 +26,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/source_deferred_inherited_const_type_agg.qo"
 
 cat >"${BASE_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace N {
     public hashdecl ApiOptionInfo {
@@ -55,9 +53,7 @@ public namespace N {
 QORE
 
 cat >"${CHILD_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace N {
     public class Child inherits Base {
@@ -74,9 +70,7 @@ public namespace N {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub source_deferred_inherited_const_type_test() {
     N::Child child();

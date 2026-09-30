@@ -15,9 +15,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class ServiceApi {
     public static stopListenerId(int id) {
@@ -26,9 +24,7 @@ class ServiceApi {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 sub svc_stop_listener_id(int id) {
     return ServiceApi::stopListenerId(id);

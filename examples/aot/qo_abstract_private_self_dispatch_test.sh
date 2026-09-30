@@ -25,9 +25,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/abstract_private_self_dispatch_agg.qo"
 
 cat >"${BASE_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class PoolHandle {
     public {
@@ -50,9 +48,7 @@ public class AbstractDatasourceManager {
 QORE
 
 cat >"${DERIVED_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class DatasourceManager inherits AbstractDatasourceManager {
     private PoolHandle getPoolImpl(string name) {
@@ -62,9 +58,7 @@ public class DatasourceManager inherits AbstractDatasourceManager {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub abstract_private_self_dispatch_test() {
     DatasourceManager mgr();

@@ -23,7 +23,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
+%modern
 
 hashdecl AutoAssignNodeOptionInfo {
     bool no_exit_on_error;
@@ -39,7 +39,7 @@ class QorusCommonLib {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
+%modern
 
 class ClientProcessBase {
     static string run(bool exit_on_err) {

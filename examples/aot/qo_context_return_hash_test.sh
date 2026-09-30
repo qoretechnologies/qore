@@ -24,9 +24,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/context_return_hash_agg.qo"
 
 cat >"${CLASS_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class ContextReturnHash {
     hash<auto> build() {
@@ -52,9 +50,7 @@ public class ContextReturnHash {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub context_return_hash_test() {
     ContextReturnHash obj();

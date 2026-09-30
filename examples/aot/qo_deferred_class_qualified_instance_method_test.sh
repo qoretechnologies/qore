@@ -24,7 +24,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
+%modern
 
 class BaseClient {
     *list<string> sendCmdSerialized(string cmd, hash<auto> d) {
@@ -34,7 +34,7 @@ class BaseClient {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
+%modern
 
 class Client inherits BaseClient {
     *list<string> run(hash<auto> h) {

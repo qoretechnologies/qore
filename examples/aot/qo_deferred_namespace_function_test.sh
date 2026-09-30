@@ -16,7 +16,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
+%modern
 
 public namespace OMQ {
     public string sub get_option_name(string domain, string name) {
@@ -26,7 +26,7 @@ public namespace OMQ {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
+%modern
 
 class Consumer {
     static string run(string value) {

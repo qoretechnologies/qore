@@ -23,9 +23,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class MemberDefaultProvider {
     public static string value() {
@@ -35,9 +33,7 @@ class MemberDefaultProvider {
 QORE
 
 cat >"${TMP}/src/holder.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class MemberDefaultHolder {
     private {
@@ -51,9 +47,7 @@ class MemberDefaultHolder {
 QORE
 
 cat >"${TMP}/src/user.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub main() {
     MemberDefaultHolder holder();

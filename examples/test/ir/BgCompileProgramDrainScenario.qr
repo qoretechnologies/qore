@@ -15,8 +15,7 @@
 #
 # Prints "total=<n>" for the caller to compare across exec modes.
 
-%new-style
-%require-types
+%modern
 
 int sub work(int x) {
     int s = 0;

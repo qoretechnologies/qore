@@ -22,9 +22,7 @@ SRC_QO="${TMP}/qo/${SRC_ID}.qo"
 AGG_QO="${TMP}/qo/static_method_auto_arg_runtime_dispatch_agg.qo"
 
 cat >"${SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %requires RestHandler
 
 auto sub make_runtime_rest_body() {

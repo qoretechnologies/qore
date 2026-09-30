@@ -26,9 +26,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/imported_class_signature_agg.qo"
 
 cat >"${PROVIDER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace ProviderTypes {
     public class AbstractProvider {
@@ -48,9 +46,7 @@ public namespace ProviderTypes {
 QORE
 
 cat >"${REGISTRY_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace OMQ {
     public class ProviderRegistry {
@@ -70,9 +66,7 @@ public namespace OMQ {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub imported_class_signature_test() {
     ProviderTypes::AbstractProvider provider("db");

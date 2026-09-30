@@ -21,9 +21,7 @@ SRC_QO="${TMP}/qo/${SRC_ID}.qo"
 AGG_QO="${TMP}/qo/overload_resolution_agg.qo"
 
 cat >"${SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class TypeDescription {
 }

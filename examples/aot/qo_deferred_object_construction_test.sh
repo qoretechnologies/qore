@@ -24,7 +24,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
+%modern
 
 class Tx {
     constructor(string driver) {
@@ -37,7 +37,7 @@ class Tx {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
+%modern
 
 string sub getDriverName() {
     return "pgsql";

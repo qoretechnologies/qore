@@ -1,7 +1,4 @@
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 # Factory that instantiates Top and asserts both cross-session
 # invariants held: ctor-args chain propagated to Base, AND Base's

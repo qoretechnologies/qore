@@ -15,7 +15,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
+%modern
 %requires yaml
 %strict-args
 %require-types
@@ -74,9 +74,7 @@ class AbstractQorusProcessManager inherits AbstractQorusClientProcess {
 QORE
 
 cat >"${TMP}/src/common.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class QorusMasterCoreQsvcCommon {
     static *hash<LoggerParams> buildLoggerParams(*hash<auto> input_params) {
@@ -95,9 +93,7 @@ class QorusMasterCoreQsvcCommon {
 QORE
 
 cat >"${TMP}/src/main.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class QorusMaster inherits AbstractQorusProcessManager, QorusMasterCoreQsvcCommon {
     constructor() {

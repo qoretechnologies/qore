@@ -24,9 +24,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/internal_pool_bool_args_namespace_agg.qo"
 
 cat >"${GLOBALS_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %require-our
 
 public class PoolHandle {
@@ -53,7 +51,7 @@ public namespace OMQ {
 QORE
 
 cat >"${MANAGER_SRC}" <<'QORE'
-%new-style
+%modern
 
 namespace OMQ {
 class AbstractManager {
@@ -83,9 +81,7 @@ class Manager inherits AbstractManager {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %require-our
 
 int sub internal_pool_bool_args_namespace_test() {

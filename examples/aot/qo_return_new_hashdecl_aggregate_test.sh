@@ -27,9 +27,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/return_new_hashdecl_agg.qo"
 
 cat >"${TYPES_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public hashdecl RestInfo {
     string name;
@@ -61,9 +59,7 @@ class UserRestClass inherits QorusRestClass {
 QORE
 
 cat >"${BASE_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class UsersRestClass inherits QorusRestClass {
     *QorusRestClass subClassImpl(string name) {
@@ -78,9 +74,7 @@ class UsersRestClass inherits QorusRestClass {
 QORE
 
 cat >"${V8_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class UserRestClassV8 inherits UserRestClass {
     constructor(hash<RestInfo> h) : UserRestClass(h) {
@@ -95,9 +89,7 @@ class UsersRestClassV8 inherits UsersRestClass {
 QORE
 
 cat >"${V9_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class UserRestClassV9 inherits UserRestClassV8 {
     constructor(hash<RestInfo> h) : UserRestClassV8(h) {
@@ -112,9 +104,7 @@ class UsersRestClassV9 inherits UsersRestClassV8 {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub return_new_hashdecl_aggregate_test() {
     UsersRestClassV9 users();

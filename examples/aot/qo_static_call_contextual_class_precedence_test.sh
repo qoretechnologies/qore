@@ -25,9 +25,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/relative_lookup_agg.qo"
 
 cat >"${GLOBAL_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class OptionHelper {
     public static string globalOnly(string token) {
@@ -37,9 +35,7 @@ public class OptionHelper {
 QORE
 
 cat >"${PROVIDER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace RemoteDevelopment {
     public class OptionHelper {
@@ -51,9 +47,7 @@ public namespace RemoteDevelopment {
 QORE
 
 cat >"${CONSUMER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace RemoteDevelopment {
     public class DeployProcessFSA {
@@ -65,9 +59,7 @@ public namespace RemoteDevelopment {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub relative_lookup_test() {
     string result = RemoteDevelopment::DeployProcessFSA::getProcessArgs("abc");

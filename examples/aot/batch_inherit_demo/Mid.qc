@@ -1,7 +1,4 @@
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 # Middle layer — empty-body ctor delegating args to Base via
 # explicit BCA.  Matches the shape that broke on qwf where

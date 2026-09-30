@@ -23,9 +23,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/on_exit_bool_member_return_agg.qo"
 
 cat >"${LOCKED_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace OMQ {
     public class LockedFlag {
@@ -66,9 +64,7 @@ public namespace OMQ {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub on_exit_bool_member_return_test() {
     OMQ::LockedFlag lf();

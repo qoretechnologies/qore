@@ -23,9 +23,7 @@ SRC_QO="${TMP}/qo/${SRC_ID}.qo"
 AGG_QO="${TMP}/qo/static_local_overrides_inherited_agg.qo"
 
 cat >"${SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %requires RestHandler
 %requires HttpServerUtil
 

@@ -23,9 +23,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/private_self_call_init_agg.qo"
 
 cat >"${CLASS_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public class PrivateSelfCallInitBase {
     private {
@@ -71,9 +69,7 @@ public class PrivateSelfCallInitDerived inherits PrivateSelfCallInitBase {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub private_self_call_init_test() {
     PrivateSelfCallInitDerived obj();

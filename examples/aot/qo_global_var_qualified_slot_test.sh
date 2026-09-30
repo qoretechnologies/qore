@@ -24,9 +24,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/global_var_qualified_slot_agg.qo"
 
 cat >"${GLOBALS_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %require-our
 
 public class PoolHandle {
@@ -47,9 +45,7 @@ public namespace RbacModule {
 QORE
 
 cat >"${MANAGER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %require-our
 
 public class Manager {
@@ -60,9 +56,7 @@ public class Manager {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 %require-our
 
 int sub global_var_qualified_slot_test() {

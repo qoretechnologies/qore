@@ -23,9 +23,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/keys_member_hash_slot_agg.qo"
 
 cat >"${REGISTRY_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace OMQ {
     public class AbstractProvider {
@@ -62,9 +60,7 @@ public namespace OMQ {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub keys_member_hash_slot_test() {
     OMQ::ProviderRegistry registry();

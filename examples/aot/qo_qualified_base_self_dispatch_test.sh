@@ -32,9 +32,7 @@ MAIN_SRC="${TMP}/src/main.q"
 AGG_QO="${TMP}/qo/qualified_base_self_dispatch_agg.qo"
 
 cat >"${BASE_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 namespace OMQ {
 public class CryptoKeyHelper {
@@ -46,9 +44,7 @@ public class CryptoKeyHelper {
 QORE
 
 cat >"${APP_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 namespace OMQ {
 public class QorusApp inherits CryptoKeyHelper {
@@ -64,9 +60,7 @@ public class QorusApp inherits CryptoKeyHelper {
 QORE
 
 cat >"${MAIN_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub qualified_base_self_dispatch_test() {
     OMQ::QorusApp app();
@@ -159,9 +153,7 @@ DEFER_PROVIDER_QO="${DEFER_TMP}/qo/crypto-key-helper.qo"
 DEFER_CONSUMER_QO="${DEFER_TMP}/qo/qorus-app.qo"
 
 cat >"${DEFER_PROVIDER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 namespace OMQ {
 public class CryptoKeyHelper {
@@ -173,9 +165,7 @@ public class CryptoKeyHelper {
 QORE
 
 cat >"${DEFER_CONSUMER_SRC}" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 namespace OMQ {
 public class QorusApp inherits CryptoKeyHelper {

@@ -39,7 +39,7 @@ mkdir -p "${TMP}/mod"
 cp "${TMP}/AsyncSocketIo.qmod" "${TMP}/mod/"
 
 cat > "${TMP}/drive.q" <<'EOF'
-%new-style
+%modern
 %requires AsyncSocketIo
 printf("aggregated AsyncSocketIo.qmod: loaded\n");
 AsyncSocketIo::AsyncSocketIoController ctl();

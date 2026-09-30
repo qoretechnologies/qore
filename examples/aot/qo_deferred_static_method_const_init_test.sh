@@ -15,9 +15,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class ConstProvider {
     public static string value() {
@@ -27,9 +25,7 @@ class ConstProvider {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class ConstConsumer {
     public {

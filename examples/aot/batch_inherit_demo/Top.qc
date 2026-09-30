@@ -1,7 +1,4 @@
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 # Top of the 3-deep chain — Top → Mid → Base.  Empty-body
 # constructor that delegates args to Mid via explicit BCA.

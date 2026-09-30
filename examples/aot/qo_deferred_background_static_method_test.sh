@@ -15,9 +15,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 class BackgroundProvider {
     public static write(string path, string text) {
@@ -30,9 +28,7 @@ class BackgroundProvider {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<QORE
-%new-style
-%strict-args
-%require-types
+%modern
 
 class BackgroundConsumer {
     static start(string path) {

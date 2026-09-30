@@ -1,7 +1,4 @@
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 # Regression demo for AOT batch phase-sync — cross-session
 # inheritance with:

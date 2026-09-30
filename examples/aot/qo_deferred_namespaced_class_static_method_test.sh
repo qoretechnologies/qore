@@ -16,9 +16,7 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 cat >"${TMP}/src/provider.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace OMQ {
     public class MapperProgram {
@@ -36,9 +34,7 @@ public namespace OMQ {
 QORE
 
 cat >"${TMP}/src/consumer.q" <<'QORE'
-%new-style
-%strict-args
-%require-types
+%modern
 
 namespace OMQ {
     class MapperFieldCodeTypeHelper {
