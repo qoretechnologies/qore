@@ -40,6 +40,17 @@ void qore_es_private::assimilate(qore_es_private& xs) {
         thread_exit = xs.thread_exit;
         xs.thread_exit = false;
     }
+    // The source sink is always left empty, so its `rethrown` flag must be reset along with its
+    // exception list, exactly as clear() and catchException() do.  The flag describes the
+    // exception held by the sink; once that exception has been handed off it describes nothing.
+    // A stale flag is destructive: the on_block_exit loops (StatementBlock::execIntern() and the
+    // IR/JIT/AOT runtime equivalents) reuse one handler sink for every handler they fire and
+    // clear the in-flight exception whenever that sink reports `rethrown` after an on_error
+    // handler.  A leftover flag from an earlier `on_error rethrow` handler therefore made a later
+    // on_error handler that did NOT rethrow discard the rethrown exception, and the function
+    // returned normally with no exception.  The flag is deliberately not transferred to this
+    // sink: the rethrow was already applied to it by the caller clearing the replaced exception.
+    xs.rethrown = false;
     if (xs.tail) {
         assert(xs.head);
         if (tail) {

@@ -58,7 +58,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR rethrow outside catch smoke", \testIrRethrowOutsideCatchSmoke());
         addTestCase("IR rethrow with args smoke", \testIrRethrowWithArgsSmoke());
-        addTestCase("IR on_error direct-call handled exception", \testIrOnErrorDirectCallHandledException());
+        addTestCase("IR on_error direct-call rethrown exception", \testIrOnErrorDirectCallRethrownException());
         addTestCase("IR guard mismatch smoke", \testIrGuardMismatchSmoke());
         addTestCase("IR guard exception flow smoke", \testIrGuardExceptionFlowSmoke());
         addTestCase("IR logical guard exception smoke", \testIrLogicalGuardExceptionSmoke());
@@ -2318,7 +2318,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             "Unexpected IR rethrow with args output");
     }
 
-    testIrOnErrorDirectCallHandledException() {
+    testIrOnErrorDirectCallRethrownException() {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
@@ -2360,10 +2360,12 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertFalse(err_output =~ /IR-EXECUTION-ERROR/, "Unexpected IR execution error");
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
-        assertEq("handler1 ERR\nafter-wrapper\n", stdout_output,
+        # the handlers fire LIFO: the rethrow replaces the exception, and the later on_error handler must not
+        # discard it, so it reaches the caller's catch block (an on_error handler never handles an exception)
+        assertEq("handler1 ERR\ncaught:ERR:desc\n", stdout_output,
             "Unexpected IR on_error direct-call output");
         assertFalse(stdout_output =~ /bad-after-fail/, "Unexpected continuation after failing call");
-        assertFalse(stdout_output =~ /caught:/, "Handled on_error exception should not reach outer catch");
+        assertFalse(stdout_output =~ /after-wrapper/, "The rethrown exception must reach the outer catch");
         assertFalse(stdout_output =~ /IR-EXECUTION-ERROR/, "Unexpected IR execution error in stdout");
     }
 

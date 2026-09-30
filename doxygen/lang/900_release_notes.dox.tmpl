@@ -3825,6 +3825,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed an exception rethrown by an \c on_error handler with \c rethrow being lost when another \c on_error
+      handler ran after it for the same exception: the function returned normally instead of raising the exception
+      (or, if it declared a return type, raised a \c RUNTIME-TYPE-ERROR exception for a missing return statement);
+      this affected handlers in the same block in all execution modes and, in compiled code, an
+      <tt>on_error rethrow</tt> in a nested block or loop of a function that also has its own \c on_error handler
     - Fixed @ref Qore::SQL::DatasourcePool "DatasourcePool" memory corruption: deleting a pool while another thread
       was still inside one of its methods released the pool's options, event queue and queue argument twice, which
       could crash the process later at an unrelated allocation; @ref Qore::SQL::DatasourcePool::setEventQueue()

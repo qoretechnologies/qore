@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class OnErrorRethrowTest
+
+#! Tests that an exception rethrown by an on_error handler survives the other handlers fired for it
+/** The on_block_exit runtimes fire every handler that an exception triggers into one handler exception
+    sink and, after each on_error handler, clear the in-flight exception if that sink reports that the
+    handler rethrew it.  The sink's "rethrown" flag survived the handoff of its exception to the caller, so
+    any LATER on_error handler fired through the same sink -- one that did not rethrow at all -- cleared the
+    rethrown exception, and the function returned normally (or, for a typed function, failed with
+    "block missing return statement").
+
+    Every execution mode shared the defect for handlers in the same block.  Compiled code also hit it for an
+    on_error rethrow in a nested block under a function-level on_error handler, because a throw that no
+    local variable cleanup anchors fires the handlers of every enclosing scope in one pass.
+
+    The worker runs each case and prints one line per case; the line holds the outcome and the handlers
+    that ran, in order.  It is run in every execution mode and as a qcc-compiled executable, and every line
+    must match the expected (interpreter) result exactly.
+*/
+class OnErrorRethrowTest inherits QUnit::Test {
+    public {
+        const TypeError = "RUNTIME-TYPE-ERROR:<block return> expects type 'int', but got no value instead: "
+            "block missing return statement";
+
+        #! the expected "<outcome> [<handler log>]" of each case in the worker
+        const Expected = {
+            "void_inline": "caught E:d [oe]",
+            "typed_call_args": "caught E:x [oe]",
+            "typed_call_args_false": "caught E:x []",
+            "same_block": "caught E:d [oe]",
+            "same_block_args": "caught E:d+a [oe:d+a]",
+            "outer_on_exit": "caught E:d+i [exit]",
+            "outer_on_exit_if": "caught E:d [exit-if]",
+            "outer_on_success": "caught E:d [oe]",
+            "outer_on_success_if": "caught E:s []",
+            "multi_level": "caught E:d+3+1 [oe2:d+3,oe0:d+3+1]",
+            "loop_call_ok": "returned 2 []",
+            "loop_call": "caught L:bad (element 1) [oe:bad (element 1)]",
+            "loop_inline": "caught L:inline [oe,exit]",
+            "outer_handler_throws": "caught E:d+i -> H:outer handler []",
+            "inner_handler_throws": "caught E:d -> H:inner handler [oe]",
+            "both_rethrow": "caught E:d+inner+outer []",
+            "no_exception": "returned 10 [body,exit,success]",
+            "inner_no_rethrow": "caught E:d [inner-oe,oe]",
+            "handler_catches_own": "caught E:d [caught-in-handler:X,oe]",
+            "sequential_blocks": "caught E:second [first,oe]",
+            "catch_in_body": "returned 14 [catch:in-try]",
+            "rethrow_from_catch": "caught E:from-catch [oe:from-catch]",
+            "rethrow_args_throw": "caught E:d -> ARG:rethrow argument failed [oe:E]",
+            "post_ok": "returned 16 []",
+            "post_err": "caught EVENT-ERROR:object (key \"obj\") (key \"info\") (event) [release,oe]",
+        };
+
+        #! the interpreted execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc optimization levels that the worker is compiled with
+        const OptLevels = ("0", "3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("OnErrorRethrowTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        worker = get_script_dir() + DirSep + "on-error-rethrow-worker.q";
+
+        addTestCase("the expected results parse", \testExpectedParse());
+        addTestCase("negative: the output check rejects a lost exception", \testCheckRejectsLostException());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExpectedParse() {
+        # the parser must accept every expected line, or the mode checks below would compare nothing
+        string out = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, $1.value), Expected.pairIterator());
+        assertEq(Expected, parseOutput("expected", out));
+    }
+
+    testCheckRejectsLostException() {
+        # what the defect produced: the exception vanished and the function returned normally
+        hash<string, string> results = Expected + {
+            "void_inline": "returned null [oe]",
+            "typed_call_args": "caught " + TypeError + " [oe]",
+        };
+        list<string> mismatches = getMismatches(results);
+        assertEq(("typed_call_args", "void_inline"), sort(mismatches));
+
+        # a case missing from the output is reported as well
+        mismatches = getMismatches(Expected - "post_err");
+        assertEq(("post_err",), mismatches);
+
+        # and so is output the worker should not print
+        assertThrows("WORKER-OUTPUT-ERROR", \parseOutput(), ("bad", "unexpected text\n"));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                qore_bin, mode, worker));
+            checkResults(mode, parseOutput(mode, out));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-on-error-rethrow-");
+        foreach string opt in (OptLevels) {
+            string exe = tmp.path + DirSep + "on-error-rethrow-O" + opt;
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%s -o %s %s 2>&1", libqore_dir,
+                qcc_bin, opt, exe, worker));
+            assertTrue(is_file(exe), sprintf("qcc -O%s: %s", opt, compile_out));
+            string label = "aot-O" + opt;
+            checkResults(label, parseOutput(label, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                exe))));
+        }
+    }
+
+    #! parses the "<case>: <result>" lines printed by the worker
+    private hash<string, string> parseOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> parts = (line =~ x/^([a-z_]+): (.*)$/);
+            if (!parts) {
+                throw "WORKER-OUTPUT-ERROR", sprintf("%s: unexpected worker output line %y in: %s", label, line,
+                    out);
+            }
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! returns the names of the cases whose result differs from the expected one, or that are missing or extra
+    private list<string> getMismatches(hash<string, string> results) {
+        list<string> rv = ();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            if (results{i.key} !== i.value) {
+                push rv, i.key;
+            }
+        }
+        foreach string key in (keys results) {
+            if (!Expected.hasKey(key)) {
+                push rv, key;
+            }
+        }
+        return rv;
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": cases run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq((), getMismatches(results), label + ": mismatches");
+    }
+}

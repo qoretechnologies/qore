@@ -21,6 +21,8 @@ class OnBlockExitTest inherits QUnit::Test {
         addTestCase("on_exit with function calls", \testOnExitWithFunctionCalls());
         addTestCase("on_exit ordering", \testOnExitOrdering());
         addTestCase("on_error rethrow", \testOnErrorRethrow());
+        addTestCase("on_error rethrow followed by another on_error handler", \testRethrowThenOnError());
+        addTestCase("nested on_error rethrow under an outer on_error handler", \testNestedRethrowOuterOnError());
         set_return_value(main());
     }
 
@@ -178,5 +180,107 @@ class OnBlockExitTest inherits QUnit::Test {
             assertEq("ORIGINAL-ERROR", ex.err);
         }
         assertEq(True, caught_rethrow);
+    }
+
+    testRethrowThenOnError() {
+        # handlers fire LIFO: the rethrow runs first, then the plain on_error handler, which must not discard
+        # the rethrown exception
+        list<string> order = ();
+        try {
+            on_error order += "oe:" + $1.desc;
+            on_error rethrow $1.err, $1.desc + "+r";
+            throw "SAME-BLOCK-ERROR", "d";
+        } catch (hash<ExceptionInfo> ex) {
+            order += "caught:" + ex.err + ":" + ex.desc;
+        }
+        assertEq(("oe:d+r", "caught:SAME-BLOCK-ERROR:d+r"), order);
+
+        # plain rethrow
+        order = ();
+        assertThrows("SAME-BLOCK-ERROR", \rethrowThenOnError(), \order);
+        assertEq(("oe",), order);
+
+        # negative: no exception, so neither handler runs
+        order = ();
+        {
+            on_error order += "oe";
+            on_error rethrow;
+            order += "body";
+        }
+        assertEq(("body",), order);
+    }
+
+    testNestedRethrowOuterOnError() {
+        list<string> order = ();
+        assertThrows("NESTED-ERROR", "d-i", \nestedRethrow(), (\order, False));
+        assertEq(("oe",), order);
+
+        # a typed function must propagate the exception, not fail for a missing return statement
+        order = ();
+        assertThrows("NESTED-ERROR", "d-i", \nestedRethrowTyped(), \order);
+        assertEq(("oe",), order);
+
+        # the same in a loop
+        order = ();
+        assertThrows("NESTED-ERROR", "d-element-1", \nestedRethrowLoop(), \order);
+        assertEq(("oe",), order);
+
+        # negative: an outer handler that throws itself chains its exception after the rethrown one
+        order = ();
+        try {
+            nestedRethrow(\order, True);
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("NESTED-ERROR", ex.err);
+            assertEq("d-i", ex.desc);
+            assertEq("HANDLER-ERROR", ex.next.err);
+        }
+        assertEq(("oe",), order);
+    }
+
+    private rethrowThenOnError(reference<list<string>> order) {
+        on_error order += "oe";
+        on_error rethrow;
+        throw "SAME-BLOCK-ERROR", "d";
+    }
+
+    private nestedRethrow(reference<list<string>> order, bool handler_throws) {
+        on_error {
+            order += "oe";
+            if (handler_throws) {
+                throw "HANDLER-ERROR", "outer handler";
+            }
+        }
+        {
+            on_error rethrow $1.err, $1.desc + "-i";
+            throw "NESTED-ERROR", "d";
+        }
+        order += "after-block";
+    }
+
+    private int nestedRethrowTyped(reference<list<string>> order) {
+        on_error order += "oe";
+        {
+            on_error rethrow $1.err, $1.desc + "-i";
+            throwNested();
+        }
+        return 1;
+    }
+
+    private int nestedRethrowLoop(reference<list<string>> order) {
+        on_error order += "oe";
+        int n = 0;
+        foreach int i in (0, 1, 2) {
+            on_error rethrow $1.err, sprintf("%s-element-%d", $1.desc, $#);
+            if (i == 1) {
+                throwNested();
+            }
+            ++n;
+        }
+        return n;
+    }
+
+    private static throwNested() {
+        throw "NESTED-ERROR", "d";
     }
 }
