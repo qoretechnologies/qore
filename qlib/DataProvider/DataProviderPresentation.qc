@@ -1070,7 +1070,15 @@ public class DataProviderPresentation {
 */
 public class DataProviderPresentationCatalog {
     private {
+        #! the native catalog domain
+        string domain;
+        #! the canonical requested locale
         string locale;
+        #! the effective catalog files composed into @ref catalog, in load order
+        list<string> files;
+        #! the catalog discovery options the catalog was built with
+        *hash<auto> discovery_opts;
+        #! the composed message catalog; it depends only on @ref files
         I18n::MessageCatalog catalog;
     }
 
@@ -1233,9 +1241,11 @@ public class DataProviderPresentationCatalog {
     constructor(string domain, string requested_locale,
             *hash<auto> discovery_opts = NOTHING,
             *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
+        self.domain = domain;
+        self.discovery_opts = discovery_opts;
         locale = canonicalRequestedLocale(requested_locale);
-        list<string> files = discoverEffectiveCatalogFiles(domain, locale,
-            discovery_opts, discovery_index);
+        files = discoverEffectiveCatalogFiles(domain, locale, discovery_opts,
+            discovery_index);
         list<hash<auto>> native_catalogs = ();
         foreach string path in (files) {
             native_catalogs += I18n::load_native_catalog(path);
@@ -1244,9 +1254,132 @@ public class DataProviderPresentationCatalog {
     }
 
     #! Creates a projection catalog from an already composed message catalog
-    private:internal constructor(string locale, I18n::MessageCatalog catalog) {
+    private:internal constructor(string domain, string locale,
+            list<string> files, *hash<auto> discovery_opts,
+            I18n::MessageCatalog catalog) {
+        self.domain = domain;
         self.locale = locale;
+        self.files = files;
+        self.discovery_opts = discovery_opts;
         self.catalog = catalog;
+    }
+
+    #! Returns the effective catalog files of one domain for a requested locale
+    /** These are the files a catalog for \a requested_locale is composed from,
+        in load order: the provider's @c root layer, then its base-language and
+        regional layers, with each owner layer installed in more than one
+        catalog search root counted once.  Requested locales that resolve to the
+        same files are presented from the same composed messages, so a caller
+        that caches catalogs can key the composed catalog by these files and
+        derive each requested locale's catalog from it with
+        @ref forRequestedLocale() instead of loading the same files again.
+
+        @param domain native i18n catalog domain
+        @param requested_locale requested BCP 47 locale or \c root for
+            producer-source presentation
+        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_index optional discovery index reused for one
+            operation; see the constructor
+
+        @return the effective catalog file paths in load order; an empty list
+            if the domain has no catalog for the locale
+
+        @throw I18N-CATALOG-ERROR if catalog discovery fails
+        @throw I18N-LOCALE-ERROR if \a requested_locale is invalid
+
+        @par Example
+        With only @c root and @c es catalogs installed, @c es-ES, @c es, and
+        @c es-MX resolve to the same files:
+        @code{.py}
+        list<string> files = DataProviderPresentationCatalog::getEffectiveCatalogFiles("data-provider.UW9yZQ",
+            "es-MX");
+        @endcode
+
+        @since %DataProvider 3.9
+    */
+    static list<string> getEffectiveCatalogFiles(string domain,
+            string requested_locale, *hash<auto> discovery_opts = NOTHING,
+            *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
+        return discoverEffectiveCatalogFiles(domain,
+            canonicalRequestedLocale(requested_locale), discovery_opts,
+            discovery_index);
+    }
+
+    #! Returns the catalog for another requested locale that resolves to the same catalog files
+    /** The returned catalog shares this catalog's composed messages, so no
+        catalog file is parsed or composed again; it projects exactly as a
+        catalog constructed for \a requested_locale with this catalog's domain
+        and discovery options, including the locale it reports as
+        @c presentation_language.  The files of \a requested_locale are
+        discovered with this catalog's discovery options and must be this
+        catalog's files (see @ref getEffectiveCatalogFiles()); a locale with a
+        catalog layer of its own is rejected, as its messages are not in this
+        catalog.
+
+        @param requested_locale requested BCP 47 locale or \c root for
+            producer-source presentation
+        @param discovery_index optional discovery index reused for one
+            operation; see the constructor
+
+        @return this catalog if \a requested_locale is its locale, otherwise a
+            new catalog for \a requested_locale sharing this catalog's messages
+
+        @throw I18N-CATALOG-ERROR if catalog discovery fails
+        @throw I18N-LOCALE-ERROR if \a requested_locale is invalid
+        @throw DATA-PROVIDER-PRESENTATION-CATALOG-MISMATCH if \a requested_locale
+            does not resolve to this catalog's files; the exception argument
+            has the \c locale, its \c files, and this catalog's
+            \c catalog_files
+
+        @par Example
+        @code{.py}
+        DataProviderPresentationCatalog es("data-provider.UW9yZQ", "es");
+        # no es-MX catalog is installed, so es-MX shares the es messages
+        DataProviderPresentationCatalog es_mx = es.forRequestedLocale("es-MX");
+        @endcode
+
+        @since %DataProvider 3.9
+    */
+    DataProviderPresentationCatalog forRequestedLocale(string requested_locale,
+            *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
+        string requested = canonicalRequestedLocale(requested_locale);
+        if (requested == locale) {
+            return self;
+        }
+        list<string> requested_files = discoverEffectiveCatalogFiles(domain,
+            requested, discovery_opts, discovery_index);
+        if (requested_files != files) {
+            throw "DATA-PROVIDER-PRESENTATION-CATALOG-MISMATCH", sprintf("locale %y of catalog domain %y resolves "
+                "to catalog files %y, not to the files %y of the %y catalog", requested, domain,
+                requested_files, files, locale), {
+                "locale": requested,
+                "files": requested_files,
+                "catalog_files": files,
+            };
+        }
+        return new DataProviderPresentationCatalog(domain, requested, files,
+            discovery_opts, catalog);
+    }
+
+    #! Returns the effective catalog files this catalog is composed from, in load order
+    /** @return the catalog file paths; an empty list if the domain has no
+            catalog for the locale
+
+        @see getEffectiveCatalogFiles()
+
+        @since %DataProvider 3.9
+    */
+    list<string> getCatalogFiles() {
+        return files;
+    }
+
+    #! Returns the native catalog domain of this catalog
+    /** @return the native i18n catalog domain the catalog was built for
+
+        @since %DataProvider 3.9
+    */
+    string getDomain() {
+        return domain;
     }
 
     #! Creates the projection catalogs for several locales of one domain
@@ -1375,8 +1508,9 @@ public class DataProviderPresentationCatalog {
                     remove parsed{path};
                 }
             }
-            consumer(new DataProviderPresentationCatalog(locale,
-                composeCatalog(files, native_catalogs)));
+            consumer(new DataProviderPresentationCatalog(domain, locale,
+                files, discovery_opts, composeCatalog(files,
+                    native_catalogs)));
         }
     }
 

@@ -84,6 +84,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \catalogDiscoveryIndexTest());
         addTestCase("domain catalogs share parsed catalog files",
             \domainCatalogBuilderTest());
+        addTestCase("requested locales resolving to the same catalog files share one load",
+            \requestedLocaleCatalogTest());
         addTestCase("catalog conflicts name the conflicting files",
             \catalogConflictReportTest());
         addTestCase("source catalogs cover provider presentation metadata",
@@ -912,6 +914,182 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \DataProviderPresentationCatalog::buildDomainCatalogs(),
             (Domain, ("ja", "not a locale!"), discovery_opts),
             "an invalid locale is rejected");
+    }
+
+    requestedLocaleCatalogTest() {
+        string root = make_tmp_dir("data-provider-presentation-requested-");
+        on_exit remove_tree(root);
+        string domain_dir = root + DirSep + Domain;
+        mkdir(domain_dir);
+        mkdir(domain_dir + DirSep + "es");
+        string display_id = DataProviderPresentation::actionMessageId(App,
+            Action, "display_name");
+        string desc_id = DataProviderPresentation::actionMessageId(App,
+            Action, "desc");
+        writeJson(domain_dir + DirSep + "root.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "Odeslat zprávu"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "es.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"es": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "Enviar mensaje"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "es" + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"es": {"messages": {
+                desc_id: {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "Envía el mensaje."},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "pt.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"pt": {"messages": {
+                display_id: {"source": "Odeslat zprávu",
+                    "message": "Enviar mensagem"},
+            }}},
+        });
+        writeJson(domain_dir + DirSep + "pt-BR.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"pt-BR": {"messages": {
+                desc_id: {"source": "Odešle zprávu přes vybraný účet.",
+                    "message": "Envia a mensagem."},
+            }}},
+        });
+        hash<auto> discovery_opts = {"search_path": (root,)};
+
+        # the regional variants of es have no layer of their own
+        list<string> es_files =
+            DataProviderPresentationCatalog::getEffectiveCatalogFiles(Domain,
+                "es", discovery_opts);
+        assertEq(3, es_files.size(), "root.json, es.json, and the es owner "
+            "fragment");
+        foreach string locale in (("es-ES", "es_MX", "es-MX")) {
+            assertEq(es_files,
+                DataProviderPresentationCatalog::getEffectiveCatalogFiles(
+                    Domain, locale, discovery_opts),
+                sprintf("%y resolves to the es files", locale));
+        }
+        list<string> pt_br_files =
+            DataProviderPresentationCatalog::getEffectiveCatalogFiles(Domain,
+                "pt-BR", discovery_opts);
+        list<string> pt_files =
+            DataProviderPresentationCatalog::getEffectiveCatalogFiles(Domain,
+                "pt", discovery_opts);
+        assertEq(3, pt_br_files.size(), "pt-BR adds its own layer to pt");
+        assertEq(pt_files, pt_br_files[0..1], "pt-BR falls back to the pt "
+            "layers first");
+        assertEq((), DataProviderPresentationCatalog::getEffectiveCatalogFiles(
+            "test.data-provider.presentation.missing", "es", discovery_opts),
+            "a domain without a catalog has no files");
+
+        # the es files are parsed once for all three locales
+        int before = I18n::get_catalog_file_parse_count();
+        DataProviderPresentationCatalog es(Domain, "es", discovery_opts);
+        assertEq(3, I18n::get_catalog_file_parse_count() - before,
+            "the es catalog parses its three files");
+        assertEq(Domain, es.getDomain());
+        assertEq(es_files, es.getCatalogFiles());
+        before = I18n::get_catalog_file_parse_count();
+        DataProviderPresentationCatalog es_es = es.forRequestedLocale("es-ES");
+        DataProviderPresentationCatalog es_mx = es.forRequestedLocale("es_MX");
+        assertEq(0, I18n::get_catalog_file_parse_count() - before,
+            "catalogs for other requested locales parse no file");
+        assertEq("es-ES", es_es.getLocale());
+        assertEq("es-MX", es_mx.getLocale(), "the requested locale is "
+            "canonicalized");
+        assertEq(es_files, es_mx.getCatalogFiles());
+        assertEq(Domain, es_mx.getDomain());
+        assertTrue(es.forRequestedLocale("es") == es,
+            "the catalog's own locale returns the catalog");
+        assertTrue(es_mx.forRequestedLocale("es-MX") == es_mx);
+
+        # a derived catalog projects exactly as a catalog constructed for its
+        # locale, including the locale it reports
+        foreach DataProviderPresentationCatalog derived in ((es_es, es_mx)) {
+            DataProviderPresentationCatalog constructed(Domain,
+                derived.getLocale(), discovery_opts);
+            hash<auto> projected = derived.projectAction(app(), action());
+            assertEq(constructed.projectAction(app(), action()), projected,
+                derived.getLocale());
+            assertEq(constructed.projectApp(app()), derived.projectApp(app()),
+                derived.getLocale());
+            assertEq(derived.getLocale(), projected.presentation_language);
+            assertEq("Enviar mensaje", projected.display_name);
+            assertEq("Envía el mensaje.", projected.desc);
+        }
+        # a derived catalog derives further catalogs from the same messages
+        before = I18n::get_catalog_file_parse_count();
+        assertEq("es-419", es_mx.forRequestedLocale("es-419").getLocale());
+        assertEq(0, I18n::get_catalog_file_parse_count() - before);
+
+        # a locale resolving to other files is rejected without parsing any
+        # file
+        before = I18n::get_catalog_file_parse_count();
+        *hash<ExceptionInfo> ex = catchException(sub () {
+            es.forRequestedLocale("pt");
+        });
+        assertEq("DATA-PROVIDER-PRESENTATION-CATALOG-MISMATCH", ex.err);
+        assertEq({
+            "locale": "pt",
+            "files": pt_files,
+            "catalog_files": es_files,
+        }, ex.arg);
+        DataProviderPresentationCatalog pt(Domain, "pt", discovery_opts);
+        before = I18n::get_catalog_file_parse_count();
+        ex = catchException(sub () {
+            pt.forRequestedLocale("pt-BR");
+        });
+        assertEq("DATA-PROVIDER-PRESENTATION-CATALOG-MISMATCH", ex.err,
+            "a regional locale with a layer of its own is rejected");
+        assertEq(pt_br_files, ex.arg.files);
+        assertEq(0, I18n::get_catalog_file_parse_count() - before,
+            "a rejected locale parses no file");
+        assertThrows("I18N-LOCALE-ERROR", \es.forRequestedLocale(),
+            ("not a locale!",), "an invalid locale is rejected");
+        assertThrows("I18N-LOCALE-ERROR",
+            \DataProviderPresentationCatalog::getEffectiveCatalogFiles(),
+            (Domain, "not a locale!", discovery_opts));
+
+        # locales without any layer of their own share the root catalog
+        DataProviderPresentationCatalog root_catalog(Domain, "root",
+            discovery_opts);
+        DataProviderPresentationCatalog sk = root_catalog.forRequestedLocale(
+            "sk");
+        assertEq("sk", sk.getLocale());
+        DataProviderPresentationCatalog constructed_sk(Domain, "sk",
+            discovery_opts);
+        assertEq(constructed_sk.projectAction(app(), action()),
+            sk.projectAction(app(), action()), "a locale without a catalog "
+            "projects as its constructed catalog");
+
+        # catalogs built for several locales at once derive catalogs too
+        list<DataProviderPresentationCatalog> built =
+            DataProviderPresentationCatalog::buildDomainCatalogs(Domain,
+                ("es", "pt-BR"), discovery_opts);
+        assertEq(es_files, built[0].getCatalogFiles());
+        assertEq(pt_br_files, built[1].getCatalogFiles());
+        assertEq(Domain, built[1].getDomain());
+        before = I18n::get_catalog_file_parse_count();
+        assertEq(es_es.projectAction(app(), action()),
+            built[0].forRequestedLocale("es-ES").projectAction(app(),
+                action()));
+        assertEq(0, I18n::get_catalog_file_parse_count() - before);
+
+        # the derived catalog's discovery reuses a caller-supplied index
+        I18n::CatalogDiscoveryIndex discovery_index();
+        DataProviderPresentationCatalog::getEffectiveCatalogFiles(Domain,
+            "es-AR", discovery_opts, discovery_index);
+        int scans = discovery_index.getDirectoryScanCount();
+        assertGt(0, scans);
+        es.forRequestedLocale("es-AR", discovery_index);
+        assertEq(scans, discovery_index.getDirectoryScanCount(),
+            "the derived catalog read no catalog directory again");
     }
 
     catalogConflictReportTest() {

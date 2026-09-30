@@ -1988,6 +1988,10 @@ while (*binary chunk = input.read(65536)) {
       - added native catalog-locale discovery and a cached multilingual action embedding projection, allowing
         semantic indexes to include every shipped source-owned provider translation without maintaining a
         language list or changing exact application and action identities
+      - added @ref DataProvider::DataProviderPresentationCatalog::getEffectiveCatalogFiles() "DataProviderPresentationCatalog::getEffectiveCatalogFiles()"
+        and @ref DataProvider::DataProviderPresentationCatalog::forRequestedLocale() "DataProviderPresentationCatalog::forRequestedLocale()",
+        so a presentation catalog cache loads the catalog files shared by regional variants such as \c es-ES,
+        \c es, and \c es-MX once instead of once per variant
       - the \c qore-data-provider-i18n catalog check now validates every discovered sibling translation against
         current producer metadata, rejecting removed message ids and stale source text while allowing partial
         catalogs and identical brand names or cognates; it can also recursively validate catalog trees from Qore,

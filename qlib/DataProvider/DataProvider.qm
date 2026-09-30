@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.8";
+    version = "3.9";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1348,6 +1348,16 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_9 DataProvider v3.9
+    - added @ref DataProvider::DataProviderPresentationCatalog::getEffectiveCatalogFiles() "DataProviderPresentationCatalog::getEffectiveCatalogFiles()",
+      which returns the catalog files a requested locale resolves to, and
+      @ref DataProvider::DataProviderPresentationCatalog::forRequestedLocale() "DataProviderPresentationCatalog::forRequestedLocale()",
+      which returns the catalog of another requested locale resolving to the same files without parsing or composing
+      them again; a cache of presentation catalogs can then load the files of regional variants such as \c es-ES,
+      \c es, and \c es-MX once instead of once per variant
+    - added @ref DataProvider::DataProviderPresentationCatalog::getCatalogFiles() "DataProviderPresentationCatalog::getCatalogFiles()"
+      and @ref DataProvider::DataProviderPresentationCatalog::getDomain() "DataProviderPresentationCatalog::getDomain()"
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns
