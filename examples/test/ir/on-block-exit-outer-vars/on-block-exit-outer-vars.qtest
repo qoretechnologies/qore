@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class OnBlockExitOuterVarsTest
+
+#! Tests that on_block_exit handlers read and write the variables they reach from outside the handler
+/** Compiled (qcc) code runs on_error / on_exit / on_success handlers as IR through the interpreter; when a
+    function is loaded, the local variables used by its handler IR are bound to the variables of the function's
+    AOT context.  A variable that the handler reaches from outside the function - a top-level local, a variable
+    captured by a closure - was bound only if the function body also used it; otherwise the handler got a fresh
+    variable that no scope had instantiated: reads returned NOTHING, writes were lost, and a captured variable
+    crashed the process (the closure variable lookup did not find it).
+
+    The worker runs each case and prints one line per case; it is run in every execution mode and as a
+    qcc-compiled executable, and every line must match the expected (interpreter) result exactly.
+*/
+class OnBlockExitOuterVarsTest inherits QUnit::Test {
+    public {
+        #! the expected result of each case in the worker
+        const Expected = {
+            "tl_on_error_write": "[\"oe\"]",
+            "tl_on_error_read": "caught E:d -> R:[\"a\", \"b\"]",
+            "tl_on_exit_write": "[1, 1, \"tl+exit\"]",
+            "tl_on_success_write": "[2, {success: 1}]",
+            "tl_on_error_if": "[[\"oe-if:IF\"], {success: 1, IF: \"if-desc\"}]",
+            "tl_nested_handler": "[\"body\", \"outer-exit\", \"nested-exit\"]",
+            "tl_loop": "[\"loop:0\", \"loop:1\", \"loop:2\"]",
+            "tl_foreach_error": "caught FE:at 2",
+            "tl_foreach_error_log": "[\"fe-oe:2\"]",
+            "fn_local_write": "[\"oe\"]",
+            "fn_local_only_in_handler": "15",
+            "fn_param_only_in_handler": "\"p!\"",
+            "fn_param_write_error": "[\"param:pp\"]",
+            "fn_handler_local": "14",
+            "cl_on_error_write": "[\"c-oe\"]",
+            "cl_on_error_read": "\"E:d -> R:captured\"",
+            "cl_on_exit_counter": "4",
+            "cl_on_success": "{1: 1, 2: 4, 3: 9}",
+            "cl_nested": "[\"inner-oe\", \"outer-oe\"]",
+            "cl_nested_handler": "[\"exit\", \"nested-exit\"]",
+            "cl_loop": "[\"i0\", \"i1\", \"i2\"]",
+            "cl_top_level": "[\"closure-tl\"]",
+            "ref_caller": "[\"start\", \"ref-oe\"]",
+            "ref_on_exit_caller": "101",
+            "ref_top_level": "[\"x\", \"ref-oe\"]",
+            "method": "[\"method-oe\"]",
+            "method_closure": "[[\"method-closure-oe\"], [\"method-oe\", \"member-from-closure\"]]",
+        };
+
+        #! the interpreted execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc optimization levels that the worker is compiled with
+        const OptLevels = ("0", "3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("OnBlockExitOuterVarsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        worker = get_script_dir() + DirSep + "on-block-exit-outer-vars-worker.q";
+
+        addTestCase("the expected results parse", \testExpectedParse());
+        addTestCase("negative: the output check rejects lost handler writes", \testCheckRejectsLostWrites());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExpectedParse() {
+        # the parser must accept every expected line, or the mode checks below would compare nothing
+        string out = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, $1.value), Expected.pairIterator());
+        assertEq(Expected, parseOutput("expected", out));
+    }
+
+    testCheckRejectsLostWrites() {
+        # what the defect produced: handler writes to outer variables were lost and reads returned NOTHING
+        hash<string, string> results = Expected + {
+            "tl_on_error_write": "[]",
+            "tl_on_error_read": "caught E:d -> R:null",
+        };
+        list<string> mismatches = getMismatches(results);
+        assertEq(("tl_on_error_read", "tl_on_error_write"), sort(mismatches));
+
+        # the cases the crash never reached are reported as missing
+        mismatches = getMismatches(Expected - ("method", "method_closure"));
+        assertEq(("method", "method_closure"), sort(mismatches));
+
+        # and so is output the worker should not print
+        assertThrows("WORKER-OUTPUT-ERROR", \parseOutput(), ("bad", "unexpected text\n"));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                qore_bin, mode, worker));
+            checkResults(mode, parseOutput(mode, out));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-on-block-exit-outer-vars-");
+        foreach string opt in (OptLevels) {
+            string exe = tmp.path + DirSep + "on-block-exit-outer-vars-O" + opt;
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%s -o %s %s 2>&1", libqore_dir,
+                qcc_bin, opt, exe, worker));
+            assertTrue(is_file(exe), sprintf("qcc -O%s: %s", opt, compile_out));
+            string label = "aot-O" + opt;
+            checkResults(label, parseOutput(label, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                exe))));
+        }
+    }
+
+    #! parses the "<case>: <result>" lines printed by the worker
+    private hash<string, string> parseOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> parts = (line =~ x/^([a-z_0-9]+): (.*)$/);
+            if (!parts) {
+                throw "WORKER-OUTPUT-ERROR", sprintf("%s: unexpected worker output line %y in: %s", label, line,
+                    out);
+            }
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! returns the names of the cases whose result differs from the expected one, or that are missing or extra
+    private list<string> getMismatches(hash<string, string> results) {
+        list<string> rv = ();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            if (results{i.key} !== i.value) {
+                push rv, i.key;
+            }
+        }
+        foreach string key in (keys results) {
+            if (!Expected.hasKey(key)) {
+                push rv, key;
+            }
+        }
+        return rv;
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": cases run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq((), getMismatches(results), label + ": mismatches");
+    }
+}

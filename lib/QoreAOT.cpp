@@ -31589,6 +31589,55 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
         && !ei->operands.empty();
 }
 
+//! Registers the variables that an on_block_exit handler reaches from outside the function running it
+/** A compiled function's handlers run as IR through the interpreter, and when the handler IR is loaded, each
+    local variable it uses is bound to a LocalVar of the enclosing AOT context: the function's own locals by slot,
+    its body locals (which include every handler's own locals) by name.  A variable that the handler reaches from
+    outside the function - a top-level local, a variable captured by a closure, or a parameter - is in neither set
+    unless the function body itself uses it, so it was bound to a fresh LocalVar that no scope ever
+    instantiated: reads returned NOTHING, writes were lost, and a captured variable could not be found at all.
+
+    Registering those variables in the function's local slot table gives them a slot identity that the runtime
+    resolves to the real variable exactly as for the function body's own references, and the handler IR loader
+    binds the handler's reference to that variable.
+
+    Nested handlers are walked too: their outer variables must be bound by the same context.
+
+    @param handler the handler IR function
+    @param body_locals the body locals of the function that owns the handler
+    @param slots the slot map of the function that owns the handler
+*/
+static void registerHandlerOuterLocals(const QoreIRFunction& handler,
+        const std::unordered_set<const LocalVar*>& body_locals, AOTSlotMap& slots) {
+    // register in handler slot order so that the slot table is deterministic
+    std::vector<std::pair<uint32_t, const LocalVar*>> outer;
+    for (const auto& [lv, slot_id] : handler.local_var_slots) {
+        // slots below parent_slot_count are the parent's own locals, bound to the parent's slots directly
+        if (lv && slot_id >= handler.parent_slot_count && !body_locals.count(lv)
+                && !slots.hasLocalSlot(reinterpret_cast<const void*>(lv))) {
+            outer.emplace_back(slot_id, lv);
+        }
+    }
+    std::sort(outer.begin(), outer.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    for (const auto& i : outer) {
+        slots.getLocalSlot(reinterpret_cast<const void*>(i.second));
+    }
+
+    for (const auto& block : handler.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::OnBlockExit) {
+                continue;
+            }
+            const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+            if (obei->handler_ir) {
+                registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+            }
+        }
+    }
+}
+
 // Walk a lvalue expression tree and register all inner VarRefNodes in the slot maps.
 // Required so ExprTreeSerializer can serialize subscript lvalue expressions even when the
 // base variable only appears inside a *LValue instruction and not in any LoadLocal/StoreLocal.
@@ -31683,6 +31732,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
             slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
         }
     }
+
+    // the function's own body locals (including those declared in its on_block_exit handlers); built on demand
+    // for the first on_block_exit handler
+    std::unordered_set<const LocalVar*> body_locals;
+    bool body_locals_built = false;
 
     // Walk blocks and instructions in deterministic order (same as LLVM lowering)
     // to assign slot indices for each unique process-specific pointer.
@@ -32063,6 +32117,15 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
                     slots.getStmtSlot(reinterpret_cast<const void*>(code));
+                    if (obei->handler_ir) {
+                        if (!body_locals_built) {
+                            for (const LocalVar* lv : func.all_body_locals) {
+                                body_locals.insert(lv);
+                            }
+                            body_locals_built = true;
+                        }
+                        registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+                    }
                     break;
                 }
                 case QoreIROpcode::SwitchCaseMatch: {
