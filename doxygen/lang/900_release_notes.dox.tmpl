@@ -334,6 +334,15 @@
     restoring their option and data provider types, which took several seconds and hundreds of megabytes for a
     large index; see @ref providerindexutil_summaries.  Indexes published by earlier versions are still read, and
     their action summaries are then read from the metadata of each app; rebuild the index after upgrading.
+
+    An app or action that cannot be initialized no longer fails the index build: it is recorded in the index with
+    its error, and is unavailable in it, while the other apps and actions are indexed (metadata cache version 9; see
+    @ref providerindexutil_failures).  Only failures that are not those of individual apps or actions, such as a
+    discovery source or factory module that cannot be loaded, a failed index worker, or an index file that cannot
+    be written, still fail the build.  A caller that requires a complete catalog checks the \c complete member of
+    the build's qualification report.  Earlier versions of the @ref providerindexutilintro "ProviderIndexUtil"
+    module cannot read an index published by this version; indexes published by earlier versions are still read,
+    without failure records.
     @endparblock
 
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
@@ -4250,6 +4259,12 @@ while (*binary chunk = input.read(65536)) {
         serialized
       - added @ref DataProvider::DataProviderIndexedActionSummaryInfo "DataProviderIndexedActionSummaryInfo", the
         action-level record of an action from the data provider index
+      - @ref DataProvider::DataProviderActionCatalog::sealDiscovery() "DataProviderActionCatalog::sealDiscovery()"
+        can record the failures of individual apps and actions in the new \c unavailable member of the discovery
+        report instead of failing the discovery generation; see
+        @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure() "DataProviderActionCatalog::isAppDiscoveryFailure()"
+      - fixed the static initializers registered after one that fails being discarded without being run; they are
+        now run by the next @ref DataProvider::DataProvider::checkStaticInit() "DataProvider::checkStaticInit()"
       - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
         restores types from their descriptions more faithfully, including class-backed named types in unions,
         hash types without fields, options of "or nothing" types, and union type descriptions
@@ -4305,6 +4320,14 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
       - rebuilding a provider index now includes inventories introduced by lazily loaded integrations, avoiding
         false stale-inventory errors while still preserving the previous index if qualification fails
+      - an app or action that cannot be initialized, for example because a resource it needs is not available, no
+        longer fails the index build; its failure is recorded in the index and logged, and the build reports the
+        number of failed apps and actions; an app that registered its info and connection scheme before failing is
+        indexed with them and without the actions that failed; the recorded failures are returned by the new
+        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()",
+        @ref ProviderIndexUtil::ProviderIndexUtil::tryGetAppFailure() "ProviderIndexUtil::tryGetAppFailure()",
+        and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionFailure() "ProviderIndexUtil::tryGetActionFailure()"
+        (see @ref providerindexutil_failures)
       - added @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()" so that callers can distinguish an unreadable or corrupt
         index from a system where no index has been created yet, and therefore avoid silently degrading to a
         partial app catalog

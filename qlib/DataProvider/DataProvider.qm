@@ -1350,6 +1350,13 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - @ref DataProvider::DataProviderActionCatalog::sealDiscovery() "DataProviderActionCatalog::sealDiscovery()"
+      takes an optional \c record_app_failures argument, with which the failures of individual apps and actions do
+      not block a discovery generation, but are returned in the new \c unavailable member of
+      @ref DataProvider::DataProviderDiscoveryReportInfo "DataProviderDiscoveryReportInfo"; added
+      @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure() "DataProviderActionCatalog::isAppDiscoveryFailure()"
+    - fixed the static initializers registered after one that fails being discarded without being run; they are now
+      run by the next @ref DataProvider::DataProvider::checkStaticInit() "DataProvider::checkStaticInit()"
     - added @ref DataProvider::DataProviderPresentationCatalog::getEffectiveCatalogFiles() "DataProviderPresentationCatalog::getEffectiveCatalogFiles()",
       which returns the catalog files a requested locale resolves to, and
       @ref DataProvider::DataProviderPresentationCatalog::forRequestedLocale() "DataProviderPresentationCatalog::forRequestedLocale()",

@@ -28,8 +28,8 @@ public class ProviderIndexActionSummariesTest inherits QUnit::Test {
         #! A second app
         const OtherApp = "QoreTestSummariesOther";
 
-        #! The metadata cache format version that records action summaries
-        const SummaryVersion = 8;
+        #! The metadata cache format version written
+        const CacheVersion = 9;
 
         #! The members of an indexed action that are not in its summary
         const NotInSummary = ("options", "data_provider_info");
@@ -538,8 +538,8 @@ public class ProviderIndexActionSummariesTest inherits QUnit::Test {
 
         hash<ProviderIndexInfo> info = writeTestIndex(getTestActions());
         hash<auto> manifest = getManifest(dir);
-        assertEq(SummaryVersion, manifest.routing.metadata_cache_version);
-        assertEq(SummaryVersion, manifest.manifest.version);
+        assertEq(CacheVersion, manifest.routing.metadata_cache_version);
+        assertEq(CacheVersion, manifest.manifest.version);
         string path = getSummaryFile(dir);
         binary data = ReadOnlyFile::readBinaryFile(path);
         assertEq(manifest.manifest.actions.size, data.size());

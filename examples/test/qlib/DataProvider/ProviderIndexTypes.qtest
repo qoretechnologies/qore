@@ -18,7 +18,7 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         on_exit remove_tree(directory);
         addTestCase("nested and media option type descriptions survive YAML and index readback",
             \roundTripTest());
-        addTestCase("a type description that is not plain data blocks publication with structured evidence",
+        addTestCase("an action whose type description is not plain data is recorded as unavailable",
             \failureTest());
         set_return_value(main());
     }
@@ -71,8 +71,7 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         }
     }
     private failureTest() {
-        auto previous = publish();
-        string original = File::readTextFile(previous.path);
+        publish();
         auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;
         action.action = "invalid";
         action.path = "/invalid";
@@ -80,17 +79,22 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         action.options = DataProviderActionCatalog::getActionOptionFromFields({
             "invalid": new QoreDataField({"name": "invalid", "type": invalid})});
         DataProviderActionCatalog::registerAction(action);
-        bool rejected = False;
-        try { publish(); }
-        catch (hash<ExceptionInfo> ex) {
-            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
-            assertFalse(ex.arg.complete);
-            assertEq(1, ex.arg.failures.size());
-            assertEq("serialize-action-metadata", ex.arg.failures[0].phase);
-            assertEq("invalid", ex.arg.failures[0].action);
-            rejected = True;
-        }
-        assertTrue(rejected);
-        assertEq(original, File::readTextFile(previous.path));
+        # the action is left out and its failure recorded; the app's other action is indexed
+        hash<auto> published = publish();
+        hash<DataProviderDiscoveryReportInfo> report = published.summary.qualification;
+        assertFalse(report.complete);
+        assertEq((), report.failures);
+        assertEq(1, report.unavailable.size());
+        assertEq("serialize-action-metadata", report.unavailable[0].phase);
+        assertEq("invalid", report.unavailable[0].action);
+        assertEq(1, published.summary.failed_actions);
+        hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+        assertFalse(index.actioninfomap.IndexIdentityFixture.hasKey("invalid"));
+        assertTrue(index.actioninfomap.IndexIdentityFixture.hasKey("record"));
+        *hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFailure("IndexIdentityFixture",
+            "invalid");
+        assertEq("serialize-action-metadata", failure.phase);
+        assertEq("action", failure.kind);
+        assertEq(report.unavailable[0].error, failure.error);
     }
 }

@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DataProviderStaticInitTest
+
+#! Tests the static initializers run by DataProvider::checkStaticInit()
+public class DataProviderStaticInitTest inherits QUnit::Test {
+    constructor() : Test("DataProvider static initialization test", "1.0") {
+        addTestCase("initializers after a failed initializer are run by the next check", \failureTest());
+        addTestCase("an initializer that checks static initialization does not run the others", \nestedTest());
+        set_return_value(main());
+    }
+
+    failureTest() {
+        # run any initializers registered by the modules loaded
+        DataProvider::checkStaticInit();
+
+        list<string> ran = ();
+        DataProvider::registerStaticInitializer(sub () { ran += "first"; });
+        DataProvider::registerStaticInitializer(sub () {
+            ran += "failing";
+            throw "STATIC-INIT-TEST-ERROR", "the initializer failed";
+        });
+        DataProvider::registerStaticInitializer(sub () { ran += "third"; });
+        DataProvider::registerStaticInitializer(sub () { ran += "fourth"; });
+
+        assertThrows("STATIC-INIT-TEST-ERROR", \DataProvider::checkStaticInit());
+        assertEq(("first", "failing"), ran, "the initializers after the failed one have not run");
+
+        # one registered after the failure runs after those that had not run
+        DataProvider::registerStaticInitializer(sub () { ran += "later"; });
+        DataProvider::checkStaticInit();
+        assertEq(("first", "failing", "third", "fourth", "later"), ran,
+            "the remaining initializers are run once, in order; the failed one is not run again");
+        DataProvider::checkStaticInit();
+        assertEq(5, ran.size(), "no initializer is run twice");
+    }
+
+    nestedTest() {
+        DataProvider::checkStaticInit();
+
+        list<string> ran = ();
+        DataProvider::registerStaticInitializer(sub () {
+            ran += "outer-start";
+            DataProvider::checkStaticInit();
+            ran += "outer-end";
+        });
+        DataProvider::registerStaticInitializer(sub () { ran += "second"; });
+        DataProvider::checkStaticInit();
+        assertEq(("outer-start", "outer-end", "second"), ran);
+    }
+}

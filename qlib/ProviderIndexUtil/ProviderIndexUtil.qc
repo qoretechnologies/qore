@@ -72,12 +72,16 @@ const RoutingIndexVersion = 4;
 #! changes a file that the previous index references; version 6 records the info of the indexed data provider
 #! factories in a file of its own that the manifest references; version 7 stores each distinct option type
 #! description and field description of an app once, in tables of its chunk that the descriptions refer to by position;
-#! version 8 records the action-level record of every action in a file of its own that the manifest references
-const MetadataCacheVersion = 8;
+#! version 8 records the action-level record of every action in a file of its own that the manifest references;
+#! version 9 records the apps and actions that could not be initialized when the index was built in a file of its own
+#! that the manifest references
+const MetadataCacheVersion = 9;
 #! The first metadata cache version whose chunks store the type descriptions of an app in tables
 const MetadataCacheTypeTableVersion = 7;
 #! The first metadata cache version that records the action summaries in a file of their own
 const MetadataCacheActionSummaryVersion = 8;
+#! The first metadata cache version that records the apps and actions that could not be initialized
+const MetadataCacheFailureVersion = 9;
 
 #! The members of a serialized action that are not in its action summary
 /** The options and the data provider info hold the type descriptions of the action; the others are not indexed, or
@@ -156,6 +160,59 @@ public hashdecl DataProviderIndexInfo {
     /** When read, values are \c DataProvider::DataProviderIndexedActionInfo hashes.
     */
     *hash<string, hash<auto>> top_actioninfomap;
+
+    #! Maps apps to the failures that made the app or some of its actions unavailable when the index was built
+    /** Each failure has the members of @ref ProviderIndexFailureInfo, the app's own failures first, then those of
+        its actions in action name order.  An app that could not be initialized at all has no info in
+        \c appinfomap; an app whose actions failed is indexed with the actions that did not fail.
+
+        Written to and read from the metadata cache only, not the canonical index file, which earlier versions of
+        this module read; @ref nothing if the index does not record failures, because it was published by an earlier
+        version of this module, or its writer did not provide them.
+
+        @see ProviderIndexUtil::getIndexedFailures()
+
+        @since ProviderIndexUtil 1.2
+    */
+    *hash<string, list<hash<auto>>> failuremap;
+}
+
+#! An app or action that could not be initialized when the data provider index was built
+/** The app or action is unavailable in the index: an app whose own initialization failed has no info in the index,
+    unless it registered its info before failing, and an action that failed is not in the index.  The other apps and
+    actions of the index are not affected.
+
+    @see ProviderIndexUtil::getIndexedFailures()
+
+    @since ProviderIndexUtil 1.2
+*/
+public hashdecl ProviderIndexFailureInfo {
+    #! The unit that failed: \c app, \c action, or \c scheme (the app's connection scheme is not registered)
+    string kind;
+
+    #! The app name
+    string app;
+
+    #! The action name, for an action failure
+    *string action;
+
+    #! The phase in which the failure occurred
+    /** One of:
+        - \c registration: the app's or action's initialization raised an error
+        - \c expected-inventory: the app or action was declared, but was not registered by its initialization
+        - \c publication: the app has no module path, or its connection scheme is not registered
+        - \c serialize-action-metadata: the action's metadata is not plain data
+    */
+    string phase;
+
+    #! The original error code
+    string error;
+
+    #! The original error description
+    string description;
+
+    #! The name of the module that registered the app or action, if known
+    *string module;
 }
 
 #! Index info
@@ -183,10 +240,10 @@ public hashdecl ProviderIndexInfo {
 /** @since ProviderIndexUtil 1.2
 */
 public hashdecl SerializedDataProviderIndexInfo {
-    #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c factoryinfomap, \c appinfomap, and \c actioninfomap members of the index
+    #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c factoryinfomap, \c failuremap, \c appinfomap, and \c actioninfomap members of the index
     /** App and action metadata is in the serialized form stored in the index, as in the YAML written by
-        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"; \c altmap and
-        \c factoryinfomap are only present if the index records them
+        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"; \c altmap,
+        \c factoryinfomap, and \c failuremap are only present if the index records them
     */
     *hash<auto> index;
 
@@ -271,6 +328,9 @@ hashdecl DataProviderMetadataCacheManifest {
     # the size and digest of the file holding the action summaries of every app (version 8), with the members of
     # DataProviderMetadataCacheChunkInfo; not set if the index does not record them
     *hash<auto> actions;
+    # the size and digest of the file holding the failures of the apps and actions that could not be initialized
+    # (version 9), with the members of DataProviderMetadataCacheChunkInfo; not set if the index does not record them
+    *hash<auto> failures;
 }
 
 #! A published index's routing index and metadata cache manifest, verified
@@ -410,6 +470,10 @@ public class ProviderIndexUtil {
         #! Set when the factory info of the index has been read, or found not to be recorded; the info is then in
         #! \c index.factoryinfomap
         static bool factory_info_checked;
+
+        #! Set when the failures recorded by the index have been read, or found not to be recorded; they are then in
+        #! \c index.failuremap
+        static bool failure_info_checked;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -610,6 +674,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         remove metadata_cache_manifest;
         metadata_cache_manifest_checked = False;
         factory_info_checked = False;
+        failure_info_checked = False;
         apps_loaded = False;
         remove index_sha256;
         remove canonical_apps;
@@ -641,6 +706,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         metadata_cache_manifest = state.manifest;
         metadata_cache_manifest_checked = state.manifest_checked;
         factory_info_checked = False;
+        failure_info_checked = False;
         apps_loaded = False;
         index_sha256 = state.sha256;
         canonical_apps = state.canonical_apps;
@@ -1199,6 +1265,135 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         }
         # the metadata cache cannot be read; a canonical index file published with the index holds the same info
         return readCanonicalDataProviderIndex().factoryinfomap;
+    }
+
+    #! Returns the apps and actions that could not be initialized when the index was built
+    /** An index is built even if some apps or actions cannot be initialized, for example because a resource that
+        an app needs is not available; each such failure is recorded in the index, and the app or action is
+        unavailable in it, while the other apps and actions are indexed normally.  The failures are read from the
+        metadata cache when they are first requested, and then kept in memory; no provider module is loaded.
+
+        @param app the app whose failures are returned; if not given, the failures of every app are returned
+
+        @return the failures, the failures of each app in app name order, the app's own failures first, then those
+        of its actions in action name order; empty if there are none; @ref nothing if the index does not record
+        failures, because it was published by an earlier version of this module, or its failures cannot be read, in
+        which case the error is reported by @ref getIndexReadError(); see @ref hasIndexedFailureInfo()
+
+        @par Example:
+        @code{.py}
+foreach hash<ProviderIndexFailureInfo> failure in (ProviderIndexUtil::getIndexedFailures()) {
+    printf("%s%s is unavailable: %s: %s\n", failure.app, failure.action ? "/" + failure.action : "",
+        failure.error, failure.description);
+}
+        @endcode
+
+        @see
+        - tryGetAppFailure()
+        - tryGetActionFailure()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *list<hash<ProviderIndexFailureInfo>> getIndexedFailures(*string app) {
+        *hash<string, list<hash<auto>>> failuremap = getFailureMap();
+        if (!exists failuremap) {
+            return NOTHING;
+        }
+        list<hash<ProviderIndexFailureInfo>> rv = ();
+        foreach string failed_app in (exists app ? (app,) : sort(keys failuremap)) {
+            map rv += cast<hash<ProviderIndexFailureInfo>>($1), failuremap{failed_app};
+        }
+        return rv;
+    }
+
+    #! Returns the failure that made the given app unavailable when the index was built, if any
+    /** @param app the app name
+
+        @return the app's own failure; @ref nothing if the app did not fail, if only some of its actions failed
+        (see @ref tryGetActionFailure()), or if the index does not record failures; see @ref getIndexedFailures()
+
+        @par Example:
+        @code{.py}
+if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetAppFailure("Trello")) {
+    throw "APP-UNAVAILABLE", sprintf("%s: %s", failure.error, failure.description);
+}
+        @endcode
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<ProviderIndexFailureInfo> tryGetAppFailure(string app) {
+        foreach hash<auto> failure in (getFailureMap(){app}) {
+            if (!exists failure.action) {
+                return cast<hash<ProviderIndexFailureInfo>>(failure);
+            }
+        }
+    }
+
+    #! Returns the failure that made the given action unavailable when the index was built, if any
+    /** @param app the app name
+        @param action the action name
+
+        @return the action's failure, or, if the action has none, the failure of its app, which makes all of its
+        actions unavailable; @ref nothing if neither failed, or if the index does not record failures; see
+        @ref getIndexedFailures()
+
+        @par Example:
+        @code{.py}
+*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFailure("Trello", "create-card");
+        @endcode
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<ProviderIndexFailureInfo> tryGetActionFailure(string app, string action) {
+        *hash<auto> app_failure;
+        foreach hash<auto> failure in (getFailureMap(){app}) {
+            if (failure.action === action) {
+                return cast<hash<ProviderIndexFailureInfo>>(failure);
+            }
+            if (!exists failure.action && !app_failure) {
+                app_failure = failure;
+            }
+        }
+        return app_failure ? cast<hash<ProviderIndexFailureInfo>>(app_failure) : NOTHING;
+    }
+
+    #! Returns @ref True if the index records the apps and actions that could not be initialized when it was built
+    /** @return @ref True if @ref getIndexedFailures() answers from the index; @ref False if no index is published,
+        the process is in index build mode, the index was published by an earlier version of this module or read
+        from its canonical index file, or its failures cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool hasIndexedFailureInfo() {
+        return exists getFailureMap();
+    }
+
+    #! Returns the failures recorded by the index, reading them on first use
+    static private *hash<string, list<hash<auto>>> getFailureMap() {
+        checkDataIndex();
+        m.lock();
+        on_exit m.unlock();
+        if (!failure_info_checked) {
+            # the failures are only recorded in the metadata cache; the canonical index file does not hold them
+            if (metadata_cache_sha256 && !exists index.failuremap) {
+                index.failuremap = readProcessFailureInfo();
+            }
+            failure_info_checked = True;
+        }
+        return index.failuremap;
+    }
+
+    #! Reads the failures recorded by the process's index from its metadata cache; must be called with the lock held
+    /** @return the failures, or @ref nothing if the index does not record them, or if they cannot be read, in which
+        case the error is reported by @ref getIndexReadError()
+    */
+    static private *hash<string, list<hash<auto>>> readProcessFailureInfo() {
+        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
+        if (!manifest.failures) {
+            return;
+        }
+        return readFailureInfoChunk(manifest.failures, manifest.version);
     }
 
     #! Returns @ref True if the given action declares an alternative to its app's scheme connection
@@ -2511,7 +2706,10 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index, and
         optionally its \c factoryinfomap member; if \c factoryinfomap is not given, the index does not record factory
         info, and readers load the factory modules to get it; the info of a factory that is not in \c factorymap is
-        not written, so an index read with @ref readSerializedDataProviderIndex() can be updated and written again
+        not written, so an index read with @ref readSerializedDataProviderIndex() can be updated and written again;
+        optionally also its \c failuremap member, the failures of the apps and actions that could not be initialized
+        (see @ref DataProviderIndexInfo::failuremap), which are written to the metadata cache only; if it is not
+        given, the index does not record failures
         @param action_apps the apps that have actions
         @param get_app_actions returns the actions of the given app, keyed by action name, in the serialized form
         stored in the index
@@ -2674,6 +2872,30 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 %endif
 
+        # the failures of the apps and actions that could not be initialized, if the index records them
+        *hash<DataProviderMetadataCacheChunkInfo> failures;
+%ifndef NoMsgPack
+        if (write_cache && exists maps.failuremap) {
+            try {
+                binary data = packFailureInfoChunk(maps.failuremap);
+                string sha256 = digest("sha256", data).toHex();
+                writeFileAtomic(getMetadataCacheChunkPath("", sha256, MetadataCacheVersion), data);
+                failures = <DataProviderMetadataCacheChunkInfo>{
+                    "size": data.size(),
+                    "sha256": sha256,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                if (!canonical) {
+                    rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider failures: %s: %s",
+                        ex.err, ex.desc);
+                }
+                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                    get_exception_string(ex));
+                write_cache = False;
+            }
+        }
+%endif
+
         # the action summaries of every app
         *hash<DataProviderMetadataCacheChunkInfo> summaries;
 %ifndef NoMsgPack
@@ -2703,11 +2925,11 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         int cache_size = 0;
         if (write_cache) {
             try {
-                binary manifest = packMetadataCacheManifest(chunks, factories, summaries);
+                binary manifest = packMetadataCacheManifest(chunks, factories, summaries, failures);
                 cache_sha256 = digest("sha256", manifest).toHex();
                 writeFileAtomic(getMetadataCachePath(cache_sha256), manifest);
                 cache_size = manifest.size() + ((foldl $1 + $2, (map $1.size, chunks.iterator())) ?? 0)
-                    + (factories.size ?? 0) + (summaries.size ?? 0);
+                    + (factories.size ?? 0) + (summaries.size ?? 0) + (failures.size ?? 0);
             } catch (hash<ExceptionInfo> ex) {
                 if (!canonical) {
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata cache "
@@ -2746,7 +2968,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
 
         removeUnreferencedIndexFiles(cache_sha256 ? chunks : NOTHING, cache_sha256, canonical,
-            cache_sha256 ? factories.sha256 : NOTHING, cache_sha256 ? summaries.sha256 : NOTHING);
+            cache_sha256 ? factories.sha256 : NOTHING, cache_sha256 ? summaries.sha256 : NOTHING,
+            cache_sha256 ? failures.sha256 : NOTHING);
 
         return <ProviderIndexInfo>{
             "path": canonical ? path : getIndexPath("routing"),
@@ -2947,11 +3170,13 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     /** @param chunks the chunks written
         @param factories the size and digest of the factory info file, if the index records factory info
         @param summaries the size and digest of the action summary file
+        @param failures the size and digest of the failure file, if the index records failures
 
         @return the packed manifest
     */
     static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks,
-            *hash<DataProviderMetadataCacheChunkInfo> factories, *hash<DataProviderMetadataCacheChunkInfo> summaries) {
+            *hash<DataProviderMetadataCacheChunkInfo> factories, *hash<DataProviderMetadataCacheChunkInfo> summaries,
+            *hash<DataProviderMetadataCacheChunkInfo> failures) {
         hash<DataProviderMetadataCacheManifest> manifest = <DataProviderMetadataCacheManifest>{
             "version": MetadataCacheVersion,
             "apps": chunks,
@@ -2962,6 +3187,10 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
         if (summaries) {
             manifest.actions = summaries;
+        }
+        # a manifest without the member does not record failures
+        if (failures) {
+            manifest.failures = failures;
         }
         return packIndexData(manifest);
     }
@@ -2984,6 +3213,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @param canonical @ref True if a canonical index file was written with the routing index
         @param factories_sha256 the digest of the factory info file that the manifest references, if any
         @param summaries_sha256 the digest of the action summary file that the manifest references, if any
+        @param failures_sha256 the digest of the failure file that the manifest references, if any
 
         @par Example
         Uninstalling a provider module and rebuilding the index removes that app's chunk, so the index directory
@@ -2993,7 +3223,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         the index itself is already published at this point.
     */
     static private removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
-            *string manifest_sha256, bool canonical, *string factories_sha256, *string summaries_sha256) {
+            *string manifest_sha256, bool canonical, *string factories_sha256, *string summaries_sha256,
+            *string failures_sha256) {
         *string dir = tryGetIndexDir();
         if (!dir.val()) {
             return;
@@ -3008,6 +3239,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         }
         if (summaries_sha256) {
             keep{basename(getMetadataCacheChunkPath("", summaries_sha256, MetadataCacheVersion))} = True;
+        }
+        if (failures_sha256) {
+            keep{basename(getMetadataCacheChunkPath("", failures_sha256, MetadataCacheVersion))} = True;
         }
         try {
             Dir d();
@@ -3046,13 +3280,14 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         (\c qore-data-index.yaml), which holds the same metadata uncompressed and as text, and so is many times
         larger, is only published on request.  This reads the compact files and verifies them: the routing index
         against its own checksum, the metadata cache manifest against the digest recorded in the routing index, and
-        each app's metadata, the factory info, and the action summaries against the sizes and digests recorded in the
-        manifest.  The action summaries are not returned, since they are taken from the actions.
+        each app's metadata, the factory info, the failures, and the action summaries against the sizes and digests
+        recorded in the manifest.  The action summaries are not returned, since they are taken from the actions.
 
         @param dir the index directory
         @param per_app optional code called with each app's name, info, and actions, in app name order, as each
         app's metadata is read; the index then holds only its \c factorymap, \c appmap, \c schememap, and any
-        \c altmap and \c factoryinfomap members, so the metadata of only one app is in memory at a time
+        \c altmap, \c factoryinfomap, and \c failuremap members, so the metadata of only one app is in memory at a
+        time
 
         @return the index, or @ref nothing if the directory holds no routing index with a metadata cache, or if the
         files are inconsistent; if the index was published with a canonical index file, the caller can then read it
@@ -3250,6 +3485,18 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     factoryinfomap = unpackFactoryInfoChunk(data);
                 }
             }
+            *hash<string, list<hash<auto>>> failuremap;
+            if (*hash<auto> failures = compact.manifest.failures) {
+                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath("", failures.sha256,
+                    compact.manifest.version, dir));
+                if (data.size() != failures.size || digest("sha256", data).toHex() != failures.sha256) {
+                    return;
+                }
+                size += data.size();
+                if (unpack) {
+                    failuremap = unpackFailureInfoChunk(data);
+                }
+            }
             # the action summaries are not returned, since they are taken from the actions, but a copy of the index
             # without them is incomplete
             if (*hash<auto> summaries = compact.manifest.actions) {
@@ -3305,6 +3552,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 # an index that does not record factory info has no member
                 if (exists factoryinfomap) {
                     rv.index.factoryinfomap = factoryinfomap;
+                }
+                # an index that does not record failures has no member
+                if (exists failuremap) {
+                    rv.index.failuremap = failuremap;
                 }
                 if (!per_app) {
                     rv.index += {
@@ -3408,6 +3659,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 if (!exists cache.factoryinfomap) {
                     failed = True;
                 }
+            }
+            # the failures are only recorded in the metadata cache; if they cannot be read, the error is reported
+            # by getIndexReadError(), and the index is returned without them
+            if (manifest.failures) {
+                cache.failuremap = readFailureInfoChunk(manifest.failures, manifest.version);
             }
         } else {
             failed = True;
@@ -3919,6 +4175,88 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
 %else
         return cast<hash<string, hash<auto>>>(msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE) ?? {});
+%endif
+    }
+
+    #! Reads and validates the failure file of a metadata cache
+    /** @param info the file's size and digest from the manifest
+        @param version the metadata cache version
+        @param dir the index directory; if not given, the configured index directory
+
+        @return the failures, or @ref nothing if they cannot be read, in which case the error is reported by
+        @ref getIndexReadError()
+    */
+    static private *hash<string, list<hash<auto>>> readFailureInfoChunk(hash<auto> info, int version, *string dir) {
+        *string path;
+        try {
+            path = getMetadataCacheChunkPath("", info.sha256, version, dir);
+            binary data = ReadOnlyFile::readBinaryFile(path);
+            if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
+                setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the data provider failures in %y do not match the "
+                    "size and digest recorded in the metadata cache manifest", path));
+                return;
+            }
+            return unpackFailureInfoChunk(data);
+        } catch (hash<ExceptionInfo> ex) {
+            setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the data provider failures from %y: "
+                "%s: %s", path ?? "<unknown>", ex.err, ex.desc));
+        }
+    }
+
+    #! Packs the failures of an index into a metadata cache file
+    /** @param failuremap the failures, keyed by app
+
+        @return the compressed file contents
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or a failure is not a valid
+        @ref ProviderIndexFailureInfo record
+    */
+    static private binary packFailureInfoChunk(hash<auto> failuremap) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
+%else
+        hash<auto> sorted = {};
+        foreach string app in (sort(keys failuremap)) {
+            # only valid records are written, as plain hashes
+            sorted{app} = map {} + cast<hash<ProviderIndexFailureInfo>>($1), failuremap{app};
+        }
+        return compress(msgpack_pack(sorted, MSGPACK_QORE_MODE));
+%endif
+    }
+
+    #! Unpacks the failure file of a metadata cache
+    /** @param data the compressed file contents
+
+        @return the failures, keyed by app
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or the file does not hold a hash of lists
+        of valid @ref ProviderIndexFailureInfo records
+    */
+    static private hash<string, list<hash<auto>>> unpackFailureInfoChunk(binary data) {
+%ifdef NoMsgPack
+        throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
+%else
+        auto failures = msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE) ?? {};
+        if (failures.typeCode() != NT_HASH) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the failure file must hold a hash; got %s instead", failures.type());
+        }
+        hash<string, list<hash<auto>>> rv = {};
+        foreach hash<auto> app in (failures.pairIterator()) {
+            if (app.value.typeCode() != NT_LIST) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("the failures of app %y must be a list; got %s instead",
+                    app.key, app.value.type());
+            }
+            list<hash<auto>> app_failures = ();
+            foreach auto failure in (app.value) {
+                if (failure.typeCode() != NT_HASH || failure.app !== app.key) {
+                    throw "PROVIDER-INDEX-ERROR", sprintf("invalid failure of app %y: %y", app.key, failure);
+                }
+                # validates the record
+                app_failures += {} + cast<hash<ProviderIndexFailureInfo>>(failure);
+            }
+            rv{app.key} = app_failures;
+        }
+        return rv;
 %endif
     }
 

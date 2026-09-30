@@ -102,6 +102,32 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()"
     restores only the given action, and of the type descriptions of its app only those that it refers to.
 
+    @section providerindexutil_failures Apps and Actions That Could Not Be Initialized
+
+    An index is built even if some apps or actions cannot be initialized, for example because an app needs a
+    resource that is not available: each failure is recorded in the index with the app, the action for an action
+    failure, the phase, the original error and description, and the module that registered it
+    (@ref ProviderIndexUtil::ProviderIndexFailureInfo "ProviderIndexFailureInfo"), and the app or action is
+    unavailable in the index, while the other apps and actions are indexed normally.  An app whose own
+    initialization failed has no info in the index, unless it registered its info and connection scheme before
+    failing, in which case it is indexed with them and without the actions that failed.
+
+    The failures are read from a file of the metadata cache when they are first requested, without reading the
+    metadata of any app or loading any provider module:
+
+    @code{.py}
+# report why an indexed app or action cannot be used
+if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFailure(app, action)) {
+    throw "APP-UNAVAILABLE", sprintf("%s: %s", failure.error, failure.description), failure;
+}
+    @endcode
+
+    @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()"
+    returns all failures, or those of one app; an index published by an earlier version of this module does not
+    record failures, which
+    @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFailureInfo() "ProviderIndexUtil::hasIndexedFailureInfo()"
+    reports.
+
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
@@ -149,10 +175,20 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
       them, so the descriptions of record types that refer to each other, which repeat the same nested descriptions
       many times, are read and restored in time and memory in proportion to their distinct descriptions; the action
       summaries of every app are in a file of their own (format version 8, see @ref providerindexutil_summaries);
-      indexes written with metadata cache versions 4 to 7 are still read, those written with versions 4 and 5
-      without factory info; earlier versions of this module cannot read an index written in format 6 or later, and
-      an index must be recreated after upgrading to record the factory info, to store each type description once,
-      and to record the action summaries
+      the apps and actions that could not be initialized when the index was built are recorded in a file of their
+      own (format version 9, see @ref providerindexutil_failures);
+      indexes written with metadata cache versions 4 to 8 are still read, those written with versions 4 and 5
+      without factory info, and those written with versions 4 to 8 without failures; earlier versions of this
+      module cannot read an index written in format 6 or later, and an index must be recreated after upgrading to
+      record the factory info, to store each type description once, to record the action summaries, and to record
+      the failures
+    - added @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetAppFailure() "ProviderIndexUtil::tryGetAppFailure()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionFailure() "ProviderIndexUtil::tryGetActionFailure()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFailureInfo() "ProviderIndexUtil::hasIndexedFailureInfo()",
+      and @ref ProviderIndexUtil::ProviderIndexFailureInfo "ProviderIndexFailureInfo", which return the apps and
+      actions that could not be initialized when the index was built (see @ref providerindexutil_failures); an
+      index written with the new \c failuremap member of the index maps records them
     - errors reading the routing index or the metadata cache are reported by
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()";
       the canonical index file is only read if there is one, and an app whose metadata cannot be read is

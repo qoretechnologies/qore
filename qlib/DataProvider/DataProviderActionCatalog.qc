@@ -838,7 +838,7 @@ public hashdecl DataProviderDiscoveryReportInfo {
     #! Catalog revision when discovery was sealed
     int sealed_revision;
 
-    #! Whether the generation is complete and qualified
+    #! Whether the generation is complete: no failure blocks it, and no application or action is unavailable
     bool complete;
 
     #! Exact expected identities supplied by discovery sources
@@ -850,8 +850,18 @@ public hashdecl DataProviderDiscoveryReportInfo {
     #! Exact app/action identities present when the generation was sealed
     list<string> actions;
 
-    #! Structured failures; empty only for a qualified generation
+    #! Structured failures that block the generation; empty for a qualified generation
     list<hash<DataProviderDiscoveryFailureInfo>> failures;
+
+    #! Application and action failures recorded without blocking the generation
+    /** A generation sealed with \c record_app_failures (see @ref DataProviderActionCatalog::sealDiscovery()) is
+        qualified despite the failures of individual applications and actions (see
+        @ref DataProviderActionCatalog::isAppDiscoveryFailure()); they are listed here, so that the consumer can
+        record them, and the generation is not \c complete.  Always empty for a generation sealed without it.
+
+        @since %DataProvider 3.9
+    */
+    list<hash<DataProviderDiscoveryFailureInfo>> unavailable = ();
 }
 
 #! Opaque handle for one open discovery generation
@@ -1712,19 +1722,69 @@ public class DataProviderActionCatalog {
         }
     }
 
+    #! Returns @ref True if the given discovery failure belongs to one application or action only
+    /** Such a failure makes its application or action unavailable without affecting any other: an application or
+        action whose initialization failed (phase \c registration), an expected application or action that is not
+        registered (phase \c expected-inventory), an application that cannot be published because it has no module
+        path or its connection scheme is not registered (phase \c publication), and an action whose metadata is not
+        plain data (phase \c serialize-action-metadata).  Failures of discovery sources, factories, and the catalog
+        itself, such as a stale snapshot, affect more than one application and are not application failures.
+
+        @param failure the discovery failure
+
+        @return @ref True if the failure identifies an application and is one of the failures above
+
+        @par Example
+        @code{.py}
+list<hash<DataProviderDiscoveryFailureInfo>> blocking = map $1, report.failures,
+    !DataProviderActionCatalog::isAppDiscoveryFailure($1);
+        @endcode
+
+        @see sealDiscovery()
+
+        @since %DataProvider 3.9
+    */
+    static bool isAppDiscoveryFailure(hash<DataProviderDiscoveryFailureInfo> failure) {
+        if (!failure.app.val()) {
+            return False;
+        }
+        switch (failure.phase) {
+            case "registration":
+            case "expected-inventory":
+                return failure.kind == "app" || failure.kind == "action";
+            case "publication":
+                return failure.kind == "app" || failure.kind == "scheme";
+            case "serialize-action-metadata":
+                return failure.kind == "action";
+        }
+        return False;
+    }
+
     #! Seals and qualifies one discovery generation
     /** @param session open discovery generation
+        @param record_app_failures if @ref True, the failures of individual applications and actions (see
+            @ref isAppDiscoveryFailure()) do not block the generation; they are returned in the \c unavailable member
+            of the report, which is then not \c complete, so that the consumer can record them; only the other
+            failures block the generation
 
         @return an opaque qualification token bound to the current catalog revision
 
         @throw DATA-PROVIDER-DISCOVERY-ERROR if an expected identity is missing or any applicable structured failure
-            remains; the exception argument is a @ref DataProviderDiscoveryReportInfo record
+            remains (with \a record_app_failures, only a failure that is not an application failure); the exception
+            argument is a @ref DataProviderDiscoveryReportInfo record
         @throw DATA-PROVIDER-DISCOVERY-SESSION-ERROR if the session is not open
 
-        @since %DataProvider 3.8
+        @par Example
+        @code{.py}
+# an index is published with the failed apps and actions recorded as unavailable
+DataProviderQualifiedDiscovery qualification = DataProviderActionCatalog::sealDiscovery(session, True);
+map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport().unavailable;
+        @endcode
+
+        @since %DataProvider 3.8; \a record_app_failures since %DataProvider 3.9
     */
     static DataProviderQualifiedDiscovery sealDiscovery(
-            DataProviderDiscoverySession session) {
+            DataProviderDiscoverySession session, bool record_app_failures = False) {
         AutoLock al(lck);
         int generation = session.getGeneration();
         string generation_key = generation.toString();
@@ -1814,16 +1874,22 @@ public class DataProviderActionCatalog {
                 };
             }
         }
+        list<hash<DataProviderDiscoveryFailureInfo>> unavailable = ();
+        if (record_app_failures) {
+            unavailable = map $1, failures, DataProviderActionCatalog::isAppDiscoveryFailure($1);
+            failures = map $1, failures, !DataProviderActionCatalog::isAppDiscoveryFailure($1);
+        }
         hash<DataProviderDiscoveryReportInfo> report
             = <DataProviderDiscoveryReportInfo>{
                 "generation": generation,
                 "start_revision": state.start_revision,
                 "sealed_revision": catalog_revision,
-                "complete": !failures,
+                "complete": !failures && !unavailable,
                 "expected": expected,
                 "apps": sort(keys appcache),
                 "actions": sort(keys top_actionmap),
                 "failures": failures,
+                "unavailable": unavailable,
             };
         if (failures) {
             throw "DATA-PROVIDER-DISCOVERY-ERROR", sprintf(

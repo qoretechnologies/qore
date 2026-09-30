@@ -2289,6 +2289,17 @@ class QdpCmd {
                 index ? cast<hash<DataProviderIndexInfo>>(index) : NOTHING
             );
             printf("Created index %y: %d bytes in %y (%y)\n", info.path, info.size, info.delta, info.summary);
+            # apps and actions that could not be initialized are recorded in the index as unavailable
+            if (info.summary.failed_apps || info.summary.failed_actions) {
+                list<hash<auto>> failures = info.summary.qualification.unavailable;
+                printf("%d app(s) and %d action(s) could not be initialized and are unavailable in the index:\n",
+                    info.summary.failed_apps, info.summary.failed_actions);
+                map printf(" - %s%s: %s: %s\n", $1.app, $1.action ? "/" + $1.action : "", $1.error,
+                    $1.description), failures[0..19];
+                if (failures.size() > 20) {
+                    printf(" - and %d more\n", failures.size() - 20);
+                }
+            }
             QdpCmd::exitProgram(0);
         } catch (hash<ExceptionInfo> ex) {
             error("%s: %s", ex.err, ex.desc);

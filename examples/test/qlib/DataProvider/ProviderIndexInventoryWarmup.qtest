@@ -40,7 +40,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
         ProviderIndexUtil::setEnvironmentVariable(root);
         addTestCase("lazy initialization updates an existing inventory before collection", \changedInventoryTest());
         addTestCase("lazy initialization adds a new inventory before collection", \lateInventoryTest());
-        addTestCase("late inventory missing identities still block publication", \missingIdentityTest());
+        addTestCase("late inventory missing identities are recorded as unavailable", \missingIdentityTest());
         addTestCase("late inventory callback errors still block publication", \callbackFailureTest());
         addTestCase("mutation during inventory collection still blocks repeated publication", \mutationTest());
         set_return_value(main());
@@ -141,12 +141,29 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
                 });
             DataProviderActionCatalog::registerAction(info);
         });
+        if (!callback_error) {
+            # a missing action is recorded in the index as unavailable; the app's other actions are published
+            hash<auto> result = createIndex();
+            hash<DataProviderDiscoveryReportInfo> report = result.summary.qualification;
+            assertFalse(report.complete);
+            assertEq((), report.failures);
+            list<hash<DataProviderDiscoveryFailureInfo>> unavailable = select report.unavailable,
+                $1.error == "DATA-PROVIDER-EXPECTED-IDENTITY-MISSING";
+            assertEq(1, unavailable.size());
+            assertEq(App + "/" + missing, unavailable[0].identity);
+            assertEq("expected-inventory", unavailable[0].phase);
+            assertTrue(exists ProviderIndexUtil::readDataProviderIndex().actioninfomap{App}{info.action});
+            assertEq("DATA-PROVIDER-EXPECTED-IDENTITY-MISSING",
+                ProviderIndexUtil::tryGetActionFailure(App, missing).error);
+            return;
+        }
+        # a failed producer inventory is not the failure of one app, and still blocks publication
         hash<DataProviderDiscoveryReportInfo> report = failureReport();
         list<hash<DataProviderDiscoveryFailureInfo>> failures = select report.failures,
-            $1.error == (callback_error ? "TEST-INVENTORY-ERROR" : "DATA-PROVIDER-EXPECTED-IDENTITY-MISSING");
+            $1.error == "TEST-INVENTORY-ERROR";
         assertEq(1, failures.size());
-        assertEq(callback_error ? source : App + "/" + missing, failures[0].identity);
-        assertEq(callback_error ? "inventory" : "expected-inventory", failures[0].phase);
+        assertEq(source, failures[0].identity);
+        assertEq("inventory", failures[0].phase);
         assertEq(before, ReadOnlyFile::readTextFile(root + "/qore-routing-index.yaml"));
     }
 

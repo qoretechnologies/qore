@@ -1870,7 +1870,19 @@ if (action.data_provider_info) {
     #! Checks for static initialization
     private static synchronized checkStaticInitIntern() {
         if (ilist) {
-            map $1(), (remove ilist);
+            # the list is removed first, so an initializer that checks static initialization again does not run the
+            # others while it runs; if an initializer fails, the initializers after it have not run, and are
+            # restored ahead of any registered in the meantime, so they are run by the next check instead of being
+            # lost
+            list<code> l = remove ilist;
+            int i = 0;
+            on_error {
+                # the list has no value after it has been removed
+                ilist = l[(i + 1)..] + (ilist ?? ());
+            }
+            for (; i < l.size(); ++i) {
+                l[i]();
+            }
         }
     }
 

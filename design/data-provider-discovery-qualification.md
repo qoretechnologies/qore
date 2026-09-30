@@ -5,7 +5,9 @@
 Provider registration is intentionally resilient: one optional integration may fail while healthy providers remain
 usable in the live process. An authoritative provider index and a release artifact have a stronger contract. They
 must never silently certify a partial catalog. This design separates those two meanings and keeps qualification out
-of action-execution hot paths.
+of action-execution hot paths. A provider index records the failures of individual apps and actions instead of
+failing (see [provider-index-failures.md](provider-index-failures.md)): it is published, but its report is never
+`complete`, and the failures are in the index for consumers to report.
 
 This design coordinates [issue #5448](https://github.com/qoretechnologies/qore/issues/5448) with the independent
 presentation-completeness work in [issue #5439](https://github.com/qoretechnologies/qore/issues/5439). Registration
@@ -44,7 +46,10 @@ other; release qualification requires both.
    take the same lock. A mutation in either registry while the candidate is copied rejects the attempt; neither
    registry can change during the atomic write.
 4. `sealDiscovery()` snapshots registered technical identities and rejects the generation if an applicable retained
-   failure, explicit discovery failure, missing expected identity, or stale checked-point snapshot remains.
+   failure, explicit discovery failure, missing expected identity, or stale checked-point snapshot remains. With
+   `record_app_failures`, the failures of individual apps and actions (`isAppDiscoveryFailure()`) are moved to the
+   report's `unavailable` list instead, and only the others reject the generation; the report is then not
+   `complete`.
 5. A successful seal returns an authenticated, single-use `DataProviderQualifiedDiscovery` token tied to the exact
    catalog revision.
 6. `publishQualifiedDiscovery()` validates the token and revision and invokes publication while holding the catalog
@@ -68,10 +73,11 @@ deregistered. An explicit application scope excludes unrelated app failures from
 inventory fragment alone never narrows a full build. A catalog or qualification-state mutation after sealing
 invalidates the token.
 
-`ProviderIndex` treats requested source-load failures, unavailable factories, missing module paths, unknown schemes,
-and missing selected identities as structured qualification failures. It assembles the candidate in memory and
-enters the existing atomic writer only through `publishQualifiedDiscovery()`, leaving the prior index untouched on
-all pre-publication failures.
+`ProviderIndex` treats requested source-load failures and unavailable factories as structured qualification
+failures that block publication. Missing module paths, unknown schemes, missing selected identities, and app or
+action initialization failures are app failures: `ProviderIndex` seals with `record_app_failures` and records them
+in the index. It assembles the candidate in memory and enters the existing atomic writer only through
+`publishQualifiedDiscovery()`, leaving the prior index untouched on all pre-publication failures.
 
 Environment-driven discovery uses `loadProvidersFromEnvironmentWithReport()` rather than interpreting standard
 error output. Registration-module, registration-map, and provider-module exceptions retain their exact module and
@@ -112,7 +118,8 @@ Local and release checks cover:
 - normal, AST, and AOT parsing/execution of external-boundary fixtures and serialization round trips;
 - exact root/locale ID and source parity, including nested fields and allowed values;
 - build-and-install into an empty prefix, followed by checks with source module paths excluded;
-- full provider-index generation with an expected inventory and zero structured failures;
+- full provider-index generation with an expected inventory, zero structured failures, and a `complete` report
+  (no unavailable apps or actions);
 - inventory callbacks added or changed by lazy initialization, including late missing identities and callback
   failures; mutation during collection still rejects repeated attempts without replacing the previous index;
 - fresh-process loading for binary provider modules and their declared runtime dependencies.

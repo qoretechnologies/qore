@@ -19,11 +19,11 @@
 
 %exec-class ProviderIndexInitializationFailureTest
 
-#! Verifies that provider-index construction cannot certify a partial catalog after registration failures
+#! Verifies that provider-index construction records registration failures and never certifies a partial catalog
 public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex initialization failures", "1.0") {
-        addTestCase("structured deferred failure blocks repeated discovery", \deferredFailureTest());
-        addTestCase("reported eager failure is filtered and retained", \eagerFailureTest());
+        addTestCase("structured deferred failure is recorded by repeated discovery", \deferredFailureTest());
+        addTestCase("reported eager failure is filtered, retained, and recorded", \eagerFailureTest());
         addTestCase("environment source failures remain visible and retryable", \environmentFailureTest());
         addTestCase("environment provider failures remain visible and retryable",
             \environmentProviderFailureTest());
@@ -44,33 +44,30 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         });
     }
 
-    private hash<ExceptionInfo> createIndexExpectingFailure(string app, string dir) {
-        try {
-            ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, dir, <ProviderIndexCreateOptions>{
+    #! Creates the index of the given app, whose failures are recorded instead of failing the build
+    private hash<DataProviderDiscoveryReportInfo> createIndexRecordingFailure(string app, string dir) {
+        hash<auto> info = ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, dir,
+            <ProviderIndexCreateOptions>{
                 "load_known_factories": False,
                 "load_environment": False,
                 "load_typescript_actions": False,
                 "apps": (app,),
             });
-            fail("provider index creation must reject an incomplete catalog");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err,
-                sprintf("provider index exception: %y", ex));
-            return ex;
-        }
-        throw "TEST-ERROR", "provider index creation unexpectedly succeeded";
+        hash<DataProviderDiscoveryReportInfo> report = info.summary.qualification;
+        assertEq((), report.failures, "an app failure does not block the build");
+        assertTrue(is_readable(join_paths(dir, "qore-routing-index.yaml")), "the index is published");
+        return report;
     }
 
-    private checkFailure(hash<ExceptionInfo> ex, string kind, string app, *string action, string error,
-            string description, auto argument) {
-        hash<DataProviderDiscoveryReportInfo> report = ex.arg;
-        assertFalse(report.complete, "failed discovery report is not complete");
+    private checkFailure(hash<DataProviderDiscoveryReportInfo> report, string kind, string app, *string action,
+            string error, string description, auto argument) {
+        assertFalse(report.complete, "a discovery report with unavailable apps is not complete");
         hash<string, bool> expected_apps = map {$1.app: True},
             report.expected.iterator();
         assertEq((app,), sort(keys expected_apps),
             "the report preserves only the selected expected app scope");
         list<hash<DataProviderDiscoveryFailureInfo>> selected = map $1,
-            report.failures, $1.kind == kind && $1.app == app
+            report.unavailable, $1.kind == kind && $1.app == app
                 && $1.action == action && $1.error == error;
         assertEq(1, selected.size(),
             "the selected structured failure is reported once");
@@ -82,10 +79,21 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         assertEq(description, failure.description);
         assertEq(argument, failure.argument);
         list<hash<DataProviderDiscoveryFailureInfo>> publication_failures
-            = map $1, report.failures,
+            = map $1, report.unavailable,
                 $1.error == "DATA-PROVIDER-MODULE-PATH-MISSING";
         assertEq(1, publication_failures.size(),
             "publication qualification also reports the missing owner path");
+
+        # the failure is recorded in the published index
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        *hash<ProviderIndexFailureInfo> recorded = action
+            ? ProviderIndexUtil::tryGetActionFailure(app, action)
+            : ProviderIndexUtil::tryGetAppFailure(app);
+        assertEq(error, recorded.error, "the failure is recorded in the index");
+        assertEq(description, recorded.description);
+        assertEq("DATA-PROVIDER-MODULE-PATH-MISSING", ProviderIndexUtil::tryGetAppFailure(app).error,
+            "the app without a module path is recorded as unavailable");
     }
 
     private deferredFailureTest() {
@@ -99,15 +107,13 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        hash<ExceptionInfo> first = createIndexExpectingFailure(app, dir);
+        hash<DataProviderDiscoveryReportInfo> first = createIndexRecordingFailure(app, dir);
         checkFailure(first, "action", app, "broken-action", "DEFERRED-REGISTRATION-ERROR",
             "synthetic deferred action failure", {"state": "deferred"});
-        assertFalse(is_readable(join_paths(dir, "qore-routing-index.yaml")),
-            "an incomplete index is not written");
 
         # The pending callback is consumed on the first attempt, so only retained structured state can make the
-        # second discovery fail as well.
-        hash<ExceptionInfo> second = createIndexExpectingFailure(app, dir);
+        # second discovery record the failure as well.
+        hash<DataProviderDiscoveryReportInfo> second = createIndexRecordingFailure(app, dir);
         checkFailure(second, "action", app, "broken-action", "DEFERRED-REGISTRATION-ERROR",
             "synthetic deferred action failure", {"state": "deferred"});
 
@@ -143,7 +149,7 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        checkFailure(createIndexExpectingFailure(app, dir), "action", app, "eager-action",
+        checkFailure(createIndexRecordingFailure(app, dir), "action", app, "eager-action",
             "EAGER-REGISTRATION-ERROR", "synthetic eager action failure", {"state": "eager"});
 
         assertEq((), DataProviderActionCatalog::getInitializationFailures(("UnrelatedApp",)),

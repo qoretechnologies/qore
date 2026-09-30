@@ -184,9 +184,12 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @param dir optional output directory; otherwise the configured provider-index directory is used
         @param opts discovery sources, optional exact application/action inventory, and optional application selection
         @return the published index path, size, elapsed generation time, and summary whose \c qualification member is
-            the complete @ref DataProvider::DataProviderDiscoveryReportInfo used to authorize publication
+            the complete @ref DataProvider::DataProviderDiscoveryReportInfo used to authorize publication, and whose
+            \c failed_apps and \c failed_actions members give the number of apps and actions that could not be
+            initialized and are recorded as unavailable in the index
         @throw PROVIDER-INDEX-MODULE-ERROR an explicit dependency has no authoritative loaded module identity
-        @throw DATA-PROVIDER-DISCOVERY-ERROR if discovery qualification is incomplete
+        @throw DATA-PROVIDER-DISCOVERY-ERROR if discovery fails other than by the failure of individual apps or actions:
+            a discovery source, a factory, or a worker fails, or the catalog changes while it is indexed
         @throw DATA-PROVIDER-DISCOVERY-STALE if registration changes after qualification
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
@@ -196,6 +199,14 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             index being replaced is never read; when the build finishes, the next index lookup reads the new index.
         @note With @ref ProviderIndexCreateOptions::workers "workers" set, providers are loaded and indexed in
             worker processes; see @ref runIndexWorker()
+        @note An app or action that cannot be initialized does not fail the build: it is recorded in the index with its
+            error (see @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures()
+            "ProviderIndexUtil::getIndexedFailures()"), and is unavailable in it, while the other apps and actions are
+            indexed; an app that registered its info before failing is indexed with its info and connection scheme and
+            without the actions that failed.  The failures are in the \c unavailable member of the \c qualification
+            report, which is then not \c complete, and are logged; a caller that requires a complete catalog checks
+            \c summary.qualification.complete (see @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure()
+            "DataProviderActionCatalog::isAppDiscoveryFailure()")
         @note Existing explicit-path indexes remain readable. Rebuilding persists module names so the runtime
             can select source or compiled representations through its normal search path. This is a semantic
             catalog, not a binary digest or a lease over concurrently replaced module files.
@@ -300,13 +311,15 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         list<hash<auto>> type_info_mismatches = ();
         int scheme_registry_revision = snapshotIndex(\index, discovery, opts.apps, \type_info_mismatches);
 
-        qualification = DataProviderActionCatalog::sealDiscovery(discovery);
+        # the failures of individual apps and actions are recorded in the index instead of failing the build
+        qualification = DataProviderActionCatalog::sealDiscovery(discovery, True);
         discovery = NOTHING;
         hash<DataProviderDiscoveryReportInfo> qualification_report
             = qualification.getReport();
+        index.failuremap = getFailureMap(qualification_report.unavailable, getModuleNames());
         # The scheme registry and data-provider catalog hold their registration locks across the O(1) revision
         # checks and atomic file replacement, so neither can invalidate qualification between check and write.
-        return ConnectionSchemeCache::publishStableRegistrySnapshot(
+        hash<auto> rv = ConnectionSchemeCache::publishStableRegistrySnapshot(
             scheme_registry_revision, hash<auto> sub () {
                 return DataProviderActionCatalog::publishQualifiedDiscovery(
                     qualification, hash<auto> sub () {
@@ -317,9 +330,145 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                                 "schemes": index.schememap.size(),
                                 "qualification": qualification_report,
                                 "type_info_mismatches": type_info_mismatches,
-                            }, opts.write_canonical_yaml);
+                            } + getFailureSummary(index.failuremap), opts.write_canonical_yaml);
                     });
                 });
+        logFailures(index.failuremap);
+        return rv;
+    }
+
+    #! The maximum number of failed apps and actions named in the log message of an index build
+    const MaxLoggedFailures = 20;
+
+    #! The order of the failures recorded for the same app or action; the first is the cause of the others
+    const FailurePhaseOrder = {
+        "registration": 0,
+        "publication": 1,
+        "serialize-action-metadata": 2,
+        "expected-inventory": 3,
+    };
+
+    #! Returns the failures of individual apps and actions to record in the index
+    /** @param unavailable the failures of individual apps and actions (see
+            @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure()
+            "DataProviderActionCatalog::isAppDiscoveryFailure()")
+        @param module_names maps the module paths of the process to module names
+
+        @return the failures keyed by app, as
+        @ref ProviderIndexUtil::ProviderIndexFailureInfo "ProviderIndexFailureInfo" records in plain hashes; each app's own failures are first, then those of its actions in action name order;
+        a missing expected identity is only recorded if its app or action has no other failure, which caused it,
+        and a failure reported more than once is recorded once
+    */
+    private static hash<string, list<hash<auto>>> getFailureMap(
+            *list<hash<DataProviderDiscoveryFailureInfo>> unavailable, hash<string, string> module_names) {
+        # app -> action ("" for the app itself) -> failures
+        hash<string, hash<string, list<hash<auto>>>> identities = {};
+        foreach hash<DataProviderDiscoveryFailureInfo> failure in (unavailable) {
+            hash<auto> record = {} + <ProviderIndexFailureInfo>{
+                "kind": failure.kind,
+                "app": failure.app,
+                "action": failure.action,
+                "phase": failure.phase,
+                "error": failure.error,
+                "description": failure.description,
+                "module": getFailureModule(failure.module_context, module_names),
+            };
+            string key = failure.action ?? "";
+            if (!inlist(record, identities{failure.app}{key})) {
+                identities{failure.app}{key} += record;
+            }
+        }
+        hash<string, list<hash<auto>>> rv = {};
+        foreach string app in (sort(keys identities)) {
+            list<hash<auto>> app_failures = ();
+            # the app's own failures ("") sort first
+            foreach string key in (sort(keys identities{app})) {
+                list<hash<auto>> records = identities{app}{key};
+                if (records.size() > 1) {
+                    records = map $1, records, $1.phase != "expected-inventory";
+                    records = sort(records, int sub (hash<auto> l, hash<auto> r) {
+                        return (FailurePhaseOrder{l.phase} ?? 99) <=> (FailurePhaseOrder{r.phase} ?? 99)
+                            ?: l.error <=> r.error ?: l.description <=> r.description;
+                    });
+                }
+                app_failures += records;
+            }
+            rv{app} = app_failures;
+        }
+        return rv;
+    }
+
+    #! Returns the module name to record for the owner of a failure
+    /** @param module_context the owner's module path or name, if known
+        @param module_names maps the module paths of the process to module names
+
+        @return the owner's module name, or @ref nothing if it is not known
+    */
+    private static *string getFailureModule(*string module_context, hash<string, string> module_names) {
+        if (!module_context.val()) {
+            return NOTHING;
+        }
+        if (*string name = module_names{module_context}) {
+            return name;
+        }
+        # a path that is not a loaded module does not identify one
+        if (module_context =~ /[\/\\]/ || module_context =~ /\.(qm|qmod)$/i) {
+            return NOTHING;
+        }
+        return module_context;
+    }
+
+    #! Returns the number of apps and actions recorded as unavailable, for the summary of an index build
+    /** @param failuremap the failures recorded in the index
+
+        @return \c failed_apps: the number of apps whose own initialization failed, and \c failed_actions: the
+        number of actions that failed
+    */
+    private static hash<auto> getFailureSummary(*hash<string, list<hash<auto>>> failuremap) {
+        int apps = 0;
+        int actions = 0;
+        foreach list<hash<auto>> failures in ((failuremap ?? {}).iterator()) {
+            if (select failures, !exists $1.action) {
+                ++apps;
+            }
+            actions += ((map {$1.action: True}, failures, exists $1.action) ?? {}).size();
+        }
+        return {
+            "failed_apps": apps,
+            "failed_actions": actions,
+        };
+    }
+
+    #! Logs the apps and actions recorded as unavailable in a published index
+    /** One warning names up to @ref MaxLoggedFailures failed apps and actions with their errors, and each failure
+        is logged in full at debug level
+
+        @param failuremap the failures recorded in the index
+    */
+    private static logFailures(*hash<string, list<hash<auto>>> failuremap) {
+        if (!failuremap) {
+            return;
+        }
+        hash<auto> summary = getFailureSummary(failuremap);
+        list<string> names = ();
+        int count = 0;
+        foreach list<hash<auto>> failures in (failuremap.iterator()) {
+            foreach hash<auto> failure in (failures) {
+                ++count;
+                if (names.size() < MaxLoggedFailures) {
+                    names += sprintf("%s%s (%s)", failure.app, exists failure.action ? "/" + failure.action : "",
+                        failure.error);
+                }
+                log(LoggerLevel::LevelDebug, "unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
+                    failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
+                    failure.error, failure.description);
+            }
+        }
+        log(LoggerLevel::LevelWarn, "the data provider index was published with %d app(s) and %d action(s) that could "
+            "not be initialized and are unavailable in it; %d failure(s): %s%s", summary.failed_apps,
+            summary.failed_actions, count, names.join(", "), count > names.size()
+                ? sprintf(", and %d more", count - names.size())
+                : "");
     }
 
     #! Materializes the loaded providers and copies the index candidate from them
@@ -743,8 +892,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         before the batch is indexed, such as loading modules that the embedding application requires; an exception
         it raises is reported by the build as the worker's error
 
-        @return the exit code for the worker process: 0 if the batch was indexed, 1 if its discovery failed, in which
-        case the build reports the failures, or 2 if the worker failed
+        @return the exit code for the worker process: 0 if the batch was indexed, including when some of its apps or
+        actions could not be initialized, which the build records, 1 if its discovery failed otherwise, in which case
+        the build reports the failures, or 2 if the worker failed
 
         @par Example:
         A worker command:
@@ -775,7 +925,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 setup();
             }
             result += indexWorkerBatch(batch);
-            rc = result.report.complete ? 0 : 1;
+            # the failures of individual apps and actions are recorded by the build
+            rc = result.report.failures ? 1 : 0;
         } catch (hash<ExceptionInfo> ex) {
             # the error is reported by the build; the details are written to the worker's standard error
             result.error = sprintf("%s: %s", ex.err, ex.desc);
@@ -914,7 +1065,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "type_info_mismatches": type_info_mismatches,
         };
         try {
-            qualification = DataProviderActionCatalog::sealDiscovery(discovery);
+            # the failures of individual apps and actions are recorded by the build
+            qualification = DataProviderActionCatalog::sealDiscovery(discovery, True);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DATA-PROVIDER-DISCOVERY-ERROR" && ex.arg.typeCode() == NT_HASH) {
                 discovery = NOTHING;
@@ -924,7 +1076,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             rethrow;
         }
         discovery = NOTHING;
-        rv.report = toPlainData(qualification.getReport());
+        hash<DataProviderDiscoveryReportInfo> report = qualification.getReport();
+        rv.report = toPlainData(report);
+        # the build does not load the worker's modules, so the owners of the failures are resolved here
+        hash<string, string> module_names = getModuleNames();
+        rv.failure_modules = map {$1.module_context: getFailureModule($1.module_context, module_names)},
+            report.unavailable, exists getFailureModule($1.module_context, module_names);
         return rv + ConnectionSchemeCache::publishStableRegistrySnapshot(
             scheme_registry_revision, hash<auto> sub () {
                 return DataProviderActionCatalog::publishQualifiedDiscovery(
@@ -1068,6 +1225,10 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<string, bool> seeded_apps = (map {$1: True}, keys index.appmap) ?? {};
 
         list<hash<DataProviderDiscoveryFailureInfo>> failures = ();
+        # the failures of individual apps and actions, which are recorded in the index
+        list<hash<DataProviderDiscoveryFailureInfo>> unavailable = ();
+        # the module names of the owners of the failures, resolved by the workers
+        hash<string, string> failure_modules = {};
         list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected = opts.expected_inventory ?? ();
         map expected += <DataProviderDiscoveryExpectedIdentityInfo>{"app": $1}, opts.apps;
         hash<string, bool> report_apps = {};
@@ -1135,6 +1296,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
             # the result is plain data, so its typed hashes are restored
             failures += map cast<hash<DataProviderDiscoveryFailureInfo>>($1), result.report.failures;
+            unavailable += map cast<hash<DataProviderDiscoveryFailureInfo>>($1), result.report.unavailable;
+            map failure_modules{$1.key} = $1.value, (result.failure_modules ?? {}).pairIterator();
             expected += map cast<hash<DataProviderDiscoveryExpectedIdentityInfo>>($1), result.report.expected;
             map report_apps{$1} = True, result.report.apps;
             map report_actions{$1} = True, result.report.actions;
@@ -1247,7 +1410,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             merged_expected += identity;
             if (identity.action ? !exists action_sha256{identity.app}{identity.action}
                     : !exists appinfomap{identity.app}) {
-                failures += <DataProviderDiscoveryFailureInfo>{
+                # a missing app or action is recorded in the index
+                unavailable += <DataProviderDiscoveryFailureInfo>{
                     "generation": 0,
                     "kind": identity.action ? "action" : "app",
                     "phase": "expected-inventory",
@@ -1261,15 +1425,19 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }
         }
 
+        # an identity missing in one worker's scope can be registered by another worker
+        unavailable = map $1, unavailable, $1.phase != "expected-inventory"
+            || (exists $1.action ? !exists action_sha256{$1.app}{$1.action} : !exists appinfomap{$1.app});
         hash<DataProviderDiscoveryReportInfo> report = <DataProviderDiscoveryReportInfo>{
             "generation": 0,
             "start_revision": 0,
             "sealed_revision": 0,
-            "complete": !failures,
+            "complete": !failures && !unavailable,
             "expected": merged_expected,
             "apps": sort(keys report_apps),
             "actions": sort(keys report_actions),
             "failures": failures,
+            "unavailable": unavailable,
         };
         if (failures) {
             throw "DATA-PROVIDER-DISCOVERY-ERROR", sprintf("data provider index workers reported %d failure(s)",
@@ -1285,11 +1453,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "appmap": index.appmap ?? {},
             "schememap": index.schememap ?? {},
             "appinfomap": (index.appinfomap ?? {}) + appinfomap,
+            "failuremap": getFailureMap(unavailable, module_names + failure_modules),
         };
         *hash<string, hash<string, hash<auto>>> seeded_actions = index.actioninfomap;
         hash<string, bool> action_apps = (map {$1: True}, keys seeded_actions) ?? {};
         map action_apps{$1} = True, keys app_sources;
-        return writeDataProviderIndexByApp(maps, keys action_apps, *hash<auto> sub (string app) {
+        hash<ProviderIndexInfo> rv = writeDataProviderIndexByApp(maps, keys action_apps, *hash<auto> sub (string app) {
             *hash<auto> actions = seeded_actions{app};
             foreach hash<auto> source in (app_sources{app}) {
                 binary data = ReadOnlyFile::readBinaryFile(staging_dir + DirSep + source.file);
@@ -1307,7 +1476,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "qualification": report,
             "type_info_mismatches": type_info_mismatches,
             "workers": worker_summary,
-        }, opts.write_canonical_yaml);
+        } + getFailureSummary(maps.failuremap), opts.write_canonical_yaml);
+        logFailures(maps.failuremap);
+        return rv;
 %endif
     }
 
@@ -1329,7 +1500,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         if (!result.report) {
             return sprintf("the worker exited with code %y without a result", run.exit_code);
         }
-        if (run.exit_code != (result.report.complete ? 0 : 1)) {
+        # a worker whose apps or actions failed indexes the others and exits with 0
+        if (run.exit_code != (result.report.failures ? 1 : 0)) {
             return sprintf("the worker exited with code %y", run.exit_code);
         }
     }

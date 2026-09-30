@@ -1,0 +1,92 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ProviderIndexAppFailureFixture.qm registers apps and actions of which some fail to initialize
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires DataProvider
+
+module ProviderIndexAppFailureFixture {
+    version = "1.0";
+    desc = "ProviderIndex app and action failure fixture";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # an app whose initialization always fails, so it never registers its info
+        DataProviderActionCatalog::registerPendingApp(ProviderIndexAppFailureFixture::FailingApp, sub () {
+            throw "QORE-TEST-APP-INIT-ERROR", "the failing test app cannot be initialized";
+        });
+
+        # an app with one action that initializes and one that always fails
+        ProviderIndexAppFailureFixture::registerTestApp(ProviderIndexAppFailureFixture::PartialApp, "http");
+        ProviderIndexAppFailureFixture::registerTestAction(ProviderIndexAppFailureFixture::PartialApp, "good");
+        DataProviderActionCatalog::registerPendingAppAction(ProviderIndexAppFailureFixture::PartialApp, "broken",
+                sub () {
+            throw "QORE-TEST-ACTION-INIT-ERROR", "the broken test action cannot be initialized";
+        });
+
+        # an app that registers its info and connection scheme, and then fails, like an app whose action schemas
+        # are not available
+        ProviderIndexAppFailureFixture::registerTestApp(ProviderIndexAppFailureFixture::SchemaApp, "http");
+        try {
+            throw "QORE-TEST-SCHEMAS-UNAVAILABLE", "the test app's action schemas are not available";
+        } catch (hash<ExceptionInfo> ex) {
+            DataProviderActionCatalog::reportInitializationFailure("app", ProviderIndexAppFailureFixture::SchemaApp,
+                NOTHING, ex);
+        }
+
+        # an app whose actions all initialize
+        ProviderIndexAppFailureFixture::registerTestApp(ProviderIndexAppFailureFixture::HealthyApp);
+        ProviderIndexAppFailureFixture::registerTestAction(ProviderIndexAppFailureFixture::HealthyApp, "first");
+        ProviderIndexAppFailureFixture::registerTestAction(ProviderIndexAppFailureFixture::HealthyApp, "second");
+    };
+}
+
+#! The fixture's apps and helpers
+public namespace ProviderIndexAppFailureFixture {
+#! An app whose initialization fails
+public const FailingApp = "QoreTestIndexFailingApp";
+#! An app with one action that fails
+public const PartialApp = "QoreTestIndexPartialApp";
+#! An app that registers its info and then fails
+public const SchemaApp = "QoreTestIndexSchemaApp";
+#! An app without failures
+public const HealthyApp = "QoreTestIndexHealthyApp";
+#! All apps of the fixture
+public const Apps = (FailingApp, PartialApp, SchemaApp, HealthyApp);
+
+#! Registers a test app
+sub registerTestApp(string app, *string scheme) {
+    hash<DataProviderAppInfo> info = <DataProviderAppInfo>{
+        "name": app,
+        "display_name": app,
+        "short_desc": "app failure fixture",
+        "desc": "app failure fixture",
+        "groups": (AppGroup::DataTransformation,),
+        "logo": "fixture",
+        "logo_mime_type": "image/svg+xml",
+        "logo_file_name": "fixture.svg",
+    };
+    if (scheme) {
+        info.scheme = scheme;
+    }
+    DataProviderActionCatalog::registerApp(info);
+}
+
+#! Registers a test action
+sub registerTestAction(string app, string action) {
+    QoreDataField name({"name": "name", "type": StringType});
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+        "app": app,
+        "action": action,
+        "path": "/" + action,
+        "display_name": action,
+        "short_desc": "app failure fixture action",
+        "desc": "app failure fixture action",
+        "action_code": DPAT_API,
+        "options": DataProviderActionCatalog::getActionOptionFromFields({"name": name}),
+        "output_type": AbstractDataProviderType::get(AutoHashType),
+    });
+}
+}

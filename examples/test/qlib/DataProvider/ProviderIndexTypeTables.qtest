@@ -39,7 +39,7 @@ public class ProviderIndexTypeTablesTest inherits QUnit::Test {
         const TypeTableVersion = 7;
 
         #! The metadata cache format version written
-        const CacheVersion = 8;
+        const CacheVersion = 9;
 
         #! The app of the test index
         const App = "QoreTestTypes";

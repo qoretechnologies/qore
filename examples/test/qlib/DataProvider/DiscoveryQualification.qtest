@@ -32,7 +32,107 @@ public class DiscoveryQualificationTest inherits QUnit::Test {
             \unmaterializedDeregistrationTest());
         addTestCase("pending declarations become exact expected inventory",
             \pendingDeclarationInventoryTest());
+        addTestCase("app failures can be recorded without blocking qualification", \recordAppFailuresTest());
+        addTestCase("only the failures of individual apps and actions are app failures",
+            \appFailureClassificationTest());
         set_return_value(main());
+    }
+
+    private recordAppFailuresTest() {
+        string app = "DiscoveryRecorded_" + get_random_string(8);
+        registerTestApp(app);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerTestAction(app, "ready");
+        DataProviderActionCatalog::registerPendingAppAction(app, "broken", sub () {
+            throw "RECORDED-ACTION-ERROR", "recorded action failure";
+        });
+        DataProviderActionCatalog::getActions(app, False);
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected = (
+            <DataProviderDiscoveryExpectedIdentityInfo>{"app": app, "action": "ready"},
+            <DataProviderDiscoveryExpectedIdentityInfo>{"app": app, "action": "absent"},
+        );
+
+        # without recording, the app failures block qualification as before
+        try {
+            DataProviderActionCatalog::sealDiscovery(DataProviderActionCatalog::beginDiscovery(expected, (app,)));
+            fail("app failures must block qualification unless they are recorded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            assertEq((), ex.arg.unavailable, "nothing is recorded as unavailable");
+            assertEq(sort(("registration", "expected-inventory", "expected-inventory")),
+                sort(map $1.phase, ex.arg.failures));
+        }
+
+        # with recording, a token is issued, and the report lists the app failures
+        DataProviderQualifiedDiscovery qualification = DataProviderActionCatalog::sealDiscovery(
+            DataProviderActionCatalog::beginDiscovery(expected, (app,)), True);
+        on_exit DataProviderActionCatalog::discardQualifiedDiscovery(qualification);
+        hash<DataProviderDiscoveryReportInfo> report = qualification.getReport();
+        assertFalse(report.complete, "a generation with unavailable identities is not complete");
+        assertEq((), report.failures);
+        assertEq(sort((app + "/broken", app + "/broken", app + "/absent")), sort(map $1.identity, report.unavailable));
+        assertEq(("RECORDED-ACTION-ERROR",), map $1.error, report.unavailable, $1.phase == "registration");
+        assertEq({"published": True}, DataProviderActionCatalog::publishQualifiedDiscovery(qualification,
+            hash<auto> sub () { return {"published": True}; }));
+
+        # other failures still block a generation that records app failures
+        DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery(expected, (app,));
+        DataProviderActionCatalog::reportDiscoveryFailure(session, "source", "load-environment", "QORE_DATA_PROVIDERS",
+            "SOURCE-ERROR", "source failure");
+        try {
+            DataProviderActionCatalog::sealDiscovery(session, True);
+            fail("a source failure must block qualification");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            assertEq(("SOURCE-ERROR",), map $1.error, ex.arg.failures);
+            assertEq(3, ex.arg.unavailable.size(), "the app failures are reported with it");
+            assertFalse(ex.arg.complete);
+        }
+
+        # a clean generation that records app failures is complete
+        string clean_app = "DiscoveryClean_" + get_random_string(8);
+        registerTestApp(clean_app);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(clean_app);
+        registerTestAction(clean_app, "ready");
+        DataProviderQualifiedDiscovery clean = DataProviderActionCatalog::sealDiscovery(
+            DataProviderActionCatalog::beginDiscovery((<DataProviderDiscoveryExpectedIdentityInfo>{
+                "app": clean_app, "action": "ready"},), (clean_app,)), True);
+        on_exit DataProviderActionCatalog::discardQualifiedDiscovery(clean);
+        assertTrue(clean.getReport().complete);
+        assertEq((), clean.getReport().unavailable);
+    }
+
+    private appFailureClassificationTest() {
+        code failure = hash<DataProviderDiscoveryFailureInfo> sub (string kind, string phase, *string app) {
+            return <DataProviderDiscoveryFailureInfo>{
+                "generation": 1,
+                "kind": kind,
+                "phase": phase,
+                "identity": app ?? "identity",
+                "app": app,
+                "error": "ERROR",
+                "description": "description",
+            };
+        };
+        foreach list<auto> i in ((
+                ("app", "registration"), ("action", "registration"),
+                ("app", "expected-inventory"), ("action", "expected-inventory"),
+                ("app", "publication"), ("scheme", "publication"),
+                ("action", "serialize-action-metadata"),
+            )) {
+            assertTrue(DataProviderActionCatalog::isAppDiscoveryFailure(failure(i[0], i[1], "App")),
+                sprintf("%s/%s", i[0], i[1]));
+        }
+        foreach list<auto> i in ((
+                ("app", "worker-merge"), ("action", "worker-merge"), ("scheme", "catalog-snapshot-stale"),
+                ("source", "registration"), ("factory", "load-known-factory"), ("source", "inventory"),
+                ("scheme", "registration"), ("factory", "serialize-factory-info"), ("action", "publication"),
+            )) {
+            assertFalse(DataProviderActionCatalog::isAppDiscoveryFailure(failure(i[0], i[1], "App")),
+                sprintf("%s/%s", i[0], i[1]));
+        }
+        assertFalse(DataProviderActionCatalog::isAppDiscoveryFailure(failure("app", "registration")),
+            "a failure without an app is not an app failure");
     }
 
     private registerTestApp(string app) {

@@ -91,6 +91,13 @@ module ProviderIndex {
     - indexes are published without the canonical index file (\c qore-data-index.yaml) unless
       @ref ProviderIndex::ProviderIndexCreateOptions::write_canonical_yaml "ProviderIndexCreateOptions::write_canonical_yaml"
       is set
+    - an app or action that cannot be initialized no longer fails the build: its failure is recorded in the index
+      (see @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()")
+      and logged, the build summary reports the numbers of failed apps and actions (\c failed_apps and
+      \c failed_actions), and the failures are in the \c unavailable member of the qualification report, which is
+      then not complete; an app that registered its info and connection scheme before failing is indexed with them;
+      failures that are not those of individual apps or actions still fail the build, and an index worker whose
+      apps or actions failed indexes the others and succeeds
     - indexes written by this version require ProviderIndexUtil 1.2 or later
 
     @subsection providerindex_v1_1 ProviderIndex v1.1

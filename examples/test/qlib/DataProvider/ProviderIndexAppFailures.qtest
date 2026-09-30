@@ -1,0 +1,525 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires DataProvider
+%requires ProviderIndex
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%try-module process >= 2.1
+%define NoProcess
+%endtry
+
+%exec-class ProviderIndexAppFailuresTest
+
+#! Tests that apps and actions that cannot be initialized are recorded in the index instead of failing its build
+public class ProviderIndexAppFailuresTest inherits QUnit::Test {
+    public {
+        #! The apps of ProviderIndexAppFailureFixture.qm
+        const FailingApp = "QoreTestIndexFailingApp";
+        const PartialApp = "QoreTestIndexPartialApp";
+        const SchemaApp = "QoreTestIndexSchemaApp";
+        const HealthyApp = "QoreTestIndexHealthyApp";
+        const Apps = (FailingApp, PartialApp, SchemaApp, HealthyApp);
+
+        #! The module that registers the fixture apps
+        const FixtureModule = "ProviderIndexAppFailureFixture";
+
+        #! The failures recorded for the fixture apps: app, action, kind, phase, error, module
+        const ExpectedFailures = (
+            {"kind": "app", "app": FailingApp, "action": NOTHING, "phase": "registration",
+                "error": "QORE-TEST-APP-INIT-ERROR", "description": "the failing test app cannot be initialized",
+                "module": FixtureModule},
+            {"kind": "action", "app": PartialApp, "action": "broken", "phase": "registration",
+                "error": "QORE-TEST-ACTION-INIT-ERROR",
+                "description": "the broken test action cannot be initialized", "module": FixtureModule},
+            {"kind": "app", "app": SchemaApp, "action": NOTHING, "phase": "registration",
+                "error": "QORE-TEST-SCHEMAS-UNAVAILABLE",
+                "description": "the test app's action schemas are not available", "module": FixtureModule},
+        );
+    }
+
+    private {
+        # registers the provider module in QORE_PROVIDER_INDEX_FIXTURE_MODULE
+        string registration_module = normalize_dir(get_script_dir()) + "/ProviderIndexEnvironmentMapFixture.qm";
+        # registers the fixture apps, of which some fail
+        string fixture_module = normalize_dir(get_script_dir()) + "/ProviderIndexAppFailureFixture.qm";
+
+        # environment variables changed by the tests and their original values
+        hash<string, auto> saved_env;
+    }
+
+    constructor() : Test("ProviderIndex app failures test", "1.0") {
+        addTestCase("failed apps and actions are recorded and the other apps are indexed", \recordTest());
+        addTestCase("a repeated build records the same failures", \repeatTest());
+        addTestCase("a worker build records the same failures as a single-process build", \workerTest());
+        addTestCase("a published index can be read and written again with its failures", \roundTripTest());
+        addTestCase("a failure that is not an app failure still fails the build", \blockingFailureTest());
+        addTestCase("an index I/O error still fails the build", \ioFailureTest());
+        addTestCase("an index published before failures were recorded is read", \earlierVersionTest());
+        addTestCase("an unreadable failure file is reported without affecting the apps", \corruptFailureFileTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules(*bool workers) {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+%ifdef NoProcess
+        if (workers) {
+            testSkip("no process module 2.1 or later");
+        }
+%endif
+    }
+
+    #! Sets a process environment variable until restoreEnv() is called; workers inherit it
+    private setEnv(string var, *string value) {
+        if (!saved_env.hasKey(var)) {
+            saved_env{var} = getenv(var);
+        }
+        if (exists value) {
+            setenv(var, value);
+            ENV{var} = value;
+        } else {
+            unsetenv(var);
+            remove ENV{var};
+        }
+    }
+
+    #! Restores the environment variables changed by setEnv()
+    private restoreEnv() {
+        foreach hash<auto> i in (saved_env.pairIterator()) {
+            if (exists i.value) {
+                setenv(i.key, i.value);
+                ENV{i.key} = i.value;
+            } else {
+                unsetenv(i.key);
+                remove ENV{i.key};
+            }
+        }
+        saved_env = {};
+    }
+
+    #! Makes QORE_DATA_PROVIDERS load the fixture module; the caller calls restoreEnv()
+    private setFixtureEnv(*string extra_module) {
+        setEnv("QORE_DATA_PROVIDERS", registration_module + (extra_module ? PathSep + extra_module : ""));
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", fixture_module);
+    }
+
+    #! Returns the options of a build that loads only the providers registered by QORE_DATA_PROVIDERS
+    private hash<ProviderIndexCreateOptions> getOptions(int workers = 0, *list<string> apps) {
+        hash<ProviderIndexCreateOptions> rv = <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_typescript_actions": False,
+            "workers": workers,
+        };
+        if (apps) {
+            rv.apps = apps;
+        }
+        return rv;
+    }
+
+    #! Builds the index of the fixture apps in the given directory
+    private hash<auto> buildFixtureIndex(string dir) {
+        setFixtureEnv();
+        return ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(0, Apps));
+    }
+
+    #! Returns the contents of all index files in the given directory
+    private hash<string, binary> readIndexFiles(string dir) {
+        hash<string, binary> rv = {};
+        Dir d();
+        d.chdir(dir);
+        foreach string file in (d.listFiles()) {
+            rv{file} = ReadOnlyFile::readBinaryFile(dir + DirSep + file);
+        }
+        return rv;
+    }
+
+    #! Returns the recorded failures as plain hashes
+    private static list<hash<auto>> plain(*list<hash<ProviderIndexFailureInfo>> failures) {
+        return map {} + $1, failures;
+    }
+
+    #! Checks the index of the fixture apps published in the given directory
+    private checkFixtureIndex(string dir) {
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+
+        assertTrue(ProviderIndexUtil::hasIndexedFailureInfo());
+        assertEq(ExpectedFailures, plain(ProviderIndexUtil::getIndexedFailures()),
+            "each failure is recorded once, with its cause");
+        assertEq((ExpectedFailures[1],), plain(ProviderIndexUtil::getIndexedFailures(PartialApp)));
+        assertEq((), plain(ProviderIndexUtil::getIndexedFailures(HealthyApp)));
+
+        # the app whose initialization failed has no info, only its failure
+        assertNothing(ProviderIndexUtil::tryGetAppInfo(FailingApp));
+        assertEq(ExpectedFailures[0], {} + ProviderIndexUtil::tryGetAppFailure(FailingApp));
+        assertEq(ExpectedFailures[0], {} + ProviderIndexUtil::tryGetActionFailure(FailingApp, "any"),
+            "the app's failure makes all of its actions unavailable");
+
+        # the app with a failed action is indexed with its other action and its connection scheme
+        assertEq(PartialApp, ProviderIndexUtil::tryGetAppInfo(PartialApp).name);
+        assertEq("http", ProviderIndexUtil::tryGetAppInfo(PartialApp).scheme);
+        assertEq(("good",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(PartialApp));
+        assertNothing(ProviderIndexUtil::tryGetAppFailure(PartialApp));
+        assertNothing(ProviderIndexUtil::tryGetActionFailure(PartialApp, "good"));
+        assertEq(ExpectedFailures[1], {} + ProviderIndexUtil::tryGetActionFailure(PartialApp, "broken"));
+
+        # the app that registered its info before failing is indexed with it and its connection scheme
+        assertEq("http", ProviderIndexUtil::tryGetAppInfo(SchemaApp).scheme);
+        assertEq(ExpectedFailures[2], {} + ProviderIndexUtil::tryGetAppFailure(SchemaApp));
+        hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+        assertEq({FixtureModule: True}, index.appmap{SchemaApp});
+        assertEq({FixtureModule: True}, index.schememap.http);
+        assertNothing(index.appmap{FailingApp}, "no module is recorded for an app that has no info");
+        assertEq(sort((FailingApp, PartialApp, SchemaApp)), keys index.failuremap);
+
+        # the other app is intact
+        assertNothing(ProviderIndexUtil::tryGetAppFailure(HealthyApp));
+        assertEq(("first", "second"), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(HealthyApp));
+        assertEq(("name",), keys ProviderIndexUtil::tryGetActionMetadata(HealthyApp, "first").options);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+    }
+
+    recordTest() {
+        checkModules();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        hash<auto> info = buildFixtureIndex(dir);
+
+        hash<DataProviderDiscoveryReportInfo> report = info.summary.qualification;
+        assertEq((), report.failures, "no failure blocks the build");
+        assertFalse(report.complete, "a catalog with unavailable apps is not complete");
+        assertEq(sort((FailingApp, PartialApp, SchemaApp)), sort(keys (map {$1.app: True}, report.unavailable)));
+        assertTrue((map $1, report.unavailable, $1.phase == "expected-inventory" && $1.app == FailingApp).size() > 0,
+            "the report also has the failed app's missing identity");
+        assertEq(2, info.summary.failed_apps);
+        assertEq(1, info.summary.failed_actions);
+
+        # the failures are logged with their names
+        list<string> warnings = log.getMessages("could not be initialized");
+        assertEq(1, warnings.size());
+        assertRegex("2 app\\(s\\) and 1 action\\(s\\)", warnings[0]);
+        assertRegex(FailingApp + " \\(QORE-TEST-APP-INIT-ERROR\\)", warnings[0]);
+        assertRegex(PartialApp + "/broken \\(QORE-TEST-ACTION-INIT-ERROR\\)", warnings[0]);
+        assertEq(3, log.getMessages("^unavailable in the data provider index").size(),
+            "each failure is logged in full");
+
+        checkFixtureIndex(dir);
+    }
+
+    repeatTest() {
+        checkModules();
+        string first = make_tmp_dir();
+        on_exit remove_tree(first);
+        string second = make_tmp_dir();
+        on_exit remove_tree(second);
+        on_exit restoreEnv();
+
+        buildFixtureIndex(first);
+        # the failed initializers have been consumed; their failures are retained by the catalog
+        hash<auto> info = buildFixtureIndex(second);
+        assertEq(2, info.summary.failed_apps);
+        assertEq(1, info.summary.failed_actions);
+        assertEq(readIndexFiles(first), readIndexFiles(second), "the same index is published");
+        checkFixtureIndex(second);
+    }
+
+    workerTest() {
+        checkModules(True);
+        string single_dir = make_tmp_dir();
+        on_exit remove_tree(single_dir);
+        string worker_dir = make_tmp_dir();
+        on_exit remove_tree(worker_dir);
+        on_exit restoreEnv();
+        setFixtureEnv();
+
+        hash<auto> worker_info = ProviderIndex::createDataProviderIndex(NOTHING, worker_dir, getOptions(1));
+        assertEq(0, worker_info.summary.workers[0].exit_code, "a worker whose apps failed succeeds");
+        assertEq((), worker_info.summary.qualification.failures);
+        assertEq(2, worker_info.summary.failed_apps);
+        assertEq(1, worker_info.summary.failed_actions);
+        checkFixtureIndex(worker_dir);
+
+        ProviderIndex::createDataProviderIndex(NOTHING, single_dir, getOptions(0));
+        assertEq(readIndexFiles(single_dir), readIndexFiles(worker_dir), "the index files are identical");
+    }
+
+    roundTripTest() {
+        checkModules();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string copy_dir = make_tmp_dir();
+        on_exit remove_tree(copy_dir);
+        on_exit restoreEnv();
+
+        buildFixtureIndex(dir);
+        hash<SerializedDataProviderIndexInfo> serialized = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
+        assertEq(ExpectedFailures, map $1, (foldl $1 + $2, serialized.index.failuremap.iterator()));
+
+        # an index read with readSerializedDataProviderIndex() is written again with its failures
+        ProviderIndexUtil::setEnvironmentVariable(copy_dir);
+        hash<auto> maps = serialized.index - "actioninfomap";
+        ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys serialized.index.actioninfomap,
+            *hash<auto> sub (string app) { return serialized.index.actioninfomap{app}; }, 0s, {});
+        assertEq(readIndexFiles(dir), readIndexFiles(copy_dir), "the same index is written");
+
+        # an index written without failures does not record them
+        ProviderIndexUtil::writeDataProviderIndexByApp(maps - "failuremap", keys serialized.index.actioninfomap,
+            *hash<auto> sub (string app) { return serialized.index.actioninfomap{app}; }, 0s, {});
+        assertFalse(ProviderIndexUtil::readSerializedDataProviderIndex(copy_dir).index.hasKey("failuremap"));
+        resetIndexState();
+        assertFalse(ProviderIndexUtil::hasIndexedFailureInfo());
+        assertNothing(ProviderIndexUtil::getIndexedFailures());
+        assertNothing(ProviderIndexUtil::tryGetAppFailure(FailingApp));
+
+        # the failure file is removed with the index that referenced it: the index directory holds only the files
+        # of the published index
+        hash<string, binary> files = readIndexFiles(copy_dir);
+        assertEq(readIndexFiles(dir).size() - 1, files.size());
+    }
+
+    blockingFailureTest() {
+        checkModules();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+        buildFixtureIndex(dir);
+        hash<string, binary> published = readIndexFiles(dir);
+
+        # a discovery source that cannot be loaded fails the build, and the app failures are reported with it
+        string missing = "ProviderIndexMissingSource_" + get_random_string(8);
+        setFixtureEnv(missing);
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(0, Apps));
+            fail("a failed discovery source must fail the build");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            hash<DataProviderDiscoveryReportInfo> report = ex.arg;
+            assertFalse(report.complete);
+            assertEq(1, (map $1, report.failures, $1.kind == "source" && $1.identity == missing).size());
+            assertEq((), (map $1, report.failures, DataProviderActionCatalog::isAppDiscoveryFailure($1)),
+                "only blocking failures are in failures");
+            assertTrue(report.unavailable.size() > 0, "the app failures are reported as unavailable");
+        }
+        assertEq(published, readIndexFiles(dir), "the published index is untouched");
+    }
+
+    ioFailureTest() {
+        checkModules();
+        if (!getuid()) {
+            testSkip("the index directory cannot be made read-only for root");
+        }
+        string dir = make_tmp_dir();
+        on_exit {
+            chmod(dir, 0700);
+            remove_tree(dir);
+        }
+        on_exit restoreEnv();
+
+        # an app whose initialization makes the index directory read-only, after the build checked that it can be
+        # written to, and then fails, so that the app's failure is recorded, and writing the index fails
+        string app = "QoreTestIndexIoFailureApp";
+        DataProviderActionCatalog::registerPendingApp(app, sub () {
+            chmod(dir, 0500);
+            throw "QORE-TEST-APP-INIT-ERROR", "the I/O failure test app cannot be initialized";
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        setFixtureEnv();
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(0, Apps + app));
+            fail("an index that cannot be written must fail the build");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PROVIDER-INDEX-ERROR", ex.err, sprintf("%s: %s", ex.err, ex.desc));
+        }
+        chmod(dir, 0700);
+        assertEq({}, readIndexFiles(dir), "no index is published");
+    }
+
+    earlierVersionTest() {
+        checkModules();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+        buildFixtureIndex(dir);
+        # the same index as published by metadata cache version 8, whose manifest has no failure file
+        hash<auto> info = getManifest(dir);
+        unlink(getFailureFile(dir, info.manifest));
+        remove info.manifest.failures;
+        info.manifest.version = 8;
+        info.routing.metadata_cache_version = 8;
+        writeManifest(dir, info.routing, info.manifest);
+        resetIndexState();
+
+        assertFalse(ProviderIndexUtil::hasIndexedFailureInfo());
+        assertNothing(ProviderIndexUtil::getIndexedFailures());
+        assertNothing(ProviderIndexUtil::tryGetAppFailure(FailingApp));
+        assertNothing(ProviderIndexUtil::tryGetActionFailure(PartialApp, "broken"));
+        # the apps are read as before
+        assertEq(("good",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(PartialApp));
+        assertEq(("first", "second"), keys ProviderIndexUtil::getAllActionSummaries(){HealthyApp});
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+        hash<SerializedDataProviderIndexInfo> serialized = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
+        assertFalse(serialized.index.hasKey("failuremap"));
+        assertEq(sort((PartialApp, SchemaApp, HealthyApp)), sort(keys serialized.index.appinfomap));
+        assertNothing(ProviderIndexUtil::readDataProviderIndex().failuremap);
+
+        # an unsupported later version is not read
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        info = getManifest(dir);
+        info.manifest.version = 10;
+        info.routing.metadata_cache_version = 10;
+        writeManifest(dir, info.routing, info.manifest);
+        resetIndexState();
+        assertNothing(ProviderIndexUtil::tryGetAppInfo(PartialApp));
+        assertRegex("supported version", ProviderIndexUtil::getIndexReadError() ?? "");
+        assertEq(1, log.getMessages("no metadata cache with a supported version \\(10\\)").size());
+    }
+
+    corruptFailureFileTest() {
+        checkModules();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+        buildFixtureIndex(dir);
+        LogCapture log = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        hash<auto> info = getManifest(dir);
+        string path = getFailureFile(dir, info.manifest);
+        chmod(path, 0600);
+        File f();
+        f.open2(path, O_TRUNC | O_WRONLY);
+        f.write("corrupt");
+        f.close();
+        resetIndexState();
+
+        assertFalse(ProviderIndexUtil::hasIndexedFailureInfo());
+        assertNothing(ProviderIndexUtil::getIndexedFailures());
+        assertRegex("PROVIDER-INDEX-ERROR.*failures.*do not match", ProviderIndexUtil::getIndexReadError() ?? "");
+        assertEq(1, log.getMessages("failures in .* do not match").size(), "the error is logged once");
+        # the apps are not affected
+        assertEq(("good",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(PartialApp));
+        # a copy of the index without its failures is not the published index
+        assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir));
+
+        # a failure file of the right size and digest that does not hold valid failures
+        binary data = compress(msgpack_pack({FailingApp: ({"app": FailingApp, "unknown": True},)},
+            MSGPACK_QORE_MODE));
+        string sha256 = digest("sha256", data).toHex();
+        string bad_path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256);
+        f.open2(bad_path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+        info.manifest.failures = {"size": data.size(), "sha256": sha256};
+        writeManifest(dir, info.routing, info.manifest);
+        resetIndexState();
+        assertNothing(ProviderIndexUtil::getIndexedFailures());
+        assertRegex("PROVIDER-INDEX-ERROR.*cannot read the data provider failures.*unknown key",
+            ProviderIndexUtil::getIndexReadError() ?? "");
+        assertEq(("good",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(PartialApp));
+    }
+
+    #! Returns the routing index and manifest of the published index in the given directory
+    private static hash<auto> getManifest(string dir) {
+        hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+        string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
+        return {
+            "routing": routing,
+            "manifest": msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE),
+            "path": path,
+        };
+    }
+
+    #! Returns the path of the failure file of the given manifest
+    private static string getFailureFile(string dir, hash<auto> manifest) {
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.failures.sha256);
+    }
+
+    #! Publishes the given manifest with a routing index that references it
+    private static writeManifest(string dir, hash<auto> routing, hash<auto> manifest) {
+        binary manifest_data = msgpack_pack(manifest, MSGPACK_QORE_MODE);
+        string manifest_sha256 = digest("sha256", manifest_data).toHex();
+        File f();
+        f.open2(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256),
+            O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(manifest_data);
+        f.close();
+        routing.metadata_cache_sha256 = manifest_sha256;
+        # the members of the checksum payload, in its order
+        hash<auto> payload = routing{"factorymap", "appmap", "schememap", "version"};
+        foreach string key in (("data_sha256", "data_size", "canonical_yaml", "metadata_cache_version",
+                "metadata_cache_sha256", "altmap")) {
+            if (exists routing{key}) {
+                payload{key} = routing{key};
+            }
+        }
+        routing.routing_sha256 = digest("sha256", make_yaml(payload, BlockStyle)).toHex();
+        f.open2(dir + DirSep + "qore-routing-index.yaml", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(make_yaml(routing, BlockStyle));
+        f.close();
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    #! Captures the messages logged by the module; the caller restores the global logger
+    private static LogCapture captureLog() {
+        LogCapture log();
+        Logger logger("provider-index-app-failures-test", LoggerLevel::LevelAll);
+        logger.addAppender(log);
+        ProviderIndexUtil::setGlobalLogger(logger);
+        return log;
+    }
+}
+
+#! Captures the messages logged by the module
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+
+    #! Returns the messages matching the given pattern
+    list<string> getMessages(string pattern) {
+        AutoLock al(mtx);
+        return map $1, messages, regex($1, pattern);
+    }
+}
