@@ -388,6 +388,8 @@ static void removeAOTLocalCandidate(std::unordered_map<std::string, std::deque<L
     @param index the variable's index in the top-level local list, or UINT32_MAX if unknown
     @param name the variable's name
     @param type_path the variable's serialized type path
+    @param type_resolver resolves @a type_path for comparison with a candidate's type, or nullptr; a candidate is
+    rejected only when its type is known not to match (see aotLocalTypeKnownMismatch())
 
     Without an index, the last matching declaration is returned: a later top-level declaration of the same name
     hides an earlier one for the code parsed after it.
@@ -4273,10 +4275,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             ctx->locals[i] = lv;
             if (trace_slot_reg) {
                 fprintf(stderr, "[aot-slot-reg] '%s': local[%d] '%s' type '%s' flags=0x%x ordinal=%u -> %p\n",
-                    name, i, lname ? lname : "", ltype ? ltype : "", lflags, body_ordinal, (void*)lv);
+                    name, i, lname ? lname : "", ltype ? ltype : "", lflags, body_ordinal, static_cast<void*>(lv));
             }
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
-                name, i, lname ? lname : "", lflags, param_idx, (void*)lv);
+                name, i, lname ? lname : "", lflags, param_idx, static_cast<void*>(lv));
         } else {
             printd(0, "AOT v2: '%s' unresolved local slot %d ('%s' flags=0x%x param_idx=%d)\n",
                 name, i, lname ? lname : "", lflags, param_idx);
@@ -8852,7 +8854,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         // for every slot on that path.  A nested handler's parent slots are not
         // the AOT context's slots (see above).
         if (parent_locals_arr && !container_slot_locals
-                && (use_parent_locals_for_all_slots || slot_id < (uint32_t)parent_slot_count)
+                && (use_parent_locals_for_all_slots || slot_id < parent_slot_count)
                 && num_parent_locals > 0
                 && slot_id < static_cast<uint32_t>(num_parent_locals)
                 && parent_locals_arr[slot_id]) {

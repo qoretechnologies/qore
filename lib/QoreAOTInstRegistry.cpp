@@ -852,6 +852,7 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
         // container's LocalVars (same pointer identity as the runtime TLS stack) even when names are shadowed.
         // The enclosing AOT context's tables resolve the handler's explicit variable bindings; the local_map
         // is the name-based fallback for artifacts without them.
+        assert(ctx.slot_to_local);
         nested_handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
             &ctx.local_map, ctx.error, ctx.parent_locals_arr, ctx.num_parent_locals, nullptr, false, nullptr,
             ctx.local_owner_pgm, false, nullptr, ctx.enclosing_body_locals, ctx.slot_to_local);

@@ -14796,6 +14796,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     }
     const LVList* top_level_lvars = writer.serialization_program
         ? qore_program_private::get(*writer.serialization_program)->sb.getLVList() : nullptr;
+    // Program top-level locals by identity -> index in the top-level local list; built on first use, as most IR
+    // functions reference no top-level local
+    std::unordered_map<const LocalVar*, uint32_t> top_level_indices;
+    bool top_level_indices_built = false;
 
     // Sort by slot_id for deterministic serialization
     std::vector<std::pair<const LocalVar*, uint32_t>> sorted_slots(
@@ -14816,7 +14820,7 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         AOTIRLocalBinding binding = AOTIRLocalBinding::NONE;
         uint32_t binding_index = UINT32_MAX;
         if (ordinal_it == body_local_ordinals.end()) {
-            const void* ptr = reinterpret_cast<const void*>(lv);
+            const void* ptr = static_cast<const void*>(lv);
             auto slot_it = enclosing_slots.find(ptr);
             if (slot_it != enclosing_slots.end()) {
                 binding = AOTIRLocalBinding::ENCLOSING_SLOT;
@@ -14828,13 +14832,23 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                     binding_index = body_it->second;
                 } else if (lv->isTopLevel()) {
                     binding = AOTIRLocalBinding::TOP_LEVEL;
-                    if (top_level_lvars) {
-                        for (unsigned i = 0; i < top_level_lvars->size(); ++i) {
-                            if (top_level_lvars->lv[i] == lv) {
-                                binding_index = i;
-                                break;
+                    if (!top_level_indices_built) {
+                        top_level_indices_built = true;
+                        if (top_level_lvars) {
+                            for (unsigned i = 0; i < top_level_lvars->size(); ++i) {
+                                if (i && !(i % 100)
+                                        && qore_check_cancel(nullptr, "AOT top-level local index")) {
+                                    qoreAOTSetExprSerializationError("cancelled while indexing the top-level "
+                                        "local variables for IR function '" + func.name + "'");
+                                    return false;
+                                }
+                                top_level_indices.emplace(top_level_lvars->lv[i], i);
                             }
                         }
+                    }
+                    auto top_it = top_level_indices.find(lv);
+                    if (top_it != top_level_indices.end()) {
+                        binding_index = top_it->second;
                     }
                 }
             }

@@ -31614,7 +31614,7 @@ static void registerHandlerOuterLocals(const QoreIRFunction& handler,
     for (const auto& [lv, slot_id] : handler.local_var_slots) {
         // slots below parent_slot_count are the parent's own locals, bound to the parent's slots directly
         if (lv && slot_id >= handler.parent_slot_count && !body_locals.count(lv)
-                && !slots.hasLocalSlot(reinterpret_cast<const void*>(lv))) {
+                && !slots.hasLocalSlot(static_cast<const void*>(lv))) {
             outer.emplace_back(slot_id, lv);
         }
     }
@@ -31622,7 +31622,7 @@ static void registerHandlerOuterLocals(const QoreIRFunction& handler,
         return a.first < b.first;
     });
     for (const auto& i : outer) {
-        slots.getLocalSlot(reinterpret_cast<const void*>(i.second));
+        slots.getLocalSlot(static_cast<const void*>(i.second));
     }
 
     for (const auto& block : handler.blocks) {
@@ -35876,7 +35876,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     if (pgm) {
         if (const LVList* top_lvars = qore_program_private::get(*pgm)->sb.getLVList()) {
             for (unsigned i = 0; i < top_lvars->size(); ++i) {
-                top_level_indices.emplace(reinterpret_cast<const void*>(top_lvars->lv[i]), i);
+                top_level_indices.emplace(static_cast<const void*>(top_lvars->lv[i]), i);
             }
         }
     }
@@ -35943,7 +35943,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     // Extract body local identities
     for (LocalVar* lv : func.all_body_locals) {
         AOTBodyLocalId blid;
-        blid.local_var_ptr = reinterpret_cast<const void*>(lv);
+        blid.local_var_ptr = static_cast<const void*>(lv);
         blid.name = lv->getName();
         blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();

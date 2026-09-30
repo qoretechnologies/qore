@@ -70,19 +70,27 @@ class AotShadowedLocalsTest inherits QUnit::Test {
 
     private {
         string qore_bin;
-        string qcc_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
         string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
         string worker;
     }
 
     constructor() : QUnit::Test("AotShadowedLocalsTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
         }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         worker = get_script_dir() + DirSep + "aot-shadowed-locals-worker.q";
 
         addTestCase("the expected results parse", \testExpectedParse());
@@ -119,21 +127,23 @@ class AotShadowedLocalsTest inherits QUnit::Test {
 
     testExecModes() {
         foreach string mode in (ExecModes) {
-            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
-                qore_bin, mode, worker));
+            string out = backquote(sprintf("%s %s -b --exec-mode=%s %s 2>&1", env, qore_bin, mode, worker));
             checkResults(mode, parseOutput(mode, out));
         }
     }
 
     testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
         TmpDir tmp("qore-aot-shadowed-locals-");
         foreach hash<auto> i in (CompileOptions.pairIterator()) {
             string exe = tmp.path + DirSep + "aot-shadowed-locals-" + i.key;
-            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1", libqore_dir,
-                qcc_bin, i.value, exe, worker));
+            string compile_out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, i.value, exe,
+                worker));
             assertTrue(is_file(exe), sprintf("qcc %s: %s", i.value, compile_out));
-            checkResults(i.key, parseOutput(i.key, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
-                exe))));
+            checkResults(i.key, parseOutput(i.key, backquote(sprintf("%s %s 2>&1", env, exe))));
         }
     }
 
