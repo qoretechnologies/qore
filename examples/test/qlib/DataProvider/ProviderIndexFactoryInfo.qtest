@@ -388,13 +388,13 @@ printf(\"%s\\n\", make_json({
         # the routing index stays compact: it holds no factory info
         hash<auto> routing = readRouting(dir);
         assertFalse(routing.hasKey("factoryinfomap"), "no factory info in the routing index");
-        assertEq(6, routing.metadata_cache_version);
+        assertEq(7, routing.metadata_cache_version);
         assertEq({"qoretest": "QoreTestFactoryModule", "qoretest-noinfo": "QoreTestNoInfoModule"},
             routing.factorymap);
 
         # the manifest references the factory info file with its size and digest
         hash<auto> manifest = readManifest(dir);
-        assertEq(6, manifest.version);
+        assertEq(7, manifest.version);
         string path = getFactoryInfoPath(dir);
         binary data = ReadOnlyFile::readBinaryFile(path);
         assertEq(data.size(), manifest.factories.size);
@@ -537,7 +537,7 @@ printf(\"%s\\n\", make_json({
         # a writer that does not provide factory info publishes an index that does not record it
         writeTestIndex(False, getTestMaps());
         hash<auto> manifest = readManifest(dir);
-        assertEq(6, manifest.version);
+        assertEq(7, manifest.version);
         assertFalse(manifest.hasKey("factories"), "the manifest does not reference factory info");
         assertFalse(ProviderIndexUtil::readSerializedDataProviderIndex(dir).index.hasKey("factoryinfomap"));
         assertNothing(ProviderIndexUtil::readDataProviderIndex().factoryinfomap);

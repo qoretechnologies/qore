@@ -1,0 +1,502 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+%requires Logger
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexTypeTablesTest
+
+#! Gives the test access to the metadata cache chunk format, as the ProviderIndex module has
+class ChunkAccess inherits ProviderIndexUtil {
+    #! Unpacks a metadata cache chunk
+    static hash<DataProviderIndexInfo> unpack(binary data, int version, bool restore) {
+        return unpackMetadataCacheChunk(data, version, restore);
+    }
+
+    #! Restores a serialized action as it is restored from the index
+    static hash<auto> restore(hash<auto> action) {
+        return getIndexedAction(action, createMetadataDeserializeContext(), True);
+    }
+}
+
+public class ProviderIndexTypeTablesTest inherits QUnit::Test {
+    public {
+        #! The metadata cache format version that stores type descriptions in tables
+        const TypeTableVersion = 7;
+
+        #! The app of the test index
+        const App = "QoreTestTypes";
+    }
+
+    constructor() : Test("ProviderIndex type description tables test", "1.0") {
+        addTestCase("each distinct type and field description is stored once", \storedOnceTest());
+        addTestCase("descriptions read from the tables equal the descriptions written", \roundTripTest());
+        addTestCase("descriptions restored from the tables equal those restored from complete descriptions",
+            \restoredEquivalenceTest());
+        addTestCase("a description reachable by an exponential number of paths is restored once per description",
+            \exponentialPathsTest());
+        addTestCase("an index published before the tables is read", \earlierFormatTest());
+        addTestCase("a description that refers to a missing description or to itself is not read",
+            \invalidTablesTest());
+        addTestCase("an action with an unreadable description is left out, the others are read",
+            \unreadableActionTest());
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    storedOnceTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # a record type whose levels each refer to the level below by two fields: its complete description holds
+        # 2^depth descriptions of the lowest level
+        int depth = 10;
+        writeTestIndex(getTestActions(depth));
+        hash<auto> chunk = readChunk(dir);
+        # the lowest level's string type, and each level
+        assertEq(depth + 2, chunk.types.size());
+        # the lowest level's field, and the two fields of each other level
+        assertEq(2 * depth + 1, chunk.fields.size());
+        # every option refers to its description by its position; the three options share one description
+        hash<auto> actions = chunk.index.actioninfomap{App};
+        assertEq(Type::Int, actions.deep.options.record.type_info.type());
+        assertEq(actions.deep.options.record.type_info, actions.deep.options.copy.type_info);
+        assertEq(actions.deep.options.record.type_info, actions.other.options.record.type_info);
+        # an option without a description is stored as it is
+        assertNothing(actions.other.options.plain.type_info);
+        # nested descriptions are stored before the descriptions that refer to them
+        foreach hash<auto> field in (chunk.fields) {
+            assertEq(Type::Int, field.type.type());
+        }
+        for (int i = 0; i < chunk.types.size(); ++i) {
+            foreach hash<auto> field in (chunk.types[i].fields.pairIterator()) {
+                assertTrue(chunk.fields[field.value].type < i, "a field of a type refers to a lower position");
+            }
+        }
+%endif
+    }
+
+    roundTripTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<auto> actions = getTestActions(8);
+        writeTestIndex(actions, True);
+        string canonical = ReadOnlyFile::readTextFile(dir + DirSep + "qore-data-index.yaml");
+        writeTestIndex(actions);
+        # the serialized form holds complete descriptions, exactly as written
+        assertEq(actions, ProviderIndexUtil::readSerializedDataProviderIndex(dir).index.actioninfomap{App});
+        hash<auto> per_app;
+        ProviderIndexUtil::readSerializedDataProviderIndex(dir, sub (string app, *hash<auto> info,
+                *hash<auto> app_actions) {
+            per_app{app} = app_actions;
+        });
+        assertEq(actions, per_app{App});
+        assertEq(canonical, ProviderIndexUtil::dumpIndexYaml(dir), "the YAML of the canonical index file");
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    restoredEquivalenceTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        int depth = 6;
+        hash<auto> actions = getTestActions(depth);
+        writeTestIndex(actions);
+        resetIndexState();
+        hash<auto> restored = map {$1.action: $1}, ProviderIndexUtil::tryGetActionMetadataForApp(App);
+        assertEq(("deep", "other"), sort(keys restored));
+        foreach hash<auto> i in (actions.pairIterator()) {
+            # restored from the complete descriptions, as from an index published before the tables
+            hash<auto> expected = ChunkAccess::restore(i.value);
+            assertEq(msgpack_pack(expected, MSGPACK_QORE_MODE), msgpack_pack(restored{i.key}, MSGPACK_QORE_MODE),
+                i.key);
+        }
+        hash<auto> type_info = restored.deep.options.record.type_info;
+        assertEq("hash<DataTypeInfo>", type_info.fullType());
+        assertEq("hash<DataFieldInfo>", type_info.fields.a.fullType());
+        assertEq("L" + depth, type_info.name);
+        assertEq("L" + (depth - 2), type_info.fields.a.type.fields.b.type.name);
+        # the restored description restores the type it describes
+        AbstractDataProviderType type = AbstractDataProviderType::get(cast<hash<DataTypeInfo>>(type_info));
+        assertEq("L" + depth, type.getName());
+        assertEq(("a", "b"), keys type.getFields());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    exponentialPathsTest() {
+        checkModules();
+%ifndef NoMsgPack
+        # 64 levels that each refer to the level below by two fields: the complete description would hold 2^64
+        # descriptions of the lowest level, so it is only restored if each stored description is restored once
+        int depth = 64;
+        list<hash<auto>> types = (leafType(), getLevel(0, {"v": 0}));
+        list<hash<auto>> fields = (getField("v", 0),);
+        for (int i = 1; i <= depth; ++i) {
+            push fields, getField("a", i);
+            push fields, getField("b", i);
+            push types, getLevel(i, {"a": fields.size() - 2, "b": fields.size() - 1});
+        }
+        hash<auto> action = {"app": App, "action": "deep", "options": {
+            "record": {"display_name": "record", "type_info": types.size() - 1},
+            "leaf": {"display_name": "leaf", "type_info": 0},
+        }};
+        hash<auto> chunk = ChunkAccess::unpack(packChunk({"deep": action}, types, fields), TypeTableVersion, True);
+        hash<auto> restored = ChunkAccess::restore(chunk.actioninfomap{App}.deep);
+        # position 0 is a description too
+        assertEq("string", restored.options.leaf.type_info.name);
+        hash<auto> type_info = restored.options.record.type_info;
+        assertEq("L" + depth, type_info.name);
+        # follow one path to the lowest level
+        for (int i = depth; i > 0; --i) {
+            assertEq("L" + i, type_info.name);
+            assertEq(("a", "b"), keys type_info.fields);
+            type_info = type_info.fields{i % 2 ? "a" : "b"}.type;
+        }
+        assertEq("L0", type_info.name);
+        assertEq("string", type_info.fields.v.type.name);
+%endif
+    }
+
+    earlierFormatTest() {
+        checkModules();
+%ifndef NoMsgPack
+        # a version 6 chunk holds complete descriptions
+        hash<auto> actions = getTestActions(4);
+        hash<auto> app_index = {
+            "factorymap": {}, "appmap": {}, "schememap": {},
+            "appinfomap": {App: {"name": App}},
+            "actioninfomap": {App: actions},
+            "top_actioninfomap": {},
+        };
+        binary data = compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
+        hash<auto> serialized = ChunkAccess::unpack(data, 6, False);
+        assertEq(actions, serialized.actioninfomap{App});
+        hash<auto> raw = ChunkAccess::unpack(data, 6, True);
+        assertEq(actions, raw.actioninfomap{App}, "no tables are added to the actions of a chunk without tables");
+        hash<auto> restored = ChunkAccess::restore(raw.actioninfomap{App}.deep);
+        assertEq("L4", restored.options.record.type_info.name);
+        assertEq("hash<DataTypeInfo>", restored.options.record.type_info.fullType());
+%endif
+    }
+
+    invalidTablesTest() {
+        checkModules();
+%ifndef NoMsgPack
+        list<hash<auto>> types = (leafType(), getLevel(0, {"v": 0}));
+        list<hash<auto>> fields = (getField("v", 0),);
+
+        # a position that is not in the type table
+        hash<auto> chunk = ChunkAccess::unpack(packChunk({"deep": getAction(2)}, types, fields), TypeTableVersion,
+            True);
+        assertThrows("PROVIDER-INDEX-ERROR", "position 2 of the type description table, which has 2 descriptions",
+            \ChunkAccess::restore(), (chunk.actioninfomap{App}.deep,));
+        # a negative position
+        chunk = ChunkAccess::unpack(packChunk({"deep": getAction(-1)}, types, fields), TypeTableVersion, True);
+        assertThrows("PROVIDER-INDEX-ERROR", "position -1 of the type description table",
+            \ChunkAccess::restore(), (chunk.actioninfomap{App}.deep,));
+        # a field that refers to a position that is not in the field table
+        chunk = ChunkAccess::unpack(packChunk({"deep": getAction(2)}, types + getLevel(1, {"a": 5}), fields),
+            TypeTableVersion, True);
+        assertThrows("PROVIDER-INDEX-ERROR", "position 5 of the field description table, which has 1 description$",
+            \ChunkAccess::restore(), (chunk.actioninfomap{App}.deep,));
+        # a type whose field refers to the type
+        list<hash<auto>> cyclic_fields = (getField("v", 0, 1),);
+        chunk = ChunkAccess::unpack(packChunk({"deep": getAction(1)}, types, cyclic_fields), TypeTableVersion, True);
+        assertThrows("PROVIDER-INDEX-ERROR", "type description 1 of a type description table refers to itself",
+            \ChunkAccess::restore(), (chunk.actioninfomap{App}.deep,));
+        # the same descriptions are rejected in the serialized form
+        assertThrows("PROVIDER-INDEX-ERROR", "type description 1 of a type description table refers to itself",
+            \ChunkAccess::unpack(), (packChunk({"deep": getAction(1)}, types, cyclic_fields), TypeTableVersion,
+                False));
+        assertThrows("PROVIDER-INDEX-ERROR", "position 2 of the type description table", \ChunkAccess::unpack(),
+            (packChunk({"deep": getAction(2)}, types, fields), TypeTableVersion, False));
+        # a table that is not a list
+        assertThrows("PROVIDER-INDEX-ERROR", "type description table of a metadata cache chunk must be a list",
+            \ChunkAccess::unpack(), (compress(msgpack_pack({"index": getChunkIndex({"deep": getAction(0)}),
+                "types": {}, "fields": fields}, MSGPACK_QORE_MODE)), TypeTableVersion, True));
+        # a chunk without its index
+        assertThrows("PROVIDER-INDEX-ERROR", "must be a hash with an \"index\" hash", \ChunkAccess::unpack(),
+            (compress(msgpack_pack({"types": types, "fields": fields}, MSGPACK_QORE_MODE)), TypeTableVersion,
+                True));
+        # a position in an action without tables, as in a chunk published before the tables
+        assertThrows("PROVIDER-INDEX-ERROR", "refers to position 0 of a type description table, but its metadata has "
+            "none", \ChunkAccess::restore(), (getAction(0),));
+%endif
+    }
+
+    unreadableActionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        writeTestIndex(getTestActions(3));
+        # replace the chunk of the app with one in which one action refers to a description that is not in it
+        list<hash<auto>> types = (leafType(), getLevel(0, {"v": 0}));
+        list<hash<auto>> fields = (getField("v", 0),);
+        replaceChunk(dir, packChunk({"deep": getAction(1), "other": getAction(7, "other")}, types, fields));
+        resetIndexState();
+        LogCapture log();
+        Logger logger("provider-index-type-tables-test", LoggerLevel::LevelAll);
+        logger.addAppender(log);
+        ProviderIndexUtil::setGlobalLogger(logger);
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        hash<auto> restored = (map {$1.action: $1}, ProviderIndexUtil::tryGetActionMetadataForApp(App)) ?? {};
+        assertEq(("deep",), keys restored);
+        assertEq("L0", restored.deep.options.record.type_info.name);
+        assertNothing(ProviderIndexUtil::tryGetActionMetadata(App, "other"));
+        assertEq(1, log.getMessages("Omitting action \"other\" of app \"QoreTestTypes\".*PROVIDER-INDEX-ERROR: a "
+            "type description refers to position 7 of the type description table").size());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    #! Returns the actions of the test app, whose options describe a record type of the given depth
+    private static hash<auto> getTestActions(int depth) {
+        hash<auto> type_info = getRecordType(depth);
+        return {
+            "deep": {"app": App, "action": "deep", "desc": "a deep record", "options": {
+                "record": {"display_name": "record", "type_info": type_info},
+                "copy": {"display_name": "copy", "type_info": type_info},
+            }},
+            "other": {"app": App, "action": "other", "desc": "the same record", "options": {
+                "record": {"display_name": "record", "type_info": type_info},
+                "plain": {"display_name": "plain"},
+            }},
+        };
+    }
+
+    #! Returns the complete description of a record type of the given depth
+    private static hash<auto> getRecordType(int depth) {
+        hash<auto> rv = getLevel(0, {"v": getField("v", 0, leafType())});
+        for (int i = 1; i <= depth; ++i) {
+            rv = getLevel(i, {"a": getField("a", i, rv), "b": getField("b", i, rv)});
+        }
+        return rv;
+    }
+
+    #! Returns the description of a level of a record type
+    private static hash<auto> getLevel(int level, hash<auto> fields) {
+        return {
+            "name": "L" + level,
+            "display_name": "level " + level,
+            "short_desc": "level " + level,
+            "desc": "level " + level,
+            "base_type": "hash",
+            "mandatory": True,
+            "types_accepted": ("hash",),
+            "types_returned": ("hash",),
+            "fields": fields,
+            "unique_key": "L" + level,
+            "recursive": False,
+        };
+    }
+
+    #! Returns the description of a field of a level; if no type is given, its type is the position of the next lower level
+    private static hash<auto> getField(string name, int level, auto type = NOTHING) {
+        # the next lower level is at the position of this level in the type table, after the string type
+        if (!exists type) {
+            type = level;
+        }
+        return {
+            "name": name,
+            "display_name": name,
+            "desc": sprintf("field %s of level %d", name, level),
+            "type": type,
+            "unique_key": name + level,
+        };
+    }
+
+    #! Returns the description of the string type
+    private static hash<auto> leafType() {
+        return {
+            "name": "string",
+            "display_name": "string",
+            "short_desc": "a string",
+            "desc": "a string",
+            "base_type": "string",
+            "mandatory": True,
+            "types_accepted": ("string",),
+            "types_returned": ("string",),
+            "unique_key": "string",
+            "recursive": False,
+        };
+    }
+
+    #! Returns an action whose option refers to the given position of the type table
+    private static hash<auto> getAction(int pos, string name = "deep") {
+        return {"app": App, "action": name, "options": {"record": {"display_name": "record", "type_info": pos}}};
+    }
+
+    #! Returns the index of a chunk of the test app with the given actions
+    private static hash<auto> getChunkIndex(hash<auto> actions) {
+        return {
+            "factorymap": {}, "appmap": {}, "schememap": {},
+            "appinfomap": {App: {"name": App}},
+            "actioninfomap": {App: actions},
+            "top_actioninfomap": {},
+        };
+    }
+
+    #! Returns a chunk of the test app with the given actions and tables
+    private static binary packChunk(hash<auto> actions, list<hash<auto>> types, list<hash<auto>> fields) {
+        return compress(msgpack_pack({"index": getChunkIndex(actions), "types": types, "fields": fields},
+            MSGPACK_QORE_MODE));
+    }
+
+    #! Returns the manifest of the published index in the given directory, with its path
+    private static hash<auto> getManifest(string dir) {
+        hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+        assertEqStatic(TypeTableVersion, routing.metadata_cache_version);
+        string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
+        return {
+            "routing": routing,
+            "path": path,
+            "manifest": msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE),
+        };
+    }
+
+    #! Fails the current test if the given values differ
+    private static assertEqStatic(auto expected, auto actual) {
+        if (expected !== actual) {
+            throw "TEST-ERROR", sprintf("expected %y, got %y", expected, actual);
+        }
+    }
+
+    #! Returns the unpacked chunk of the test app in the given directory
+    private static hash<auto> readChunk(string dir) {
+        hash<auto> manifest = getManifest(dir).manifest;
+        assertEqStatic(TypeTableVersion, manifest.version);
+        string path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.apps{App}.sha256);
+        return msgpack_unpack(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)), MSGPACK_QORE_MODE);
+    }
+
+    #! Replaces the chunk of the test app in the published index in the given directory
+    private static replaceChunk(string dir, binary data) {
+        hash<auto> info = getManifest(dir);
+        string sha256 = digest("sha256", data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256), data);
+        hash<auto> manifest = info.manifest;
+        manifest.apps{App}.size = data.size();
+        manifest.apps{App}.sha256 = sha256;
+        binary manifest_data = msgpack_pack(manifest, MSGPACK_QORE_MODE);
+        string manifest_sha256 = digest("sha256", manifest_data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256), manifest_data);
+        hash<auto> routing = info.routing;
+        routing.metadata_cache_sha256 = manifest_sha256;
+        # the members of the checksum payload, in its order
+        hash<auto> payload = routing{"factorymap", "appmap", "schememap", "version"};
+        foreach string key in (("data_sha256", "data_size", "canonical_yaml", "metadata_cache_version",
+                "metadata_cache_sha256", "altmap")) {
+            if (exists routing{key}) {
+                payload{key} = routing{key};
+            }
+        }
+        routing.routing_sha256 = digest("sha256", make_yaml(payload, BlockStyle)).toHex();
+        writeFile(dir + DirSep + "qore-routing-index.yaml", make_yaml(routing, BlockStyle));
+    }
+
+    #! Publishes an index of the test app with the given actions
+    private static writeTestIndex(hash<auto> actions, *bool canonical) {
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {},
+            "appmap": {App: {"QoreTestModule": True}},
+            "schememap": {},
+            "appinfomap": {App: {"name": App}},
+        }, (App,), *hash<auto> sub (string app) { return actions; }, 0s, {}, canonical);
+    }
+
+    #! Makes the given directory the index directory; returns code that restores the previous directory
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            # no later test case reads this index
+            resetIndexState();
+        };
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    private static writeFile(string path, data contents) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
+    }
+}
+
+#! Captures the messages logged by the module
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages = ();
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+
+    #! Returns the messages matching the given regular expression
+    list<string> getMessages(string pattern) {
+        AutoLock al(mtx);
+        return (map $1, messages, regex($1, pattern)) ?? ();
+    }
+}

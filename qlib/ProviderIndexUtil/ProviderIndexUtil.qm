@@ -111,7 +111,7 @@ if (!info.reloaded) {
       without reading any app's metadata;
       @ref ProviderIndexUtil::ProviderIndexUtil::hasConnectionAlternatives() "ProviderIndexUtil::hasConnectionAlternatives()"
       reports whether an index published by an earlier version records them; such indexes are still read
-    - the metadata cache is written in format version 6 (routing index version 4): each metadata cache file is
+    - the metadata cache is written in format version 7 (routing index version 4): each metadata cache file is
       named after the digest of its contents, so that publishing an index never changes a file that the previous
       index references, and the routing index, which is written last, publishes the new index atomically; the files
       that it no longer references are then removed; the info of the indexed data provider factories is in a file
@@ -124,9 +124,13 @@ if (!info.reloaded) {
       reports whether an index records their info), so the factories can be listed with their info without loading
       their modules, while the routing index and the manifest do not grow with it; factory info that cannot be read
       is reported by @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()",
-      and the factory modules are then loaded to get it; indexes written with metadata cache versions 4 and 5 are
-      still read, without factory info; earlier versions of this module cannot read an index written in format 6,
-      and an index must be recreated after upgrading to record the factory info
+      and the factory modules are then loaded to get it; each distinct option type description and field
+      description of an app is stored once in the app's metadata, and descriptions refer to the descriptions nested in
+      them, so the descriptions of record types that refer to each other, which repeat the same nested descriptions
+      many times, are read and restored in time and memory in proportion to their distinct descriptions; indexes
+      written with metadata cache versions 4 to 6 are still read, those written with versions 4 and 5 without factory
+      info; earlier versions of this module cannot read an index written in format 6 or 7, and an index must be
+      recreated after upgrading to record the factory info and to store each type description once
     - errors reading the routing index or the metadata cache are reported by
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()";
       the canonical index file is only read if there is one, and an app whose metadata cannot be read is

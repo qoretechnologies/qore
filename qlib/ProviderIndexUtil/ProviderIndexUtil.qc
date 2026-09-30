@@ -70,8 +70,16 @@ public const DefaultMaxCanonicalIndexSize = 128 * 1024 * 1024;
 const RoutingIndexVersion = 4;
 #! Version 5 names each metadata cache file after the digest of its contents, so that publishing an index never
 #! changes a file that the previous index references; version 6 records the info of the indexed data provider
-#! factories in a file of its own that the manifest references
-const MetadataCacheVersion = 6;
+#! factories in a file of its own that the manifest references; version 7 stores each distinct option type
+#! description and field description of an app once, in tables of its chunk that the descriptions refer to by position
+const MetadataCacheVersion = 7;
+#! The first metadata cache version whose chunks store the type descriptions of an app in tables
+const MetadataCacheTypeTableVersion = 7;
+
+#! The key of a restored chunk's action that holds the chunk's type description tables until the action is restored
+/** The key is removed when the action is restored, so it is never visible outside of the module
+*/
+const IndexedTypeTableKey = "type_table";
 #! The earliest routing index and metadata cache versions that are read; they name the metadata cache files after
 #! their apps
 const MinRoutingIndexVersion = 2;
@@ -2199,7 +2207,11 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     }
 
     #! Packs one app's metadata into a metadata cache chunk
-    /** @param app the app name
+    /** The option type descriptions of the app's actions are stored in the chunk's tables of distinct type and
+        field descriptions (see @ref IndexedTypeTableBuilder), and each option refers to its description by its
+        position in the type table
+
+        @param app the app name
         @param app_info the app's serialized info, if any
         @param actions the app's serialized actions, if any
 
@@ -2219,28 +2231,68 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         if (exists app_info) {
             app_index.appinfomap{app} = app_info;
         }
+        IndexedTypeTableBuilder types();
         if (exists actions) {
-            app_index.actioninfomap{app} = actions;
+            hash<auto> app_actions = {};
+            foreach hash<auto> action in (actions.pairIterator()) {
+                app_actions{action.key} = types.addActionTypes(action.value);
+            }
+            app_index.actioninfomap{app} = app_actions;
         }
         # type descriptions repeat many keys and values, so chunks compress by about 10 times
-        return compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
+        return compress(msgpack_pack({"index": app_index} + types.getTables(), MSGPACK_QORE_MODE));
 %endif
     }
 
     #! Unpacks a metadata cache chunk
     /** @param data the compressed chunk
+        @param version the metadata cache version of the chunk; by default, the current version, as for the chunks
+        written by the workers of an index build
+        @param restore @ref True if the actions will be restored by getIndexedAction(), in which case each action of
+        a chunk that stores its type descriptions in tables refers to the tables with the @ref IndexedTypeTableKey
+        key, so that each description is restored once; @ref False to return the actions in their serialized form,
+        in which every option type description is a complete description
 
         @return the chunk's index, with the app's info and actions
 
-        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or a type description refers to a
+        description that is not in the chunk
 
         @since ProviderIndexUtil 1.2
     */
-    static private hash<DataProviderIndexInfo> unpackMetadataCacheChunk(binary data) {
+    static private hash<DataProviderIndexInfo> unpackMetadataCacheChunk(binary data,
+            int version = MetadataCacheVersion, bool restore = False) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
 %else
-        return cast<hash<DataProviderIndexInfo>>(msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE));
+        auto chunk = msgpack_unpack(uncompress_to_binary(data), MSGPACK_QORE_MODE);
+        if (version < MetadataCacheTypeTableVersion) {
+            return cast<hash<DataProviderIndexInfo>>(chunk);
+        }
+        if (chunk.typeCode() != NT_HASH || chunk.index.typeCode() != NT_HASH) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("a metadata cache chunk of version %d must be a hash with an "
+                "\"index\" hash; got %s instead", version, chunk.typeCode() == NT_HASH ? chunk.index.type()
+                : chunk.type());
+        }
+        hash<DataProviderIndexInfo> rv = cast<hash<DataProviderIndexInfo>>(chunk.index);
+        if (!rv.actioninfomap) {
+            return rv;
+        }
+        IndexedTypeTable types(chunk.types, chunk.fields);
+        foreach hash<auto> app in (rv.actioninfomap.pairIterator()) {
+            hash<auto> app_actions = {};
+            foreach hash<auto> action in (app.value.pairIterator()) {
+                if (restore) {
+                    hash<auto> raw = action.value;
+                    raw{IndexedTypeTableKey} = types;
+                    app_actions{action.key} = raw;
+                } else {
+                    app_actions{action.key} = types.expandActionTypes(action.value);
+                }
+            }
+            rv.actioninfomap{app.key} = app_actions;
+        }
+        return rv;
 %endif
     }
 
@@ -2526,7 +2578,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 throw "PROVIDER-INDEX-ERROR", sprintf("the metadata of app %y in the data provider index in %y is "
                     "corrupt", chunk_app, dir);
             }
-            *hash<auto> actions = unpackMetadataCacheChunk(data).actioninfomap{chunk_app};
+            *hash<auto> actions = unpackMetadataCacheChunk(data, compact.manifest.version, False)
+                .actioninfomap{chunk_app};
             if (exists actions) {
                 writeCanonicalAppActions(write, chunk_app, actions, !actions_written);
                 actions_written = True;
@@ -2586,7 +2639,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 }
                 size += data.size();
                 if (unpack) {
-                    hash<DataProviderIndexInfo> chunk = unpackMetadataCacheChunk(data);
+                    hash<DataProviderIndexInfo> chunk = unpackMetadataCacheChunk(data, compact.manifest.version,
+                        False);
                     if (per_app) {
                         per_app_error = True;
                         per_app(app, chunk.appinfomap{app}, chunk.actioninfomap{app});
@@ -3173,7 +3227,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     "size and digest recorded in the metadata cache manifest", app, path));
                 return;
             }
-            return unpackMetadataCacheChunk(data);
+            return unpackMetadataCacheChunk(data, version, True);
         } catch (hash<ExceptionInfo> ex) {
             setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("cannot read the metadata of app %y from %y: %s: %s",
                 app, path ?? "<unknown>", ex.err, ex.desc));
@@ -3362,8 +3416,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     */
     static private hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
             *bool indexed) {
+        # the type description tables of the action's chunk, if it stores its type descriptions in tables; a
+        # registered action is a typed hash without this key
+        *IndexedTypeTable types = action.hasKey(IndexedTypeTableKey) ? action{IndexedTypeTableKey} : NOTHING;
         # dynamic callbacks and output types are not indexed; earlier indexes may contain output types
-        action -= ("output_type", "get_output_type", "get_dynamic_options");
+        action -= ("output_type", "get_output_type", "get_dynamic_options", IndexedTypeTableKey);
         return ctx.action_info_th.doCastWithOverrides(action, {
             "path_vars": (action.path_vars
                 ? ctx.path_vars_th.doCastValues(action.path_vars)
@@ -3377,7 +3434,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     "element_allowed_values": (exists $1.value.element_allowed_values
                         ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
                         : NOTHING),
-                    "type_info": getOptionTypeInfo(action, $1.key, $1.value, ctx),
+                    "type_info": getOptionTypeInfo(action, $1.key, $1.value, ctx, types),
                     "default_view": indexed ? ctx.ui_view_map{$1.value.default_view} : $1.value.default_view,
                 }
             }, action.options.pairIterator()) : NOTHING),
@@ -3394,14 +3451,16 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param name the option name
         @param option the option as stored in the index, or an option of a registered action
         @param ctx the prepared deserialization context
+        @param types the type description tables of the action's chunk, if it stores its type descriptions in tables
 
         @return a \c DataProvider::DataTypeInfo hash
     */
     static private hash<auto> getOptionTypeInfo(hash<auto> action, string name, hash<auto> option,
-            hash<MetadataDeserializeContext> ctx) {
-        # a registered action's option is a typed hash without this key
-        if (option.hasKey("type_info") && option.type_info) {
-            return castTypeInfo(option.type_info, ctx);
+            hash<MetadataDeserializeContext> ctx, *IndexedTypeTable types) {
+        # a registered action's option is a typed hash without this key; an option of a chunk that stores its type
+        # descriptions in tables refers to its description by its position, which can be 0
+        if (option.hasKey("type_info") && (option.type_info.typeCode() == NT_INT || option.type_info)) {
+            return IndexedTypeTable::restoreTypeInfo(option.type_info, ctx, types);
         }
         switch (option.type.typeCode()) {
             case NT_OBJECT:
@@ -3418,43 +3477,6 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 "cannot be read; the index must be recreated", name, action.action, action.app);
         }
         return ctx.type_map."auto".getInfo();
-    }
-
-    #! Returns the given plain type description as a DataTypeInfo hash, including all nested descriptions
-    /** @param info the type description as stored in the index
-        @param ctx the prepared deserialization context
-
-        @return a \c DataProvider::DataTypeInfo hash
-    */
-    static private hash<auto> castTypeInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
-        return ctx.type_info_th.doCastWithOverrides(info, {
-            "supported_options": (exists info.supported_options
-                ? ctx.type_opt_info_th.doCastValues(info.supported_options)
-                : NOTHING),
-            "fields": (exists info.fields ? ctx.field_info_th.doCastValuesWithOverrides(info.fields, map {
-                $1.key: {
-                    "type": castTypeInfo($1.value.type, ctx),
-                    "allowed_values": (exists $1.value.allowed_values
-                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
-                        : NOTHING),
-                    "element_allowed_values": (exists $1.value.element_allowed_values
-                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
-                        : NOTHING),
-                },
-            }, info.fields.pairIterator()) : NOTHING),
-            "element_type": exists info.element_type ? castTypeInfo(info.element_type, ctx) : NOTHING,
-            "union_types": exists info.union_types ? (map castTypeInfo($1, ctx), info.union_types) : NOTHING,
-            "default_field_type_info": (exists info.default_field_type_info
-                ? castTypeInfo(info.default_field_type_info, ctx)
-                : NOTHING),
-            "allowed_values": (exists info.allowed_values
-                ? map cast<hash<AllowedValueInfo>>($1), info.allowed_values
-                : NOTHING),
-            "element_allowed_values": (exists info.element_allowed_values
-                ? map cast<hash<AllowedValueInfo>>($1), info.element_allowed_values
-                : NOTHING),
-            "constraints": exists info.constraints ? ctx.constraint_info_th.doCast(info.constraints) : NOTHING,
-        });
     }
 
     #! Returns the data provider info of an indexed action, with its types described by plain data
@@ -3781,6 +3803,377 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             # ensure errors are never silently dropped when the logger is not yet configured
             stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
         }
+    }
+}
+
+%ifndef NoMsgPack
+#! Builds the tables of distinct type and field descriptions of a metadata cache chunk
+/** The description of a type that is reachable by more than one path, as a record type that other record types
+    refer to, repeats the descriptions of the types below it at each path, and the description of a recursive type
+    repeats them at each path to each of its truncations, so the option type descriptions of some apps are many
+    times larger than the descriptions of their distinct types.  In the tables, each distinct type description and
+    each distinct field description is stored once: a type description refers to its field descriptions and to its
+    nested type descriptions (its element type, its union types, and its default field type), and a field
+    description to its type description, by their positions in the tables.
+
+    Nested descriptions are added before the descriptions that refer to them.  Descriptions are compared by their
+    serialized form, so descriptions are only shared if they are identical.
+
+    @see IndexedTypeTable, which restores the descriptions
+
+    @since ProviderIndexUtil 1.2
+*/
+class IndexedTypeTableBuilder {
+    private {
+        #! Distinct type descriptions, whose nested descriptions are positions
+        list<hash<auto>> types = ();
+        #! Distinct field descriptions, whose type descriptions are positions
+        list<hash<auto>> fields = ();
+        #! The positions of the type descriptions, by serialized form
+        hash<string, int> type_pos = {};
+        #! The positions of the field descriptions, by serialized form
+        hash<string, int> field_pos = {};
+    }
+
+    #! Returns the given serialized action with each option type description replaced by its position
+    /** @param action a serialized action
+
+        @return the action; an option's \c type_info that is not a non-empty hash is left unchanged
+    */
+    hash<auto> addActionTypes(hash<auto> action) {
+        if (action.options.typeCode() != NT_HASH) {
+            return action;
+        }
+        # the action, its options, and the descriptions may be typed hashes, whose members cannot be positions
+        hash<auto> options = {};
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH && i.value.type_info.typeCode() == NT_HASH && i.value.type_info) {
+                hash<auto> option = {} + i.value;
+                option.type_info = addType(i.value.type_info);
+                options{i.key} = option;
+            } else {
+                options{i.key} = i.value;
+            }
+        }
+        hash<auto> rv = {} + action;
+        rv.options = options;
+        return rv;
+    }
+
+    #! Returns the tables as stored in a metadata cache chunk
+    /** @return a hash with \c types and \c fields keys
+    */
+    hash<auto> getTables() {
+        return {
+            "types": types,
+            "fields": fields,
+        };
+    }
+
+    #! Adds the given type description and its nested descriptions, and returns its position
+    private int addType(hash<auto> info) {
+        hash<auto> node = {} + info;
+        if (info.fields.typeCode() == NT_HASH) {
+            hash<auto> node_fields = {};
+            foreach hash<auto> i in (info.fields.pairIterator()) {
+                node_fields{i.key} = i.value.typeCode() == NT_HASH ? addField(i.value) : i.value;
+            }
+            node.fields = node_fields;
+        }
+        if (info.element_type.typeCode() == NT_HASH) {
+            node.element_type = addType(info.element_type);
+        }
+        if (info.union_types.typeCode() == NT_LIST) {
+            list<auto> union_types = ();
+            foreach auto union_type in (info.union_types) {
+                push union_types, union_type.typeCode() == NT_HASH ? addType(union_type) : union_type;
+            }
+            node.union_types = union_types;
+        }
+        if (info.default_field_type_info.typeCode() == NT_HASH) {
+            node.default_field_type_info = addType(info.default_field_type_info);
+        }
+        string key = msgpack_pack(node, MSGPACK_QORE_MODE).toBase64();
+        *int pos = type_pos{key};
+        if (exists pos) {
+            return pos;
+        }
+        push types, node;
+        return type_pos{key} = types.size() - 1;
+    }
+
+    #! Adds the given field description and its type description, and returns its position
+    private int addField(hash<auto> field) {
+        hash<auto> node = {} + field;
+        if (field.type.typeCode() == NT_HASH) {
+            node.type = addType(field.type);
+        }
+        string key = msgpack_pack(node, MSGPACK_QORE_MODE).toBase64();
+        *int pos = field_pos{key};
+        if (exists pos) {
+            return pos;
+        }
+        push fields, node;
+        return field_pos{key} = fields.size() - 1;
+    }
+}
+%endif
+
+#! The tables of distinct type and field descriptions of a metadata cache chunk
+/** Restores the descriptions stored by @ref IndexedTypeTableBuilder: each description is restored once, when it is
+    first needed, and every description that refers to it shares the restored description, so restoring the option
+    types of an app's actions takes time and memory in proportion to its distinct descriptions, not to the size of
+    their complete descriptions.
+
+    A description that refers to a position that is not in its table, or to itself, cannot be restored.
+
+    @since ProviderIndexUtil 1.2
+*/
+class IndexedTypeTable {
+    private {
+        #! Distinct type descriptions, whose nested descriptions are positions
+        list<auto> types;
+        #! Distinct field descriptions, whose type descriptions are positions
+        list<auto> fields;
+        #! Restored type descriptions by position
+        list<auto> restored_types = ();
+        #! Restored field descriptions by position
+        list<auto> restored_fields = ();
+        #! Complete serialized type descriptions by position
+        list<auto> expanded_types = ();
+        #! Complete serialized field descriptions by position
+        list<auto> expanded_fields = ();
+        #! The descriptions being restored or expanded by each thread, to reject a description that refers to itself
+        hash<string, bool> pending = {};
+    }
+
+    #! Creates the object from the tables of a metadata cache chunk
+    /** @param types the type description table
+        @param fields the field description table
+
+        @throw PROVIDER-INDEX-ERROR a table is not a list
+    */
+    constructor(auto types, auto fields) {
+        self.types = getTable(types, "type");
+        self.fields = getTable(fields, "field");
+    }
+
+    #! Returns the given type description, stored in a chunk's tables or as a complete description, as a DataTypeInfo hash
+    /** @param info a position in the type table of @a types, or a complete type description, whose nested
+        descriptions may be positions in the tables of @a types
+        @param ctx the prepared deserialization context
+        @param types the tables of the description's chunk, if it stores its type descriptions in tables
+
+        @return a \c DataProvider::DataTypeInfo hash
+
+        @throw PROVIDER-INDEX-ERROR the description refers to a position without tables, or to a position that is
+        not in its table, or to itself
+    */
+    static hash<auto> restoreTypeInfo(auto info, hash<MetadataDeserializeContext> ctx, *IndexedTypeTable types) {
+        if (info.typeCode() == NT_INT) {
+            if (!types) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("a type description refers to position %d of a type "
+                    "description table, but its metadata has none", info);
+            }
+            return types.restoreType(info, ctx);
+        }
+        return castTypeInfo(info, ctx, types);
+    }
+
+    #! Returns the given plain type description as a DataTypeInfo hash, including all nested descriptions
+    /** @param info the type description as stored in the index
+        @param ctx the prepared deserialization context
+        @param types the tables of the description's chunk, if it stores its type descriptions in tables
+
+        @return a \c DataProvider::DataTypeInfo hash
+    */
+    static hash<auto> castTypeInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx, *IndexedTypeTable types) {
+        return ctx.type_info_th.doCastWithOverrides(info, {
+            "supported_options": (exists info.supported_options
+                ? ctx.type_opt_info_th.doCastValues(info.supported_options)
+                : NOTHING),
+            "fields": exists info.fields ? castFields(info.fields, ctx, types) : NOTHING,
+            "element_type": exists info.element_type ? restoreTypeInfo(info.element_type, ctx, types) : NOTHING,
+            "union_types": (exists info.union_types
+                ? (map restoreTypeInfo($1, ctx, types), info.union_types)
+                : NOTHING),
+            "default_field_type_info": (exists info.default_field_type_info
+                ? restoreTypeInfo(info.default_field_type_info, ctx, types)
+                : NOTHING),
+            "allowed_values": (exists info.allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), info.allowed_values
+                : NOTHING),
+            "element_allowed_values": (exists info.element_allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), info.element_allowed_values
+                : NOTHING),
+            "constraints": exists info.constraints ? ctx.constraint_info_th.doCast(info.constraints) : NOTHING,
+        });
+    }
+
+    #! Returns the given serialized action with each option type description that is a position replaced by the complete description
+    /** @param action a serialized action from a chunk that stores its type descriptions in tables
+
+        @return the action in the serialized form of a chunk without tables; descriptions are shared, not copied
+
+        @throw PROVIDER-INDEX-ERROR a description refers to a position that is not in its table, or to itself
+    */
+    hash<auto> expandActionTypes(hash<auto> action) {
+        if (action.options.typeCode() != NT_HASH) {
+            return action;
+        }
+        hash<auto> options = {};
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH && i.value.type_info.typeCode() == NT_INT) {
+                hash<auto> option = {} + i.value;
+                option.type_info = expandType(i.value.type_info);
+                options{i.key} = option;
+            } else {
+                options{i.key} = i.value;
+            }
+        }
+        hash<auto> rv = {} + action;
+        rv.options = options;
+        return rv;
+    }
+
+    #! Returns the type description at the given position as a DataTypeInfo hash
+    private hash<auto> restoreType(int pos, hash<MetadataDeserializeContext> ctx) {
+        if (exists (auto rv = restored_types[pos])) {
+            return rv;
+        }
+        hash<auto> node = getEntry(types, pos, "type");
+        string key = sprintf("%d:rt%d", gettid(), pos);
+        checkPending(key, pos, "type");
+        on_exit remove pending{key};
+        return restored_types[pos] = castTypeInfo(node, ctx, self);
+    }
+
+    #! Returns the field description at the given position as a DataFieldInfo hash
+    private hash<auto> restoreField(int pos, hash<MetadataDeserializeContext> ctx) {
+        if (exists (auto rv = restored_fields[pos])) {
+            return rv;
+        }
+        hash<auto> node = getEntry(fields, pos, "field");
+        string key = sprintf("%d:rf%d", gettid(), pos);
+        checkPending(key, pos, "field");
+        on_exit remove pending{key};
+        return restored_fields[pos] = castFieldInfo(node, ctx, self);
+    }
+
+    #! Returns the complete serialized type description at the given position
+    private hash<auto> expandType(int pos) {
+        if (exists (auto rv = expanded_types[pos])) {
+            return rv;
+        }
+        hash<auto> rv = {} + getEntry(types, pos, "type");
+        string key = sprintf("%d:et%d", gettid(), pos);
+        checkPending(key, pos, "type");
+        on_exit remove pending{key};
+        if (rv.fields.typeCode() == NT_HASH) {
+            hash<auto> node_fields = {};
+            foreach hash<auto> i in (rv.fields.pairIterator()) {
+                node_fields{i.key} = i.value.typeCode() == NT_INT ? expandField(i.value) : i.value;
+            }
+            rv.fields = node_fields;
+        }
+        if (rv.element_type.typeCode() == NT_INT) {
+            rv.element_type = expandType(rv.element_type);
+        }
+        if (rv.union_types.typeCode() == NT_LIST) {
+            list<auto> union_types = ();
+            foreach auto union_type in (rv.union_types) {
+                push union_types, union_type.typeCode() == NT_INT ? expandType(union_type) : union_type;
+            }
+            rv.union_types = union_types;
+        }
+        if (rv.default_field_type_info.typeCode() == NT_INT) {
+            rv.default_field_type_info = expandType(rv.default_field_type_info);
+        }
+        return expanded_types[pos] = rv;
+    }
+
+    #! Returns the complete serialized field description at the given position
+    private hash<auto> expandField(int pos) {
+        if (exists (auto rv = expanded_fields[pos])) {
+            return rv;
+        }
+        hash<auto> rv = {} + getEntry(fields, pos, "field");
+        string key = sprintf("%d:ef%d", gettid(), pos);
+        checkPending(key, pos, "field");
+        on_exit remove pending{key};
+        if (rv.type.typeCode() == NT_INT) {
+            rv.type = expandType(rv.type);
+        }
+        return expanded_fields[pos] = rv;
+    }
+
+    #! Returns the given field descriptions as DataFieldInfo hashes
+    private static hash<auto> castFields(hash<auto> info_fields, hash<MetadataDeserializeContext> ctx,
+            *IndexedTypeTable types) {
+        hash<auto> rv = {};
+        foreach hash<auto> i in (info_fields.pairIterator()) {
+            if (i.value.typeCode() == NT_INT) {
+                if (!types) {
+                    throw "PROVIDER-INDEX-ERROR", sprintf("field %y refers to position %d of a field description "
+                        "table, but its metadata has none", i.key, i.value);
+                }
+                rv{i.key} = types.restoreField(i.value, ctx);
+            } else {
+                rv{i.key} = castFieldInfo(i.value, ctx, types);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the given field description as a DataFieldInfo hash
+    private static hash<auto> castFieldInfo(hash<auto> field, hash<MetadataDeserializeContext> ctx,
+            *IndexedTypeTable types) {
+        return ctx.field_info_th.doCastWithOverrides(field, {
+            "type": restoreTypeInfo(field.type, ctx, types),
+            "allowed_values": (exists field.allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), field.allowed_values
+                : NOTHING),
+            "element_allowed_values": (exists field.element_allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), field.element_allowed_values
+                : NOTHING),
+        });
+    }
+
+    #! Marks the given description as being restored or expanded by the current thread
+    /** @throw PROVIDER-INDEX-ERROR the description is already being restored or expanded by the current thread,
+        so it refers to itself
+    */
+    private checkPending(string key, int pos, string what) {
+        if (pending{key}) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("%s description %d of a type description table refers to itself",
+                what, pos);
+        }
+        pending{key} = True;
+    }
+
+    #! Returns the entry at the given position of the given table
+    /** @throw PROVIDER-INDEX-ERROR the position is not in the table, or its entry is not a hash
+    */
+    private static hash<auto> getEntry(list<auto> table, int pos, string what) {
+        if (pos < 0 || pos >= table.size() || table[pos].typeCode() != NT_HASH) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("a type description refers to position %d of the %s description "
+                "table, which has %d description%s", pos, what, table.size(), table.size() == 1 ? "" : "s");
+        }
+        return table[pos];
+    }
+
+    #! Returns the given table of a metadata cache chunk
+    /** @throw PROVIDER-INDEX-ERROR the table is neither a list nor missing
+    */
+    private static list<auto> getTable(auto table, string what) {
+        switch (table.typeCode()) {
+            case NT_LIST:
+                return table;
+            case NT_NOTHING:
+                return ();
+        }
+        throw "PROVIDER-INDEX-ERROR", sprintf("the %s description table of a metadata cache chunk must be a list; "
+            "got %s instead", what, table.type());
     }
 }
 }
