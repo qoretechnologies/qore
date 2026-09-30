@@ -135,7 +135,8 @@ proven safely during lowering, values are promoted to cleanup allocas. See
 
 Lvalue operations must not inflate container refcounts before copy-on-write
 checks. Mutation paths that need the natural container refcount must use
-borrowed loads and invalidate local caches before mutation.
+borrowed loads and invalidate local caches before mutation, and the temps of a
+value operand are released before the mutation (`DiscardTempsKeep`).
 
 See `design/lvalue-loads-in-ir.md` for the precise invariant and current
 handler rules.

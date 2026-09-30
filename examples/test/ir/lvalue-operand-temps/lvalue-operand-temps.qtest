@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class LValueOperandTempsTest
+
+#! Tests that the value operand of an lvalue mutation does not make the container it changes shared
+/** An assignment or compound assignment to an lvalue path must change the container in place when only the variable
+    holds it, even when an operand reads the container, as in <tt>h.x.y = h.x.a + 1</tt> or <tt>push l, l.size()</tt>:
+    the temps of the operands (values, keys, and indexes) are released before the container is changed, as the AST
+    interpreter releases them; so are the temps of a foreach list, a switch value, and a for initializer before
+    the body runs.  The checks are in
+    lvalue-operand-temps-checks.qi; each reports the values it produced and whether each container on the path is
+    still the same container (with library debugging), and every tier and a compiled module must report exactly what
+    the AST interpreter does.
+*/
+class LValueOperandTempsTest inherits QUnit::Test {
+    public {
+        #! the results of the AST interpreter; "same" and "copied" are container identities
+        const Expected = {
+            # the operand reads the key's own container, another container of the variable, and the value replaced
+            "self-read": "same:same:{x: {a: 1, y: 2}, o: {p: 1}}",
+            "other-read": "same:same:{x: {a: 1, y: 1, w: {p: 1}}, o: {p: 1}}",
+            "same-value": "same:same:{a: 1, y: 4}",
+            # the container replaced by a value computed from itself: the variable's hash is kept
+            "replace-self": "same:{a: 1, y: 1, n: 1}",
+            "nested": "same:same:same:{a: {b: {d: 2, c: 5}, e: 3}}",
+            "list-elements": "same:[1, 3]|same:same:{l: [1, 2, 3]}",
+            "list-of-hashes": "same:same:[{y: 1, x: 2}]",
+            "object-member": "same:same:{a: 1, y: 2}",
+            "compound": "same:same:{a: 1, y: 6, l: [1, 2]}",
+            "dynamic-key": "same:same:{a: 1, y: 1, z: 2}",
+            "result-used": "same:same:2:{a: 1, y: 2}",
+            # another variable holds the container: it is copied, and the other variable does not see the change
+            "alias-kept": "same:copied:{a: 1, y: 2}:{a: 1, y: 1}",
+            "reference-root": "same:same:{a: 1, y: 2}",
+            # an operand that raises, and a temp of the operand that raises when it is released, leave the lvalue
+            # unchanged
+            "operand-exception": "same:same:RHS-ERROR,RHS-ERROR:{x: {a: 1, y: 1}, o: {p: 1}}",
+            "operand-destructor-exception": "DESTRUCTOR-ERROR:{a: 1, y: 1}",
+            # keys and indexes that read the container are operands of the mutation too
+            "key-operands": "same:same:same:{a: 1, y: 1, z: 2, z2: 1}:[0, 5]",
+            # push, unshift and compound assignments change a variable's value in place
+            "variable-mutations": "same:same:[3, 0, 1, 1]:{a: 1, b: 1}",
+            "path-push": "same:same:{l: [2, 0, 1]}",
+            # the temps of a foreach list, a switch value, and a for initializer are not held while the body runs
+            "statement-bodies": "same:same:{a: 1, y: 1, k: 1, l: 2, k2: 2, l2: 3, s: 2, f2: 2, f3: 3}",
+            "merge-loop": "same:same:{other/a: 1, app1/a: 1, app1/b: 2, app2/a: 1, app2/b: 2}",
+            "self-member": "same:same:{a: 1, y: 2}",
+            # the sibling container is changed in place only if the static variable was not copied
+            "static-var": "same:same:{map: {app: {b: 2, a: 1}}, top: {app/a: 1, app/b: 2}}",
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("LValueOperandTempsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            # functions are compiled when first called; the worker runs the checks again once they are native
+            checkWorkerOutput(mode, runWorker("lvalue-operand-temps-worker.q", get_script_dir(),
+                "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-lvalue-operand-temps-");
+        string qmod_path = tmp.path + DirSep + "LValueOperandTempsChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "LValueOperandTempsChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("lvalue-operand-temps-module-worker.q", tmp.path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! compares the "name=value" lines printed by the worker with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            string expected = i.value;
+            # container identities are only reported with library debugging
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                expected = regex_subst(expected, "\\b(same|copied)\\b", "n/a", RE_Global);
+            }
+            assertEq(expected, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

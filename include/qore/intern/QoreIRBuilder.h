@@ -301,6 +301,17 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+    //! Emit DiscardTempsKeep to close the innermost temp scope while keeping one value.
+    /** Every temp registered since the matching PushTempMark is released, except \a value, whose result is an
+        independent reference owned by the enclosing temp scope.  Lvalue mutations use this to release the
+        temps of an operand before copy-on-write is evaluated, and foreach and switch statements to release the
+        temps of their expression before their body runs; see design/lvalue-loads-in-ir.md.
+
+        @param value the value to keep
+        @param loc optional source location for diagnostics
+        @return the DiscardTempsKeep instruction; its result owns a reference to \a value
+     */
+    QoreIRInstruction* createDiscardTempsKeep(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     //! Set the statement temp scope that caught invoke exceptions must unwind.
     void setExceptionTempScopeId(uint32_t id);
     //! Return the statement temp scope currently assigned to invoke instructions.

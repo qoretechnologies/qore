@@ -1,0 +1,424 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file lvalue-operand-temps-checks.qi checks that the operand of an lvalue mutation does not make the container shared
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** An assignment, compound assignment, push, or unshift must change the container in place when nothing but the
+    variable holds it, even when an operand (the value, or a key or index of the path) reads the container: the AST
+    releases the temps of the operand (a load of the variable, or of a container on the path) when the operand's
+    evaluation returns, before the lvalue is changed, and every other tier must too, or the change copies the
+    container first.  The same holds for the temps of a foreach list, a switch value, and a for initializer while
+    the statement's body runs.
+
+    Each check reports the values it produced and, with library debugging, whether each container on the path is
+    still the same container afterwards ("same", from its address as reported by dbg_node_info(); "n/a" without
+    library debugging).  The test requires every execution tier and a compiled module to report what the AST
+    interpreter reports.  Every check runs in its own function.
+*/
+public namespace LValueOperandTemps {
+#! the address of the node holding \a v, or "n/a" without library debugging
+string sub addr(auto v) {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return "n/a";
+    }
+    *list<*string> a = (call_function("dbg_node_info", v, True) =~ x/node: (0x[0-9a-f]+)/);
+    return a[0] ?? "none";
+}
+
+#! "same" if \a before is the address of \a v, "copied" if not, "n/a" without library debugging
+string sub same(string before, auto v) {
+    if (before == "n/a") {
+        return before;
+    }
+    return before == addr(v) ? "same" : "copied";
+}
+
+#! a hash that only the variable holds: x: {a: 1, y: 1}, o: {p: 1}
+hash<auto> sub make_hash() {
+    hash<auto> h = {};
+    h.x = {};
+    h.x.a = 1;
+    h.x.y = 1;
+    h.o = {};
+    h.o.p = 1;
+    return h;
+}
+
+#! raises an exception
+int sub thrower() {
+    throw "RHS-ERROR", "the operand raised";
+}
+
+#! an object with a hash member
+public class Holder {
+    public {
+        hash<auto> h;
+        static hash<auto> sv;
+    }
+
+    constructor() {
+        h = make_hash();
+    }
+
+    #! changes a member of self from its own value
+    string selfMember() {
+        string hb = addr(h);
+        string xb = addr(h.x);
+        h.x.y = h.x.a + 1;
+        return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+    }
+
+    #! merges the actions of two apps as ProviderIndexUtil::mergeIndexedActions() does
+    static string mergeLoop() {
+        sv = {};
+        sv.map = {};
+        sv.top = {};
+        sv.top."other/a" = 1;
+        string sb = addr(sv);
+        string tb = addr(sv.top);
+        foreach string app in ("app1", "app2") {
+            *hash<auto> actions = {"a": 1, "b": 2};
+            sv.map{app} = (actions ?? {}) + (sv.map{app} ?? {});
+            foreach hash<auto> action in (sv.map{app}.pairIterator()) {
+                sv.top{app + "/" + action.key} = action.value;
+            }
+        }
+        return sprintf("%s:%s:%y", same(sb, sv), same(tb, sv.top), sv.top);
+    }
+
+    #! changes a static variable from its own value, as ProviderIndexUtil::mergeIndexedActions() does
+    static string staticVar() {
+        sv = {};
+        sv.map = {};
+        sv.map.app = {"a": 1};
+        sv.top = {};
+        sv.top."app/a" = 1;
+        string sb = addr(sv);
+        string tb = addr(sv.top);
+        sv.map.app = {"b": 2} + (sv.map.app ?? {});
+        # the sibling is changed in place only if the root was not copied above
+        sv.top."app/b" = 2;
+        return sprintf("%s:%s:%y", same(sb, sv), same(tb, sv.top), sv);
+    }
+}
+
+#! destroys itself with an exception
+class ThrowingDestructor {
+    public {
+        int v;
+    }
+
+    constructor(int v) {
+        self.v = v;
+    }
+
+    destructor() {
+        throw "DESTRUCTOR-ERROR", "the operand's temp raised";
+    }
+}
+
+#! the operand reads the key's own container
+string sub self_read() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    string xb = addr(h.x);
+    h.x.y = h.x.a + 1;
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h);
+}
+
+#! the operand reads another container of the same variable
+string sub other_read() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    string xb = addr(h.x);
+    h.x.w = h.o;
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h);
+}
+
+#! the operand reads the value it replaces, repeatedly
+string sub same_value() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    string xb = addr(h.x);
+    for (int i = 0; i < 3; ++i) {
+        h.x.y = h.x.y + 1;
+    }
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+}
+
+#! the container is replaced by a value computed from itself
+string sub replace_self() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    h.x = h.x + {"n": 1};
+    return sprintf("%s:%y", same(hb, h), h.x);
+}
+
+#! a path of three hashes
+string sub nested() {
+    hash<auto> h = {};
+    h.a = {};
+    h.a.b = {};
+    h.a.b.d = 2;
+    h.a.e = 3;
+    string hb = addr(h);
+    string ab = addr(h.a);
+    string bb = addr(h.a.b);
+    h.a.b.c = h.a.b.d + h.a.e;
+    return sprintf("%s:%s:%s:%y", same(hb, h), same(ab, h.a), same(bb, h.a.b), h);
+}
+
+#! list elements
+string sub list_elements() {
+    list<auto> l = ();
+    push l, 1;
+    push l, 2;
+    string lb = addr(l);
+    l[1] = l[0] + l[1];
+    string r = sprintf("%s:%y", same(lb, l), l);
+
+    hash<auto> h = {};
+    h.l = ();
+    push h.l, 1;
+    push h.l, 2;
+    string hb = addr(h);
+    lb = addr(h.l);
+    h.l[2] = h.l[0] + h.l[1];
+    return r + sprintf("|%s:%s:%y", same(hb, h), same(lb, h.l), h);
+}
+
+#! a hash in a list
+string sub list_of_hashes() {
+    list<auto> l = ();
+    push l, {};
+    l[0].y = 1;
+    string lb = addr(l);
+    string eb = addr(l[0]);
+    l[0].x = l[0].y + 1;
+    return sprintf("%s:%s:%y", same(lb, l), same(eb, l[0]), l);
+}
+
+#! a hash member of an object
+string sub object_member() {
+    Holder o();
+    string hb = addr(o.h);
+    string xb = addr(o.h.x);
+    o.h.x.y = o.h.x.a + 1;
+    return sprintf("%s:%s:%y", same(hb, o.h), same(xb, o.h.x), o.h.x);
+}
+
+#! compound assignments whose operand reads the container
+string sub compound() {
+    hash<auto> h = make_hash();
+    h.x.l = (1,);
+    string hb = addr(h);
+    string xb = addr(h.x);
+    h.x.y += h.x.a;
+    h.x.l += h.x.a + 1;
+    h.x.y *= h.x.a + 2;
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+}
+
+#! a key computed at run time
+string sub dynamic_key() {
+    hash<auto> h = make_hash();
+    string k = "z";
+    string hb = addr(h);
+    string xb = addr(h.x);
+    h.x{k} = h.x.a + 1;
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+}
+
+#! the value of the assignment is used
+string sub result_used() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    string xb = addr(h.x);
+    int v = (h.x.y = h.x.a + 1);
+    return sprintf("%s:%s:%d:%y", same(hb, h), same(xb, h.x), v, h.x);
+}
+
+#! another variable holds the container: it must be copied, and the other variable must not see the change
+string sub alias_kept() {
+    hash<auto> h = make_hash();
+    hash<auto> alias = h.x;
+    string hb = addr(h);
+    string xb = addr(h.x);
+    h.x.y = h.x.a + 1;
+    return sprintf("%s:%s:%y:%y", same(hb, h), same(xb, h.x), h.x, alias);
+}
+
+#! the root is a reference to another variable
+string sub reference_root() {
+    hash<auto> h = make_hash();
+    reference<hash<auto>> r = \h;
+    string hb = addr(h);
+    string xb = addr(h.x);
+    r.x.y = r.x.a + 1;
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+}
+
+#! the operand raises: the lvalue is unchanged
+string sub operand_exception() {
+    hash<auto> h = make_hash();
+    string hb = addr(h);
+    string xb = addr(h.x);
+    string err;
+    try {
+        h.x.y = h.x.a + thrower();
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    try {
+        h.x.y += h.x.a + h.o.p + thrower();
+    } catch (hash<ExceptionInfo> ex) {
+        err += "," + ex.err;
+    }
+    return sprintf("%s:%s:%s:%y", same(hb, h), same(xb, h.x), err, h);
+}
+
+#! a temp of the operand raises in its destructor when the operand's temps are released
+string sub operand_destructor_exception() {
+    hash<auto> h = make_hash();
+    string err;
+    try {
+        h.x.y = (new ThrowingDestructor(h.x.a + 5)).v;
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    return sprintf("%s:%y", err, h.x);
+}
+
+#! keys and indexes that read the container
+string sub key_operands() {
+    hash<auto> h = make_hash();
+    h.k = "z";
+    list<auto> l = ();
+    push l, 0;
+    push l, 1;
+    string hb = addr(h);
+    string xb = addr(h.x);
+    string lb = addr(l);
+    h.x{h.k} = 1;
+    h.x{h.k + "2"} = h.x.a;
+    l[l[1]] = 5;
+    h.x{h.k} += h.x.a;
+    return sprintf("%s:%s:%s:%y:%y", same(hb, h), same(xb, h.x), same(lb, l), h.x, l);
+}
+
+#! push, unshift and compound assignments to a variable whose operand reads the variable
+string sub variable_mutations() {
+    list<int> l = ();
+    push l, 0;
+    string lb = addr(l);
+    push l, l.size();
+    l += l[0] + 1;
+    unshift l, l.size();
+    hash<auto> h = {};
+    h.a = 1;
+    string hb = addr(h);
+    h += {"b": h.a};
+    return sprintf("%s:%s:%y:%y", same(lb, l), same(hb, h), l, h);
+}
+
+#! push and unshift to a path whose operand reads the container
+string sub path_push() {
+    hash<auto> h = {};
+    h.l = ();
+    push h.l, 0;
+    string hb = addr(h);
+    string lb = addr(h.l);
+    push h.l, h.l.size();
+    unshift h.l, h.l[1] + 1;
+    return sprintf("%s:%s:%y", same(hb, h), same(lb, h.l), h);
+}
+
+#! loops and a switch whose expression reads the container that their body changes
+string sub statement_bodies() {
+    hash<auto> h = make_hash();
+    h.m = {};
+    h.m.k = 1;
+    h.m.l = 2;
+    string hb = addr(h);
+    string xb = addr(h.x);
+    # the iterator is kept while the body runs, but not the temps that produced it
+    foreach hash<auto> i in (h.m.pairIterator()) {
+        h.x{i.key} = i.value;
+    }
+    foreach string k in (keys h.m) {
+        h.x{k + "2"} = h.m{k} + 1;
+    }
+    switch (h.x.a) {
+        case 1:
+            h.x.s = h.x.a + 1;
+            break;
+    }
+    for (int i = h.m.size(); i < 4; ++i) {
+        h.x{"f" + i} = i;
+    }
+    return sprintf("%s:%s:%y", same(hb, h), same(xb, h.x), h.x);
+}
+
+#! the loop of ProviderIndexUtil::mergeIndexedActions(): a static variable, a map of apps, and a map of all actions
+string sub merge_loop() {
+    return Holder::mergeLoop();
+}
+
+#! a self member
+string sub self_member() {
+    Holder o();
+    return o.selfMember();
+}
+
+#! a static variable
+string sub static_var() {
+    return Holder::staticVar();
+}
+
+#! Returns the result of every check
+public hash<string, auto> sub get_results() {
+    return {
+        "self-read": self_read(),
+        "other-read": other_read(),
+        "same-value": same_value(),
+        "replace-self": replace_self(),
+        "nested": nested(),
+        "list-elements": list_elements(),
+        "list-of-hashes": list_of_hashes(),
+        "object-member": object_member(),
+        "compound": compound(),
+        "dynamic-key": dynamic_key(),
+        "result-used": result_used(),
+        "alias-kept": alias_kept(),
+        "reference-root": reference_root(),
+        "operand-exception": operand_exception(),
+        "operand-destructor-exception": operand_destructor_exception(),
+        "key-operands": key_operands(),
+        "variable-mutations": variable_mutations(),
+        "path-push": path_push(),
+        "statement-bodies": statement_bodies(),
+        "merge-loop": merge_loop(),
+        "self-member": self_member(),
+        "static-var": static_var(),
+    };
+}
+}

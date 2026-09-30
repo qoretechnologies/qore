@@ -79,7 +79,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 406,
+static_assert(QORE_IR_MAX_OPCODE == 407,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -6185,6 +6185,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
+    // Helper: release the interpreter's cached references to the local at the root of an lvalue path.  The slot
+    // cache and the slots of earlier loads of the local hold references of their own to its value, which make the
+    // container shared: they are released before the path is navigated, so that copy-on-write sees the references
+    // of the program only, and again after a mutation, since it can replace the local's value (see
+    // design/lvalue-loads-in-ir.md).  A reference root can write through to any local.
+    auto invalidateLValuePathLocalCaches = [&](const QoreIRLValuePathInstruction* path_inst) {
+        if (!path_inst->hasLocalTarget()) {
+            return;
+        }
+        bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
+            && QoreTypeInfo::isReference(path_inst->path[0].type_info);
+        if (is_ref) {
+            for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                if (preserveParentSlotForWriteback(j)) {
+                    continue;
+                }
+                if (j < locals_ir_only.size() && locals_ir_only[j]) {
+                    continue;
+                }
+                locals_slot_cache[j].discard(xsink);
+                locals_slot_cache[j] = QoreValue();
+            }
+        } else {
+            if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
+                locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+            }
+            clearLoadSlots(path_inst->lvalue_slot_id);
+        }
+    };
+
     // Helper: prepare slot cache before a lvalue operation.
     // Extracts the base VarRefNode, calls ensureLocalInstantiated, and pre-invalidates
     // the slot cache entry and closure cache. Returns the base VarRefNode.
@@ -11706,6 +11737,44 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::DiscardTempsKeep: {
+                // Close the temp scope of an expression whose value is used after other code has run, such as an
+                // lvalue mutation's operand or a foreach list: the kept value gets a reference of its own, which the
+                // enclosing scope owns, before the scope's temps are released, since the value can be one of them or
+                // be borrowed from one.  The other temps - such as a load of the container that the mutation changes
+                // - no longer hold references when it evaluates copy-on-write.  Weak-reference loads of the
+                // enclosing scope are kept: the enclosing statement is still running.  See
+                // design/lvalue-loads-in-ir.md.
+                if (inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "discard.temps.keep missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue kept = getIRValue(values, inst->operands.front());
+                if (kept.hasNode()) {
+                    kept.ref();
+                }
+                cleanupToTempScope(inst->temp_scope_id, false, true);
+                setOwnedValueSlot(values, cleanup, inst->result.id, kept, xsink);
+                if (xsink && *xsink) {
+                    // a destructor raised: the enclosing statement's scope is the innermost one left
+                    if (inst->exception_target) {
+                        cleanupToTempScope(0, true, true, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
@@ -12598,6 +12667,7 @@ load_local_done:
                 // try to acquire the same lock for GC scanning).
                 QoreValue res;
                 if (!assignment_failed) {
+                    invalidateLValuePathLocalCaches(path_inst);
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         assignment_failed = true;
@@ -12629,26 +12699,7 @@ load_local_done:
                 // any variable), targeted for non-reference roots.
                 if (path_inst->hasLocalTarget()) {
                     markParentLValuePathDirty(path_inst);
-                    bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
-                        && QoreTypeInfo::isReference(path_inst->path[0].type_info);
-                    if (is_ref) {
-                        for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
-                            if (preserveParentSlotForWriteback(j)) {
-                                continue;
-                            }
-                            if (j < locals_ir_only.size() && locals_ir_only[j]) {
-                                continue;
-                            }
-                            locals_slot_cache[j].discard(xsink);
-                            locals_slot_cache[j] = QoreValue();
-                        }
-                    } else {
-                        if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                            locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
-                        }
-                        clearLoadSlots(path_inst->lvalue_slot_id);
-                    }
+                    invalidateLValuePathLocalCaches(path_inst);
                 }
 
                 if (path_inst->result.isValid()) {
@@ -12680,6 +12731,7 @@ load_local_done:
                 // try to acquire the same lock for GC scanning).
                 bool navigation_failed = false;
                 {
+                    invalidateLValuePathLocalCaches(path_inst);
                     LValueHelper lvh(xsink);
                     navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
                     if (!navigation_failed) {
@@ -12778,26 +12830,7 @@ load_local_done:
                 // Cache invalidation: broad for reference roots, targeted for others
                 if (path_inst->hasLocalTarget()) {
                     markParentLValuePathDirty(path_inst);
-                    bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
-                        && QoreTypeInfo::isReference(path_inst->path[0].type_info);
-                    if (is_ref) {
-                        for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
-                            if (preserveParentSlotForWriteback(j)) {
-                                continue;
-                            }
-                            if (j < locals_ir_only.size() && locals_ir_only[j]) {
-                                continue;
-                            }
-                            locals_slot_cache[j].discard(xsink);
-                            locals_slot_cache[j] = QoreValue();
-                        }
-                    } else {
-                        if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                            locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
-                        }
-                        clearLoadSlots(path_inst->lvalue_slot_id);
-                    }
+                    invalidateLValuePathLocalCaches(path_inst);
                 }
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -13339,17 +13372,20 @@ load_local_done:
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                // Get RHS value (operands[0] for push/unshift)
+                // Get RHS value (operands[0] for push/unshift); the holder keeps it while the caches of the root
+                // local, which can hold it, are released
                 QoreValue rhs;
                 if (!path_inst->operands.empty()) {
                     rhs = getIRValue(values, path_inst->operands[0]);
                 }
+                ValueHolder rhs_holder(rhs.refSelf(), xsink);
                 QoreValue res;
                 bool navigation_failed = false;
                 // Release the lvalue lock before cleaning up values or transferring
                 // control to a catch block.  Cleanup can dereference objects that
                 // need the same lock.
                 {
+                    invalidateLValuePathLocalCaches(path_inst);
                     LValueHelper lvh(xsink);
                     navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
                     if (!navigation_failed) {

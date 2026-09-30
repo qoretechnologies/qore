@@ -3776,6 +3776,7 @@ public:
                         }
                         break;
                     case QoreIROpcode::DiscardTemps:
+                    case QoreIROpcode::DiscardTempsKeep:
                         if (inst->temp_scope_id) {
                             temp_discard_ids.emplace_back(inst->temp_scope_id, i);
                         }
@@ -4013,6 +4014,7 @@ private:
                         ++temp_push_count;
                         break;
                     case QoreIROpcode::DiscardTemps:
+                    case QoreIROpcode::DiscardTempsKeep:
                         ++temp_discard_count;
                         break;
                     case QoreIROpcode::OnBlockExit: {

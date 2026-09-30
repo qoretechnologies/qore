@@ -778,7 +778,15 @@ enum class QoreIROpcode : uint16_t {
     //! Format an exact list<int> with fixed sprintf metadata and join in one pass.
     ListIntSprintfJoin = 406,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (407, 408, ...)
+    //! Close the temp scope of an expression whose value is used after other code has run, keeping the value.
+    //!
+    //! operands[0] = the value to keep; result = the same value, owned by the enclosing temp scope.
+    //! Pairs with the `PushTempMark` emitted before the expression was lowered, like `DiscardTemps`: every
+    //! other temp of the expression is released here, for example before an lvalue mutation that uses the
+    //! value evaluates copy-on-write, or before a foreach body runs.  See design/lvalue-loads-in-ir.md.
+    DiscardTempsKeep = 407,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (408, 409, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -787,8 +795,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListIntSprintfJoin);
-static_assert(QORE_IR_MAX_OPCODE == 406, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::DiscardTempsKeep);
+static_assert(QORE_IR_MAX_OPCODE == 407, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

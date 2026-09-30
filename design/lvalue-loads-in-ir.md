@@ -26,6 +26,52 @@ LoadLocal(container, auto_ref=false)
 This applies to direct mutation opcodes and to root values for lvalue paths.
 The borrowed value must not be placed in owned cleanup lists.
 
+## Operand Temp Scope Rule
+
+The value operand of an assignment to a container path is evaluated before the mutation, and its evaluation can create temps that refer to the very container being changed: in
+`h.x.y = h.x.a + 1` the operand loads `h` and projects `h.x`.  A statement's temps are released by its
+`DiscardTemps`, after the mutation, so these temps would make `h` and `h.x` shared when copy-on-write is
+evaluated, and the mutation would copy them.  The AST releases them when the operand's evaluation returns.
+
+`QoreIRLowering::lowerMutationOperand()` therefore lowers such an operand in a temp scope of its own and
+closes it with `DiscardTempsKeep`, right before the mutation.  The same applies to every operand lowered
+before a mutation: the value of an assignment, compound assignment, `push`, or `unshift`, and the dynamic
+keys and indexes of the path (`lowerExpressionInTempScope()`).  A compound assignment, `push`, or
+`unshift` to a variable changes the variable's value in place, so its operand is scoped too unless the
+variable's type holds no reference; a plain assignment to a variable replaces the value and is not scoped:
+
+```text
+push.temp.mark
+load.local @h -> %6
+hash.key.access.hash.guarded .x -> %7 %6
+hash.key.access .a -> %8 %7
+add.any -> %10 %8, %9
+discard.temps.keep -> %11 %10
+lvalue.path.assign %11
+```
+
+`DiscardTempsKeep` takes a reference to its operand before it releases the scope's temps, since the
+operand can be one of them or be borrowed from one, and registers that reference in the enclosing scope,
+so the mutation can still take the value over.  The operand scope is used only when the operand creates
+temps besides its value and the statement has a temp scope of its own; its mark has no source location, so
+it is not a debugger step.  A destructor that raises while the operand's temps are released branches to the
+exception target with the enclosing scope, which is then the innermost one: the mutation is not made, as in
+the AST.
+
+Statements whose expression is evaluated before their body runs hold the expression's temps while the
+body changes containers, for the same reason: the list of a `foreach` statement and the value of a `switch`
+statement are lowered with `lowerExpressionInTempScope()`, so that only the value iterated or switched on
+is kept, and the initializer of a `for` statement, whose value is not used, gets a temp scope closed with
+`DiscardTemps` before the loop.  Without this, a `foreach` over `index.map{app}.pairIterator()` that writes
+to `index.top` copied `index.top` in its first iteration (ProviderIndexUtil::mergeIndexedActions()).
+
+The interpreter also releases its own cached references to the root local (slot cache and earlier load
+slots) before it navigates an assignment, compound assignment, `push`, or `unshift` path, not only
+afterwards (see *Cache Invalidation Rule*).
+
+Regression coverage: `examples/test/ir/lvalue-operand-temps/` checks container identity (with library
+debugging) and values in every execution mode and in a compiled module.
+
 ## Paired Local Mutation Rule
 
 An ordinary local can remain runtime-backed because another statement in the
@@ -150,6 +196,7 @@ the lock-release requirement.
 When adding a new lvalue opcode or helper:
 
 - The lowering path uses borrowed loads for mutation roots.
+- A value operand that can read the container is lowered with `lowerMutationOperand()`.
 - Paired local mutations clear only compiler-owned references before COW.
 - Shared local roots use lock-held structured lvalue navigation.
 - Interpreter cleanup never owns borrowed roots.

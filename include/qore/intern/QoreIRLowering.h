@@ -417,6 +417,26 @@ private:
     void markLocalAssignmentFromExpression(const QoreValue& exp);
     void markLocalUnassignmentFromExpression(const QoreValue& exp);
 
+    //! Lowers the value operand of an assignment, compound assignment, push, or unshift to \a lvalue
+    /** When \a lvalue is a container path, or, unless \a assignment, a variable whose value can be a container,
+        and the operand's evaluation creates temps besides its value, the operand is lowered in a temp scope of its
+        own that is closed with DiscardTempsKeep, so that those temps (for example a load of the container being
+        changed) are released before the mutation evaluates copy-on-write, as the AST releases them when the
+        operand's evaluation returns; see design/lvalue-loads-in-ir.md.
+    */
+    QoreIRValue lowerMutationOperand(const QoreValue& lvalue, const QoreValue& expr,
+        const QoreProgramLocation* loc, std::string& error, bool assignment = false);
+    //! Lowers an expression whose value is used after other code has run, releasing its other temps
+    /** When the expression's evaluation creates temps besides its value, it is lowered in a temp scope of its own
+        that is closed with DiscardTempsKeep, so that only the value is kept.  Used for the operands of a mutation
+        (see lowerMutationOperand(); also the keys and indexes of a mutated path), and for the list of a foreach
+        statement and the value of a switch statement, whose temps would otherwise be held while the body changes
+        the containers they refer to; see design/lvalue-loads-in-ir.md.  With \a containers_only, as for those
+        statements, the scope is used only if a temp besides the value can be or hold a container, so that the
+        value of a string or scalar expression stays directly available to the statement's optimizations.
+    */
+    QoreIRValue lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error, bool containers_only = false);
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
     void setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,

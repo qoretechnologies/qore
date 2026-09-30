@@ -363,6 +363,96 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
     return true;
 }
 
+//! Returns true if \a operand_may_create_temp() is true for an operand of \a val
+/** Used to ask whether evaluating \a val creates temps besides its own value: a variable, a constant, or a value
+    creates none, and an unknown kind of expression is assumed to.
+*/
+template <typename F>
+static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_temp) {
+    const AbstractQoreNode* node = val.getInternalNode();
+    if (!node || val.isValue() || dynamic_cast<const VarRefNode*>(node)
+            || dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        return false;
+    }
+
+    auto args_may_create_temp = [&operand_may_create_temp](const QoreParseListNode* parse_args,
+            const QoreListNode* args) {
+        if (parse_args) {
+            for (size_t i = 0; i < parse_args->size(); ++i) {
+                if (operand_may_create_temp(parse_args->get(i))) {
+                    return true;
+                }
+            }
+        }
+        if (args) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                if (operand_may_create_temp(li.getValue())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        return args_may_create_temp(call->getParseArgs(), call->getArgs());
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        const MethodCallNode* method = dot->getMethodCall();
+        return operand_may_create_temp(dot->getExpression())
+            || !method || args_may_create_temp(method->getParseArgs(), method->getArgs());
+    }
+    if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        return operand_may_create_temp(call->getExp())
+            || args_may_create_temp(call->getParseArgs(), call->getArgs());
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        return operand_may_create_temp(binop->getLeft()) || operand_may_create_temp(binop->getRight());
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
+        return operand_may_create_temp(binop->getLeft()) || operand_may_create_temp(binop->getRight());
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        return operand_may_create_temp(unop->getExp());
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        return operand_may_create_temp(unop->getExp());
+    }
+    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return operand_may_create_temp(sub->getLeft()) || operand_may_create_temp(sub->getRight());
+    }
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return operand_may_create_temp(hd->getLeft());
+    }
+
+    return true;
+}
+
+//! Returns true if evaluating \a val may create a node temp besides the value of the expression itself
+static bool expressionMayCreateIntermediateNodeTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        return expressionMayCreateNodeTemp(operand);
+    });
+}
+
+//! Returns true if evaluating \a val may create a temp besides its own value that is or can hold a container
+/** A value of any type other than a hash, list, or object holds no container, so such a temp cannot make a
+    container shared.
+*/
+static bool expressionMayCreateIntermediateContainerTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        if (!operand || operand.isValue()) {
+            return false;
+        }
+        const QoreTypeInfo* type_info = getExprTypeInfo(operand);
+        return QoreTypeInfo::parseReturns(type_info, NT_HASH) != QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(type_info, NT_LIST) != QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(type_info, NT_OBJECT) != QTI_NOT_EQUAL
+            || expressionMayCreateIntermediateContainerTemp(operand);
+    });
+}
+
 static bool statementMayCreateNodeTemp(const AbstractStatement* stmt) {
     if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
         return expressionMayCreateNodeTemp(expr_stmt->getExpression());
@@ -1796,9 +1886,24 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         cond_block->is_loop_header = true;
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
+            // the value of the initializer is not used: it and its temps are released before the loop runs, as in
+            // the AST, so that they cannot make a container that the loop changes shared (see
+            // design/lvalue-loads-in-ir.md); a statement without a temp scope is not given one, as for
+            // lowerExpressionInTempScope()
+            bool init_scope = builder.getExceptionTempScopeId() && expressionMayCreateNodeTemp(init);
+            if (init_scope) {
+                builder.createPushTempMark(nullptr);
+            }
             QoreIRValue lowered = lowerExpression(init, error);
-            if (!lowered.isValid()) {
-                return false;
+            if (!lowered.isValid() || blockHasTerminator(builder.getBlock())) {
+                if (init_scope) {
+                    builder.abandonTempScope();
+                }
+                if (!lowered.isValid()) {
+                    return false;
+                }
+            } else if (init_scope) {
+                builder.createDiscardTemps(stmt->loc);
             }
         }
         QoreValue cond_expr = for_stmt->getCond();
@@ -2215,7 +2320,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 || (element_type == stringTypeInfo && foreach_var_type == stringTypeInfo));
         QoreIRValue list_val;
         if (list_expr && !list_expr.isNothing()) {
-            list_val = lowerExpression(list_expr, error);
+            // only the value iterated is kept while the body runs, as in the AST
+            list_val = lowerExpressionInTempScope(list_expr, stmt->loc, error, true);
             if (!list_val.isValid()) {
                 return false;
             }
@@ -2864,7 +2970,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
         QoreValue switch_expr = switch_stmt->getSwitchExp();
-        QoreIRValue switch_val = lowerExpression(switch_expr, error);
+        // only the value switched on is kept while a case runs, as in the AST
+        QoreIRValue switch_val = lowerExpressionInTempScope(switch_expr, stmt->loc, error, true);
         if (!switch_val.isValid()) {
             return false;
         }
@@ -7193,6 +7300,51 @@ const QoreProgramLocation* QoreIRLowering::getExpressionLocation(const QoreValue
     return parse_node ? parse_node->loc : nullptr;
 }
 
+QoreIRValue QoreIRLowering::lowerMutationOperand(const QoreValue& lvalue, const QoreValue& expr,
+        const QoreProgramLocation* loc, std::string& error, bool assignment) {
+    // An assignment to a variable replaces its value and changes no container; a compound assignment or push changes
+    // the variable's value in place unless the value holds no reference
+    const AbstractQoreNode* lvalue_node = lvalue.getInternalNode();
+    if (!lvalue_node) {
+        return lowerExpression(expr, error);
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(lvalue_node)) {
+        if (assignment || isImmediateCleanupFreeType(var->getTypeInfo())) {
+            return lowerExpression(expr, error);
+        }
+    }
+    return lowerExpressionInTempScope(expr, loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error, bool containers_only) {
+    // The temps of an expression are released by the temp scope of the statement, which ends only after the code
+    // that uses the expression's value: the rest of the statement, and for a foreach or switch statement, its body.
+    // A temp that refers to a container that this code changes - a load of the variable holding it, or of a
+    // container on its path - makes the container shared when the change evaluates copy-on-write, and the change
+    // then copies it.  The AST releases these temps when the expression's evaluation returns, so they are released
+    // here once the value has been computed.  A statement without a temp scope (0) is not given one here, since a
+    // raise in it must then release nothing.
+    if (!builder.getExceptionTempScopeId()
+            || !(containers_only ? expressionMayCreateIntermediateContainerTemp(expr)
+                : expressionMayCreateIntermediateNodeTemp(expr))) {
+        return lowerExpression(expr, error);
+    }
+    // no location: the mark is not a statement boundary, so it must not be a debugger step (the tiers step at the
+    // marks that have one)
+    builder.createPushTempMark(nullptr);
+    QoreIRValue value = lowerExpression(expr, error);
+    if (!value.isValid() || blockHasTerminator(builder.getBlock())) {
+        builder.abandonTempScope();
+        return value;
+    }
+    QoreIRInstruction* keep = builder.createDiscardTempsKeep(value, loc);
+    if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+        keep->exception_target = handler;
+    }
+    return keep->result;
+}
+
 QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     // Check for the weak and opaque assignment operators first, since both
@@ -7234,7 +7386,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     QoreValue right_expr(assign->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -7284,7 +7436,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                 // Lower dynamic key/index operands
                 std::vector<QoreIRValue> dyn_vals;
                 for (auto& dop : dynamic_operands) {
-                    QoreIRValue dv = lowerExpression(dop, error);
+                    QoreIRValue dv = lowerExpressionInTempScope(dop, assign->loc, error);
                     if (!dv.isValid()) {
                         return QoreIRValue();
                     }
@@ -7429,7 +7581,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
     }
 
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -7635,7 +7787,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         }
         return inst->result;
     }
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -7801,7 +7953,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         }
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -7928,7 +8080,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         }
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -8043,7 +8195,7 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -8133,7 +8285,7 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -8223,7 +8375,7 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -8313,7 +8465,7 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -9424,7 +9576,7 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -9499,7 +9651,7 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerExpression(right_expr, error);
+    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10002,7 +10154,7 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
     }
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreIRValue right = lowerMutationOperand(lvalue, op->getRight(), op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10072,7 +10224,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         if (local_var && !local_may_be_reference && !var->ref.id->closureUse()) {
 
             // Lower the value to push first
-            QoreIRValue push_val = lowerExpression(op->getRight(), error);
+            QoreIRValue push_val = lowerMutationOperand(left_expr, op->getRight(), op->loc, error);
             if (!push_val.isValid()) {
                 return QoreIRValue();
             }
@@ -10173,7 +10325,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
 
     // Path-based push for complex lvalues (member chains, nested subscripts)
     {
-        QoreIRValue push_val = lowerExpression(op->getRight(), error);
+        QoreIRValue push_val = lowerMutationOperand(left_expr, op->getRight(), op->loc, error);
         if (!push_val.isValid()) {
             return QoreIRValue();
         }
@@ -11900,7 +12052,7 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
     if (!list_val.isValid()) return QoreIRValue();
 
     // Lower the index expression
-    QoreIRValue index_val = lowerExpression(index_expr, error);
+    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
     if (!index_val.isValid()) return QoreIRValue();
 
     // Load current element value via ListIndexAccess
@@ -11975,7 +12127,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     }
 
     // Lower the key expression to IR
-    QoreIRValue key_val = lowerExpression(key_expr, error);
+    QoreIRValue key_val = lowerExpressionInTempScope(key_expr, loc, error);
     if (!key_val.isValid()) {
         return QoreIRValue();
     }
@@ -12023,7 +12175,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     // Lower dynamic key/index operands
     std::vector<QoreIRValue> dyn_vals;
     for (auto& dop : dynamic_operands) {
-        QoreIRValue dv = lowerExpression(dop, error);
+        QoreIRValue dv = lowerExpressionInTempScope(dop, loc, error);
         if (!dv.isValid()) {
             return QoreIRValue();
         }
@@ -12107,7 +12259,7 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     }
 
     // Lower the index expression
-    QoreIRValue index_val = lowerExpression(index_expr, error);
+    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
     if (!index_val.isValid()) {
         return QoreIRValue();
     }

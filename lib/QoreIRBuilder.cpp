@@ -1495,6 +1495,32 @@ QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createDiscardTempsKeep(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::DiscardTempsKeep);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->result = func->createValue();
+    if (const QoreIRValueFacts* facts = func->getValueFacts(value)) {
+        QoreIRValueFacts result_facts = *facts;
+        if (result_facts.ownership != QoreIRValueOwnership::ReferenceFree) {
+            result_facts.ownership = QoreIRValueOwnership::Owned;
+        }
+        func->setValueFacts(inst->result, result_facts);
+    }
+    // the drain is the matching mark's, as for DiscardTemps; a raise branches with the enclosing scope, which is
+    // the innermost mark left once this one has been drained
+    inst->temp_scope_id = 0;
+    if (!temp_scope_id_stack.empty()) {
+        inst->temp_scope_id = temp_scope_id_stack.back();
+        temp_scope_id_stack.pop_back();
+    }
+    if (!exception_temp_scope_id_stack.empty()) {
+        exception_temp_scope_id = exception_temp_scope_id_stack.back();
+        exception_temp_scope_id_stack.pop_back();
+    }
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::PushTempMark);
     inst->loc = loc;

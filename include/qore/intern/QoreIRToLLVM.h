@@ -1139,7 +1139,10 @@ private:
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
-    void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0);
+    //! Releases the temps registered since the mark of \a scope_id; \a statement_end also releases the local
+    //! reload state that is kept until the end of a statement (false for DiscardTempsKeep, which closes the scope
+    //! of an operand in the middle of a statement)
+    void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0, bool statement_end = true);
 
     // Register an alloca-backed cleanup slot and, for large functions, add its
     // address to the entry-block cleanup pointer array used by

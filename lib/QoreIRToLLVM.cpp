@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 406,
+static_assert(QORE_IR_MAX_OPCODE == 407,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -3254,7 +3254,7 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     }
 }
 
-void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
+void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, bool statement_end) {
     TempCleanupMark mark;
     if (!temp_cleanup_marks.empty()) {
         // Select the matching mark by scope id rather than blindly popping the
@@ -3314,7 +3314,9 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
         pending_ssa_cleanup.resize(mark.pending_ssa_count);
     }
 
-    flushLocalReloadStateAtTempBoundary(module);
+    if (statement_end) {
+        flushLocalReloadStateAtTempBoundary(module);
+    }
 }
 
 void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
@@ -30065,6 +30067,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
+            return true;
+        }
+        case QoreIROpcode::DiscardTempsKeep: {
+            // Close the temp scope of an expression whose value is used after other code has run, such as an
+            // lvalue mutation's operand (see the interpreter): the kept value is referenced before the scope's
+            // cleanups run, since it can be one of them or be borrowed from one, and its reference is registered
+            // after them, in the enclosing scope
+            if (inst->operands.empty()) {
+                error = "DiscardTempsKeep: missing operand";
+                return false;
+            }
+            uint32_t kept_id = inst->operands[0].id;
+            auto* val = getVal(kept_id, error);
+            if (!val) {
+                return false;
+            }
+            llvm::Value* retained = emitHelperRef(module, boxValue(val, kept_id));
+            emitDiscardTemps(module, inst->temp_scope_id, false);
+            values[inst->result.id] = retained;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(retained, inst->result.id, llvm_func);
+            // a destructor run by the cleanups can raise
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
