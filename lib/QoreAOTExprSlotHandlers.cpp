@@ -1118,65 +1118,77 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     std::unique_ptr<QoreIRFunction> owned_ir;
     if (!closure_ir) {
         // Lower on the fly for serialization
-        owned_ir.reset(::lowerClosureForSerialization(variant));
+        std::string closure_error;
+        owned_ir.reset(::lowerClosureForSerialization(variant, &closure_error));
         closure_ir = owned_ir.get();
+        if (!closure_ir) {
+            ::qoreAOTReportExprSerializationError(std::string("failed to lower closure '") + ucf->getName()
+                + "' for AOT serialization: " + (closure_error.empty() ? std::string("unknown error")
+                    : closure_error));
+            return false;
+        }
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
     if (!::qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
+        ::qoreAOTReportExprSerializationError(std::string("cancelled while preparing the local slots of closure '")
+            + ucf->getName() + "'");
         return false;
     }
     ::qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
     if (!::qoreAOTWriteClosureCaptures(ctx.writer, vlist, closure_ir, ctx.parent_locals)) {
+        ::qoreAOTReportExprSerializationError(std::string("the captures of closure '") + ucf->getName()
+            + "' exceed the AOT format limit");
         return false;
     }
 
-    if (closure_ir) {
-        ctx.writer.writeU8(1);  // has_ir
-        uint32_t size_pos = ctx.writer.position();
-        ctx.writer.writeU32(0);  // placeholder
+    ctx.writer.writeU8(1);  // has_ir
+    uint32_t size_pos = ctx.writer.position();
+    ctx.writer.writeU32(0);  // placeholder
 
-        // Expression trees inside serialized closure IR use the closure IR's
-        // own local slot IDs.  The reader fills closure_locals_vec from the
-        // serialized local slot table before instruction expressions are read.
-        std::vector<AOTLocalSlotId> closure_locals;
-        uint32_t max_slot = 0;
-        bool has_slots = false;
+    // Expression trees inside serialized closure IR use the closure IR's
+    // own local slot IDs.  The reader fills closure_locals_vec from the
+    // serialized local slot table before instruction expressions are read.
+    std::vector<AOTLocalSlotId> closure_locals;
+    uint32_t max_slot = 0;
+    bool has_slots = false;
+    for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+        if (lv) {
+            if (!has_slots || slot_id > max_slot) {
+                max_slot = slot_id;
+            }
+            has_slots = true;
+        }
+    }
+    if (has_slots) {
+        closure_locals.resize(static_cast<size_t>(max_slot) + 1);
         for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
             if (lv) {
-                if (!has_slots || slot_id > max_slot) {
-                    max_slot = slot_id;
-                }
-                has_slots = true;
+                AOTLocalSlotId& slot = closure_locals[slot_id];
+                slot.local_var_ptr = reinterpret_cast<const void*>(lv);
+                slot.name = lv->getName() ? lv->getName() : "";
             }
         }
-        if (has_slots) {
-            closure_locals.resize(static_cast<size_t>(max_slot) + 1);
-            for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
-                if (lv) {
-                    AOTLocalSlotId& slot = closure_locals[slot_id];
-                    slot.local_var_ptr = reinterpret_cast<const void*>(lv);
-                    slot.name = lv->getName() ? lv->getName() : "";
-                }
-            }
-        }
+    }
 
-        auto writeExpr = [&closure_locals, &ctx](
-                QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
-            return classifyAndWriteExpr(w, e, closure_locals, ctx.parent_globals,
-                ctx.const_reverse_map);
-        };
+    auto writeExpr = [&closure_locals, &ctx](
+            QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
+        return classifyAndWriteExpr(w, e, closure_locals, ctx.parent_globals,
+            ctx.const_reverse_map);
+    };
 
-        // the closure's references to outer variables are bound in the domain of ctx.parent_locals, like
-        // LOCAL_VARREF expression indices
-        AOTIRLocalBindingSource binding_source{&ctx.parent_locals, nullptr};
-        QoreAOTIRLocalBindingSourceHelper binding_source_helper(ctx.writer, &binding_source);
-        ::serializeIRFunction(ctx.writer, *closure_ir, writeExpr);
-        uint32_t end_pos = ctx.writer.position();
-        ctx.writer.patchU32(size_pos, end_pos - size_pos - 4);
-    } else {
+    // the closure's references to outer variables are bound in the domain of ctx.parent_locals, like
+    // LOCAL_VARREF expression indices
+    AOTIRLocalBindingSource binding_source{&ctx.parent_locals, nullptr};
+    QoreAOTIRLocalBindingSourceHelper binding_source_helper(ctx.writer, &binding_source);
+    // a failure leaves a truncated IR blob behind the size placeholder: the slot must not be emitted
+    if (!::serializeIRFunction(ctx.writer, *closure_ir, writeExpr)) {
+        ::qoreAOTReportExprSerializationError(std::string("failed to serialize the IR of closure '")
+            + ucf->getName() + "'");
         return false;
     }
+    uint32_t end_pos = ctx.writer.position();
+    ctx.writer.patchU32(size_pos, end_pos - size_pos - 4);
     return true;
 }
 

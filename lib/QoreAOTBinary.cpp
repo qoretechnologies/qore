@@ -11963,6 +11963,14 @@ bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* l
 
 } // anonymous namespace
 
+//! Records why an expression slot writer failed (QoreAOTExprSlotHandlers.cpp)
+/** The caller of the slot writer reports it as a compile error; the first diagnostic recorded is kept, so a nested
+    writer's more specific message is not replaced by its caller's.
+*/
+void qoreAOTReportExprSerializationError(std::string msg) {
+    qoreAOTSetExprSerializationError(std::move(msg));
+}
+
 bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist) {
     if (!closure_ir) {
@@ -14721,8 +14729,26 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     return true;
 }
 
+//! Test hook: the IR functions whose serialization fails, by a substring of the IR function's name
+/** Set with \c QORE_AOT_TEST_FAIL_IR_SERIALIZATION; the regression test of closure serialization uses it to check
+    that a failure to serialize the IR of a closure is reported as a compile error instead of leaving a truncated
+    record in the output.
+*/
+static const char* aotTestFailIRSerialization() {
+    static const char* name = getenv("QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
+    return name && *name ? name : nullptr;
+}
+
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
+    if (const char* fail_name = aotTestFailIRSerialization()) {
+        if (strstr(func.name.c_str(), fail_name)) {
+            qoreAOTSetExprSerializationError("serialization of IR function '" + func.name
+                + "' failed by request of QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
+            return false;
+        }
+    }
+
     std::string registry_error;
     if (!qore_aot_validate_inst_group_registry(registry_error)) {
         qoreAOTSetExprSerializationError("AOT instruction group registry validation failed: " + registry_error);

@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTClosureSerializationFailureTest
+
+#! Tests that qcc reports a failure to serialize a closure's IR as a compile error
+/** The expression slot writer for a closure (CLOSURE_CREATE) ignored the result of serializing the closure's IR,
+    so a failed serialization silently left a truncated closure record in the compiled output.  The failure is now
+    a compile error naming the closure's slot and the function containing it, and no output is written.
+
+    The failure is provoked with the \c QORE_AOT_TEST_FAIL_IR_SERIALIZATION test hook, which makes the
+    serialization of every IR function whose name contains the given text fail.
+*/
+class AOTClosureSerializationFailureTest inherits QUnit::Test {
+    public {
+        #! scripts creating closures, by label: in a function, at the top level, and nested in another closure
+        const Scripts = {
+            "function": "%modern
+int sub f() {
+    int base = 41;
+    code c = int sub () { return base + 1; };
+    return c();
+}
+printf(\"%d\\n\", f());
+",
+            "toplevel": "%modern
+int base = 41;
+code c = int sub () { return base + 1; };
+printf(\"%d\\n\", c());
+",
+            "nested": "%modern
+int base = 1;
+code c = int sub () { code d = int sub () { return base + 1; }; return d() + 40; };
+printf(\"%d\\n\", c());
+",
+        };
+
+        #! the IR function name of a closure lowered for serialization
+        const ClosureIRName = "<closure>";
+
+        #! the qcc optimization levels tested
+        const OptLevels = ("0", "3");
+    }
+
+    private {
+        string qore_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTClosureSerializationFailureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("closures compile and run without the hook", \testCompiles());
+        addTestCase("negative: a hook matching no IR function changes nothing", \testHookNoMatch());
+        addTestCase("a failed closure IR serialization is a compile error", \testFailureReported());
+
+        set_return_value(main());
+    }
+
+    testCompiles() {
+        checkQcc();
+        TmpDir tmp("qore-aot-closure-serialization-");
+        foreach hash<auto> i in (Scripts.pairIterator()) {
+            foreach string opt in (OptLevels) {
+                hash<auto> rv = compile(tmp.path, i.key, i.value, opt);
+                assertEq(0, rv.rc, sprintf("%s -O%s: %s", i.key, opt, rv.out));
+                assertTrue(is_file(rv.exe), sprintf("%s -O%s: %s", i.key, opt, rv.out));
+                assertEq("42\n", backquote(sprintf("%s %s 2>&1", env, rv.exe)), sprintf("%s -O%s", i.key, opt));
+            }
+        }
+    }
+
+    testHookNoMatch() {
+        checkQcc();
+        TmpDir tmp("qore-aot-closure-serialization-");
+        hash<auto> rv = compile(tmp.path, "function", Scripts.function, "0", "no-such-ir-function");
+        assertEq(0, rv.rc, rv.out);
+        assertEq("42\n", backquote(sprintf("%s %s 2>&1", env, rv.exe)));
+    }
+
+    testFailureReported() {
+        checkQcc();
+        TmpDir tmp("qore-aot-closure-serialization-");
+        foreach hash<auto> i in (Scripts.pairIterator()) {
+            foreach string opt in (OptLevels) {
+                string label = sprintf("%s -O%s", i.key, opt);
+                hash<auto> rv = compile(tmp.path, i.key, i.value, opt, ClosureIRName);
+                assertNeq(0, rv.rc, label + ": " + rv.out);
+                # no truncated output is left behind
+                assertFalse(is_file(rv.exe), label);
+                # the error names the closure slot and the requested failure
+                assertRegex("failed to serialize expression slot kind [0-9]+ \\(CLOSURE_CREATE\\) in function "
+                    "'(f\\(\\)|_toplevel)'", rv.out, label);
+                assertRegex("serialization of IR function '<closure>' failed", rv.out, label);
+            }
+        }
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+    }
+
+    #! compiles @a script to an executable; returns the exit code, the output, and the executable's path
+    private hash<auto> compile(string dir, string label, string script, string opt, *string fail_ir) {
+        string src = dir + DirSep + label + ".q";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(script);
+        f.close();
+        string exe = dir + DirSep + label + "-O" + opt;
+        if (is_file(exe)) {
+            unlink(exe);
+        }
+        string hook = fail_ir ? sprintf("QORE_AOT_TEST_FAIL_IR_SERIALIZATION=%s ", quote(fail_ir)) : "";
+        int rc;
+        string out = backquote(sprintf("%s%s %s -O%s -o %s %s 2>&1", hook, env, qcc_bin, opt, exe, src), \rc);
+        return {"rc": rc, "out": out, "exe": exe};
+    }
+
+    #! quotes @a str for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

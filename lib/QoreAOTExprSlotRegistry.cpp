@@ -109,6 +109,7 @@ bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vli
     const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals);
 void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
     const LVarSet* vlist);
+void qoreAOTReportExprSerializationError(std::string msg);
 
 // ============================================================================
 // Expression Slot Metadata Handlers (Phase 3.3)
