@@ -4006,9 +4006,10 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
-    - Fixed writes to a local variable that is not instantiated in the current context (for example a top-level
-      local variable used by a function in a <tt>.qo</tt> object registered by a custom C++ host) being silently
-      discarded; they now raise \c LVALUE-ERROR naming the variable
+    - Fixed accesses to a local variable that is not instantiated in the current context (for example a top-level
+      local variable used by a function in a <tt>.qo</tt> object registered by a custom C++ host): writes were
+      silently discarded, reads returned no value and \c remove / \c delete did nothing; they now raise
+      \c LVALUE-ERROR naming the variable
     - Fixed executables that <tt>qcc -o</tt> builds from several sources or links from <tt>.qo</tt> objects silently
       skipping top-level code: such an executable runs only its entry function, so a function using a top-level
       local variable read no value and lost its updates, and other top-level statements never ran.  \c qcc now
