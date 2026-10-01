@@ -4810,7 +4810,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else if (method && !method_ref.sig_text) {
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *method)->getFunction();
-                    if (mfb && mfb->numVariants() == 1) {
+                    if (mfb && mfb->numVariants() == 1 && !mfb->hasInheritedVariants()) {
                         // Resolve variant from method only when the method has exactly
                         // ONE variant — safe fast-dispatch shortcut. For overloaded
                         // methods, leave variant null so the runtime does proper
@@ -6748,8 +6748,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *ctx->call_targets[i].method)->getFunction();
                     if (mfb && mfb->numVariants() == 1) {
+                        // the method's own single variant stands in for a missing parse-time variant only if no
+                        // inherited variant can match the call instead
                         const AbstractQoreFunctionVariant* v = mc->getVariant();
-                        ctx->call_targets[i].variant = v ? v : mfb->first();
+                        if (v) {
+                            ctx->call_targets[i].variant = v;
+                        } else if (!mfb->hasInheritedVariants()) {
+                            ctx->call_targets[i].variant = mfb->first();
+                        }
                     }
                 }
             }

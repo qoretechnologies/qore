@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class InheritedVariantDispatchTest
+
+#! Tests that a method call resolved at runtime considers the variants a derived class inherits
+/** A derived class that overrides one variant of a base class method with several variants still inherits the
+    others.  When a call was resolved at runtime by name (e.g. through an \c object or base class receiver), the IR
+    interpreter, which also runs IR code for JIT and tiered execution, took the derived method's single own variant
+    without matching the arguments, so \c receive("/", "file") on a derived object ran
+    \c Derived::receive(string, reference) and failed with \c RUNTIME-TYPE-ERROR instead of running the inherited
+    \c Base::receive(string, string).
+*/
+class InheritedVariantDispatchTest inherits QUnit::Test {
+    public {
+        const Script = 'class Base {
+    string receive(string cwd, string path) {
+        return "Base::receive(string):" + path;
+    }
+    *string receive(string cwd, reference<string> path) {
+        path = "Base";
+    }
+}
+
+class Derived inherits Base {
+    *string receive(string cwd, reference path) {
+        path += ".derived";
+    }
+}
+
+# a derived class that inherits the override and adds nothing
+class MoreDerived inherits Derived {
+}
+
+string sub viaBase(Base b) {
+    return b.receive("/", "file");
+}
+
+string sub viaObject(object o) {
+    return o.receive("/", "file");
+}
+
+string sub refViaObject(object o) {
+    string p = "file";
+    o.receive("/", \p);
+    return p;
+}
+
+list<string> rv;
+# repeated calls exercise the cached call-site state; mixed receivers a polymorphic call site
+foreach object o in ((new Derived(), new Base(), new MoreDerived(), new Derived())) {
+    rv += viaBase(o);
+    rv += viaObject(o);
+    rv += refViaObject(o);
+}
+Derived d();
+rv += d.receive("/", "file");
+printf("%y\n", rv);
+';
+
+        const Expected = sprintf("%y\n", (
+            "Base::receive(string):file", "Base::receive(string):file", "file.derived",
+            "Base::receive(string):file", "Base::receive(string):file", "Base",
+            "Base::receive(string):file", "Base::receive(string):file", "file.derived",
+            "Base::receive(string):file", "Base::receive(string):file", "file.derived",
+            "Base::receive(string):file",
+        ));
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("InheritedVariantDispatchTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("inherited variants in every execution mode", \testExecModes());
+        addTestCase("inherited variants in an AOT executable", \testAot());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-inherited-variant-dispatch-");
+        string src = writeScript(tmp.path);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            assertEq(0, rv.rc, mode + ": " + rv.err);
+            assertEq(Expected, rv.out, mode);
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-inherited-variant-dispatch-");
+        string src = writeScript(tmp.path);
+        string exe = tmp.path + DirSep + "inherited-variant-dispatch";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(Expected, rv.out);
+    }
+
+    private string writeScript(string dir) {
+        string path = dir + DirSep + "inherited-variant-dispatch.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

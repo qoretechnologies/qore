@@ -3885,7 +3885,8 @@ static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(cons
     }
     const qore_method_private* priv = qore_method_private::get(*method);
     const QoreFunction* func = priv ? priv->getFunction() : nullptr;
-    return func && func->numVariants() == 1 ? func->first() : nullptr;
+    // a single own variant is the one a call resolves to only if no inherited variant can match instead
+    return func && func->numVariants() == 1 && !func->hasInheritedVariants() ? func->first() : nullptr;
 }
 
 template <typename DotEvalInst>
