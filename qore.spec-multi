@@ -1,790 +1,405 @@
-# this spec file can be used for multiple RPM-based distributions including Fedora, RHEL, *SUSE, and others
-
-%{?_datarootdir: %global mydatarootdir %_datarootdir}
-%{!?_datarootdir: %global mydatarootdir %{buildroot}/usr/share}
-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#!BuildConstraint: hardware:physicalmemory:size unit=G 24
+#!BuildConstraint: hardware:disk:size unit=G 30
+# Source archives are prepared from pinned commits by qore-packaging.
+# Use the pinned source epoch for RPM headers and installed file timestamps.
+%global source_date_epoch_from_changelog 1
+%global use_source_date_epoch_as_buildtime 1
+%if v"%{rpmversion}" >= v"4.20"
+%global build_mtime_policy clamp_to_source_date_epoch
+%else
+%global clamp_mtime_to_source_date_epoch 1
+%endif
+%global upstream_version 3.0.0
+%global module_api 2.0
+%global soname 20
 %global module_dir %{_libdir}/qore-modules
-%global user_module_dir %{mydatarootdir}/qore-modules/
+%global _vpath_builddir build
+%bcond_without tests
+%bcond_without docs
 
-%if 0%{?sles_version}
-%global dist .sles%{?sles_version}
-%else
 %if 0%{?suse_version}
-# get *suse release major version
-%global os_maj %(echo %suse_version|rev|cut -b3-|rev)
-# get *suse release minor version without trailing zeros
-%global os_min %(echo %suse_version|rev|cut -b-2|rev|sed s/0*$//)
-%if %suse_version > 1010
-%global dist .opensuse%{os_maj}_%{os_min}
+%global libname libqore%{soname}
+%global llvm_major 19
 %else
-%global dist .suse%{os_maj}_%{os_min}
-%endif
-%endif
-%endif
-
-# see if we can determine the distribution type
-%if 0%{!?dist:1}
 %if 0%{?rhel}
-%global dist .el%{rhel}
+%global llvm_major 21
+%else
+%global llvm_major 22
 %endif
+%global libname libqore
 %endif
 
-Summary: Multithreaded Programming Language
 Name: qore
 Version: 3.0.0
-Release: 1%{dist}
-%if 0%{?suse_version}
-License: LGPL-2.0+ or GPL-2.0+ or MIT
-%else
-License: LGPLv2+ or GPLv2+ or MIT
-%endif
-Group: Development/Languages
-URL: http://qore.org
-Source0: https://github.com/qorelanguage/qore/releases/download/release-%{version}/%{name}-%{version}.tar.bz2
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-Requires: /usr/bin/env
-BuildRequires: cmake >= 3.14
-BuildRequires: flex >= 2.5.31
-BuildRequires: bison
-BuildRequires: openssl-devel
-BuildRequires: pcre2-devel
-BuildRequires: zlib-devel
-BuildRequires: gmp-devel
-BuildRequires: mpfr-devel
-BuildRequires: doxygen
+Release: 6%{?dist}
+Summary: Multithreaded programming language and integration platform
+License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
+URL: https://qore.org
+Source0: %{name}-%{version}.tar.xz
+BuildRequires: cmake >= 3.20
+BuildRequires: make
 BuildRequires: gcc-c++
-BuildRequires: pkgconfig(libnghttp2) >= 1.68.1
-BuildRequires: pkgconfig(libcares)
+BuildRequires: flex >= 2.5.35
+BuildRequires: bison
+BuildRequires: git
+BuildRequires: python3 >= 3.11
+BuildRequires: pkgconfig
+BuildRequires: pkgconfig(openssl) >= 3.5
+BuildRequires: pkgconfig(zlib)
+BuildRequires: pkgconfig(libpcre2-8)
+BuildRequires: pkgconfig(gmp)
+BuildRequires: pkgconfig(mpfr)
+BuildRequires: pkgconfig(libnghttp2) >= 1.70.0
+BuildRequires: pkgconfig(libngtcp2) >= 1.25.0
+BuildRequires: pkgconfig(libngtcp2_crypto_ossl) >= 1.25.0
+BuildRequires: pkgconfig(libnghttp3) >= 1.18.0
+BuildRequires: pkgconfig(libcares) >= 1.34.8
+BuildRequires: c-ares(qore-query-lifecycle-fixes) = 1
 BuildRequires: pkgconfig(libbrotlienc)
 BuildRequires: pkgconfig(libbrotlidec)
 BuildRequires: pkgconfig(libzstd)
 BuildRequires: pkgconfig(liblz4)
-BuildRequires: krb5-devel
-BuildRequires: rust
-BuildRequires: cargo
-BuildRequires: llvm-devel
+BuildRequires: pkgconfig(krb5)
+BuildRequires: pkgconfig(krb5-gssapi)
+BuildRequires: pkgconfig(tree-sitter) >= 0.26.13
 BuildRequires: pkgconfig(icu-uc)
 BuildRequires: pkgconfig(icu-i18n)
-BuildRequires: pkgconfig(eigen3)
+BuildRequires: pkgconfig(eigen3) >= 3.4
 BuildRequires: pkgconfig(protobuf)
+BuildRequires: pkgconfig(yaml-0.1)
+BuildRequires: pkgconfig(libutf8proc)
+BuildRequires: pkgconfig(arrow)
+BuildRequires: pkgconfig(parquet)
 %if 0%{?suse_version}
-BuildRequires: pkg-config
-BuildRequires: fdupes
-%if 0%{?sles_version} && %{?sles_version} <= 10
-BuildRequires: bzip2
+BuildRequires: pkgconfig(mongoc2)
 %else
+BuildRequires: pkgconfig(libmongoc-1.0)
+%endif
+BuildRequires: pkgconfig(tesseract)
+BuildRequires: pkgconfig(lept)
+BuildRequires: pkgconfig(liburing) >= 2.0
+BuildRequires: llvm-devel >= %{llvm_major}
+BuildRequires: llvm-devel < %{expr:%{llvm_major}+1}
+# Upstream CI uses 1.22.0; qualify the matched distro headers/library together.
+# Debian's >= 1.23.2 is its qualified archive baseline, not a CMake API minimum.
+BuildRequires: onnxruntime-devel >= 1.22.2
+%if 0%{?suse_version}
 BuildRequires: libbz2-devel
-%endif
+BuildRequires: protobuf-devel
 %else
-BuildRequires: pkgconfig
 BuildRequires: bzip2-devel
-%if 0%{?redhat} >= 8 || 0%{?centos} >= 8
-BuildRequires: gdb-headless
+BuildRequires: protobuf-compiler
 %endif
+%if %{with docs}
+BuildRequires: doxygen
+BuildRequires: graphviz
+BuildRequires: /usr/bin/hardlink
 %endif
-%if 0%{?sles_version}
-BuildArch: %{_target_cpu}
-%endif
+Requires: %{libname}%{?_isa} = %{version}-%{release}
+Requires: %{name}-stdlib%{?_isa} = %{version}-%{release}
+Recommends: ca-certificates
+Suggests: %{name}-debug-tools
+Suggests: %{name}-misc-tools
+
+# LLVM AOT DWARF is not supported by every target's dwz. Keep separate debug
+# files and normal stripping; only the incompatible DWARF deduplication is off.
+%global _find_debuginfo_dwz_opts %{nil}
 
 %description
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
-
-%if 0%{?suse_version}
-%debug_package
-%endif
-
-%if 0%{?fedora}
-%global libname libqore
-%else
-%if 0%{?rhel}
-%global libname libqore
-%else
-%global libname libqore20
-%endif
-%endif
+Qore provides a multithreaded language, an embeddable C++ runtime, a native
+compiler, and a standard library for enterprise integration and general use.
 
 %package -n %{libname}
-Summary: The libraries for the qore runtime and qore clients
-Group: System Environment/Libraries
-Provides: qore-module(abi)%{?_isa} = 2.0
-%if "%{libname}" == "libqore"
-Provides: libqore20 = %{version}
-Obsoletes: libqore20 < %{version}
+Summary: Qore runtime shared library
+Provides: qore-module(abi)%{?_isa} = %{module_api}
+Requires: c-ares(qore-query-lifecycle-fixes)%{?_isa} = 1
+# iconv loads these converters dynamically; ELF dependency discovery cannot
+# detect them. Minimal installations otherwise lose non-Unicode encodings.
+%if 0%{?suse_version}
+Requires: glibc-gconv-modules-extra%{?_isa}
+%else
+Requires: glibc-gconv-extra%{?_isa}
 %endif
-%if 0%{?sles_version}
-BuildArch: %{_target_cpu}
+# These libraries retain their SONAME across API additions. ELF dependencies
+# alone do not enforce the versions selected by Qore's compile-time headers.
+%if 0%{?suse_version}
+Requires: libnghttp2-14%{?_isa} >= 1.70.0
+Requires: libngtcp2-16%{?_isa} >= 1.25.0
+Requires: libngtcp2_crypto_ossl0%{?_isa} >= 1.25.0
+Requires: libnghttp3-9%{?_isa} >= 1.18.0
+%else
+Requires: libnghttp2%{?_isa} >= 1.70.0
+Requires: ngtcp2%{?_isa} >= 1.25.0
+Requires: ngtcp2-crypto-ossl%{?_isa} >= 1.25.0
+Requires: libnghttp3%{?_isa} >= 1.18.0
+%endif
+%if ! 0%{?suse_version}
+Provides: libqore%{soname}%{?_isa} = %{version}-%{release}
+Obsoletes: libqore%{soname} < %{version}-%{release}
 %endif
 
 %description -n %{libname}
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
-
-This package provides the qore library required for all clients using qore
-functionality.
-
-%files -n %{libname}
-%defattr(-,root,root,-)
-%{_libdir}/libqore.so.20.0.0
-%{_libdir}/libqore.so.20
-%doc COPYING.LGPL COPYING.GPL COPYING.MIT README.md README-LICENSE README-MODULES RELEASE-NOTES AUTHORS ABOUT
-
-%post -n %{libname}
-ldconfig %{_libdir}
-
-%postun -n %{libname}
-ldconfig %{_libdir}
+The SONAME library for Qore interpreters, embedded clients and native modules.
 
 %package stdlib
-Summary: Standard library modules
-Group: System Environment/Libraries
-Requires: %{libname} = %{version}-%{release}
-%if ! 0%{?el7}
-Recommends: %{name} = %{version}
+Summary: Qore standard library and bundled native modules
+Requires: %{libname}%{?_isa} = %{version}-%{release}
+%if 0%{?suse_version}
+Requires: libtree-sitter0_26%{?_isa} >= 0.26.13
+%else
+Requires: tree-sitter%{?_isa} >= 0.26.13
 %endif
+Provides: qore-json-module = %{version}-%{release}
+Obsoletes: qore-json-module < 1.13
+Provides: qore-yaml-module = %{version}-%{release}
+Obsoletes: qore-yaml-module < 3.0.0
+Provides: qore-linenoise-module = %{version}-%{release}
+Obsoletes: qore-linenoise-module < 3.0.0
 
 %description stdlib
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
+Native and AOT-compiled standard modules, source fallbacks, resources and
+translations. This package includes JSON, YAML and CPU ONNX inference.
 
-This package provides the Qore language standard library user and binary
-modules.
+%package devel
+Summary: Qore headers, native compiler and module development tools
+Requires: %{libname}%{?_isa} = %{version}-%{release}
+Requires: %{name}%{?_isa} = %{version}-%{release}
+Requires: gcc-c++
+Requires: pkgconfig(openssl)
+Requires: llvm-devel%{?_isa} >= %{llvm_major}
+Requires: llvm-devel%{?_isa} < %{expr:%{llvm_major}+1}
 
-%files stdlib
-%defattr(-,root,root,-)
-%{user_module_dir}
-%{module_dir}
-%{mydatarootdir}/qore/i18n
-%doc COPYING.MIT README-LICENSE
+%description devel
+Public headers, qpp, qcc, qdx, qjar, compiler metadata, linker configuration,
+and CMake/pkg-config integration for embedding Qore and developing modules.
 
+%package rpm-macros
+Summary: RPM build helpers for Qore modules
+BuildArch: noarch
+Requires: python3 >= 3.11
+Requires: rpm
+
+%description rpm-macros
+RPM macros and dependency generators for Qore's native and AOT modules.
+These preserve metadata during stripping and derive runtime dependencies
+from the installed SDK. They are only needed to build module RPMs.
+
+%package misc-tools
+Summary: Qore command-line integration tools
+BuildArch: noarch
+Requires: %{name} = %{version}-%{release}
+
+%description misc-tools
+Command-line tools for REST APIs, databases, data providers, downloads,
+formatting, schema generation, translation catalogs and ONNX models.
+
+%package debug-tools
+Summary: Qore remote debugger tools
+BuildArch: noarch
+Requires: %{name} = %{version}-%{release}
+
+%description debug-tools
+The remote debugger, debugger server and Visual Studio Code debug adapter.
+
+%if %{with docs}
 %package doc
-Summary: API documentation, programming language reference, and Qore example programs
-Group: Documentation
+Summary: Qore language and module documentation
 BuildArch: noarch
 
 %description doc
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
-
-This package provides the HTML documentation for the Qore programming language
-and also for user modules delivered with Qore and also example programs.
-
-%files doc
-%defattr(-,root,root,-)
-%doc docs/lang docs/modules/* examples/ COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
-
-%package devel
-Summary: The header files needed to compile programs using the qore library
-Group: Development/Libraries
-Requires: %{libname}%{?_isa} = %{version}-%{release}
-%if 0%{?sles_version}
-BuildArch: %{_target_cpu}
-%endif
-
-%description devel
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
-
-This package provides header files and development tools, including qcc, needed
-to compile client programs and AOT-compiled Qore artifacts.
-
-%files devel
-%defattr(-,root,root,-)
-/usr/bin/qpp
-/usr/bin/qcc
-/usr/bin/qdx
-/usr/bin/qjar
-%{_mandir}/man1/qcc.1.*
-%{_mandir}/man1/qdx.1.*
-%{_mandir}/man1/qjar.1.*
-%{_libdir}/libqore.so
-%{_libdir}/pkgconfig/qore.pc
-%dir %{_libdir}/cmake
-%{_libdir}/cmake/Qore
-%{_prefix}/include/*
-%{mydatarootdir}/qore
-%{mydatarootdir}/qore/*
+Language and standard-library API documentation and example programs.
 
 %package devel-doc
-Summary: C++ API documentation for the qore library
-Group: Documentation
+Summary: Qore C++ API documentation
 BuildArch: noarch
 
 %description devel-doc
-Qore is a scripting language supporting threading and embedded logic, designed
-for applying a flexible scripting-based approach to enterprise interface
-development but is also useful as a general purpose language.
+API reference for embedding Qore and writing native modules.
+%endif
 
-This package provides HTML documentation for the C++ API for the Qore library.
+# Keep this block identical to rpm/macros.qore's implementation. Core Qore
+# bootstraps the macro package and cannot BuildRequire itself.
+%global qore_rpm_helper rpm/preserve-aot-metadata.py
+%global qore_debug_source_dir %{lua:local p = rpm.expand("/usr/src/debug/%{name}-%{version}"); if (tonumber(rpm.expand("%{?_unique_debug_srcs}")) or 0) > 0 then p = p .. rpm.expand("-%{release}.%{_arch}") end; print(p)}
+%{lua:
+  -- Preserve LLVM's .debug_names without requesting a second GDB index.
+  rpm.undefine("_include_gdb_index")
+  local original = rpm.expand("%{macrobody:__spec_install_post}")
+  local newline = string.char(10)
+  local continuation = string.char(92, 10)
+  rpm.define("qore_original_install_post " .. original:gsub(newline, continuation))
+  local wrapper = [=[
+cat > qore-rpm-post.sh <<'QORE_RPM_POST_EOF'
+%{qore_original_install_post}
+QORE_RPM_POST_EOF
+/usr/bin/python3 "%{qore_rpm_helper}" "%{buildroot}" /bin/sh -e qore-rpm-post.sh
+]=]
+  rpm.define("__spec_install_post " .. wrapper:gsub(newline, continuation))
+}
 
-%files devel-doc
-%defattr(-,root,root,-)
-%doc docs/library/html/*
-
-%package misc-tools
-Summary: Miscellaneous user tools writen in Qore Programming Language
-License: LGPL-2.0+ or GPL-2.0+ or MIT
-Group: Development/Tools/Other
-Requires: qore = %{version}-%{release}
-BuildArch: noarch
-
-%description misc-tools
-This package contains tools for working with:
- - REST APIs (rest, saprest, sfrest)
- - SQL Databases (sqlutil, schema-reverse, qschema)
- - Kerberos credential/keytab inspection (qklist)
- - Data Providers (qdp)
- - Code Formatting (qfmt)
- - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
- - Language Server (qls)
- - File Downloads (qget)
- - Translation Catalogs (qore-i18n, qore-data-provider-i18n)
-
-%files misc-tools
-%defattr(-,root,root,-)
-%{_bindir}/qdiff
-%{_bindir}/qdp
-%{_bindir}/qfmt
-%{_bindir}/qget
-%{_bindir}/qklist
-%{_bindir}/qls
-%{_bindir}/qore-asyncapi-gen
-%{_bindir}/qore-extract-qm-metadata
-%{_bindir}/qore-data-provider-i18n
-%{_bindir}/qore-i18n
-%{_bindir}/qore-openapi3-gen
-%{_bindir}/qpatch
-%{_bindir}/qschema
-%{_bindir}/rest
-%{_bindir}/saprest
-%{_bindir}/schema-reverse
-%{_bindir}/sfrest
-%{_bindir}/sqlutil
-%{_mandir}/man1/qdiff.1.*
-%{_mandir}/man1/qdp.1.*
-%{_mandir}/man1/qfmt.1.*
-%{_mandir}/man1/qget.1.*
-%{_mandir}/man1/qklist.1.*
-%{_mandir}/man1/qls.1.*
-%{_mandir}/man1/qore-asyncapi-gen.1.*
-%{_mandir}/man1/qore-extract-qm-metadata.1.*
-%{_mandir}/man1/qore-data-provider-i18n.1.*
-%{_mandir}/man1/qore-i18n.1.*
-%{_mandir}/man1/qore-openapi3-gen.1.*
-%{_mandir}/man1/qpatch.1.*
-%{_mandir}/man1/qschema.1.*
-%{_mandir}/man1/rest.1.*
-%{_mandir}/man1/saprest.1.*
-%{_mandir}/man1/schema-reverse.1.*
-%{_mandir}/man1/sfrest.1.*
-%{_mandir}/man1/sqlutil.1.*
+%if 0%{?suse_version}
+%post -n %{libname} -p /sbin/ldconfig
+%postun -n %{libname} -p /sbin/ldconfig
+%endif
 
 %prep
-%setup -q
-# silence the executable warning for examples
-find examples -type f -exec chmod -x {} \;
+%autosetup -n %{name}-%{version}
 
 %build
-export CXXFLAGS="%{?optflags}"
-cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DSINGLE_COMPILATION_UNIT=1 .
-%{__make} %{?_smp_mflags}
-# build the doxygen-generated C++ API docs that the qore-devel-doc subpackage ships
-%{__make} %{?_smp_mflags} docs
+%{?set_build_flags}
+. rpm/build-env.sh
+qore_set_source_prefix_maps "%{qore_debug_source_dir}"
+cmake -S . -B build -G 'Unix Makefiles' \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DQORE_AOT_LINK_FLAGS="-Wl,-z,relro -Wl,-z,now" \
+    -DCMAKE_C_FLAGS_RELEASE:STRING=-DNDEBUG \
+    -DCMAKE_CXX_FLAGS_RELEASE:STRING=-DNDEBUG \
+    -DCMAKE_INSTALL_PREFIX=%{_prefix} \
+    -DCMAKE_INSTALL_LIBDIR=%{_lib} \
+    -DCMAKE_SKIP_INSTALL_RPATH=ON \
+    -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON \
+    -DCMAKE_IGNORE_PREFIX_PATH=/usr/local \
+    -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+    -DQORE_REQUIRE_SYSTEM_DEPENDENCIES=ON \
+    -DQORE_BUILD_WITH_EXTERNAL_MODULES=OFF \
+    -DQORE_BUILD_AOT_MODULES=ON \
+    -DQORE_AOT_LINK_SOURCE_MODULES=OFF \
+    -DQORE_WITH_ONNXRUNTIME=ON \
+    -DQORE_REQUIRE_ONNXRUNTIME=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=%{!?with_docs:ON}%{?with_docs:OFF}
+cmake --build build -- %{?_smp_mflags}
+# The installed public LLVM plugin headers require the same LLVM major.
+grep -qx 'set(QORE_LLVM_MAJOR_VERSION %{llvm_major})' build/cmake/install/QoreConfig.cmake
+%if %{with docs}
+cmake --build build --target docs -- %{?_smp_mflags}
+%endif
 
 %install
-%make_install
-mkdir -p $RPM_BUILD_ROOT/%{module_dir}
-%if 0%{?suse_version}
-%fdupes -s docs/library/html
+DESTDIR=%{buildroot} cmake --install build
+python3 rpm/install-aot-sources.py "%{buildroot}" "%{qore_debug_source_dir}" qlib
+install -dm755 %{buildroot}%{_libdir}/qore
+mv %{buildroot}%{_bindir}/qcc-format.stamp %{buildroot}%{_libdir}/qore/
+sed -i 's|%{_bindir}/qcc-format.stamp|%{_libdir}/qore/qcc-format.stamp|' \
+    %{buildroot}%{_libdir}/cmake/Qore/QoreConfig.cmake
+# RPM's find-debuginfo selects executable ELF files; qmods are shared objects.
+find %{buildroot}%{module_dir} -type f -name '*.qmod' -exec chmod 755 {} +
+install -Dm644 rpm/macros.qore %{buildroot}%{_rpmconfigdir}/macros.d/macros.qore
+install -Dm644 rpm/qore.attr %{buildroot}%{_rpmconfigdir}/fileattrs/qore.attr
+install -Dm755 rpm/qore-requires.py %{buildroot}%{_rpmconfigdir}/qore/qore-requires.py
+install -Dm755 rpm/preserve-aot-metadata.py %{buildroot}%{_rpmconfigdir}/qore/preserve-aot-metadata.py
+install -Dm755 rpm/install-aot-sources.py %{buildroot}%{_rpmconfigdir}/qore/install-aot-sources.py
+install -Dm644 rpm/build-env.sh %{buildroot}%{_rpmconfigdir}/qore/build-env.sh
+install -Dm644 rpm/module-env.sh %{buildroot}%{_rpmconfigdir}/qore/module-env.sh
+%if %{with docs}
+# Install before post-processing so duplicate Doxygen assets share storage.
+# Relative %%doc entries are copied later and would lose these hardlinks.
+install -d %{buildroot}%{_docdir}/%{name}-doc %{buildroot}%{_docdir}/%{name}-devel-doc
+cp -a build/docs/lang build/docs/modules examples %{buildroot}%{_docdir}/%{name}-doc/
+cp -a build/docs/library/html %{buildroot}%{_docdir}/%{name}-devel-doc/
+hardlink -t -O %{buildroot}%{_docdir}/%{name}-doc
+hardlink -t -O %{buildroot}%{_docdir}/%{name}-devel-doc
 %endif
+python3 rpm/finalize-install.py %{buildroot} %{_libdir}
 
 %check
-export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
-./qore examples/test/qore/threads/background.qtest
-./qore examples/test/qore/threads/deadlock.qtest
-./qore examples/test/qore/threads/max-threads-count.qtest
-./qore examples/test/qore/threads/set_thread_init.qtest
-./qore examples/test/qore/threads/thread-object.qtest
-./qore examples/test/qore/threads/thread-resources.qtest
-./qore examples/test/qore/threads/tld.qtest
-
-%clean
-rm -rf $RPM_BUILD_ROOT
+%if %{with tests}
+. rpm/build-env.sh
+export LD_LIBRARY_PATH=$PWD/build
+export QORE_MODULE_DIR=$PWD/build/qlib-qmod:$PWD/qlib
+for module in "$PWD"/build/modules/*; do
+    test -d "$module" || continue
+    QORE_MODULE_DIR="$QORE_MODULE_DIR:$module"
+done
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_metadata.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_requires.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_install.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_build_env.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_sources.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
+QORE_TEST_QCC=$PWD/build/qcc QORE_TEST_QORE=$PWD/build/qore \
+    python3 -B -W error rpm/tests/qcc-rpm-integration.py -v
+QORE_QPP_EXECUTABLE=$PWD/build/qpp QORE_QCC_EXECUTABLE=$PWD/build/qcc \
+    QORE_BINARY=$PWD/build/qore python3 -B -m unittest discover -s examples/test/cmake
+cmake --build build --target linenoise-unicode-test -- %{?_smp_mflags}
+build/modules/linenoise/linenoise-unicode-test
+QORE_BINARY=$PWD/build/qore QORE_TEST_QMOD_DIR=$PWD/build/qlib-qmod \
+    PATH=$PWD/build:$PATH QORE_TEST_OPTS='-penable-debug' ./run_tests.sh -E -d qore
+build/qore -b --enable-debug -l ml -e 'if (!ML::ml_get_capabilities().has_onnx) { throw "PACKAGE-TEST-ERROR", "ONNX is required"; }'
+build/qore -b --enable-debug modules/ml/test/ml.qtest -v
+%endif
 
 %files
-%defattr(-,root,root,-)
-/usr/bin/qore
-/usr/bin/qdbg
-/usr/bin/qdbg-server
-/usr/bin/qdbg-remote
-/usr/bin/qdbg-vsc-adapter
-%if 0%{?_mandir:1}
-%{_mandir}/man1/qore.1.*
-%{_mandir}/man1/qdbg.1.*
-%{_mandir}/man1/qdbg-remote.1.*
-%{_mandir}/man1/qdbg-server.1.*
-%{_mandir}/man1/qdbg-vsc-adapter.1.*
-%else
-%if 0%{?rh_dist}
-%if %{?rh_dist} <= 5
-/usr/man/man1/qore.1.*
-/usr/man/man1/qdbg.1.*
-/usr/man/man1/qdbg-remote.1.*
-/usr/man/man1/qdbg-server.1.*
-/usr/man/man1/qdbg-vsc-adapter.1.*
-%else
-/usr/share/man/man1/qore.1.*
-/usr/share/man/man1/qdbg.1.*
-/usr/share/man/man1/qdbg-remote.1.*
-/usr/share/man/man1/qdbg-server.1.*
-/usr/share/man/man1/qdbg-vsc-adapter.1.*
+%license COPYING.MIT
+%{_bindir}/qore
+%{_bindir}/qdbg
+%{_mandir}/man1/qore.1*
+%{_mandir}/man1/qdbg.1*
+
+%files -n %{libname}
+%license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE debian/copyright
+%{_libdir}/libqore.so.%{soname}*
+
+%files stdlib
+%license COPYING.MIT COPYING.LGPL debian/copyright
+%license modules/json/third-party/jsoncons/LICENSE modules/linenoise/src/linenoise/linenoise.cpp modules/linenoise/src/linenoise/wcwidth.cpp
+%dir %{_datadir}/qore
+%dir %{_datadir}/qore/metadata
+%{module_dir}/
+%{_datadir}/qore-modules/
+%{_datadir}/qore/i18n/
+
+%files devel -f rpm-devel-extra.files
+%{_bindir}/qpp
+%{_bindir}/qcc
+%{_bindir}/qdx
+%{_bindir}/qjar
+%{_bindir}/qore-extract-qm-metadata
+%{_mandir}/man1/qpp.1*
+%{_mandir}/man1/qcc.1*
+%{_mandir}/man1/qdx.1*
+%{_mandir}/man1/qjar.1*
+%{_mandir}/man1/qore-extract-qm-metadata.1*
+%{_libdir}/libqore.so
+%{_libdir}/pkgconfig/qore.pc
+%{_libdir}/cmake/Qore/
+%{_libdir}/qore/
+%{_includedir}/qore/
+%{_datadir}/qore/metadata/
+%{_datadir}/qore/treesitter/
+%if %{with docs}
+%{_datadir}/qore/qore.tag
 %endif
-%else
-%if 0%{?mdkversion}
-/usr/share/man/man1/qore.1.*
-/usr/share/man/man1/qdbg.1.*
-/usr/share/man/man1/qdbg-remote.1.*
-/usr/share/man/man1/qdbg-server.1.*
-/usr/share/man/man1/qdbg-vsc-adapter.1.*
-%endif
-%endif
+
+%files rpm-macros
+%license COPYING.MIT
+%{_rpmconfigdir}/macros.d/macros.qore
+%{_rpmconfigdir}/fileattrs/qore.attr
+%{_rpmconfigdir}/qore/
+
+%files misc-tools -f rpm-tools.files
+
+%files debug-tools
+%{_bindir}/qdbg-server
+%{_bindir}/qdbg-remote
+%{_bindir}/qdbg-vsc-adapter
+%{_mandir}/man1/qdbg-server.1*
+%{_mandir}/man1/qdbg-remote.1*
+%{_mandir}/man1/qdbg-vsc-adapter.1*
+
+%if %{with docs}
+%files doc
+%license COPYING.MIT
+%doc %{_docdir}/%{name}-doc/
+
+%files devel-doc
+%license COPYING.LGPL COPYING.GPL COPYING.MIT
+%doc %{_docdir}/%{name}-devel-doc/
 %endif
 
 %changelog
-* Sat Sep 12 2026 David Nichols <david@qore.org> 3.0.0
-- added required build dependencies: llvm-devel, icu, eigen3, protobuf
-
-* Fri Feb 6 2026 David Nichols <david@qore.org> 3.0.0
-- updated module-abi to 2.0 (Binary Module API 2.0)
-- added required build dependencies: nghttp2, brotli, zstd, lz4
-- switched build system from autotools to cmake
-
-* Wed Dec 31 2025 David Nichols <david@qore.org> 3.0.0
-- updated version to 3.0.0
-- updated libqore version to 20.0.0
-- added support for module-abi 1.5, dropped support for all previous versions (breaking ABI change)
-
-* Fri Jun 13 2025 David Nichols <david@qore.org> 2.2.0
-- updated version to 2.2.0
-
-* Mon May 26 2025 David Nichols <david@qore.org> 2.1.2
-- updated version to 2.1.2
-
-* Tue May 6 2025 David Nichols <david@qore.org> 2.1.1
-- updated version to 2.1.1
-
-* Wed Sep 20 2023 David Nichols <david@qore.org> 2.1.0
-- updated version to 2.1.0
-- updated libqore version to 12.6.0
-
-* Wed Sep 20 2023 David Nichols <david@qore.org> 2.0.0
-- updated version to 2.0.0
-- updated libqore version to 12.5.0
-
-* Sat Aug 19 2023 David Nichols <david@qore.org> 1.19.0
-- updated version to 1.19.0
-- updated libqore version to 12.4.1
-
-* Tue Aug 15 2023 David Nichols <david@qore.org> 1.18.1
-- updated version to 1.18.1
-
-* Fri Aug 4 2023 David Nichols <david@qore.org> 1.18.0
-- updated version to 1.18.0
-
-* Fri Jul 7 2023 David Nichols <david@qore.org> 1.17.0
-- updated version to 1.17.0
-- updated libqore version to 12.4.0
-
-* Thu Jun 15 2023 David Nichols <david@qore.org> 1.16.1
-- updated version to 1.16.1
-
-* Tue Apr 4 2023 David Nichols <david@qore.org> 1.16.0
-- updated version to 1.16.0
-
-* Sun Mar 19 2023 David Nichols <david@qore.org> 1.15.0
-- updated version to 1.15.0
-- updated libqore version to 12.3.1
-
-* Sat Mar 11 2023 David Nichols <david@qore.org> 1.14.2
-- updated version to 1.14.2
-
-* Mon Feb 20 2023 David Nichols <david@qore.org> 1.14.1
-- updated version to 1.14.1
-
-* Mon Jan 23 2023 David Nichols <david@qore.org> 1.14.0
-- updated version to 1.14.0
-- updated libqore version to 12.3.0
-- added support for module-abi 1.4
-
-* Mon Jan 2 2023 David Nichols <david@qore.org> 1.13.0
-- updated version to 1.13.0
-- updated libqore version to 12.2.0
-
-* Mon Dec 12 2022 David Nichols <david@qore.org> 1.12.4
-- updated version to 1.12.4
-
-* Mon Nov 14 2022 David Nichols <david@qore.org> 1.12.3
-- updated version to 1.12.3
-
-* Tue Nov 1 2022 David Nichols <david@qore.org> 1.12.2
-- updated version to 1.12.2
-
-* Mon Sep 19 2022 David Nichols <david@qore.org> 1.12.1
-- updated version to 1.12.1
-- updated libqore version to 12.1.1
-
-* Tue Sep 13 2022 David Nichols <david@qore.org> 1.12.0
-- updated version to 1.12.0
-- updated libqore version to 12.1.0
-
-* Fri Sep 2 2022 David Nichols <david@qore.org> 1.11.0
-- updated version to 1.11.0
-
-* Sat Jul 16 2022 David Nichols <david@qore.org> 1.10.0
-- updated version to 1.10.0
-- updated libqore version to 12.0.3
-
-* Tue Jul 5 2022 David Nichols <david@qore.org> 1.9.1
-- updated version to 1.9.1
-- updated libqore version to 12.0.2
-
-* Mon Jun 20 2022 David Nichols <david@qore.org> 1.9.0
-- updated version to 1.9.0
-
-* Sun Jun 5 2022 David Nichols <david@qore.org> 1.8.1
-- updated version to 1.8.1
-
-* Fri May 6 2022 David Nichols <david@qore.org> 1.8.0
-- updated version to 1.8.0
-
-* Mon May 2 2022 David Nichols <david@qore.org> 1.7.2
-- updated version to 1.7.2
-
-* Mon Apr 18 2022 David Nichols <david@qore.org> 1.7.1
-- updated version to 1.7.1
-
-* Mon Mar 28 2022 David Nichols <david@qore.org> 1.7.0
-- updated version to 1.7.0
-
-* Fri Mar 18 2022 David Nichols <david@qore.org> 1.6.0
-- updated version to 1.6.0
-
-* Wed Mar 9 2022 David Nichols <david@qore.org> 1.5.1
-- updated version to 1.5.1
-
-* Sun Feb 20 2022 David Nichols <david@qore.org> 1.5.0
-- updated version to 1.5.0
-
-* Wed Feb 9 2022 David Nichols <david@qore.org> 1.4.0
-- updated version to 1.4.0
-- updated libqore version to 12.0.0
-- added support for module-abi 1.3, dropped support for all previous versions
-
-* Fri Jan 28 2022 David Nichols <david@qore.org> 1.3.0
-- updated version to 1.3.0
-- updated libqore version to 7.4.2
-
-* Fri Jan 21 2022 David Nichols <david@qore.org> 1.2.0
-- updated version to 1.2.0
-- updated libqore version to 7.4.1
-
-* Sun Jan 9 2022 David Nichols <david@qore.org> 1.1.0
-- updated version to 1.1.0
-- updated libqore version to 7.4.0
-
-* Wed Dec 15 2021 David Nichols <david@qore.org> 1.0.13
-- updated version to 1.0.13
-- updated libqore version to 7.3.0
-
-* Thu Nov 25 2021 David Nichols <david@qore.org> 1.0.12
-- updated version to 1.0.12
-- updated libqore version to 7.2.3
-
-* Sat Nov 20 2021 David Nichols <david@qore.org> 1.0.11
-- updated version to 1.0.11
-
-* Wed Oct 13 2021 David Nichols <david@qore.org> 1.0.10
-- updated version to 1.0.10
-- updated libqore version to 7.2.2
-
-* Wed Oct 6 2021 David Nichols <david@qore.org> 1.0.9
-- updated version to 1.0.9
-- updated libqore version to 7.2.1
-
-* Sun Oct 3 2021 David Nichols <david@qore.org> 1.0.8
-- updated version to 1.0.8
-- updated libqore version to 7.2.0
-
-* Thu Sep 23 2021 David Nichols <david@qore.org> 1.0.7
-- updated version to 1.0.7
-- updated libqore version to 7.1.1
-
-* Mon Sep 20 2021 David Nichols <david@qore.org> 1.0.6
-- updated version to 1.0.6
-
-* Thu Sep 16 2021 David Nichols <david@qore.org> 1.0.5
-- updated version to 1.0.5
-
-* Tue Sep 7 2021 David Nichols <david@qore.org> 1.0.4
-- updated version to 1.0.4
-
-* Mon Aug 16 2021 David Nichols <david@qore.org> 1.0.3
-- updated version to 1.0.3
-- updated libqore version to 7.1.0
-- added module api 1.1
-
-* Sat Jul 17 2021 David Nichols <david@qore.org> 1.0.2
-- updated version to 1.0.2
-
-* Thu Jul 1 2021 David Nichols <david@qore.org> 1.0.1
-- updated version to 1.0.1
-- updated libqore version to 7.0.1
-
-* Thu Dec 31 2020 David Nichols <david@qore.org> 1.0
-- updated version to 1.0
-- updated libqore version to 7.0.0
-- updated ABI version to 1.0; removed all others
-
-* Mon Dec 21 2020 David Nichols <david@qore.org> 0.9.11
-- updated version to 0.9.11
-
-* Sun Nov 29 2020 David Nichols <david@qore.org> 0.9.10
-- updated version to 0.9.10
-
-* Mon Nov 16 2020 David Nichols <david@qore.org> 0.9.9
-- updated version to 0.9.9
-
-* Tue Nov 10 2020 David Nichols <david@qore.org> 0.9.8
-- updated version to 0.9.8
-
-* Fri Nov 6 2020 David Nichols <david@qore.org> 0.9.7
-- updated version to 0.9.7
-
-* Thu Oct 22 2020 David Nichols <david@qore.org> 0.9.6
-- updated version to 0.9.6
-
-* Wed May 20 2020 David Nichols <david@qore.org> 0.9.5
-- updated version to 0.9.5
-
-* Sun May 10 2020 David Nichols <david@qore.org> 0.9.4.4
-- updated version to 0.9.4.4
-
-* Sat Mar 28 2020 David Nichols <david@qore.org> 0.9.4.3
-- updated version to 0.9.4.3
-
-* Mon Mar 2 2020 David Nichols <david@qore.org> 0.9.4.2
-- updated version to 0.9.4.2
-
-* Wed Feb 12 2020 David Nichols <david@qore.org> 0.9.4.1
-- updated version to 0.9.4.1
-
-* Sat Sep 7 2019 David Nichols <david@qore.org> 0.9.4
-- updated version to 0.9.4
-
-* Tue Mar 26 2019 David Nichols <david@qore.org> 0.9.3
-- updated version to 0.9.3
-
-* Mon Mar 11 2019 David Nichols <david@qore.org> 0.9.2
-- updated version to 0.9.2
-
-* Fri Feb 15 2019 David Nichols <david@qore.org> 0.9.1
-- updated version to 0.9.1
-
-* Fri Nov 16 2018 David Nichols <david@qore.org> 0.9
-- updated version to 0.9
-
-* Wed Nov 14 2018 David Nichols <david@qore.org> 0.8.13.9
-- updated version to 0.8.13.9
-
-* Thu Oct 25 2018 David Nichols <david@qore.org> 0.8.13.8
-- updated version to 0.8.13.8
-
-* Tue Sep 11 2018 David Nichols <david@qore.org> 0.8.13.7
-- updated version to 0.8.13.7
-
-* Fri Jun 22 2018 David Nichols <david@qore.org> 0.8.13.6
-- updated version to 0.8.13.6
-
-* Tue May 15 2018 David Nichols <david@qore.org> 0.8.13.5
-- updated version to 0.8.13.5
-
-* Fri Apr 13 2018 David Nichols <david@qore.org> 0.8.13.4
-- updated version to 0.8.13.4
-
-* Thu Mar 22 2018 David Nichols <david@qore.org> 0.8.13.3
-- updated version to 0.8.13.3
-
-* Sat Dec 30 2017 David Nichols <david@qore.org> 0.8.13.2
-- updated version to 0.8.13.2
-
-* Fri Sep 29 2017 David Nichols <david@qore.org> 0.8.13.1
-- updated version to 0.8.13.1
-
-* Fri Aug 4 2017 David Nichols <david@qore.org> 0.8.13
-- updated version to 0.8.13
-
-* Thu Aug 3 2017 David Nichols <david@qore.org> 0.8.12.12
-- updated to 0.8.12.12
-
-* Thu Jun 15 2017 David Nichols <david@qore.org> 0.8.12.11
-- updated to 0.8.12.11
-
-* Thu Apr 13 2017 David Nichols <david@qore.org> 0.8.12.10
-- updated to 0.8.12.10
-
-* Thu Mar 16 2017 David Nichols <david@qore.org> 0.8.12.9
-- updated to 0.8.12.9
-
-* Tue Feb 21 2017 David Nichols <david@qore.org> 0.8.12.8
-- updated to 0.8.12.8
-
-* Sun Feb 12 2017 David Nichols <david@qore.org> 0.8.12.7
-- updated to 0.8.12.7
-
-* Wed Feb 1 2017 David Nichols <david@qore.org> 0.8.12.6
-- updated to 0.8.12.6
-
-* Wed Nov 23 2016 David Nichols <david@qore.org> 0.8.12.5
-- updated to 0.8.12.5
-
-* Fri Oct 21 2016 David Nichols <david@qore.org> 0.8.12.4
-- updated to 0.8.12.4
-
-* Tue Sep 27 2016 David Nichols <david@qore.org> 0.8.12.3
-- updated to 0.8.12.3
-
-* Sat Sep 10 2016 David Nichols <david@qore.org> 0.8.12.2
-- updated to 0.8.12.2
-
-* Wed Aug 17 2016 David Nichols <david@qore.org> 0.8.12.1
-- updated to 0.8.12.1
-
-* Sun Oct 19 2014 David Nichols <david@qore.org> 0.8.12
-- updated to 0.8.12
-
-* Mon Jun 23 2014 David Nichols <david@qore.org> 0.8.11.1
-- updated to 0.8.11.1
-
-* Sat May 31 2014 David Nichols <david@qore.org> 0.8.11
-- updated to 0.8.11
-
-* Wed Mar 12 2014 David Nichols <david@qore.org> 0.8.10
-- updated to 0.8.10
-
-* Fri Oct 04 2013 David Nichols <david@qore.org> 0.8.9
-- updated to 0.8.9
-
-* Sun Feb 24 2013 David Nichols <david@qore.org> 0.8.8
-- updated to 0.8.8
-
-* Wed Nov 21 2012 David Nichols <david@qore.org> 0.8.7
-- updated to 0.8.7
-
-* Fri Nov 9 2012 David Nichols <david@qore.org> 0.8.6.2
-- updated to 0.8.6.2
-
-* Sat Oct 27 2012 David Nichols <david@qore.org> 0.8.6.1
-- updated to 0.8.6.1
-
-* Sun Sep 2 2012 David Nichols <david@qore.org> 0.8.6
-- updated to 0.8.6
-
-* Wed May 23 2012 David Nichols <david@qore.org> 0.8.5
-- updated to 0.8.5
-
-* Tue May 22 2012 David Nichols <david@qore.org> 0.8.4
-- updated for new doxygen-based documentation, added devel-doc pkg for API docs
-- updated package descriptions
-
-* Thu Oct 20 2011 David Nichols <david@qore.org> 0.8.4
-- updated to 0.8.4
-
-* Fri Oct 07 2011 Petr Vanek <petr.vanek@qoretechnologies.com> 0.8.3
-- pkg-config
-
-* Sun Mar 6 2011 David Nichols <david@qore.org>
-- updated to 0.8.3
-
-* Sun Dec 26 2010 David Nichols <david@qore.org>
-- updated to 0.8.2
-
-* Tue Jun 15 2010 David Nichols <david@qore.org>
-- updated to 0.8.1
-
-* Wed Nov 18 2009 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.8.0
-
-* Fri Nov 6 2009 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.7
-
-* Mon Jul 13 2009 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.6
-
-* Mon Jun 22 2009 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.5
-
-* Wed Mar 4 2009 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.4
-
-* Wed Dec 3 2008 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.3
-
-* Wed Nov 26 2008 David Nichols <david_nichols@users.sourceforge.net>
-- made libqore* the default name for lib package, removed la file
-
-* Sun Nov 23 2008 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.7.2
-
-* Tue Oct 7 2008 David Nichols <david_nichols@users.sourceforge.net>
-- released 0.7.0
-
-* Thu Sep 4 2008 David Nichols <david_nichols@users.sourceforge.net>
-- removed all modules as they are now independent projects
-
-* Tue Sep 2 2008 David Nichols <david_nichols@users.sourceforge.net>
-- fixed dist tag for suse distributions
-- updated for new module directory, added qore-module-api-* capability
-
-* Thu Jun 12 2008 David Nichols <david_nichols@users.sourceforge.net>
-- added new modules
-
-* Mon Oct 22 2007 David Nichols <david_nichols@users.sourceforge.net>
-- updated spec file with corrections from suse open build service
-
-* Tue Jul 17 2007 David Nichols <david_nichols@users.sourceforge.net>
-- updated library version to 3.1.0
-
-* Sat Jul 14 2007 David Nichols <david_nichols@users.sourceforge.net>
-- copied improvements from opensuse rpm and updated based on rpmlint output
-- updated version to 0.7.0
-
-* Thu Jun 14 2007 David Nichols <david_nichols@users.sourceforge.net>
-- fixed spec file to support more architectures
-
-* Wed Jun 13 2007 David Nichols <david_nichols@users.sourceforge.net>
-- removed tibae module from spec file due to compiler requiremenets (g++-32)
-- added pgsql module
-
-* Tue Feb 20 2007 David Nichols <david_nichols@users.sourceforge.net>
-- updated to libqore.so.3.0.0
-
-* Sun Feb 11 2007 David Nichols <david_nichols@users.sourceforge.net>
-- updated to 0.6.2 and libqore 1.1
-
-* Tue Jan 30 2007 David Nichols <david_nichols@users.sourceforge.net>
-- added tuxedo module
-
-* Fri Jan 5 2007 David Nichols <david_nichols@users.sourceforge.net>
-- updated libqore so version to 1.0.0
-
-* Sat Nov 18 2006 David Nichols <david_nichols@users.sourceforge.net>
-- updated descriptions
-- changes to make spec file more release-agnostic (use of the dist tag in release)
-
-* Wed Dec 7 2005 David Nichols <david_nichols@users.sourceforge.net>
-- Initial rpm build
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-6
+- Unify Fedora, Enterprise Linux and SUSE packaging.
+- Preserve AOT metadata, retain debug symbols, and isolate offline builds.
+- Align runtime, SDK, tools and module dependencies with installed artifacts.

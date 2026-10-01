@@ -1,0 +1,30 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%qore_module_api 2.0
+%qore_module_dir %{_libdir}/qore-modules
+%qore_user_module_dir %{_datadir}/qore-modules
+%qore_rpm_helper %{_rpmconfigdir}/qore/preserve-aot-metadata.py
+%qore_debug_source_dir %{lua:local p = rpm.expand("/usr/src/debug/%{name}-%{version}"); if (tonumber(rpm.expand("%{?_unique_debug_srcs}")) or 0) > 0 then p = p .. rpm.expand("-%{release}.%{_arch}") end; print(p)}
+%qore_install_aot_sources() /usr/bin/python3 %{_rpmconfigdir}/qore/install-aot-sources.py "%{buildroot}" "%{qore_debug_source_dir}" %{*}
+
+# Capture the unexpanded post-install macro, preserving distro-specific debug,
+# stripping, hardening and policy processing. Restore EOF trailers even if a
+# post-install command fails. Binary package generation still fails in that case.
+%qore_enable_aot_post %{lua:
+  -- LLVM supplies .debug_names. gdb-add-index cannot replace that index and
+  -- warns when RPM requests a second index. Keep the compiler's index.
+  rpm.undefine("_include_gdb_index")
+  if not rpm.isdefined("qore_original_install_post") then
+    local original = rpm.expand("%{macrobody:__spec_install_post}")
+    local newline = string.char(10)
+    local continuation = string.char(92, 10)
+    rpm.define("qore_original_install_post " .. original:gsub(newline, continuation))
+    local wrapper = [=[
+cat > qore-rpm-post.sh <<'QORE_RPM_POST_EOF'
+%{qore_original_install_post}
+QORE_RPM_POST_EOF
+/usr/bin/python3 "%{qore_rpm_helper}" "%{buildroot}" /bin/sh -e qore-rpm-post.sh
+]=]
+    rpm.define("__spec_install_post " .. wrapper:gsub(newline, continuation))
+  end
+}

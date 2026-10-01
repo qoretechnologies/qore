@@ -1,0 +1,2 @@
+%__qore_requires %{_rpmconfigdir}/qore/qore-requires.py
+%__qore_path ^%{_libdir}/qore-modules/.*\\.qmod$

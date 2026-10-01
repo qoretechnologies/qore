@@ -1,0 +1,18 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Adapted from debian/tests; also exercised by RPM qualification.
+set -eu
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+cd "${QORE_RPM_TEST_TMP:-$(mktemp -d)}"
+# Some Qore tools use exit status 1 for their usage display.
+check_help() {
+    status=0
+    "$1" -h > help.txt 2>&1 || status=$?
+    cat help.txt
+    test "$status" -le 1
+    grep -Eiq '^usage([[:space:]:]|$)' help.txt
+}
+check_help qfmt
+check_help qget
+check_help qore-i18n
+check_help qore-onnx

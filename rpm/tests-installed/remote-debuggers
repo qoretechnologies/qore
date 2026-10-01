@@ -1,0 +1,19 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Adapted from debian/tests; also exercised by RPM qualification.
+set -eu
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+cd "${QORE_RPM_TEST_TMP:-$(mktemp -d)}"
+check_help() {
+    tool=$1
+    shift
+    status=0
+    "$tool" -h "$@" > help.txt 2>&1 || status=$?
+    cat help.txt
+    test "$status" -le 1
+    grep -iq '^usage:' help.txt
+}
+check_help qdbg-server
+# The remote client's option parser requires a URL even when showing help.
+check_help qdbg-remote ws://127.0.0.1/
+check_help qdbg-vsc-adapter

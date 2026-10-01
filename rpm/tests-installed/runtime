@@ -1,0 +1,80 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Adapted from debian/tests; also exercised by RPM qualification.
+set -eu
+
+# Run outside the checkout, with only installed modules on the search path.
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR QORE_LIBDIR LD_LIBRARY_PATH
+test_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+cd "${QORE_RPM_TEST_TMP:-$(mktemp -d)}"
+# Only copy the model fixture; all executable code comes from installed packages.
+cp "$test_dir/../../modules/ml/test/data/test_linear.onnx" .
+qore -b --enable-debug --version
+for module in astparser avro dataframe i18n json krb5 linenoise ml mongodb ocr protobuf reflection sshutil tokenizer yaml; do
+    qore -b --enable-debug -l "$module" -e 'exit(0);'
+done
+for module in Connect ConnectDataProvider DataStreamClient DataStreamClientIo DataStreamRequestHandler DataStreamUtil YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler; do
+    qore -b --enable-debug -l "$module" -e 'exit(0);'
+done
+cat > onnx.q <<'EOF'
+%modern
+%requires ml
+if (!ML::ml_get_capabilities().has_onnx) {
+    throw "PACKAGE-TEST-ERROR", "ONNX Runtime support is missing";
+}
+ML::OnnxModel model("test_linear.onnx");
+hash<auto> result = model.run({"X": ((-1.0,), (0.0,), (2.0,))});
+list<float> expected = (-1.0, 1.0, 5.0);
+if (result.Y.size() != expected.size()) {
+    throw "PACKAGE-TEST-ERROR", "ONNX inference output size mismatch";
+}
+for (int i = 0; i < expected.size(); ++i) {
+    if (abs(result.Y[i] - expected[i]) > 1e-5) {
+        throw "PACKAGE-TEST-ERROR", "ONNX inference produced an incorrect result";
+    }
+}
+ML::OnnxSessionPool pool("test_linear.onnx",
+    <ML::OnnxSessionConfig>{"providers": ()}, {"max_sessions": 2});
+if (abs(pool.run({"X": ((4.0,),)}).Y[0] - 9.0) > 1e-5) {
+    throw "PACKAGE-TEST-ERROR", "ONNX session pool produced an incorrect result";
+}
+EOF
+qore -b --enable-debug onnx.q
+cat > runtime.q <<'EOF'
+%modern
+%requires Util
+%requires json
+%requires yaml
+string utf8 = "Příliš žluťoučký kůň";
+string latin2 = convert_encoding(utf8, "ISO-8859-2");
+if (convert_encoding(latin2, "UTF-8") !== utf8) {
+    throw "PACKAGE-TEST-ERROR", "ISO-8859-2 character conversion failed";
+}
+hash<auto> value = parse_json("{\"answer\":42}");
+if (value.answer != 42) {
+    throw "PACKAGE-TEST-ERROR", "JSON round trip failed";
+}
+hash<auto> document = parse_yaml("answer: 42\nwhen: 2026-09-27T12:00:00Z\n", YAML::ParseCoreSchema);
+if (document.answer != 42 || document."when" !== "2026-09-27T12:00:00Z") {
+    throw "PACKAGE-TEST-ERROR", "YAML 1.2 core schema parsing failed";
+}
+if (parse_yaml(make_yaml(value)) != value) {
+    throw "PACKAGE-TEST-ERROR", "YAML round trip failed";
+}
+EOF
+for mode in ast ir jit tiered; do
+    qore -b --enable-debug --exec-mode="$mode" runtime.q
+done
+
+# AOT user modules are native ELF files and belong under the multiarch libdir.
+module_dir="$(qore --module-dir)/$(qore --short-version)"
+test -s "$module_dir/Util.qmod"
+# ELF stripping must preserve the appended dependency trailer of every AOT
+# module. Native C++ modules have an API suffix and do not carry this metadata.
+find "$module_dir" -type f -name '*.qmod' ! -name '*-api-*.qmod' > aot-modules.list
+while IFS= read -r module; do
+    if [ "$(tail -c 8 "$module" | head -c 4)" != QAMD ]; then
+        echo "Missing AOT dependency metadata: $module" >&2
+        exit 1
+    fi
+done < aot-modules.list
