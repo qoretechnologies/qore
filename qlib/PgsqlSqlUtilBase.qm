@@ -60,6 +60,35 @@ module PgsqlSqlUtilBase {
 
     All the public symbols in the module are defined in the PgsqlSqlUtilBase namespace
 
+    @section pgsql_schema_scope Schema Scope of Object Names
+
+    PostgreSQL resolves an object name without a schema against the connection's \c search_path.  This module
+    resolves such a name for tables, views, and sequences in <tt>current_schema()</tt>, the first existing
+    schema of the \c search_path (or \c "public" if the \c search_path names no existing schema); a name of
+    the form \c "schema.name" is resolved in the schema given.
+
+    Like Oracle and MySQL, which list only the objects of the connection's own schema, the following methods
+    list only the objects in the schemas of the connection's \c search_path (<tt>current_schemas(false)</tt>),
+    never every schema in the database:
+    - @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
+      @ref SqlUtil::AbstractDatabase::tableIterator() "AbstractDatabase::tableIterator()"
+    - @ref SqlUtil::AbstractDatabase::listViews() "AbstractDatabase::listViews()" and
+      @ref SqlUtil::AbstractDatabase::viewIterator() "AbstractDatabase::viewIterator()"
+    - @ref SqlUtil::AbstractDatabase::listSequences() "AbstractDatabase::listSequences()" and
+      @ref SqlUtil::AbstractDatabase::sequenceIterator() "AbstractDatabase::sequenceIterator()"
+    - @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "PgsqlDatabase::listMaterializedViews()"
+
+    An object in <tt>current_schema()</tt> is listed by its name alone, and an object in any other
+    \c search_path schema as \c "schema.name", so that every name listed resolves to the object listed, and an
+    object name present in more than one \c search_path schema is listed once per schema.  Partition child
+    tables are not listed as tables, views are listed by
+    @ref SqlUtil::AbstractDatabase::listTables() "listTables()" as well, as \c information_schema.tables
+    reports them, and session temporary tables are listed only if \c pg_temp is named
+    explicitly in the \c search_path.  If the \c search_path names no existing schema, these methods return an
+    empty list.
+
+    To list the objects of a schema outside the \c search_path, use a connection whose \c search_path names it.
+
     @section pgsql_schema_management Schema Management on PostgreSQL
 
     @subsection pgsql_type_mapping Type Mapping
@@ -186,6 +215,12 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
+    - tables, views, sequences, and materialized views are listed only from the schemas of the connection's
+      \c search_path, as on Oracle and MySQL, instead of from every schema in the database; an object in
+      <tt>current_schema()</tt> is listed unqualified and one in any other \c search_path schema as
+      \c "schema.name" (see @ref pgsql_schema_scope)
+    - fixed \c listMaterializedViews(), which listed the ordinary tables of every schema instead of materialized
+      views
     - preserve partial predicates, INCLUDE columns, NULLS NOT DISTINCT, and per-key sort/null order in
       index introspection, DDL, schema descriptions, and alignment (issue 5470)
     - parse nested and quoted index expressions without confusing embedded text with storage options
@@ -374,6 +409,14 @@ public string sub get_pgsql_default_schema(AbstractDatasource ds) {
     # current_schema() returns NULL when search_path names no existing schema
     *string schema = ds.selectRow("select current_schema() as \"schema\"").schema;
     return schema ?? "public";
+}
+
+# returns an SQL expression giving a relation's name as the connection resolves it: unqualified when the
+# relation is in current_schema(), the schema in which PgsqlTable, getView() and getSequence() resolve a
+# name without a schema, and "schema.name" otherwise
+string sub pgsql_relation_name_expr(string schema_col, string name_col) {
+    return sprintf("case when %s = current_schema() then %s else %s || '.' || %s end", schema_col, name_col,
+        schema_col, name_col);
 }
 
 sub parse_schema_name(string nname, reference<string> schema, reference<string> name,
@@ -1797,7 +1840,14 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return False;
     }
 
-    #! returns a list of string table names in the database
+    #! returns a list of string table names in the schemas of the connection's \c search_path
+    /** Only tables in the schemas of the connection's \c search_path (<tt>current_schemas(false)</tt>) are
+        listed, as Oracle and MySQL list only the tables of the connection's own schema.  A table in
+        <tt>current_schema()</tt> is listed unqualified, a table in any other \c search_path schema is listed
+        as \c "schema.table", so that every name returned resolves in the schema of the table listed.
+        Partition child relations are not listed; views are listed as \c information_schema.tables reports them.
+        An empty list is returned if the \c search_path names no existing schema.
+    */
     private list<string> listTablesImpl() {
         # NOTE: exclude partition child relations. PostgreSQL exposes each declarative partition as its own
         # relation, but a partition is not a standalone logical table and must not appear in the table list
@@ -1805,16 +1855,17 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # partitioned table (pg_class.relkind = 'p'). This check is version-safe (on servers without declarative
         # partitioning the 'p' relkind simply never matches) and does not exclude classic table-inheritance
         # children, whose parent relkind is 'r'.
-        string sql = "select t.table_schema, t.table_name from information_schema.tables t "
-            "where t.table_schema not in ('pg_catalog', 'information_schema') "
+        # NOTE: listing every schema of the database exposed other schemas' tables and, in a database with
+        # one schema per tenant, repeated the same table names once per schema
+        string sql = sprintf("select %s as name from information_schema.tables t "
+            "where t.table_schema = any (current_schemas(false)) "
             "and not exists (select 1 from pg_catalog.pg_inherits inh "
             "join pg_catalog.pg_class child on child.oid = inh.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = child.relnamespace "
             "join pg_catalog.pg_class parent on parent.oid = inh.inhparent "
-            "where cn.nspname = t.table_schema and child.relname = t.table_name and parent.relkind = 'p')";
-        return map
-            $1.table_schema != 'public' ? sprintf("%s.%s", $1.table_schema, $1.table_name) : $1.table_name,
-            ds.select(sql).contextIterator();
+            "where cn.nspname = t.table_schema and child.relname = t.table_name and parent.relkind = 'p')",
+            pgsql_relation_name_expr("t.table_schema", "t.table_name"));
+        return ds.select(sql).name ?? ();
     }
 
     #! returns a list of string function names in the database
@@ -1840,26 +1891,45 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return listFunctionsImpl();
     }
 
+    #! returns a list of string sequence names in the schemas of the connection's \c search_path
+    /** Names are qualified as for tables; see listTablesImpl()
+    */
     private list<string> listSequencesImpl() {
-        # only the sequences reachable on the search path, like listViewsImpl() below; matching on
-        # relkind alone lists every schema's sequences, so in a database holding more than one schema
-        # this reported sequences that unqualified SQL here cannot reach
-        return ds.select("select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace "
-            "where c.relkind = 'S' and n.nspname = any (current_schemas(false)) order by 1").relname;
+        # only the sequences reachable on the search path; matching on relkind alone lists every schema's
+        # sequences, so in a database holding more than one schema this reported sequences that unqualified
+        # SQL here cannot reach.  A sequence outside current_schema() is qualified, as getSequence() resolves
+        # an unqualified name in current_schema() only
+        return ds.select(sprintf("select %s as name from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'S' and n.nspname = any (current_schemas(false)) order by 1",
+            pgsql_relation_name_expr("n.nspname", "c.relname"))).name ?? ();
     }
 
+    #! returns a list of string view names in the schemas of the connection's \c search_path
+    /** Names are qualified as for tables; see listTablesImpl()
+    */
     private list<string> listViewsImpl() {
-        return ds.select("select table_name from information_schema.views where table_schema = any (current_schemas(false)) order by 1").table_name;
+        # a view outside current_schema() is qualified, as getView() resolves an unqualified name in
+        # current_schema() only, and the same view name in two search_path schemas must not be listed twice
+        return ds.select(sprintf("select %s as name from information_schema.views v "
+            "where v.table_schema = any (current_schemas(false)) order by 1",
+            pgsql_relation_name_expr("v.table_schema", "v.table_name"))).name ?? ();
     }
 
-    #! returns a list of string materialized view names in the database
+    #! returns a list of string materialized view names in the schemas of the connection's \c search_path
+    /** Names are qualified as for tables; see @ref SqlUtil::AbstractDatabase::listTables() "listTables()"
+
+        @return a list of string materialized view names in the schemas of the connection's \c search_path;
+        a materialized view in <tt>current_schema()</tt> is listed unqualified, one in any other \c search_path
+        schema as \c "schema.name"
+    */
     list<string> listMaterializedViews() {
-        string sql = "select relname from pg_class"
-                        " where relkind = 'r' and relnamespace in"
-                            " (select oid from pg_namespace"
-                                " where nspname != 'information_schema' and nspname not like 'pg\_%')"
-                        " order by 1";
-        return ds.select(sql).relname;
+        # relkind 'm' is a materialized view; this previously listed relkind 'r' (ordinary tables) of every
+        # schema in the database
+        return ds.select(sprintf("select %s as name from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'm' and n.nspname = any (current_schemas(false)) order by 1",
+            pgsql_relation_name_expr("n.nspname", "c.relname"))).name ?? ();
     }
 
     #! returns an iterator listing the string materialized view names in the database

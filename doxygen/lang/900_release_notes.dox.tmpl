@@ -345,6 +345,22 @@
     without failure records.
     @endparblock
 
+    @par PostgreSQL Lists Only the Connection's Schemas
+    @parblock
+    On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
+    @ref SqlUtil::AbstractDatabase::tableIterator() "AbstractDatabase::tableIterator()" now list only the tables in
+    the schemas of the connection's \c search_path, as Oracle and MySQL list only the tables of the connection's
+    own schema; they listed the tables of every schema in the database.  A table is listed without a schema if it
+    is in <tt>current_schema()</tt>, the schema in which an unqualified name is resolved, and as
+    \c "schema.table" otherwise; tables outside \c public were always listed qualified, and tables in \c public
+    unqualified, even where the connection resolves an unqualified name in another schema.  Views, sequences, and
+    materialized views are listed with the same rules (see the @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase"
+    module).  Callers that relied on a datasource listing other schemas' tables, such as the children of a
+    @ref DbDataProvider::DbTablesDataProvider "DbTablesDataProvider" or the tables analyzed by
+    @ref SqlUtil::AbstractDatabase::computeStatistics() "AbstractDatabase::computeStatistics()" without the
+    \c tables option, must use a connection whose \c search_path names those schemas.
+    @endparblock
+
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
     @parblock
     A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
@@ -2352,6 +2368,13 @@ while (*binary chunk = input.read(65536)) {
         \c /chat/completions
       - new \c chat-model connection option, so the model used when the connection is
         selected for chat can be configured on the connection; defaults to \c "sonar"
+
+    - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
+      - tables, views, sequences, and materialized views are listed only from the schemas of the connection's
+        \c search_path, as on Oracle and MySQL; they were listed from every schema in the database, so a
+        database with one schema per tenant listed every tenant's tables, repeating the same names once per
+        schema (see @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
+      - fixed listing materialized views, which listed the ordinary tables of every schema instead
 
     - @ref providerindexintro "ProviderIndex" module
       - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()", which stops the

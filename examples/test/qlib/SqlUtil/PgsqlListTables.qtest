@@ -1,0 +1,385 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires DbDataProvider
+
+%exec-class PgsqlListTablesTest
+
+#! Tests that PostgreSQL object listing is scoped to the connection's search_path
+/** Every object is created in scratch schemas created and dropped by the test; the connection's search_path is
+    only changed for the test's own connection.
+
+    The connection string is taken from the \c -c / \c --conn option or the \c QORE_DB_CONNSTR_PGSQL environment
+    variable; all tests are skipped if no PostgreSQL connection can be made.
+*/
+class PgsqlListTablesTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the test connection; NOTHING if no PostgreSQL connection is available
+        *Datasource ds;
+
+        #! the scratch schema used as the connection's current_schema()
+        string cur;
+
+        #! a second scratch schema named second in the search_path in some tests
+        string second;
+
+        #! a scratch schema never named in the search_path
+        string outside;
+
+        #! the reason the tests are skipped, if they are
+        string skip_reason = "no PostgreSQL connection";
+    }
+
+    constructor() : Test("PgsqlListTablesTest", "1.0", \ARGV, MyOpts) {
+        try {
+            *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL;
+            if (connstr) {
+                Datasource nds(connstr);
+                if (nds.getDriverName() != "pgsql") {
+                    skip_reason = sprintf("connection uses driver %y, not pgsql", nds.getDriverName());
+                } else {
+                    nds.open();
+                    ds = nds;
+                }
+            } else {
+                skip_reason = "no PostgreSQL connection configured (use -c or QORE_DB_CONNSTR_PGSQL)";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reason = sprintf("cannot connect to PostgreSQL: %s: %s", ex.err, ex.desc);
+        }
+
+        string suffix = get_random_string(10).lwr();
+        cur = "qore_plt_cur_" + suffix;
+        second = "qore_plt_sec_" + suffix;
+        outside = "qore_plt_out_" + suffix;
+
+        on_exit if (ds) {
+            dropSchemas();
+        }
+        if (ds) {
+            setupSchemas();
+        }
+
+        addTestCase("another schema's table is not listed", \otherSchemaNotListedTest());
+        addTestCase("second search_path schema is listed qualified", \secondSchemaQualifiedTest());
+        addTestCase("public is qualified when it is not current_schema()", \publicQualifiedTest());
+        addTestCase("partition children are not listed", \partitionChildTest());
+        addTestCase("temporary tables are listed only with pg_temp in the search_path", \temporaryTableTest());
+        addTestCase("views and sequences are scoped and qualified", \viewSequenceTest());
+        addTestCase("materialized views are listed, tables are not", \materializedViewTest());
+        addTestCase("empty search_path lists nothing", \emptySearchPathTest());
+        addTestCase("db tables data provider children are scoped", \dataProviderTest());
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", 22);
+    }
+
+    #! creates the scratch schemas and their objects
+    private setupSchemas() {
+        # drop anything left behind by an interrupted run with the same names (practically never)
+        dropSchemas();
+        on_error ds.rollback();
+        on_success ds.commit();
+        map ds.exec(sprintf("create schema %s", $1)), (cur, second, outside);
+
+        # "dup" exists in all three schemas; the second schema's has an extra column to tell them apart
+        map ds.exec(sprintf("create table %s.dup (id int)", $1)), (cur, outside);
+        ds.exec(sprintf("create table %s.dup (id int, sec_col int)", second));
+        ds.exec(sprintf("create table %s.cur_only (id int)", cur));
+        ds.exec(sprintf("create table %s.sec_only (id int)", second));
+        ds.exec(sprintf("create table %s.out_only (id int)", outside));
+
+        # a partitioned table with a partition child, and a classic-inheritance parent/child
+        ds.exec(sprintf("create table %s.part (id int not null) partition by range (id)", cur));
+        ds.exec(sprintf("create table %s.part_p1 partition of %s.part for values from (0) to (100)", cur, cur));
+        ds.exec(sprintf("create table %s.ci_parent (id int)", cur));
+        ds.exec(sprintf("create table %s.ci_child (extra int) inherits (%s.ci_parent)", cur, cur));
+        # a partition child in the second schema whose parent is in the current schema
+        ds.exec(sprintf("create table %s.part_p2 partition of %s.part for values from (100) to (200)", second,
+            cur));
+
+        # views, sequences, and materialized views
+        map ds.exec(sprintf("create view %s.v_dup as select 1 as id", $1)), (cur, second, outside);
+        ds.exec(sprintf("create view %s.v_out as select 1 as id", outside));
+        map ds.exec(sprintf("create sequence %s.s_dup", $1)), (cur, second, outside);
+        ds.exec(sprintf("create sequence %s.s_out", outside));
+        map ds.exec(sprintf("create materialized view %s.mv_dup as select 1 as id", $1)), (cur, second, outside);
+    }
+
+    #! drops the scratch schemas; never throws, so it can run on exit
+    private dropSchemas() {
+        foreach string schema in ((cur, second, outside)) {
+            try {
+                on_error ds.rollback();
+                on_success ds.commit();
+                ds.exec(sprintf("drop schema if exists %s cascade", schema));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop scratch schema %y: %s: %s\n", schema, ex.err, ex.desc);
+            }
+        }
+        try {
+            setSearchPath("\"$user\", public");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("WARNING: cannot reset search_path: %s: %s\n", ex.err, ex.desc);
+        }
+    }
+
+    #! sets the connection's search_path; it is committed, as a rolled-back SET is undone
+    private setSearchPath(string path) {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("set search_path to " + path);
+    }
+
+    private checkConnection() {
+        if (!ds) {
+            testSkip(skip_reason);
+        }
+    }
+
+    #! returns the given list as a set
+    private static hash<string, bool> toSet(list<string> l) {
+        return map {$1: True}, l;
+    }
+
+    #! returns only the names in the scratch schemas, as the database may hold other objects
+    private list<string> scratchNames(list<string> l) {
+        return select l, $1 =~ /^qore_plt_/ || !($1 =~ /\./);
+    }
+
+    #! returns the listed names without the test's views, which getTable() does not acquire
+    private static list<string> tableNames(list<string> l) {
+        return select l, !($1 =~ /(^|\.)v_dup$/);
+    }
+
+    #! asserts that each listed table name resolves to an existing table in the expected schema
+    private assertResolves(Database db, list<string> names, hash<string, string> expected_schema) {
+        foreach string name in (names) {
+            *AbstractTable t = db.getTable(name);
+            assertTrue(exists t, sprintf("listed name %y resolves with getTable()", name));
+            if (!t) {
+                continue;
+            }
+            assertTrue(t.checkExistence(), sprintf("listed name %y resolves to an existing table", name));
+            if (expected_schema{name}) {
+                assertEq(expected_schema{name}, t.getSchemaName(),
+                    sprintf("listed name %y resolves in schema %y", name, expected_schema{name}));
+            }
+        }
+    }
+
+    private otherSchemaNotListedTest() {
+        checkConnection();
+        setSearchPath(cur);
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        hash<string, bool> listed = toSet(tables);
+
+        assertTrue(listed.cur_only, "a table in current_schema() is listed unqualified");
+        assertTrue(listed.dup, "a table in current_schema() with a name repeated elsewhere is listed unqualified");
+        assertFalse(listed.hasKey(cur + ".cur_only"), "a table in current_schema() is not listed qualified");
+        assertFalse(listed.hasKey("out_only"), "a table in a schema outside the search_path is not listed");
+        assertFalse(listed.hasKey(outside + ".out_only"), "a table outside the search_path is not listed qualified");
+        assertFalse(listed.hasKey(outside + ".dup"), "the same name in a schema outside the search_path is not listed");
+        assertFalse(listed.hasKey("sec_only"), "a table in a schema not in the search_path is not listed");
+        assertFalse(listed.hasKey(second + ".sec_only"), "a table in a schema not in the search_path is not listed");
+
+        # with only scratch schemas in the search_path, every table listed is one of the test's own; views are
+        # listed as well, as information_schema.tables reports them
+        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup")), tables,
+            "exactly the tables of the search_path schema are listed");
+        # names must not repeat
+        assertEq(tables.size(), listed.size(), "no table name is listed twice");
+
+        assertResolves(db, tableNames(tables), {"cur_only": cur, "dup": cur});
+        # the iterator lists the same tables
+        assertEq(tables, map $1, db.tableIterator(), "tableIterator() lists the same tables");
+    }
+
+    private secondSchemaQualifiedTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        hash<string, bool> listed = toSet(tables);
+
+        assertTrue(listed.dup, "the current_schema() table is listed unqualified");
+        assertTrue(listed{second + ".dup"}, "the same name in the second search_path schema is listed qualified");
+        assertTrue(listed{second + ".sec_only"}, "a table only in the second search_path schema is listed qualified");
+        assertFalse(listed.hasKey("sec_only"), "a table in the second search_path schema is not listed unqualified");
+        assertFalse(listed.hasKey(cur + ".dup"), "a current_schema() table is not listed qualified");
+        assertFalse(listed.hasKey(outside + ".dup"), "a table outside the search_path is not listed");
+        assertEq(tables.size(), listed.size(), "no table name is listed twice");
+
+        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup", second + ".dup",
+            second + ".sec_only", second + ".v_dup")), tables,
+            "exactly the tables of both search_path schemas are listed");
+
+        # every listed name resolves to the table listed, not to a same-named table in current_schema()
+        assertResolves(db, tableNames(tables), {"dup": cur, second + ".dup": second, second + ".sec_only": second});
+    }
+
+    private publicQualifiedTest() {
+        checkConnection();
+        # "public" is listed qualified when another schema is current_schema(): an unqualified name resolves in
+        # current_schema(), not in public
+        setSearchPath(cur + ", public");
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        list<string> public_unqualified = select tables, !($1 =~ /\./) && !inlist($1,
+            ("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup"));
+        assertEq((), public_unqualified, "no public table is listed unqualified when public is not current_schema()");
+        list<string> scratch_qualified = select tables, $1 =~ /^qore_plt_/;
+        assertEq((), scratch_qualified, "no scratch schema is listed qualified");
+
+        # with public as current_schema() the scratch schema's tables are listed qualified instead
+        setSearchPath("public, " + cur);
+        if ((ds.selectRow("select current_schema() as s").s ?? "") != "public") {
+            testSkip("the public schema does not exist");
+        }
+        hash<string, bool> listed = toSet(db.listTables());
+        assertTrue(listed{cur + ".cur_only"}, "a table in the second search_path schema is listed qualified");
+        assertFalse(listed.hasKey("cur_only"), "a table in the second search_path schema is not listed unqualified");
+        assertFalse(listed.hasKey("public.cur_only"), "nothing is listed for a schema that lacks the table");
+    }
+
+    private partitionChildTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        hash<string, bool> listed = toSet((new Database(ds)).listTables());
+        assertTrue(listed.part, "the partitioned parent is listed");
+        assertFalse(listed.hasKey("part_p1"), "a partition child is not listed");
+        assertFalse(listed.hasKey(cur + ".part_p1"), "a partition child is not listed qualified");
+        assertFalse(listed.hasKey(second + ".part_p2"),
+            "a partition child in another search_path schema than its parent is not listed");
+        assertTrue(listed.ci_parent, "a classic-inheritance parent is listed");
+        assertTrue(listed.ci_child, "a classic-inheritance child is listed (it is not a partition)");
+    }
+
+    private temporaryTableTest() {
+        checkConnection();
+        setSearchPath(cur);
+
+        on_exit ds.rollback();
+        string tname = "qore_plt_tmp_" + get_random_string(8).lwr();
+        ds.exec(sprintf("create temporary table %s (id int) on commit drop", tname));
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        list<string> temp_listed = select tables, regex($1, "^(.*\\.)?" + tname + "$");
+        assertEq((), temp_listed, "a session temporary table is not listed");
+        # the temporary table still resolves by name
+        assertTrue(db.getTable(tname).checkExistence(), "the temporary table resolves by name");
+
+        # pg_temp named explicitly in the search_path makes it a search_path schema like any other
+        ds.exec(sprintf("set local search_path to %s, pg_temp", cur));
+        string temp_schema = ds.selectRow("select nspname from pg_catalog.pg_namespace "
+            "where oid = pg_catalog.pg_my_temp_schema()").nspname;
+        assertTrue(inlist(temp_schema + "." + tname, db.listTables()),
+            "a temporary table is listed qualified when pg_temp is named after current_schema()");
+        ds.exec("set local search_path to pg_temp, " + cur);
+        assertTrue(inlist(tname, db.listTables()),
+            "a temporary table is listed unqualified when pg_temp is current_schema()");
+    }
+
+    private viewSequenceTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        Database db(ds);
+        list<string> views = scratchNames(db.listViews());
+        assertEq(sort(("v_dup", second + ".v_dup")), views,
+            "views of both search_path schemas are listed, qualified outside current_schema()");
+        assertEq(views, scratchNames(map $1, db.viewIterator()), "viewIterator() lists the same views");
+        foreach string name in (views) {
+            *AbstractView v = db.getView(name);
+            assertTrue(exists v, sprintf("listed view %y resolves with getView()", name));
+            assertEq(name =~ /\./ ? second : cur, v.schema, sprintf("listed view %y resolves in its schema", name));
+        }
+
+        list<string> seqs = scratchNames(db.listSequences());
+        assertEq(sort(("s_dup", second + ".s_dup")), seqs,
+            "sequences of both search_path schemas are listed, qualified outside current_schema()");
+        assertEq(seqs, scratchNames(map $1, db.sequenceIterator()), "sequenceIterator() lists the same sequences");
+        map assertTrue(exists db.getSequence($1), sprintf("listed sequence %y resolves with getSequence()", $1)),
+            seqs;
+
+        # objects outside the search_path are not listed
+        assertFalse(inlist("v_out", db.listViews()), "a view outside the search_path is not listed");
+        assertFalse(inlist(outside + ".v_out", db.listViews()), "a view outside the search_path is not listed");
+        assertFalse(inlist("s_out", db.listSequences()), "a sequence outside the search_path is not listed");
+        assertFalse(inlist(outside + ".s_out", db.listSequences()),
+            "a sequence outside the search_path is not listed");
+    }
+
+    private materializedViewTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        PgsqlDatabase db(ds);
+        list<string> mvs = scratchNames(db.listMaterializedViews());
+        assertEq(sort(("mv_dup", second + ".mv_dup")), mvs,
+            "materialized views of both search_path schemas are listed, qualified outside current_schema()");
+        assertFalse(inlist("cur_only", mvs), "an ordinary table is not listed as a materialized view");
+        assertFalse(inlist("dup", mvs), "an ordinary table is not listed as a materialized view");
+        assertEq(mvs, scratchNames(map $1, db.materializedViewIterator()),
+            "materializedViewIterator() lists the same materialized views");
+    }
+
+    private emptySearchPathTest() {
+        checkConnection();
+
+        foreach string path in (("''", "qore_plt_nonexistent_schema")) {
+            setSearchPath(path);
+            # an SQL NULL; "??" treats it like NOTHING
+            assertEq("<none>", ds.selectRow("select current_schema() as s").s ?? "<none>",
+                sprintf("search_path %s has no current_schema()", path));
+
+            PgsqlDatabase db(ds);
+            assertEq((), db.listTables(), sprintf("search_path %s: no tables are listed", path));
+            assertEq((), map $1, db.tableIterator(), sprintf("search_path %s: the iterator lists no tables", path));
+            assertEq((), db.listViews(), sprintf("search_path %s: no views are listed", path));
+            assertEq((), db.listSequences(), sprintf("search_path %s: no sequences are listed", path));
+            assertEq((), db.listMaterializedViews(),
+                sprintf("search_path %s: no materialized views are listed", path));
+        }
+    }
+
+    private dataProviderTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        DbTablesDataProvider prov(ds);
+        list<string> children = prov.getChildProviderNames() ?? ();
+        assertEq((new Database(ds)).listTables(), children, "the data provider's children are the listed tables");
+        assertFalse(inlist(outside + ".dup", children), "a table outside the search_path is not a child");
+        assertFalse(inlist(outside + ".out_only", children), "a table outside the search_path is not a child");
+
+        # each child resolves to its own table: an unqualified name in current_schema(), a qualified one elsewhere
+        AbstractDataProvider dup = prov.getChildProviderEx("dup");
+        AbstractDataProvider sec_dup = prov.getChildProviderEx(second + ".dup");
+        assertFalse(dup.getRecordType().hasKey("sec_col"), "the unqualified child is the current_schema() table");
+        assertTrue(sec_dup.getRecordType().hasKey("sec_col"), "the qualified child is the second schema's table");
+        assertThrows("INVALID-CHILD-PROVIDER", \prov.getChildProviderEx(), "no_such_table_qore_plt");
+        assertThrows("INVALID-CHILD-PROVIDER", \prov.getChildProviderEx(), outside + "_nonexistent.dup");
+    }
+}

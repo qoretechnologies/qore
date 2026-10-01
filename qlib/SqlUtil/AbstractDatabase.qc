@@ -1337,11 +1337,22 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns a list of string table names in the database
+    /** @return a sorted list of the names of the tables visible to the connection; a name is qualified with a
+        schema only where the connection would otherwise resolve it in another schema
+
+        @note the tables listed are scoped by the driver to the schema(s) in which the connection resolves
+        unqualified names: Oracle lists the tables of the connection's own schema (plus tables reachable through
+        the user's synonyms), MySQL the tables of the connection's database, and PostgreSQL the tables of the
+        schemas in the connection's \c search_path, where a table outside <tt>current_schema()</tt> is listed as
+        \c "schema.table" (see the PgsqlSqlUtilBase module's "Schema Scope of Object Names" section)
+    */
     list<string> listTables() {
         return sort(listTablesImpl());
     }
 
     #! returns an iterator listing the string table names in the database
+    /** the tables are those listed by listTables()
+    */
     Qore::ListIterator<string> tableIterator() {
         return sort(listTablesImpl()).iterator();
     }
