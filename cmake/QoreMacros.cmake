@@ -3730,11 +3730,8 @@ MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
         # from the former, the correct relative path is ../../${usermod}/html.
         set(_qb2pd_tagfiles "")
         foreach(_qb2pd_um ${_user_modules})
-            if (_qb2pd_tagfiles STREQUAL "")
-                set(_qb2pd_tagfiles "${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html")
-            else()
-                set(_qb2pd_tagfiles "${_qb2pd_tagfiles} ${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html")
-            endif()
+            string(APPEND _qb2pd_tagfiles
+                " \"${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html\"")
         endforeach()
 
         # Create the final-pass Doxyfile by copying the initial one and appending
@@ -3742,7 +3739,7 @@ MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
         # COPYONLY preserves literal Doxygen substitutions and supports CMake < 3.21.
         configure_file("${CMAKE_BINARY_DIR}/Doxyfile" "${CMAKE_BINARY_DIR}/Doxyfile.final" COPYONLY)
         file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile.final
-            "\n# Final pass: enable user module cross-references and re-enable doc error warnings\nTAGFILES = ${_qb2pd_tagfiles}\nWARN_IF_DOC_ERROR = YES\n")
+            "\n# Final pass: retain existing indexes and add user module cross-references\nTAGFILES +=${_qb2pd_tagfiles}\nWARN_IF_DOC_ERROR = YES\n")
 
         add_custom_target(docs-module-final
             COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final

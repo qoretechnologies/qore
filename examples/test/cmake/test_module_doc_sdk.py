@@ -37,17 +37,20 @@ GENERATE_TAGFILE = "{tag}"
         self.run_command(["doxygen", str(config)], root)
         return tag
 
-    def configure(self, root, *, language_tag=True, image_dirs=()):
+    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False):
         source = root / "module source"
         source.mkdir(exist_ok=True)
         for name in image_dirs:
             (source / name).mkdir(exist_ok=True)
         language = self.make_tag(root, "language") if language_tag else root / "absent.tag"
         native = self.make_tag(root, "native")
+        if two_phase:
+            self.make_tag(root, "child")
         input_file = source / "module.dox"
         input_file.write_text("/** @page module Module\n"
                               + ("See @ref language and " if language_tag else "See ")
-                              + "@ref native.\n*/\n")
+                              + "@ref native.\n"
+                              + ("See @ref child.\n" if two_phase else "") + "*/\n")
         template = root / "Doxyfile.in"
         template.write_text('''QUIET = YES
 INPUT = "@_dox_input@"
@@ -68,13 +71,33 @@ set(_dox_input "{input_file}")
 qore_configure_module_doxygen("{template}" "{root}/Doxyfile")
 file(WRITE "{root}/tagfiles-after" "${{TAGFILES}}")
 ''')
-        self.run_command([CMAKE, "-P", str(script)], root)
+        config = root / "Doxyfile"
+        if two_phase:
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(TwoPhaseDocSdk NONE)
+include("{script}")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE doxygen)
+add_custom_target(docs)
+add_custom_target(docs-child)
+qore_binary_module_two_phase_docs(module "child")
+''')
+            self.run_command([CMAKE, "-S", str(source), "-B", str(root)], root)
+            config = root / "Doxyfile.final"
+        else:
+            self.run_command([CMAKE, "-P", str(script)], root)
         self.assertEqual(f'"{native}=https://example.invalid/native"',
                          (root / "tagfiles-after").read_text())
-        self.run_command(["doxygen", str(root / "Doxyfile")], root)
+        self.run_command(["doxygen", str(config)], root)
         html = (root / "output/html/module.html").read_text()
         self.assertIn("https://example.invalid/native/native.html", html)
-        return html, (root / "Doxyfile").read_text(), source
+        return html, config.read_text(), source
+
+    def test_two_phase_docs_retain_language_and_caller_indexes(self):
+        with tempfile.TemporaryDirectory(prefix="qore doc two phase ") as directory:
+            html, _, _ = self.configure(Path(directory), two_phase=True)
+            self.assertIn("https://example.invalid/language/language.html", html)
+            self.assertIn("../../child/html/child.html", html)
 
     def test_language_and_module_references_with_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="qore doc sdk ") as directory:

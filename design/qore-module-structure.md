@@ -296,6 +296,10 @@ into user module symbols:
 
 #### Preferred: `qore_binary_module_two_phase_docs()` macro
 
+The final pass appends user-module indexes to the existing `TAGFILES`, preserving
+language and caller-provided cross-references. Index paths are quoted so build
+directories containing spaces remain supported.
+
 The helper copies the Doxyfile with `configure_file(COPYONLY)` so literal Doxygen
 substitutions survive and external modules can configure on CMake versions before
 3.21. Verify the exported helper with

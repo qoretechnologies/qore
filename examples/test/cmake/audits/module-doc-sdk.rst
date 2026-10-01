@@ -12,10 +12,12 @@ No C++, QPP, .qm/.qc modules, DataProviders or .qtest files change in this core 
 Root cause: installed external-module builds lacked the language tag index and
 Doxygen searched a source image directory even when that directory did not exist.
 The generated index installs optionally with the SDK after docs are built;
-CMake preserves module TAGFILES and adds the index only when present. Existing
+CMake preserves module TAGFILES and adds the index only when present.
+The final two-phase pass appends quoted child indexes instead of replacing
+existing language and caller-provided references. Existing
 source docs/doxygen image directories are quoted, including spaces in paths.
 
-Validation: 55 CMake regression tests pass, including real Doxygen output with
+Validation: 56 CMake regression tests pass, including real Doxygen output with
 language and module cross-references, absent language index, absent image paths,
 and paths containing spaces. Full Release configuration uses the installed /usr
 prefix. External sysconf, magic and msgpack integration exercises the installed
@@ -276,5 +278,5 @@ Valgrind does not apply to this core change, which contains no C++.
 
    * - Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)
      - Pass
-     - All 55 CMake tests pass, including real HTML link targets, caller TAGFILES preservation, missing-index behavior and paths with spaces.
+     - All 56 CMake tests pass, including real HTML link targets, caller TAGFILES preservation, missing-index behavior and paths with spaces.
 
