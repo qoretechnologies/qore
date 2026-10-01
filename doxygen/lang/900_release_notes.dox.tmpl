@@ -551,6 +551,11 @@ val = "string";      # OK
     and works with CMake versions before 3.21.
     External user-module documentation now includes only generated Qore source headers; packaged
     SVG, YAML, JSON and protocol resources no longer cause missing documentation input warnings.
+    QPP preserves the newline after an enum member's documentation comment, allowing Doxygen
+    to generate the member's reference anchor. Invalid enum declarations now fail the
+    build before QPP creates partial output files.
+    Configure with \c -DQORE_GENERATE_JAVA_BINDINGS=OFF to build HTML documentation without
+    generating Java bindings when JNI is not part of the requested build.
 
     @par User Module Source Tracking
     Adding or removing a source file in a separated (split-directory) user module re-runs the CMake

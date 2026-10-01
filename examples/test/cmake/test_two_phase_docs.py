@@ -114,6 +114,15 @@ qore_binary_module_intern2(fixture 1.0 "" "1")
                 result = subprocess.run(command, text=True, capture_output=True, timeout=30)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertTrue((build / "qjar-environment-ok").is_file())
+            (build / "qjar-environment-ok").unlink()
+            # HTML generation must remain usable when no Java/JNI output is requested.
+            for command in ([CMAKE, "-S", str(source), "-B", str(build),
+                             "-DQORE_GENERATE_JAVA_BINDINGS=OFF"],
+                            [CMAKE, "--build", str(build), "--target", "docs"]):
+                result = subprocess.run(command, text=True, capture_output=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("Warning", result.stderr)
+            self.assertFalse((build / "qjar-environment-ok").exists())
 
     def test_missing_dependency_is_an_error(self):
         with tempfile.TemporaryDirectory(prefix="qore-doc-helper-") as directory:

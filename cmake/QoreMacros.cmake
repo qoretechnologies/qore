@@ -14,6 +14,8 @@ set(QORE_USER_MODULE_NAMES "" CACHE INTERNAL "List of user module names for doc 
 if (NOT DEFINED QORE_QDX_COMMAND)
     set(QORE_QDX_COMMAND ${QORE_QDX_EXECUTABLE})
 endif ()
+option(QORE_GENERATE_JAVA_BINDINGS "Generate Java bindings with module documentation (requires JNI)" ON)
+
 if (NOT DEFINED QORE_QJAR_COMMAND)
     set(QORE_QJAR_COMMAND ${QORE_QJAR_EXECUTABLE})
 endif ()
@@ -2179,12 +2181,18 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             endif()
             set(_qore_qjar_env QORE_MODULE_DIR=${_qore_qjar_module_dir} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
 
+            set(_qore_binary_java_step)
+            if (QORE_GENERATE_JAVA_BINDINGS)
+                set(_qore_binary_java_step
+                    COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
+                    BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+            endif()
+
             add_custom_target(${_docs_targ}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_dox_output}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_working_dir}/Doxyfile
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_dox_output}/html ${_dox_output}/html/search
-                COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java
+                ${_qore_binary_java_step}
                 WORKING_DIRECTORY ${_working_dir}
                 COMMENT "Generating API documentation with Doxygen"
                 VERBATIM
@@ -3157,6 +3165,13 @@ MACRO (QORE_USER_MODULE _module_file)
         endif ()
         set(QDX_QMDOXH_ARGS ${_qdx_table_arg} ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h)
 
+        set(_qore_user_java_step)
+        if (QORE_GENERATE_JAVA_BINDINGS)
+            set(_qore_user_java_step
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
+                BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+        endif()
+
         # add CMake target for the documentation
         if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
             add_custom_target(docs-${f}
@@ -3166,8 +3181,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java
+                ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
@@ -3179,8 +3193,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java
+                ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
@@ -3193,8 +3206,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java
+                ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
@@ -3206,8 +3218,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java
+                ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )

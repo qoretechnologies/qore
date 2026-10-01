@@ -130,6 +130,19 @@ Boost being reported as found while Arrow cannot link Boost::headers. If the par
 is also unwritable, configuration stops with a permissions diagnostic.
 
 
+Documentation Without Java Bindings
+-----------------------------------
+
+Module documentation generates Java bindings by default and requires the JNI
+module for that output. To build only the HTML API references, configure with:
+
+    cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release \
+        -DQORE_GENERATE_JAVA_BINDINGS=OFF
+    cmake --build build --target docs
+
+This option applies to both bundled and external module documentation targets.
+
+
 AOT Consumer Link Configuration
 -------------------------------
 

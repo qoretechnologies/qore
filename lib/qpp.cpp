@@ -5797,7 +5797,7 @@ struct EnumMemberInfo {
         if (!comment.empty()) {
             std::string c = comment;
             process_comment(c);
-            fprintf(fp, "%s", c.c_str());
+            fprintf(fp, "%s\n", c.c_str());
         }
         fprintf(fp, "    %s", n);
         // Show explicit value in docs if provided
@@ -7911,7 +7911,13 @@ protected:
                 if (!sc.compare(0, 5, "enum ")) {
                     sc.erase(0, 5);
                     checkBuf(buf);
-                    source.push_back(new Enum(std::move(str), sc, fp, fileName, lineNumber));
+                    std::unique_ptr<Enum> declaration(new Enum(std::move(str), sc, fp, fileName, lineNumber));
+                    if (!*declaration) {
+                        rc = -1;
+                        break;
+                    }
+                    source.push_back(declaration.get());
+                    declaration.release();
                     continue;
                 }
 
