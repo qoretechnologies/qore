@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 12%{?dist}
+Release: 13%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -78,11 +78,8 @@ BuildRequires: pkgconfig(yaml-0.1)
 BuildRequires: pkgconfig(libutf8proc)
 BuildRequires: pkgconfig(arrow)
 BuildRequires: pkgconfig(parquet)
-%if 0%{?suse_version}
-BuildRequires: pkgconfig(mongoc2)
-%else
-BuildRequires: pkgconfig(libmongoc-1.0)
-%endif
+# CMake supports both driver APIs; EPEL also transitions to 2.x during EL10.
+BuildRequires: (pkgconfig(mongoc2) or pkgconfig(libmongoc-1.0))
 BuildRequires: pkgconfig(tesseract)
 # Some distributions expose curl and archive directly through tesseract.pc.
 BuildRequires: pkgconfig(libcurl)
@@ -420,6 +417,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-13
+- Accept either supported MongoDB C driver API across distribution updates.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-12
 - Validate embedded license grants, including the permissive wcwidth notice.
 

@@ -1,6 +1,9 @@
 RPM packaging
 =============
 
+MongoDB builds accept either the 1.x or 2.x system C driver, matching CMake's
+existing API detection. This also covers EPEL's transition to 2.x during EL10.
+
 Copyright 2026 Qore Technologies, s.r.o.
 
 ``qore.spec-multi`` is the canonical portable spec. ``qore.spec-fedora`` and

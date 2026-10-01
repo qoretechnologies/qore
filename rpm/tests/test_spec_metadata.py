@@ -126,6 +126,34 @@ class SpecMetadataTest(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
                          "requires the target build dependency image")
+    def test_mongodb_dependency_accepts_the_installed_driver_api(self):
+        import tempfile
+        requirements = subprocess.check_output([
+            "rpmspec", "-q", "--buildrequires", str(SPEC)], text=True).splitlines()
+        dependency, = [value for value in requirements if 'pkgconfig(' in value and 'mongoc' in value]
+        # Exercise RPM's dependency solver against real SDKs carrying either
+        # the 1.x or 2.x driver. Also prove the negative case cannot pass.
+        with tempfile.TemporaryDirectory() as directory:
+            spec = Path(directory) / 'probe.spec'
+            def prepare(requirement):
+                spec.write_text('Name: qore-mongodb-dependency-probe\nVersion: 1\nRelease: 1\n'
+                                'Summary: Dependency solver probe\nLicense: MIT\n'
+                                f'BuildRequires: {requirement}\n'
+                                '%description\nDependency solver probe.\n%prep\n:\n%files\n'
+                                '%changelog\n* Thu Oct 01 2026 Qore <info@qore.org> - 1-1\n'
+                                '- Exercise native dependency resolution.\n')
+                return subprocess.run(['rpmbuild', '-bp', '--define', f'_topdir {directory}',
+                                       '--define', '_buildhost qore-rpm-builder', str(spec)],
+                                      capture_output=True, text=True)
+            result = prepare(dependency)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertNotIn('warning:', result.stderr.lower())
+            result = prepare('(pkgconfig(qore-missing-mongoc2) or pkgconfig(qore-missing-mongoc1))')
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('Failed build dependencies', result.stderr)
+
+    @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
+                         "requires the target build dependency image")
     def test_documentation_deduplicator_has_a_resolvable_package_requirement(self):
         provider = subprocess.check_output([
             "rpm", "-qf", "/usr/bin/hardlink", "--qf", "%{NAME}"], text=True)
