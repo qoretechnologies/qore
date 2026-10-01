@@ -206,6 +206,10 @@ public class Main inherits QUnit::Test {
         addTestCase("disconnect from the event thread", \eventThreadDisconnectTest());
         addTestCase("connected event before the stream's events", \connectedFirstIoTest());
         addTestCase("legacy client: connected event before the stream's events", \connectedFirstLegacyTest());
+        addTestCase("event thread terminating before the start call returns", \threadEndsBeforeStartReturnsTest());
+        addTestCase("disconnect from an observer before the start call returns",
+            \observerDisconnectBeforeStartReturnsTest());
+        addTestCase("event thread not started", \threadStartErrorTest());
 
         http = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
@@ -496,6 +500,136 @@ public class Main inherits QUnit::Test {
         assertEq(EVENT_SSE_CONNECTED, events[0], "first event");
         assertEq(EVENT_SSE_DATA, events[1], "second event");
         handler.requests.get(30s);
+    }
+
+    #! Returns a start_thread callable that returns only once the event thread has terminated
+    /** The event thread can run to completion before the call that started it returns, when the calling thread is
+        descheduled; the thread then must not be recorded as running
+    */
+    private static code<int(code<nothing()>)> getStartAndWaitForEnd(Counter ended) {
+        return int sub (code<nothing()> fn) {
+            int tid = background sub () {
+                on_exit ended.dec();
+                fn();
+            }();
+            ended.waitForZero(30s);
+            return tid;
+        };
+    }
+
+    #! Runs disconnect() in another thread and returns 0 if it returned within 30 seconds
+    private static int disconnectReturns(ServerSentEventClientIo client) {
+        Counter returned(1);
+        background sub () {
+            on_exit returned.dec();
+            client.disconnect();
+        }();
+        return returned.waitForZero(30s);
+    }
+
+    #! An event thread that terminates before the start call returns is not left recorded as running
+    threadEndsBeforeStartReturnsTest() {
+        Counter ended(1);
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/ended",
+            "data": "json",
+            "start_thread": Main::getStartAndWaitForEnd(ended),
+        });
+        EventObserver observer();
+        client.registerObserver(observer);
+        client.connect();
+        assertEq(0, ended.getCount(), "the event thread terminated before connect() returned");
+        assertEq("ended", handler.requests.get(30s).path);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq({"a": 1}, observer.next().data.data);
+        assertEq({"a": 2}, observer.next().data.data);
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+
+        assertFalse(client.isOpen());
+        assertFalse(client.isReconnecting());
+        assertFalse(client.reconnect(), "no event thread to reconnect");
+        assertEq(-1, client.getConnectionInfo().cid);
+        int rc = Main::disconnectReturns(client);
+        assertEq(0, rc, "disconnect() returned");
+        if (rc) {
+            # connect() would block as well
+            return;
+        }
+
+        # the client connects again
+        ended.inc();
+        client.connect();
+        assertEq("ended", handler.requests.get(30s).path);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq(EVENT_SSE_DATA, observer.next().event_id);
+        assertEq(2, client.getConnectionInfo().num_connects);
+        assertEq(0, Main::disconnectReturns(client), "disconnect() returned after reconnecting");
+        assertEq(0, handler.requests.size());
+    }
+
+    #! A disconnect from an observer is recognized as made from the event thread before the start call returns
+    observerDisconnectBeforeStartReturnsTest() {
+        Counter ended(1);
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/observer",
+            "data": "json",
+            "reconnect": True,
+            "reconnect_delay": 1ms,
+            "start_thread": Main::getStartAndWaitForEnd(ended),
+        });
+        DisconnectingObserver observer(client);
+        client.registerObserver(observer);
+        client.connect();
+        assertEq(0, ended.getCount(), "the event thread terminated before connect() returned");
+        assertEq("observer", handler.requests.get(30s).path);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq(1, observer.next().data.id);
+        # the second event is not read after the disconnect, and no reconnect is made
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        assertEq(0, observer.q.size());
+        assertFalse(client.getReconnect());
+        assertFalse(client.isReconnecting());
+        assertEq(0, Main::disconnectReturns(client), "disconnect() returned");
+        assertEq(0, handler.requests.size());
+    }
+
+    #! When the event thread cannot be started, the client is not left connected
+    threadStartErrorTest() {
+        bool fail = True;
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/nothread",
+            "data": "json",
+            "start_thread": int sub (code<nothing()> fn) {
+                if (fail) {
+                    throw "THREAD-START-ERROR", "the thread cannot be started";
+                }
+                return background fn();
+            },
+        });
+        EventObserver observer();
+        client.registerObserver(observer);
+        assertThrows("THREAD-START-ERROR", \client.connect());
+        assertEq("nothread", handler.requests.get(30s).path);
+        assertFalse(client.isOpen());
+        assertFalse(client.isReconnecting());
+        assertFalse(client.reconnect(), "no event thread to reconnect");
+        assertEq(-1, client.getConnectionInfo().cid);
+        int rc = Main::disconnectReturns(client);
+        assertEq(0, rc, "disconnect() returned");
+        if (rc) {
+            # connect() would block as well
+            return;
+        }
+
+        fail = False;
+        client.connect();
+        assertEq("nothread", handler.requests.get(30s).path);
+        # the connected event of the failed attempt was raised before its thread was to be started
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq({"a": 1}, observer.next().data.data);
+        assertEq(0, Main::disconnectReturns(client), "disconnect() returned");
+        assertEq(0, handler.requests.size());
     }
 
     # The legacy client raises the connected event after starting its event thread, which waits for it before
