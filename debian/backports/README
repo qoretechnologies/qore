@@ -35,6 +35,9 @@ SHA-256; it does not have a release archive signature in this recipe.
 The trixie target additionally prepares qore-onnx 1.20.0 and ONNX Runtime
 1.23.2+dfsg from Debian's repacked source archives, pinned by SHA-256 from
 authenticated Debian source metadata. Ubuntu uses its archive's ONNX packages.
+It also prepares Boost 1.90 and NATS C 3.13 for the independent process and
+nats modules. These four recipes are Debian-only; selecting them for resolute
+fails before preparing a source workspace.
 ONNX Runtime derives its Python library links from VERSION_NUMBER instead of
 a stale hard-coded version. The ABI-version generator writes SOVERSION_NUMBER
 so an in-source build cannot overwrite the upstream release version.
@@ -81,6 +84,43 @@ tree-sitter CLI. Qore builds its committed generated parser directly. It does
 not need the generator installed to build astparser. The C runtime has an
 offline C API/linking smoke test and an installed-package test; this does not
 replace upstream's full Rust/parser regression suite.
+
+Independent module dependencies
+-------------------------------
+
+The Boost backport keeps Debian's complete versioned library/development
+package recipe and installed-package tests. Its Boost.Build engine uses the
+supported cxx bootstrap toolset with Debian's compiler and linker flags. The
+default gcc bootstrap strips b2 early and drops linker hardening; the cxx
+toolset instead leaves stripping and detached debug symbols to debhelper.
+Bootstrap failures must stop the build. The redundant unversioned g++ build
+dependency is removed because build-essential already supplies it.
+The CMake configuration generator uses paths relative to the installed config
+instead of embedding Debian's temporary staging directory. Preprocessed
+assembly receives Debian's compiler flags and an assembler debug-prefix map,
+so Boost.Context debug information does not retain the build directory.
+
+Boost 1.90 development headers replace the distribution's 1.83 development
+headers, while the versioned 1.83 runtime packages remain coinstallable.
+Qualification must exercise existing 1.83 clients after that transition and
+load both runtime versions in one process in both orders. The process module
+still carries its own patched Boost.Process headers; this backport supplies
+the matching Boost headers and libraries and does not replace that patch.
+
+NATS C retains Debian's library/development packages. The recipe adds a
+bounded C API probe against a private loopback nats-server with JetStream,
+covering pub/sub, request/reply, missing keys and key/value revision history.
+The probe runs against the newly built library and again against the installed
+SDK. It needs no external service or network access. Invoke the broker by its
+installed /usr/sbin/nats-server path because unprivileged test users may not
+have /usr/sbin in PATH. Qualification also checks that existing 3.10 clients
+keep using their original runtime after the 3.13 SDK is installed.
+
+Both backports require native amd64 and arm64 builds, source/binary Lintian,
+reproducibility, ELF hardening, matching detached debug symbols and installed
+tests before accepting the downstream modules. Keep the source and dependency
+maintenance records with the binary artifacts; these recipes do not establish
+a published Debian archive or a final Qore release.
 
 c-ares patch maintenance
 ------------------------

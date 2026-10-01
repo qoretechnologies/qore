@@ -3,9 +3,10 @@ Debian 13 independent module qualification: 2026-10-01
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Result: PASS for 24 additional development snapshots on native amd64 and
-arm64 (aarch64 Linux on hoppy). Together with UUID from QUALIFICATION-DEBIAN13,
-25 of the 36 independent module repositories have Debian qualification.
+Result: PASS for development snapshots from 31 of the 36 independent module
+repositories on native amd64 and arm64 (aarch64 Linux on hoppy). This comprises
+UUID from QUALIFICATION-DEBIAN13, the original 24-module batch below, and the
+six-module dependency chain described in the additional qualification section.
 These are unsigned local packages, not final releases or a published archive.
 
 Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13.
@@ -21,10 +22,11 @@ Qualified modules
 amqp, cairo, fsevent, geos, git, imagemagick, kalman, magic, msgpack, mysql,
 ncurses, odbc, openldap, pgsql, sqlite3, ssh, ssh2, sybase (freetds), sysconf,
 tar, treesitter, vss, zip and zmq. UUID was qualified with the core SDK earlier.
+The additional chain qualifies process, xml, python, xmlsec, proj and nats.
 Bundled modules, including JSON and YAML, remain part of Qore's packages.
 
-Completed checks
-----------------
+Original 24-module batch checks
+------------------------------
 
 - All 24 source packages reproduce from independent preparations.
 - Each module passes two full offline, unprivileged builds on each CPU,
@@ -63,13 +65,61 @@ must be available to APT, and SSH/SSH2 tests can consume a driver's piped stdin.
 The corrected driver uses a local package index and passes scripts as command
 arguments with closed stdin. Original failures and corrected runs are retained.
 
+Additional six-module qualification
+-----------------------------------
+
+Evidence bundles: qore-debian13-module-chain-20261001 and
+qore-debian13-module-deps-20261001, with the same Qore SDK/runtime as above.
+The chain's QUALIFICATION.json records exact module commits, source versions,
+packaging overlays, dependency reports, combined installation and audit records.
+PROJ includes upstream documentation/CMake fixes from commit 2a36e61eca54.
+
+- All six source packages reproduce independently. 24 full offline builds
+  and 12 architecture-only builds pass across both CPUs. All
+  36 first-build artifacts reproduce on their CPU; all 6 architecture-
+  independent packages also match across CPUs. Architecture-only builds omit
+  Doxygen/Graphviz and reproduce the full-build binaries.
+- All 26 installed autopkgtest executions pass, including PROJ/Python
+  coexistence. Minimal SDK-free installation, exact debug/documentation package
+  coinstallation, file verification, purge, autoremove and reinstall pass.
+- Source/binary Lintian, ELF hardening, detached debug information and AOT
+  metadata checks pass. Each module's qualification file records its scope.
+- Combined installation now covers 94 artifacts from all 31 repositories.
+  All 82 native/AOT names load together in both orders in fresh tiered and
+  AST processes, offline and without the SDK. Installed file verification passes.
+
+Boost 1.90 (1.90.0-6.1~qore4~deb13.1) and NATS C
+(3.13.0-2~qore2~deb13.1) add 111 dependency artifacts per CPU. Both backports
+pass two full native offline builds, source/binary Lintian, exact binary
+reproducibility, hardening/debug inspection and installed tests before and
+after purge/autoremove/reinstall. Boost runs all 26 Debian installed-library
+tests; NATS exercises pub/sub, request/reply and JetStream revision history.
+
+Existing Debian Boost 1.83 and NATS 3.10 clients remain usable after installing
+the newer SDKs, with their original runtimes and loader paths preserved.
+Boost 1.83/1.90 filesystem libraries also pass same-process operations in
+both load orders. These checks do not establish compatibility for every
+possible Boost consumer; the exact tested scope is retained with the evidence.
+
+Qualification caught premature stripping and missing linker hardening in the
+Boost.Build bootstrap. The recipe now passes Debian flags to its supported
+cxx toolset and lets debhelper split debug symbols. Bootstrap failures propagate;
+the redundant unversioned g++ dependency is removed. The CMake generator
+uses relative installed paths, and assembly receives debug-prefix mapping,
+so the SDK and Boost.Context reproduce across build directories. NATS C uses
+an explicit /usr/sbin/nats-server path; the Qore NATS fixtures declare the system PATH for
+unprivileged users. The qualification driver also needed XML's separate
+libxml2 orig component, prepared by its existing pinned-source repacker. This
+required no XML code change. Original failures and corrected candidates are
+retained.
+
 Remaining work
 --------------
 
-Eleven repositories still need Debian qualification: process, xml, python,
-xmlsec, proj, nats, grpc, pdf, v8, jni and oracle. The next dependency is
-Boost 1.90 for process, followed by XML/Python/XMLSec and PROJ coexistence.
-Other dependency work includes NATS, PyArrow, PDFium and the Node/V8 stack.
+Five repositories still need Debian qualification: grpc, pdf, v8, jni and
+oracle. Remaining dependency work includes PyArrow, PDFium and the Node/V8
+stack. Boost 1.90, NATS C and the process/XML/Python/XMLSec/PROJ chain pass the
+additional qualification above.
 JNI retains the approved pinned-JAR policy. Oracle dependency hosting and
 the optional V8 app catalogue's redistribution review remain separate gates.
 

@@ -13,6 +13,26 @@
       "date": "Thu, 01 Oct 2026 08:00:00 +0200",
       "ppa": null,
       "packages": {
+        "boost1.90": {
+          "upstream_version": "1.90.0",
+          "revision": "6.1~qore4",
+          "orig_url": "https://deb.debian.org/debian/pool/main/b/boost1.90/boost1.90_1.90.0.orig.tar.xz",
+          "orig_sha256": "72e81363dece294942cf4f0ccb86158b390b723d7b332a59a0f869709f306da6",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/b/boost1.90/boost1.90_1.90.0-6.1.debian.tar.xz",
+          "packaging_sha256": "ce301722034d9db70987d3f876ad670bda7581957e8842907d401078411f7af6",
+          "metadata_license": "MIT",
+          "changes": ["Backport Boost 1.90 to {distribution_name} for Qore's process module.", "Retain Debian's complete library packaging and installed-package tests.", "Bootstrap b2 with distribution compiler/linker flags and retain debug information for debhelper; propagate bootstrap failures.", "Remove the redundant unversioned g++ dependency already supplied by build-essential.", "Generate relocatable CMake configurations without package staging paths.", "Pass distribution flags and debug-prefix mapping to preprocessed assembly."],
+          "extra_patches": ["boost1.90/relocatable-cmake-config.patch"]
+        },
+        "nats.c": {
+          "upstream_version": "3.13.0",
+          "revision": "2~qore2",
+          "orig_url": "https://deb.debian.org/debian/pool/main/n/nats.c/nats.c_3.13.0.orig.tar.gz",
+          "orig_sha256": "9a116a4aa0986f2f50890dd65eff061cabbcaf948dc7c47ee134d81dbf3cb8f3",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/n/nats.c/nats.c_3.13.0-2.debian.tar.xz",
+          "packaging_sha256": "ce99345b551716f6d1f03326ba7e8da7015873239bdfedc894c5f3acd481e102",
+          "changes": ["Backport the NATS C client to {distribution_name} for Qore's NATS module.", "Retain Debian's shared library and development package layout.", "Test pub/sub, request/reply and JetStream key/value history against a local broker during builds and installed-package tests."]
+        },
         "c-ares": {
           "extra_patches": ["c-ares/timeout-test-offline.patch"],
           "changes": ["Backport to {distribution_name} for Qore.", "Carry both Qore c-ares lost-query and query-ID reuse fixes.", "Test timeout selection against the IPv4/IPv6 DNS mock without external network access."]
