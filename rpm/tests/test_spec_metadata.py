@@ -79,6 +79,29 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertEqual("1", subprocess.check_output(
             ["rpm", "--eval", expression], text=True).strip())
 
+    def test_fedora_postprocessor_fixes_are_build_dependencies_only(self):
+        fedora = subprocess.check_output(["rpm", "--eval", "%{?fedora}"], text=True).strip()
+        fixes = {"add-determinism(qore-tempfile-fix) = 1",
+                 "linkdupes(qore-bounded-descriptors) = 1"}
+        for options in ([], ["--without", "docs", "--without", "tests"]):
+            requirements = set(subprocess.check_output(
+                ["rpmspec", *options, "-q", "--buildrequires", str(SPEC)],
+                text=True).splitlines())
+            self.assertEqual(fixes if fedora else set(), fixes & requirements)
+        for requirements in self.requirements().values():
+            self.assertTrue(fixes.isdisjoint(requirements))
+        if fedora and os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1":
+            for fix in fixes:
+                # RPM's database lookup accepts a capability name, not a
+                # version expression. Verify the provider's EVR separately.
+                capability = fix.split()[0]
+                result = subprocess.run([
+                    "rpm", "-q", "--whatprovides", capability, "--qf",
+                    "[%{PROVIDENAME} = %{PROVIDEVERSION}\n]"],
+                    capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertIn(fix, result.stdout.splitlines())
+
     def test_disabling_docs_and_checks_does_not_disable_onnx(self):
         output = subprocess.check_output([
             "rpmspec", "--without", "docs", "--without", "tests", "-P", str(SPEC)], text=True)

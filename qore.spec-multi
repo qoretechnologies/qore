@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 9%{?dist}
+Release: 10%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -45,6 +45,12 @@ BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: git
 BuildRequires: python3 >= 3.11
+%if 0%{?fedora}
+# Fedora 0.7.3 needs bounded descriptors and correctly excluded temporary files
+# when normalizing the full Qore documentation tree in OBS.
+BuildRequires: add-determinism(qore-tempfile-fix) = 1
+BuildRequires: linkdupes(qore-bounded-descriptors) = 1
+%endif
 BuildRequires: pkgconfig
 BuildRequires: pkgconfig(openssl) >= 3.5
 BuildRequires: pkgconfig(zlib)
@@ -409,6 +415,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-10
+- Require corrected Fedora file post-processors while retaining all BRP checks.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-9
 - Ship bundled module documentation indexes in the SDK.
 

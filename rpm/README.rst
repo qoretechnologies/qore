@@ -83,3 +83,14 @@ Documentation builds declare the distribution package providing ``hardlink``
 it without file-provider metadata. The dependency check verifies this against
 the target RPM database. OCR also declares libcurl and libarchive SDKs because
 some Tesseract pkg-config files expose these libraries directly.
+
+Fedora file post-processing
+---------------------------
+
+Fedora builds require the qore-packaging backport capabilities for add-determinism
+and linkdupes. The fixes exclude live temporary output from parallel directory
+walks and bound descriptor use while comparing large documentation trees. The
+standard RPM normalization, SELinux checks, stripping and debug packages remain
+enabled. These tools are build dependencies only; end-user installations do not
+need them. Their offline source pins, regressions and backport rationale are in
+qore-packaging/dependencies/add-determinism.rst.
