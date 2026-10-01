@@ -74,6 +74,8 @@ information and original Qore source files. The core RPM runs it in ``%check``.
 temporary directory outside the source checkout. Set ``QORE_RPM_TEST_TMP`` to
 a fresh directory for each script. These tests cover module loading, ONNX
 inference, CMake/pkg-config SDK use, qcc, metadata extraction and tool startup.
+Install ``findutils`` in the test container for the runtime script's AOT file
+inventory. This is a test dependency; the runtime RPM does not require it.
 
 Set ``QORE_RPM_VERIFY_INSTALLED_DEPS=1`` when running the helper tests in a
 target build dependency image. This additionally resolves the emitted parser
@@ -86,6 +88,11 @@ Documentation builds declare the distribution package providing ``hardlink``
 it without file-provider metadata. The dependency check verifies this against
 the target RPM database. OCR also declares libcurl and libarchive SDKs because
 some Tesseract pkg-config files expose these libraries directly.
+HTML documentation is built with ``QORE_GENERATE_JAVA_BINDINGS=OFF`` because
+these RPMs do not distribute generated Java bindings or require JNI.
+The portable ML build requires ONNX Runtime CPU inference and disables CUDA
+toolkit discovery. An undeclared workstation CUDA SDK must not change RPM
+dependencies; accelerator builds require separate dependencies and qualification.
 
 Fedora file post-processing
 ---------------------------

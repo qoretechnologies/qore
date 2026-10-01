@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 13%{?dist}
+Release: 14%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -266,6 +266,7 @@ python3 rpm/stage-licenses.py . .
 . rpm/build-env.sh
 qore_set_source_prefix_maps "%{qore_debug_source_dir}"
 cmake -S . -B build -G 'Unix Makefiles' \
+    -DQORE_GENERATE_JAVA_BINDINGS=OFF \
     -DCMAKE_BUILD_TYPE=Release \
     -DQORE_AOT_LINK_FLAGS="-Wl,-z,relro -Wl,-z,now" \
     -DCMAKE_C_FLAGS_RELEASE:STRING=-DNDEBUG \
@@ -282,6 +283,7 @@ cmake -S . -B build -G 'Unix Makefiles' \
     -DQORE_AOT_LINK_SOURCE_MODULES=OFF \
     -DQORE_WITH_ONNXRUNTIME=ON \
     -DQORE_REQUIRE_ONNXRUNTIME=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_CUDAToolkit=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=%{!?with_docs:ON}%{?with_docs:OFF}
 cmake --build build -- %{?_smp_mflags}
 # The installed public LLVM plugin headers require the same LLVM major.
@@ -417,6 +419,11 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-14
+- Build packaged HTML documentation without optional Java/JNI artifacts.
+- Include corrected enum documentation and canonical HTTP response charsets.
+- Include synchronized ONNX async completion statistics in the portable CPU build.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-13
 - Accept either supported MongoDB C driver API across distribution updates.
 

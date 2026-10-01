@@ -110,6 +110,7 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertNotIn("./run_tests.sh", output)
         self.assertIn("-DQORE_WITH_ONNXRUNTIME=ON", output)
         self.assertIn("-DQORE_REQUIRE_ONNXRUNTIME=ON", output)
+        self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_CUDAToolkit=ON", output)
 
     def test_snapshot_compatibility_does_not_obsolete_itself(self):
         # Source preparation substitutes a snapshot version before rpmbuild.
