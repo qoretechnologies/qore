@@ -91,6 +91,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
     "AOT string expression wire bound is smaller than the runtime bound");
 
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/ExpressionStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/FunctionCallNode.h"
@@ -5118,6 +5119,130 @@ static inline bool shouldSkipByFile(const char* item_file, const char* compile_f
     }
     if (compile_files && compile_files->find(item_file) != compile_files->end()) {
         return false;
+    }
+    return true;
+}
+
+//! Returns true if @a v declares a global or thread-local variable, whose initializer a script fragment carries
+static bool qoreAOTIsGlobalVarDecl(const QoreValue& v) {
+    if (v.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vr = v.get<const VarRefNode>();
+    return vr->isGlobalDecl() && (vr->getType() == VT_GLOBAL || vr->getType() == VT_THREAD_LOCAL);
+}
+
+//! Describes a top-level statement whose effect a script fragment loses, or returns nullptr if it loses none
+/** A script fragment carries its source's declarations and the initializers of its global variables
+    (Var::preserveAOTInitExpr()), but no host runs its top-level statements.  A declaration without an initializer
+    executes nothing, so it loses nothing.  Every other statement - a local variable initialization, an assignment
+    to an existing variable, a call, a control statement - would execute code that never runs.
+
+    @param s the top-level statement
+
+    @return a description of the statement, or nullptr if the fragment loses nothing by not running it
+*/
+static const char* qoreAOTUnrunTopLevelStatementKind(const AbstractStatement* s) {
+    if (s->isDeclaration()) {
+        return nullptr;
+    }
+    const ExpressionStatement* es = dynamic_cast<const ExpressionStatement*>(s);
+    if (!es) {
+        return "executable top-level statement";
+    }
+    QoreValue exp = es->getExpression();
+    if (exp.getType() == NT_VARREF) {
+        // a declaration with an implied constructor call, e.g. "Foo foo();" or "hash<MyHash> h();"
+        if (dynamic_cast<const VarRefNewObjectNode*>(exp.get<const VarRefNode>())) {
+            return qoreAOTIsGlobalVarDecl(exp) ? nullptr : "top-level local variable initialization";
+        }
+        return "executable top-level statement";
+    }
+    if (const QoreAssignmentOperatorNode* an = dynamic_cast<const QoreAssignmentOperatorNode*>(
+            exp.getInternalNode())) {
+        QoreValue left = an->getLeft();
+        if (qoreAOTIsGlobalVarDecl(left)) {
+            return nullptr;
+        }
+        if (left.getType() == NT_VARREF && left.get<const VarRefNode>()->isGlobalDecl()) {
+            return "top-level local variable initialization";
+        }
+    }
+    return "executable top-level statement";
+}
+
+//! Returns the namespace-qualified name of the function a top-level statement calls without arguments, or ""
+/** A script commonly ends with a call of its entry function (<tt>main();</tt>) so that the interpreter runs it; an
+    executable linked from its object makes the same call, so the link exempts it.
+
+    @param s the top-level statement
+
+    @return the called function's name, qualified with its namespace path unless it is in the root namespace; an
+    empty string if the statement is not a call of a function without arguments
+*/
+static std::string qoreAOTTopLevelCallName(const AbstractStatement* s) {
+    const ExpressionStatement* es = dynamic_cast<const ExpressionStatement*>(s);
+    if (!es) {
+        return std::string();
+    }
+    QoreValue exp = es->getExpression();
+    const FunctionCallNode* fc = exp.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(exp.getInternalNode()) : nullptr;
+    if (!fc || !fc->getFunctionEntry() || (fc->getArgs() && !fc->getArgs()->empty())
+            || (fc->getParseArgs() && !fc->getParseArgs()->empty())) {
+        return std::string();
+    }
+    const FunctionEntry* fe = fc->getFunctionEntry();
+    std::string name;
+    if (qore_ns_private* ns = fe->getNamespace()) {
+        ns->getPath(name, false);
+    }
+    while (!name.compare(0, 2, "::")) {
+        name.erase(0, 2);
+    }
+    if (!name.empty()) {
+        name += "::";
+    }
+    return name + fe->getName();
+}
+
+//! Collects the top-level statements of a script fragment's sources whose effects the fragment loses
+/** Script fragments are registered without running their sources' top-level statements, so an executable linked
+    from them would skip these statements silently; the fragment records them so that such a link can be refused.
+
+    @param pgm the Program the sources were parsed into
+    @param compile_file the fragment's source, or nullptr if @a compile_files lists the sources
+    @param compile_files the fragment's sources (a script aggregate), or nullptr
+    @param statements receives the statements whose effects the fragment loses
+    @param error receives the reason on failure
+
+    @return true on success, false if the operation was cancelled
+*/
+static bool qoreAOTCollectUnrunTopLevelCode(QoreProgram* pgm, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files,
+        std::vector<QoreAOTUnrunTopLevelStatement>& statements, std::string& error) {
+    statements.clear();
+    if (!pgm) {
+        return true;
+    }
+    size_t i = 0;
+    for (const AbstractStatement* s : qore_program_private::get(*pgm)->sb.getStatements()) {
+        if (i++ && !(i % 100) && qore_check_cancel(nullptr, "AOT unrun top-level code collection")) {
+            error = "operation cancelled during the AOT unrun top-level code collection";
+            return false;
+        }
+        if (!s) {
+            continue;
+        }
+        const char* file = s->loc ? s->loc->getFile() : nullptr;
+        // statements of other sources (stubs, other fragments' sources) belong to other objects
+        if (!file || shouldSkipByFile(file, compile_file, compile_files)) {
+            continue;
+        }
+        if (const char* kind = qoreAOTUnrunTopLevelStatementKind(s)) {
+            statements.push_back({qore_aot_map_source_path(file), s->loc->start_line, kind,
+                qoreAOTTopLevelCallName(s)});
+        }
     }
     return true;
 }
@@ -26976,6 +27101,13 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
             target_canon.c_str());
+        {
+            std::vector<QoreAOTUnrunTopLevelStatement> unrun;
+            if (!qoreAOTCollectUnrunTopLevelCode(qpgm, target_canon.c_str(), nullptr, unrun, error)) {
+                return false;
+            }
+            serializeAOTUnrunTopLevelCode(writer, unrun);
+        }
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,
@@ -29085,6 +29217,13 @@ bool QoreAOT::compileScriptAggregate(
             return false;
         }
         appendBuildInfoSection(writer, "script-aggregate", target_triple, opt_level, include_source);
+        {
+            std::vector<QoreAOTUnrunTopLevelStatement> unrun;
+            if (!qoreAOTCollectUnrunTopLevelCode(qpgm, nullptr, &target_set, unrun, error)) {
+                return false;
+            }
+            serializeAOTUnrunTopLevelCode(writer, unrun);
+        }
 
         std::vector<std::string> explicit_deps;
         for (const SrcEntry& e : entries) {
@@ -29796,6 +29935,13 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
             target_canon.c_str());
+        {
+            std::vector<QoreAOTUnrunTopLevelStatement> unrun;
+            if (!qoreAOTCollectUnrunTopLevelCode(*qpgm, target_canon.c_str(), nullptr, unrun, error)) {
+                return false;
+            }
+            serializeAOTUnrunTopLevelCode(writer, unrun);
+        }
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,

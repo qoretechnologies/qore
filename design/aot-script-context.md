@@ -66,8 +66,33 @@ The generated or custom host must:
 4. Begin AOT batch registration.
 5. Register all linked `.qo` objects.
 6. End the batch, resolving cross-file metadata.
-7. Run top-level code, `%exec-class`, or the selected entry function.
+7. Run the selected entry function (or `%exec-class`, for hosts that use it).
 8. Destroy the program and shut down Qore.
+
+## Top-Level Code
+
+Script objects never carry their sources' top-level statements: registration
+runs the global variable initializers the objects carry, and no host runs
+anything else at the top level.  (A single-source executable, `qcc -o app
+script.qr`, is not built from objects: it runs its top-level code.)
+
+Each object records, in the optional `UNRUN_TOP_LEVEL_CODE` section, the file,
+line and kind of every top-level statement of its sources that executes code
+(an assignment, a call, a local variable initialization, a control statement);
+declarations without an initializer execute nothing and are not recorded.
+
+`qcc` refuses to link an entry-function executable (`qcc -o app *.qo`, or a
+multi-source executable) from objects whose top-level code it would silently
+skip:
+
+- a function, method, closure or initializer using a top-level local variable,
+  found through the `QORE_AOT_LOCAL_SLOT_TOP_LEVEL` local slot flag in the
+  object's slot maps (so objects built before the section existed are checked
+  too): the variable would never be created
+- any statement recorded in `UNRUN_TOP_LEVEL_CODE`
+
+Compiling objects (`qcc -c`) is unaffected, as are hosts that register objects
+themselves (`--link-qo` aggregates, custom C++ hosts): they define what runs.
 
 ## Ordering
 

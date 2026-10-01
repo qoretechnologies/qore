@@ -20860,6 +20860,65 @@ bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+void serializeAOTUnrunTopLevelCode(QoreAOTBinaryWriter& writer,
+        const std::vector<QoreAOTUnrunTopLevelStatement>& statements) {
+    if (statements.empty()) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE);
+    writer.writeU32(static_cast<uint32_t>(statements.size()));
+    for (const QoreAOTUnrunTopLevelStatement& stmt : statements) {
+        writer.writeStringRef(stmt.file.c_str());
+        writer.writeU32(static_cast<uint32_t>(stmt.line));
+        writer.writeStringRef(stmt.description.c_str());
+        writer.writeStringRef(stmt.call.c_str());
+    }
+    writer.endSection(sec_idx);
+}
+
+bool readAOTUnrunTopLevelCode(const QoreAOTBinaryReader& reader,
+        std::vector<QoreAOTUnrunTopLevelStatement>& statements, std::string& error) {
+    statements.clear();
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 4) {
+        error = "invalid UNRUN_TOP_LEVEL_CODE section";
+        return false;
+    }
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // each record is a file string ref, a line, a description string ref and a call string ref; checking the count
+    // against the section size bounds every read below
+    constexpr uint32_t record_size = 16;
+    if (count > (sec->size - 4) / record_size) {
+        error = "UNRUN_TOP_LEVEL_CODE count exceeds section capacity";
+        return false;
+    }
+    statements.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT unrun top-level code read")) {
+            error = "operation cancelled while reading the UNRUN_TOP_LEVEL_CODE section";
+            return false;
+        }
+        QoreAOTUnrunTopLevelStatement stmt;
+        const char* file = reader.readStringRef(ptr);
+        stmt.line = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
+        const char* desc = reader.readStringRef(ptr);
+        const char* call = reader.readStringRef(ptr);
+        if (!file || !desc || !call) {
+            error = "invalid UNRUN_TOP_LEVEL_CODE string at index " + std::to_string(i);
+            return false;
+        }
+        stmt.file = file;
+        stmt.description = desc;
+        stmt.call = call;
+        statements.push_back(std::move(stmt));
+    }
+    return true;
+}
+
 bool readBuildInfo(const QoreAOTBinaryReader& reader,
         std::vector<std::pair<std::string, std::string>>& info,
         std::string& error) {

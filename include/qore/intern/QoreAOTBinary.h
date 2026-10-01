@@ -323,6 +323,7 @@ enum class QoreAOTSectionType : uint16_t {
     DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
     IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
     SOURCE_STAT_FINGERPRINT = 30,  //!< Optional source size and nanosecond mtime for staleness checks
+    UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1700,6 +1701,40 @@ void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
 */
 bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
         QoreAOTSourceStatFingerprint& fingerprint);
+
+//! A top-level statement of a script fragment's source that the fragment does not carry
+/** Script fragments (`qcc -c`) carry declarations, functions and the initializers of global variables, but never
+    their sources' top-level statements: no host runs them, so an executable linked from fragments silently skips
+    them.  A fragment records each such statement that would execute code in its optional
+    QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE section, so that a link can refuse it instead.
+*/
+struct QoreAOTUnrunTopLevelStatement {
+    std::string file;         //!< the source file of the statement
+    int32_t line = 0;         //!< the first line of the statement
+    std::string description;  //!< what the statement is, e.g. "top-level local variable initialization"
+    //! for a call of a function without arguments (e.g. <tt>main();</tt>), the function's namespace-qualified name
+    //! (without a leading \c "::"), otherwise empty: an executable whose entry function it is makes that very call
+    std::string call;
+};
+
+//! Serialize the top-level statements of a script fragment's sources that the fragment does not carry
+/** Nothing is written for an empty list; older runtimes ignore the unknown optional section.
+
+    @param writer AOT binary writer receiving the section
+    @param statements the statements
+*/
+void serializeAOTUnrunTopLevelCode(QoreAOTBinaryWriter& writer,
+        const std::vector<QoreAOTUnrunTopLevelStatement>& statements);
+
+//! Read the top-level statements a script fragment does not carry from an AOT binary
+/** @param reader opened AOT binary reader
+    @param statements receives the recorded statements; empty if the section is absent
+    @param error receives the reason on failure
+
+    @return true on success (including when the section is absent), false if the section is malformed
+*/
+bool readAOTUnrunTopLevelCode(const QoreAOTBinaryReader& reader,
+        std::vector<QoreAOTUnrunTopLevelStatement>& statements, std::string& error);
 
 //! Read producer/build metadata from an opened binary reader.
 bool readBuildInfo(const QoreAOTBinaryReader& reader,

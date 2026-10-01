@@ -4002,6 +4002,12 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
+    - Fixed executables that <tt>qcc -o</tt> builds from several sources or links from <tt>.qo</tt> objects silently
+      skipping top-level code: such an executable runs only its entry function, so a function using a top-level
+      local variable read no value and lost its updates, and other top-level statements never ran.  \c qcc now
+      refuses to link it with a diagnostic naming each affected function and variable and the file and line of
+      each skipped statement; declarations without an initializer, global variable initializers and a top-level
+      call of the entry function itself (such as a closing <tt>main();</tt>) remain allowed (see @ref aot_artifacts)
     - Fixed executables that <tt>qcc -o</tt> links from <tt>.qo</tt> objects: the Program always ran with the parse
       options \c PO_NEW_STYLE and \c PO_STRICT_ARGS instead of those the objects were compiled with, so, for example,
       an \c %%allow-debugger program could not use the debugger; it now runs with every parse option any of its

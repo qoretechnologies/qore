@@ -262,6 +262,35 @@ qcc -c --output-dir=build/aot src/lib.qr src/main.qr src/worker.qr
 qcc -o app build/aot/*.qo
     @endcode
 
+    An executable built from several sources or from \c .qo objects registers their declarations, functions and
+    global variable initializers and then calls only its entry function (\c main() unless <tt>-e FN</tt> /
+    <tt>--entry=FN</tt> names another one): the top-level statements of its sources never run.  \c qcc therefore
+    refuses to link such an executable when that would silently change what the code does, with a diagnostic
+    naming the object and, for each problem, either the function using a top-level local variable (which is never
+    created) or the file and line of a top-level statement that executes code (an assignment, a call, a local
+    variable initialization or a control statement).  Declarations without an initializer and global variable
+    initializers are allowed, as is one top-level call of the entry function without arguments (a script that ends
+    with <tt>main();</tt> so that the interpreter runs it): the executable makes that very call.  Move such code into a function, declare variables that functions share with
+    \c our, or compile a single script on its own (<tt>qcc -o app script.qr</tt>), which runs its top-level code:
+
+    @code{.py}
+# rejected: "function 'bump()' uses top-level local variable 'counter', which is never created"
+int counter = 5;
+int sub bump() {
+    return ++counter;
+}
+    @endcode
+
+    @code{.py}
+# accepted: a global variable's initializer is carried by the object and runs when it is registered
+our int counter = 5;
+int sub bump() {
+    return ++counter;
+}
+    @endcode
+
+    Compiling objects with \c -c is not affected, nor are hosts that register objects themselves.
+
     Build integrations can add \c --batch-build-sidecars and
     <tt>--depfile-dir=build/aot</tt> to the batch \c -c command. This emits the
     index, manifest, status, dependency, success-stamp, and content-stamp

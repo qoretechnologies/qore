@@ -54,11 +54,17 @@ string sub unsafeNestedRecord(string prefix, int value, string suffix) {
     return concatPair(\"[\", formatRecord(prefix, value, suffix));
 }
 
-int wrapper_effects;
+# a global variable: an executable linked from script objects never runs their top-level statements, so a
+# top-level local variable used here would never be created (and qcc refuses to link such objects)
+our int wrapper_effects = 0;
 
 string sub effectfulWrapper(string left, string right) {
     ++wrapper_effects;
     return concatPair(left, right);
+}
+
+int sub wrapperEffects() {
+    return wrapper_effects;
 }
 
 string sub recursiveWrapper(string value, int depth) {
@@ -295,6 +301,8 @@ string sub consumerCode() {
         mergeHashRecords(hash_present, hash_missing).size(),
         mergeHashRecords(hash_present, hash_removed).size(),
         multi_hash_unassigned_rejected);
+    # effectfulWrapper() is called exactly once above; its side effect must not be fused away
+    printf(\"effects:%d\\n\", wrapperEffects());
     return 0;
 }
 ";
@@ -452,6 +460,10 @@ string hash_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, hash_disabled_exe));
 string borrowed_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, borrowed_disabled_exe));
+if (ast !~ /\neffects:1\n$/) {
+    printf("effectfulWrapper() side effect not observed exactly once:\n%s", ast);
+    exit(2);
+}
 if (ast != enabled || ast != disabled || ast != hash_disabled
         || ast != borrowed_disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%sBorrowed disabled:\n%s",

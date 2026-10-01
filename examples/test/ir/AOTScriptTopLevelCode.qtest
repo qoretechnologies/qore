@@ -1,0 +1,467 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTScriptTopLevelCodeTest
+
+#! Tests that qcc refuses to link an entry-function executable that would silently skip top-level code
+/** An executable linked from script objects (`qcc -o exe a.qo b.qo`, or a multi-source executable
+    `qcc -o exe a.qr b.qr`) registers the objects and then runs only its entry function: the top-level statements of
+    the objects' sources never run.  A function using a top-level local variable used to read no value and lose its
+    updates silently (e.g. `int counter = 5; int sub bump() { ++counter; return counter; }` returned 0 or failed
+    instead of returning 6), and other top-level statements were silently skipped.
+
+    qcc now refuses such a link with a diagnostic naming the object, the function and the variable, or the file and
+    line of the skipped statement.  Declarations without an initializer and the initializers of global variables,
+    which objects carry, remain allowed; compiling the objects (`qcc -c`) is unaffected, as is the interpreter and a
+    single-source executable, which runs its top-level code.
+*/
+class AOTScriptTopLevelCodeTest inherits QUnit::Test {
+    public {
+        #! the entry function source linked with every provider
+        const MainSrc = "int sub main() {\n    run();\n    return 0;\n}\n";
+
+        #! providers that may be linked: declarations and global variable initializers only
+        const Accepted = {
+            "globals": {
+                "src": 'our int counter = 5;
+# a declaration without an initializer executes nothing
+int unused;
+our int g;
+our hash<auto> h = {"a": 1};
+thread_local int t = 7;
+class Foo {
+    public {
+        int v = 3;
+    }
+}
+# a global variable with an implied constructor call is carried like any global initializer
+our Foo foo();
+int sub bump() {
+    ++counter;
+    return counter;
+}
+sub run() {
+    printf("bump=%d bump=%d t=%d foo=%d h=%y g=%y\n", bump(), bump(), t, foo.v, h, g);
+}
+',
+                "out": "bump=6 bump=7 t=7 foo=3 h={a: 1} g=null\n",
+            },
+            "functions_only": {
+                "src": 'string sub greet(string who) {
+    return "hello " + who;
+}
+sub run() {
+    code c = string sub (string x) { return greet(x); };
+    printf("%s\n", c("world"));
+}
+',
+                "out": "hello world\n",
+            },
+        };
+
+        #! providers that must be refused, with the interpreter's output and the diagnostic lines expected
+        const Rejected = {
+            "function": {
+                "src": 'int counter = 5;
+int sub bump() {
+    ++counter;
+    return counter;
+}
+sub run() {
+    printf("bump=%d\n", bump());
+}
+',
+                "out": "bump=6\n",
+                "uses": ("function 'bump()' uses top-level local variable 'counter'",),
+                "unrun": ((1, "top-level local variable initialization"),),
+            },
+            # a declaration without an initializer is allowed on its own, but not when a function uses it
+            "declaration_used": {
+                "src": 'int x;
+sub run() {
+    x = 2;
+    printf("x=%d\n", x);
+}
+',
+                "out": "x=2\n",
+                "uses": ("function 'run()' uses top-level local variable 'x'",),
+                "unrun": (),
+            },
+            "methods": {
+                "src": 'int counter = 1;
+class C {
+    int m() {
+        return counter + 1;
+    }
+    static int s() {
+        return counter + 2;
+    }
+}
+sub run() {
+    printf("%d %d\n", new C().m(), C::s());
+}
+',
+                "out": "2 3\n",
+                "uses": ("method 'C::m()' uses top-level local variable 'counter'",
+                    "static method 'C::s()' uses top-level local variable 'counter'"),
+                "unrun": ((1, "top-level local variable initialization"),),
+            },
+            "closure": {
+                "src": 'list<int> l = (1, 2);
+code sub mk() {
+    return int sub () { return l[1]; };
+}
+sub run() {
+    printf("%d\n", mk()());
+}
+',
+                "out": "2\n",
+                # the closure binds the variable through the function that creates it
+                "uses": ("a closure in 'mk()' uses top-level local variable 'l'",
+                    "function 'mk()' uses top-level local variable 'l'"),
+                "unrun": ((1, "top-level local variable initialization"),),
+            },
+            "global_initializer": {
+                "src": 'int counter = 1;
+our int g2 = counter + 1;
+sub run() {
+    printf("g2=%d\n", g2);
+}
+',
+                "out": "g2=2\n",
+                "uses": ("the initializer of global variable 'g2' uses top-level local variable 'counter'",),
+                "unrun": ((1, "top-level local variable initialization"),),
+            },
+            "global_assignment": {
+                "src": 'our int g;
+g = 5;
+sub run() {
+    printf("g=%d\n", g);
+}
+',
+                "out": "g=5\n",
+                "uses": (),
+                "unrun": ((2, "executable top-level statement"),),
+            },
+            # a list declaration of global variables is not carried as a global initializer
+            "global_list_declaration": {
+                "src": 'our (int a, int b) = (1, 2);
+sub run() {
+    printf("a=%d b=%d\n", a, b);
+}
+',
+                "out": "a=1 b=2\n",
+                "uses": (),
+                "unrun": ((1, "executable top-level statement"),),
+            },
+            "call": {
+                "src": 'printf("side effect\n");
+sub run() {
+}
+',
+                "out": "side effect\n",
+                "uses": (),
+                "unrun": ((1, "executable top-level statement"),),
+            },
+            "control_statement": {
+                "src": 'sub run() {
+}
+if (True) {
+    printf("if\n");
+}
+',
+                "out": "if\n",
+                "uses": (),
+                "unrun": ((3, "executable top-level statement"),),
+            },
+            "local_constructor": {
+                "src": 'class Foo {
+    constructor() {
+        printf("constructed\n");
+    }
+}
+Foo f();
+sub run() {
+}
+',
+                "out": "constructed\n",
+                "uses": (),
+                "unrun": ((6, "top-level local variable initialization"),),
+            },
+            "local_hashdecl": {
+                "src": 'hashdecl H {
+    int a = 1;
+}
+hash<H> hh();
+sub run() {
+}
+',
+                "out": "",
+                "uses": (),
+                "unrun": ((4, "top-level local variable initialization"),),
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTScriptTopLevelCodeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the interpreter runs every provider's top-level code", \testInterpreter());
+        addTestCase("objects without skipped top-level code link and run", \testAcceptedObjects());
+        addTestCase("multi-source executables without skipped top-level code", \testAcceptedMultiSource());
+        addTestCase("a single-source executable runs its top-level code", \testSingleSource());
+        addTestCase("negative: objects with skipped top-level code are refused", \testRejectedObjects());
+        addTestCase("negative: multi-source executables with skipped top-level code", \testRejectedMultiSource());
+        addTestCase("objects record the top-level statements they do not carry", \testDumpInfo());
+        addTestCase("a top-level call of the entry function is the call the executable makes", \testEntryCall());
+
+        set_return_value(main());
+    }
+
+    testInterpreter() {
+        TmpDir tmp("qore-aot-top-level-");
+        foreach hash<auto> i in ((Accepted + Rejected).pairIterator()) {
+            # the provider, then the entry function, then a call to it: what the executable would run
+            string src = writeFile(tmp.path + DirSep + i.key + "-combined.qr", i.value.src + MainSrc + "main();\n");
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b %s", env, qore_bin, src));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertEq(i.value.out, rv.out, i.key);
+        }
+    }
+
+    testAcceptedObjects() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        foreach hash<auto> i in (Accepted.pairIterator()) {
+            hash<auto> objs = compileObjects(tmp.path, i.key, i.value.src);
+            string exe = tmp.path + DirSep + i.key + "-exe";
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, objs.provider, objs.main));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertNothing(rv.err =~ x/(error:.*)/, i.key);
+            rv = run(tmp.path, sprintf("%s %s", env, exe));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertEq(i.value.out, rv.out, i.key);
+            # objects carrying nothing to skip record nothing
+            rv = run(tmp.path, sprintf("%s %s --dump-info %s", env, qcc_bin, objs.provider));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertEq(-1, rv.out.find("unrun top-level code"), i.key);
+        }
+    }
+
+    testAcceptedMultiSource() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        foreach hash<auto> i in (Accepted.pairIterator()) {
+            hash<auto> srcs = writeSources(tmp.path, i.key, i.value.src);
+            string exe = tmp.path + DirSep + i.key + "-multi";
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, srcs.provider, srcs.main));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            rv = run(tmp.path, sprintf("%s %s", env, exe));
+            assertEq(0, rv.rc, i.key + ": " + rv.err);
+            assertEq(i.value.out, rv.out, i.key);
+        }
+    }
+
+    testSingleSource() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        # a single-source executable runs its top-level code, so a function may use a top-level local variable
+        hash<auto> script = Rejected."function";
+        string src = writeFile(tmp.path + DirSep + "single.qr", script.src + MainSrc + "main();\n");
+        string exe = tmp.path + DirSep + "single-exe";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(script.out, rv.out);
+    }
+
+    testRejectedObjects() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        foreach hash<auto> i in (Rejected.pairIterator()) {
+            # compiling the objects is not affected
+            hash<auto> objs = compileObjects(tmp.path, i.key, i.value.src);
+            string exe = tmp.path + DirSep + i.key + "-exe";
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, objs.provider, objs.main));
+            checkRejection(i.key, rv, objs.provider, objs.provider_src, i.value);
+            assertFalse(is_file(exe), i.key);
+            # the order of the objects does not matter
+            rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, objs.main, objs.provider));
+            checkRejection(i.key + " (reversed)", rv, objs.provider, objs.provider_src, i.value);
+            assertFalse(is_file(exe), i.key + " (reversed)");
+        }
+    }
+
+    testRejectedMultiSource() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        foreach hash<auto> i in (Rejected.pairIterator()) {
+            hash<auto> srcs = writeSources(tmp.path, i.key, i.value.src);
+            string exe = tmp.path + DirSep + i.key + "-multi";
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, srcs.provider, srcs.main));
+            # the temporary object is named with its source
+            checkRejection(i.key + " multi-source", rv, srcs.provider, srcs.provider, i.value);
+            assertFalse(is_file(exe), i.key + " multi-source");
+        }
+    }
+
+    testDumpInfo() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        hash<auto> script = Rejected.control_statement;
+        hash<auto> objs = compileObjects(tmp.path, "dump", script.src);
+        hash<auto> rv = run(tmp.path, sprintf("%s %s --dump-info --dump-sections %s", env, qcc_bin, objs.provider));
+        assertEq(0, rv.rc, rv.err);
+        assertTrue(rv.out.find("unrun top-level code:\n      " + objs.provider_src
+            + ":3: executable top-level statement\n") >= 0, rv.out);
+        assertTrue(rv.out.find("UNRUN_TOP_LEVEL_CODE") >= 0, rv.out);
+    }
+
+    testEntryCall() {
+        checkQcc();
+        TmpDir tmp("qore-aot-top-level-");
+        string lib = writeFile(tmp.path + DirSep + "lib.qr", "sub run() {\n    printf(\"run\\n\");\n}\n");
+        # the common idiom: the script calls its entry function itself so that the interpreter runs it
+        string main_src = writeFile(tmp.path + DirSep + "idiom.qr", MainSrc + "main();\n");
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -b %s %s", env, qore_bin, "--exec-mode=ast",
+            writeFile(tmp.path + DirSep + "idiom-combined.qr", File::readTextFile(lib) + MainSrc + "main();\n")));
+        assertEq("run\n", rv.out);
+        string exe = tmp.path + DirSep + "idiom-exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib, main_src));
+        assertEq(0, rv.rc, rv.err);
+        # the executable runs the entry function exactly once, like the interpreter
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq("run\n", rv.out);
+
+        # the same with another entry function
+        string other = writeFile(tmp.path + DirSep + "other.qr", "int sub start() {\n    run();\n    return 0;\n}\n"
+            + "start();\n");
+        exe = tmp.path + DirSep + "other-exe";
+        rv = run(tmp.path, sprintf("%s %s -e start -o %s %s %s", env, qcc_bin, exe, lib, other));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq("run\n", rv.out);
+
+        # negative: the call is not the entry function's
+        exe = tmp.path + DirSep + "other-main-exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s %s", env, qcc_bin, exe, lib, other,
+            writeFile(tmp.path + DirSep + "plain-main.qr", "int sub main() {\n    return 0;\n}\n")));
+        checkRejection("call of another function", rv, other, other, {"uses": (),
+            "unrun": ((5, "executable top-level statement"),)});
+        assertFalse(is_file(exe));
+
+        # negative: a second call of the entry function would be skipped
+        string twice = writeFile(tmp.path + DirSep + "twice.qr", MainSrc + "main();\nmain();\n");
+        exe = tmp.path + DirSep + "twice-exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib, twice));
+        checkRejection("second entry call", rv, twice, twice, {"uses": (),
+            "unrun": ((6, "executable top-level statement"),)});
+        assertFalse(is_file(exe));
+
+        # negative: a call with arguments is not the call the executable makes
+        string args = writeFile(tmp.path + DirSep + "args.qr", "int sub main(*int x) {\n    run();\n    return 0;\n}\n"
+            + "main(1);\n");
+        exe = tmp.path + DirSep + "args-exe";
+        rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib, args));
+        checkRejection("entry call with arguments", rv, args, args, {"uses": (),
+            "unrun": ((5, "executable top-level statement"),)});
+        assertFalse(is_file(exe));
+    }
+
+    #! checks a refused link: no executable, and a diagnostic naming every use and skipped statement
+    private checkRejection(string label, hash<auto> rv, string obj, string src, hash<auto> script) {
+        assertNeq(0, rv.rc, label);
+        assertTrue(rv.err.find("link failed for output") >= 0, label + ": " + rv.err);
+        assertTrue(rv.err.find("runs only its entry function") >= 0, label);
+        # the reported items, one per line
+        list<string> items = (select rv.err.split("\n"), $1 =~ /^  /) ?? ();
+        foreach string use in (script.uses) {
+            string text = ": " + use + ", which is never created";
+            assertEq(1, (select items, $1.find(obj) >= 0 && $1.find(text) > 0).size(), label + ": " + use
+                + ": " + rv.err);
+        }
+        foreach list<auto> stmt in (script.unrun) {
+            string text = sprintf("%s:%d: %s never runs", src, stmt[0], stmt[1]);
+            assertEq(1, (select items, $1.find(text) >= 0).size(), label + ": " + text + ": " + rv.err);
+        }
+        # nothing else is reported
+        assertEq(script.uses.size() + script.unrun.size(), items.size(), label + ": " + rv.err);
+        # the remedies
+        assertTrue(rv.err.find("our int counter = 5;") >= 0, label);
+        assertTrue(rv.err.find("compile a single script on its own") >= 0, label);
+    }
+
+    #! writes the provider and entry sources; returns their paths
+    private hash<auto> writeSources(string dir, string label, string src) {
+        return {
+            "provider": writeFile(dir + DirSep + label + ".qr", src),
+            "main": writeFile(dir + DirSep + label + "-main.qr", MainSrc),
+        };
+    }
+
+    #! compiles the provider and entry sources to objects; returns their paths and the provider's source
+    private hash<auto> compileObjects(string dir, string label, string src) {
+        hash<auto> srcs = writeSources(dir, label, src);
+        string provider = dir + DirSep + label + ".qo";
+        string main = dir + DirSep + label + "-main.qo";
+        hash<auto> rv = run(dir, sprintf("%s %s -c -L %s -o %s %s", env, qcc_bin, dir, provider, srcs.provider));
+        assertEq(0, rv.rc, label + ": " + rv.err);
+        rv = run(dir, sprintf("%s %s -c -L %s -o %s %s", env, qcc_bin, dir, main, srcs.main));
+        assertEq(0, rv.rc, label + " main: " + rv.err);
+        return {"provider": provider, "main": main, "provider_src": srcs.provider};
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+    }
+
+    private string writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

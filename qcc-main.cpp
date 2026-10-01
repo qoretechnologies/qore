@@ -1872,6 +1872,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::CALL_RELOCATIONS: return "CALL_RELOCATIONS";
         case QoreAOTSectionType::DEBUG_IR: return "DEBUG_IR";
         case QoreAOTSectionType::SOURCE_STAT_FINGERPRINT: return "SOURCE_STAT_FINGERPRINT";
+        case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
     }
     return "UNKNOWN";
 }
@@ -3925,6 +3926,19 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
         }
     } else {
         printf("    build info: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::vector<QoreAOTUnrunTopLevelStatement> unrun_top_level;
+    if (readAOTUnrunTopLevelCode(reader, unrun_top_level, error)) {
+        if (!unrun_top_level.empty()) {
+            printf("    unrun top-level code:\n");
+            for (const QoreAOTUnrunTopLevelStatement& stmt : unrun_top_level) {
+                printf("      %s:%d: %s\n", stmt.file.c_str(), static_cast<int>(stmt.line), stmt.description.c_str());
+            }
+        }
+    } else {
+        printf("    unrun top-level code: error: %s\n", error.c_str());
         error.clear();
     }
 
@@ -8989,6 +9003,40 @@ static bool validate_script_object_body_contracts(
     return valid;
 }
 
+//! Loads the AOT metadata blobs embedded in a script-context `.qo` fragment
+/** @param path the fragment
+    @param blobs receives the fragment's metadata blobs
+    @param error receives the reason on failure
+
+    @return true on success; a fragment without any metadata blob is an error
+*/
+static bool load_script_object_metadata_blobs(const std::string& path, std::vector<AOTDumpMetadataBlob>& blobs,
+        std::string& error) {
+    std::string contents;
+    if (!read_file(path.c_str(), contents)) {
+        error = "cannot read input object: " + path;
+        return false;
+    }
+    auto binary_or = llvm::object::createBinary(path);
+    if (!binary_or) {
+        error = "cannot read object file '" + path + "': " + llvm::toString(binary_or.takeError());
+        return false;
+    }
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary_or->getBinary());
+    if (!obj) {
+        error = "input is not a relocatable object file: " + path;
+        return false;
+    }
+    std::set<std::string> seen_blobs;
+    extract_aot_metadata_from_object(*obj, blobs, seen_blobs);
+    scan_aot_metadata_blobs(contents, blobs, seen_blobs);
+    if (blobs.empty()) {
+        error = "input has no AOT metadata blob: " + path;
+        return false;
+    }
+    return true;
+}
+
 //! Returns the parse options a Program running the given script-context `.qo` fragments needs
 /** Each fragment records the parse options it was compiled with, including the Program-level directives in its source
     (e.g. \c %allow-debugger, \c %new-style, or a \c %no-... restriction).  In a shared parse a directive in any file
@@ -9004,27 +9052,8 @@ static bool collect_script_object_parse_options(const std::vector<std::string>& 
         QoreParseOptions& po, std::string& error) {
     po = QoreParseOptions();
     for (const std::string& path : object_paths) {
-        std::string contents;
-        if (!read_file(path.c_str(), contents)) {
-            error = "cannot read input object: " + path;
-            return false;
-        }
-        auto binary_or = llvm::object::createBinary(path);
-        if (!binary_or) {
-            error = "cannot read object file '" + path + "': " + llvm::toString(binary_or.takeError());
-            return false;
-        }
-        auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary_or->getBinary());
-        if (!obj) {
-            error = "input is not a relocatable object file: " + path;
-            return false;
-        }
         std::vector<AOTDumpMetadataBlob> blobs;
-        std::set<std::string> seen_blobs;
-        extract_aot_metadata_from_object(*obj, blobs, seen_blobs);
-        scan_aot_metadata_blobs(contents, blobs, seen_blobs);
-        if (blobs.empty()) {
-            error = "input has no AOT metadata blob: " + path;
+        if (!load_script_object_metadata_blobs(path, blobs, error)) {
             return false;
         }
         for (const AOTDumpMetadataBlob& blob : blobs) {
@@ -9042,6 +9071,233 @@ static bool collect_script_object_parse_options(const std::vector<std::string>& 
     return true;
 }
 
+//! A function in a script-context `.qo` fragment that uses a top-level local variable of its source
+struct ScriptObjectTopLevelLocalUse {
+    //! the fragment, with the source it was compiled from
+    std::string object;
+    //! the description of the function, method, closure or initializer using the variable
+    std::string function;
+    //! the top-level local variable
+    std::string variable;
+
+    bool operator<(const ScriptObjectTopLevelLocalUse& other) const {
+        return std::tie(object, function, variable) < std::tie(other.object, other.function, other.variable);
+    }
+};
+
+//! Returns the user-facing description of a compiled function named in a SLOT_MAPS entry
+/** Compiled initializers and closures are named by internal keys (see QoreAOT.cpp); static methods carry a
+    \c _static_ marker before the method name.
+
+    @param name the name recorded in the slot map
+
+    @return the description, e.g. \c "method 'C::m()'" or \c "a closure in 'mk()'"
+*/
+static std::string script_object_function_description(const std::string& name) {
+    // strips a namespace path with an empty root ("::x" or "::::x" for a root namespace item)
+    auto item_path = [](std::string path) {
+        while (path.compare(0, 2, "::") == 0) {
+            path.erase(0, 2);
+        }
+        return path;
+    };
+    auto starts = [&name](const char* prefix) {
+        return name.compare(0, strlen(prefix), prefix) == 0;
+    };
+    if (starts("__gvar_init::")) {
+        return "the initializer of global variable '" + item_path(name.substr(strlen("__gvar_init::"))) + "'";
+    }
+    if (starts("__svar_init::")) {
+        return "the initializer of static variable '" + item_path(name.substr(strlen("__svar_init::"))) + "'";
+    }
+    if (starts("__const_init::")) {
+        return "the initializer of constant '" + item_path(name.substr(strlen("__const_init::"))) + "'";
+    }
+    if (starts("__aot_closure::")) {
+        // "__aot_closure::<owner>::<expression index>"
+        std::string owner = name.substr(strlen("__aot_closure::"));
+        size_t pos = owner.rfind("::");
+        if (pos != std::string::npos) {
+            owner.erase(pos);
+        }
+        return "a closure in '" + item_path(owner) + "'";
+    }
+    std::string display = name;
+    size_t pos = display.find("::_static_");
+    if (pos != std::string::npos) {
+        display.erase(pos + 2, strlen("_static_"));
+        return "static method '" + display + "'";
+    }
+    if (display.find("::") != std::string::npos) {
+        return "method '" + display + "'";
+    }
+    return "function '" + display + "'";
+}
+
+//! Collects the functions in one AOT metadata blob that use a top-level local variable
+/** A compiled function, method or closure that uses a top-level local variable of its source records the variable
+    in its slot map with \c QORE_AOT_LOCAL_SLOT_TOP_LEVEL (closures bind through the slot of the function that
+    contains them).
+
+    @param reader the opened blob
+    @param object the fragment the blob was read from
+    @param uses receives the uses found
+    @param error receives the reason on failure
+
+    @return true on success, false if the SLOT_MAPS section is malformed or the operation was cancelled
+*/
+static bool collect_blob_top_level_local_uses(const QoreAOTBinaryReader& reader, const std::string& object,
+        std::set<ScriptObjectTopLevelLocalUse>& uses, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* p = reader.getSectionData(*sec);
+    if (!p) {
+        error = "invalid SLOT_MAPS section in '" + object + "'";
+        return false;
+    }
+    const uint8_t* end = p + sec->size;
+    uint32_t num_funcs = 0;
+    if (!dump_read_u32(p, end, num_funcs)) {
+        error = "truncated SLOT_MAPS header in '" + object + "'";
+        return false;
+    }
+    const bool has_decl_ordinal = (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0;
+    for (uint32_t f = 0; f < num_funcs; ++f) {
+        if (!qo_link_check_cancel(f, "AOT executable top-level local check", error)) {
+            return false;
+        }
+        uint32_t entry_size = 0;
+        if (!dump_read_u32(p, end, entry_size) || static_cast<size_t>(end - p) < entry_size) {
+            error = "truncated SLOT_MAPS entry in '" + object + "'";
+            return false;
+        }
+        const uint8_t* entry_end = p + entry_size;
+        const char* fname = nullptr;
+        uint16_t num_locals = 0;
+        // function name, then the local, global, expression, statement, regex and body-local slot counts,
+        // the unsupported-expression flag and the LValuePath count
+        if (!dump_skip_string_ref(reader, p, entry_end, &fname)
+                || !dump_read_u16(p, entry_end, num_locals)
+                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t))) {
+            error = "malformed SLOT_MAPS entry " + std::to_string(f) + " in '" + object + "'";
+            return false;
+        }
+        for (uint16_t i = 0; i < num_locals; ++i) {
+            if (!qo_link_check_cancel(i, "AOT executable top-level local slot check", error)) {
+                return false;
+            }
+            const char* lname = nullptr;
+            uint8_t lflags = 0;
+            if (!dump_skip_string_ref(reader, p, entry_end, &lname)
+                    || !dump_skip_string_ref(reader, p, entry_end)
+                    || !dump_read_u8(p, entry_end, lflags)
+                    || !dump_skip_bytes(p, entry_end, sizeof(uint16_t) + (has_decl_ordinal ? sizeof(uint32_t) : 0))) {
+                error = "malformed local slot " + std::to_string(i) + " of SLOT_MAPS entry " + std::to_string(f)
+                    + " in '" + object + "'";
+                return false;
+            }
+            if (lflags & QORE_AOT_LOCAL_SLOT_TOP_LEVEL) {
+                uses.insert({object, script_object_function_description(fname && *fname ? fname : "<unnamed>"),
+                    lname && *lname ? lname : "<unnamed>"});
+            }
+        }
+        p = entry_end;
+    }
+    return true;
+}
+
+//! Rejects script-context `.qo` fragments whose top-level code an executable linked from them would skip
+/** An executable linked from script objects (`qcc -o exe a.qo b.qo`, or a multi-source executable) registers the
+    objects and then runs only its entry function: the top-level statements of the objects' sources never run.  Two
+    kinds of fragment content would therefore change the program's behavior silently, where the interpreter runs
+    the same code correctly, and the link is refused for either:
+    - a function, method or closure using a top-level local variable: the variable is never created, so the
+      function reads no value and its updates are lost; found through the slot maps, so it is also detected in
+      fragments built before fragments recorded their top-level statements
+    - a top-level statement that executes code (an assignment, a call, a local variable initialization, a control
+      statement): recorded by the fragment in its UNRUN_TOP_LEVEL_CODE section.  Declarations without an
+      initializer execute nothing, and the initializers of global variables are carried by the fragment and run
+      when it is registered, so neither is reported.  A script commonly ends with a call of its entry function
+      without arguments (<tt>main();</tt>) so that the interpreter runs it; the executable makes exactly that call,
+      so the first such call (in link order) is exempt, and any further one is reported
+
+    Hosts that register fragments themselves (the `--link-qo` and custom C++ host workflows) define what runs and
+    are not affected.
+
+    @param object_paths the fragments being linked
+    @param entry the entry function the executable calls
+    @param error receives the diagnostic
+
+    @return true if the fragments contain no top-level code that the executable would skip
+*/
+static bool check_script_object_top_level_code(const std::vector<std::string>& object_paths, const char* entry,
+        std::string& error) {
+    std::string entry_name = entry ? entry : "";
+    while (!entry_name.compare(0, 2, "::")) {
+        entry_name.erase(0, 2);
+    }
+    bool entry_call_seen = false;
+    std::set<ScriptObjectTopLevelLocalUse> uses;
+    std::vector<std::pair<std::string, QoreAOTUnrunTopLevelStatement>> unrun;
+    for (size_t i = 0; i < object_paths.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT executable top-level code check", error)) {
+            return false;
+        }
+        const std::string& path = object_paths[i];
+        std::vector<AOTDumpMetadataBlob> blobs;
+        if (!load_script_object_metadata_blobs(path, blobs, error)) {
+            return false;
+        }
+        for (const AOTDumpMetadataBlob& blob : blobs) {
+            QoreAOTBinaryReader reader;
+            std::string reader_error;
+            if (!reader.open(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), reader_error)) {
+                error = "invalid AOT metadata in '" + path + "' (" + blob.source + "): " + reader_error;
+                return false;
+            }
+            // name the source as well: a multi-source executable links temporary objects
+            const char* label = reader.getLabel();
+            std::string object = label && *label && path.find(label) == std::string::npos
+                ? path + " (" + label + ")"
+                : path;
+            if (!collect_blob_top_level_local_uses(reader, object, uses, error)) {
+                return false;
+            }
+            std::vector<QoreAOTUnrunTopLevelStatement> statements;
+            if (!readAOTUnrunTopLevelCode(reader, statements, reader_error)) {
+                error = "invalid AOT metadata in '" + path + "' (" + blob.source + "): " + reader_error;
+                return false;
+            }
+            for (QoreAOTUnrunTopLevelStatement& stmt : statements) {
+                if (!entry_call_seen && !stmt.call.empty() && stmt.call == entry_name) {
+                    entry_call_seen = true;
+                    continue;
+                }
+                unrun.emplace_back(path, std::move(stmt));
+            }
+        }
+    }
+    if (uses.empty() && unrun.empty()) {
+        return true;
+    }
+    error = "an executable linked from script objects runs only its entry function; the top-level statements of "
+        "its sources never run, so it would silently skip code that the sources rely on:";
+    for (const ScriptObjectTopLevelLocalUse& use : uses) {
+        error += "\n  " + use.object + ": " + use.function + " uses top-level local variable '" + use.variable
+            + "', which is never created";
+    }
+    for (const auto& [object, stmt] : unrun) {
+        error += "\n  " + object + ": " + stmt.file + ":" + std::to_string(stmt.line) + ": " + stmt.description
+            + " never runs";
+    }
+    error += "\nmove top-level code into a function (for example the entry function), declare variables that "
+        "functions share as global variables (for example 'our int counter = 5;'), whose initializers do run, or "
+        "compile a single script on its own to an executable, which runs its top-level code";
+    return false;
+}
+
 //! Link script-context `.qo` fragments into an executable.
 static int link_script_objects_to_executable(const std::string& output,
         const std::vector<std::string>& object_paths,
@@ -9055,6 +9311,14 @@ static int link_script_objects_to_executable(const std::string& output,
     }
     if (!validate_script_object_body_contracts(object_paths)) {
         return 1;
+    }
+    {
+        std::string tl_error;
+        if (!check_script_object_top_level_code(object_paths, entry, tl_error)) {
+            fprintf(stderr, "error: %s link failed for output '%s': %s\n", mode_label, output.c_str(),
+                tl_error.c_str());
+            return 1;
+        }
     }
     // the Program runs with the options the fragments were compiled with, not a fixed set
     QoreParseOptions link_po;
