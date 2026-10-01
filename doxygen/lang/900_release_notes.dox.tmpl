@@ -1887,6 +1887,10 @@ while (*binary chunk = input.read(65536)) {
     graph, redirects, proxies (also from the environment), TLS options (\c --cacert, \c --capath, \c -E, \c -k),
     time limits, several URLs at once, and Ctrl-C handling that keeps the data received; see \c qget \c --help.
 
+    @par rest Accepts del for DELETE
+    The \c rest command-line REST client accepts \c del (in any case) as an alias for the \c DELETE method, as in
+    <tt>rest del URL</tt>.
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse
