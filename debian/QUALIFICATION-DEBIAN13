@@ -106,9 +106,10 @@ Limits and next steps
   comparisons are not claimed. The older Ubuntu ABI analysis is separate.
 - GPU/Metal and service-dependent database tests are not qualified by these
   offline runs. DataFrame's PostgreSQL test skips without a connection string.
-- Other independent modules still need Debian-specific dependency/build and
-  installed qualification; existing Ubuntu results do not establish Debian
-  support. Bundled modules remain part of Qore's packages.
+- The subsequent batch in QUALIFICATION-MODULES-DEBIAN13 qualifies 24 more
+  independent repositories on both CPUs, bringing the total with UUID to 25
+  of 36. Eleven still need Debian qualification; existing Ubuntu results do
+  not establish Debian support. Bundled modules remain part of Qore's packages.
 - A signed Debian repository, dependency security-maintenance policy and
   retention of release artifacts/evidence are needed before public delivery.
   Launchpad Ubuntu PPA uploads do not publish these Debian artifacts.

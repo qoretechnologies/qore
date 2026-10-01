@@ -1,0 +1,80 @@
+Debian 13 independent module qualification: 2026-10-01
+====================================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Result: PASS for 24 additional development snapshots on native amd64 and
+arm64 (aarch64 Linux on hoppy). Together with UUID from QUALIFICATION-DEBIAN13,
+25 of the 36 independent module repositories have Debian qualification.
+These are unsigned local packages, not final releases or a published archive.
+
+Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13.
+Evidence bundle: qore-debian13-modules-20261001 under the qualification hosts'
+temporary directory. QUALIFICATION.json records exact package versions, source
+commits, packaging-overlay hashes and per-architecture reports. QUALIFICATION.txt
+summarizes the results. Each module has debian/QUALIFICATION-DEBIAN13, and audits/
+records all 71 audit-changes checks. commits.json records module push verification.
+
+Qualified modules
+-----------------
+
+amqp, cairo, fsevent, geos, git, imagemagick, kalman, magic, msgpack, mysql,
+ncurses, odbc, openldap, pgsql, sqlite3, ssh, ssh2, sybase (freetds), sysconf,
+tar, treesitter, vss, zip and zmq. UUID was qualified with the core SDK earlier.
+Bundled modules, including JSON and YAML, remain part of Qore's packages.
+
+Completed checks
+----------------
+
+- All 24 source packages reproduce from independent preparations.
+- Each module passes two full offline, unprivileged builds on each CPU,
+  using different paths and parallelism and varied incoming locale/timezone.
+  All 146 first-build binary artifacts reproduce byte-for-byte on their CPU.
+- Each module also passes a clean architecture-only (-B) build without
+  Doxygen or Graphviz. Its packages match the full builds exactly.
+  Totals: 96 full builds and 48 architecture-only builds.
+- All 25 architecture-independent packages match across amd64 and arm64.
+- Source/binary Lintian has no errors. Binary checking uses the pinned
+  Lintian 2.129 checker with the Debian profile in a separate offline image.
+  Artifact manifests, ELF hardening, detached debug symbols and Qore AOT
+  metadata pass inspection on both CPUs.
+- All 96 installed autopkgtest executions pass offline as an unprivileged
+  user. Minimal runtime installation without libqore-dev, exact coinstallation
+  of documentation/debug packages, dpkg verification, purge, autoremove and
+  SDK-free reinstall pass individually for every module on both CPUs.
+- Combined installation of 76 artifacts from all 25 repositories passes
+  on both CPUs. All 55 native/AOT module names load together in forward and
+  reverse order in fresh tiered and AST processes, using only installed /usr
+  modules, without the SDK or network access. Installed file verification passes.
+
+Corrections found by qualification
+----------------------------------
+
+The ncurses and tar packages produced different AOT objects when build
+parallelism changed. Their recipes now fix QCC_JOBS=1 and remove an inherited
+QCC_SPLIT_THRESHOLD; independent make targets still build in parallel. Fsevent
+receives the same missing reproducibility policy. OpenLDAP's unprivileged
+fixture now invokes /usr/sbin/slapd because /usr/sbin is absent from that user's
+default PATH. All four corrected source candidates pass the checks above.
+Their source manifests preserve the frozen, precommit packaging overlays.
+
+Two issues were in the qualification driver: ImageMagick's own common package
+must be available to APT, and SSH/SSH2 tests can consume a driver's piped stdin.
+The corrected driver uses a local package index and passes scripts as command
+arguments with closed stdin. Original failures and corrected runs are retained.
+
+Remaining work
+--------------
+
+Eleven repositories still need Debian qualification: process, xml, python,
+xmlsec, proj, nats, grpc, pdf, v8, jni and oracle. The next dependency is
+Boost 1.90 for process, followed by XML/Python/XMLSec and PROJ coexistence.
+Other dependency work includes NATS, PyArrow, PDFium and the Node/V8 stack.
+JNI retains the approved pinned-JAR policy. Oracle dependency hosting and
+the optional V8 app catalogue's redistribution review remain separate gates.
+
+No prior Debian upgrade/ABI baseline is available. Only the service scenarios
+exercised by package tests are qualified. Final ABI/release freeze, acceptance
+of exact release artifacts, dependency maintenance and durable evidence
+retention remain required. Public Debian delivery needs a signed Debian archive;
+an Ubuntu PPA does not publish these packages.
