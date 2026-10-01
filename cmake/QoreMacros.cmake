@@ -1997,6 +1997,13 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
     endif()
 ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
+# Export a generated module index without requiring the large HTML tree.
+function(QORE_INSTALL_MODULE_DOXYGEN_TAG _module _tagfile)
+    install(FILES "${_tagfile}" RENAME "${_module}.tag"
+        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/qore/module-tags"
+        OPTIONAL COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+endfunction()
+
 # Configure external-module documentation with the installed language index and
 # only existing image directories. Keep TAGFILES supplied by the module intact.
 function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
@@ -2010,6 +2017,16 @@ function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
     if(EXISTS "${QORE_DOXYGEN_TAGFILE}")
         set(QORE_CORE_DOC_TAGFILES "\"${QORE_DOXYGEN_TAGFILE}=${QORE_DOXYGEN_TAG_URL}\"")
     endif()
+    foreach(_module IN LISTS QORE_DOXYGEN_MODULES)
+        if(NOT "${_module}" MATCHES "^[A-Za-z][A-Za-z0-9_]*$")
+            message(FATAL_ERROR "Invalid QORE_DOXYGEN_MODULES name: ${_module}")
+        endif()
+        set(_tag "${QORE_DOXYGEN_MODULE_TAG_DIR}/${_module}.tag")
+        if(EXISTS "${_tag}")
+            string(APPEND QORE_CORE_DOC_TAGFILES
+                " \"${_tag}=${QORE_DOXYGEN_MODULE_URL}/${_module}/html\"")
+        endif()
+    endforeach()
     configure_file("${_template}" "${_output}" @ONLY)
 endfunction()
 

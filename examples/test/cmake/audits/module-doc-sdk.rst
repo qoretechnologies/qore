@@ -21,7 +21,14 @@ registered; native and dependent user-module index paths are quoted.
 The regression exercises flat and separated modules without a native index,
 and native-plus-user-module links using real Doxygen with warnings as errors.
 
-Validation: 57 CMake regression tests pass, including real Doxygen output with
+Bundled native and standard-library module indexes are also exported by the SDK.
+Callers select indexes with QORE_DOXYGEN_MODULES; missing optional indexes are
+omitted and invalid module names fail configuration. Debian installs optional
+indexes with dh_install only when present, including nodoc and architecture-only
+coverage. VSS documentation builds with warnings as errors and 171 runtime cases
+pass (517 assertions).
+
+Validation: 60 CMake regression tests pass, including real Doxygen output with
 language and module cross-references, absent language index, absent image paths,
 and paths containing spaces. Full Release configuration uses the installed /usr
 prefix. External sysconf, magic and msgpack integration exercises the installed
@@ -282,5 +289,5 @@ Valgrind does not apply to this core change, which contains no C++.
 
    * - Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)
      - Pass
-     - All 57 CMake tests pass, including real HTML link targets, caller TAGFILES preservation, missing-index behavior and paths with spaces.
+     - All 60 CMake tests pass, including real HTML link targets, caller TAGFILES preservation, missing-index behavior and paths with spaces.
 

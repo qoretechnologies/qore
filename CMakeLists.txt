@@ -4049,9 +4049,16 @@ endif()
         # Build TAGFILES string from collected module names
         set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
+        qore_install_module_doxygen_tag("${mod}" "${CMAKE_BINARY_DIR}/${mod}.tag")
         # Tag file is generated in build root as {mod}.tag
         # Relative path to module html from lang html: ../../modules/{mod}/html
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
+    endforeach()
+    foreach(mod astparser reflection logger_bin linenoise krb5 ml sshutil
+            avro dataframe i18n json ocr protobuf tokenizer yaml mongodb)
+        if(TARGET docs-${mod})
+            qore_install_module_doxygen_tag("${mod}" "${CMAKE_BINARY_DIR}/modules/${mod}/${mod}.tag")
+        endif()
     endforeach()
     # Add binary module tag files required for lang cross-references.
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/astparser/astparser.tag=../../modules/astparser/html\"")

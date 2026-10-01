@@ -70,6 +70,7 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_aot_metadata.py
 	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_artifacts.py
 	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_source.py
+	PYTHONDONTWRITEBYTECODE=1 python3 debian/tests/test_doc_indexes.py
 	PYTHONDONTWRITEBYTECODE=1 QORE_QPP_EXECUTABLE=$(CURDIR)/$(builddir)/qpp \
 		QORE_QCC_EXECUTABLE=$(CURDIR)/$(builddir)/qcc QORE_BINARY=$(CURDIR)/$(builddir)/qore \
 		python3 -m unittest discover -s examples/test/cmake
@@ -97,6 +98,13 @@ override_dh_auto_install:
 			sed -i '1s|^#!/usr/bin/env qore$$|#!/usr/bin/qore|' "$$script"; \
 		fi; \
 	done
+
+override_dh_install:
+	dh_install
+	# These optional SDK indexes exist only when documentation was built.
+	if test -f debian/tmp/usr/share/qore/qore.tag; then \
+		dh_install -plibqore-dev --autodest usr/share/qore/qore.tag usr/share/qore/module-tags; \
+	fi
 
 override_dh_installdocs:
 	dh_installdocs --remaining-packages -Nqore-doc

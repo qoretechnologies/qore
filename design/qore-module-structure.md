@@ -19,6 +19,19 @@ find_package(Qore REQUIRED)
 The Doxygen image search includes a module's `doxygen/` and `docs/` directories only
 when they exist. An SDK built without documentation remains usable for compilation.
 
+Bundled module indexes are installed in `share/qore/module-tags`. Select the modules
+whose API documentation you reference before configuring your documentation:
+
+```cmake
+set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
+find_package(Qore REQUIRED)
+```
+
+`QORE_DOXYGEN_MODULE_TAG_DIR` overrides the index directory and
+`QORE_DOXYGEN_MODULE_URL` overrides the base HTML URL (the helper appends
+`/<module>/html`). Indexes that were not built are omitted. The default URL is
+`https://docs.qore.org/current/modules`; installed indexes keep builds offline.
+
 ## Module Layout
 
 There are two supported layouts. Choose one and keep it consistent.

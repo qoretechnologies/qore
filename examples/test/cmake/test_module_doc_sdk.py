@@ -37,7 +37,7 @@ GENERATE_TAGFILE = "{tag}"
         self.run_command(["doxygen", str(config)], root)
         return tag
 
-    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False):
+    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False):
         source = root / "module source"
         source.mkdir(exist_ok=True)
         for name in image_dirs:
@@ -46,11 +46,14 @@ GENERATE_TAGFILE = "{tag}"
         native = self.make_tag(root, "native")
         if two_phase:
             self.make_tag(root, "child")
+        if module_indexes:
+            self.make_tag(root, "SdkDependency")
         input_file = source / "module.dox"
         input_file.write_text("/** @page module Module\n"
                               + ("See @ref language and " if language_tag else "See ")
                               + "@ref native.\n"
-                              + ("See @ref child.\n" if two_phase else "") + "*/\n")
+                              + ("See @ref child.\n" if two_phase else "")
+                              + ("See @ref SdkDependency.\n" if module_indexes else "") + "*/\n")
         template = root / "Doxyfile.in"
         template.write_text('''QUIET = YES
 INPUT = "@_dox_input@"
@@ -66,6 +69,9 @@ set(CMAKE_BINARY_DIR "{root}")
 include("{ROOT}/cmake/QoreMacros.cmake")
 set(QORE_DOXYGEN_TAGFILE "{language}")
 set(QORE_DOXYGEN_TAG_URL "https://example.invalid/language")
+set(QORE_DOXYGEN_MODULE_TAG_DIR "{root}")
+set(QORE_DOXYGEN_MODULE_URL "https://example.invalid/modules")
+set(QORE_DOXYGEN_MODULES "{'SdkDependency;Unavailable' if module_indexes else ''}")
 set(TAGFILES "\\\"{native}=https://example.invalid/native\\\"")
 set(_dox_input "{input_file}")
 qore_configure_module_doxygen("{template}" "{root}/Doxyfile")
@@ -98,6 +104,43 @@ qore_binary_module_two_phase_docs(module "child")
             html, _, _ = self.configure(Path(directory), two_phase=True)
             self.assertIn("https://example.invalid/language/language.html", html)
             self.assertIn("../../child/html/child.html", html)
+
+    def test_selected_installed_module_indexes_resolve_links(self):
+        with tempfile.TemporaryDirectory(prefix="qore installed module indexes ") as directory:
+            html, config, _ = self.configure(Path(directory), module_indexes=True, two_phase=True)
+            self.assertIn("https://example.invalid/modules/SdkDependency/html/SdkDependency.html", html)
+            self.assertNotIn("Unavailable.tag", config)
+
+    def test_module_index_installation_is_optional_and_preserves_content(self):
+        with tempfile.TemporaryDirectory(prefix="qore install module indexes ") as directory:
+            root = Path(directory)
+            tag = self.make_tag(root, "available")
+            prefix = root / "sdk"
+            (root / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(InstallDocIndex NONE)
+include("{ROOT}/cmake/QoreMacros.cmake")
+set(CMAKE_INSTALL_FULL_DATADIR "{prefix}/share")
+set(QORE_INSTALL_COMPONENT_BOOTSTRAP sdk)
+qore_install_module_doxygen_tag(Module "{tag}")
+qore_install_module_doxygen_tag(Unavailable "{root}/absent.tag")
+''')
+            self.run_command([CMAKE, "-S", str(root), "-B", str(root / "build")], root)
+            self.run_command([CMAKE, "--install", str(root / "build"), "--component", "sdk"], root)
+            self.assertEqual(tag.read_bytes(), (prefix / "share/qore/module-tags/Module.tag").read_bytes())
+            self.assertFalse((prefix / "share/qore/module-tags/Unavailable.tag").exists())
+
+    def test_invalid_installed_module_index_name_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "invalid.cmake"
+            script.write_text(f'''include("{ROOT}/cmake/QoreMacros.cmake")
+set(QORE_DOXYGEN_MODULES "../outside")
+qore_configure_module_doxygen("absent.in" "output")
+''')
+            result = subprocess.run([CMAKE, "-P", str(script)], cwd=root, capture_output=True, text=True,
+                                    timeout=60)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Invalid QORE_DOXYGEN_MODULES name", result.stderr)
 
     def test_language_and_module_references_with_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="qore doc sdk ") as directory:
