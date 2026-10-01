@@ -1,4 +1,4 @@
-#!/usr/bin/env qr
+#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 #! Demonstrates the opt-in structured datasource mutation observer.
