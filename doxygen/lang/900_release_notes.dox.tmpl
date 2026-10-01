@@ -4019,6 +4019,13 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
+    - Fixed closures created in object methods seeing a live object after it had been destroyed, contrary to the
+      documented @ref object_scope "object scope" rules and to AST and JIT execution: the IR interpreter
+      (\c ir and \c tiered execution) kept the temporary receiver of a method call (<tt>new C().getClosure()</tt>)
+      alive until the end of the statement, and in AOT-compiled code a closure referring to \c self kept its object
+      alive for the closure's lifetime; in every execution mode a temporary receiver is now destroyed when the method
+      call returns, and such a closure reads no value for \c self and raises \c OBJECT-ALREADY-DELETED for member
+      accesses and method calls once its object has been destroyed
     - Fixed an unqualified call of a method from another method of a base class (<tt>method(args)</tt> rather than
       <tt>self.method(args)</tt>) skipping a derived class's override when the method had several variants and the
       override's parameter types were compatible with, but not identical to, the base variant's (for example

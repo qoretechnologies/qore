@@ -1713,10 +1713,14 @@ static bool raiseInterpreterAnalysisCancel(ExceptionSink* xsink) {
 
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_method_call_bases, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
+    // method call bases used by a call in the block that defines them, before the use
+    std::vector<uint8_t> same_block_call_bases(counts.size(), 0);
+    // the block defining each value seen so far
+    std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
     size_t inst_count = 0;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
@@ -1741,6 +1745,10 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
 
             if (dot_eval && !inst->operands.empty()) {
                 markIRValueUse(dot_eval_base_candidates, inst->operands[0]);
+                QoreIRValue base = inst->operands[0];
+                if (base.isValid() && base.id < def_block.size() && def_block[base.id] == block.get()) {
+                    same_block_call_bases[base.id] = 1;
+                }
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
                     if (((++inst_count % 100) == 0)
                             && qore_check_cancel(xsink, "IR interpreter analysis")) {
@@ -1755,15 +1763,22 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     return raiseInterpreterAnalysisCancel(xsink);
                 }
             }
+            if (inst->result.isValid() && inst->result.id < def_block.size()) {
+                def_block[inst->result.id] = block.get();
+            }
         }
     }
     dot_eval_only_bases.assign(counts.size(), 0);
+    consumed_method_call_bases.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
         if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
             return false;
         }
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
+        }
+        if (same_block_call_bases[i] && counts[i] == 1) {
+            consumed_method_call_bases[i] = 1;
         }
     }
     return true;
@@ -1782,7 +1797,8 @@ static bool interpreterEffectSummaryStatsEnabled() {
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
-    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, xsink)) {
+    std::vector<uint8_t> consumed_method_call_bases;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_method_call_bases, xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -1927,6 +1943,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
+    func.interpreter_consumed_method_call_bases = std::move(consumed_method_call_bases);
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
@@ -5543,6 +5560,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
     const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
     const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
+    const std::vector<uint8_t>& consumed_method_call_bases = func.interpreter_consumed_method_call_bases;
     auto isDotEvalOnlyBase = [&](const QoreIRInstruction* i) -> bool {
         return i && i->result.isValid() && i->result.id < dot_eval_only_bases.size()
             && dot_eval_only_bases[i->result.id];
@@ -6560,6 +6578,29 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             values[id].discard(xsink);
         }
         values[id] = QoreValue();
+    };
+
+    // Releases the base of a completed method call when the call consumes it (its only use, in the block that
+    // defines it; see buildValueUseCounts()), as AST evaluation and native code do: a temporary object (e.g.
+    // "new C().m()") must not outlive the call, or it outlives what a closure created by the method can observe (a
+    // closure holds no strong reference to its object) and its destructor runs later than in every other execution
+    // mode.  A value defined outside the block, such as a loop invariant hoisted out of a loop, is used again by
+    // each execution of the block and is never released here.  Borrowed and weak-load temporaries are released by
+    // their own bookkeeping and are not touched here.  Returns false if the release raised an exception (from a
+    // destructor).
+    auto releaseDeadMethodCallBase = [&](QoreIRValue base) -> bool {
+        uint32_t id = base.id;
+        if (!base.isValid() || id >= values.size() || id >= consumed_method_call_bases.size()
+                || !consumed_method_call_bases[id]
+                || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
+                || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+            return true;
+        }
+        removeAllCleanupEntries(cleanup, id);
+        QoreValue v = values[id];
+        values[id] = QoreValue();
+        v.discard(xsink);
+        return !(xsink && *xsink);
     };
 
     auto trackWeakLoadTemp = [&](uint32_t id) {
@@ -14765,6 +14806,12 @@ load_local_done:
                 if (called_external) {
                     invalidateExternalCaches();
                 }
+                if (!releaseDeadMethodCallBase(direct_inst->operands[0])) {
+                    res.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -14893,6 +14940,10 @@ load_local_done:
                     invalidateExternalCaches();
                 }
 
+                if (!(xsink && *xsink) && !releaseDeadMethodCallBase(de_invoke_inst->operands[0])) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                }
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
                     if (!de_invoke_inst->exception_target) {

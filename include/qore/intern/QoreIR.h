@@ -3437,6 +3437,9 @@ public:
     mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
+    //! method call bases that the call consumes: their only use is a method call in the block that defines them,
+    //! so the value cannot be needed again (a later execution of the block recomputes it first)
+    mutable std::vector<uint8_t> interpreter_consumed_method_call_bases;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;

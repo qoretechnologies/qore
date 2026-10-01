@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ObjectClosureLifetimeTest
+
+#! Tests that a closure created in a method does not prolong its object's lifetime in any execution mode
+/** A closure created in an object's method encapsulates the object's state but holds no strong reference to the
+    object: once the object is destroyed, \c self reads no value and member accesses and method calls raise
+    \c OBJECT-ALREADY-DELETED.  A temporary object (<tt>new C().getClosure()</tt>) is destroyed as soon as the
+    method call that uses it returns.
+
+    The IR interpreter (\c ir and \c tiered execution) kept a temporary method-call receiver until the end of the
+    statement, and AOT-compiled code captured \c self as a closure variable, which kept the object alive for the
+    closure's lifetime; both made such a closure see a live object where the interpreter's AST mode and JIT do not.
+*/
+class ObjectClosureLifetimeTest inherits QUnit::Test {
+    public {
+        const Script = 'class C {
+    public {
+        int v = 7;
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        printf("destroyed %s\n", name);
+    }
+
+    code getSelf() {
+        return auto sub () { return self; };
+    }
+
+    code getMember() {
+        return auto sub () { return v; };
+    }
+
+    code getCall() {
+        return auto sub () { return m(); };
+    }
+
+    code getConstant() {
+        return int sub () { return 1; };
+    }
+
+    int m() {
+        return 2;
+    }
+
+    # the closure is called while the object is alive
+    auto callNow() {
+        code c = auto sub () { return self.v + v; };
+        return c();
+    }
+}
+
+sub t(string label, code c) {
+    try {
+        auto v = c();
+        printf("%s: %s\n", label, v instanceof C ? "object " + v.name : sprintf("%y", v));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", label, ex.err);
+    }
+}
+
+# a temporary receiver is destroyed when the method call returns, before the closure is used
+t("temporary self", new C("t1").getSelf());
+t("temporary member", new C("t2").getMember());
+t("temporary method call", new C("t3").getCall());
+t("temporary no object reference", new C("t4").getConstant());
+code c0 = new C("t5").getSelf();
+printf("temporary assigned\n");
+t("temporary assigned self", c0);
+
+# a block-local object is destroyed at the end of its block
+code c1;
+code c2;
+{
+    C o("block");
+    c1 = o.getSelf();
+    c2 = o.getMember();
+}
+printf("after block\n");
+t("block self", c1);
+t("block member", c2);
+
+# an explicitly deleted object
+C d("deleted");
+code c3 = d.getMember();
+code c4 = d.getSelf();
+delete d;
+t("deleted member", c3);
+t("deleted self", c4);
+
+# a live object
+C live("live");
+t("live self", live.getSelf());
+t("live member", live.getMember());
+t("live method call", live.getCall());
+printf("call now: %y\n", live.callNow());
+
+# a live object used from another thread
+Counter cnt(1);
+code c5 = live.getMember();
+background sub () { t("background live member", c5); cnt.dec(); }();
+cnt.waitForZero();
+
+# a receiver loaded before a loop is used by every iteration; a temporary in the loop is destroyed in each one
+C x("loop");
+int sum = 0;
+for (int i = 0; i < 3; ++i) {
+    sum += x.m();
+    code lc = new C("iteration " + i).getConstant();
+    sum += lc();
+}
+printf("loop sum: %d\n", sum);
+
+# a function frame
+sub f() {
+    code c = new C("in function").getMember();
+    printf("in function\n");
+    t("function temporary member", c);
+}
+f();
+printf("done\n");
+';
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("ObjectClosureLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the AST interpreter defines the behavior", \testAst());
+        addTestCase("every execution mode behaves like the AST interpreter", \testExecModes());
+        addTestCase("AOT executables behave like the AST interpreter", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        TmpDir tmp("qore-object-closure-lifetime-");
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, writeScript(tmp.path)));
+        assertEq(0, rv.rc, rv.err);
+        list<string> lines = rv.out.split("\n");
+        # temporaries are destroyed before the closure is called; no closure sees a destroyed object
+        foreach string line in (("temporary self: null", "temporary member: OBJECT-ALREADY-DELETED",
+                "temporary method call: OBJECT-ALREADY-DELETED", "temporary no object reference: 1",
+                "temporary assigned self: null", "block self: null", "block member: OBJECT-ALREADY-DELETED",
+                "deleted member: OBJECT-ALREADY-DELETED", "deleted self: null", "live self: object live",
+                "live member: 7", "live method call: 2", "call now: 14", "background live member: 7",
+                "function temporary member: OBJECT-ALREADY-DELETED", "loop sum: 9", "destroyed iteration 0",
+                "destroyed iteration 2")) {
+            assertTrue(inlist(line, lines), line + ": " + rv.out);
+        }
+        # each object is destroyed before its closure is used
+        assertBefore(lines, "destroyed t1", "temporary self: null");
+        assertBefore(lines, "destroyed t5", "temporary assigned");
+        assertBefore(lines, "destroyed block", "after block");
+        assertBefore(lines, "destroyed in function", "in function");
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-object-closure-lifetime-");
+        string src = writeScript(tmp.path);
+        string expected = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
+        foreach string mode in (("ir", "jit", "tiered")) {
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            assertEq(0, rv.rc, mode + ": " + rv.err);
+            assertEq(expected, rv.out, mode);
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-object-closure-lifetime-");
+        string src = writeScript(tmp.path);
+        string expected = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
+        string exe = tmp.path + DirSep + "object-closure-lifetime";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        # native closures, and closure bodies run by the IR interpreter
+        foreach string opts in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1")) {
+            rv = run(tmp.path, sprintf("%s %s %s", env, opts, exe));
+            assertEq(0, rv.rc, opts + ": " + rv.err);
+            assertEq(expected, rv.out, opts);
+        }
+    }
+
+    #! asserts that @a first appears in @a lines before @a second
+    private assertBefore(list<string> lines, string first, string second) {
+        int i = indexOf(lines, first);
+        assertTrue(i >= 0 && i < indexOf(lines, second), sprintf("%y before %y", first, second));
+    }
+
+    #! returns the index of @a line in @a lines, or -1
+    private static int indexOf(list<string> lines, string line) {
+        foreach string l in (lines) {
+            if (l == line) {
+                return $#;
+            }
+        }
+        return -1;
+    }
+
+    private string writeScript(string dir) {
+        string path = dir + DirSep + "object-closure-lifetime.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

@@ -143,7 +143,7 @@
 
     @par Description
     Closures encapsulate the state and value of local variables of the outer code block referenced from within the closure when the closure is created. Whenever local variables are bound within a closure, these variables are subject to concurrent thread access protection (locking) just as with global variables, in order to allow closures to be used in any context without restriction and to preseve thread-safety regarding bound local variables.\n\n
-    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and <tt>$.</tt><em>member</em> from within closures created from objects) and additionally prolongs the scope of the object for the lifetime of the closure.\n\n
+    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and <tt>$.</tt><em>member</em> from within closures created from objects), but the closure does not prolong the scope of the object: once the object has been destroyed (for example a temporary object as in <tt>new MyClass().getClosure()</tt>, which is destroyed as soon as the method call returns), \c self evaluates to no value in the closure and member accesses and method calls raise \c OBJECT-ALREADY-DELETED exceptions; see @ref object_scope "object scope".\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example

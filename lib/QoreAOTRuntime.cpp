@@ -6441,7 +6441,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                         }
                     }
 
-                    if (lv) {
+                    // The lexical self of a closure created in a method is not a captured variable: the
+                    // closure reaches its object through its object context, which holds no strong reference
+                    // to the object, as in every other execution mode.  Binding self as a closure variable
+                    // made the closure keep the object alive (and return it after it would otherwise have
+                    // been destroyed); it is bound only as the closure's selfid below.
+                    if (lv && !(lv->isSelf() || (lv->getName() && !strcmp(lv->getName(), "self")))) {
                         closure_vlist->add(lv);
                         if (!lv->closureUse()) {
                             lv->setClosureUse();
