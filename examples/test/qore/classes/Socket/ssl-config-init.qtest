@@ -265,11 +265,18 @@ class SslConfigInitTest inherits QUnit::Test {
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(realpath(qore_bin));
         string root = get_script_dir() + "/../../../../..";
 
+        # the driver is built here, which a system that only runs Qore cannot do; a compiler that
+        # is present must build it, however
+        string cxx = ENV.CXX ?? "c++";
+        if (!trim(backquote("command -v " + shellQuote(cxx) + " || true"))) {
+            testSkip(sprintf("no C++ compiler %y to build the test driver; set CXX to use another one", cxx));
+        }
+
         TmpDir dir("qore-ssl-config-init-");
         string driver = dir.path + "/ssl-config-init-host";
         # -Wl,-rpath is what lets the driver find libqore on macOS, where its install name is
         # @rpath/libqore.<ver>.dylib and LD_LIBRARY_PATH means nothing
-        run(lib_dir, "", (ENV.CXX ?? "c++", "-std=c++20", "-g", "-I" + root + "/include",
+        run(lib_dir, "", (cxx, "-std=c++20", "-g", "-I" + root + "/include",
             "-I" + lib_dir + "/include", get_script_dir() + "/ssl_config_init_host.cpp", "-L" + lib_dir,
             "-Wl,-rpath," + lib_dir, "-lqore", "-ldl", "-o", driver) + libqoreTargetFlags());
 
