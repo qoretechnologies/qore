@@ -4,6 +4,9 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Builds with OpenSSL 1.1 and later no longer reference the obsolete engine cleanup API,
+    including distributions that retain an empty engine header after removing engine support.
+
     Pure Qore module documentation no longer references a nonexistent native module index;
     native and user module index paths also support spaces in the build directory.
     The SDK also installs indexes for bundled modules; external projects can select

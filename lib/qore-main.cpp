@@ -497,7 +497,9 @@ void qore_cleanup() {
         // cleanup openssl library
         ERR_free_strings();
 
-#ifdef HAVE_OPENSSL_ENGINE_H
+        // OpenSSL 1.1+ no longer needs ENGINE_cleanup(); some distributions
+        // retain an empty engine.h without defining OPENSSL_NO_ENGINE.
+#if defined(HAVE_OPENSSL_ENGINE_H) && !defined(OPENSSL_NO_ENGINE) && OPENSSL_VERSION_NUMBER < 0x10100000L
         ENGINE_cleanup();
 #endif
         EVP_cleanup();
