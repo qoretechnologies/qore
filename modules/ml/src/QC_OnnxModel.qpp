@@ -954,6 +954,10 @@ Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch, *list<
 //! Returns current pool counters and configuration
 /** @return hash with configured limits, active/waiting counts, run counters,
     timeout/rejection counters, and dynamic batching settings
+
+    @note After an inference future returns its result or inference error,
+    its completion or error counter is visible here. Cancelling a future does
+    not wait for inference to finish; its worker outcome is counted later.
 */
 hash<auto> OnnxSessionPool::getPoolStats() [flags=RET_VALUE_ONLY] {
     return pool->getPoolStats(xsink);
@@ -961,6 +965,7 @@ hash<auto> OnnxSessionPool::getPoolStats() [flags=RET_VALUE_ONLY] {
 
 //! Resets pool run counters without changing configured limits
 /** Does not change configured limits or currently active/waiting callers.
+    Inferences that finish after the reset contribute to the new counters.
 */
 nothing OnnxSessionPool::resetPoolStats() {
     pool->resetPoolStats();

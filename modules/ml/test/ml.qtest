@@ -175,6 +175,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxSessionPool timeout", \onnxSessionPoolTimeoutTest());
         addTestCase("OnnxSessionPool async inference", \onnxSessionPoolAsyncTest());
         addTestCase("OnnxSessionPool async dynamic batching", \onnxSessionPoolAsyncDynamicBatchTest());
+        addTestCase("OnnxSessionPool async completion statistics", \onnxSessionPoolAsyncCompletionStatsTest());
+        addTestCase("OnnxSessionPool async dynamic error statistics", \onnxSessionPoolAsyncDynamicErrorStatsTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -4957,6 +4959,91 @@ public class MlTest inherits QUnit::Test {
         assertEq(2, stats.async_batch_items);
         assertEq(1, stats.total_batches);
         assertEq(2, stats.total_batch_items);
+    }
+
+    onnxSessionPoolAsyncCompletionStatsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()}, {"max_sessions": 1});
+
+        # Future completion is the synchronization boundary: never poll counters
+        # or sleep before inspecting/resetting them. Exercise each worker path.
+        for (int i = 0; i < 16; ++i) {
+            hash<auto> result = pool.runAsync({"X": ((float(i),),)}).get(5s);
+            assertAsyncPoolCounters(pool, 1, 1, 0);
+            assertFloat(2.0 * i + 1.0, result.Y[0], 1e-5);
+            pool.resetPoolStats();
+
+            hash<auto> tensors = pool.runTensorsAsync({"X": ((float(i),),)}).get(5s);
+            assertAsyncPoolCounters(pool, 1, 1, 0);
+            assertTrue(tensors.Y instanceof ML::Tensor);
+            pool.resetPoolStats();
+
+            list<hash<auto>> batch = pool.runBatchAsync(({"X": ((float(i),),)},)).get(5s);
+            assertAsyncPoolCounters(pool, 1, 1, 0);
+            assertFloat(2.0 * i + 1.0, batch[0].Y[0], 1e-5);
+            pool.resetPoolStats();
+
+            assertThrows("ML-ONNX-INFERENCE-ERROR", sub() {
+                pool.runAsync({"wrong_name": ((1.0,),)}).get(5s);
+            });
+            assertAsyncPoolCounters(pool, 1, 0, 1);
+            pool.resetPoolStats();
+
+            assertThrows("ML-ONNX-INFERENCE-ERROR", sub() {
+                pool.runTensorsAsync({"wrong_name": ((1.0,),)}).get(5s);
+            });
+            assertAsyncPoolCounters(pool, 1, 0, 1);
+            pool.resetPoolStats();
+
+            assertThrows("ML-ONNX-INFERENCE-ERROR", sub() {
+                pool.runBatchAsync(({"wrong_name": ((1.0,),)},)).get(5s);
+            });
+            assertAsyncPoolCounters(pool, 1, 0, 1);
+            pool.resetPoolStats();
+        }
+
+        assertEq((), pool.runBatchAsync(()).get(5s));
+        assertAsyncPoolCounters(pool, 1, 1, 0);
+        pool.resetPoolStats();
+        assertAsyncPoolCounters(pool, 0, 0, 0);
+    }
+
+    onnxSessionPoolAsyncDynamicErrorStatsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 4,
+                "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 100});
+        for (int i = 0; i < 16; ++i) {
+            Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+            Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)});
+            hash<auto> r1 = f1.get(5s);
+            hash<auto> r2 = f2.get(5s);
+            assertAsyncPoolCounters(pool, 2, 2, 0);
+            assertFloat(3.0, r1.Y[0], 1e-5);
+            assertFloat(5.0, r2.Y[0], 1e-5);
+            pool.resetPoolStats();
+
+            f1 = pool.runAsync({"wrong_name": ((1.0,),)});
+            f2 = pool.runAsync({"wrong_name": ((2.0,),)});
+            assertThrows("ML-ONNX-INFERENCE-ERROR", sub() { f1.get(5s); });
+            assertThrows("ML-ONNX-INFERENCE-ERROR", sub() { f2.get(5s); });
+            assertAsyncPoolCounters(pool, 2, 0, 2);
+            pool.resetPoolStats();
+        }
+        assertAsyncPoolCounters(pool, 0, 0, 0);
+    }
+
+    private assertAsyncPoolCounters(ML::OnnxSessionPool pool, int submitted, int completed, int errors) {
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(submitted, stats.async_submitted);
+        assertEq(completed, stats.async_completed);
+        assertEq(errors, stats.async_errors);
     }
 
     onnxSingleValueTest() {

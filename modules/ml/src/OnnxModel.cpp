@@ -5391,17 +5391,26 @@ QoreListNode* QoreOnnxSessionPool::runBatch(const QoreListNode* batch, const Qor
     return rv.release();
 }
 
-void QoreOnnxSessionPool::resolveAsyncRequest(AsyncRequest& request, QoreValue value,
-        ExceptionSink* xsink) {
-    (void)xsink;
+void QoreOnnxSessionPool::resolveAsyncRequest(QorePromise* promise, QoreValue value) {
     ExceptionSink psink;
-    request.promise->set(value, &psink);
+    {
+        // set() wakes Future::get() callers. Keep the statistics lock until the
+        // outcome is counted so getPoolStats() and resetPoolStats() cannot race
+        // with a completion the caller has already observed. Promise::set()
+        // does not invoke continuations; inference results contain only output
+        // data and native Tensor objects, including when cancellation discards
+        // the result. No user code is called while holding this lock.
+        std::lock_guard<std::mutex> lock(mutex);
+        promise->set(value, &psink);
+        if (psink) {
+            ++async_errors;
+        } else {
+            ++async_completed;
+        }
+    }
     if (psink) {
         psink.clear();
-        ++async_errors;
-        return;
     }
-    ++async_completed;
 }
 
 void QoreOnnxSessionPool::rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch,
@@ -5428,11 +5437,12 @@ void QoreOnnxSessionPool::rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequ
 
     for (auto& request : batch) {
         ExceptionSink psink;
+        // Count the failed inference before publishing its exception.
+        ++async_errors;
         request->promise->setError(code.c_str(), desc.c_str(), arg.refSelf(), &psink);
         if (psink) {
             psink.clear();
         }
-        ++async_errors;
     }
 
     ExceptionSink xsink;
@@ -5465,14 +5475,7 @@ void QoreOnnxSessionPool::singleAsyncThread(ExceptionSink* xsink, void* arg) {
         return;
     }
 
-    ExceptionSink psink;
-    params->promise->set(rv, &psink);
-    if (psink) {
-        psink.clear();
-        params->pool->async_errors++;
-        return;
-    }
-    params->pool->async_completed++;
+    params->pool->resolveAsyncRequest(params->promise, rv);
 }
 
 void QoreOnnxSessionPool::dynamicRunAsyncThread(ExceptionSink* xsink, void* arg) {
@@ -5594,7 +5597,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 return;
             }
             QoreValue value = results->getReferencedEntry(i);
-            resolveAsyncRequest(*batch[i], value, xsink);
+            resolveAsyncRequest(batch[i]->promise, value);
         }
     }
 }

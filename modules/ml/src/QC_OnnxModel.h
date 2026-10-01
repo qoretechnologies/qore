@@ -790,7 +790,7 @@ private:
     DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs,
         const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL void processDynamicRunQueue(ExceptionSink* xsink);
-    DLLLOCAL void resolveAsyncRequest(AsyncRequest& request, QoreValue value, ExceptionSink* xsink);
+    DLLLOCAL void resolveAsyncRequest(QorePromise* promise, QoreValue value);
     DLLLOCAL void rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch, ExceptionSink& err);
 
     DLLLOCAL static void singleAsyncThread(ExceptionSink* xsink, void* arg);

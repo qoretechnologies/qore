@@ -1015,6 +1015,11 @@ if (!caps.has_onnx) {
     @section mlreleasenotes ml Module Release Notes
 
     @subsection ml_1_1 ml Module Version 1.1
+    - Fixed an async session pool race: completion/error counters are visible
+      immediately after an inference future returns, including dynamic batches.
+      Resetting counters after completed futures no longer carries their late
+      completion updates into the next measurement interval.
+
     - Added @ref Qore::ML::Tensor "Tensor" and
       @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()" for dense
       ONNX inference with \c buffer<T> storage and explicit shape metadata
