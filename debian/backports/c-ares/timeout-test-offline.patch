@@ -1,0 +1,113 @@
+Description: Exercise timeout selection with a loopback DNS mock
+ The default-channel test attempts to send to the builder's external DNS
+ server. Without external routes the send can fail synchronously, leaving
+ no timer to inspect. Move the test to the existing IPv4/IPv6 UDP mock
+ fixture and verify query completion without external network access.
+Author: Qore Technologies, s.r.o.
+Copyright: 2026 Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-01
+
+--- a/test/ares-test-misc.cc
++++ b/test/ares-test-misc.cc
+@@ -180,43 +180,6 @@
+   EXPECT_EQ(ARES_EBADSTR, ares_set_servers_csv(channel_, "2.3.4.5,1.2.3.4:Z,3.4.5.6"));
+ }
+ 
+-TEST_F(DefaultChannelTest, TimeoutValue) {
+-  struct timeval tinfo;
+-  tinfo.tv_sec = 0;
+-  tinfo.tv_usec = 0;
+-  struct timeval tmax;
+-  tmax.tv_sec = 0;
+-  tmax.tv_usec = 10;
+-  struct timeval* pt;
+-
+-  // No timers => get max back.
+-  pt = ares_timeout(channel_, &tmax, &tinfo);
+-  EXPECT_EQ(&tmax, pt);
+-  EXPECT_EQ(0, pt->tv_sec);
+-  EXPECT_EQ(10, pt->tv_usec);
+-
+-  pt = ares_timeout(channel_, nullptr, &tinfo);
+-  EXPECT_EQ(nullptr, pt);
+-
+-  HostResult result;
+-  ares_gethostbyname(channel_, "www.google.com.", AF_INET, HostCallback, &result);
+-
+-  // Now there's a timer running.
+-  pt = ares_timeout(channel_, &tmax, &tinfo);
+-  EXPECT_EQ(&tmax, pt);
+-  EXPECT_EQ(0, pt->tv_sec);
+-  EXPECT_EQ(10, pt->tv_usec);
+-
+-  tmax.tv_sec = 100;
+-  pt = ares_timeout(channel_, &tmax, &tinfo);
+-  EXPECT_EQ(&tinfo, pt);
+-
+-  pt = ares_timeout(channel_, nullptr, &tinfo);
+-  EXPECT_EQ(&tinfo, pt);
+-
+-  Process();
+-}
+-
+ TEST_F(LibraryTest, InetNtoP) {
+   struct in_addr addr;
+   addr.s_addr = htonl(0x01020304);
+--- a/test/ares-test-mock.cc
++++ b/test/ares-test-mock.cc
+@@ -171,6 +171,54 @@
+   EXPECT_EQ(ARES_ETIMEOUT, result.status_);
+ }
+ 
++TEST_P(MockUDPChannelTest, TimeoutValue) {
++  struct timeval tinfo;
++  tinfo.tv_sec = 0;
++  tinfo.tv_usec = 0;
++  struct timeval tmax;
++  tmax.tv_sec = 0;
++  tmax.tv_usec = 10;
++  struct timeval* pt;
++
++  // No timers => get max back.
++  pt = ares_timeout(channel_, &tmax, &tinfo);
++  EXPECT_EQ(&tmax, pt);
++  EXPECT_EQ(0, pt->tv_sec);
++  EXPECT_EQ(10, pt->tv_usec);
++
++  pt = ares_timeout(channel_, nullptr, &tinfo);
++  EXPECT_EQ(nullptr, pt);
++
++  // Queue against the loopback mock server, independent of host DNS routing.
++  DNSPacket reply;
++  reply.set_response().set_aa()
++    .add_question(new DNSQuestion("timer.example", T_A))
++    .add_answer(new DNSARR("timer.example", 100, {1, 2, 3, 4}));
++  EXPECT_CALL(server_, OnRequest("timer.example", T_A))
++    .WillOnce(SetReply(&server_, &reply));
++  HostResult result;
++  ares_gethostbyname(channel_, "timer.example.", AF_INET, HostCallback, &result);
++
++  // Now there's a timer running.
++  pt = ares_timeout(channel_, &tmax, &tinfo);
++  EXPECT_EQ(&tmax, pt);
++  EXPECT_EQ(0, pt->tv_sec);
++  EXPECT_EQ(10, pt->tv_usec);
++
++  tmax.tv_sec = 100;
++  pt = ares_timeout(channel_, &tmax, &tinfo);
++  EXPECT_EQ(&tinfo, pt);
++
++  pt = ares_timeout(channel_, nullptr, &tinfo);
++  EXPECT_EQ(&tinfo, pt);
++
++  EXPECT_FALSE(result.done_);
++  Process();
++  EXPECT_TRUE(result.done_);
++  EXPECT_EQ(ARES_SUCCESS, result.status_);
++  EXPECT_EQ(nullptr, ares_timeout(channel_, nullptr, &tinfo));
++}
++
+ // UDP only so mock server doesn't get confused by concatenated requests
+ TEST_P(MockUDPChannelTest, GetHostByNameParallelLookups) {
+   DNSPacket rsp1;

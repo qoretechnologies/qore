@@ -1,5 +1,5 @@
-Qore dependency backports for Ubuntu 26.04
-========================================
+Qore dependency backports for Debian 13 and Ubuntu 26.04
+======================================================
 
 Copyright 2026 Qore Technologies, s.r.o.
 
@@ -8,16 +8,18 @@ The testing PPA is:
   https://launchpad.net/~qore-packagers/+archive/ubuntu/qore-testing
   dput destination: ppa:qore-packagers/qore-testing
 
-These recipes initially target Ubuntu 26.04 (resolute). They are not Debian,
-Ubuntu 24.04, or Ubuntu 22.04 qualification results. Build each distribution
-separately and resolve its dependencies before adding another target here.
+The source preparer supports Ubuntu 26.04 (resolute, the default) and Debian 13
+(trixie). Each target has its own changelog and version suffix. Debian sources
+have no PPA destination: build and publish them in a separate Debian archive.
+Build and qualify each distribution and architecture separately. These recipes
+do not establish compatibility with Ubuntu 24.04 or Ubuntu 22.04.
 
 Sources and package scope
 -------------------------
 
 sources.json pins upstream archives and existing Debian/Ubuntu packaging by
 HTTPS URL and SHA-256 digest. It records the changelog date, target distribution,
-maintainer, and PPA versions. The preparation tool additionally verifies the
+maintainer, and target versions. The preparation tool additionally verifies the
 c-ares, nghttp2, nghttp3, and ngtcp2 upstream signatures using keys shipped in
 the pinned Debian packaging. The tree-sitter GitHub tag archive is pinned by
 SHA-256; it does not have a release archive signature in this recipe.
@@ -29,6 +31,49 @@ SHA-256; it does not have a release archive signature in this recipe.
     and GnuTLS crypto backends.
   qore-tree-sitter 0.26.13: C runtime and development packages only, retaining
     Debian's SONAME-qualified library package and symbol history.
+
+The trixie target additionally prepares qore-onnx 1.20.0 and ONNX Runtime
+1.23.2+dfsg from Debian's repacked source archives, pinned by SHA-256 from
+authenticated Debian source metadata. Ubuntu uses its archive's ONNX packages.
+ONNX Runtime derives its Python library links from VERSION_NUMBER instead of
+a stale hard-coded version. The ABI-version generator writes SOVERSION_NUMBER
+so an in-source build cannot overwrite the upstream release version.
+
+Debian unstable's ONNX 1.20 library has a different protobuf ABI from Debian
+13's ONNX 1.17 and replaces the libraries used by stable PyTorch. The qore-onnx
+source instead builds libqore-onnx-dev: static PIC libraries in a private
+multiarch prefix, headers in /usr/include/qore-onnx, and the qore_onnx C++
+namespace. It supplies no system ONNX headers, shared library or Python module.
+The exported CMake targets carry the private header path and protobuf link
+dependencies. Both libraries use protobuf-lite; ONNX Runtime binds its legacy
+namespace references to the configured private namespace at its internal
+protobuf boundary. Static schema registration is disabled because the runtime
+registers its own schemas; standalone consumers and the C++ tests initialize
+their schemas explicitly. ONNX Runtime links this private dependency; Debian's
+ONNX/PyTorch packages remain installed and usable. Consumers must be rebuilt when this
+static dependency receives security updates. The incorporating binary packages
+record its exact source version in Static-Built-Using and ship its copyright
+and license record as copyright.qore-onnx. Keep the matching qore-onnx source
+available alongside the runtime packages.
+
+Debian's ONNX Runtime repack excludes models whose licenses are unclear and
+disables the upstream model-dependent unit tests. Its installed-package
+tests cover C linking, generated-model inference and CPU execution providers.
+An additional test imports Debian's ONNX/PyTorch and the backported runtime in
+both orders, compares convolution results, and checks profiling records for
+actual CPU, DNNL and XNNPACK execution. The runtime also backports the upstream
+XNNPACK Gemm dynamic-batch fix. Unsupported transpose/bias layouts fall back to
+the CPU provider, and runtime input channels are checked against the weights.
+Numerical regressions cover changing and empty batches, optional and broadcast
+biases, transposed inputs/weights, zero input channels and mismatched shapes.
+qore-onnx runs the upstream C++ tests during its build and has an installed
+CMake/linking test alongside Debian's ONNX and PyTorch packages.
+These tests must pass for both architectures; a successful build alone is
+not qualification.
+
+ONNX Runtime keeps compressed debug information in each library's debug file.
+This avoids dwz 0.15 generating an empty, string-only shared debug object
+(https://bugs.debian.org/1106590); automatic debug-symbol packages remain enabled.
 
 qore-tree-sitter is deliberately a separate source package. It produces
 libtree-sitter0.26 and libtree-sitter-dev, without backporting Rust crates or the
@@ -53,6 +98,12 @@ source upload. It is applied by dpkg-source, without CMake downloading or
 patching libraries during the Qore package build. A changed upstream source
 that no longer matches the patcher fails preparation and requires review.
 
+The trixie recipe also moves c-ares' timeout-selection test to its existing
+IPv4/IPv6 loopback DNS mock. The original test tries the host's external DNS
+server; an immediate unreachable-network error leaves no timer to inspect.
+The corrected test retains the timer assertions and checks successful query
+completion without external network access. Both runtime fixes are unchanged.
+
 When updating c-ares, check whether upstream includes BOTH fixes before
 removing the patch. Also increment the PPA revision when modifying a published
 patch. Keep the system-library backport and FetchContent fixes synchronized.
@@ -67,6 +118,11 @@ APT. Generated archives and extracted sources must live outside the checkout:
   tools/prepare-debian-backports.py \
     --output /path/to/new-source-workspace \
     --cache /path/to/download-cache
+
+For Debian 13, add --suite trixie. The same pinned upstream sources and patches
+are used, with ~deb13.1 versions instead of ~ubuntu26.04.1. Changelog entries and
+source provenance refer to the selected distribution. --suite resolute selects
+the existing Ubuntu target explicitly.
 
 Pass source package names after the options to prepare a subset. The tool
 refuses existing package workspaces. After populating the download cache,
@@ -85,20 +141,45 @@ Launchpad has accepted it; increment its Qore revision in sources.json.
 Clean local binary builds
 -------------------------
 
-The helper uses rootless Podman with an Ubuntu 26.04 image. It installs tools
-and declared build dependencies in a fresh container, then builds and tests
-as an unprivileged build user from the .dsc with the network disabled. It does
+The helper uses rootless Podman with an Ubuntu 26.04 image by default. It
+installs tools and declared build dependencies in a fresh container, then builds
+and tests as an unprivileged build user from the .dsc with the network disabled. It does
 not install backports into the development host or change the host's APT sources.
 
   podman pull docker.io/library/ubuntu:26.04
   tools/build-debian-backport.sh \
     /path/to/new-source-workspace/c-ares /path/to/new-c-ares-results
 
+For a prepared Debian 13 source package, select the Debian image:
+
+  podman pull docker.io/library/debian:13
+  QORE_BACKPORT_IMAGE=docker.io/library/debian:13 \
+    tools/build-debian-backport.sh \
+      /path/to/trixie-sources/c-ares /path/to/new-trixie-c-ares-results
+
+The helper requires the source changelog suite to match the container release.
+Run it on a native amd64 or arm64 host; an Ubuntu-built binary is not a Debian
+build. These five recipes supply the HTTP/DNS/parser libraries. Debian 13 also
+needs the ONNX/ONNX Runtime recipes and Arrow/Parquet packages before Qore can
+build with all required features; see debian/README.source.
+
+Build qore-onnx first. To build ONNX Runtime against its local dependency,
+set QORE_BACKPORT_DEPENDENCIES to the same-architecture qore-onnx results:
+
+  QORE_BACKPORT_IMAGE=docker.io/library/debian:13 \
+  QORE_BACKPORT_DEPENDENCIES=/path/to/trixie-qore-onnx-results \
+    tools/build-debian-backport.sh \
+      /path/to/trixie-sources/onnxruntime /path/to/new-trixie-onnxruntime-results
+
+The directory is mounted read-only. Its .deb files are installed only inside
+the provisioning container, and their SHA-256 hashes are retained with the
+build results. The subsequent build and tests still have no network access.
+
 Repeat for nghttp2, nghttp3, ngtcp2 and qore-tree-sitter. Each results directory
 must be new. Results include binaries, build metadata, logs, the base image's
 identity and the exact build-dependency inventory. The provisioned build image
 is retained locally for diagnosis; its ID is recorded in build-image.txt.
-QORE_BACKPORT_IMAGE may select a previously pulled Ubuntu 26.04 base image by
+QORE_BACKPORT_IMAGE may select a previously pulled supported base image by
 digest. No image is pushed to a registry.
 
 Lintian errors in source or binary packages fail the build helper. Review
@@ -118,6 +199,10 @@ Before uploading, verify the resulting source package with:
 
 Signing and uploading
 ---------------------
+
+The following PPA upload instructions apply only to resolute sources. Do not
+upload trixie packages to the Ubuntu PPA; Debian publication requires its own
+signed archive and distribution-specific qualification.
 
 Source preparation and local builds do not contact Launchpad to publish
 anything. Review the source changes, build results and PPA target first.

@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+include /usr/share/dpkg/architecture.mk
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all reproducible=+all
+
+%:
+	dh $@ --buildsystem=cmake+ninja
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_INSTALL_LIBDIR=lib/$(DEB_HOST_MULTIARCH)/qore-onnx \
+		-DCMAKE_INSTALL_INCLUDEDIR=include/qore-onnx \
+		-DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+		-DBUILD_SHARED_LIBS=OFF \
+		-DONNX_NAMESPACE=qore_onnx \
+		-DONNX_DISABLE_STATIC_REGISTRATION=ON \
+		-DONNX_USE_PROTOBUF_SHARED_LIBS=ON \
+		-DONNX_USE_LITE_PROTO=ON \
+		-DONNX_BUILD_PYTHON=OFF \
+		-DONNX_BUILD_TESTS=$(if $(filter nocheck,$(DEB_BUILD_OPTIONS)),OFF,ON) \
+		-DFETCHCONTENT_FULLY_DISCONNECTED=ON

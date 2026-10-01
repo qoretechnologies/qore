@@ -5,16 +5,18 @@
 
     Regression test for TLS startup when the OpenSSL configuration file cannot be processed.
 
-    OpenSSL loads its configuration file lazily, inside the first SSL_CTX_new() call.  A file that
-    this OpenSSL build cannot parse makes that load fail, and when the file sets
-    "config_diagnostics = 1" the failure is hard: SSL_CTX_new() then returns nullptr on whichever
-    thread created the first context, leaving that thread's error queue empty.  Qore reported the
-    result as "the SSL_CTX_new() call could not be completed because the TLS/SSL connection was
-    terminated by the remote end", blaming a peer that had not been contacted yet, and only the
-    first TLS operation in the process failed — every later one worked.
+    OpenSSL loads its configuration file lazily, inside the first call that needs it, and remembers
+    the result for the life of the process.  A file that this OpenSSL build cannot process makes
+    that load fail, and when the file sets "config_diagnostics = 1" the failure is hard:
+    SSL_CTX_new() then returns nullptr with an empty error queue.  Qore reported the result as "the
+    SSL_CTX_new() call could not be completed because the TLS/SSL connection was terminated by the
+    remote end", blaming a peer that had not been contacted yet.  Up to OpenSSL 3.6.4 only the first
+    TLS operation in the process failed; from 3.6.5 on every one does.
 
-    Qore now processes the configuration file at startup, on the main thread, so the reason is
-    reported once and every thread can create a TLS context afterwards.
+    Qore now switches automatic loading off and processes the configuration file itself at startup,
+    on the main thread, so the reason is reported once and every thread can create a TLS context
+    afterwards.  It can do that only when nothing else in the process has used OpenSSL first; in an
+    application that has, the file must not be processed a second time.
 */
 
 %modern
@@ -41,13 +43,47 @@ class SslConfigInitTest inherits QUnit::Test {
             "[evp_properties]\n"
             "qore-test-unknown-option = no\n";
 
+        #! A configuration file with the same unusable option, but without \c config_diagnostics
+        /** OpenSSL skips a module that cannot be initialized unless the file asks for diagnostics.
+        */
+        const LenientConfig = "openssl_conf = openssl_init\n"
+            "\n"
+            "[openssl_init]\n"
+            "alg_section = evp_properties\n"
+            "\n"
+            "[evp_properties]\n"
+            "qore-test-unknown-option = no\n";
+
+        #! A usable configuration file that can be processed only once in a process
+        /** Registering an OID that already exists is an error, and \c config_diagnostics makes it
+            one that is reported.
+        */
+        const OnceOnlyConfig = "config_diagnostics = 1\n"
+            "openssl_conf = openssl_init\n"
+            "\n"
+            "[openssl_init]\n"
+            "oid_section = oids\n"
+            "\n"
+            "[oids]\n"
+            "qoreTestSslConfigInitOid = 1.3.6.1.4.1.99999.77.1\n";
+
         #! Marks a successful TLS context creation in the child's output
         const HandshakeMarker = "during the TLS handshake";
+
+        #! The startup warning for a configuration file that could not be processed
+        const ConfigWarning = "OpenSSL configuration file could not be processed";
+
+        #! The number of TLS connections the child makes: one in the main thread, one in another
+        const ChildConnections = 2;
     }
 
     constructor() : Test("SslConfigInitTest", "1.0") {
         addTestCase("an unprocessable OpenSSL config does not break TLS", \testBrokenConfigStillConnects());
         addTestCase("a usable OpenSSL config produces no warning", \testGoodConfigIsSilent());
+        addTestCase("an OpenSSL config error without diagnostics is not reported",
+            \testLenientConfigIsSilent());
+        addTestCase("a missing OpenSSL config is not reported", \testMissingConfigIsSilent());
+        addTestCase("the OpenSSL config is processed exactly once", \testConfigProcessedOnce());
         set_return_value(main());
     }
 
@@ -58,19 +94,22 @@ class SslConfigInitTest inherits QUnit::Test {
         return qore_bin;
     }
 
-    #! Accepts one TCP connection and closes it without speaking TLS
+    #! Accepts the child's TCP connections and closes each one without speaking TLS
     /** The peer only has to get far enough for the client to need a TLS context; what it does with
         the connection afterwards is irrelevant to what is being tested here.
 
         @param listener the bound and listening socket
-        @param accepted the counter to decrement once the connection has been handled
+        @param accepted the counter to decrement once the connections have been handled
     */
     private startDroppingPeer(Socket listener, Counter accepted) {
         background sub () {
             on_exit accepted.dec();
             try {
-                *Socket conn = listener.accept(30s);
-                if (conn) {
+                for (int i = 0; i < ChildConnections; ++i) {
+                    *Socket conn = listener.accept(30s);
+                    if (!conn) {
+                        break;
+                    }
                     conn.close();
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -79,8 +118,11 @@ class SslConfigInitTest inherits QUnit::Test {
         }();
     }
 
-    #! Runs a child qore process that makes a TLS connection, and returns its combined output
-    /** @param openssl_conf the value to give the child in \c OPENSSL_CONF
+    #! Runs a child qore process that makes TLS connections, and returns its combined output
+    /** The child connects once in its main thread and then once in another thread, so that a TLS
+        context is created both by the first TLS operation in the process and by a later one.
+
+        @param openssl_conf the value to give the child in \c OPENSSL_CONF
 
         @return the child's combined stdout and stderr
     */
@@ -95,13 +137,22 @@ class SslConfigInitTest inherits QUnit::Test {
         startDroppingPeer(listener, accepted);
 
         TmpFile tmp(NOTHING, ".qr");
-        tmp.file.write(sprintf("Socket s();\n"
-            "try {\n"
-            "    s.connectSSL(\"localhost:%d\", 30s);\n"
-            "    printf(\"CHILD: connected\\n\");\n"
-            "} catch (hash<ExceptionInfo> ex) {\n"
-            "    printf(\"CHILD: %%s: %%s\\n\", ex.err, ex.desc);\n"
-            "}\n", port));
+        tmp.file.write(sprintf("sub tls_connect(string label) {\n"
+            "    Socket s();\n"
+            "    try {\n"
+            "        s.connectSSL(\"localhost:%d\", 30s);\n"
+            "        printf(\"CHILD %%s: connected\\n\", label);\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        printf(\"CHILD %%s: %%s: %%s\\n\", label, ex.err, ex.desc);\n"
+            "    }\n"
+            "}\n"
+            "tls_connect(\"main\");\n"
+            "Counter done(1);\n"
+            "background sub () {\n"
+            "    on_exit done.dec();\n"
+            "    tls_connect(\"thread\");\n"
+            "}();\n"
+            "done.waitForZero();\n", port));
         tmp.file.close();
 
         string out = backquote(sprintf("OPENSSL_CONF=%s %s %s 2>&1", shellQuote(openssl_conf),
@@ -110,27 +161,48 @@ class SslConfigInitTest inherits QUnit::Test {
         return out;
     }
 
+    #! Asserts that every TLS connection the child made got as far as the handshake
+    /** @param out the child's output
+        @param desc what the child was run with
+    */
+    private assertHandshakesReached(string out, string desc) {
+        foreach string label in ("main", "thread") {
+            assertRegex("CHILD " + label + ": [^\n]*" + HandshakeMarker, out,
+                sprintf("the %s connection must reach the TLS handshake with %s", label, desc));
+        }
+        assertFalse(out =~ /SSL_CTX_new/, "SSL_CTX_new() must not fail with " + desc);
+    }
+
     private static string shellQuote(string arg) {
         return "'" + replace(arg, "'", "'\\''") + "'";
     }
 
-    testBrokenConfigStillConnects() {
-        TmpFile cfg(NOTHING, ".cnf");
-        cfg.file.write(BrokenConfig);
-        cfg.file.close();
+    #! Writes an OpenSSL configuration file
+    /** @param content the content of the file
 
+        @return the file, which is removed when the object goes out of scope
+    */
+    private static TmpFile writeConfig(string content) {
+        TmpFile cfg(NOTHING, ".cnf");
+        cfg.file.write(content);
+        cfg.file.close();
+        return cfg;
+    }
+
+    testBrokenConfigStillConnects() {
+        TmpFile cfg = writeConfig(BrokenConfig);
         string out = runTlsChild(cfg.path);
 
         # the reason the config could not be used is reported once, at startup
-        assertRegex("OpenSSL configuration file could not be processed", out,
-            "an unprocessable OpenSSL config must be reported at startup");
+        assertRegex(ConfigWarning, out, "an unprocessable OpenSSL config must be reported at startup");
+        assertEq(1, (out =~ x/(could not be processed)/g).size(),
+            "an unprocessable OpenSSL config must be reported only once");
         assertRegex("unknown option", out, "the startup warning must carry the OpenSSL reason");
 
-        # the point of the test: creating the TLS context must still work, so the connection gets
-        # as far as the handshake instead of failing before any byte is sent
-        assertRegex(HandshakeMarker, out,
-            "the client must reach the TLS handshake with an unprocessable OpenSSL config");
-        assertFalse(out =~ /SSL_CTX_new/, "SSL_CTX_new() must not fail because of the config file");
+        # the point of the test: creating a TLS context must still work, in the first TLS operation
+        # in the process and in every later one, so each connection gets as far as the handshake
+        # instead of failing before any byte is sent
+        assertHandshakesReached(out, "an unprocessable OpenSSL config");
         assertFalse(out =~ /terminated by the remote end.*SSL_CTX_new/,
             "a local context failure must never be reported as a peer disconnection");
     }
@@ -139,8 +211,97 @@ class SslConfigInitTest inherits QUnit::Test {
         # /dev/null is a valid, empty configuration file
         string out = runTlsChild("/dev/null");
 
-        assertFalse(out =~ /OpenSSL configuration file could not be processed/,
-            "a usable OpenSSL config must not produce a warning");
-        assertRegex(HandshakeMarker, out, "the client must reach the TLS handshake");
+        assertFalse(out.regex(ConfigWarning), "a usable OpenSSL config must not produce a warning");
+        assertHandshakesReached(out, "a usable OpenSSL config");
+    }
+
+    testLenientConfigIsSilent() {
+        TmpFile cfg = writeConfig(LenientConfig);
+        string out = runTlsChild(cfg.path);
+
+        # OpenSSL does not report this without "config_diagnostics = 1", and neither must Qore
+        assertFalse(out.regex(ConfigWarning),
+            "an OpenSSL config error must not be reported when the config does not ask for diagnostics");
+        assertHandshakesReached(out, "an OpenSSL config error without diagnostics");
+    }
+
+    testMissingConfigIsSilent() {
+        TmpDir dir("qore-ssl-config-init-");
+        string out = runTlsChild(dir.path + "/no-such-openssl.cnf");
+
+        assertFalse(out.regex(ConfigWarning), "a missing OpenSSL config must not produce a warning");
+        assertHandshakesReached(out, "a missing OpenSSL config");
+    }
+
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than
+        libqore's, and the linker then warns that libqore was built for a newer macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
+    #! Runs a command and returns its combined output; the command must succeed
+    /** @param lib_dir the directory with libqore
+        @param env environment assignments for the command, already quoted
+        @param args the command and its arguments
+
+        @return the command's combined stdout and stderr
+    */
+    private string run(string lib_dir, string env, list<string> args) {
+        string command = sprintf("LD_LIBRARY_PATH=%s %s %s 2>&1; echo \"exit status: $?\"", shellQuote(lib_dir),
+            env, (map shellQuote($1), args).join(" "));
+        string out = backquote(command);
+        assertRegex("exit status: 0\n$", out, "the command must succeed: " + command);
+        return out;
+    }
+
+    testConfigProcessedOnce() {
+        string qore_bin = qoreBin();
+        if (qore_bin !~ /\//) {
+            qore_bin = trim(backquote("command -v " + shellQuote(qore_bin)));
+        }
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(realpath(qore_bin));
+        string root = get_script_dir() + "/../../../../..";
+
+        # the driver is built here, which a system that only runs Qore cannot do; a compiler that
+        # is present must build it, however
+        string cxx = ENV.CXX ?? "c++";
+        if (!trim(backquote("command -v " + shellQuote(cxx) + " || true"))) {
+            testSkip(sprintf("no C++ compiler %y to build the test driver; set CXX to use another one", cxx));
+        }
+
+        TmpDir dir("qore-ssl-config-init-");
+        string driver = dir.path + "/ssl-config-init-host";
+        # -Wl,-rpath is what lets the driver find libqore on macOS, where its install name is
+        # @rpath/libqore.<ver>.dylib and LD_LIBRARY_PATH means nothing
+        run(lib_dir, "", (cxx, "-std=c++20", "-g", "-I" + root + "/include",
+            "-I" + lib_dir + "/include", get_script_dir() + "/ssl_config_init_host.cpp", "-L" + lib_dir,
+            "-Wl,-rpath," + lib_dir, "-lqore", "-ldl", "-o", driver) + libqoreTargetFlags());
+
+        TmpFile cfg = writeConfig(OnceOnlyConfig);
+        string env = "OPENSSL_CONF=" + shellQuote(cfg.path);
+
+        foreach string mode in ("qore-first", "host-first") {
+            string out = run(lib_dir, env, (driver, mode));
+            *string openssl = (out =~ x/^openssl: (\S+)$/m)[0];
+            if (openssl.toInt() < 3) {
+                # "config_diagnostics" came with OpenSSL 3; before it there is no failure to keep
+                # from being remembered and Qore leaves the load to OpenSSL
+                testSkip(sprintf("OpenSSL %y does not have config_diagnostics", openssl));
+            }
+
+            # whoever used OpenSSL first, the file has been processed when qore_init() returns ...
+            assertRegex("(?m)^reload: failed$", out,
+                sprintf("%s: the OpenSSL config must have been processed during initialization", mode));
+            # ... and by Qore only when the application had not done it, as a second pass over the
+            # file fails on the OID it registers
+            assertFalse(out.regex(ConfigWarning),
+                sprintf("%s: the OpenSSL config must not be processed twice: %s", mode, out));
+            if (mode == "host-first") {
+                assertRegex("(?m)^host init: ok$", out, "the application's own OpenSSL initialization must succeed");
+            }
+        }
     }
 }

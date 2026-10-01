@@ -1,0 +1,138 @@
+Description: Handle dynamic Gemm batches and validate XNNPACK capabilities
+ Backport upstream's runtime batch-size fix. Also reject transposed A and
+ unsupported bias broadcasts so another provider handles them; check ranks
+ before indexing dimensions and handle an absent optional bias safely.
+Author: Ishaan Gupta <guptaishaan@users.noreply.github.com>
+Author: Qore Technologies, s.r.o.
+Origin: upstream, https://github.com/microsoft/onnxruntime/commit/86c6efcc3f4853b793b22f59c2c7b407855b8bbe
+Bug: https://github.com/microsoft/onnxruntime/issues/31153
+Forwarded: not-needed
+Last-Update: 2026-10-01
+Copyright: 2026 Microsoft Corporation and Qore Technologies, s.r.o.
+License: MIT
+
+--- a/onnxruntime/core/providers/xnnpack/math/gemm.cc
++++ b/onnxruntime/core/providers/xnnpack/math/gemm.cc
+@@ -33,6 +33,9 @@
+     const auto beta = node.GetAttributes().find("beta");
+     if ((*beta).second.f() != 1.0) break;
+ 
++    const auto trans_a = node.GetAttributes().find("transA");
++    if (trans_a != node.GetAttributes().end() && trans_a->second.i() != 0) break;
++
+     const NodeArg* A_arg = input_defs[0];
+     const NodeArg* B_arg = input_defs[1];
+     const NodeArg* C_arg = input_defs.size() == 2 ? nullptr : input_defs[2];
+@@ -58,22 +61,29 @@
+     // making sure we are dealing with MatMul
+     const ONNX_NAMESPACE::TensorShapeProto* A_shape = A_arg->Shape();
+     const ONNX_NAMESPACE::TensorShapeProto* B_shape = B_arg->Shape();
+-    const ONNX_NAMESPACE::TensorShapeProto* C_shape = C_arg->Shape();
+-
+-    if (!A_shape || A_shape->dim_size() >= 3) {
+-      break;
+-    }
+-
+-    if (!B_shape || B_shape->dim_size() >= 3) {
+-      break;
+-    }
+-
+-    if (!C_shape || C_shape->dim_size() >= 3) {
+-      break;
+-    }
+-
+-    if (C_arg && C_arg->Exists() && (C_shape->dim(0).dim_value() != B_shape->dim(1).dim_value() && C_shape->dim(0).dim_value() != B_shape->dim(0).dim_value())) {
+-      break;
++    const ONNX_NAMESPACE::TensorShapeProto* C_shape = C_arg && C_arg->Exists() ? C_arg->Shape() : nullptr;
++
++    if (!A_shape || A_shape->dim_size() != 2) {
++      break;
++    }
++
++    if (!B_shape || B_shape->dim_size() != 2 ||
++        B_shape->dim(0).dim_value() <= 0 || B_shape->dim(1).dim_value() <= 0) {
++      break;
++    }
++
++    if (C_arg && C_arg->Exists()) {
++      const auto trans_b = node.GetAttributes().find("transB");
++      const int output_dim = trans_b != node.GetAttributes().end() && trans_b->second.i() != 0 ? 0 : 1;
++      const int64_t output_channels = B_shape->dim(output_dim).dim_value();
++      // The XNNPACK bias buffer has exactly N contiguous elements. Other valid
++      // ONNX broadcasts are handled by another execution provider.
++      if (!C_shape ||
++          !((C_shape->dim_size() == 1 && C_shape->dim(0).dim_value() == output_channels) ||
++            (C_shape->dim_size() == 2 && C_shape->dim(0).dim_value() == 1 &&
++             C_shape->dim(1).dim_value() == output_channels))) {
++        break;
++      }
+     }
+ 
+     supported = true;
+@@ -88,7 +98,6 @@
+ 
+   const auto& node{Node()};
+   const auto& input_defs = node.InputDefs();
+-  const auto* shapeA = input_defs[0]->Shape();
+   const auto* shapeB = input_defs[1]->Shape();
+ 
+   const NodeArg& X = *input_defs[0];
+@@ -103,20 +112,9 @@
+ 
+   C_matrix_exists_ = C_arg && C_arg->Exists();
+ 
+-  // A - MxK
+-  if (trans_A_ == CblasNoTrans) {
+-    M_ = shapeA->dim(0).dim_value() > 1 ? shapeA->dim(0).dim_value() : 1;
+-    K_ = shapeA->dim(1).dim_value();
+-  } else {
+-    M_ = shapeA->dim(1).dim_value();
+-    K_ = shapeA->dim(0).dim_value() > 1 ? shapeA->dim(0).dim_value() : 1;
+-  }
+-  // B - KxN
+-  if (trans_B_ == CblasNoTrans) {
+-    N_ = shapeB->dim(1).dim_value();
+-  } else {
+-    N_ = shapeB->dim(0).dim_value() > 1 ? shapeB->dim(0).dim_value() : 1;
+-  }
++  // B is a constant initializer; validate runtime A against its input channels.
++  K_ = shapeB->dim(trans_B_ == CblasNoTrans ? 0 : 1).dim_value();
++  N_ = shapeB->dim(trans_B_ == CblasNoTrans ? 1 : 0).dim_value();
+ }
+ 
+ Status Gemm::PrePack(const Tensor& tensor, int input_idx, AllocatorPtr,
+@@ -191,10 +189,13 @@
+ Status Gemm::Compute(OpKernelContext* context) const {
+   pthreadpool_t threadpool = GetThreadPool();
+   const auto* A = context->Input<Tensor>(0);
+-  auto Y = context->Output(0, {M_, N_});
++  ORT_RETURN_IF_NOT(A->Shape().NumDimensions() == 2, "Gemm requires a rank-2 input");
++  ORT_RETURN_IF_NOT(A->Shape()[1] == K_, "Gemm input channels do not match the weights");
++  const int64_t M = A->Shape()[0];
++  auto Y = context->Output(0, {M, N_});
+ 
+   // if input is empty tensor, return as nothing need to be calculated and we've set the shape for the output
+-  if (M_ == 0 || N_ == 0) {
++  if (M == 0 || N_ == 0) {
+     return Status::OK();
+   }
+ 
+@@ -204,7 +205,7 @@
+   }
+   xnn_status status = reshape_func(op0_.get(),
+                                    // Number of rows to multiply
+-                                   trans_A_ == CblasNoTrans ? M_ : K_,
++                                   M,
+                                    threadpool);
+ 
+   if (status != xnn_status_success) {
+--- a/onnxruntime/core/providers/xnnpack/math/gemm.h
++++ b/onnxruntime/core/providers/xnnpack/math/gemm.h
+@@ -29,7 +29,6 @@
+  private:
+   const Tensor* B_{nullptr};
+ 
+-  int64_t M_ = -1;
+   int64_t K_ = -1;
+   int64_t N_ = -1;
+ 

@@ -812,6 +812,8 @@ class PgsqlTest inherits SqlTestBase {
         on_exit {
             ds.rollback();
         }
+        # restored on exit: the connection's own search_path, which is not necessarily "public"
+        string orig_search_path = getSearchPath(ds);
 
         # two schemas, each with a sequence of the SAME name: the case a schema-blind lookup gets wrong
         string mine = ("qore_pgsql_sqm_" + get_random_string()).lwr();
@@ -823,7 +825,7 @@ class PgsqlTest inherits SqlTestBase {
         on_exit {
             ds.exec(sprintf("drop schema if exists %s cascade", mine));
             ds.exec(sprintf("drop schema if exists %s cascade", other));
-            ds.exec("set search_path to public");
+            ds.exec("set search_path to " + orig_search_path);
             ds.commit();
         }
         ds.exec(sprintf("create sequence %s.%s start with 1", mine, seq_name));
@@ -909,19 +911,23 @@ class PgsqlTest inherits SqlTestBase {
             ds.rollback();
         }
 
+        # the connection's own search_path and schema, which are "public" unless the connection sets another
+        string orig_search_path = getSearchPath(ds);
+        string orig_schema = ds.selectRow("select current_schema() as s").s ?? "public";
+
         string sname = ("qore_pgsql_sp_" + get_random_string()).lwr();
         string tname = ("qore_pgsql_spt_" + get_random_string()).lwr();
         ds.exec(sprintf("create schema %s", sname));
         on_exit {
             ds.exec(sprintf("drop schema if exists %s cascade", sname));
-            ds.exec("set search_path to public");
+            ds.exec("set search_path to " + orig_search_path);
             ds.commit();
         }
         ds.exec(sprintf("create table %s.%s (id int, name text)", sname, tname));
         ds.commit();
 
-        # the default search_path must continue to resolve to "public"
-        assertEq("public", get_pgsql_default_schema(ds), "default search_path resolves to public");
+        # the connection's own search_path must continue to resolve to its schema ("public" by default)
+        assertEq(orig_schema, get_pgsql_default_schema(ds), "default search_path resolves to its schema");
 
         ds.exec(sprintf("set search_path to %s", sname));
         ds.commit();
@@ -941,8 +947,8 @@ class PgsqlTest inherits SqlTestBase {
             "insert through the resolved object writes to the search_path schema");
 
         # an explicit schema in the name must still win over search_path
-        Table qualified(ds, "public." + table.getName());
-        assertEq("public", qualified.getSchemaName(), "an explicit schema overrides search_path");
+        Table qualified(ds, orig_schema + "." + table.getName());
+        assertEq(orig_schema, qualified.getSchemaName(), "an explicit schema overrides search_path");
 
         # a foreign key whose target this connection resolves without a schema must be reported without
         # one, so that it matches an unqualified schema description instead of being dropped and re-added
@@ -962,7 +968,7 @@ class PgsqlTest inherits SqlTestBase {
 
         # the same table reached by a qualified name on a connection whose search_path does not name its
         # schema must report the target qualified, as the caller cannot resolve it otherwise
-        ds.exec("set search_path to public");
+        ds.exec("set search_path to " + orig_search_path);
         ds.commit();
         PgsqlTable child_qualified(ds, sname + "." + child_name);
         AbstractForeignConstraint qualified_fk =
@@ -1979,7 +1985,10 @@ class PgsqlTest inherits SqlTestBase {
             (new PgsqlTable(ds, parent)).truncatePartitionCommit(spec);
             assertEq(0, ds.selectRow(sprintf("select count(1) as c from %s", p1)).c,
                 sprintf("%s: truncate by typed bounds executed", native_type));
-            assertEq(sprintf("alter table public.%s detach partition public.%s concurrently", parent, p1),
+            # names are qualified with the connection's schema, "public" unless the connection sets another
+            string schema_name = get_pgsql_default_schema(ds);
+            assertEq(sprintf("alter table %s.%s detach partition %s.%s concurrently", schema_name, parent,
+                schema_name, p1),
                 (new PgsqlTable(ds, parent)).getDetachPartitionConcurrentlySql(spec),
                 sprintf("%s: concurrent detach SQL resolves typed bounds", native_type));
             AbstractTable detached = (new PgsqlTable(ds, parent)).detachPartitionCommit(spec);
@@ -2110,7 +2119,10 @@ class PgsqlTest inherits SqlTestBase {
         tmpl.setupTable(desc);
         string create_sql = tmpl.getCreateSqlString();
         assertTrue(create_sql =~ /partition by range \(id\)/i, "parent DDL contains partition strategy");
-        assertTrue(create_sql =~ /partition of public\.pgsql_partition_test/i, "child DDL references parent");
+        # qualified with the connection's schema, "public" unless the connection sets another
+        string schema_name = get_pgsql_default_schema(ds);
+        assertTrue(create_sql.lwr().find("partition of " + schema_name + ".pgsql_partition_test") >= 0,
+            "child DDL references parent");
         tmpl.createCommit();
 
         PgsqlTable t(ds, parent);
@@ -2173,7 +2185,7 @@ class PgsqlTest inherits SqlTestBase {
         hash<string, PartitionInfo> partitions = t.listPartitions();
         assertEq(2, partitions.size(), "initial partition count");
         assertEq(0, partitions{p1}.ordinal, "full pgsql listing replaces the partial targeted cache");
-        assertEq(p1, t.getPartition("public." + p1).name,
+        assertEq(p1, t.getPartition(schema_name + "." + p1).name,
             "pgsql targeted lookup preserves explicitly qualified lifecycle names after a full listing");
         assertTrue(partitions.hasKey(p1), "partition p1 introspected");
         assertEq(0, partitions{p1}.bound_from, "p1 lower bound parsed");
@@ -2872,7 +2884,8 @@ class PgsqlTest inherits SqlTestBase {
         t.clear();
         hash<string, PartitionInfo> rwparts = t.listPartitions();
         assertTrue(rwparts.hasKey("order"), "reserved-word partition name created and introspected");
-        assertEq('public."order"', rwparts{"order"}.sql_name, "reserved-word partition sql_name is quoted");
+        assertEq(get_pgsql_default_schema(ds) + '."order"', rwparts{"order"}.sql_name,
+            "reserved-word partition sql_name is quoted");
         t.dropPartitionCommit("order");
 
         # --- ensurePartition() concurrent-create race: prime a stale cache, create the partition out of band
@@ -3111,6 +3124,11 @@ class PgsqlTest inherits SqlTestBase {
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
+    }
+
+    #! returns the connection's search_path setting, so that a test changing it can restore it
+    private static string getSearchPath(AbstractDatasource ds) {
+        return ds.selectRow("select current_setting('search_path') as sp").sp;
     }
 
     Datasource getDatasource() {

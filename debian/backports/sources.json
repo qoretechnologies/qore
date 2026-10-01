@@ -1,9 +1,46 @@
 {
   "distribution": "resolute",
+  "distribution_name": "Ubuntu 26.04",
   "version_suffix": "~ubuntu26.04.1",
   "date": "Sun, 27 Sep 2026 12:00:00 +0200",
   "maintainer": "David Nichols <david@qore.org>",
   "ppa": "ppa:qore-packagers/qore-testing",
+  "targets": {
+    "trixie": {
+      "distribution": "trixie",
+      "distribution_name": "Debian 13",
+      "version_suffix": "~deb13.1",
+      "date": "Thu, 01 Oct 2026 08:00:00 +0200",
+      "ppa": null,
+      "packages": {
+        "c-ares": {
+          "extra_patches": ["c-ares/timeout-test-offline.patch"],
+          "changes": ["Backport to {distribution_name} for Qore.", "Carry both Qore c-ares lost-query and query-ID reuse fixes.", "Test timeout selection against the IPv4/IPv6 DNS mock without external network access."]
+        },
+        "qore-onnx": {
+          "upstream_version": "1.20.0",
+          "revision": "6~qore1",
+          "orig_url": "https://deb.debian.org/debian/pool/main/o/onnx/onnx_1.20.0.orig.tar.gz",
+          "orig_sha256": "39017e01ef44b12ebb33af400f08b8b1b2143fb78b8633aa9fa184745e95ff7e",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/o/onnx/onnx_1.20.0-6.debian.tar.xz",
+          "packaging_sha256": "3e85ba162328d04f0fc848b7d219a91e758fffbf65c6396bbb8cb38abfa9006b",
+          "metadata_license": "Apache-2.0",
+          "extra_patches": ["onnx/installed-targets.patch", "onnx/explicit-test-registration.patch"],
+          "changes": ["Build a private static ONNX 1.20.0 dependency for Qore on {distribution_name}.", "Use a private include/library prefix and C++ namespace to preserve Debian's ONNX and PyTorch ABI.", "Build and run the upstream C++ tests without network access."]
+        },
+        "onnxruntime": {
+          "upstream_version": "1.23.2+dfsg",
+          "revision": "6.1~qore1",
+          "extra_patches": ["onnxruntime/private-namespace.patch", "onnxruntime/preserve-upstream-version.patch", "onnxruntime/gemm-dynamic-batch.patch"],
+          "orig_url": "https://deb.debian.org/debian/pool/main/o/onnxruntime/onnxruntime_1.23.2+dfsg.orig.tar.xz",
+          "orig_sha256": "c601bdc18b542435e5a0149ca18dc353106e0ed87a38d96ed759f1a82a52ef43",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/o/onnxruntime/onnxruntime_1.23.2+dfsg-6.1.debian.tar.xz",
+          "packaging_sha256": "140fe4766a37f1a57451bef8f21174ae43ff206d0dc80e467f52e6e9694c37f9",
+          "changes": ["Backport ONNX Runtime 1.23.2 to {distribution_name} for Qore's ML module.", "Retain Debian's repack and CPU execution providers, linking the private static Qore ONNX dependency."]
+        }
+      }
+    }
+  },
   "packages": {
     "c-ares": {
       "upstream_version": "1.34.8",
@@ -14,7 +51,7 @@
       "signature_sha256": "06b5fefc70e74ba09f79454876a817ad30d4f648b5a5a175fb5b6c440a58edc0",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/c-ares/1.34.8-1/c-ares_1.34.8-1.debian.tar.xz",
       "packaging_sha256": "a94195bb26cc3faaceccf85edb7b39b44973c18a353555c144c13cb1cc875aba",
-      "changes": ["Backport to Ubuntu 26.04 for Qore.", "Carry both Qore c-ares lost-query and query-ID reuse fixes."]
+      "changes": ["Backport to {distribution_name} for Qore.", "Carry both Qore c-ares lost-query and query-ID reuse fixes."]
     },
     "nghttp2": {
       "upstream_version": "1.70.0",
@@ -25,7 +62,7 @@
       "signature_sha256": "10846bc9ec5c1bfd4f8109d62e4492f6c348a7c0113e7467924f04cf96a5a44c",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0-1.debian.tar.xz",
       "packaging_sha256": "d43abd52531c78a82df1baf29c2b8b8785ca954e5a5c6abbb525d86e32dccfc3",
-      "changes": ["Backport to Ubuntu 26.04 for Qore using debhelper compatibility 13."]
+      "changes": ["Backport to {distribution_name} for Qore using debhelper compatibility 13."]
     },
     "nghttp3": {
       "upstream_version": "1.18.0",
@@ -36,7 +73,7 @@
       "signature_sha256": "152a1d3c6a84968e2361698b5e72724220a771b3335017b6450eb658592e13d3",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp3/1.17.0-1/nghttp3_1.17.0-1.debian.tar.xz",
       "packaging_sha256": "436f5a40de284d76e8dbfe22e7cbd3fd9dafdfe1a6a404c9f37f7d197b64b3b0",
-      "changes": ["Package upstream 1.18.0 for Qore on Ubuntu 26.04.", "Retain Debian's library packaging and symbol history."]
+      "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history."]
     },
     "ngtcp2": {
       "upstream_version": "1.25.0",
@@ -47,7 +84,7 @@
       "signature_sha256": "441174c47cbeb4a282ba07e988441e4cb3e188b4b0331bd1306c696483ac8375",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ngtcp2/1.24.0-1build1/ngtcp2_1.24.0-1build1.debian.tar.xz",
       "packaging_sha256": "a1b55a51688144f95c26efc41c5b6d9f52d27e24c14a18379055258ea97ae7de",
-      "changes": ["Package upstream 1.25.0 for Qore on Ubuntu 26.04.", "Build matching OpenSSL and GnuTLS crypto backend packages."]
+      "changes": ["Package upstream 1.25.0 for Qore on {distribution_name}.", "Build matching OpenSSL and GnuTLS crypto backend packages."]
     },
     "qore-tree-sitter": {
       "upstream_version": "0.26.13",
@@ -56,7 +93,7 @@
       "orig_sha256": "ece24c3c5e2a76384075e830c7139b59fce8fb01e4ef8436fab08bbe10444c89",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/tree-sitter/0.26.11-1/tree-sitter_0.26.11-1.debian.tar.xz",
       "packaging_sha256": "4704f73a7aa3881dd80bce4238d126e155b38043662d21558b84ec8d4ada908c",
-      "changes": ["Package the upstream 0.26.13 C runtime for Qore on Ubuntu 26.04.", "Use a distinct source package for the C library; do not build Rust crates or CLI.", "Retain Debian's runtime SONAME packaging, copyright and symbol history."]
+      "changes": ["Package the upstream 0.26.13 C runtime for Qore on {distribution_name}.", "Use a distinct source package for the C library; do not build Rust crates or CLI.", "Retain Debian's runtime SONAME packaging, copyright and symbol history."]
     }
   }
 }

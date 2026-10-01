@@ -1,0 +1,4 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+Tests: runtime
+Depends: libqore-onnx-dev, cmake, g++, dpkg-dev, libonnx-dev, python3-onnx, python3-torch
+Restrictions: allow-stderr

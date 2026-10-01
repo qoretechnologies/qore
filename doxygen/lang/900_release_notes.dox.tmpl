@@ -348,6 +348,22 @@
     without failure records.
     @endparblock
 
+    @par PostgreSQL Lists Only the Connection's Schemas
+    @parblock
+    On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
+    @ref SqlUtil::AbstractDatabase::tableIterator() "AbstractDatabase::tableIterator()" now list only the tables in
+    the schemas of the connection's \c search_path, as Oracle and MySQL list only the tables of the connection's
+    own schema; they listed the tables of every schema in the database.  A table is listed without a schema if it
+    is in <tt>current_schema()</tt>, the schema in which an unqualified name is resolved, and as
+    \c "schema.table" otherwise; tables outside \c public were always listed qualified, and tables in \c public
+    unqualified, even where the connection resolves an unqualified name in another schema.  Views, sequences, and
+    materialized views are listed with the same rules (see the @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase"
+    module).  Callers that relied on a datasource listing other schemas' tables, such as the children of a
+    @ref DbDataProvider::DbTablesDataProvider "DbTablesDataProvider" or the tables analyzed by
+    @ref SqlUtil::AbstractDatabase::computeStatistics() "AbstractDatabase::computeStatistics()" without the
+    \c tables option, must use a connection whose \c search_path names those schemas.
+    @endparblock
+
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
     @parblock
     A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
@@ -1874,6 +1890,10 @@ while (*binary chunk = input.read(65536)) {
     graph, redirects, proxies (also from the environment), TLS options (\c --cacert, \c --capath, \c -E, \c -k),
     time limits, several URLs at once, and Ctrl-C handling that keeps the data received; see \c qget \c --help.
 
+    @par rest Accepts del for DELETE
+    The \c rest command-line REST client accepts \c del (in any case) as an alias for the \c DELETE method, as in
+    <tt>rest del URL</tt>.
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse
@@ -2355,6 +2375,13 @@ while (*binary chunk = input.read(65536)) {
         \c /chat/completions
       - new \c chat-model connection option, so the model used when the connection is
         selected for chat can be configured on the connection; defaults to \c "sonar"
+
+    - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
+      - tables, views, sequences, and materialized views are listed only from the schemas of the connection's
+        \c search_path, as on Oracle and MySQL; they were listed from every schema in the database, so a
+        database with one schema per tenant listed every tenant's tables, repeating the same names once per
+        schema (see @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
+      - fixed listing materialized views, which listed the ordinary tables of every schema instead
 
     - @ref providerindexintro "ProviderIndex" module
       - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()", which stops the
@@ -3841,6 +3868,14 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed TLS being unusable when the OpenSSL configuration file cannot be processed and sets
+      <tt>config_diagnostics = 1</tt>, which happens for example when a distribution's configuration file is read by
+      a differently patched OpenSSL build: the first TLS operation in the process failed with an error blaming the
+      remote end, and with OpenSSL 3.6.5 and later every TLS operation failed.  %Qore now processes the
+      configuration file itself at startup, reports a file that cannot be processed once on \c stderr with the
+      OpenSSL reason, and TLS contexts can be created in every thread afterwards; the parts of the configuration
+      that could not be processed are not applied.  When another library in the process has used OpenSSL before
+      %Qore is initialized, the configuration file is left to OpenSSL as before.
     - Fixed compiled (\c qcc) functions called from a closure losing their updates of a top-level local variable
       that a closure captures: assignments with an operator (such as \c push, \c ++, \c +=, element and member
       assignments, \c remove and \c delete) made by the function were silently discarded, while reads and plain
