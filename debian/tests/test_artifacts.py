@@ -46,6 +46,54 @@ class ArtifactChecksTest(unittest.TestCase):
         self.assertEqual({"non_executable_stack", "relro", "bind_now", "no_rpath", "position_independent"},
                          set(failures))
 
+    def test_private_jvm_policy_is_limited_to_its_package_and_dependency(self):
+        if not shutil.which("cc") or not shutil.which("dpkg-deb"):
+            self.skipTest("cc and dpkg-deb are required")
+        library_source = self.root / "jvm.c"
+        library_source.write_text("int jvm_fixture(void) { return 0; }\n")
+        subprocess.run(["cc", "-shared", "-fPIC", str(library_source), "-Wl,-soname,libjvm.so",
+                        "-o", str(self.root / "libjvm.so")], check=True, capture_output=True)
+        package = self.root / "package"
+        (package / "DEBIAN").mkdir(parents=True)
+        output = self.root / "packages"
+        output.mkdir()
+
+        def inspect_package(data, member, name="qore-jni-module", architecture="amd64",
+                            depends="openjdk-21-jre-headless", opt_in=True):
+            for old in package.rglob("*.qmod"):
+                old.unlink()
+            target = package / member
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            (package / "DEBIAN/control").write_text(
+                f"Package: {name}\nVersion: 1.0-1\nArchitecture: {architecture}\n"
+                f"Depends: {depends}\nMaintainer: Qore <david@qore.org>\nDescription: fixture\n")
+            subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(package),
+                            str(output / "fixture.deb")], check=True, capture_output=True)
+            return artifacts.inspect(output, allow_private_jvm=opt_in)["passed"]
+
+        for architecture, multiarch in (("amd64", "x86_64-linux-gnu"), ("arm64", "aarch64-linux-gnu")):
+            path = f"/usr/lib/jvm/java-21-openjdk-{architecture}/lib/server"
+            member = f"usr/lib/{multiarch}/qore-modules/jni-api-2.0.qmod"
+            flags = ["-fPIE", "-pie", "-Wl,-z,relro,-z,now,-z,noexecstack",
+                     "-Wl,--no-as-needed", "-L" + str(self.root), "-ljvm"]
+            data = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + path)
+            with self.subTest(architecture=architecture):
+                self.assertTrue(inspect_package(data, member, architecture=architecture))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, opt_in=False))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, name="other-module"))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, depends="libc6"))
+                self.assertFalse(inspect_package(data, member, architecture=architecture,
+                                                depends="openjdk-21-jre-headless | java-runtime"))
+                self.assertFalse(inspect_package(data, "usr/lib/other-api-2.0.qmod", architecture=architecture))
+                for extra in ("/tmp", path + ":/tmp", "$ORIGIN", path.replace("21", "25")):
+                    bad = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + extra)
+                    self.assertFalse(inspect_package(bad, member, architecture=architecture))
+                bad = self.compile(*flags, "-Wl,--disable-new-dtags,-rpath," + path)
+                self.assertFalse(inspect_package(bad, member, architecture=architecture))
+                bad = self.compile("-fPIE", "-pie", "-Wl,-z,relro,-z,now,-z,noexecstack,-rpath," + path)
+                self.assertFalse(inspect_package(bad, member, architecture=architecture))
+
     def test_read_execute_stack_is_rejected(self):
         # An executable stack need not also be writable. Exercise a real ELF
         # program header with PF_R | PF_X, which readelf prints as "R E".

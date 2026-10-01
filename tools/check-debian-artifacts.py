@@ -83,7 +83,7 @@ def trailers(data):
     return result
 
 
-def inspect_elf(data, scratch, debug=False):
+def inspect_elf(data, scratch, debug=False, private_jvm_runpath=None):
     scratch.write_bytes(data)
     info = subprocess.check_output(
         ["readelf", "--wide", "--file-header", "--program-headers", "--dynamic",
@@ -119,12 +119,21 @@ def inspect_elf(data, scratch, debug=False):
         "no_rpath": "(RPATH)" not in info and "(RUNPATH)" not in info,
         "no_textrel": "(TEXTREL)" not in info,
     }
+    if private_jvm_runpath is not None:
+        # The package-level opt-in is restricted to JNI's explicit OpenJDK
+        # dependency. Reject RPATH, extra directories and an unrelated ELF.
+        runpaths = re.findall(r"\(RUNPATH\).*?\[([^]]+)\]", info)
+        needed = re.findall(r"\(NEEDED\).*?\[([^]]+)\]", info)
+        checks["no_rpath"] = ("(RPATH)" not in info
+                              and runpaths == [private_jvm_runpath]
+                              and "libjvm.so" in needed)
+        symbols["private_jvm_runpath"] = runpaths
     # ET_EXEC is not PIE; shared libraries and PIE executables are ET_DYN.
     checks["position_independent"] = kind == "DYN"
     return {"type": kind, **symbols, **checks}, [key for key, passed in checks.items() if not passed]
 
 
-def archive_members(path, control=False, scratch=None, debug=False):
+def archive_members(path, control=False, scratch=None, debug=False, private_jvm=None):
     flag = "--ctrl-tarfile" if control else "--fsys-tarfile"
     process = subprocess.Popen(["dpkg-deb", flag, str(path)], stdout=subprocess.PIPE)
     members, findings = {}, []
@@ -144,7 +153,11 @@ def archive_members(path, control=False, scratch=None, debug=False):
                     entry["sha256"] = digest(data)
                     entry["size"] = len(data)
                     if not control and data.startswith(b"\x7fELF"):
-                        entry["elf"], failures = inspect_elf(data, scratch, debug=debug)
+                        jvm_path = None
+                        if private_jvm and re.fullmatch(private_jvm[0], name):
+                            jvm_path = private_jvm[1]
+                        entry["elf"], failures = inspect_elf(data, scratch, debug=debug,
+                                                           private_jvm_runpath=jvm_path)
                         findings.extend(f"{name}: {failure}" for failure in failures)
                     if not control and name.endswith(".qmod") and "-api-" not in name:
                         entry["trailers"] = trailers(data)
@@ -189,7 +202,7 @@ def check_debug_symbols(packages):
     return {"checked": checked, "passed": not findings}, findings
 
 
-def inspect(directory, require_debug=False):
+def inspect(directory, require_debug=False, allow_private_jvm=False):
     packages, findings = {}, []
     inputs = sorted([*directory.glob("*.deb"), *directory.glob("*.ddeb")])
     if not inputs:
@@ -206,7 +219,15 @@ def inspect(directory, require_debug=False):
             if key in packages:
                 raise ValueError(f"Multiple versions of {key} in input")
             debug = package.endswith("-dbgsym")
-            payload, errors = archive_members(path, scratch=scratch, debug=debug)
+            private_jvm = None
+            if allow_private_jvm and package == "qore-jni-module":
+                multiarch = {"amd64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}.get(architecture)
+                depends = subprocess.check_output(["dpkg-deb", "-f", str(path), "Depends"], text=True)
+                if multiarch and any(re.fullmatch(r"openjdk-21-jre-headless(?:\s+\([^()]+\))?", item.strip())
+                                     for item in depends.split(",")):
+                    private_jvm = (rf"usr/lib/{multiarch}/qore-modules/jni-api-[0-9]+\.[0-9]+\.qmod",
+                                   f"/usr/lib/jvm/java-21-openjdk-{architecture}/lib/server")
+            payload, errors = archive_members(path, scratch=scratch, debug=debug, private_jvm=private_jvm)
             control, _ = archive_members(path, control=True)
             findings.extend(f"{key}: {error}" for error in errors)
             packages[key] = {"version": version, "sha256": file_digest(path), "debug_package": debug,
@@ -216,6 +237,7 @@ def inspect(directory, require_debug=False):
         symbols, errors = check_debug_symbols(packages)
         findings.extend(errors)
     return {"schema": 1, "packages": packages, "findings": findings, "checksums": manifest,
+            "private_jvm_policy": allow_private_jvm,
             "debug_symbols": symbols, "passed": not findings}
 
 
@@ -247,6 +269,8 @@ def main():
     check.add_argument("directory", type=Path)
     check.add_argument("--require-debug-symbols", action="store_true",
                        help="Require matching detached DWARF, build IDs and debuglink CRCs for every runtime ELF")
+    check.add_argument("--allow-private-jvm", action="store_true",
+                       help="Allow only Qore JNI's packaged OpenJDK 21 RUNPATH on amd64/arm64")
     diff = commands.add_parser("compare", help="Compare JSON reports from two builds")
     diff.add_argument("left", type=Path)
     diff.add_argument("right", type=Path)
@@ -254,7 +278,8 @@ def main():
         command.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "inspect":
-        result = inspect(args.directory, require_debug=args.require_debug_symbols)
+        result = inspect(args.directory, require_debug=args.require_debug_symbols,
+                         allow_private_jvm=args.allow_private_jvm)
         passed = result["passed"]
         print(f"Inspected {len(result['packages'])} packages; {len(result['findings'])} findings")
     else:

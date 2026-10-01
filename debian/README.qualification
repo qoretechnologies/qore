@@ -102,6 +102,13 @@ Keep each version/profile in its own directory. Compiler fortification and
 stack-protector coverage still require build-flag review; ELF checks alone do
 not establish those properties for every function.
 
+Qore JNI links to OpenJDK's private libjvm.so. When inspecting that package,
+add --allow-private-jvm to permit its exact Java 21 server-library RUNPATH.
+This policy applies only to qore-jni-module's versioned native JNI plugin on
+amd64 or arm64, with an explicit openjdk-21-jre-headless dependency and a
+libjvm.so link. Legacy RPATH, additional directories and other package files
+remain disallowed. The default inspection policy is unchanged.
+
 Build the same source twice in fresh containers, with the same dependency
 versions and build options. Vary the build path/time/locale deliberately when
 investigating reproducibility. Inspect each build, then compare:
