@@ -1997,6 +1997,22 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
     endif()
 ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
+# Configure external-module documentation with the installed language index and
+# only existing image directories. Keep TAGFILES supplied by the module intact.
+function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
+    set(QORE_MODULE_DOXYGEN_IMAGE_PATH "")
+    foreach(_image_dir IN ITEMS "${CMAKE_SOURCE_DIR}/doxygen" "${CMAKE_SOURCE_DIR}/docs")
+        if(IS_DIRECTORY "${_image_dir}")
+            string(APPEND QORE_MODULE_DOXYGEN_IMAGE_PATH " \"${_image_dir}\"")
+        endif()
+    endforeach()
+    set(QORE_CORE_DOC_TAGFILES "")
+    if(EXISTS "${QORE_DOXYGEN_TAGFILE}")
+        set(QORE_CORE_DOC_TAGFILES "\"${QORE_DOXYGEN_TAGFILE}=${QORE_DOXYGEN_TAG_URL}\"")
+    endif()
+    configure_file("${_template}" "${_output}" @ONLY)
+endfunction()
+
 MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suffix)
     if ("${_mod_suffix}" STREQUAL "")
         set(_docs_targ docs)
@@ -2127,7 +2143,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     if (DOXYGEN_FOUND)
         if (EXISTS "${QORE_USERMODULE_DOXYGEN_TEMPLATE}")
             set(CURRENT_MODULE_NAME ${_module_name})
-            configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE} ${_working_dir}/Doxyfile @ONLY)
+            qore_configure_module_doxygen("${QORE_USERMODULE_DOXYGEN_TEMPLATE}" "${_working_dir}/Doxyfile")
 
             if (WIN32 OR MSYS OR MINGW)
                 set(_qore_qjar_module_dir "${_working_dir}")
@@ -3511,7 +3527,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
         string(REPLACE ";" " " _dox_input "${_dox_input}")
 
         # prepare QDX arguments - process .qm file
-        configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f} @ONLY)
+        qore_configure_module_doxygen("${QORE_USERMODULE_DOXYGEN_TEMPLATE}" "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
         set(QDX_QMDOXH_ARGS ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h)
 
         # Build list of qdx commands for all .qc files
@@ -3783,7 +3799,7 @@ MACRO (QORE_USER_MODULES _inputs)
             #message(STATUS "Doxyfile for ${file}")
             set(CURRENT_MODULE_NAME ${_file}) # used for configure_file line below
             set(_dox_input ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${MODULE_DOX_INPUT})
-            configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file} @ONLY)
+            qore_configure_module_doxygen("${QORE_USERMODULE_DOXYGEN_TEMPLATE}" "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file}")
             file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${file}/${qm_install_subdir}/)
             add_custom_target(docs-${file}
                 ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file}

@@ -3,6 +3,22 @@
 This document clarifies how Qore user modules are structured in this repository.
 Follow these rules to avoid load and documentation issues.
 
+External module documentation uses the SDK's `share/qore/qore.tag` language index,
+installed when Qore's documentation has been built before installation. This index
+does not require the complete language HTML documentation. The exported CMake helpers
+preserve each module's `TAGFILES` and add the language index when it exists. Set
+`QORE_DOXYGEN_TAGFILE` and `QORE_DOXYGEN_TAG_URL` before `find_package(Qore)` to use
+another index or an offline HTML location, for example:
+
+```cmake
+set(QORE_DOXYGEN_TAGFILE "/opt/qore/share/qore/qore.tag")
+set(QORE_DOXYGEN_TAG_URL "file:///opt/qore/share/doc/qore/lang/html")
+find_package(Qore REQUIRED)
+```
+
+The Doxygen image search includes a module's `doxygen/` and `docs/` directories only
+when they exist. An SDK built without documentation remains usable for compilation.
+
 ## Module Layout
 
 There are two supported layouts. Choose one and keep it consistent.

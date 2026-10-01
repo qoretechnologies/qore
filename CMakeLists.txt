@@ -3187,6 +3187,11 @@ install(FILES
 # prepare documentation targets
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
+    # External module documentation needs the language reference index, without
+    # installing the complete HTML documentation. It exists after building docs.
+    install(FILES ${CMAKE_BINARY_DIR}/qore.tag
+            DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+            OPTIONAL COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
     # documentation
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/footer_template.html ${CMAKE_BINARY_DIR}/doxygen/footer_template.html @ONLY)
     add_custom_target(docs COMMENT "Generating API documentation")
