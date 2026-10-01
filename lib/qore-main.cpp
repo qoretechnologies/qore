@@ -224,7 +224,36 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     // initialize openssl library
     if (!qore_check_option(QLO_DISABLE_OPENSSL_INIT)) {
 #ifdef HAVE_OPENSSL_INIT_CRYPTO
-        OPENSSL_init_crypto(0, 0);
+        // Process the OpenSSL configuration file here, on the main thread, before any user code can
+        // create a TLS context.
+        //
+        // OpenSSL does this lazily otherwise, inside the first call that needs it, and remembers
+        // the result for the life of the process.  A configuration file that this OpenSSL build
+        // cannot process and that sets "config_diagnostics = 1" makes that load fail (the usual way
+        // to get one is a distribution config read by a differently patched OpenSSL build), and
+        // every SSL_CTX_new() call then returns nullptr with an empty error queue: TLS that cannot
+        // be used for a reason the process cannot report.  (Up to OpenSSL 3.6.4 only the first
+        // call failed, because the calls OpenSSL makes into its own initialization while it loads
+        // the file marked the load as done; 3.6.5 stopped doing that.)
+        //
+        // So Qore loads the file itself: automatic loading is switched off, which is the only way
+        // to keep a failure from being remembered, and the file is then processed with the flags
+        // OpenSSL uses.  A file that cannot be processed is reported once, with the reason, and
+        // TLS contexts can still be created on any thread.
+        //
+        // This is only possible when nothing else in the process has used OpenSSL yet; otherwise
+        // the file may already have been loaded, and processing it a second time would repeat every
+        // module's initialization under whatever is using the library.
+        // CRYPTO_set_mem_functions() succeeds only as long as OpenSSL has not allocated any memory,
+        // which makes it the test for that; with no functions given it changes nothing.
+        bool owns_openssl_config = false;
+#ifdef OPENSSL_3_PLUS
+        owns_openssl_config = CRYPTO_set_mem_functions(nullptr, nullptr, nullptr)
+            && OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr);
+#endif
+        if (!owns_openssl_config) {
+            OPENSSL_init_crypto(0, 0);
+        }
 #else
         OPENSSL_config(0);
 #endif
@@ -234,20 +263,20 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
         ERR_load_crypto_strings();
 
 #ifdef HAVE_OPENSSL_INIT_CRYPTO
-        // Process the OpenSSL configuration file here, on the main thread, before any user code can
-        // create a TLS context.
-        //
-        // SSL_CTX_new() does this lazily otherwise, on whichever thread happens to create the first
-        // context, and a configuration file that this OpenSSL build cannot parse then makes that
-        // call return nullptr with an empty error queue on that thread: a TLS connection that fails
-        // for a reason the process cannot report.  (A file setting "config_diagnostics = 1" turns
-        // any unknown option in it into a hard error; the usual way to get one is a distribution
-        // config read by a differently patched OpenSSL build.)  Loading it here reports the reason
-        // once, at startup, and leaves the library able to create contexts on any thread.
-        // note that the call reports success even when the configuration file could not be
-        // processed, leaving the reason on the error queue, so both have to be checked
-        if (!OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG | OPENSSL_INIT_LOAD_SSL_STRINGS
-                | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr) || ERR_peek_error()) {
+        bool openssl_config_failed;
+        if (owns_openssl_config) {
+            // the flags OpenSSL uses for its automatic load; "config_diagnostics = 1" in the file
+            // overrides the ones that suppress errors
+            openssl_config_failed = CONF_modules_load_file(nullptr, nullptr, CONF_MFLAGS_DEFAULT_SECTION
+                | CONF_MFLAGS_IGNORE_MISSING_FILE | CONF_MFLAGS_IGNORE_RETURN_CODES) <= 0;
+        } else {
+            // OpenSSL was in use before Qore was initialized, so the automatic load is all there is.
+            // Up to OpenSSL 3.6.4 the call reports success even when the configuration file could
+            // not be processed, leaving the reason on the error queue, so both have to be checked.
+            openssl_config_failed = !OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG | OPENSSL_INIT_LOAD_SSL_STRINGS
+                | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr) || ERR_peek_error();
+        }
+        if (openssl_config_failed) {
             // Drain the queue as well as report it: entries left here belong to no operation, and
             // the next OpenSSL call that inspects the queue would otherwise report them as its own
             // failure.

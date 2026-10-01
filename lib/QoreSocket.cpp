@@ -10282,8 +10282,8 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
         // A local call failed and queued nothing.  The socket is not involved: it must not be
         // closed, and the peer must not be blamed.  SSL_CTX_new() reaching here means the TLS
         // library could not be initialized — an OpenSSL configuration file that this build cannot
-        // parse does exactly that when the file sets "config_diagnostics = 1", and the failure
-        // then surfaces on whichever thread creates the first context rather than at startup.
+        // parse does exactly that when the file sets "config_diagnostics = 1" and OpenSSL loaded it
+        // itself, which qore_init() prevents unless OpenSSL was in use before Qore was initialized.
         if (always_error) {
             SimpleRefHolder<QoreStringNode> errstr(new QoreStringNodeMaker("error in Socket::%s(): the %s() call "
                 "failed and the TLS library gave no reason; this normally means the TLS library could not be "

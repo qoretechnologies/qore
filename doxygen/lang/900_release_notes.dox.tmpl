@@ -3865,6 +3865,14 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed TLS being unusable when the OpenSSL configuration file cannot be processed and sets
+      <tt>config_diagnostics = 1</tt>, which happens for example when a distribution's configuration file is read by
+      a differently patched OpenSSL build: the first TLS operation in the process failed with an error blaming the
+      remote end, and with OpenSSL 3.6.5 and later every TLS operation failed.  %Qore now processes the
+      configuration file itself at startup, reports a file that cannot be processed once on \c stderr with the
+      OpenSSL reason, and TLS contexts can be created in every thread afterwards; the parts of the configuration
+      that could not be processed are not applied.  When another library in the process has used OpenSSL before
+      %Qore is initialized, the configuration file is left to OpenSSL as before.
     - Fixed compiled (\c qcc) functions called from a closure losing their updates of a top-level local variable
       that a closure captures: assignments with an operator (such as \c push, \c ++, \c +=, element and member
       assignments, \c remove and \c delete) made by the function were silently discarded, while reads and plain
