@@ -78,6 +78,9 @@ BuildRequires: pkgconfig(mongoc2)
 BuildRequires: pkgconfig(libmongoc-1.0)
 %endif
 BuildRequires: pkgconfig(tesseract)
+# Some distributions expose curl and archive directly through tesseract.pc.
+BuildRequires: pkgconfig(libcurl)
+BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(lept)
 BuildRequires: pkgconfig(liburing) >= 2.0
 BuildRequires: llvm-devel >= %{llvm_major}
@@ -95,7 +98,11 @@ BuildRequires: protobuf-compiler
 %if %{with docs}
 BuildRequires: doxygen
 BuildRequires: graphviz
-BuildRequires: /usr/bin/hardlink
+%if 0%{?suse_version}
+BuildRequires: util-linux
+%else
+BuildRequires: util-linux-core
+%endif
 %endif
 Requires: %{libname}%{?_isa} = %{version}-%{release}
 Requires: %{name}-stdlib%{?_isa} = %{version}-%{release}

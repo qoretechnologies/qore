@@ -77,3 +77,9 @@ target build dependency image. This additionally resolves the emitted parser
 runtime requirement against the real RPM database and compares its version
 with RPM semantics. Fedora uses ``libtree-sitter``; Enterprise Linux uses the
 ``tree-sitter`` backport, and openSUSE uses ``libtree-sitter0_26``.
+
+Documentation builds declare the distribution package providing ``hardlink``
+(``util-linux-core`` on Fedora/EL, ``util-linux`` on openSUSE), so OBS can resolve
+it without file-provider metadata. The dependency check verifies this against
+the target RPM database. OCR also declares libcurl and libarchive SDKs because
+some Tesseract pkg-config files expose these libraries directly.

@@ -88,6 +88,20 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertIn("-DQORE_WITH_ONNXRUNTIME=ON", output)
         self.assertIn("-DQORE_REQUIRE_ONNXRUNTIME=ON", output)
 
+    @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
+                         "requires the target build dependency image")
+    def test_documentation_deduplicator_has_a_resolvable_package_requirement(self):
+        provider = subprocess.check_output([
+            "rpm", "-qf", "/usr/bin/hardlink", "--qf", "%{NAME}"], text=True)
+        requirements = subprocess.check_output([
+            "rpmspec", "-q", "--buildrequires", str(SPEC)], text=True).splitlines()
+        self.assertIn(provider, requirements)
+        self.assertNotIn("/usr/bin/hardlink", requirements)
+        without_docs = subprocess.check_output([
+            "rpmspec", "--without", "docs", "-q", "--buildrequires", str(SPEC)],
+            text=True).splitlines()
+        self.assertNotIn(provider, without_docs)
+
 
 if __name__ == "__main__":
     unittest.main()
