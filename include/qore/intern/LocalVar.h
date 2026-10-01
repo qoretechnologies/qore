@@ -604,6 +604,17 @@ public:
     }
 };
 
+//! The outcome of looking up a local variable's value on the current thread; see LocalVar::tryGetLValue()
+enum class LocalVarLValueLookup {
+    //! the variable's value was found and bound to the LValueHelper
+    Found,
+    //! the variable has no value on the current thread: it is not instantiated on the thread's local variable stack
+    //! (or, for a closure-bound variable, no container is reachable); no exception is raised
+    NotInstantiated,
+    //! the lookup failed and an exception was raised
+    Error,
+};
+
 // now shared between parent and child Program objects for top-level local variables with global scope
 class LocalVar {
 public:
@@ -799,19 +810,44 @@ public:
         return val ? val->isRef() : false;
     }
 
+    //! Binds the variable's value on the current thread to @a lvh; raises an exception if it has none
+    /** A variable that is not instantiated on the current thread has no value to bind: that is an error here, and
+        \c LVALUE-ERROR is raised.  Code that writes a value it also keeps elsewhere (an IR or native slot) and
+        only needs to mirror it to the thread's variable when one exists must use tryGetLValue() instead.
+
+        @return 0 for success, -1 if an exception was raised
+    */
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
-        //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
+        LocalVarLValueLookup rc = tryGetLValue(lvh, for_remove, initial_assignment);
+        if (rc == LocalVarLValueLookup::Found) {
+            return 0;
+        }
+        if (rc == LocalVarLValueLookup::NotInstantiated) {
+            lvh.vl.xsink->raiseException("LVALUE-ERROR", "local variable '%s' is not instantiated in the current "
+                "context", name.c_str());
+        }
+        assert(*lvh.vl.xsink);
+        return -1;
+    }
+
+    //! Binds the variable's value on the current thread to @a lvh if it has one
+    /** @return LocalVarLValueLookup::Found if the value was bound, LocalVarLValueLookup::NotInstantiated (with no
+        exception raised) if the variable has no value on the current thread, LocalVarLValueLookup::Error if an
+        exception was raised
+    */
+    DLLLOCAL LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
+        //printd(5, "LocalVar::tryGetLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (read_only && !initial_assignment) {
             lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
                 "cannot modify read-only local variable '%s'", name.c_str());
-            return -1;
+            return LocalVarLValueLookup::Error;
         }
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
-                // Variable not on the current thread's lvstack (IR-managed context)
-                return -1;
+                // not on the current thread's lvstack (e.g. an IR-managed context)
+                return LocalVarLValueLookup::NotInstantiated;
             }
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
             const QoreTypeInfo* ti = getTypeInfoForLValue();
@@ -820,7 +856,8 @@ public:
                 val->resolveLValueTypeInfo(ti, rti, type_info_needs_substitution,
                     ref_type_info_needs_substitution);
             }
-            return val->getLValue(lvh, for_remove, ti, rti);
+            return val->getLValue(lvh, for_remove, ti, rti) ? LocalVarLValueLookup::Error
+                : LocalVarLValueLookup::Found;
         }
 
         ClosureVarValue* val = findClosureVarValue();
@@ -830,9 +867,10 @@ public:
             val = thread_try_find_closure_var(name.c_str());
         }
         if (!val) {
-            return -1;
+            return LocalVarLValueLookup::NotInstantiated;
         }
-        return val->getLValue(lvh, for_remove, initial_assignment);
+        return val->getLValue(lvh, for_remove, initial_assignment) ? LocalVarLValueLookup::Error
+            : LocalVarLValueLookup::Found;
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {

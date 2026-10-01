@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class LocalVarLValueLookupTest
+
+#! Tests the two outcomes of looking up a local variable that is not instantiated on the current thread
+/** LocalVar::getLValue() used to return -1 without an exception for a local variable with no value on the current
+    thread.  That was a legitimate "not here" result where the IR slot cache holds the value (a closure loop
+    variable run by the IR interpreter), but everywhere else it silently discarded the write.  The legitimate case
+    now uses the explicit LocalVar::tryGetLValue() lookup, and every other write raises \c LVALUE-ERROR.
+*/
+class LocalVarLValueLookupTest inherits QUnit::Test {
+    public {
+        #! a closure whose loop variable lives in the IR slot cache when the closure body is interpreted
+        const ClosureSrc = 'int captured = 3;
+code<int(int)> loop = int sub (int count) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += i * captured;
+    }
+    for (int j = 10; j > 7; j--) {
+        sum += j;
+    }
+    return sum;
+};
+printf("%d\n", loop(4));
+';
+        #! the output of ClosureSrc
+        const ClosureOut = "45\n";
+
+        #! a script object whose functions use a top-level local variable, which an object never instantiates
+        const TopLevelLocalSrc = 'int counter = 5;
+int sub bump() {
+    ++counter;
+    return counter;
+}
+int sub assignIt() {
+    counter = 7;
+    return 0;
+}
+string sub addIt() {
+    counter += 2;
+    return "added";
+}
+string sub appendIt() {
+    counter = counter + 1;
+    return "appended";
+}
+';
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("LocalVarLValueLookupTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a slot-cached local with no thread value runs in every execution mode", \testExecModes());
+        addTestCase("an interpreted AOT closure body keeps its loop variables in the slot cache", \testAotClosure());
+        addTestCase("negative: a write to a local that is not instantiated raises LVALUE-ERROR",
+            \testNotInstantiatedWrite());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-lvalue-lookup-");
+        string src = writeFile(tmp.path + DirSep + "closure.qr", ClosureSrc);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            assertEq(0, rv.rc, mode + ": " + rv.err);
+            assertEq(ClosureOut, rv.out, mode);
+        }
+    }
+
+    testAotClosure() {
+        checkQcc();
+        TmpDir tmp("qore-lvalue-lookup-");
+        string src = writeFile(tmp.path + DirSep + "closure.qr", ClosureSrc);
+        string exe = tmp.path + DirSep + "closure";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        # native closures, and closure bodies run by the IR interpreter
+        foreach string opts in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
+                "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1")) {
+            rv = run(tmp.path, sprintf("%s %s %s", env, opts, exe));
+            assertEq(0, rv.rc, opts + ": " + rv.err);
+            assertEq(ClosureOut, rv.out, opts);
+        }
+    }
+
+    testNotInstantiatedWrite() {
+        checkQcc();
+        string cxx = ENV.CXX ?? "c++";
+        if (!(backquote(sprintf("command -v %s 2>/dev/null", cxx)).val())) {
+            testSkip("no C++ compiler available to build the custom host");
+        }
+        TmpDir tmp("qore-lvalue-lookup-");
+        # a custom host is not affected by qcc's link-time check for this case; it registers the object itself
+        string src = writeFile(tmp.path + DirSep + "toplevel_local.qr", TopLevelLocalSrc);
+        string obj = tmp.path + DirSep + "toplevel_local.qo";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
+        assertEq(0, rv.rc, rv.err);
+        string root = realpath(get_script_dir() + "/../../..");
+        string host = tmp.path + DirSep + "host";
+        *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
+        string flags = target ? target[0] : "-ldl";
+        rv = run(tmp.path, sprintf("%s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
+            "aot_top_level_local_host.cpp %s -L%s -Wl,-rpath,%s -lqore %s -o %s", cxx, root, libqore_dir, root, obj,
+            libqore_dir, libqore_dir, flags, host));
+        assertEq(0, rv.rc, rv.err);
+
+        list<string> fns = ("bump", "assignIt", "addIt", "appendIt");
+        rv = run(tmp.path, sprintf("%s %s %s", env, host, fns.join(" ")));
+        assertEq(0, rv.rc, rv.err);
+        # each write raises the exception instead of being silently discarded
+        foreach string fn in (fns) {
+            assertRegex(sprintf("^%s: rc=1 err=LVALUE-ERROR: local variable 'counter' is not instantiated in the "
+                "current context$", fn), (select rv.out.split("\n"), $1.find(fn + ":") == 0)[0] ?? "", fn);
+        }
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+    }
+
+    private string writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

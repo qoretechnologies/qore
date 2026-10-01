@@ -1461,6 +1461,24 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
     helper.assign(value);
 }
 
+//! Mirrors a value that the IR slot cache already holds to the thread's local variable, if it has one
+/** Used only after the slot cache has been updated with \a value, which makes the cache the authoritative copy:
+    a local that is not instantiated on the current thread (e.g. a loop variable of a closure body run by the IR
+    interpreter) has nothing to mirror to, which is not an error here.  Every other failure raises an exception.
+    Transfers ownership of \a value.
+*/
+static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
+    assert(var);
+    LValueHelper helper(xsink);
+    LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
+    if (rc != LocalVarLValueLookup::Found) {
+        assert(rc == LocalVarLValueLookup::NotInstantiated || *xsink);
+        value.discard(xsink);
+        return;
+    }
+    helper.assign(value);
+}
+
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
@@ -9051,10 +9069,10 @@ load_local_done:
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
                         } else {
-                            assignLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
+                            mirrorLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         }
                     } else {
-                        assignLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
+                        mirrorLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                     }
                 }
                 markParentSlotDirty(fused_inst->target_slot_id);
@@ -9146,10 +9164,10 @@ load_local_done:
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
                         } else {
-                            assignLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
+                            mirrorLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
                         }
                     } else {
-                        assignLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
+                        mirrorLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
                     }
                 }
                 markParentSlotDirty(fused_inst->slot_id);
