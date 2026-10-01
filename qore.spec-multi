@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 6%{?dist}
+Release: 7%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -148,6 +148,8 @@ Summary: Qore standard library and bundled native modules
 Requires: %{libname}%{?_isa} = %{version}-%{release}
 %if 0%{?suse_version}
 Requires: libtree-sitter0_26%{?_isa} >= 0.26.13
+%elif 0%{?fedora}
+Requires: libtree-sitter%{?_isa} >= 0.26.13
 %else
 Requires: tree-sitter%{?_isa} >= 0.26.13
 %endif
@@ -317,7 +319,7 @@ python3 -B -W error -m unittest discover -s rpm/tests -p 'test_requires.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_install.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_build_env.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_sources.py' -v
-python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
+QORE_RPM_VERIFY_INSTALLED_DEPS=1 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
 QORE_TEST_QCC=$PWD/build/qcc QORE_TEST_QORE=$PWD/build/qore \
     python3 -B -W error rpm/tests/qcc-rpm-integration.py -v
 QORE_QPP_EXECUTABLE=$PWD/build/qpp QORE_QCC_EXECUTABLE=$PWD/build/qcc \
@@ -399,6 +401,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-7
+- Require Fedora's native libtree-sitter package and verify the runtime provider.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-6
 - Unify Fedora, Enterprise Linux and SUSE packaging.
 - Preserve AOT metadata, retain debug symbols, and isolate offline builds.

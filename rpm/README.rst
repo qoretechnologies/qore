@@ -71,3 +71,9 @@ information and original Qore source files. The core RPM runs it in ``%check``.
 temporary directory outside the source checkout. Set ``QORE_RPM_TEST_TMP`` to
 a fresh directory for each script. These tests cover module loading, ONNX
 inference, CMake/pkg-config SDK use, qcc, metadata extraction and tool startup.
+
+Set ``QORE_RPM_VERIFY_INSTALLED_DEPS=1`` when running the helper tests in a
+target build dependency image. This additionally resolves the emitted parser
+runtime requirement against the real RPM database and compares its version
+with RPM semantics. Fedora uses ``libtree-sitter``; Enterprise Linux uses the
+``tree-sitter`` backport, and openSUSE uses ``libtree-sitter0_26``.

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Check the runtime contract emitted by the target distribution's RPM parser."""
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import unittest
@@ -29,6 +30,7 @@ class SpecMetadataTest(unittest.TestCase):
 
     def test_runtime_versions_are_enforced_without_development_packages(self):
         suse = subprocess.check_output(["rpm", "--eval", "%{?suse_version}"], text=True).strip()
+        fedora = subprocess.check_output(["rpm", "--eval", "%{?fedora}"], text=True).strip()
         isa = subprocess.check_output(["rpm", "--eval", "%{?_isa}"], text=True).strip()
         self.assertTrue(isa.startswith("("), "native architecture capability is required")
         packages = self.requirements()
@@ -44,12 +46,38 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertIn(f"c-ares(qore-query-lifecycle-fixes){isa} = 1", runtime)
         converters = "glibc-gconv-modules-extra" if suse else "glibc-gconv-extra"
         self.assertIn(f"{converters}{isa}", runtime)
-        parser = "libtree-sitter0_26" if suse else "tree-sitter"
+        parser = "libtree-sitter0_26" if suse else ("libtree-sitter" if fedora else "tree-sitter")
         self.assertIn(f"{parser}{isa} >= 0.26.13", packages["qore-stdlib"])
         for name in ("qore", "libqore20" if suse else "libqore", "qore-stdlib"):
             self.assertFalse(any("-devel" in value or "pkgconfig(" in value
                                  for value in packages[name]), name)
         self.assertIn("python3 >= 3.11", packages["qore-rpm-macros"])
+
+    @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
+                         "requires the target build dependency image")
+    def test_parser_requirement_is_provided_by_installed_runtime(self):
+        # Query the actual target RPM database, not a second spelling table.
+        # Fedora's library package differs from the Enterprise Linux backport.
+        requirements = [value for value in self.requirements()["qore-stdlib"]
+                        if "tree-sitter" in value]
+        self.assertEqual(1, len(requirements))
+        capability, operator, minimum = requirements[0].split()
+        self.assertEqual(">=", operator)
+        result = subprocess.run(["rpm", "-q", "--whatprovides", capability,
+                                 "--qf", "%{NAME}\n[%{PROVIDENAME} %{PROVIDEVERSION}\n]"],
+                                capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("-devel", result.stdout)
+        versions = [line.split()[1] for line in result.stdout.splitlines()
+                    if line.startswith(capability + " ")]
+        self.assertEqual(1, len(versions), result.stdout)
+        for value in (versions[0], minimum):
+            self.assertRegex(value, r"^[A-Za-z0-9._+~:^\-]+$")
+        # --whatprovides resolves names only; RPM's version expression performs
+        # the EVR comparison using the same semantics as its dependency solver.
+        expression = '%{expr:v"' + versions[0] + '" >= v"' + minimum + '"}'
+        self.assertEqual("1", subprocess.check_output(
+            ["rpm", "--eval", expression], text=True).strip())
 
     def test_disabling_docs_and_checks_does_not_disable_onnx(self):
         output = subprocess.check_output([
