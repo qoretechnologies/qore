@@ -22,7 +22,12 @@ class AotLinkConfigTest(unittest.TestCase):
         self.source = self.root / "source"
         self.source.mkdir()
         self.build = self.root / "build"
-        self.env = {key: value for key, value in os.environ.items() if not key.startswith("RPM_")}
+        # Model an SDK consumer outside the package build. Compiler/linker
+        # flags and RPM_* metadata form one build environment: retaining
+        # package-note specs while removing their RPM_ARCH input is invalid.
+        private_flags = {"CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS"}
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith("RPM_") and key not in private_flags}
         (self.source / "probe.c").write_text("int answer(void) { return 42; }\n")
         (self.source / "main.c").write_text("int answer(void); int main(void) { return answer() == 42 ? 0 : 1; }\n")
 
