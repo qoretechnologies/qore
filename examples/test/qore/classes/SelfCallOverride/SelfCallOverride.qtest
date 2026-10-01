@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SelfCallOverrideTest
+
+#! Tests that an unqualified call of a method from a base class method dispatches like a call through \c self
+/** A base class method calling \c method(...) without a qualifier must reach a derived class's override whenever
+    that override accepts the call, exactly as \c self.method(...) and a call from outside the class do.  An
+    override whose parameter types were compatible but not identical to the base variant's (\c reference vs.
+    \c reference<string>, \c auto or \c *string vs. \c string) was silently skipped for methods with several
+    variants, so for example an FTP handler wrapper passing a renamed path by reference ignored the derived
+    handler.  Overrides that do not accept the arguments, \c private:internal methods and static methods are not
+    reached, as before.
+*/
+class SelfCallOverrideTest inherits QUnit::Test {
+    public {
+        const Classes = 'class Base {
+    # a compatibility wrapper calling a reference variant, like Qorus FTP handler wrappers
+    string receive(string cwd, string path) {
+        receive(cwd, \path);
+        return path;
+    }
+    *string receive(string cwd, reference<string> path) {
+    }
+
+    string viaAuto() { return disp("x"); }
+    string viaInt() { return disp(1); }
+    string disp(string v) { return "Base::disp(string)"; }
+    string disp(int v) { return "Base::disp(int)"; }
+
+    string viaOptional() { return opt("x"); }
+    string opt(string v) { return "Base::opt(string)"; }
+    string opt(int v) { return "Base::opt(int)"; }
+
+    string viaIdentical() { return same("x"); }
+    string same(string v) { return "Base::same(string)"; }
+    string same(int v) { return "Base::same(int)"; }
+
+    # the override does not accept the arguments: the base variant runs
+    string viaIncompatible() { return inc("x"); }
+    string inc(string v) { return "Base::inc(string)"; }
+    string inc(float v) { return "Base::inc(float)"; }
+
+    # a variant the override does not cover is still reachable
+    string viaUncovered() { return part(1.5); }
+    string part(string v) { return "Base::part(string)"; }
+    string part(float v) { return "Base::part(float)"; }
+
+    string viaPrivate() { return priv("x"); }
+    private string priv(string v) { return "Base::priv(string)"; }
+    private string priv(int v) { return "Base::priv(int)"; }
+
+    # private:internal methods are not overridden
+    string viaInternal() { return pi("x"); }
+    private:internal string pi(string v) { return "Base::pi(string)"; }
+    private:internal string pi(int v) { return "Base::pi(int)"; }
+
+    # static methods are not virtual
+    string viaStatic() { return st("x"); }
+    static string st(string v) { return "Base::st(string)"; }
+    static string st(int v) { return "Base::st(int)"; }
+
+    # a single-variant method
+    string viaSingle() { return single("x"); }
+    string single(string v) { return "Base::single(string)"; }
+}
+
+class Derived inherits Base {
+    *string receive(string cwd, reference path) {
+        path += ".tmp";
+    }
+    string disp(auto v) { return "Derived::disp(auto)"; }
+    string opt(*string v) { return "Derived::opt(*string)"; }
+    string same(string v) { return "Derived::same(string)"; }
+    string inc(int v) { return "Derived::inc(int)"; }
+    string part(string v) { return "Derived::part(string)"; }
+    private string priv(auto v) { return "Derived::priv(auto)"; }
+    private:internal string pi(auto v) { return "Derived::pi(auto)"; }
+    static string st(auto v) { return "Derived::st(auto)"; }
+    string single(auto v) { return "Derived::single(auto)"; }
+}
+
+hash<string, string> sub selfCallResults(Base b) {
+    return {
+        "receive": b.receive("/", "hello.txt"),
+        "auto": b.viaAuto(),
+        "int": b.viaInt(),
+        "optional": b.viaOptional(),
+        "identical": b.viaIdentical(),
+        "incompatible": b.viaIncompatible(),
+        "uncovered": b.viaUncovered(),
+        "private": b.viaPrivate(),
+        "internal": b.viaInternal(),
+        "static": b.viaStatic(),
+        "single": b.viaSingle(),
+    };
+}
+';
+
+        #! the results for a Derived object
+        const DerivedResults = {
+            "receive": "hello.txt.tmp",
+            "auto": "Derived::disp(auto)",
+            # the most-derived variant accepting the arguments wins, as for a call from outside the class
+            "int": "Derived::disp(auto)",
+            "optional": "Derived::opt(*string)",
+            "identical": "Derived::same(string)",
+            "incompatible": "Base::inc(string)",
+            "uncovered": "Base::part(float)",
+            "private": "Derived::priv(auto)",
+            "internal": "Base::pi(string)",
+            "static": "Base::st(string)",
+            "single": "Derived::single(auto)",
+        };
+
+        #! the results for a Base object
+        const BaseResults = {
+            "receive": "hello.txt",
+            "auto": "Base::disp(string)",
+            "int": "Base::disp(int)",
+            "optional": "Base::opt(string)",
+            "identical": "Base::same(string)",
+            "incompatible": "Base::inc(string)",
+            "uncovered": "Base::part(float)",
+            "private": "Base::priv(string)",
+            "internal": "Base::pi(string)",
+            "static": "Base::st(string)",
+            "single": "Base::single(string)",
+        };
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("SelfCallOverrideTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("unqualified self calls in this Program", \testInProgram());
+        addTestCase("unqualified self calls in every execution mode", \testExecModes());
+        addTestCase("unqualified self calls in an AOT executable", \testAot());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.parse(Classes, "self-call-override");
+        assertEq(DerivedResults, p.callFunction("selfCallResults", p.callFunction("create_object", "Derived")));
+        assertEq(BaseResults, p.callFunction("selfCallResults", p.callFunction("create_object", "Base")));
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-self-call-override-");
+        string src = writeScript(tmp.path);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            assertEq(0, rv.rc, mode + ": " + rv.err);
+            assertEq(expectedOutput(), rv.out, mode);
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-self-call-override-");
+        string src = writeScript(tmp.path);
+        string exe = tmp.path + DirSep + "self-call-override";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(expectedOutput(), rv.out);
+    }
+
+    private string expectedOutput() {
+        return sprintf("%y\n%y\n", DerivedResults, BaseResults);
+    }
+
+    private string writeScript(string dir) {
+        string path = dir + DirSep + "self-call-override.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Classes + "printf(\"%y\\n%y\\n\", selfCallResults(new Derived()), selfCallResults(new Base()));\n");
+        f.close();
+        return path;
+    }
+
+    #! runs @a cmd; returns its exit code, its standard output, and its standard error output
+    private hash<auto> run(string dir, string cmd) {
+        string err_file = dir + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = File::readTextFile(err_file);
+        unlink(err_file);
+        return {"rc": rc, "out": out, "err": err};
+    }
+}

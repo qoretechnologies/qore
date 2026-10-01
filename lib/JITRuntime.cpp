@@ -10930,10 +10930,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const Qore
     return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
 }
 
+//! Calls a method of self by name with arguments that are already evaluated
+/** The arguments are passed as temporary arguments (like AbstractMethodCallNode::exec() does for IR clones), so that
+    a reference argument reaches the method as a reference rather than being dereferenced by a second evaluation.
+    A name that does not resolve is reported by QoreClass's normal method evaluation.
+*/
 static QoreValue qore_rt_eval_self_method_by_name(QoreObject* self, const char* name,
         QoreListNode* arg_list, const qore_class_private* class_ctx, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return qore_class_private::get(*self->getClass())->evalMethod(self, name, arg_list, class_ctx, rc, xsink);
+    const qore_class_private* priv = qore_class_private::get(*self->getClass());
+    const QoreMethod* m = priv->getMethodForEval(name, self->getProgram(), class_ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (m) {
+        return qore_method_private::evalTmpArgs(*m, xsink, rc, self, arg_list, class_ctx);
+    }
+    return priv->evalMethod(self, name, arg_list, class_ctx, rc, xsink);
 }
 
 static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& target,
@@ -10980,54 +10993,8 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
     }
 
     if (target.self_ns_single) {
-        // Match SelfFunctionCallNode::evalImpl(): unqualified self calls are virtual,
-        // except for inherited multi-variant methods where a derived class may hide
-        // only some variants. In that case try a matching override first, then fall
-        // back to the parse-time method pointer to preserve inherited overload access.
-        if (!target.self_is_abstract && self->getClass() != method->getClass()
-                && qore_method_private::get(*method)->getFunction()->numVariants() > 1) {
-            const qore_class_private* obj_priv = qore_class_private::get(*self->getClass());
-            const QoreMethod* derived = obj_priv->getMethodForEval(method_name, self->getProgram(),
-                call_ctx, xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
-            if (derived && derived != method) {
-                if (target.variant) {
-                    const AbstractFunctionSignature* sig = target.variant->getSignature();
-                    if (sig) {
-                        unsigned np = sig->numParams();
-                        const QoreFunction* dfunc = qore_method_private::get(*derived)->getFunction();
-                        QoreFunctionIterator it(*dfunc);
-                        while (it.next()) {
-                            const AbstractQoreFunctionVariant* dv = it.getVariant();
-                            const AbstractFunctionSignature* dsig = dv->getSignature();
-                            if (!dsig || dsig->numParams() != np) {
-                                continue;
-                            }
-                            bool match = true;
-                            for (unsigned i = 0; i < np; ++i) {
-                                if (!QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
-                                        dsig->getParamTypeInfo(i))) {
-                                    match = false;
-                                    break;
-                                }
-                            }
-                            if (match) {
-                                return toBits(qore_method_private::evalTmpArgs(*derived, xsink, rc,
-                                    self, *arg_list, call_ctx, dv));
-                            }
-                        }
-                    }
-                } else {
-                    return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list,
-                        call_ctx, rc, xsink));
-                }
-            }
-            return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, nullptr,
-                target.variant));
-        }
-
+        // Match SelfFunctionCallNode::evalImpl(): unqualified self calls are virtual, so unless the object's class
+        // is the parse-time class (or the method's), the method is resolved by name on the object's class
         if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
             return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, call_ctx,
                 target.variant));
