@@ -113,6 +113,57 @@ qore_binary_module_two_phase_docs(module "child")
             self.assertNotIn("absent.tag", config)
             self.assertIn("IMAGE_PATH = \n", config)
 
+    def test_external_user_modules_only_reference_registered_indexes(self):
+        for separated, native in ((False, False), (True, False), (True, True)):
+            with self.subTest(separated=separated, native=native), tempfile.TemporaryDirectory(
+                    prefix="qore user doc sdk ") as directory:
+                root = Path(directory)
+                source = root / "source"
+                build = root / "build"
+                build.mkdir()
+                module = source / ("qlib/Fixture/Fixture.qm" if separated else "qlib/Fixture.qm")
+                module.parent.mkdir(parents=True)
+                module.write_text("%modern\nmodule Fixture { version = \"1.0\"; }\n")
+                self.make_tag(build, "dependency")
+                if native:
+                    self.make_tag(build, "native")
+                template = source / "Doxyfile.in"
+                template.write_text('''QUIET = YES
+INPUT = "@_dox_input@"
+OUTPUT_DIRECTORY = "@CMAKE_BINARY_DIR@/output"
+GENERATE_LATEX = NO
+WARN_AS_ERROR = YES
+TAGFILES = @TAGFILES@ @QORE_CORE_DOC_TAGFILES@
+''')
+                (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(UserModuleDocSdk NONE)
+include("{ROOT}/cmake/QoreMacros.cmake")
+set(QORE_BUILD_AOT_MODULES OFF)
+set(DOXYGEN_FOUND TRUE)
+set(QORE_USERMODULE_DOXYGEN_TEMPLATE "{template}")
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+set(DOXYGEN_EXECUTABLE doxygen)
+set(QORE_USER_MODULES_DIR share/qore-modules)
+set(QORE_DOXYGEN_TAGFILE "{root}/absent.tag")
+{'set(_external_module_name native)' if native else ''}
+add_custom_target(docs)
+add_custom_target(docs-module)
+add_custom_target(docs-dependency)
+qore_external_user_module("{'qlib/Fixture' if separated else 'qlib/Fixture.qm'}" "dependency")
+''')
+                self.run_command([CMAKE, "-S", str(source), "-B", str(build)], root)
+                header = build / "doxygen/qlib/Fixture/Fixture.qm.dox.h"
+                header.write_text("/** @page fixture Fixture\nSee @ref dependency.\n"
+                                  + ("See @ref native.\n" if native else "") + "*/\n")
+                config = build / "doxygen/Doxyfile.Fixture"
+                self.run_command(["doxygen", str(config)], build)
+                html = (build / "output/html/fixture.html").read_text()
+                self.assertIn("../../dependency/html/dependency.html", html)
+                if native:
+                    self.assertIn("../../native/html/native.html", html)
+                else:
+                    self.assertNotIn(str(build / ".tag"), config.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3458,7 +3458,8 @@ endfunction()
 
 # Install qore native/user module (.qm file) into proper location.
 #
-# NOTE: must be called afer QORE_EXTERNAL_BINARY_MODULE
+# When packaging a native module, call after QORE_EXTERNAL_BINARY_MODULE.
+# Pure Qore module projects do not need a native module documentation index.
 #
 # Param #1: path to the module; e.g. "qlib/RestHandler.qm"
 # Param #2: list of module dependencies separated by semicolon; e.g. "HttpServerUtil;Mime;Util"
@@ -3501,14 +3502,15 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
 
         # prepare needed vars
         set(MOD_DOXYFILE "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
-        #set(MOD_DEPS -t${_external_module_name}.tag=../../${_external_module_name}/html)
         set(CURRENT_MODULE_NAME ${f})
-        set(TAGFILES ${CMAKE_BINARY_DIR}/${_external_module_name}.tag=../../${_external_module_name}/html)
+        set(TAGFILES "")
+        if (DEFINED _external_module_name AND NOT "${_external_module_name}" STREQUAL "")
+            list(APPEND TAGFILES "\"${CMAKE_BINARY_DIR}/${_external_module_name}.tag=../../${_external_module_name}/html\"")
+        endif()
         foreach(i ${_mod_deps})
             # we must use relative directories for tags; using absolute paths for tags will break the documentation
             # when used on any system except the one where it's generated
-            #SET(MOD_DEPS ${MOD_DEPS} -t${i}.tag=../../${i}/html)
-            SET(TAGFILES ${TAGFILES} ${CMAKE_BINARY_DIR}/${i}.tag=../../${i}/html)
+            list(APPEND TAGFILES "\"${CMAKE_BINARY_DIR}/${i}.tag=../../${i}/html\"")
         endforeach(i)
         string (REPLACE ";" " " TAGFILES "${TAGFILES}")
 
