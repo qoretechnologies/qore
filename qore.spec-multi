@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 11%{?dist}
+Release: 12%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -262,15 +262,7 @@ QORE_RPM_POST_EOF
 %prep
 %autosetup -n %{name}-%{version}
 # Retain complete license notices without shipping implementation as license data.
-python3 - <<'PY_LICENSES'
-from pathlib import Path
-for name in ("linenoise", "wcwidth"):
-    data = Path("modules/linenoise/src/linenoise/" + name + ".cpp").read_text()
-    assert data.startswith("/*") and "*/" in data
-    notice = data[:data.index("*/") + 2] + "\n"
-    assert "Copyright" in notice or "copyright" in notice
-    Path(name + ".LICENSE").write_text(notice)
-PY_LICENSES
+python3 rpm/stage-licenses.py . .
 
 %build
 %{?set_build_flags}
@@ -342,6 +334,7 @@ python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_metadata.py' 
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_requires.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_install.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_examples.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_licenses.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_build_env.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_sources.py' -v
 QORE_RPM_VERIFY_INSTALLED_DEPS=1 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
@@ -427,6 +420,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-12
+- Validate embedded license grants, including the permissive wcwidth notice.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-11
 - Ship runnable user examples without development test fixtures or Git metadata.
 - Package complete third-party license notices and sourced shell helpers correctly.
