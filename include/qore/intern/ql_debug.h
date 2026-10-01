@@ -75,11 +75,23 @@ typedef void (*qore_dbg_deref_wait_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_wait_hook_t> qore_dbg_deref_wait_hook;
 
 class AbstractHttpPollConnectionPriv;
-//! called by the HTTP/1 client poll operation when it fails and is about to mark its connection closed; returns
+//! called by the HTTP/1 client poll operation when it fails and is about to mark its connection closed (holding a
+//! reference to it, but no lock of the operation); returns
 //! true if the hook took over marking it closed (holding its own reference); set by
 //! dbg_defer_http1_connection_close()
 typedef bool (*qore_dbg_http1_defer_close_hook_t)(AbstractHttpPollConnectionPriv* conn);
 DLLLOCAL extern std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook;
+
+//! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
+//! before it releases the reference that it holds while running the hook; returns true if the hook released a
+//! reference of its own, in which case qore_dbg_conn_close_released() is called once setClosed() has released its
+//! reference; set by dbg_release_http1_connection_on_close()
+typedef bool (*qore_dbg_conn_close_release_hook_t)(AbstractHttpPollConnectionPriv* conn);
+DLLLOCAL extern std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook;
+
+//! called by AbstractHttpPollConnectionPriv::setClosed() after it released its reference when
+//! qore_dbg_conn_close_release_hook released one before
+DLLLOCAL void qore_dbg_conn_close_released();
 
 //! the number of times the next c-ares lookups report their query as lost; set by dbg_cares_lose_query()
 DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;

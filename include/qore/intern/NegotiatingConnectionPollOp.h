@@ -250,7 +250,7 @@ private:
     DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void notifyOwnerReady(std::string&& alpn);
-    DLLLOCAL void notifyOwnerClosed();
+    DLLLOCAL void notifyOwnerClosed(ExceptionSink* xsink);
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
 };
 

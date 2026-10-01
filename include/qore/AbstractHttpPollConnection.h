@@ -199,6 +199,32 @@ public:
         return state.load(std::memory_order_acquire);
     }
 
+    //! Takes the connection from a back-pointer that @a lock protects, with a reference of its own
+    /** Clears @a conn.  Returns @c nullptr if there is no connection, or if its last reference is already gone: the
+        connection is being destroyed then, and its destructor closes it.
+
+        The caller marks the returned connection closed with setClosed() and then releases the reference, both
+        without holding @a lock: setClosed() can release the last reference held by others, so the release here can
+        destroy the connection, and its destructor takes @a lock to disarm the back-pointer.
+
+        @param lock the lock that protects @a conn
+        @param conn the back-pointer; cleared
+
+        @return the connection with a reference that the caller must release, or @c nullptr
+
+        @since %Qore 3.0
+    */
+    template <typename T>
+    DLLLOCAL static T* takeBackPointer(QoreThreadLock& lock, T*& conn) {
+        AutoLocker al(lock);
+        T* rv = conn;
+        conn = nullptr;
+        if (rv && !rv->optRef()) {
+            return nullptr;
+        }
+        return rv;
+    }
+
     //! Registers an EventNotifier to be signaled when the connection becomes ready or closed
     /** If the connection is already in a decided state (READY, DRAINING, or CLOSED), returns
         \c false immediately — the caller should not poll and may proceed directly.

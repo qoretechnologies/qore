@@ -2266,10 +2266,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // closeImpl() rejects with HTTP1-ABORT.
     if (close) {
         h1_state.store(H1State::CLOSED, std::memory_order_release);
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
+        closeConnectionPriv(false, xsink);
     }
 
     // Dispatch to action
@@ -2411,10 +2408,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     // that is about to be evicted).
     if (close) {
         h1_state.store(H1State::CLOSED, std::memory_order_release);
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
+        closeConnectionPriv(false, xsink);
     }
 
     if (action) {
@@ -2510,13 +2504,7 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     }
     // Close before notifying, so a caller woken by notifyPendingStreams() cannot
     // check out this connection again — see setError() for the full rationale.
-    {
-        AutoLocker al(stream_lock);
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
-    }
+    closeConnectionPriv(false, xsink);
     notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
@@ -2575,20 +2563,27 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, c
     // getStoredError() below, or HttpClientConnectionBase::raiseClosedSubmitError())
     // without ever reaching the wire, so the caller sees this request's failure
     // reported as the next request's failure.
-    {
-        AutoLocker al(stream_lock);
-        if (connection_priv) {
-#ifdef DEBUG
-            // tests defer marking the connection closed to hold open the window in which the failure is published
-            // but the pooled connection still looks reusable
-            qore_dbg_http1_defer_close_hook_t hook = qore_dbg_http1_defer_close_hook.load();
-            if (!hook || !hook(connection_priv))
-#endif
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
-    }
+    closeConnectionPriv(true, xsink);
     notifyPendingStreams(err, desc, xsink);
+}
+
+void Http1ClientPollOperationPriv::closeConnectionPriv(bool failed, ExceptionSink* xsink) {
+    // the connection is marked closed without holding stream_lock: setClosed() can release the last reference held
+    // by others (the connection manager evicts a closed connection), so the reference released here can be the last
+    // one, and the destructor of the connection takes stream_lock in disarmConnectionPriv()
+    AbstractHttpPollConnectionPriv* conn = AbstractHttpPollConnectionPriv::takeBackPointer(stream_lock,
+        connection_priv);
+    if (!conn) {
+        return;
+    }
+#ifdef DEBUG
+    // tests defer marking a failed connection closed to hold open the window in which the failure is published but
+    // the pooled connection still looks reusable
+    qore_dbg_http1_defer_close_hook_t hook = failed ? qore_dbg_http1_defer_close_hook.load() : nullptr;
+    if (!hook || !hook(conn))
+#endif
+    conn->setClosed();
+    conn->deref(xsink);
 }
 
 bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {

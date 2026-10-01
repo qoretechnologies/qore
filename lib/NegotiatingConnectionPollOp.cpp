@@ -301,7 +301,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
     //
     // setClosed() is thread-safe (AbstractHttpPollConnectionPriv takes
     // its own lock) so calling it from the I/O thread is fine.
-    notifyOwnerClosed();
+    notifyOwnerClosed(xsink);
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
@@ -315,7 +315,7 @@ void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
 
     neg_state.store(NegState::CLOSED, std::memory_order_release);
     releaseCurrentOp(xsink);
-    notifyOwnerClosed();
+    notifyOwnerClosed(xsink);
 }
 
 void NegotiatingConnectionPollOpPriv::notifyOwnerReady(std::string&& alpn) {
@@ -325,11 +325,14 @@ void NegotiatingConnectionPollOpPriv::notifyOwnerReady(std::string&& alpn) {
     }
 }
 
-void NegotiatingConnectionPollOpPriv::notifyOwnerClosed() {
-    AutoLocker al(owner_lock);
-    if (owner_conn) {
-        owner_conn->setClosed();
-        owner_conn = nullptr;
+void NegotiatingConnectionPollOpPriv::notifyOwnerClosed(ExceptionSink* xsink) {
+    // the owner is marked closed without holding owner_lock: setClosed() can release the last reference held by
+    // others, so the reference released here can be the last one, and the destructor of the owner takes owner_lock
+    // in clearOwner()
+    NegotiatingHttpClientConnection* conn = AbstractHttpPollConnectionPriv::takeBackPointer(owner_lock, owner_conn);
+    if (conn) {
+        conn->setClosed();
+        conn->deref(xsink);
     }
 }
 

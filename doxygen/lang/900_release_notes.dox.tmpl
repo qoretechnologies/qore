@@ -3991,6 +3991,10 @@ while (*binary chunk = input.read(65536)) {
       a @ref Qore::StringInputStream "StringInputStream" body
     - Fixed @ref Qore::StringOutputStream::getData() "StringOutputStream::getData()" tagging the data written
       before its first call with the default character encoding instead of the encoding given to the constructor
+    - Fixed a deadlock of the asynchronous I/O thread, after which every HTTP request and socket operation of the
+      process hung, when a server closed an idle HTTP/1 or HTTP/2 client connection (or a connection still
+      negotiating its protocol) while the connection manager evicted it from its pool; the I/O thread destroyed the
+      connection while holding a lock that the destructor takes again
     - Fixed @ref Qore::TransformOutputStream "TransformOutputStream" and
       @ref Qore::TransformInputStream "TransformInputStream" holding back decompressed data: a decompressor that
       expands its input to more than one output buffer, as Brotli and Zstd do, kept the rest of the output until

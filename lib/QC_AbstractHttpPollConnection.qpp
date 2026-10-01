@@ -35,6 +35,7 @@
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/ql_debug.h"
 
 // Forward declaration for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -94,8 +95,19 @@ void AbstractHttpPollConnectionPriv::setClosed() {
     // design/http-client-manager-cpp-port.md for the lock ordering rules.
     if (fire_hook) {
         onClosedHook();
+#ifdef DEBUG
+        // tests release a reference here to make the one released below the last one, as when the connection
+        // manager evicts the connection in the meantime
+        qore_dbg_conn_close_release_hook_t release_hook = qore_dbg_conn_close_release_hook.load();
+        bool released = release_hook && release_hook(this);
+#endif
         ExceptionSink xsink;
         deref(&xsink);
+#ifdef DEBUG
+        if (released) {
+            qore_dbg_conn_close_released();
+        }
+#endif
     }
 }
 

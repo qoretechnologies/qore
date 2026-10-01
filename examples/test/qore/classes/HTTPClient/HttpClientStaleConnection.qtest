@@ -75,6 +75,63 @@ class ClosingServer {
     }
 }
 
+#! A server that accepts one connection and closes it when told to
+class HoldingServer {
+    private {
+        Socket listener();
+        int port;
+        #! decremented when the server thread has accepted the connection or failed
+        Counter accepted(1);
+        Counter running(1);
+        *Socket client;
+        *hash<ExceptionInfo> error;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! closes the accepted connection
+    closeClient() {
+        accepted.waitForZero();
+        if (error) {
+            throw error.err, error.desc, error.arg;
+        }
+        client.close();
+    }
+
+    shutdown() {
+        if (accepted.getCount()) {
+            # no connection was made; wakes the listener up
+            Socket s();
+            s.connectINET("127.0.0.1", port, 1s);
+            s.close();
+        }
+        running.waitForZero();
+        if (client) {
+            client.close();
+        }
+        listener.close();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        on_exit accepted.dec();
+        try {
+            client = listener.accept();
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+    }
+}
+
 #! A connection that the peer closes while it waits in the pool is replaced for an idempotent request
 public class HttpClientStaleConnectionTest inherits QUnit::Test {
     public {
@@ -84,6 +141,7 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
     constructor() : Test("HttpClientStaleConnectionTest", "1.0") {
         # first: the hook it arms reacts to the next connection failure in the process
         addTestCase("streamed request repeated when the pool has not seen the close", \streamedUnreflectedCloseTest());
+        addTestCase("connection destroyed by the thread that marks it closed", \releasedOnCloseTest());
         addTestCase("buffered requests", \bufferedTest());
         addTestCase("streamed responses", \streamedTest());
         set_return_value(main());
@@ -144,5 +202,29 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
         assertEq(binary("ok"), os.getData(), "request after the unreflected close");
         assertTrue(call_function("dbg_release_http1_connection_close"), "a connection close was deferred");
         assertEq(2, server.getRequests());
+    }
+
+    # When the connection manager evicts a closed connection while the I/O thread is marking it closed, the I/O
+    # thread releases the last reference and destroys the connection.  It did so while holding the lock of the poll
+    # operation that the destructor takes, so the I/O thread deadlocked and every later request on the process hung.
+    # A debug hook releases the only other reference to the connection at that point.
+    releasedOnCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that releases a connection while it is marked closed is only in debug builds");
+        }
+        HoldingServer server();
+        on_exit server.shutdown();
+        Counter released(1);
+        call_function("dbg_release_http1_connection_on_close", "127.0.0.1", server.getPort(), released);
+
+        # the I/O thread marks the connection closed and destroys it
+        server.closeClient();
+        assertEq(0, released.waitForZero(10s), "the I/O thread destroyed the connection");
+
+        # the I/O thread still serves connections
+        ClosingServer closing_server();
+        on_exit closing_server.shutdown();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", closing_server.getPort()), "timeout": 10s});
+        assertEq("ok", hc.get("/"));
     }
 }

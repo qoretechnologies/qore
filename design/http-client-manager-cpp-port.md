@@ -817,10 +817,23 @@ Two properties make closing first safe:
   thread and the ordering change introduces no new lock interaction.
 
 For H1 and H2 `connection_priv` is a raw back-pointer nulled under `stream_lock`
-by `disarmConnectionPriv()`, so `setClosed()` stays inside that lock, exactly as
-before — only its position moved.  H3 holds a counted reference and releases it
-after the notification, so the connection cannot be freed while `setError()` is
-still running.
+by `disarmConnectionPriv()`.  `closeConnectionPriv()` takes the pointer and a
+reference of its own under that lock (`AbstractHttpPollConnectionPriv::takeBackPointer()`,
+which refuses a connection whose last reference is already gone and is being
+destroyed), and calls `setClosed()` and releases the reference **after releasing
+the lock**.  `setClosed()` can release the last reference held by anyone else:
+the manager evicts a connection it sees closed, and `setClosed()`'s own
+reference then becomes the last one.  The destructor of the connection runs
+`closeConnection()`, which takes `stream_lock` in `disarmConnectionPriv()`; with
+the lock still held, the I/O thread deadlocked on itself, and every later socket
+operation of the process waited for it forever.  The negotiating connection's
+`notifyOwnerClosed()` follows the same rule for `owner_lock` and `clearOwner()`.
+H3 holds a counted reference for the lifetime of the poll operation and releases
+it after the notification, so the connection cannot be freed while `setError()`
+is still running.
+
+**Rule:** never call `setClosed()` on a connection, or release a reference to
+it, while holding a lock that the connection's destructor takes.
 
 **Defence in depth.**  `HttpClientConnectionManagerBase::request()` evicts a
 pooled connection whose `submitRequest()` failed *and* which reports

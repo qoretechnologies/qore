@@ -148,6 +148,16 @@ public:
         connection_priv = nullptr;
     }
 
+    //! Marks the connection closed and disarms the connection_priv back-pointer
+    /** Must be called without holding stream_lock: marking the connection closed can release its last reference
+        and destroy it, and its destructor takes stream_lock in disarmConnectionPriv().
+
+        @param xsink for exceptions releasing the connection
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void closeConnectionPriv(ExceptionSink* xsink);
+
     // --- SocketPollOperationBase overrides ---
 
     DLLLOCAL bool goalReached() const override {

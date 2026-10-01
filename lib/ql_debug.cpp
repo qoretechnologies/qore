@@ -5317,7 +5317,7 @@ struct Http1DeferClose {
 
 Http1DeferClose http1_defer_close;
 
-//! runs in the I/O thread under the poll operation's stream lock; disarms itself and does not block
+//! runs in the I/O thread, which holds a reference to the connection; disarms itself and does not block
 bool dbg_http1_defer_close_hook(AbstractHttpPollConnectionPriv* conn) {
     Http1DeferClose& h = http1_defer_close;
     ExceptionSink xsink;
@@ -5392,6 +5392,109 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
     conn->setClosed();
     conn->deref(xsink);
     return true;
+}
+
+std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook{nullptr};
+
+namespace {
+struct ConnCloseRelease {
+    std::mutex m;
+    //! the connection whose reference is released when it is closed, with that reference
+    AbstractHttpPollConnectionPriv* conn = nullptr;
+    //! decremented once setClosed() has released its own reference after the one released by the hook
+    Counter* released = nullptr;
+};
+
+ConnCloseRelease conn_close_release;
+
+//! runs in the thread that closes the connection, in setClosed() after the close hook; does not block
+bool dbg_conn_close_release_hook(AbstractHttpPollConnectionPriv* conn) {
+    ConnCloseRelease& h = conn_close_release;
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (h.conn != conn) {
+            return false;
+        }
+        h.conn = nullptr;
+        qore_dbg_conn_close_release_hook.store(nullptr);
+    }
+    // setClosed() holds a reference of its own while it runs, so this is not the last one
+    ExceptionSink xsink;
+    conn->deref(&xsink);
+    if (xsink) {
+        printd(0, "dbg_release_http1_connection_on_close(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+    return true;
+}
+}
+
+void qore_dbg_conn_close_released() {
+    ConnCloseRelease& h = conn_close_release;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> released(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        released = h.released;
+        h.released = nullptr;
+    }
+    if (released) {
+        released->dec(&xsink);
+    }
+    if (xsink) {
+        printd(0, "dbg_release_http1_connection_on_close(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
+//! opens an HTTP/1 client connection that is released only by the thread that marks it closed
+/** Opens a connection to the given address without a connection manager and waits until it is ready.  The only
+    reference to the connection is released by the thread that marks it closed, in
+    AbstractHttpPollConnectionPriv::setClosed() after the close hook, so the reference that setClosed() holds while
+    it runs is the last one, as when a connection manager evicts the connection in the meantime.  When the server
+    closes the connection, the I/O thread marks it closed and destroys it.
+
+    @param host the host to connect to
+    @param port the port to connect to
+    @param released decremented once setClosed() has released the last reference, which destroys the connection
+
+    @throw DBG-ARGUMENT-ERROR a connection is already waiting to be closed
+    @throw DBG-CONNECTION-ERROR the connection is not ready within 10 seconds
+*/
+static QoreValue f_dbg_release_http1_connection_on_close(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(host, const QoreStringNode, params, 0);
+    int port = (int)HARD_QORE_VALUE_INT(params, 1);
+    ReferenceHolder<Counter> released(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ConnCloseRelease& h = conn_close_release;
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (h.conn || h.released) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "an HTTP/1 connection is already waiting to be closed");
+            return QoreValue();
+        }
+    }
+    ReferenceHolder<Http1ClientConnection> conn(new Http1ClientConnection(host->c_str(), port, false, xsink),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!conn->waitForReadyOrError(10000, xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-CONNECTION-ERROR", "the connection to %s:%d is not ready",
+                host->c_str(), port);
+        }
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(h.m);
+    h.released = released.release();
+    // the hook takes over the reference
+    h.conn = conn.release();
+    qore_dbg_conn_close_release_hook.store(dbg_conn_close_release_hook);
+    return QoreValue();
 }
 
 //! makes the next c-ares lookups find that c-ares lost their query
@@ -5480,6 +5583,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred");
     qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "host",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "released");
     qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
