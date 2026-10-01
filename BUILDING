@@ -130,6 +130,26 @@ Boost being reported as found while Arrow cannot link Boost::headers. If the par
 is also unwritable, configuration stops with a permissions diagnostic.
 
 
+AOT Consumer Link Configuration
+-------------------------------
+
+CMake generates aot-link.conf for qcc and installs it under libdir/qore.
+It resolves imported CMake and pkg-config library targets, including transitive
+dependencies, into linker arguments. Package-build flags in
+CMAKE_SHARED_LINKER_FLAGS are not copied into this installed configuration:
+compiler wrappers and RPM package notes may require an environment that users
+do not have when compiling their own programs.
+
+Use QORE_AOT_LINK_FLAGS for additional flags that should apply to both dynamic
+and static AOT consumers, for example:
+
+    cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release \
+        -DQORE_AOT_LINK_FLAGS="-Wl,-z,relro -Wl,-z,now"
+
+These flags must be usable on the target system without the package builder's
+environment. Sanitizer flags and the macOS SDK sysroot are handled separately.
+
+
 Two-Pass Build (for environments installing external binary modules between passes)
 -----------------------------------------------------------------------------------
 

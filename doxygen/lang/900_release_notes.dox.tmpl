@@ -27,6 +27,9 @@
       and AOT
     - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt> artifacts by default
       for faster startup and execution (see @ref exec_mode_aot "AOT Compilation")
+    - installed AOT linker configuration resolves imported library targets and keeps package-builder
+      compiler wrappers out of consumer builds; packagers can set <tt>QORE_AOT_LINK_FLAGS</tt> explicitly
+      for flags that should also apply when users compile programs with @ref qcc_tool "qcc"
     - AOT executables and binary modules reuse debug metadata in their mapped binary image instead of
       retaining a private heap copy; temporary metadata buffers still use owned storage, and compressed
       debug sections continue to be decoded lazily
