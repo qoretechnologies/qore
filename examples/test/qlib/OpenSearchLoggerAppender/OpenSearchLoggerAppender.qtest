@@ -160,6 +160,8 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
     constructor() : Test("OpenSearchLoggerAppender Test", "1.0") {
         addTestCase("constructorTest", \constructorTest());
         addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("documentFieldsTest", \documentFieldsTest());
+        addTestCase("documentFieldsNegativeTest", \documentFieldsNegativeTest());
         addTestCase("searchCapabilityTest", \searchCapabilityTest());
         addTestCase("searchQueryTranslationTest", \searchQueryTranslationTest());
         addTestCase("searchValidationTest", \searchValidationTest());
@@ -259,6 +261,82 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         assertEq(gettid(), doc.thread_id);
         assertTrue(doc.hasKey("host"));
         assertTrue(doc.host.hasKey("name"));
+    }
+
+    #! Test the constant document fields option
+    private documentFieldsTest() {
+        checkModule(self);
+        hash<auto> fields = {
+            "group_namespace": "acme-ç日本",
+            "service": {"name": "billing", "version": 3},
+        };
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender("fields", new LoggerLayoutPattern("%m%n"), {
+            "url": "http://localhost:9200",
+            "index": "fields-logs",
+            "fields": fields,
+        });
+        assertEq(fields, appender.getDocumentFields());
+
+        LoggerEvent event("test.fqcn", "FieldsLogger", LoggerLevel::getLevelWarn(), "order %d", (7,), NOTHING,
+            gettid(), now_us(), NOTHING);
+        hash<auto> doc = appender.serializeImpl(event);
+        assertEq("acme-ç日本", doc.group_namespace);
+        assertEq({"name": "billing", "version": 3}, doc.service);
+        assertEq("order 7", doc.message, "event fields are unchanged");
+        assertEq("FieldsLogger", doc.logger);
+        assertEq("WARN", doc.level);
+
+        # without the option, no extra fields are added; an empty hash is the same as none
+        foreach *hash<auto> opt in ((NOTHING, {})) {
+            # built key by key: a literal of string values only would be typed hash<string, string>
+            hash<auto> opts = {};
+            opts.url = "http://localhost:9200";
+            opts.index = "fields-logs";
+            if (exists opt) {
+                opts.fields = opt;
+            }
+            OpenSearchLoggerAppender::OpenSearchLoggerAppender plain("plain", new LoggerLayoutPattern("%m%n"), opts);
+            assertNothing(plain.getDocumentFields());
+            assertEq(("@timestamp", "level", "level_value", "logger", "message", "thread_id", "host"),
+                keys plain.serializeImpl(event));
+        }
+
+        # the fields reach the bulk request, with the REST client constructor too
+        FakeOpenSearchRestClientIo fake();
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender sent("sent", new LoggerLayoutPattern("%m%n"), fake, {
+            "index": "fields-logs",
+            "batch_size": 1,
+            "fields": {"group_namespace": "tenant-a"},
+        });
+        sent.open();
+        on_exit sent.close();
+        Logger logger("FieldsBulk", LoggerLevel::getLevelInfo());
+        logger.addAppender(sent);
+        logger.info("bulk message");
+        string body = fake.bulk_requests.get(TimerWaitMs);
+        list<string> lines = select body.split("\n"), $1.val();
+        assertEq(2, lines.size(), "one action line and one document");
+        hash<auto> sent_doc = parse_json(lines[1]);
+        assertEq("tenant-a", sent_doc.group_namespace);
+        assertEq("bulk message", sent_doc.message);
+    }
+
+    #! Test that the constant document fields option rejects invalid values
+    private documentFieldsNegativeTest() {
+        checkModule(self);
+        code<auto(auto)> make = auto sub (auto fields) {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender("bad", new LoggerLayoutPattern("%m%n"), {
+                "url": "http://localhost:9200",
+                "index": "fields-logs",
+                "fields": fields,
+            });
+        };
+        foreach string key in (OpenSearchLoggerAppender::OpenSearchLoggerAppender::ReservedDocumentFields) {
+            assertThrows("OPENSEARCH-APPENDER-ERROR", key, make, ({key: "x"},), sprintf("reserved field %y", key));
+        }
+        assertThrows("OPENSEARCH-APPENDER-ERROR", "empty key", make, ({"": "x"},));
+        assertThrows("OPENSEARCH-APPENDER-ERROR", "must be a hash", make, ("group_namespace=acme",));
+        assertThrows("OPENSEARCH-APPENDER-ERROR", "must be a hash", make, (("group_namespace",),));
     }
 
     #! Test rendered-event search capabilities

@@ -44,7 +44,7 @@
 %requires json
 
 module OpenSearchLoggerAppender {
-    version = "1.0";
+    version = "1.1";
     desc = "OpenSearch Logger Appender Module";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -115,6 +115,8 @@ module OpenSearchLoggerAppender {
     |\c flush_interval_ms|int|No|Maximum time in milliseconds between flushes (default: 5000)
     |\c pipeline|string|No|OpenSearch ingest pipeline name for document processing
     |\c allow_search_index_override|bool|No|Allow trusted search callers to override the configured index
+    |\c fields|hash|No|Constant fields added to every document, for example the tenant that owns the logger; \
+        see @ref opensearchloggerappenderfields
     |\c connect_timeout|int|No|Connection timeout in milliseconds
     |\c timeout|int|No|Request timeout in milliseconds
 
@@ -177,7 +179,27 @@ module OpenSearchLoggerAppender {
     }
     @endcode
 
+    @section opensearchloggerappenderfields Constant Document Fields
+
+    The \c fields option adds the same fields to every document the appender writes, so the documents can be
+    filtered by values that are fixed for the logger, such as the tenant or application that owns it:
+
+    @code{.py}
+    OpenSearchLoggerAppender appender("os", layout, {
+        "url": "http://opensearch:9200",
+        "index": "app-logs-%Y.%m.%d",
+        "fields": {"group_namespace": "acme", "service": {"name": "billing"}},
+    });
+    @endcode
+
+    Each key must be a non-empty string that is not the name of a field the appender writes itself
+    (\c @timestamp, \c level, \c level_value, \c logger, \c message, \c thread_id, \c location,
+    \c exception and \c host), so that a constant field can never replace event data.
+
     @section opensearchloggerappenderrelnotes Release Notes
+
+    @subsection opensearchloggerappenderv11 v1.1
+    - Added the \c fields option, which adds constant fields to every document
 
     @subsection opensearchloggerappenderv10 v1.0
     - Initial release with batching support
@@ -212,6 +234,10 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
         #! Default flush interval in milliseconds
         const int DefaultFlushIntervalMs = 5000;
+
+        #! Fields that every document gets from the event itself; the \c fields option cannot set them
+        const ReservedDocumentFields = ("@timestamp", "level", "level_value", "logger", "message", "thread_id",
+            "location", "exception", "host");
     }
 
     private:internal {
@@ -226,6 +252,9 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
         #! Whether trusted callers may override the configured search index
         bool allowSearchIndexOverride = False;
+
+        #! Constant fields added to every document (optional)
+        *hash<auto> documentFields;
 
         #! Buffer for batched events
         list<hash<auto>> eventBuffer = ();
@@ -274,11 +303,13 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
             - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
             - \c pipeline: Ingest pipeline name (optional)
             - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
+            - \c fields: constant fields added to every document; see @ref opensearchloggerappenderfields
             - \c connect_timeout: Connection timeout in milliseconds (optional)
             - \c timeout: Request timeout in milliseconds (optional)
 
         @throw OPENSEARCH-APPENDER-ERROR the \c url or \c index option is missing, or the \c batch_size or
-            \c flush_interval_ms option is less than \c 1
+            \c flush_interval_ms option is less than \c 1, or the \c fields option is not a hash or names a
+            field that the appender writes itself
     */
     constructor(*string name, Logger::LoggerLayout layout, hash<auto> options)
             : LoggerAppenderWithLayout(name, layout) {
@@ -296,6 +327,7 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
         setBatchOptions(options);
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
+        setDocumentFields(options);
     }
 
     #! Creates the OpenSearch logger appender with an existing REST client
@@ -308,9 +340,11 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
             - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
             - \c pipeline: Ingest pipeline name (optional)
             - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
+            - \c fields: constant fields added to every document; see @ref opensearchloggerappenderfields
 
         @throw OPENSEARCH-APPENDER-ERROR the \c index option is missing, or the \c batch_size or
-            \c flush_interval_ms option is less than \c 1
+            \c flush_interval_ms option is less than \c 1, or the \c fields option is not a hash or names a
+            field that the appender writes itself
     */
     constructor(*string name, Logger::LoggerLayout layout, RestClientIo::RestClientIo rest, hash<auto> options)
             : LoggerAppenderWithLayout(name, layout) {
@@ -323,6 +357,7 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
         setBatchOptions(options);
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
+        setDocumentFields(options);
     }
 
     #! Destructor - ensures cleanup
@@ -360,6 +395,11 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
     #! Returns the index pattern
     public string getIndexPattern() {
         return indexPattern;
+    }
+
+    #! Returns the constant fields added to every document, if any
+    public *hash<auto> getDocumentFields() {
+        return documentFields;
     }
 
     #! Returns the current batch size setting
@@ -516,6 +556,34 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
         if (toFlush) {
             flushBatch(toFlush);
+        }
+    }
+
+    #! Validates and applies the constant document fields
+    /** @param options the option hash passed to the constructor
+
+        @throw OPENSEARCH-APPENDER-ERROR the \c fields option is not a hash, has an empty key, or names a
+        field that the appender writes from each event
+    */
+    private:internal setDocumentFields(hash<auto> options) {
+        if (!exists options.fields) {
+            return;
+        }
+        if (options.fields.typeCode() != NT_HASH) {
+            throw "OPENSEARCH-APPENDER-ERROR", sprintf("option 'fields' must be a hash; got type %y",
+                options.fields.type());
+        }
+        foreach string key in (keys options.fields) {
+            if (!key.val()) {
+                throw "OPENSEARCH-APPENDER-ERROR", "option 'fields' cannot have an empty key";
+            }
+            if (inlist(key, ReservedDocumentFields)) {
+                throw "OPENSEARCH-APPENDER-ERROR", sprintf("option 'fields' cannot set %y, which the appender "
+                    "writes from each event", key);
+            }
+        }
+        if (options.fields) {
+            documentFields = options.fields;
         }
     }
 
@@ -693,7 +761,7 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
     private hash<auto> getRestClientOptions(hash<auto> options) {
         hash<auto> rest_opts = options - ("index", "batch_size", "flush_interval_ms", "pipeline",
-            "allow_search_index_override");
+            "allow_search_index_override", "fields");
         if (!exists rest_opts.data) {
             rest_opts.data = "json";
         }
@@ -984,7 +1052,7 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
     #! Creates an OpenSearch document from a log event
     private hash<auto> createDocument(Logger::LoggerEvent event) {
-        hash<auto> doc = {
+        hash<auto> doc = (documentFields ?? {}) + {
             "@timestamp": format_date("YYYY-MM-DDTHH:mm:SS.xxZ", event.getTimeStamp() ?? now_us()),
             "level": event.getLevel().getStr(),
             "level_value": event.getLevel().getValue(),

@@ -3085,6 +3085,8 @@ while (*binary chunk = input.read(65536)) {
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - the \c fields option adds constant fields to every document, for example the tenant that owns the
+        logger, so the documents can be filtered by it
 
     - @ref exadataproviderintro "ExaDataProvider" module
       - new module providing a data provider API for <a href="https://exa.ai">Exa</a> (formerly Metaphor)
@@ -3512,6 +3514,8 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender" module
       - new module providing batched <a href="https://opensearch.org/">OpenSearch</a> Bulk API log appending and generic rendered-event search support
+      - the \c fields option adds constant fields to every document, for example the tenant that owns the
+        logger, so the documents can be filtered by it
 
     - @ref paddledataproviderintro "PaddleDataProvider" module
       - customer creation no longer offers the read-only customer ID as an import option
