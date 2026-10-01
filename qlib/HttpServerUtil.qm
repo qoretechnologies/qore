@@ -130,6 +130,9 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - generated response charset parameters canonicalize aliases such as \c utf8 to \c utf-8,
+      allowing strict XML clients to parse the response; string stream bodies also receive
+      a charset when their media type omits one
     - request handlers receive the trailer fields that a client sends after the request body (chunked HTTP/1.1,
       HTTP/2, and HTTP/3) in \c cx.trailers, and stream handlers receive them in the \c hdr key of the last call of
       \c recv() for HTTP/2 and HTTP/3 as well as for HTTP/1.1
@@ -1199,13 +1202,14 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
     if ((rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked")
         && (rv.hdr."Content-Type" && (rv.hdr."Content-Type" !~ /charset=/i)
         && ((rv.body.typeCode() == NT_STRING)
+            || (rv.body instanceof StringInputStream)
             || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream))))) {
-        string old_encoding = s.getEncoding().lwr();
+        string old_encoding = force_encoding("", s.getEncoding()).encoding().lwr();
         string re;
         if (!cx."response-encoding") {
             re = cx."response-encoding" = old_encoding;
         } else {
-            re = cx."response-encoding".lwr();
+            re = cx."response-encoding" = force_encoding("", cx."response-encoding").encoding().lwr();
             if (re != old_encoding) {
                 s.setEncoding(re);
             }

@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%exec-class ResponseCharsetTest
+
+class GeneratedCharsetHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<HttpResponseInfo> rv = <HttpResponseInfo>{"code": 200, "body": "café"};
+        if (hdr."x-mode" == "explicit") {
+            rv.hdr = {"Content-Type": "text/xml"};
+        } else if (hdr."x-mode" == "stream") {
+            remove rv.body;
+            rv.body = new StringInputStream("café");
+            rv.hdr = {"Content-Type": "text/plain"};
+        }
+        return rv;
+    }
+}
+
+class ResponseCharsetTest inherits QUnit::Test {
+    constructor() : Test("Canonical response charset names", "1.0") {
+        addTestCase("header helper canonicalizes encoding aliases", \helper());
+        addTestCase("wire headers use canonical UTF-8", \wire());
+        set_return_value(main());
+    }
+
+    private helper() {
+        Socket socket();
+        foreach *string encoding in (NOTHING, "utf8", "UTF-8", "utf16le") {
+            socket.setEncoding("utf8");
+            hash<auto> response = {"body": "café", "hdr": {"Content-Type": "text/xml"}};
+            hash<auto> request_context = {};
+            request_context."response-encoding" = encoding;
+            HttpServer::http_set_reply_headers(socket, request_context, \response, NOTHING);
+            assertEq("text/xml;charset=" + (encoding == "utf16le" ? "utf-16le" : "utf-8"),
+                response.hdr."Content-Type");
+        }
+        foreach auto body in ("café", "café".toBinary(), new StringInputStream("café")) {
+            hash<auto> response = {"body": body, "hdr": {"Content-Type": "text/plain; charset=ISO-8859-1"}};
+            hash<auto> request_context = {};
+            request_context."response-encoding" = "utf8";
+            HttpServer::http_set_reply_headers(socket, request_context, \response, NOTHING);
+            assertEq("text/plain; charset=ISO-8859-1", response.hdr."Content-Type");
+        }
+        hash<auto> response = {"body": "binary".toBinary(), "hdr": {"Content-Type": "application/octet-stream"}};
+        HttpServer::http_set_reply_headers(socket, {}, \response, NOTHING);
+        assertEq("application/octet-stream", response.hdr."Content-Type");
+    }
+
+    private wire() {
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("charset", new GeneratedCharsetHandler());
+        int port = server.addListener(0).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
+        foreach string mode in ("default", "explicit", "stream") {
+            foreach *string charset in (NOTHING, "utf8", "UTF-8") {
+                hash<auto> headers = {"X-Mode": mode};
+                if (charset) {
+                    headers."Accept-Charset" = charset;
+                }
+                hash<auto> response = client.send(NOTHING, "GET", "/", headers);
+                assertEq("café", response.body);
+                assertTrue(response."_qore_orig_content_type" =~ /charset=utf-8/i,
+                    sprintf("%s %y: %y", mode, charset, response."_qore_orig_content_type"));
+            }
+        }
+    }
+}

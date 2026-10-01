@@ -210,6 +210,8 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - generated response charset parameters use canonical encoding names such as \c utf-8,
+      including default content types and error responses
     - text is sent in the character encoding that the response declares: a string or a
       @ref Qore::StringInputStream "StringInputStream" in another encoding is converted to the charset of the
       \c Content-Type, or to the response encoding; a string was sent in its own encoding and labeled with the
@@ -2472,7 +2474,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     private static *string getDefaultContentType(hash<auto> rv, string encoding) {
         auto body = rv.body ?? rv.chunked_body;
         if (body instanceof StringInputStream || body.typeCode() == NT_STRING) {
-            return body.val() || body instanceof InputStream ? MimeTypeHtml + ";charset=" + encoding : NOTHING;
+            return body.val() || body instanceof InputStream ? MimeTypeHtml + ";charset=" + force_encoding("", encoding).encoding().lwr() : NOTHING;
         }
         if (body instanceof InputStream || body.typeCode() == NT_BINARY) {
             return body.val() || body instanceof InputStream ? MimeTypeOctetStream : NOTHING;
@@ -2553,9 +2555,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         bool binary_msg = response_msg.typeCode() == NT_BINARY
             || (chunked_msg && !(chunked_msg instanceof StringInputStream));
         if (!extra_hdrs."Content-Type") {
-            hdr."Content-Type" = binary_msg ? MimeTypeOctetStream : MimeTypeHtml + ";charset=" + encoding;
+            hdr."Content-Type" = binary_msg ? MimeTypeOctetStream : MimeTypeHtml + ";charset=" + force_encoding("", encoding).encoding().lwr();
         } else if (!binary_msg && extra_hdrs."Content-Type" !~ /charset=/i) {
-            extra_hdrs."Content-Type" += ";charset=" + encoding;
+            extra_hdrs."Content-Type" += ";charset=" + force_encoding("", encoding).encoding().lwr();
         }
 
         if (!is_multiplexed) {
@@ -4138,7 +4140,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
         string err_body = acceptsHtml(cx) ? getHtmlErrorMessage(status_code, msg) : msg;
         hash<auto> err_hdr = getResponseHeaders(cx."listener-id") + {
-            "Content-Type": MimeTypeHtml + ";charset=" + encoding,
+            "Content-Type": MimeTypeHtml + ";charset=" + force_encoding("", encoding).encoding().lwr(),
             "Date": getDateHeader(),
         };
         # Merge any response headers stashed by a handler's preprocessRequest() —
