@@ -6,7 +6,7 @@
 
     <b>Operators</b>
     |!Operator|!Prec.|!Description|!Example
-    |@ref backquote_operator "``"|\c 1|@ref backquote_operator "backquote/backtick operator"|@code{.py} `ls -l`@endcode
+    |@ref backquote_operator "&#96;&#96;"|\c 1|@ref backquote_operator "backquote/backtick operator"|@code{.py} `ls -l`@endcode
     |@ref hash_element_operator "{}"|\c 1|@ref hash_element_operator "hash element or object member expression dereference operator"|@code{.py} hash{"na" + "me"}@endcode
     |@ref dot_operator "."|\c 1|@ref dot_operator "hash element or object member literal dereference operator"|@code{.py} hash.name@endcode @code{.py} obj.method()@endcode
     |@ref list_element_operator "[]"|\c 1|@ref list_element_operator "list element, string, and binary dereference operator"|@code{.py} list[1]; string[3]; binary[2];@endcode
@@ -136,7 +136,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     @section op_details Operator Details
 
     <hr>
-    @subsection backquote_operator Backquote Operator (``)
+    @subsection backquote_operator Backquote Operator (&#96;&#96;)
 
     @par Sandbox Restrictions
     @ref Qore::PO_NO_EXTERNAL_PROCESS
@@ -153,7 +153,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     @par Example
     @code{.py} string dir = `ls -l`@endcode
 
-    <b>Arguments Processed by ``</b>
+    <b>Arguments Processed by &#96;&#96;</b>
     |!Argument|!Returns|!Processing
     |unquoted @ref string "string" \a shell_command|@ref string_type "string"|The shell command will be executed and the \c stdout is returned as a string
 
