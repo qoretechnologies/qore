@@ -95,9 +95,9 @@ module DataStreamUtil {
 
     DataStream uses UTF-8 encoded <a href="http://www.yaml.org/">YAML</a> for data serialization to allow for maximum data fidelity over the HTTP link.
 
-    For non-chunked messages, the \c Content-Type header is \c "text/x-yaml;charset=utf8" (\c "utf8" is case-insensitive and may contain a hyphen before the 8), and the data is sent in a normal HTTP message body.  @ref datastreamprotocolcompression "Data compression" is supported with normal HTTP content encoding as described in the previous link, applied to the serialized YAML data before sending, and the reverse operation is applied on receipt before YAML data deserialization to native data structures by the receiver.
+    For non-chunked messages, the \c Content-Type header is \c "text/x-yaml;charset=utf-8" (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8"), and the data is sent in a normal HTTP message body.  @ref datastreamprotocolcompression "Data compression" is supported with normal HTTP content encoding as described in the previous link, applied to the serialized YAML data before sending, and the reverse operation is applied on receipt before YAML data deserialization to native data structures by the receiver.
 
-    For chunked DataStream requests and responses, the \c Content-Type header is set to \c "application/octet-stream" (to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk) and the content-type of each atomic chunk is given by the \c DataStream-Content-Type header which should be set to \c "text/x-yaml;charset=utf8" (\c "utf8" is case-insensitive and may contain a hyphen before the 8).  Data compression is supported and is applied to each chunk atomically as DataStream-specific content encoding after chunk data serialization; the reverse operation is applied before YAML data deserialization to native data structures by the receiver.
+    For chunked DataStream requests and responses, the \c Content-Type header is set to \c "application/octet-stream" (to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk) and the content-type of each atomic chunk is given by the \c DataStream-Content-Type header which should be set to \c "text/x-yaml;charset=utf-8" (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8").  Data compression is supported and is applied to each chunk atomically as DataStream-specific content encoding after chunk data serialization; the reverse operation is applied before YAML data deserialization to native data structures by the receiver.
 
     @subsection datastreamprocotolchunkedrequests DataStream Chunked Request Headers
 
@@ -107,7 +107,7 @@ module DataStreamUtil {
     |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
     |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
-    |\c DataStream-Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |\c DataStream-Content-Type|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
     |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
     |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
     |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
@@ -124,7 +124,7 @@ module DataStreamUtil {
     |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
     |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
     |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
-    |[\c Content-Type]|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be included in requests with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in requests without a message body in which case it <b>MUST</b> be ignored by the server (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |[\c Content-Type]|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be included in requests with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in requests without a message body in which case it <b>MUST</b> be ignored by the server (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
     |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the request body
     |[\c Content-Length]|number|This header is required in non-chunked requests with a message body
 
@@ -134,7 +134,7 @@ module DataStreamUtil {
     <b>DataStream Chunked Response Headers</b>
     |!Header|!Value|!Description
     |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
-    |\c DataStream-Content-Type|\c text/x-yaml;charset=utf8|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |\c DataStream-Content-Type|\c text/x-yaml;charset=utf-8|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
     |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
     |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
     |\c Trailer|\c DataStream-Error|<b>MUST</b> be included as this trailer record will be sent after chunked data is transferred if an error occurs on the sending side, in which case the trailer will be assigned a string giving information about the error that occurred
@@ -146,7 +146,7 @@ module DataStreamUtil {
     The following headers are set with DataStream non-chunked responses:\n
     <b>DataStream Non-Chunked Response Headers</b>
     |!Header|!Value|!Description
-    |\c Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be included in responses with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in responses without a message body in which case it <b>MUST</b> be ignored by the client (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
+    |\c Content-Type|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be included in responses with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in responses without a message body in which case it <b>MUST</b> be ignored by the client (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
     |\c Content-Length|number|<b>MUST</b> be included in non-chunked responses with a message body
     |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the response body
 
@@ -176,7 +176,7 @@ PUT /api/system?action=dataStream HTTP/1.1
 Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
 User-Agent: Qore-DataStreamClient/1.1
 Content-Type: application/octet-stream
-DataStream-Content-Type: text/x-yaml;charset=utf8
+DataStream-Content-Type: text/x-yaml;charset=utf-8
 DataStream-Accept: text/x-yaml
 DataStream-Accept-Encoding: gzip,bzip2,deflate
 DataStream-Content-Encoding: gzip
@@ -191,7 +191,7 @@ Host: localhost:8001
 HTTP/1.1 200 OK
 Content-Type: application/octet-stream
 Transfer-Encoding: chunked
-Datastream-Content-Type: text/x-yaml;charset=utf8
+Datastream-Content-Type: text/x-yaml;charset=utf-8
 Datastream-Content-Encoding: bzip2
 Trailer: DataStream-Error
 Connection: Keep-Alive
@@ -300,6 +300,11 @@ message: "Hello, Hello, World!!"
     module for automatic dual-protocol handling.
 
     @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_4 DataStreamUtil v1.4
+    - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()" and
+      @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()" label DataStream data with
+      the registered charset name \c utf-8 instead of the alias \c utf8; receivers accept both
 
     @subsection datastreamutil_v1_3_1 DataStreamUtil v1.3.1
     - added the official \c "application/yaml" MIME type (RFC 9512) to
@@ -977,7 +982,7 @@ ds_set_chunked_headers(\hdr, "bzip");
         @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following
         headers are set:
         - \c "Content-Type: application/octet-stream" (set if header not already present in hash)
-        - \c "DataStream-Content-Type: text/x-yaml;charset=utf8" (set if header not already present in hash)
+        - \c "DataStream-Content-Type: text/x-yaml;charset=utf-8" (set if header not already present in hash)
         - \c "DataStream-Content-Encoding": set to the \c content_encoding argument, if present
         - \c "Transfer-Encoding: chunked"
         .
@@ -993,9 +998,9 @@ ds_set_chunked_headers(\hdr, "bzip");
             hdr."Content-Type" = MimeTypeOctetStream;
 
         if (!hdr{DataStreamContentType})
-            hdr{DataStreamContentType} = MimeTypeYaml + ";charset=utf8";
+            hdr{DataStreamContentType} = MimeTypeYaml + ";charset=utf-8";
         else if (hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
-            hdr{DataStreamContentType} += ";charset=utf8";
+            hdr{DataStreamContentType} += ";charset=utf-8";
 
         if (req)
             ds_do_request_headers(\hdr);
@@ -1028,9 +1033,9 @@ ds_set_non_chunked_headers(\hdr, "bzip");
     */
     public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
-            hdr."Content-Type" = MimeTypeYaml + ";charset=utf8";
+            hdr."Content-Type" = MimeTypeYaml + ";charset=utf-8";
         else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
-            hdr."Content-Type" += ";charset=utf8";
+            hdr."Content-Type" += ";charset=utf-8";
 
         if (req)
             ds_do_request_headers(\hdr);

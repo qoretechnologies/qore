@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -12,6 +13,7 @@ public class StringOutputStreamTest inherits QUnit::Test {
     constructor() : Test("StringOutputStreamTest", "1.0") {
         addTestCase("ctor empty", \empty());
         addTestCase("write", \write());
+        addTestCase("encoding", \encoding());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -42,5 +44,28 @@ public class StringOutputStreamTest inherits QUnit::Test {
 
         w.printf("%s%s", "he", "llo");
         assertEq("hello", sos.getData());
+    }
+
+    encoding() {
+        # the data is tagged with the encoding given, from the first call to getData() on
+        StringOutputStream sos("ISO-8859-2");
+        sos.write(<636166e9>);
+        string str = sos.getData();
+        assertEq("ISO-8859-2", str.encoding());
+        assertEq(4, str.size());
+        assertEq("café", str);
+        # an empty result is tagged with the encoding as well
+        assertEq("ISO-8859-2", sos.getData().encoding());
+        sos.write(<e9>);
+        str = sos.getData();
+        assertEq("ISO-8859-2", str.encoding());
+        assertEq("é", str);
+
+        # without an encoding, the data is tagged with the default encoding
+        StringOutputStream default_sos();
+        default_sos.write(<c3a9>);
+        str = default_sos.getData();
+        assertEq(get_default_encoding(), str.encoding());
+        assertEq("é", str);
     }
 }

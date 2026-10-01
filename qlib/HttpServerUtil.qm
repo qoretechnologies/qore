@@ -133,6 +133,8 @@ module HttpServerUtil {
     - generated response charset parameters canonicalize aliases such as \c utf8 to \c utf-8,
       allowing strict XML clients to parse the response; string stream bodies also receive
       a charset when their media type omits one
+    - added @ref HttpServer::http_get_charset_label() "http_get_charset_label()", which returns the canonical
+      \c charset label of a character encoding for a response \c Content-Type
     - request handlers receive the trailer fields that a client sends after the request body (chunked HTTP/1.1,
       HTTP/2, and HTTP/3) in \c cx.trailers, and stream handlers receive them in the \c hdr key of the last call of
       \c recv() for HTTP/2 and HTTP/3 as well as for HTTP/1.1
@@ -1149,6 +1151,28 @@ public *hash<auto> sub http_canonicalize_reply_header_names(*hash<auto> hdr) {
     return rv;
 }
 
+#! Returns the label of a character encoding for the \c charset parameter of a response \c Content-Type
+/** The label is the canonical name of the encoding in lower case, so that all aliases of an encoding give the same
+    label: \c "utf8", \c "UTF8", and \c "UTF-8" all give \c "utf-8", and \c "latin1" gives \c "iso-8859-1"; strict
+    clients, such as many XML parsers, reject aliases like \c "utf8" that are not registered charset names.  A name
+    that Qore does not know is returned in lower case.
+
+    @par Example:
+    @code{.py}
+# label an XML response with the charset that the client asked for, or UTF-8
+string content_type = MimeTypeXml + ";charset=" + http_get_charset_label(cx."response-encoding" ?? "utf8");
+    @endcode
+
+    @param encoding the name of a character encoding, or any of its aliases
+
+    @return the canonical name of the encoding in lower case
+
+    @since HttpServerUtil 1.6
+*/
+public string sub http_get_charset_label(string encoding) {
+    return force_encoding("", encoding).encoding().lwr();
+}
+
 #! helper function for setting HTTP response headers
 /** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
     case with http_canonicalize_reply_header_names() before they are checked
@@ -1204,18 +1228,19 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
         && ((rv.body.typeCode() == NT_STRING)
             || (rv.body instanceof StringInputStream)
             || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream))))) {
-        string old_encoding = force_encoding("", s.getEncoding()).encoding().lwr();
+        string old_encoding = http_get_charset_label(s.getEncoding());
         string re;
         if (!cx."response-encoding") {
             re = cx."response-encoding" = old_encoding;
         } else {
-            re = cx."response-encoding" = force_encoding("", cx."response-encoding").encoding().lwr();
+            re = cx."response-encoding" = http_get_charset_label(cx."response-encoding");
             if (re != old_encoding) {
                 s.setEncoding(re);
             }
         }
-        if (re != "iso-8859-1" && re != "latin1" && re != "latin-1") {
-            rv.hdr."Content-Type" += ";charset=" + cx."response-encoding";
+        # the label is canonical, so all aliases of ISO-8859-1 give the same label here
+        if (re != "iso-8859-1") {
+            rv.hdr."Content-Type" += ";charset=" + re;
         }
     }
 }

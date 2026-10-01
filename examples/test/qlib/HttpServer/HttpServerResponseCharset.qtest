@@ -2,53 +2,187 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires DataStreamUtil
 %exec-class ResponseCharsetTest
 
+#! the text that each response carries; every character is also in ISO-8859-2
+const Text = "café";
+
+#! serves one response per value of the X-Mode request header
 class GeneratedCharsetHandler inherits HttpServer::AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        hash<HttpResponseInfo> rv = <HttpResponseInfo>{"code": 200, "body": "café"};
-        if (hdr."x-mode" == "explicit") {
-            rv.hdr = {"Content-Type": "text/xml"};
-        } else if (hdr."x-mode" == "stream") {
-            remove rv.body;
-            rv.body = new StringInputStream("café");
-            rv.hdr = {"Content-Type": "text/plain"};
+        hash<HttpResponseInfo> rv = <HttpResponseInfo>{"code": 200, "body": Text};
+        switch (hdr."x-mode") {
+            # a string without a Content-Type: the server labels it as HTML
+            case "default":
+                break;
+            # a string with a Content-Type without a charset
+            case "explicit":
+                rv.hdr = {"Content-Type": "text/xml"};
+                break;
+            # a string stream in the body, sent chunked
+            case "stream":
+                rv.body = new StringInputStream(Text);
+                rv.hdr = {"Content-Type": "text/plain"};
+                break;
+            # a string stream in chunked_body
+            case "chunked-body":
+                remove rv.body;
+                rv.chunked_body = new StringInputStream(Text);
+                rv.hdr = {"Content-Type": "text/plain"};
+                break;
+            # a string stream in chunked_body without a Content-Type
+            case "chunked-body-default":
+                remove rv.body;
+                rv.chunked_body = new StringInputStream(Text);
+                break;
+            # an error response with a string body and a Content-Type
+            case "error":
+                rv."code" = 409;
+                rv.hdr = {"Content-Type": "text/plain"};
+                break;
+            # an error response with a string body without a Content-Type
+            case "error-default":
+                rv."code" = 409;
+                break;
+            # an error response with a string stream body
+            case "error-stream":
+                rv."code" = 409;
+                remove rv.body;
+                rv.chunked_body = new StringInputStream(Text);
+                rv.hdr = {"Content-Type": "text/plain"};
+                break;
+            # a handler exception: the server sends the error message
+            case "exception":
+                throw "TEST-ERROR", Text;
+            default:
+                throw "UNKNOWN-MODE", sprintf("unknown mode %y", hdr."x-mode");
         }
         return rv;
     }
 }
 
+#! serves a response with a charset that the handler sets itself
+class ExplicitCharsetHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": Text,
+            "hdr": {"Content-Type": hdr."x-content-type"},
+        };
+    }
+}
+
+#! a stream request that returns its response from getResponseHeaderMessageImpl()
+class TextStreamRequest inherits HttpServer::AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": Text,
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+}
+
+#! handles all requests as stream requests
+class TextStreamHandler inherits HttpServer::AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new TextStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
 class ResponseCharsetTest inherits QUnit::Test {
     constructor() : Test("Canonical response charset names", "1.0") {
+        addTestCase("charset label helper", \labelHelper());
         addTestCase("header helper canonicalizes encoding aliases", \helper());
-        addTestCase("wire headers use canonical UTF-8", \wire());
+        addTestCase("wire headers use canonical charset names", \wire());
+        addTestCase("handler charset is sent as given", \explicitCharset());
+        addTestCase("stream request responses", \streamRequest());
+        addTestCase("DataStream headers", \dataStream());
         set_return_value(main());
+    }
+
+    private labelHelper() {
+        hash<string, string> expected = {
+            "utf8": "utf-8",
+            "UTF8": "utf-8",
+            "UTF-8": "utf-8",
+            "utf-8": "utf-8",
+            "latin1": "iso-8859-1",
+            "ISO-8859-1": "iso-8859-1",
+            "latin2": "iso-8859-2",
+            "iso88592": "iso-8859-2",
+            "utf16le": "utf-16le",
+            "ascii": "us-ascii",
+            "cp1252": "windows-1252",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, http_get_charset_label(i.key), i.key);
+        }
+        # a name that Qore does not know is returned in lower case
+        assertEq("x-unknown-charset", http_get_charset_label("X-Unknown-Charset"));
     }
 
     private helper() {
         Socket socket();
-        foreach *string encoding in (NOTHING, "utf8", "UTF-8", "utf16le") {
+        foreach *string encoding in (NOTHING, "utf8", "UTF-8", "utf16le", "latin2") {
             socket.setEncoding("utf8");
-            hash<auto> response = {"body": "café", "hdr": {"Content-Type": "text/xml"}};
+            hash<auto> response = {"body": Text, "hdr": {"Content-Type": "text/xml"}};
             hash<auto> request_context = {};
             request_context."response-encoding" = encoding;
             HttpServer::http_set_reply_headers(socket, request_context, \response, NOTHING);
-            assertEq("text/xml;charset=" + (encoding == "utf16le" ? "utf-16le" : "utf-8"),
-                response.hdr."Content-Type");
+            string label = encoding ? http_get_charset_label(encoding) : "utf-8";
+            assertEq("text/xml;charset=" + label, response.hdr."Content-Type", encoding ?? "default");
+            # the socket sends the text in the encoding of the label
+            assertEq(label, http_get_charset_label(socket.getEncoding()));
         }
-        foreach auto body in ("café", "café".toBinary(), new StringInputStream("café")) {
-            hash<auto> response = {"body": body, "hdr": {"Content-Type": "text/plain; charset=ISO-8859-1"}};
-            hash<auto> request_context = {};
-            request_context."response-encoding" = "utf8";
+        # a socket encoding alias is also labeled with the canonical name
+        {
+            socket.setEncoding("UTF8");
+            hash<auto> response = {"chunked_body": new StringInputStream(Text), "hdr": {"Content-Type": "text/plain"}};
+            HttpServer::http_set_reply_headers(socket, {}, \response, NOTHING);
+            assertEq("text/plain;charset=utf-8", response.hdr."Content-Type");
+        }
+        # ISO-8859-1 is the HTTP default, so no charset is added for any of its aliases
+        foreach string encoding in ("latin1", "ISO-8859-1", "iso88591") {
+            socket.setEncoding("utf8");
+            hash<auto> response = {"body": Text, "hdr": {"Content-Type": "text/plain"}};
+            hash<auto> request_context = {"response-encoding": encoding};
             HttpServer::http_set_reply_headers(socket, request_context, \response, NOTHING);
-            assertEq("text/plain; charset=ISO-8859-1", response.hdr."Content-Type");
+            assertEq("text/plain", response.hdr."Content-Type", encoding);
+            assertEq("ISO-8859-1", socket.getEncoding());
         }
-        hash<auto> response = {"body": "binary".toBinary(), "hdr": {"Content-Type": "application/octet-stream"}};
-        HttpServer::http_set_reply_headers(socket, {}, \response, NOTHING);
-        assertEq("application/octet-stream", response.hdr."Content-Type");
+        # a charset that is already present is not changed, even if it is an alias
+        foreach string content_type in ("text/plain; charset=ISO-8859-1", "text/plain;charset=utf8") {
+            foreach auto body in (Text, Text.toBinary(), new StringInputStream(Text)) {
+                hash<auto> response = {"body": body, "hdr": {"Content-Type": content_type}};
+                hash<auto> request_context = {};
+                request_context."response-encoding" = "utf8";
+                HttpServer::http_set_reply_headers(socket, request_context, \response, NOTHING);
+                assertEq(content_type, response.hdr."Content-Type");
+            }
+        }
+        # binary data has no charset
+        foreach auto body in ("binary".toBinary(), new BinaryInputStream("binary".toBinary())) {
+            hash<auto> response = {"body": body, "hdr": {"Content-Type": "application/octet-stream"}};
+            HttpServer::http_set_reply_headers(socket, {"response-encoding": "utf8"}, \response, NOTHING);
+            assertEq("application/octet-stream", response.hdr."Content-Type");
+        }
     }
 
     private wire() {
@@ -57,17 +191,134 @@ class ResponseCharsetTest inherits QUnit::Test {
         server.setDefaultHandler("charset", new GeneratedCharsetHandler());
         int port = server.addListener(0).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
-        foreach string mode in ("default", "explicit", "stream") {
-            foreach *string charset in (NOTHING, "utf8", "UTF-8") {
-                hash<auto> headers = {"X-Mode": mode};
+        hash<string, list<auto>> modes = {
+            "default": (200, "text/html"),
+            "explicit": (200, "text/xml"),
+            "stream": (200, "text/plain"),
+            "chunked-body": (200, "text/plain"),
+            "chunked-body-default": (200, "text/html"),
+            "error": (409, "text/plain"),
+            "error-default": (409, "text/html"),
+            "error-stream": (409, "text/plain"),
+            "exception": (500, "text/html"),
+        };
+        foreach hash<auto> mode in (modes.pairIterator()) {
+            foreach *string charset in (NOTHING, "utf8", "UTF-8", "latin2") {
+                hash<auto> headers = {"X-Mode": mode.key};
                 if (charset) {
                     headers."Accept-Charset" = charset;
                 }
-                hash<auto> response = client.send(NOTHING, "GET", "/", headers);
-                assertEq("café", response.body);
-                assertTrue(response."_qore_orig_content_type" =~ /charset=utf-8/i,
-                    sprintf("%s %y: %y", mode, charset, response."_qore_orig_content_type"));
+                string label = charset ? http_get_charset_label(charset) : "utf-8";
+                string desc = sprintf("%s %y", mode.key, charset);
+                hash<auto> info;
+                hash<auto> response;
+                try {
+                    response = client.send(NOTHING, "GET", "/", headers, False, \info);
+                } catch (hash<ExceptionInfo> ex) {
+                    # error responses are raised as exceptions with the response in the argument
+                    assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, desc);
+                    response = ex.arg;
+                }
+                assertEq(mode.value[0], response.status_code, desc);
+                assertEq(mode.value[1] + ";charset=" + label, response."_qore_orig_content_type", desc);
+                if (mode.key == "exception") {
+                    # the server sends the exception in an HTML error page
+                    assertTrue(response.body =~ /TEST-ERROR: caf&eacute;/, desc);
+                } else {
+                    assertEq(Text, response.body, desc);
+                }
             }
         }
+    }
+
+    private explicitCharset() {
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("explicit", new ExplicitCharsetHandler());
+        int port = server.addListener(0).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
+        # the server sends the body in the encoding of the charset that the handler sets, and does not change the
+        # label, whatever the client accepts
+        foreach string content_type in ("text/plain;charset=ISO-8859-2", "text/plain; charset=latin2",
+                "text/plain;charset=utf8") {
+            foreach *string charset in (NOTHING, "utf-8") {
+                hash<auto> headers = {"X-Content-Type": content_type};
+                if (charset) {
+                    headers."Accept-Charset" = charset;
+                }
+                string desc = sprintf("%y %y", content_type, charset);
+                hash<auto> info;
+                hash<auto> response = client.send(NOTHING, "GET", "/", headers, False, \info);
+                assertEq(content_type, response."_qore_orig_content_type", desc);
+                assertEq(Text, response.body, desc);
+                # the octets on the wire are in the declared encoding
+                string encoding = (content_type =~ x/charset=(.*)$/)[0];
+                assertEq(http_get_charset_label(encoding), http_get_charset_label(response.body.encoding()), desc);
+            }
+        }
+    }
+
+    private streamRequest() {
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("stream", new TextStreamHandler());
+        int port = server.addListener(0).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
+        foreach *string charset in (NOTHING, "utf8", "latin2") {
+            string label = charset ? http_get_charset_label(charset) : "utf-8";
+            # a monolithic and a chunked request body
+            foreach bool chunked in (False, True) {
+                hash<auto> headers = {"Content-Type": "text/plain"};
+                if (charset) {
+                    headers."Accept-Charset" = charset;
+                }
+                string desc = sprintf("%y chunked: %y", charset, chunked);
+                hash<auto> response;
+                if (chunked) {
+                    # the response body is written to the stream in the encoding of its charset
+                    StringOutputStream body_stream(label);
+                    code receive_callback = sub (hash<auto> h) {
+                        if (h.hdr && !response) {
+                            response = h.hdr;
+                        }
+                    };
+                    hash<auto> info;
+                    client.sendChunked(body_stream, new StringInputStream("request"), "POST", 4096, "/", headers,
+                        30s, False, \info, receive_callback);
+                    response.body = body_stream.getData();
+                } else {
+                    response = client.send("request", "POST", "/", headers);
+                }
+                assertEq(200, response.status_code, desc);
+                assertEq("text/plain;charset=" + label, response."_qore_orig_content_type", desc);
+                assertEq(Text, response.body, desc);
+            }
+        }
+    }
+
+    private dataStream() {
+        # chunked DataStream data is labeled with the registered charset name
+        hash<auto> hdr = {};
+        ds_set_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + ";charset=utf-8", hdr{DataStreamContentType});
+        assertEq(MimeTypeOctetStream, hdr."Content-Type");
+        # a type without a charset receives one
+        hdr = {DataStreamContentType: MimeTypeYaml};
+        ds_set_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + ";charset=utf-8", hdr{DataStreamContentType});
+        # a UTF-8 charset that is already present is not changed or repeated
+        hdr = {DataStreamContentType: MimeTypeYaml + "; charset=UTF8"};
+        ds_set_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + "; charset=UTF8", hdr{DataStreamContentType});
+
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + ";charset=utf-8", hdr."Content-Type");
+        hdr = {"Content-Type": MimeTypeYaml};
+        ds_set_non_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + ";charset=utf-8", hdr."Content-Type");
+        hdr = {"Content-Type": MimeTypeYaml + ";charset=utf8"};
+        ds_set_non_chunked_headers(\hdr);
+        assertEq(MimeTypeYaml + ";charset=utf8", hdr."Content-Type");
     }
 }

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation strings (the "Software"),
@@ -44,7 +44,7 @@ public:
     DLLLOCAL StringOutputStream() : StringOutputStream(QCS_DEFAULT) {
     }
 
-    DLLLOCAL StringOutputStream(const QoreEncoding* e) : enc(e), buf(new QoreStringNode) {
+    DLLLOCAL StringOutputStream(const QoreEncoding* e) : enc(e), buf(new QoreStringNode(e)) {
     }
 
     DLLLOCAL const char* getName() override {

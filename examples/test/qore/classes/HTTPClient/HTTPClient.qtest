@@ -2106,7 +2106,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq(NOTHING, h.hdr."x-was-chunked");
             assertEq("1", h.hdr."x-got-chunks");
             assertEq("text/plain", h.hdr."content-type");
-            assertEq("text/plain;charset=utf8", h.hdr._qore_orig_content_type);
+            assertEq("text/plain;charset=utf-8", h.hdr._qore_orig_content_type);
             assertEq(hc, h.obj);
             assertEq(False, h.send_aborted);
             assertEq(NOTHING, l[1].hdr);
@@ -2138,7 +2138,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq("3", h.hdr."x-got-chunks");
             assertEq("true", h.hdr."x-content-done");
             assertEq("text/plain", h.hdr."content-type");
-            assertEq("text/plain;charset=utf8", h.hdr._qore_orig_content_type);
+            assertEq("text/plain;charset=utf-8", h.hdr._qore_orig_content_type);
             assertEq(hc, h.obj);
             assertEq(False, h.send_aborted);
             assertEq(NOTHING, l[1].hdr);

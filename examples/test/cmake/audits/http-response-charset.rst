@@ -3,13 +3,17 @@ HTTP response charset review
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Scope: HttpServer and HttpServerUtil charset generation and the new response
-charset regression. Documentation generation is reviewed separately.
+Scope: HttpServer and HttpServerUtil charset generation, the DataStream
+charset labels, the StringOutputStream encoding tag, and the response charset
+regression. Documentation generation is reviewed separately.
 
-Validation: rebuilt both AOT module targets, then ran the charset, request
-encoding and response framing suites with -b --enable-debug. All 18 cases
-and 431 assertions pass without warnings. The fixture includes sysconf during
-AOT compilation so its optional branch is available. No C++ changes.
+Validation: rebuilt libqore and the AOT module targets, then ran with -b
+--enable-debug: HttpServerResponseCharset (6 cases, 204 assertions),
+HTTPClient (27 cases), string-output and stream-encoding-names, and the qlib
+HttpServer, HttpServerUtil, HttpServerAsyncIo, RestHandler, DataStream*,
+WebSocket* and ServerSentEventsHandler suites (80 tests), all passing; the ir
+suite passes (254 tests). Valgrind reports no leaks for the StringOutputStream
+test.
 
 .. list-table:: Full audit checklist
    :header-rows: 1
@@ -76,23 +80,23 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - Uses %prepend-module-path  before %requires for in-repo modules (Qore and Qore modules only; not Qorus)
      - Pass
-     - The new test resolves all three required modules with explicit relative paths and sets the local qlib path first.
+     - The tests prepend the local qlib path and require QUnit, Mime, HttpServerUtil, HttpServer and DataStreamUtil by name.
 
    * - External module dependencies use %try-module — except modules delivered with the project itself (Qore ex: DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires
      - Pass
      - The new test uses only standard Qore modules; the fixture supplies sysconf for the existing optional import.
 
    * - No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks
-     - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - Pass
+     - The only C++ change initializes the StringOutputStream buffer with its encoding; it performs no filesystem or network operations.
 
    * - No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks
-     - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - Pass
+     - The only C++ change initializes the StringOutputStream buffer with its encoding; it performs no filesystem or network operations.
 
    * - If filesystem/network ops exist, verify QoreSandboxManagerHelper usage
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - No filesystem or network operations in the C++ change.
 
    * - No File::, Dir::, Socket::, HTTPClient:: usage without justification
      - Pass
@@ -100,19 +104,19 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - All for/while loops that could iterate >100 times have qore_check_cancel() checks
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - The C++ change is a constructor initializer with no loops or blocking operations.
 
    * - Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - The C++ change is a constructor initializer with no loops or blocking operations.
 
    * - Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - The C++ change is a constructor initializer with no loops or blocking operations.
 
    * - No blocking operations without cancellation support
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - The C++ change is a constructor initializer with no loops or blocking operations.
 
    * - Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)
      - N/A
@@ -228,11 +232,11 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features
      - Pass
-     - Canonical names come from the encoding registry; StringInputStream uses the same header path as in-memory text.
+     - Every generated label comes from http_get_charset_label(); the DataStream literals use the registered name; the StringOutputStream encoding bug found by the stream test is fixed at its source.
 
    * - Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation
      - Pass
-     - Managed Qore values own conversion temporaries; on_exit stops the test server even after an assertion or exception.
+     - The StringOutputStream buffer stays owned by SimpleRefHolder; managed Qore values own conversion temporaries; on_exit stops each test server even after an assertion or exception.
 
    * - Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction
      - Pass
@@ -244,7 +248,7 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply
      - Pass
-     - Canonicalization is bounded by the encoding registry lookup, with no added I/O or loops in response processing.
+     - Canonicalization is one encoding registry lookup per generated label, with no added I/O or loops in response processing.
 
    * - Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable
      - Pass
@@ -252,11 +256,11 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats
      - Pass
-     - Module release notes describe canonical response charsets and coverage of string stream bodies.
+     - http_get_charset_label() has @param, @return, an example and @since; module and Qore release notes describe the canonical labels, the DataStream labels and the StringOutputStream fix.
 
    * - QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects
      - N/A
-     - No new module/API class, DataProvider, C++ code or native cancellation path in this scope.
+     - No QPP signatures changed.
 
    * - Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code
      - Pass
@@ -264,4 +268,4 @@ AOT compilation so its optional branch is available. No C++ changes.
 
    * - Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)
      - Pass
-     - Tests cover aliases, default charsets, explicit charset preservation, binary bodies, string streams and real HTTP responses.
+     - Tests cover aliases, unknown names, default, explicit, string stream, chunked_body, error, exception and stream request responses with several Accept-Charset values, explicit handler charsets (sent as given, body in that encoding), ISO-8859-1 aliases, binary bodies and DataStream headers.
