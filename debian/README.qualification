@@ -40,6 +40,29 @@ All Build-Depends must resolve; the helper rejects nocheck. Binary Lintian
 errors fail the run. Inspect warnings too. The provisioned image is retained
 and identified in build-image.txt for diagnosis.
 
+Binary checking runs separately from compilation, offline, with the packages
+mounted read-only. By default it uses the provisioned build image and Debian's
+Lintian profile. Set QORE_DEB_LINTIAN_IMAGE to a pinned image containing Bash and
+Lintian to use a newer checker without changing the target's build dependencies
+or runtime libraries. QORE_DEB_LINTIAN_PROFILE selects another profile if needed.
+The lintian/ results directory records the checker image, version, profile,
+output and exit status. BUILD-PASS records compilation/tests only; PASS is
+written only after the binary checker succeeds.
+
+Debian 13's Lintian 2.122 reports library-not-linked-against-libc for Qore's AOT
+plugins, which link to libqore rather than directly to libc. Lintian removed
+this unreliable check in 2.128 (Debian bug #896012):
+https://bugs.debian.org/896012
+Use Lintian >= 2.128 for this qualification; do not add redundant linker
+dependencies or suppress all library errors to accommodate the retired check.
+A checker may run on a different distribution: keep the target build image
+unchanged and explicitly select the appropriate checking profile.
+
+To recheck existing artifacts without rebuilding them:
+
+  tools/lint-debian-packages.sh /path/to/packages /path/to/new-lintian-results \
+    /pinned/checker-image debian
+
 The package rules set TZ=UTC for compile-time schema dates and QCC_JOBS=1 so
 transient GNU make jobserver tokens cannot change LLVM codegen partitions.
 Independent modules still build in parallel. Vary the incoming timezone and
