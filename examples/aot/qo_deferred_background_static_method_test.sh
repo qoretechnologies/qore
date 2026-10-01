@@ -18,7 +18,8 @@ cat >"${TMP}/src/provider.q" <<'QORE'
 %modern
 
 class BackgroundProvider {
-    public static write(string path, string text) {
+    public static write(string path, string text, Counter done) {
+        on_exit done.dec();
         File f();
         f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         f.write(text);
@@ -31,26 +32,19 @@ cat >"${TMP}/src/consumer.q" <<QORE
 %modern
 
 class BackgroundConsumer {
-    static start(string path) {
-        background BackgroundProvider::write(path, "linked-background-static");
+    static start(string path, Counter done) {
+        done.inc();
+        background BackgroundProvider::write(path, "linked-background-static", done);
     }
 }
 
 int sub main() {
     string path = "${TMP}/background.out";
-    BackgroundConsumer::start(path);
-
-    bool ready = False;
-    for (int i = 0; i < 200; ++i) {
-        *hash<StatInfo> info = hstat(path);
-        if (exists info) {
-            ready = True;
-            break;
-        }
-        usleep(10000);
-    }
-    if (!ready) {
-        throw "BACKGROUND-STATIC-TEST", "background static method did not write output";
+    # the background call decrements the counter only after it has written and closed the file
+    Counter done();
+    BackgroundConsumer::start(path, done);
+    if (done.waitForZero(20s)) {
+        throw "BACKGROUND-STATIC-TEST", "background static method did not complete";
     }
 
     string out = ReadOnlyFile::readTextFile(path);
