@@ -103,6 +103,11 @@ class RestCmd {
             "OPTIONS": True,
             "HEAD": True,
         };
+
+        #! HTTP method aliases accepted on the command line
+        const MethodAliases = {
+            "DEL": "DELETE",
+        };
     }
 
     constructor() {
@@ -162,12 +167,13 @@ class RestCmd {
 
         *string url = shift ARGV;
         auto body;
-        if (!Methods{meth.upr()}) {
+        string umeth = MethodAliases{meth.upr()} ?? meth.upr();
+        if (!Methods{umeth}) {
             body = url;
             url = meth;
             meth = "GET";
         } else {
-            meth = meth.upr();
+            meth = umeth;
             body = shift ARGV;
         }
 
@@ -657,7 +663,7 @@ class RestCmd {
 
     static usage() {
         printf("%s - Qore REST client\n\n", color.bold("rest"));
-        printf("%s %s [options] get|put|post|delete URL ['YAML/Qore body']\n\n", color.bold("Usage:"),
+        printf("%s %s [options] get|put|post|delete|del URL ['YAML/Qore body']\n\n", color.bold("Usage:"),
             get_script_name());
 
         printf("%s\n", color.bold("Options:"));
