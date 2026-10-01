@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 8%{?dist}
+Release: 9%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -372,6 +372,7 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %{_datadir}/qore/treesitter/
 %if %{with docs}
 %{_datadir}/qore/qore.tag
+%{_datadir}/qore/module-tags/
 %endif
 
 %files rpm-macros
@@ -401,6 +402,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-9
+- Ship bundled module documentation indexes in the SDK.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-8
 - Include the SDK documentation fix for pure Qore module packages.
 
