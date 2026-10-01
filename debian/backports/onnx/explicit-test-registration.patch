@@ -1,0 +1,26 @@
+Description: Initialize test schemas when consumers own registration
+ The private ONNX dependency lets ONNX Runtime register its own schemas.
+ Initialize the standard schemas in the standalone C++ test runner as well,
+ keeping the upstream tests enabled with static registration disabled.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-01
+Copyright: 2026 Qore Technologies, s.r.o.
+License: Apache-2.0
+
+--- a/onnx/test/cpp/test_main.cc
++++ b/onnx/test/cpp/test_main.cc
+@@ -7,9 +7,13 @@
+ #include <iostream>
+ 
+ #include "gtest/gtest.h"
++#include "onnx/defs/operator_sets.h"
+ 
+ int main(int argc, char** argv) {
+   std::cout << "Running main() from test_main.cc" << '\n';
+   ::testing::InitGoogleTest(&argc, argv);
++#ifdef __ONNX_DISABLE_STATIC_REGISTRATION
++  ONNX_NAMESPACE::RegisterOnnxOperatorSetSchema();
++#endif
+   return RUN_ALL_TESTS();
+ }

@@ -1,0 +1,24 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+Source: qore-onnx
+Section: libdevel
+Priority: optional
+Maintainer: David Nichols <david@qore.org>
+Build-Depends: debhelper-compat (= 13), cmake, ninja-build, libprotobuf-dev,
+ protobuf-compiler, python3, libgtest-dev <!nocheck>
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://onnx.ai
+Vcs-Git: https://github.com/qorelanguage/qore.git
+Vcs-Browser: https://github.com/qorelanguage/qore/tree/develop/debian/backports
+
+Package: libqore-onnx-dev
+Architecture: any
+Multi-Arch: same
+Depends: libprotobuf-dev, ${misc:Depends}
+Description: private static ONNX development library for Qore dependencies
+ ONNX provides a portable model format for machine learning. This package
+ contains a private static build of ONNX for the Qore ONNX Runtime backport.
+ .
+ Headers, CMake metadata and libraries live in a separate prefix and use
+ the qore_onnx C++ namespace. Debian's system ONNX and PyTorch libraries
+ are unchanged. No Python bindings or shared libraries are installed.

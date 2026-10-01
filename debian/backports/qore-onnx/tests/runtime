@@ -1,0 +1,11 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+set -eu
+arch=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+cp debian/tests/CMakeLists.txt debian/tests/link.cpp "$AUTOPKGTEST_TMP/"
+cmake -S "$AUTOPKGTEST_TMP" -B "$AUTOPKGTEST_TMP/build" \
+    -DONNX_DIR="/usr/lib/$arch/qore-onnx/cmake/ONNX"
+cmake --build "$AUTOPKGTEST_TMP/build" -j2
+"$AUTOPKGTEST_TMP/build/qore-onnx-test"
+python3 -I -c 'import onnx; import torch; assert torch.tensor([2, 3]).sum().item() == 5; print(onnx.__version__, torch.__version__)'

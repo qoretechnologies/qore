@@ -1,0 +1,21 @@
+Description: Keep the ABI version file separate in an in-source build
+ Debian builds in the upstream source root. Writing the ABI version to
+ VERSION_NUMBER overwrites the upstream release version before Python packaging
+ and subsequent CMake runs. Use a distinct filename for the ABI version.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-01
+Copyright: 2026 Qore Technologies, s.r.o.
+License: MIT
+
+--- a/cmake/onnxruntime.cmake
++++ b/cmake/onnxruntime.cmake
+@@ -66,7 +66,7 @@
+   endforeach()
+ 
+   if(NOT CMAKE_SYSTEM_NAME MATCHES "AIX")
+-  set(ORT_SOVERSION_NUMBER_FILE "${CMAKE_CURRENT_BINARY_DIR}/VERSION_NUMBER")
++  set(ORT_SOVERSION_NUMBER_FILE "${CMAKE_CURRENT_BINARY_DIR}/SOVERSION_NUMBER")
+   file(WRITE "${ORT_SOVERSION_NUMBER_FILE}" "${VERSION_MAJOR_PART}.${VERSION_MINOR_PART}")
+   add_custom_command(OUTPUT ${SYMBOL_FILE} ${CMAKE_CURRENT_BINARY_DIR}/generated_source.c
+     COMMAND ${Python_EXECUTABLE} "${REPO_ROOT}/tools/ci_build/gen_def.py"

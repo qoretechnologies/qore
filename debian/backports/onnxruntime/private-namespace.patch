@@ -1,0 +1,23 @@
+Description: Bind legacy ONNX qualifiers to the configured ONNX namespace
+ ONNX Runtime accepts ONNX_NAMESPACE but still uses onnx:: in several internal
+ headers and implementations. Resolve both spellings to the same namespace at
+ the internal protobuf boundary. This is a compile-time alias; all symbols keep
+ the configured namespace and the public C/C++ runtime API is unchanged.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-01
+Copyright: 2026 Qore Technologies, s.r.o.
+License: MIT
+
+--- a/include/onnxruntime/core/graph/onnx_protobuf.h
++++ b/include/onnxruntime/core/graph/onnx_protobuf.h
+@@ -27,6 +27,9 @@
+ #include "onnx/onnx_pb.h"
+ #include "onnx/onnx-operators_pb.h"
+ 
++// Keep legacy qualified uses bound to the configured private ONNX namespace.
++namespace onnx = ONNX_NAMESPACE;
++
+ #if defined(__GNUC__)
+ #pragma GCC diagnostic pop
+ #endif

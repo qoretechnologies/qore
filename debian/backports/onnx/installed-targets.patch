@@ -1,0 +1,27 @@
+Description: Export configured header paths and static protobuf dependencies
+ Installed ONNX consumers must use CMAKE_INSTALL_INCLUDEDIR, including private
+ installation prefixes, and link the protobuf variant used by the archive.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-01
+Copyright: 2026 Qore Technologies, s.r.o.
+License: Apache-2.0
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -457,7 +457,14 @@
+ endforeach()
+ add_library(onnx)
+ target_link_libraries(onnx PUBLIC $<BUILD_INTERFACE:onnx_object> $<BUILD_INTERFACE:onnx_proto_object>)
+-target_include_directories(onnx PUBLIC $<INSTALL_INTERFACE:include>)
++# Installed static consumers need the configured header prefix and protobuf ABI.
++foreach(onnx_target IN ITEMS onnx onnx_proto)
++  add_onnx_global_defines(${onnx_target})
++  target_include_directories(${onnx_target} PUBLIC
++    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
++  target_link_libraries(${onnx_target} PUBLIC
++    $<INSTALL_INTERFACE:${LINKED_PROTOBUF_TARGET}>)
++endforeach()
+ if(ONNX_ML)
+   target_compile_definitions(onnx PUBLIC ONNX_ML=1)
+ endif()
