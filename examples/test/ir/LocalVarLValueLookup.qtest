@@ -14,8 +14,9 @@
 #! Tests the two outcomes of looking up a local variable that is not instantiated on the current thread
 /** LocalVar::getLValue() used to return -1 without an exception for a local variable with no value on the current
     thread.  That was a legitimate "not here" result where the IR slot cache holds the value (a closure loop
-    variable run by the IR interpreter), but everywhere else it silently discarded the write.  The legitimate case
-    now uses the explicit LocalVar::tryGetLValue() lookup, and every other write raises \c LVALUE-ERROR.
+    variable run by the IR interpreter), but everywhere else it silently discarded the write; reads (LocalVar::eval())
+    and removals likewise returned no value or did nothing.  The legitimate cases now use the explicit
+    LocalVar::tryGetLValue() and LocalVar::tryEval() lookups, and every other access raises \c LVALUE-ERROR.
 */
 class LocalVarLValueLookupTest inherits QUnit::Test {
     public {
@@ -54,6 +55,17 @@ string sub appendIt() {
     counter = counter + 1;
     return "appended";
 }
+int sub readIt() {
+    return counter;
+}
+string sub removeIt() {
+    remove counter;
+    return "removed";
+}
+string sub deleteIt() {
+    delete counter;
+    return "deleted";
+}
 ';
     }
 
@@ -80,7 +92,7 @@ string sub appendIt() {
 
         addTestCase("a slot-cached local with no thread value runs in every execution mode", \testExecModes());
         addTestCase("an interpreted AOT closure body keeps its loop variables in the slot cache", \testAotClosure());
-        addTestCase("negative: a write to a local that is not instantiated raises LVALUE-ERROR",
+        addTestCase("negative: an access to a local that is not instantiated raises LVALUE-ERROR",
             \testNotInstantiatedWrite());
 
         set_return_value(main());
@@ -133,10 +145,10 @@ string sub appendIt() {
             libqore_dir, libqore_dir, flags, host));
         assertEq(0, rv.rc, rv.err);
 
-        list<string> fns = ("bump", "assignIt", "addIt", "appendIt");
+        list<string> fns = ("bump", "assignIt", "addIt", "appendIt", "readIt", "removeIt", "deleteIt");
         rv = run(tmp.path, sprintf("%s %s %s", env, host, fns.join(" ")));
         assertEq(0, rv.rc, rv.err);
-        # each write raises the exception instead of being silently discarded
+        # each access raises the exception instead of a write being silently discarded or a read returning no value
         foreach string fn in (fns) {
             assertRegex(sprintf("^%s: rc=1 err=LVALUE-ERROR: local variable 'counter' is not instantiated in the "
                 "current context$", fn), (select rv.out.split("\n"), $1.find(fn + ":") == 0)[0] ?? "", fn);

@@ -37,6 +37,30 @@ I18n::apply_locale_context(locale_context);
     Explicit-locale APIs remain the stable default. Raw \c Queue handoff does not propagate the ambient locale; pass an
     explicit context object from \c I18n::capture_locale_context() or a locale string across queue boundaries.
 
+    @section i18nlocaledata Missing Locale Data
+
+    ICU does not fail for a locale whose data is not installed (for example with a minimal ICU data package that
+    only contains English): it formats, parses, collates and selects plural forms with the data of the default
+    locale, or of the root locale, instead.  German numbers and dates then silently come out with English rules.
+
+    Such a fallback can be detected before or after the fact:
+    - \c I18n::get_locale_data_info() returns a \c LocaleDataInfo hash naming the locale whose data serves a
+      locale and whether that data is of the requested language; \c I18n::locale_data_available() returns just
+      the latter.  A more general locale of the same language serving a region without its own data (\c "de" for
+      \c "de-XX") is not a fallback.
+    - \c I18n::get_locale_data_fallbacks() returns every locale (up to 256) that a function of this module has
+      used with the data of another language in the current process, for example for a health check.
+
+    @code{.py}
+%requires i18n
+
+if (!I18n::locale_data_available("de-DE")) {
+    printf("German ICU locale data is not installed; using %s\n",
+        I18n::get_locale_data_info("de-DE").data_locale);
+}
+printf("%y\n", I18n::get_locale_data_fallbacks());
+    @endcode
+
     @section i18nformatting Formatting and Collation
 
     Number, percentage, and currency formatting use explicit locale arguments and do not change existing core

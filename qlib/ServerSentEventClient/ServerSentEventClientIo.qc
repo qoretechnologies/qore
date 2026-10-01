@@ -85,7 +85,13 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! Stop flag
         bool stop = False;
 
-        #! TID of the event thread
+        #! True from just before the event thread is started until it terminates
+        /** Set by @ref connect() before the thread is started and cleared by the thread itself when it terminates,
+            so a thread that terminates before the call that started it returns cannot leave a stale record
+        */
+        bool thread_active = False;
+
+        #! TID of the event thread; set and cleared by the event thread itself
         *int tid;
 
         #! The reader of the open event stream
@@ -312,32 +318,41 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             stop = False;
             do_reconnect = False;
             setConnectedUnlocked(reader);
+            # the event thread is accounted for before it is started: it can run to completion before the call
+            # that starts it returns, so it cannot be recorded afterwards
+            thread_active = True;
         }
 
-        # the connection is reported before the event thread is started, which raises the stream's events: raised
-        # after it, the connected event could follow the first data event
-        notifyObservers(EVENT_SSE_CONNECTED, {});
-
-        code<nothing()> fn = sub () {
-            try {
-                eventLoop(reader);
-            } catch (hash<ExceptionInfo> ex) {
-                # the object was deleted from the event thread itself, for example by an observer
-                if (ex.err != "OBJECT-ALREADY-DELETED") {
-                    rethrow;
-                }
-            }
-        };
         int new_tid;
-%ifdef PO_NO_THREAD_CONTROL
-        new_tid = start_thread(fn);
-%else
-        new_tid = start_thread ? start_thread(fn) : background fn();
-%endif
+        try {
+            # the connection is reported before the event thread is started, which raises the stream's events:
+            # raised after it, the connected event could follow the first data event
+            notifyObservers(EVENT_SSE_CONNECTED, {});
 
-        {
+            code<nothing()> fn = sub () {
+                try {
+                    eventLoop(reader);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the object was deleted from the event thread itself, for example by an observer
+                    if (ex.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            };
+%ifdef PO_NO_THREAD_CONTROL
+            new_tid = start_thread(fn);
+%else
+            new_tid = start_thread ? start_thread(fn) : background fn();
+%endif
+        } catch (hash<ExceptionInfo> ex) {
+            # the event thread was not started
             AutoLock al1(m);
-            tid = new_tid;
+            thread_active = False;
+            remove cur_reader;
+            connected = False;
+            cid = -1;
+            stop_cond.broadcast();
+            rethrow;
         }
 
         self.logDebug("SSE I/O thread started: TID %d", new_tid);
@@ -368,7 +383,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     */
     bool reconnect() {
         AutoLock al(m);
-        if (!tid) {
+        if (!thread_active) {
             return False;
         }
         reconnect_flag = True;
@@ -411,7 +426,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     #! Returns True if the event thread is running but no event stream is open, because it is being reopened
     bool isReconnecting() {
         AutoLock al(m);
-        return tid && !connected;
+        return thread_active && !connected;
     }
 
     #! Returns the reconnect flag
@@ -487,9 +502,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     #! Stops the event thread and waits for it to terminate; must be called with @ref op_lock held
     private stopEventThread() {
         AutoLock al(m);
-        if (tid) {
+        if (thread_active) {
             requestStopUnlocked();
-            while (tid) {
+            while (thread_active) {
                 stop_cond.wait(m);
             }
         }
@@ -560,8 +575,15 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     /** @param reader the reader of the event stream opened by @ref connect()
     */
     private eventLoop(HttpClientStreamingIo::SseStreamReader reader) {
+        {
+            # recorded before any event is raised, so a disconnect() from an observer is recognized as made from
+            # the event thread, also before the call that started the thread has returned
+            AutoLock al(m);
+            tid = gettid();
+        }
         on_exit if (self) {
             AutoLock al(m);
+            thread_active = False;
             remove tid;
             remove cur_reader;
             connected = False;

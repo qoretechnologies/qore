@@ -732,7 +732,29 @@ public:
         }
     }
 
+    //! Returns the variable's value on the current thread; raises an exception if it has none
+    /** A variable that is not instantiated on the current thread has no value to read: that is an error here, and
+        \c LVALUE-ERROR is raised.  Code that keeps the value elsewhere (an IR or native slot) and only consults
+        the thread's variable when one exists must use tryEval() instead.
+    */
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+        bool found;
+        QoreValue rv = tryEval(needs_deref, xsink, found);
+        if (!found && !*xsink) {
+            assert(!needs_deref);
+            raiseNotInstantiated(xsink);
+        }
+        return rv;
+    }
+
+    //! Returns the variable's value on the current thread if it has one
+    /** @param needs_deref set to true if the caller must dereference the value returned
+        @param xsink for exceptions
+        @param found set to false (with no value returned and no exception raised) if the variable has no value on
+        the current thread, otherwise true
+    */
+    DLLLOCAL QoreValue tryEval(bool& needs_deref, ExceptionSink* xsink, bool& found) const {
+        found = true;
         if (is_self || (name == "self")) {
             if (QoreObject* obj = runtime_get_stack_object()) {
                 needs_deref = true;
@@ -743,13 +765,11 @@ public:
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
-                // Variable not on the current thread's lvstack (IR-managed context);
-                // return NOTHING with no deref needed
+                // not on the current thread's lvstack (e.g. an IR-managed context)
                 needs_deref = false;
+                found = false;
                 return QoreValue();
             }
-            //printd(5, "LocalVar::eval '%s' typeInfo: %p '%s'\n", name.c_str(), typeInfo,
-            //    QoreTypeInfo::getName(typeInfo));
             return val->eval(needs_deref, xsink);
         }
 
@@ -765,6 +785,7 @@ public:
         }
         if (!val) {
             needs_deref = false;
+            found = false;
             return QoreValue();
         }
         return val->eval(needs_deref, xsink);
@@ -823,8 +844,7 @@ public:
             return 0;
         }
         if (rc == LocalVarLValueLookup::NotInstantiated) {
-            lvh.vl.xsink->raiseException("LVALUE-ERROR", "local variable '%s' is not instantiated in the current "
-                "context", name.c_str());
+            raiseNotInstantiated(lvh.vl.xsink);
         }
         assert(*lvh.vl.xsink);
         return -1;
@@ -882,6 +902,7 @@ public:
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
+                raiseNotInstantiated(lvrh.getExceptionSink());
                 return;
             }
             return val->remove(lvrh, typeInfo);
@@ -889,6 +910,7 @@ public:
 
         ClosureVarValue* val = findClosureVarValue();
         if (!val) {
+            raiseNotInstantiated(lvrh.getExceptionSink());
             return;
         }
         return val->remove(lvrh);
@@ -1081,6 +1103,12 @@ private:
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_try_find_lvar(this);
+    }
+
+    //! Raises the exception for an access to the variable where it is not instantiated on the current thread
+    DLLLOCAL void raiseNotInstantiated(ExceptionSink* xsink) const {
+        xsink->raiseException("LVALUE-ERROR", "local variable '%s' is not instantiated in the current context",
+            name.c_str());
     }
 
     //! Returns the current value container of this closure-bound variable, or nullptr if none is instantiated

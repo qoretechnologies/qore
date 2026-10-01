@@ -2709,6 +2709,10 @@ while (*binary chunk = input.read(65536)) {
       - locale-sensitive number/percentage/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool; percentage formatting uses ratio inputs and ICU/CLDR
         percent-sign placement, spacing, digits, and bidirectional marks
+      - a locale whose ICU data is not installed is no longer silently formatted with another language's rules
+        unnoticed: \c I18n::get_locale_data_info() and \c I18n::locale_data_available() report whether ICU has data
+        for a locale's language, and \c I18n::get_locale_data_fallbacks() lists the locales the process has used
+        with the data of the default or root locale
 
     - @ref jsonintro "json" module
       - previously the external \c module-json repository, now built and installed with %Qore, so
@@ -4006,9 +4010,10 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
-    - Fixed writes to a local variable that is not instantiated in the current context (for example a top-level
-      local variable used by a function in a <tt>.qo</tt> object registered by a custom C++ host) being silently
-      discarded; they now raise \c LVALUE-ERROR naming the variable
+    - Fixed accesses to a local variable that is not instantiated in the current context (for example a top-level
+      local variable used by a function in a <tt>.qo</tt> object registered by a custom C++ host): writes were
+      silently discarded, reads returned no value and \c remove / \c delete did nothing; they now raise
+      \c LVALUE-ERROR naming the variable
     - Fixed executables that <tt>qcc -o</tt> builds from several sources or links from <tt>.qo</tt> objects silently
       skipping top-level code: such an executable runs only its entry function, so a function using a top-level
       local variable read no value and lost its updates, and other top-level statements never ran.  \c qcc now

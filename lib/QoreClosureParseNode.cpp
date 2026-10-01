@@ -58,9 +58,15 @@ static QoreClosureBase* qore_closure_try_object_context(const QoreClosureParseNo
         return nullptr;
     }
 
+    // a probe for an object context: a self variable that is not instantiated here means there is none
     ExceptionSink xsink;
     bool needs_deref = true;
-    QoreValue self_val = self_lv->eval(needs_deref, &xsink);
+    bool found;
+    QoreValue self_val = self_lv->tryEval(needs_deref, &xsink, found);
+    if (!found) {
+        assert(!needs_deref && !xsink);
+        return nullptr;
+    }
     if (xsink) {
         xsink.clear();
         if (needs_deref) {

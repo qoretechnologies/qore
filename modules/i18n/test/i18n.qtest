@@ -18,6 +18,9 @@
 class I18nTest inherits QUnit::Test {
     constructor() : Test("I18nTest", "1.0") {
         addTestCase("backend version introspection", \backendInfoTest());
+        addTestCase("locale data availability", \localeDataInfoTest());
+        addTestCase("locale data fallbacks are recorded", \localeDataFallbackTest());
+        addTestCase("locale data fallback record is bounded", \localeDataFallbackBoundTest());
         addTestCase("cardinal plural categories", \cardinalPluralCategoryTest());
         addTestCase("visible fraction digits", \visibleFractionDigitsTest());
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
@@ -60,6 +63,109 @@ class I18nTest inherits QUnit::Test {
         assertEq(I18n::get_cldr_version(), info.cldr_version);
         assertEq(1, info.catalog_schema_version);
         assertEq(1, I18n::get_catalog_schema_version());
+    }
+
+    localeDataInfoTest() {
+        # a locale with its own data
+        hash<LocaleDataInfo> info = I18n::get_locale_data_info("de-DE");
+        assertEq("de-DE", info.locale);
+        assertEq("de-DE", info.data_locale);
+        assertTrue(info.available);
+        assertTrue(I18n::locale_data_available("de_DE"));
+        # a more general locale of the same language serving a region without its own data is not a fallback
+        info = I18n::get_locale_data_info("en-XX");
+        assertEq("en-XX", info.locale);
+        assertEq("en", info.data_locale);
+        assertTrue(info.available);
+        # the root locale always has data
+        info = I18n::get_locale_data_info("und");
+        assertEq("und", info.data_locale);
+        assertTrue(info.available);
+        # a language without ICU data, as when the data is not installed: ICU uses the default locale's data
+        foreach string locale in (("qaa", "qaa-Latn-XX", "zxx")) {
+            info = I18n::get_locale_data_info(locale);
+            assertFalse(info.available, locale);
+            assertTrue(info.data_locale.val(), locale);
+            assertNeq(info.locale, info.data_locale, locale);
+            # the default locale's data or root; never the requested language
+            assertFalse(info.data_locale =~ /^(qaa|zxx)/, locale);
+            assertFalse(I18n::locale_data_available(locale), locale);
+        }
+        # the hashdecl type is returned
+        assertEq("hash<LocaleDataInfo>", I18n::get_locale_data_info("fr").fullType());
+        # negative: invalid locales
+        assertThrows("I18N-LOCALE-ERROR", \I18n::get_locale_data_info(), "not a valid locale tag!");
+        assertThrows("I18N-LOCALE-ERROR", \I18n::locale_data_available(), "not a valid locale tag!");
+    }
+
+    localeDataFallbackTest() {
+        # the record is process-wide: use locales no other test uses
+        list<string> before = I18n::get_locale_data_fallbacks();
+        foreach string locale in (("qab", "qac", "qad", "qae", "qaf", "qag", "qah", "qai", "qaj")) {
+            assertFalse(inlist(locale, before), locale);
+        }
+
+        # formatting with a locale that has its own data records nothing
+        assertEq("1.234,5", I18n::format_number(1234.5, "de-DE"));
+        assertEq(before, I18n::get_locale_data_fallbacks());
+        # a function that uses Qore data rather than ICU locale data records nothing
+        assertEq("sentence", I18n::get_capitalization_style("qab"));
+        # querying availability records nothing
+        assertFalse(I18n::locale_data_available("qab"));
+        assertFalse(I18n::get_locale_data_info("qab").available);
+        assertEq(before, I18n::get_locale_data_fallbacks());
+
+        # every function using ICU locale data records a locale served by another language's data, and still
+        # returns a result, as before
+        assertTrue(I18n::format_number(1234.5, "qab").val());
+        assertTrue(I18n::format_percent(0.5, "qac").val());
+        assertTrue(I18n::format_currency(1.5, "EUR", "qad").val());
+        assertEq(1.5n, I18n::parse_number("1.5", "qae"));
+        assertTrue(I18n::format_datetime(2026-01-01T10:00:00Z, "qaf").val());
+        assertEq(-1, I18n::compare_strings("a", "b", "qag"));
+        # plural rules fall back to the root locale's rules
+        assertEq("other", I18n::plural_category(1, "qah"));
+        assertTrue(I18n::string_predicate("Abc", "starts-with", "a", "qai"));
+        hash<auto> catalog = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {"1 file": {"plural_source": "{count} files",
+                    "forms": {"one": "{count} file", "other": "{count} files"}}}},
+            },
+        };
+        assertEq("2 files", new I18n::MessageCatalog(catalog).tn(2, "1 file", "{count} files", "qaj"));
+
+        list<string> after = I18n::get_locale_data_fallbacks();
+        foreach string locale in (("qab", "qac", "qad", "qae", "qaf", "qag", "qah", "qai", "qaj")) {
+            assertTrue(inlist(locale, after), locale);
+        }
+        assertFalse(inlist("de-DE", after));
+        # sorted and unique
+        assertEq(sort(after), after);
+        assertTrue(I18n::format_number(1, "qab").val());
+        assertEq(after, I18n::get_locale_data_fallbacks());
+    }
+
+    localeDataFallbackBoundTest() {
+        # the record is process-wide, so the bound is tested in a separate process
+        string qore = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        TmpDir tmp("i18n-locale-fallback-bound-");
+        string script = tmp.path + DirSep + "bound.qr";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("%%requires i18n\n"
+            + "foreach int i in (xrange(300)) {\n"
+            + "    string s = I18n::format_number(1, \"q\" + chr(97 + i / 26) + chr(97 + i %% 26));\n"
+            + "}\n"
+            + "list<string> l = I18n::get_locale_data_fallbacks();\n"
+            + "printf(\"%%d %%s %%s\\n\", l.size(), l[0], l.last());\n"));
+        f.close();
+        string libdir = dirname(qore);
+        string module_dir = ENV.QORE_MODULE_DIR ?? "";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libdir, module_dir,
+            qore, script));
+        # 256 distinct locales are recorded, the first 256 in sorted order
+        assertEq("256 qaa qjv\n", out);
     }
 
     cardinalPluralCategoryTest() {
