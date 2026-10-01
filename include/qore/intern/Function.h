@@ -1520,6 +1520,14 @@ public:
         return vlist.size();
     }
 
+    //! Returns true if a call of this method can resolve to a variant inherited from a base class
+    /** numVariants() counts only the variants declared in this function; a method that a derived class overrides
+        with a single variant still has every non-abstract variant of its base classes' methods of the same name
+        available to runtime variant matching.  A caller must not assume that the single variant is the one a call
+        resolves to unless this returns false.
+    */
+    DLLLOCAL bool hasInheritedVariants() const;
+
     DLLLOCAL QoreListNode* runtimeGetCallVariants() const;
 
     // returns 0 for OK, -1 for error

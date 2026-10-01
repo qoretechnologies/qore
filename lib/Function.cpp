@@ -3347,6 +3347,19 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     return variant;
 }
 
+bool QoreFunction::hasInheritedVariants() const {
+    // the first entry of the inheritance list is this function itself
+    for (size_t i = 1, e = ilist.size(); i < e; ++i) {
+        const QoreFunction* f = ilist[i].func;
+        // abstract variants are never selected at runtime (see runtimeFindVariant())
+        if (f->vlist.empty() || static_cast<const MethodFunctionBase*>(f)->isAbstract()) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
