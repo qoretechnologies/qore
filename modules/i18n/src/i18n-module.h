@@ -30,6 +30,8 @@
 
 #include "qore/Qore.h"
 
+#include <unicode/locid.h>
+
 extern QoreNamespace I18nNS;
 
 DLLLOCAL void init_i18n_functions(QoreNamespace& ns);
@@ -37,6 +39,10 @@ DLLLOCAL QoreHashNode* i18n_parse_native_catalog_json(const QoreStringNode* json
 DLLLOCAL QoreHashNode* i18n_load_native_catalog_json(const QoreStringNode* path, int64 max_file_len,
     ExceptionSink* xsink);
 DLLLOCAL int64 i18n_get_catalog_file_parse_count();
+//! Records a locale whose ICU locale data a message catalog uses, if ICU serves it with another language's data
+DLLLOCAL void i18n_note_catalog_locale_data(const icu::Locale& locale);
+//! the LocaleDataInfo hashdecl
+DLLLOCAL extern const TypedHashDecl* hashdeclLocaleDataInfo;
 
 class I18nCatalogDirIndex;
 DLLLOCAL QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,

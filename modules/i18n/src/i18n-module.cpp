@@ -29,6 +29,10 @@
 
 QoreNamespace I18nNS("Qore::I18n");
 
+const TypedHashDecl* hashdeclLocaleDataInfo;
+
+DLLLOCAL TypedHashDecl* init_hashdecl_LocaleDataInfo(QoreNamespace& ns);
+
 DLLLOCAL void preinitMessageCatalogClass();
 DLLLOCAL QoreClass* initMessageCatalogClass(QoreNamespace& ns);
 DLLLOCAL void preinitCatalogDiscoveryIndexClass();
@@ -40,6 +44,7 @@ static void i18n_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 
     I18nNS.addSystemClass(initMessageCatalogClass(I18nNS));
     I18nNS.addSystemClass(initCatalogDiscoveryIndexClass(I18nNS));
+    hashdeclLocaleDataInfo = init_hashdecl_LocaleDataInfo(I18nNS);
     init_i18n_functions(I18nNS);
 }
 

@@ -2709,6 +2709,10 @@ while (*binary chunk = input.read(65536)) {
       - locale-sensitive number/percentage/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool; percentage formatting uses ratio inputs and ICU/CLDR
         percent-sign placement, spacing, digits, and bidirectional marks
+      - a locale whose ICU data is not installed is no longer silently formatted with another language's rules
+        unnoticed: \c I18n::get_locale_data_info() and \c I18n::locale_data_available() report whether ICU has data
+        for a locale's language, and \c I18n::get_locale_data_fallbacks() lists the locales the process has used
+        with the data of the default or root locale
 
     - @ref jsonintro "json" module
       - previously the external \c module-json repository, now built and installed with %Qore, so

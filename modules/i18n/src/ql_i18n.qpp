@@ -52,6 +52,7 @@
 #include <unicode/utf16.h>
 #include <unicode/ulocdata.h>
 #include <unicode/unistr.h>
+#include <unicode/ures.h>
 #include <unicode/uversion.h>
 
 #include <algorithm>
@@ -62,6 +63,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -1299,6 +1301,83 @@ static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionS
     return locale;
 }
 
+// the maximum number of distinct locales recorded as served by fallback data; requested locales can come from
+// untrusted input such as an Accept-Language header, so the record must not grow without bound
+static constexpr size_t I18N_MAX_RECORDED_LOCALE_DATA_FALLBACKS = 256;
+
+// the requested locales (BCP 47 tags) that ICU served with the data of the default or root locale
+static std::mutex i18n_locale_data_fallback_lock;
+static std::set<std::string> i18n_locale_data_fallbacks;
+
+// returns the BCP 47 form of an ICU locale name; "und" for the root locale
+static std::string i18n_locale_name_to_tag(const char* name) {
+    if (!name || !*name || !strcmp(name, "root")) {
+        return "und";
+    }
+    UErrorCode status = U_ZERO_ERROR;
+    std::string tag;
+    icu::StringByteSink<std::string> sink(&tag);
+    icu::Locale(name).toLanguageTag(sink, status);
+    return U_SUCCESS(status) && !tag.empty() ? tag : std::string(name);
+}
+
+// Determines the locale whose ICU data serves a locale.
+//
+// ICU never fails for a locale it has no data for: it silently uses the data of the default locale (or root), so
+// for example German formatting falls back to English rules when the German data is not installed.  Opening the
+// locale's resource bundle reports that case as U_USING_DEFAULT_WARNING.  U_USING_FALLBACK_WARNING is not a loss:
+// it means a more general locale of the same language serves the request (e.g. "de" for "de-XX").
+//
+// Returns false if ICU has no locale data at all (data_locale is then empty); "available" is set to false if the
+// data of the default or root locale serves a non-root locale.
+static bool i18n_get_locale_data(const icu::Locale& locale, std::string& data_locale, bool& available) {
+    UErrorCode status = U_ZERO_ERROR;
+    UResourceBundle* bundle = ures_open(nullptr, locale.getName(), &status);
+    // ICU's own cache owns the data; the bundle handle must be closed on every path
+    std::unique_ptr<UResourceBundle, void(*)(UResourceBundle*)> holder(bundle, ures_close);
+    if (U_FAILURE(status) || !bundle) {
+        data_locale.clear();
+        available = false;
+        return false;
+    }
+    const bool root_requested = !*locale.getLanguage();
+    available = root_requested || status != U_USING_DEFAULT_WARNING;
+    UErrorCode actual_status = U_ZERO_ERROR;
+    const char* actual = ures_getLocaleByType(bundle, ULOC_ACTUAL_LOCALE, &actual_status);
+    data_locale = i18n_locale_name_to_tag(U_SUCCESS(actual_status) ? actual : nullptr);
+    return true;
+}
+
+// Records a locale about to be used for ICU locale data (formatting, parsing, collation and plural rules) if ICU
+// serves it with the data of the default or root locale; see I18n::get_locale_data_fallbacks().
+static void i18n_note_locale_data(const icu::Locale& locale) {
+    std::string data_locale;
+    bool available;
+    i18n_get_locale_data(locale, data_locale, available);
+    if (available) {
+        return;
+    }
+    std::string tag = i18n_locale_name_to_tag(locale.getName());
+    std::lock_guard<std::mutex> lock(i18n_locale_data_fallback_lock);
+    if (i18n_locale_data_fallbacks.size() < I18N_MAX_RECORDED_LOCALE_DATA_FALLBACKS) {
+        i18n_locale_data_fallbacks.insert(tag);
+    }
+}
+
+// Returns the locale for a locale tag argument whose ICU locale data will be used, recording a fallback
+static icu::Locale i18n_make_data_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (!*xsink) {
+        i18n_note_locale_data(locale);
+    }
+    return locale;
+}
+
+// for message catalogs
+void i18n_note_catalog_locale_data(const icu::Locale& locale) {
+    i18n_note_locale_data(locale);
+}
+
 static UPluralType i18n_get_plural_type(const QoreHashNode* opts, ExceptionSink* xsink) {
     if (!opts) {
         return UPLURAL_TYPE_CARDINAL;
@@ -1421,7 +1500,7 @@ static QoreStringNode* i18n_format_number_value(QoreValue value, const QoreStrin
         return nullptr;
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1459,7 +1538,7 @@ static QoreStringNode* i18n_format_percent_value(QoreValue value, const QoreStri
         return nullptr;
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1515,7 +1594,7 @@ static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStr
         return nullptr;
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1552,7 +1631,7 @@ static QoreValue i18n_parse_number_value(const QoreStringNode* text_arg, const Q
         return QoreValue();
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1709,7 +1788,7 @@ static QoreStringNode* i18n_format_datetime_value(const DateTimeNode* dt, const 
         return nullptr;
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1765,7 +1844,7 @@ static QoreStringNode* i18n_format_datetime_value(const DateTimeNode* dt, const 
 }
 
 static std::unique_ptr<icu::Collator> i18n_make_collator(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -2082,7 +2161,7 @@ static std::string i18n_select_plural_category(QoreValue value, const QoreString
         return std::string();
     }
 
-    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    icu::Locale locale = i18n_make_data_locale(locale_arg, xsink);
     if (*xsink) {
         return std::string();
     }
@@ -2593,6 +2672,19 @@ static QoreValue i18n_display_case_impl(const QoreStringNode* str_arg, const Qor
     return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
 }
 
+//! Describes the ICU locale data that serves a locale
+/** Returned by @ref Qore::I18n::get_locale_data_info() "get_locale_data_info()"
+
+*/
+hashdecl Qore::I18n::LocaleDataInfo {
+    //! the canonical BCP 47 form of the requested locale
+    string locale;
+    //! the locale whose data ICU uses (\c "und" for root); empty if ICU has no locale data at all
+    string data_locale;
+    //! @ref True if ICU has data for the requested locale's language, @ref False if it uses another locale's data
+    bool available;
+}
+
 /** @defgroup i18n_functions I18n Functions
  */
 ///@{
@@ -2631,6 +2723,119 @@ hash<auto> get_backend_info() [flags=CONSTANT] {
         return QoreValue();
     }
     return h.release();
+}
+
+//! Returns information about the ICU locale data that serves a locale.
+/** ICU does not fail for a locale whose data is not installed: it formats, parses, collates and selects plural
+    forms with the data of the default locale (or the root locale) instead, so for example German numbers and dates
+    silently come out with English rules where the German locale data is missing (as with a minimal ICU data
+    package).  This function reveals that case: \c available is @ref False and \c data_locale names the locale
+    whose data would be used.
+
+    A more general locale of the same language serving a request is not a fallback in this sense: for
+    \c "de-XX", \c data_locale is \c "de" and \c available is @ref True.
+
+    @param locale BCP 47 locale tag
+    @return a @ref Qore::I18n::LocaleDataInfo "LocaleDataInfo" hash describing the locale data used for \a locale
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @par Example:
+    @code{.py}
+hash<LocaleDataInfo> info = I18n::get_locale_data_info("de-DE");
+if (!info.available) {
+    throw "LOCALE-DATA-ERROR", sprintf("no ICU data for %y; formatting would use %y", info.locale,
+        info.data_locale);
+}
+    @endcode
+
+    @see
+    - @ref Qore::I18n::locale_data_available() "locale_data_available()"
+    - @ref Qore::I18n::get_locale_data_fallbacks() "get_locale_data_fallbacks()"
+
+*/
+hash<LocaleDataInfo> get_locale_data_info(string locale) [flags=RET_VALUE_ONLY] {
+    icu::Locale loc = i18n_make_locale(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string data_locale;
+    bool available;
+    i18n_get_locale_data(loc, data_locale, available);
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclLocaleDataInfo, xsink), xsink);
+    h->setKeyValue("locale", new QoreStringNode(i18n_locale_name_to_tag(loc.getName()), QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("data_locale", new QoreStringNode(data_locale, QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("available", available, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
+}
+
+//! Returns @ref True if ICU has locale data for the language of a locale.
+/** @param locale BCP 47 locale tag
+    @return @ref True if ICU has data for the language of \a locale (the root locale \c "und" always has data);
+    @ref False if ICU would use the data of the default or root locale instead
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @par Example:
+    @code{.py}
+if (!I18n::locale_data_available(user_locale)) {
+    log(LoggerLevel::WARN, "no ICU locale data for %y; using English rules", user_locale);
+}
+    @endcode
+
+    @see @ref Qore::I18n::get_locale_data_info() "get_locale_data_info()"
+
+*/
+bool locale_data_available(string locale) [flags=RET_VALUE_ONLY] {
+    icu::Locale loc = i18n_make_locale(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string data_locale;
+    bool available;
+    i18n_get_locale_data(loc, data_locale, available);
+    return available;
+}
+
+//! Returns the locales that this process has formatted with the locale data of another language.
+/** Every function in this module that uses ICU locale data for a locale - number, percent, currency and date/time
+    formatting, number parsing, collation, string predicates, sort keys and plural rules, including those of
+    @ref Qore::I18n::MessageCatalog "MessageCatalog" - records the locale here when ICU serves it with the data of
+    the default or root locale (see @ref Qore::I18n::get_locale_data_info() "get_locale_data_info()").  The calls
+    themselves do not fail, so this list is how such a silent fallback can be detected after the fact, for example
+    in a health check.
+
+    At most 256 distinct locales are recorded.
+
+    @return the canonical BCP 47 tags of the recorded locales, sorted; empty if every locale used so far had its
+    own data
+
+    @par Example:
+    @code{.py}
+list<string> missing = I18n::get_locale_data_fallbacks();
+if (missing) {
+    printf("no ICU locale data for: %s\n", missing.join(", "));
+}
+    @endcode
+
+*/
+list<string> get_locale_data_fallbacks() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    std::vector<std::string> fallbacks;
+    {
+        std::lock_guard<std::mutex> lock(i18n_locale_data_fallback_lock);
+        fallbacks.assign(i18n_locale_data_fallbacks.begin(), i18n_locale_data_fallbacks.end());
+    }
+    return i18n_string_vector_to_list(fallbacks, xsink, "returning the recorded locale data fallbacks");
 }
 
 //! Parses native catalog JSON data into a Qore catalog hash.
