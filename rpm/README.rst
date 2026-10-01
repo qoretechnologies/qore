@@ -94,3 +94,13 @@ standard RPM normalization, SELinux checks, stripping and debug packages remain
 enabled. These tools are build dependencies only; end-user installations do not
 need them. Their offline source pins, regressions and backport rationale are in
 qore-packaging/dependencies/add-determinism.rst.
+
+Documentation package contents
+------------------------------
+
+The documentation RPM includes user examples with the packaged Qore interpreter
+in their shebangs. Development regression tests and Git metadata remain in the
+source distribution. License data contains the complete leading notices from
+linenoise and wcwidth, without implementation source. Build environment helpers
+are sourced shell fragments, so they have neither execute permission nor a
+shebang. Snapshot compatibility capabilities obsolete only older versions.

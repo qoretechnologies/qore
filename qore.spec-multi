@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 10%{?dist}
+Release: 11%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -169,9 +169,9 @@ Requires: tree-sitter%{?_isa} >= 0.26.13
 Provides: qore-json-module = %{version}-%{release}
 Obsoletes: qore-json-module < 1.13
 Provides: qore-yaml-module = %{version}-%{release}
-Obsoletes: qore-yaml-module < 3.0.0
+Obsoletes: qore-yaml-module < %{version}
 Provides: qore-linenoise-module = %{version}-%{release}
-Obsoletes: qore-linenoise-module < 3.0.0
+Obsoletes: qore-linenoise-module < %{version}
 
 %description stdlib
 Native and AOT-compiled standard modules, source fallbacks, resources and
@@ -261,6 +261,16 @@ QORE_RPM_POST_EOF
 
 %prep
 %autosetup -n %{name}-%{version}
+# Retain complete license notices without shipping implementation as license data.
+python3 - <<'PY_LICENSES'
+from pathlib import Path
+for name in ("linenoise", "wcwidth"):
+    data = Path("modules/linenoise/src/linenoise/" + name + ".cpp").read_text()
+    assert data.startswith("/*") and "*/" in data
+    notice = data[:data.index("*/") + 2] + "\n"
+    assert "Copyright" in notice or "copyright" in notice
+    Path(name + ".LICENSE").write_text(notice)
+PY_LICENSES
 
 %build
 %{?set_build_flags}
@@ -311,7 +321,8 @@ install -Dm644 rpm/module-env.sh %{buildroot}%{_rpmconfigdir}/qore/module-env.sh
 # Install before post-processing so duplicate Doxygen assets share storage.
 # Relative %%doc entries are copied later and would lose these hardlinks.
 install -d %{buildroot}%{_docdir}/%{name}-doc %{buildroot}%{_docdir}/%{name}-devel-doc
-cp -a build/docs/lang build/docs/modules examples %{buildroot}%{_docdir}/%{name}-doc/
+cp -a build/docs/lang build/docs/modules %{buildroot}%{_docdir}/%{name}-doc/
+python3 rpm/stage-examples.py examples %{buildroot}%{_docdir}/%{name}-doc/examples
 cp -a build/docs/library/html %{buildroot}%{_docdir}/%{name}-devel-doc/
 hardlink -t -O %{buildroot}%{_docdir}/%{name}-doc
 hardlink -t -O %{buildroot}%{_docdir}/%{name}-devel-doc
@@ -330,6 +341,7 @@ done
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_metadata.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_requires.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_install.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_examples.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_build_env.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_sources.py' -v
 QORE_RPM_VERIFY_INSTALLED_DEPS=1 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
@@ -358,7 +370,7 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 
 %files stdlib
 %license COPYING.MIT COPYING.LGPL debian/copyright
-%license modules/json/third-party/jsoncons/LICENSE modules/linenoise/src/linenoise/linenoise.cpp modules/linenoise/src/linenoise/wcwidth.cpp
+%license modules/json/third-party/jsoncons/LICENSE linenoise.LICENSE wcwidth.LICENSE
 %dir %{_datadir}/qore
 %dir %{_datadir}/qore/metadata
 %{module_dir}/
@@ -415,6 +427,11 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-11
+- Ship runnable user examples without development test fixtures or Git metadata.
+- Package complete third-party license notices and sourced shell helpers correctly.
+- Avoid self-obsoleting snapshot module compatibility capabilities.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 3.0.0-10
 - Require corrected Fedora file post-processors while retaining all BRP checks.
 

@@ -1,4 +1,3 @@
-#!/bin/sh
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 # Source this file in each build/check section; no ambient Qore installation

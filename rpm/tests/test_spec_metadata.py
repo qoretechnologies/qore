@@ -111,6 +111,19 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertIn("-DQORE_WITH_ONNXRUNTIME=ON", output)
         self.assertIn("-DQORE_REQUIRE_ONNXRUNTIME=ON", output)
 
+    def test_snapshot_compatibility_does_not_obsolete_itself(self):
+        # Source preparation substitutes a snapshot version before rpmbuild.
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = Path(directory) / "qore.spec"
+            snapshot.write_text(SPEC.read_text().replace("Version: 3.0.0\n",
+                                                        "Version: 3.0.0~git20261001.11\n"))
+            output = subprocess.check_output([
+                "rpmspec", "-q", "--qf", "[%{OBSOLETENAME} %{OBSOLETEFLAGS:depflags} %{OBSOLETEVERSION}\n]",
+                str(snapshot)], text=True)
+            for module in ("linenoise", "yaml"):
+                self.assertIn(f"qore-{module}-module < 3.0.0~git20261001.11", output.splitlines())
+
     @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
                          "requires the target build dependency image")
     def test_documentation_deduplicator_has_a_resolvable_package_requirement(self):
