@@ -33,6 +33,7 @@ public class Main inherits QUnit::Test {
     constructor() : Test("OpenAiRestClientTest", "1.0", \ARGV, MyOpts) {
         addTestCase("connection tests", \connectionTest());
         addTestCase("poll tests", \pollTest());
+        addTestCase("saved URL tests", \savedUrlTest());
 
         try {
             setupConnection();
@@ -79,6 +80,36 @@ public class Main inherits QUnit::Test {
             OpenAiRestClientIo async_client = rc.getAsync(False);
             assertEq(True, async_client instanceof OpenAiRestClientIo);
         }
+    }
+
+    savedUrlTest() {
+        # generated URLs are replaced with the canonical endpoint
+        foreach string url in ("openai://x", "openai://localhost", "https://api.openai.com",
+                "openai://api.openai.com/v1", "https://api.openai.com/v1") {
+            assertTrue(OpenAiRestConnection::isGeneratedUrl(url), url);
+            assertEq({"url": OpenAiRestConnection::DefaultUrl}, getSavedUpdate(url), url);
+        }
+        # the canonical endpoint and chosen endpoints are kept
+        foreach string url in (OpenAiRestConnection::DefaultUrl, "openai://eu.api.openai.com",
+                "https://eu.api.openai.com", "openai://gateway.example.com/openai", "openai://localhost:8443") {
+            assertFalse(OpenAiRestConnection::isGeneratedUrl(url), url);
+            assertNothing(getSavedUpdate(url), url);
+        }
+        # a chosen endpoint is the one the client uses
+        OpenAiRestConnection conn("eu", "test", "openai://eu.api.openai.com", {}, {"token": "test-key"});
+        assertEq("https://eu.api.openai.com", conn.getConnectionOptions().url);
+        # no update code installed: nothing is written
+        OpenAiRestConnection unsaved("unsaved", "test", "openai://x", {}, {"token": "test-key"});
+        unsaved.setUpdateOptionsCode(NOTHING);
+        assertEq("openai://x", unsaved.url);
+    }
+
+    private *hash<auto> getSavedUpdate(string url) {
+        OpenAiRestConnection saved("saved", "test", url, {}, {"token": "test-key"});
+        *hash<auto> updated;
+        saved.setUpdateOptionsCode(sub (hash<auto> options) { updated = options; });
+        saved.setUpdateOptionsCode(NOTHING);
+        return updated;
     }
 
     pollTest() {
