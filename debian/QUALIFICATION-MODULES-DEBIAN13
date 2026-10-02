@@ -3,15 +3,16 @@ Debian 13 independent module qualification: 2026-10-02
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Result: PASS for development snapshots from 35 of the 36 independent module
+Result: PASS for development snapshots from all 36 independent module
 repositories on native amd64 and arm64 (aarch64 Linux on hoppy). This comprises
-UUID from QUALIFICATION-DEBIAN13, the original 24-module batch below, and the
-six-module dependency chain and four additional modules described below.
+UUID from QUALIFICATION-DEBIAN13, the original 24-module batch below, the
+six-module dependency chain and the final five modules described below.
 These are unsigned local packages, not final releases or a published archive.
 
 Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13.
-Evidence bundle: qore-debian13-modules-20261001 under the qualification hosts'
-temporary directory. QUALIFICATION.json records exact package versions, source
+Final evidence bundle: qore-debian13-final-modules-20261001 under the
+qualification hosts' temporary directory. It links the earlier checkpoints.
+QUALIFICATION.json records exact package versions, source
 commits, packaging-overlay hashes and per-architecture reports. QUALIFICATION.txt
 summarizes the results. Each module has debian/QUALIFICATION-DEBIAN13, and audits/
 records all 71 audit-changes checks. commits.json records module push verification.
@@ -23,7 +24,8 @@ amqp, cairo, fsevent, geos, git, imagemagick, kalman, magic, msgpack, mysql,
 ncurses, odbc, openldap, pgsql, sqlite3, ssh, ssh2, sybase (freetds), sysconf,
 tar, treesitter, vss, zip and zmq. UUID was qualified with the core SDK earlier.
 The additional chain qualifies process, xml, python, xmlsec, proj and nats.
-The final batch has also qualified grpc, jni, pdf and oracle individually.
+The final batch qualifies grpc, jni, pdf, oracle and v8, including combined
+installation.
 Bundled modules, including JSON and YAML, remain part of Qore's packages.
 
 Original 24-module batch checks
@@ -114,19 +116,24 @@ libxml2 orig component, prepared by its existing pinned-source repacker. This
 required no XML code change. Original failures and corrected candidates are
 retained.
 
-Final dependency batch: four completed modules
+Final dependency batch: five completed modules
 ---------------------------------------------
 
 Evidence bundle: qore-debian13-final-modules-20261001. Its
-PARTIAL-QUALIFICATION.json records grpc, jni, pdf and oracle, their exact source
+QUALIFICATION.json records grpc, jni, pdf, oracle and v8, their exact source
 commits and source/binary hashes, all 71 audit checks and module push records.
 On each CPU, each module passes two full offline builds, exact reproduction,
 a third clean architecture-only build, source/binary Lintian, applicable
 hardening/debug/AOT checks, installed suites and SDK-free package lifecycle
 checks. All architecture-independent module packages match across CPUs.
-This adds 16 full builds, 8 architecture-only builds, 28 first-build binary
-artifacts and 18 installed suite executions. Final combined integration with
-these four modules and V8 remains pending; the combined result above covers 31.
+This adds 20 full builds, 10 architecture-only builds,
+36 first-build binary artifacts and 22 installed suite executions.
+Final combined integration passes for all 36 repositories on both CPUs:
+112 packages and 117 native/AOT module names load together in
+forward and reverse order, in fresh tiered and AST processes. Tests run offline
+as an unprivileged user using only installed /usr modules, without libqore-dev.
+Exact package versions and dpkg file verification pass.
+All 40 architecture-independent module packages match across CPUs.
 
 PDFium is rebuilt for Debian ICU 76 on both CPUs. The Ubuntu binary packages
 need newer system libraries. The Debian rendering/text-extraction API tests,
@@ -159,19 +166,50 @@ Debian's JavaScript generator package. Its portable source manifest excludes
 host-specific pkg-config output, and its generated sources match the bootstrap
 on both CPUs. See debian/backports/README and the dependency evidence reports.
 
-Remaining work
---------------
+Node 22 and V8 qualification
+---------------------------
 
-V8 is the remaining repository. Node 22's independent source preparation and
-source Lintian pass; native builds and subsequent installed/reproducibility
-checks remain in progress. Its recipe resolves minimatch's installed entry
-point and imports Debian build flags before exporting custom flags. V8's
-full/repeat/architecture-only builds and final combined 36-module integration
-must pass after the Node dependency is qualified.
+Node 22.22.2 (3~qore4~deb13.1) passes independent source preparation, two
+native offline builds per CPU, exact binary reproducibility, source/binary
+Lintian, strict hardening/debug inspection, installed tests and full
+purge/autoremove/reinstall with repeated tests. Its portable packages match
+across CPUs. Each of the four test runs per CPU executes more than 3,000
+cases from the retained Debian message/parallel/sequential suites. The pinned
+Debian skip lists and flaky-test policy remain unchanged, including known
+HTTP2 timeouts; there are no unquarantined failures. Exact counts, skips and
+quarantined failures are recorded in dependencies/<architecture>/nodejs/
+test-policy.json. This is not a claim of full upstream Node test coverage.
+
+The Node recipe resolves minimatch's installed entry point, imports Debian
+build flags before exporting custom flags, and removes the build-tree RUNPATH
+from the staged executable before debhelper splits debug symbols. Build-tree
+execution still uses its original RUNPATH. DWZ reaches its upstream-configured
+optimization limit for the large Node library; detached debug information
+remains complete and passes the strict artifact checks.
+
+V8 uses that Node SDK and the separately qualified TypeScript 5.2 backport.
+Its four packages reproduce on each CPU; portable packages match across CPUs.
+Qualification corrected the schema-cache test's child-process module path:
+it honors the existing packaging qmod override while preserving the source
+fallback. Both modes pass all seven cache cases and 175 assertions.
+Installed tests retain eight source-only proxy fault-injection skips and two
+optional HubSpot catalogue fixture skips.
+See module-v8 commit 947892c7 and the final batch's exact source manifest.
+
+The combined check also found Node initialization replacing Qore's signal
+mask/handlers and the JVM's SIGSEGV handler. V8 now requests Node's supported
+kNoDefaultSignalHandling embedding behavior. An isolated SIGTERM regression
+fails before the fix and passes afterward, WebAssembly bounds errors remain
+correct, and all 117 native/AOT names load together in both orders and modes.
+See module-v8 commit e093a183 and the recorded signal-fix audit.
+Its normal CI pipeline 58525 passes both Ubuntu and Alpine jobs.
+
+Remaining release gates
+-----------------------
 
 Oracle dependency hosting approval and the optional V8 app catalogue remain
-separate gates. This checkpoint covers the
-native V8 bridge packaging plan, not the separately built app catalogue.
+separate gates. This checkpoint covers the native V8 bridge packaging plan,
+not the separately built app catalogue.
 
 No prior Debian upgrade/ABI baseline is available. Only the service scenarios
 exercised by package tests are qualified. Final ABI/release freeze, acceptance
