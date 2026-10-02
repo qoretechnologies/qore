@@ -263,6 +263,15 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
         return binary(buffer);
     }
 
+    #! Returns an open record type because YAML records can contain arbitrary fields
+    /** @param search_options ignored
+
+        @return @ref NOTHING to represent an open record shape
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return NOTHING;
+    }
+
     #! Returns provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

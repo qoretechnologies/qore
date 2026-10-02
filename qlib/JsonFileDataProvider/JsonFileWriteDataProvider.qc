@@ -242,6 +242,15 @@ public class JsonFileWriteDataProvider inherits DataProvider::AbstractDataProvid
         return getJsonData();
     }
 
+    #! Returns an open record type because JSON records can contain arbitrary fields
+    /** @param search_options ignored
+
+        @return @ref NOTHING to represent an open record shape
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return NOTHING;
+    }
+
     #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

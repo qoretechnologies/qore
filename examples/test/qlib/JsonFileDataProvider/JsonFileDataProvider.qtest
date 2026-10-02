@@ -67,6 +67,7 @@ class JsonFileDataProviderTest inherits QUnit::Test {
         addTestCase("scalar JSON value", \testScalarJsonValue());
         addTestCase("empty array", \testEmptyArray());
         addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("writer advertises an open record type", \testWriterOpenRecordType());
         addTestCase("write action writes its file when the action completes", \testWriteActionFile());
         set_return_value(main());
     }
@@ -420,5 +421,13 @@ class JsonFileDataProviderTest inherits QUnit::Test {
         on_exit if (is_file(path)) unlink(path);
         assertEq(NOTHING, runCreateAction("write", {"path": path}, {"sku": ("A-1",), "qty": (5,)}));
         assertEq(({"sku": "A-1", "qty": 5},), parse_json(ReadOnlyFile::readTextFile(path)));
+    }
+
+    testWriterOpenRecordType() {
+        JsonFileDataProvider::JsonFileWriteDataProvider provider();
+        # records can have any fields, so no static schema is invented, and a create type can be acquired
+        assertNothing(provider.getRecordType());
+        assertEq({}, provider.getOrNothingRecordTypeWithOptions());
+        assertNothing(provider.getCreateRecordTypeWithOptions());
     }
 }
