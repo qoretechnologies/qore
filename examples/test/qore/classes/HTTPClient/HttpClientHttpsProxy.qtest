@@ -199,6 +199,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("plain HTTP through an HTTPS proxy", \httpsProxyPlainTest());
         addTestCase("certificate verification through proxies", \verifyTest());
         addTestCase("proxy option errors", \optionErrorTest());
+        addTestCase("proxy shutdown with idle and abandoned connections", \shutdownTest());
         set_return_value(main());
     }
 
@@ -333,6 +334,29 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         }
         proxy = sprintf("https://127.0.0.1:%d", plain.getSocketInfo().port);
         assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
+    }
+
+    shutdownTest() {
+        foreach int state in (0, 1, 2) {
+            for (int i = 0; i < 10; ++i) {
+                TestConnectProxy proxy();
+                on_exit proxy.shutdown();
+                Socket client();
+                if (state) {
+                    client.connectINET("127.0.0.1", proxy.getPort(), 5s);
+                    if (state == 2) {
+                        client.close();
+                    }
+                }
+                # Includes shutdown before the accept thread starts, while it
+                # waits for a connection, and after a client abandons one.
+                proxy.shutdown();
+                assertEq((), proxy.getRequests(), "no incomplete request was recorded");
+                Socket probe();
+                assertThrows("SOCKET-CONNECT-ERROR", \probe.connectINET(),
+                    ("127.0.0.1", proxy.getPort(), 5s), "shutdown closed the listener");
+            }
+        }
     }
 
     optionErrorTest() {

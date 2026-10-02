@@ -62,17 +62,24 @@ class TestConnectProxy {
     #! Stops the proxy and waits for its threads
     shutdown() {
         quit = True;
-        threads.waitForZero();
+        # Closing the listener cancels an accept already in progress. Readiness
+        # is only a snapshot: a pending connection can disappear before accept.
         listener.close();
+        threads.waitForZero();
     }
 
     private acceptLoop() {
         on_exit threads.dec();
         while (!quit) {
-            if (!listener.isDataAvailable(50ms)) {
-                continue;
+            *Socket s;
+            try {
+                s = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                if (quit && (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-NOT-OPEN")) {
+                    return;
+                }
+                throw ex;
             }
-            *Socket s = listener.accept();
             if (s) {
                 threads.inc();
                 background serve(s);
