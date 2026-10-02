@@ -215,8 +215,24 @@ def prepare(name, package, manifest, destination, cache, offline):
             raise RuntimeError("unexpected Node build-flags setup")
         # Its exported CFLAGS/CXXFLAGS otherwise suppress debhelper's defaults,
         # losing both hardening and reproducible debug/source prefix maps.
-        rules.write_text(updated.replace(old, old +
-            "DPKG_EXPORT_BUILDFLAGS = 1\ninclude /usr/share/dpkg/buildflags.mk\n"))
+        updated = updated.replace(old, old +
+            "DPKG_EXPORT_BUILDFLAGS = 1\ninclude /usr/share/dpkg/buildflags.mk\n")
+        old = "\tdh_install\n\noverride_dh_dwz:"
+        if updated.count(old) != 1:
+            raise RuntimeError("unexpected Node installation rules")
+        # Keep build-tree RUNPATH for upstream tests, but use the normal
+        # multiarch loader path in the installed executable. Do this before
+        # debhelper separates debug symbols so both artifacts stay consistent.
+        rules.write_text(updated.replace(old,
+            "\tdh_install\n"
+            "\t# libnode is installed in the standard multiarch library directory.\n"
+            "\tchrpath --delete debian/nodejs/usr/bin/node\n\noverride_dh_dwz:"))
+        control = source / "debian/control"
+        updated = control.read_text()
+        old = "Build-Depends:\n"
+        if updated.count(old) != 1:
+            raise RuntimeError("unexpected Node build dependencies")
+        control.write_text(updated.replace(old, old + " chrpath,\n"))
     elif name == "llhttp":
         rules = source / "debian/rules"
         updated = rules.read_text()

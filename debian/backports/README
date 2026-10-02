@@ -164,7 +164,10 @@ dependencies are available, build Node and then the V8 module with TypeScript.
 Node resolves minimatch's installed CommonJS entry point when bundling it,
 supporting Debian 13's index.js layout as well as newer index.cjs layouts.
 Its rules import dpkg build flags before adding and exporting custom options,
-preserving hardening and reproducible source/debug path mappings.
+preserving hardening and reproducible source/debug path mappings. The installed
+Node executable has its build-tree RUNPATH removed with chrpath before debug
+symbols are split; libnode is resolved through the standard multiarch loader
+path. The build-tree executable keeps its RUNPATH for the upstream test suite.
 Node 22 changes the Node module ABI and replaces the distribution's Node runtime;
 this qualification does not establish compatibility for arbitrary third-party
 Node addons. Final deployment must account for other Node users on the system.
