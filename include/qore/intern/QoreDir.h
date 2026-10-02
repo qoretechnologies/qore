@@ -101,6 +101,13 @@ public:
      */
     DLLEXPORT static QoreListNode* get_files(const QoreString& path, ExceptionSink& xsink, QoreString* regex = nullptr, const QoreEncoding* cs = QCS_DEFAULT);
 
+    //! Lists module component sources in bytewise filename order.
+    /** @param xsink receives directory or cancellation errors
+        @return owned list of regular .qc/.ql filenames, or nullptr on error
+        @note Used by both the source module loader and all AOT compilation paths.
+    */
+    DLLLOCAL QoreListNode* listModuleSources(ExceptionSink* xsink) const;
+
     //! changes the directory in relation to the current
     /**
         @param dir the directory to change to. can include .. and .

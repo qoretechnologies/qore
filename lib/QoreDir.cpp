@@ -36,11 +36,41 @@
 #include "qore/intern/QoreDir.h"
 #include <sstream>
 #include <fstream>
+#include <map>
 
 #include "qore/intern/qore_qd_private.h"
 
 const QoreEncoding* QoreDir::getEncoding() const {
     return priv->getEncoding();
+}
+
+QoreListNode* QoreDir::listModuleSources(ExceptionSink* xsink) const {
+    QoreString regex(".+\\.(qc|ql)$");
+    ReferenceHolder<QoreListNode> files(list(xsink, S_IFREG, &regex), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // Insertion into an ordered map keeps sorting cancellable, including large modules.
+    std::map<std::string, size_t> order;
+    for (size_t i = 0; i < files->size(); ++i) {
+        if (!(i % 100) && qore_check_cancel(xsink, "module source ordering")) {
+            return nullptr;
+        }
+        QoreStringValueHelper filename(files->retrieveEntry(i));
+        order.emplace(filename->c_str(), i);
+    }
+    ReferenceHolder<QoreListNode> sorted(new QoreListNode(stringTypeInfo), xsink);
+    size_t count = 0;
+    for (const auto& entry : order) {
+        if (!(count++ % 100) && qore_check_cancel(xsink, "module source ordering")) {
+            return nullptr;
+        }
+        sorted->push(files->retrieveEntry(entry.second).refSelf(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return sorted.release();
 }
 
 /* static */

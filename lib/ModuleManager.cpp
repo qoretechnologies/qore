@@ -2000,14 +2000,16 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             return nullptr;
         }
 
-        QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, path);
-        ReferenceHolder<QoreListNode> fileList(moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+        ReferenceHolder<QoreListNode> fileList(moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
         }
         for (size_t i = 0; i < fileList->size(); ++i) {
+            if (!(i % 10) && qore_check_cancel(&xsink, "module source parsing")) {
+                return nullptr;
+            }
             QoreString filePath(path);
             filePath += QORE_DIR_SEP_STR;
             QoreStringValueHelper file(fileList->retrieveEntry(i));

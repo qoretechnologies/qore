@@ -15,6 +15,10 @@
     Documentation template generation publishes output only after successful conversion
     and reruns when qpp changes, preventing partial files from surviving failed builds.
 
+    Split user modules now parse their <tt>.qc</tt> and <tt>.ql</tt> files in filename order
+    after the main <tt>.qm</tt> file. Filesystem enumeration and file creation order no longer
+    change declaration order, class signatures, or compiled module metadata.
+
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
     waiting indefinitely after the descriptor has been removed from the event loop.

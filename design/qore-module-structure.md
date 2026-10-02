@@ -65,6 +65,9 @@ Examples:
 Rules:
 
 - The `.qm` file must live inside the module directory.
+- The loader parses the `.qm` file first, then sibling `.qc` and `.ql` files in
+  bytewise filename order. This keeps declaration order, class signatures, and AOT
+  metadata independent of filesystem enumeration and file creation order.
 - Do not place a second `.qm` for the same module at `qlib/<ModuleName>.qm`.
 - Register the module once in `CMakeLists.txt` using the directory path (no `.qm`
   suffix):

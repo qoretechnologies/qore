@@ -196,6 +196,70 @@ public hash<auto> sub probe() {
         for output in outputs[1:]:
             self.assertEqual(outputs[0], output)
 
+    def test_split_module_is_independent_of_directory_entry_order(self):
+        files = {
+            "ReproProbe.qm": HEADER,
+            "alpha.qc": '''public hashdecl AlphaInfo { int value; }
+public class Alpha {
+    public int value() { return 42; }
+}
+''',
+            "zeta.qc": '''public hashdecl ZetaInfo { string name; }
+public class Zeta inherits Alpha {
+}
+''',
+            "functions.ql": 'public int sub probe_order() { return new Zeta().value(); }\n',
+        }
+        outputs = []
+        orders = []
+        source = self.root / "ReproProbe"
+        artifact = self.root / "ReproProbe.qmod"
+        for names in (list(files), list(reversed(files))):
+            # Incremental objects intentionally retain physical paths; vary directory
+            # creation order at the same path, keeping source timestamps fixed too.
+            if source.exists():
+                for filename in files:
+                    (source / filename).unlink()
+                source.rmdir()
+            source.mkdir()
+            artifact.unlink(missing_ok=True)
+            for filename in names:
+                (source / filename).write_text(files[filename])
+                os.utime(source / filename, (1700000000, 1700000000))
+            orders.append([p.name for p in source.iterdir() if p.suffix in (".qc", ".ql")])
+            self.env["QORE_MODULE_DIR"] = str(source.parent)
+            self.assertEqual("42\n", self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                                                   'printf("%d\\n", probe_order());'))
+            prefix_map = f"--file-prefix-map={source}=/usr/src/qore-test/ReproProbe"
+            self.run_tool(QCC, "-m", "-O3", prefix_map, "-o", artifact, source)
+            built = {"module": artifact.read_bytes()}
+            self.env["QORE_MODULE_DIR"] = str(artifact.parent)
+            self.assertEqual("42\n", self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                                                   'printf("%d\\n", probe_order());'))
+            objects = []
+            for filename in sorted(files):
+                obj = source.parent / (filename + ".qo")
+                self.run_tool(QCC, "-c", "-O3", f"--context={source}",
+                              "-o", obj, source / filename)
+                objects.append(obj)
+                built[filename] = obj.read_bytes()
+            self.run_tool(QCC, "-m", "--from-objects", "-O3",
+                          f"--context={source}", "-o", artifact, *objects)
+            built["aggregated module"] = artifact.read_bytes()
+            self.assertEqual("42\n", self.run_tool(QORE, "-l", "ReproProbe", "-e",
+                                                   'printf("%d\\n", probe_order());'))
+            archive = source.parent / "ReproProbe.qoa"
+            self.run_tool(QCC, "-a", "-O3", f"--context={source}",
+                          "-o", archive, *objects)
+            built["archive"] = archive.read_bytes()
+            outputs.append(built)
+        if orders[0] == orders[1]:
+            self.skipTest("Filesystem returns identical directory order for both creation orders")
+        for kind in outputs[0]:
+            with self.subTest(artifact=kind):
+                self.assertEqual(outputs[0][kind], outputs[1][kind],
+                                 "Directory order changed the compiled artifact")
+
     def test_closure_capture_metadata_is_independent_of_allocator_layout(self):
         source = self.root / "ReproProbe.qm"
         # A delayed closure keeps multiple bindings alive after the defining function returns.

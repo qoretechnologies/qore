@@ -26235,7 +26235,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         // Step 7: Glob .qc/.ql files and parse each
-        QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
         if (xsink.isException()) {
             mod_ctx.close();
@@ -26244,7 +26243,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
-        ReferenceHolder<QoreListNode> fileList(moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+        ReferenceHolder<QoreListNode> fileList(moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -26259,6 +26258,12 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // Parse each .qc/.ql file for compilation and add to combined source
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
+                if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "module source parsing cancelled: " + dir_str;
+                    return false;
+                }
                 QoreValue filename_val = fileList->retrieveEntry(i);
                 if (filename_val.getType() != NT_STRING) {
                     continue;
@@ -30308,7 +30313,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_canon.c_str());
         if (xsink.isException()) {
             mod_ctx.close();
@@ -30318,7 +30322,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         }
 
         ReferenceHolder<QoreListNode> fileList(
-            moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+            moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -30326,32 +30330,37 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        // Phase 4 slice 5: capture sibling filenames in a sorted
-        // std::vector to make fragment_order deterministic across
-        // independent qcc invocations.  The underlying fileList from
-        // QoreDir::list() is not order-guaranteed (inode / dir-entry
-        // order).  Primary (the `.qm`) always takes fragment_order 0;
-        // each secondary's order is 1 + its alphabetical index in this
-        // vector.
+        // The common source loader orders .qc/.ql files bytewise. The primary .qm
+        // takes fragment_order 0; each secondary takes its alphabetical index + 1.
         std::vector<std::string> sorted_secondary_names;
         if (fileList && fileList->size() > 0) {
             sorted_secondary_names.reserve(fileList->size());
             for (size_t i = 0; i < fileList->size(); ++i) {
+                if (!(i % 100) && qore_check_cancel(&xsink, "AOT module source collection")) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "module source collection cancelled: " + dir_canon;
+                    return false;
+                }
                 QoreValue fn_val = fileList->retrieveEntry(i);
                 if (fn_val.getType() == NT_STRING) {
                     QoreStringValueHelper fn(fn_val);
                     sorted_secondary_names.emplace_back(fn->c_str());
                 }
             }
-            std::sort(sorted_secondary_names.begin(), sorted_secondary_names.end());
         }
 
         std::string combined_source = main_source;
 
-        // Parse siblings in the sorted order so parse-time behaviour is
-        // deterministic too.  This supersedes the previous natural
-        // directory-order walk without changing observable semantics.
+        // Parse siblings in the same order as whole-module compilation and source loading.
+        size_t source_index = 0;
         for (const std::string& fname : sorted_secondary_names) {
+            if (!(source_index++ % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
+                mod_ctx.close();
+                xsink.handleExceptions();
+                error = "module source parsing cancelled: " + dir_canon;
+                return false;
+            }
             std::string file_path = dir_canon + "/" + fname;
             std::string file_source = QoreDir::get_file_content(file_path.c_str());
             if (file_source.empty()) {
@@ -30873,7 +30882,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
         if (xsink.isException()) {
             mod_ctx.close();
@@ -30882,7 +30890,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             return false;
         }
         ReferenceHolder<QoreListNode> fileList(
-            moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+            moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -30893,6 +30901,12 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         std::string combined_source = main_source;
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
+                if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "module source parsing cancelled: " + dir_str;
+                    return false;
+                }
                 QoreValue filename_val = fileList->retrieveEntry(i);
                 if (filename_val.getType() != NT_STRING) {
                     continue;
@@ -31386,7 +31400,6 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        QoreString regexClassesFunc(".+\\.(qc|ql)$");
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
         if (xsink.isException()) {
             mod_ctx.close();
@@ -31395,7 +31408,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             return false;
         }
         ReferenceHolder<QoreListNode> fileList(
-            moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+            moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -31406,6 +31419,12 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         std::string combined_source = main_source;
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
+                if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "module source parsing cancelled: " + dir_str;
+                    return false;
+                }
                 QoreValue filename_val = fileList->retrieveEntry(i);
                 if (filename_val.getType() != NT_STRING) {
                     continue;
