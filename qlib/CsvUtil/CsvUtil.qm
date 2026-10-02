@@ -99,7 +99,7 @@ module CsvUtil {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                CsvReadDataProvider::ConstructorOptions - ("path", "data", "strean", "header_names"), {
+                CsvReadDataProvider::ConstructorOptions - ("path", "data", "stream", "header_names"), {
                     "loc": "constructor",
                 }
             ),
@@ -329,6 +329,7 @@ while (i.next()) {
       @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
       value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
       may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
+    - the \c read-data application action no longer offers the \c stream option; its input is the \c data option
 
     @subsection csvutil_v1_11 Version 1.11
     - added support for data provider application actions

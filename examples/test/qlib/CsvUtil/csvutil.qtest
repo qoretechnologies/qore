@@ -62,6 +62,7 @@ f2:3,00:5:25,34";
 
     constructor() : Test("CsvUtilTest", "1.0") {
         addTestCase("data provider", \dataProviderTest());
+        addTestCase("app action options", \appActionOptionTest());
         addTestCase("multi-line fields", \multiLineFieldTest());
         addTestCase("issue 2806 test", \issue2806());
         addTestCase("issue 2746 test", \issue2746());
@@ -121,6 +122,24 @@ f2:3,00:5:25,34";
                 },
             ), l);
         }
+    }
+
+    appActionOptionTest() {
+        # each read action offers exactly one input source
+        hash<DataProviderActionInfo> read = DataProviderActionCatalog::getAppActionEx("Csv", "read");
+        assertTrue(exists read.options.path);
+        assertFalse(exists read.options.data);
+        assertFalse(exists read.options.stream);
+
+        hash<DataProviderActionInfo> read_data = DataProviderActionCatalog::getAppActionEx("Csv", "read-data");
+        assertTrue(exists read_data.options.data);
+        assertTrue(read_data.options.data.required);
+        assertFalse(exists read_data.options.path);
+        assertFalse(exists read_data.options.stream,
+            "an input stream cannot be configured on an action, and inline data is the action's source");
+        # the remaining read options are offered by both actions
+        assertTrue(exists read_data.options.separator);
+        assertEq(keys (read.options - "path"), keys (read_data.options - "data"));
     }
 
     dataProviderTest() {

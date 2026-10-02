@@ -267,18 +267,6 @@
           "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
           "message": "若為 `true`，物件將從第一個標頭列解析標頭名稱，此時若未明確設定 `header_lines`，則會假定為 `1`"
         },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.display_name": {
-          "source": "Input Stream",
-          "message": "輸入串流"
-        },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.short_desc": {
-          "source": "An input stream object for CSV data",
-          "message": "用於 CSV 資料的輸入串流物件"
-        },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
-          "source": "An input stream for CSV data; conflicts with `path` and `data`",
-          "message": "用於 CSV 資料的輸入串流；與 `path` 及 `data` 衝突"
-        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.display_name": {
           "source": "Date Format",
           "message": "日期格式"

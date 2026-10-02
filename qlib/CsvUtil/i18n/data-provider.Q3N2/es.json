@@ -267,18 +267,6 @@
           "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
           "message": "si es `true`, el objeto procesará los nombres de encabezado de la primera fila de encabezado; en este caso, si `header_lines` no se establece explícitamente, se asumirá como `1`"
         },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.display_name": {
-          "source": "Input Stream",
-          "message": "Flujo de entrada"
-        },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.short_desc": {
-          "source": "An input stream object for CSV data",
-          "message": "Un objeto de flujo de entrada para datos CSV"
-        },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
-          "source": "An input stream for CSV data; conflicts with `path` and `data`",
-          "message": "Un flujo de entrada para datos CSV; entra en conflicto con `path` y `data`"
-        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.display_name": {
           "source": "Date Format",
           "message": "Formato de fecha"
