@@ -34,7 +34,9 @@ The current testing archive fingerprint is
 064EECD97DD60E822006EC8A2324C51F64E7B4EA; verify it against Launchpad before
 trusting a downloaded key. This is the archive key, not an uploader's key.
 APT provisioning has network access. Compilation, documentation and tests run
-without networking as an unprivileged user. The incoming HOME is
+without networking as an unprivileged user. Both IPv4 and IPv6 localhost
+mappings are explicit, so local socket tests do not depend on the host's
+hosts-file configuration or attempt external DNS lookups. The incoming HOME is
 /sbuild-nonexistent; debhelper gives build commands a private generated HOME.
 All Build-Depends must resolve; the helper rejects nocheck. Binary Lintian
 errors fail the run. Inspect warnings too. The provisioned image is retained
