@@ -52,6 +52,15 @@ extern "C" DLLEXPORT void cppapitest_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.del = cppapitest_module_delete;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
+
+    // Owned metadata must remain queryable throughout the module lifetime and be
+    // released with the module. The nested allocation makes shutdown leaks visible
+    // to the module API suite's Valgrind run.
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), &xsink);
+    info->setKeyValue("ownership_test", new QoreStringNode("module-owned metadata"), &xsink);
+    assert(!xsink);
+    mod_info.info = info.release();
 }
 
 static void cppapitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {

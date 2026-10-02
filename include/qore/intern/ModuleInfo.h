@@ -891,14 +891,14 @@ class QoreBuiltinModule : public QoreAbstractModule {
 public:
     //! Construct from QoreModuleInfo (API 2.0)
     DLLLOCAL QoreBuiltinModule(const char* cwd, const char* path, QoreModuleInfo& mod_info, const void* dlptr,
-            QoreHashNode* info = nullptr, unsigned load_opt = QMLO_NONE)
+            ReferenceHolder<QoreHashNode>& module_info, unsigned load_opt = QMLO_NONE)
             : QoreAbstractModule(cwd, path, mod_info.name.c_str(), mod_info.desc.c_str(),
                 mod_info.version.c_str(), mod_info.author.c_str(), mod_info.url.c_str(),
                 mod_info.license_str, load_opt),
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
-              info(info), dlptr(dlptr), feature(mod_info.name) {
+              info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name) {
     }
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
@@ -946,7 +946,9 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
-    QoreHashNode* info;
+    //! The sink outlives its metadata holder, including constructor failure cleanup.
+    ExceptionSink info_xsink;
+    ReferenceHolder<QoreHashNode> info;
     const void* dlptr;
     //! the feature name the module was initialized with; unlike QoreAbstractModule::name, it is never renamed
     const QoreString feature;

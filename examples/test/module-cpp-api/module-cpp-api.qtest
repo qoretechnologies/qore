@@ -23,7 +23,6 @@
 */
 
 %modern
-%enable-all-warnings
 
 # the "cppapiuser" test module consumes the "cppapitest" test module's C++ API and exposes the
 # result to Qore; both are built into the build tree by examples/test/module-cpp-api/CMakeLists.txt
@@ -31,9 +30,9 @@
 %requires cppapiuser
 # cppapisrc.qm is a Qore-language module with no C++ code at all
 %prepend-module-path "${SCRIPT_DIR}"
-%requires cppapisrc
+%requires cppapisrc.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
+%requires ../../../qlib/QUnit.qm
 
 %exec-class ModuleCppApiTest
 
@@ -57,7 +56,7 @@ class ModuleCppApiTest inherits QUnit::Test {
         const BadHeaderStructMinor = 9;
     }
 
-    constructor() : QUnit::Test("module-cpp-api", "1.0") {
+    constructor() : QUnit::Test("module-cpp-api", "1.0", \ARGV) {
         addTestCase("resolution", \resolutionTest());
         addTestCase("version negotiation", \versionTest());
         addTestCase("negative resolution", \negativeTest());
@@ -65,7 +64,20 @@ class ModuleCppApiTest inherits QUnit::Test {
         addTestCase("opaque handles", \handleTest());
         addTestCase("on-demand loading", \loadTest());
         addTestCase("namespace class handler", \classHandlerTest());
+        addTestCase("module metadata ownership", \metadataTest());
         set_return_value(main());
+    }
+
+    metadataTest() {
+        # Resolve first so this also covers metadata supplied during on-demand loading.
+        assertEq(ApiMajor, cpp_api_resolve("cppapitest", ApiMajor, ApiMinor).major);
+        list<hash<auto>> modules = select get_module_list(), $1.name == "cppapitest";
+        assertEq(1, modules.size());
+        assertEq("module-owned metadata", modules[0].info.ownership_test);
+        # A caller may retain or mutate its metadata copy without changing the module's copy.
+        modules[0].info.ownership_test = "caller copy";
+        list<hash<auto>> again = select get_module_list(), $1.name == "cppapitest";
+        assertEq("module-owned metadata", again[0].info.ownership_test);
     }
 
     resolutionTest() {

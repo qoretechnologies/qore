@@ -3910,6 +3910,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Binary module metadata returned through \c QoreModuleInfo::info is now released when the module is
+      destroyed. Module metadata queries retain their copy-on-write behavior.
+
     - Fixed TLS being unusable when the OpenSSL configuration file cannot be processed and sets
       <tt>config_diagnostics = 1</tt>, which happens for example when a distribution's configuration file is read by
       a differently patched OpenSSL build: the first TLS operation in the process failed with an error blaming the

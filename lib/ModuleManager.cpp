@@ -3442,7 +3442,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     load_guard->lock();
 
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, mod_info,
-        dlh ? dlh->release() : nullptr, info.release(), load_opt));
+        dlh ? dlh->release() : nullptr, info, load_opt));
     // record any child modules declared with %try-child-module; for AOT-compiled modules these are
     // delivered by the module description function, since the directive cannot be processed again when the
     // embedded source is parsed (see design/qore-module-structure.md "Child Modules")
