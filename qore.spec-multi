@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 15%{?dist}
+Release: 16%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -45,6 +45,9 @@ BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: git
 BuildRequires: python3 >= 3.11
+%if %{with tests}
+BuildRequires: gdb
+%endif
 %if 0%{?fedora}
 # Fedora 0.7.3 needs bounded descriptors and correctly excluded temporary files
 # when normalizing the full Qore documentation tree in OBS.
@@ -344,7 +347,7 @@ QORE_QPP_EXECUTABLE=$PWD/build/qpp QORE_QCC_EXECUTABLE=$PWD/build/qcc \
 cmake --build build --target linenoise-unicode-test -- %{?_smp_mflags}
 build/modules/linenoise/linenoise-unicode-test
 QORE_BINARY=$PWD/build/qore QORE_TEST_QMOD_DIR=$PWD/build/qlib-qmod \
-    PATH=$PWD/build:$PATH QORE_TEST_OPTS='-penable-debug' ./run_tests.sh -E -d qore
+    PATH=$PWD/build:$PATH QORE_TEST_OPTS='-penable-debug' ./run_tests.sh -E -v -d qore
 build/qore -b --enable-debug -l ml -e 'if (!ML::ml_get_capabilities().has_onnx) { throw "PACKAGE-TEST-ERROR", "ONNX is required"; }'
 build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
@@ -419,6 +422,10 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Fri Oct 02 2026 David Nichols <david@qore.org> - 3.0.0-16
+- Capture fresh timeout cores from OBS kernel paths and include debugger support.
+- Print test-case progress for native build failure diagnosis.
+
 * Fri Oct 02 2026 David Nichols <david@qore.org> - 3.0.0-15
 - Qualify complete HTTP charset coverage and the corrected HTTPClient assertion.
 - Include committed closure lifetime, closed HTTP connection and AOT test fixes.

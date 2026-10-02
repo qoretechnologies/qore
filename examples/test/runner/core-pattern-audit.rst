@@ -259,3 +259,12 @@ Scope: fresh-core discovery for GNU timeout and crashes; HTTP proxy test argumen
    * - 62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)
      - Pass
      - Nine runner regressions plus the five-case/38-assertion HTTPS proxy suite pass on all three target distributions. This repairs diagnostic collection; the native Fedora ARM timeout itself remains unresolved.
+
+RPM diagnostic support
+----------------------
+
+The complete checklist also covers RPM release 16: declare gdb for test-enabled
+builds and request per-case progress from the runner. Seven real RPM metadata
+checks pass on each target, including installed-provider validation. rpmspec
+expands the gdb requirement correctly and each target supplies the debugger.
+No runtime implementation, timeout budget or test selection changes.
