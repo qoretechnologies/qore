@@ -31,11 +31,16 @@ The project configuration uses:
     BinaryType: deb
     Repotype: debian
     PublishFlags: archsync noearlypublish nofailedpackages
-    Keep: libuv1t64
+    Keep: libuv1t64 node-acorn
 
-Keep preserves CMake's installed libuv runtime while building libuv itself.
-Without it, OBS removes the package's own output from the build environment
-and CMake fails to start. The library recipe and upstream tests stay intact.
+Keep preserves the build tools' installed runtime inputs while building their
+replacements. CMake needs libuv1t64 when building libuv itself; Debian's Node
+runtime needs node-acorn when building Acorn. Without these entries, OBS
+removes the package's own output from the build environment and the tool
+fails before compilation. Node reports "Cannot load externalized builtin"
+for Acorn, which nodepath hides behind misleading missing-dependency errors.
+Confirm both runtime inputs remain in the corresponding OBS _buildinfo.
+The source recipes and upstream tests stay intact.
 
 Debian dependency selection
 ---------------------------
