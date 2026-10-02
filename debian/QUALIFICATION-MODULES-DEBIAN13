@@ -132,7 +132,14 @@ PDFium is rebuilt for Debian ICU 76 on both CPUs. The Ubuntu binary packages
 need newer system libraries. The Debian rendering/text-extraction API tests,
 reproducibility and lifecycle checks pass. Oracle's Basic/SDK archive contents
 remain unchanged; native OCI client/SDK checks pass locally on both CPUs.
-These offline package checks do not repeat live database qualification.
+Fresh Debian Oracle live checks also pass on both CPUs against a disposable
+Oracle AI Database 26ai Free 23.26.2 server with client 23.26.3. Installed
+tiered/AST runs each cover 8 suites, 41 executed cases and 169 assertions,
+plus fresh compiled clients. The inaccessible legacy system-view LONG case
+skips; an independent fixture verifies LONG text larger than 16 KiB.
+See oracle-live-20261002/QUALIFICATION.json in the final evidence bundle.
+Other server/client combinations and optional server-restart/AQ demos are
+outside this result. The temporary database and credentials were removed.
 JNI passes runtime/compiler/Kotlin suites with the approved pinned-JAR policy.
 Its private JVM RUNPATH is restricted to the exact packaged OpenJDK 21 library.
 
@@ -162,8 +169,8 @@ point and imports Debian build flags before exporting custom flags. V8's
 full/repeat/architecture-only builds and final combined 36-module integration
 must pass after the Node dependency is qualified.
 
-Oracle dependency hosting approval, fresh Debian live-server tests and the
-optional V8 app catalogue remain separate gates. This checkpoint covers the
+Oracle dependency hosting approval and the optional V8 app catalogue remain
+separate gates. This checkpoint covers the
 native V8 bridge packaging plan, not the separately built app catalogue.
 
 No prior Debian upgrade/ABI baseline is available. Only the service scenarios
