@@ -1231,7 +1231,7 @@ public class DpqlParser {
             if (value[1] == '"') {
                 # Quoted field: @"field name"
                 # Remove @" prefix and " suffix
-                string content = substr(value, 2, value.size() - 3);
+                string content = substr(value, 2, -1);
                 # Process escape sequences (same handling as parseStringLiteral)
                 field_name = unescapeString(content);
             } else {
@@ -1601,8 +1601,8 @@ public class DpqlParser {
         hash<DpqlTokenInfo> tok = nextToken();
         string value = tok.value;
 
-        # Remove quotes and process escapes
-        string content = substr(value, 1, value.size() - 2);
+        # substr() counts characters; exclude the final quote without using a byte count.
+        string content = substr(value, 1, -1);
         return unescapeString(content);
     }
 
@@ -1610,43 +1610,36 @@ public class DpqlParser {
     /** Handles \\n, \\r, \\t, \\\\, \\', \\" and passes through other backslash sequences
     */
     private string unescapeString(string content) {
+        if (index(content, "\\") < 0) {
+            return content;
+        }
         string result = "";
-        int i = 0;
-        while (i < content.size()) {
-            if (content[i] == "\\") {
-                if (i + 1 < content.size()) {
-                    string next = content[i + 1];
-                    switch (next) {
-                        case "n":
-                            result += "\n";
-                            break;
-                        case "r":
-                            result += "\r";
-                            break;
-                        case "t":
-                            result += "\t";
-                            break;
-                        case "\\":
-                            result += "\\";
-                            break;
-                        case "'":
-                            result += "'";
-                            break;
-                        case '"':
-                            result += '"';
-                            break;
-                        default:
-                            result += next;
-                    }
-                    i += 2;
-                } else {
-                    result += "\\";
-                    ++i;
+        bool escaped = False;
+        # Iterate by character once, including multibyte characters after a backslash.
+        foreach string ch in (content.iterator()) {
+            if (escaped) {
+                switch (ch) {
+                    case "n":
+                        result += "\n";
+                        break;
+                    case "r":
+                        result += "\r";
+                        break;
+                    case "t":
+                        result += "\t";
+                        break;
+                    default:
+                        result += ch;
                 }
+                escaped = False;
+            } else if (ch == "\\") {
+                escaped = True;
             } else {
-                result += content[i];
-                ++i;
+                result += ch;
             }
+        }
+        if (escaped) {
+            result += "\\";
         }
         return result;
     }

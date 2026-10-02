@@ -44,6 +44,7 @@ Use double quotes for field names that:
 @"items[0]" == 1
 @"123field" == "value"
 @"user.email.address" == "literal.field.name"
+@"prénom" == "José"          # Unicode field names and string values
 ```
 
 ### Escape Sequences
@@ -219,10 +220,35 @@ ceil(@price)                 # Round up to integer
 trim(@name)                  # Remove leading/trailing whitespace
 ltrim(@name)                 # Remove leading whitespace
 rtrim(@name)                 # Remove trailing whitespace
+unaccent(@name)              # Replace accented characters with unaccented equivalents
+lwr(@name)                   # Convert to lower case
+upr(@name)                   # Convert to upper case
 concat(@first, " ", @last)   # Concatenate values as strings
 split(@csv, ",")             # Split by separator
 substr(@name, 0, 5)          # Substring extraction
 ```
+
+#### Accent-Insensitive Matching
+
+`unaccent(string)` returns a string using the same character mapping as Qore's
+`<string>::unaccent()`. It preserves case and the input encoding. Use function-call
+syntax in DPQL:
+
+```dpql
+unaccent(@name) == "Jose"                 # Matches "José" and "Jose"
+lwr(unaccent(@name)) == "jose"            # Also matches "JOSÉ"
+unaccent("příliš žluťoučký kůň") == "prilis zlutoucky kun"
+```
+
+For nullable fields, provide an empty-string default explicitly:
+
+```dpql
+lwr(unaccent(coalesce(@name, ""))) == "jose"
+```
+
+`unaccent` is included in `DataProviderGenericExpressions`. Availability in a
+provider-specific search depends on that provider's expression support; generic
+evaluation is described in the [integration guide](dpql-integration.md#accent-removal).
 
 ### Null Handling Functions
 

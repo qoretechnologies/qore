@@ -446,6 +446,30 @@ It handles three value types:
 - `hash<DataProviderExpression>` — recursively evaluates nested expressions
 - All other values are returned as-is (literals)
 
+### Accent Removal
+
+DPQL exposes `unaccent(value)` as the generic operator `DP_OP_UNACCENT`
+(canonical expression name `"unaccent"`). Its metadata declares one string argument
+and a string result. The implementation in `qlib/DataProvider/DataProviderExpressions.qc`
+evaluates the argument and calls `<string>::unaccent()`, so character mapping and
+encoding behavior are shared with Qore's string pseudo-method.
+
+```qore
+hash<DataProviderExpression> expr = DataProvider::parseDpqlExpression(
+    'lwr(unaccent(@name)) == "jose"');
+bool match = AbstractDataProvider::evalGenericExpression({"name": "JOSÉ"}, expr);
+# match == True
+```
+
+The default expression map, `DataProviderGenericExpressions`, supplies the metadata
+used for parsing, validation, serialization, and editor completions. A custom
+expression map must include `DP_OP_UNACCENT` to advertise this operator. Provider
+search capabilities still determine whether a predicate can run against that
+provider; generic evaluator support alone does not imply native server support.
+
+See [accent-insensitive matching](dpql-syntax.md#accent-insensitive-matching) for
+case handling and nullable-field examples.
+
 ### Streaming-Style Collection Operators
 
 DPQL collection operators such as `map`, `hash_map`, `select`, `first`, `any`, `all`,

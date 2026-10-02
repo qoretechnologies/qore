@@ -795,11 +795,10 @@ public class DpqlSerializer {
     #! Serializes a string with proper escaping
     private string serializeString(string value) {
         string result = '"';
-        for (int i = 0; i < value.size(); ++i) {
-            string c = value[i];
+        foreach string c in (value.iterator()) {
             switch (c) {
                 case '"':
-                    result += '\\"';
+                    result += '\"';
                     break;
                 case "\\":
                     result += "\\\\";

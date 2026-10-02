@@ -85,6 +85,10 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("parser operator tests", \parserOperatorTests());
         addTestCase("parser complex tests", \parserComplexTests());
         addTestCase("parser function tests", \parserFunctionTests());
+        addTestCase("unaccent function tests", \unaccentFunctionTests());
+        addTestCase("unaccent validation and completion tests", \unaccentValidationTests());
+        addTestCase("unaccent search tests", \unaccentSearchTests());
+        addTestCase("Unicode string and field tests", \unicodeStringTests());
         addTestCase("parser accessor tests", \parserAccessorTests());
         addTestCase("parser error tests", \parserErrorTests());
         addTestCase("serializer tests", \serializerTests());
@@ -961,6 +965,166 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("starts-with", exp.args[0].exp, "symbol resolves to internal name in complex expr");
             assertEq("email", exp.args[0].args[0].field);
             assertEq("admin", exp.args[0].args[1]);
+        }
+    }
+
+    unaccentFunctionTests() {
+        foreach string name in (("unaccent", "UNACCENT", "UnAcCeNt")) {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(name + "(@name)");
+            assertTrue(result.success);
+            assertEq(0, result.diagnostics.size());
+            assertEq(DP_OP_UNACCENT, result.expression.exp);
+            assertEq(1, result.expression.args.size());
+            assertEq("name", result.expression.args[0].field);
+            assertEq("unaccent(@name)", DataProvider::serializeDpqlExpression(result.expression));
+        }
+
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression("unaccent(@name)");
+        hash<string, string> samples = {
+            "café": "cafe",
+            "příliš žluťoučký kůň úpěl ďábelské ódy": "prilis zlutoucky kun upel dabelske ody",
+            "JOSÉ": "JOSE",
+            "plain ASCII 123": "plain ASCII 123",
+            "": "",
+        };
+        foreach string input in (keys samples) {
+            assertEq(samples{input}, AbstractDataProvider::evalGenericExpression({"name": input}, exp));
+        }
+
+        # DPQL shares the pseudo-method's input encoding and character mapping.
+        string encoded = convert_encoding("café", "ISO-8859-1");
+        string converted = AbstractDataProvider::evalGenericExpression({"name": encoded}, exp);
+        assertEq("cafe", converted);
+        assertEq(encoded.encoding(), converted.encoding());
+
+        exp = DataProvider::parseDpqlExpression('unaccent("café")');
+        assertEq("cafe", AbstractDataProvider::evalGenericExpression({}, exp));
+
+        string text = 'lwr(unaccent(@name)) == "jose"';
+        exp = DataProvider::parseDpqlExpression(text);
+        string serialized = DataProvider::serializeDpqlExpression(exp);
+        assertEq(text, serialized);
+        hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+        assertEq(exp, reparsed);
+        assertTrue(AbstractDataProvider::evalGenericExpression({"name": "JOSÉ"}, reparsed));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"name": "María"}, reparsed));
+
+        exp = DataProvider::parseDpqlExpression('lwr(unaccent(coalesce(@name, ""))) == "jose"');
+        assertTrue(AbstractDataProvider::evalGenericExpression({"name": "José"}, exp));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"name": NULL}, exp));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"name": NOTHING}, exp));
+    }
+
+    unaccentValidationTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+        DpqlParser parser(DataProviderGenericExpressions, fields);
+        hash<DpqlParseResult> result = parser.parseWithInfo("unaccent(@name)");
+        assertTrue(result.success);
+        assertEq(0, result.diagnostics.size());
+        *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
+        assertTrue(exists rtype);
+        assertEq("string", rtype.getName());
+        assertEq(0, DataProvider::validateDpqlExpression(
+            'lwr(unaccent(@name)) == "jose"', fields).size());
+
+        # Argument validation reports diagnostics, even when syntax is valid.
+        foreach string text in (("unaccent()", 'unaccent(@name, "extra")')) {
+            result = parser.parseWithInfo(text);
+            assertTrue(result.success);
+            assertEq(1, result.diagnostics.size());
+            assertEq("DPQL-W002", result.diagnostics[0].code);
+        }
+        result = parser.parseWithInfo("unaccent(@age)");
+        assertTrue(result.success);
+        assertEq(1, result.diagnostics.size());
+        assertEq("DPQL-W004", result.diagnostics[0].code);
+        assertThrows("DPQL-PARSE-ERROR", sub () {
+            DataProvider::parseDpqlExpression("unaccent(@name");
+        });
+
+        list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
+            "unacc", 5, fields, DataProviderGenericExpressions);
+        list<hash<DpqlCompletionItem>> matches = select items,
+            $1.kind == "function" && $1.label == "unaccent";
+        assertEq(1, matches.size());
+        assertEq("unaccent(", matches[0].insert_text);
+    }
+
+    unaccentSearchTests() {
+        list<hash<auto>> records = (
+            {"name": "José"},
+            {"name": "Jose"},
+            {"name": "JOSÉ"},
+            {"name": "María"},
+        );
+        DpqlTestDataProvider dp(records, getTestFields());
+        AbstractDataProviderRecordIterator i = dp.searchRecords('unaccent(@name) == "Jose"');
+        list<hash<auto>> matches = map $1, i;
+        assertEq((records[0], records[1]), matches);
+
+        i = dp.searchRecords('lwr(unaccent(@name)) == "jose"');
+        matches = map $1, i;
+        assertEq((records[0], records[1], records[2]), matches);
+        assertEq(NOTHING, dp.searchFirstRecord('unaccent(@name) == "Nobody"'));
+        assertEq("José", records[0].name, "filtering preserves the original accented value");
+    }
+
+    unicodeStringTests() {
+        # Both quote styles must strip exactly the delimiters for every UTF-8 width.
+        foreach string value in (("", "ascii", "café", "příliš", "日本語", "😀", "café\n日本語\t😀")) {
+            foreach string quote in (("'", '"')) {
+                string text = quote + value + quote;
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                assertTrue(result.success);
+                assertEq(0, result.diagnostics.size());
+                assertEq(value, AbstractDataProvider::evalGenericExpression({}, result.expression));
+                string serialized = DataProvider::serializeDpqlExpression(result.expression);
+                hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+                assertEq(value, AbstractDataProvider::evalGenericExpression({}, reparsed));
+            }
+        }
+
+        # Escape processing must keep Unicode characters and preserve the existing escape rules.
+        hash<string, string> escaped = {
+            "\"say \\\"hello\\\"\"": "say \"hello\"",
+            "\"café\\n日本語\\t😀\\r\"": "café\n日本語\t😀\r",
+            "\"café\\\\\"": "café\\",
+            "\"café\\\"😀\"": "café\"😀",
+            "\"\\é\\q\"": "éq",
+            "'café\\'😀'": "café'😀",
+        };
+        foreach string text in (keys escaped) {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(text);
+            assertEq(escaped{text}, AbstractDataProvider::evalGenericExpression({}, exp));
+            exp = DataProvider::parseDpqlExpression(DataProvider::serializeDpqlExpression(exp));
+            assertEq(escaped{text}, AbstractDataProvider::evalGenericExpression({}, exp));
+        }
+
+        foreach string field in (("café", "příjmení", "日本語😀")) {
+            string text = '@"' + field + '" == "José"';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(text);
+            assertEq(field, exp.args[0].field);
+            assertTrue(AbstractDataProvider::evalGenericExpression({field: "José"}, exp));
+            exp = DataProvider::parseDpqlExpression(DataProvider::serializeDpqlExpression(exp));
+            assertEq(field, exp.args[0].field);
+            assertTrue(AbstractDataProvider::evalGenericExpression({field: "José"}, exp));
+        }
+
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression("@\"café\\\"😀\" == \"yes\"");
+        assertEq('café"😀', exp.args[0].field);
+        assertTrue(AbstractDataProvider::evalGenericExpression({'café"😀': "yes"}, exp));
+
+        exp = DataProvider::parseDpqlExpression('unaccent(@data{"prénom"}) == "Jose"');
+        assertTrue(AbstractDataProvider::evalGenericExpression({"data": {"prénom": "José"}}, exp));
+
+        # Non-UTF-8 source is normalized by the tokenizer before the parser strips quotes.
+        exp = DataProvider::parseDpqlExpression(convert_encoding('unaccent("café")', "UTF-16LE"));
+        assertEq("cafe", AbstractDataProvider::evalGenericExpression({}, exp));
+
+        foreach string text in (('"café', '@"příjmení', "\"café\\\"")) {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
         }
     }
 
