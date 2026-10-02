@@ -4249,50 +4249,141 @@ upsert(row_hash);
     }
 
     #! returns a closure for performing bulk update operations
-    /** The closure accepts two hash arguments: set data and condition data, each as a hash-of-lists
-        (one list per column). Returns the number of rows affected.
+    /** The closure accepts two hash arguments: set data and condition data.  Each can be either a single-row hash
+        or a hash-of-lists (one list per column, every list having the same number of elements, one per row).
+        The closure returns the number of rows affected.
 
-        The default implementation iterates over rows using a prepared statement.
-        Drivers that support more efficient bulk operations (e.g. PostgreSQL UNNEST) can override this.
+        When the driver supports array binds (see @ref hasArrayBind()), the \c UPDATE statement is generated once
+        from \a example_set and \a example_cond when this method is called, and each call of the closure executes
+        it exactly once for all rows passed, binding every column's list of values as an array.  This requires
+        that every value in \a example_set and \a example_cond is a plain bind value: update operators, field
+        references, expressions, and where operators cannot be bound per row, and a @ref NULL or missing
+        condition value generates \c "is null" instead of a bind placeholder; in any of these cases the closure
+        falls back to executing one statement per row as for drivers without array bind support.  Because the
+        values are bound by column name, the keys of the set and condition data passed to an array-bind closure
+        must be exactly the keys of \a example_set and \a example_cond, otherwise an \c UPDATE-ERROR exception is
+        thrown.  The values of each list must be of a type that the driver can bind as an array.
+
+        Drivers without array bind support execute one statement per row: the statement is generated from the
+        first row passed and executed for the remaining rows with a prepared statement.
+
+        Drivers with a more efficient native bulk update (e.g. PostgreSQL \c UNNEST) override this method.
+
+        @par Example:
+        @code{.py}
+code<int(hash<auto>, hash<auto>)> bulk_update = table.getBulkUpdateClosure({"status": "done"}, {"id": 1});
+int rows = bulk_update({"status": ("done", "error")}, {"id": (1, 2)});
+        @endcode
 
         @param example_set an example single-row hash of SET column values
         @param example_cond an example single-row hash of WHERE condition values
-        @return a closure that accepts (hash<auto> set_data, hash<auto> cond_data) and returns the affected row count
+        @return a closure that accepts (hash<auto> set_data, hash<auto> cond_data) and returns the affected row
+        count
+
+        @throw UPDATE-ERROR (thrown by the closure) the keys of the set or condition data passed to an array-bind
+        closure do not match the keys of \a example_set or \a example_cond
+
+        @note a condition value of @ref NULL in a row bound to a statement generated with a bind placeholder for
+        that column matches no row, as with any SQL comparison with @ref NULL
 
         @see getBulkUpsertClosure()
     */
     code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
+        if (hasArrayBind()) {
+            *code<int(hash<auto>, hash<auto>)> array_update = getArrayBindUpdateClosure(example_set, example_cond);
+            if (array_update) {
+                return array_update;
+            }
+        }
+        return getPerRowBulkUpdateClosure();
+    }
+
+    #! Returns a closure executing a bulk update in a single array-bind statement, or NOTHING if the example rows cannot be array-bound
+    /** The statement is only usable when it binds exactly one placeholder per example value, in the order set
+        values then condition values; any other statement shape (update operators, expressions, where operators,
+        or an \c "is null" condition) returns NOTHING so that the caller can fall back to per-row execution.
+    */
+    private *code<int(hash<auto>, hash<auto>)> getArrayBindUpdateClosure(hash<auto> example_set,
+            hash<auto> example_cond) {
+        # every value must be a plain bind value: hashes are operators, field references, or expressions, and a
+        # missing or NULL condition is rendered as "is null" without a placeholder
+        foreach auto v in (example_set.iterator()) {
+            if (v.typeCode() == NT_HASH || v.typeCode() == NT_LIST) {
+                return;
+            }
+        }
+        foreach auto v in (example_cond.iterator()) {
+            if (v.typeCode() == NT_HASH || v.typeCode() == NT_LIST || v === NULL || !exists v) {
+                return;
+            }
+        }
+
+        hash<SqlCommandInfo> cmd = getUpdateSql(example_set, example_cond);
+        # the generated SQL must bind exactly one placeholder per example value
+        if (cmd.args.size() != (example_set.size() + example_cond.size())) {
+            return;
+        }
+
+        string sql = cmd.sql;
+        list<string> set_keys = keys example_set;
+        list<string> cond_keys = keys example_cond;
+
         return int sub (hash<auto> set_data, hash<auto> cond_data) {
-            # execute the first row to generate and prepare the SQL
-            *AbstractSQLStatement stmt;
-            bool first = True;
-            int uc = 0;
-            if (set_data.firstValue().typeCode() == NT_LIST) {
-                # hash-of-lists: iterate over rows
-                foreach hash<auto> row in (set_data.contextIterator()) {
-                    int row_idx = $#;
-                    hash<auto> row_cond = (map {$1.key: $1.value[row_idx]}, cond_data.pairIterator());
-                    if (first) {
-                        string sql;
-                        uc += self.update(row, row_cond, \sql);
-                        stmt = self.getStatement();
-                        stmt.prepare(sql);
-                        first = False;
-                    } else {
-                        stmt.execArgs(row.values() + row_cond.values());
-                        uc += stmt.affectedRows();
-                    }
+            checkBulkUpdateKeys("set", set_data, set_keys);
+            checkBulkUpdateKeys("condition", cond_data, cond_keys);
+
+            # an empty set of rows updates nothing; the driver cannot bind an empty array
+            auto first = set_data.firstValue();
+            if (first.typeCode() == NT_LIST && !first) {
+                return 0;
+            }
+
+            # bind by column name in the order the placeholders were generated: set values then condition values
+            list<auto> args = set_data{set_keys}.values() + cond_data{cond_keys}.values();
+            return ds.vexec(sql, args);
+        };
+    }
+
+    #! Verifies that the data passed to an array-bind bulk update closure has exactly the example keys
+    private checkBulkUpdateKeys(string desc, hash<auto> data, list<string> expected) {
+        if (data.size() == expected.size()) {
+            bool ok = True;
+            foreach string k in (expected) {
+                if (!data.hasKey(k)) {
+                    ok = False;
+                    break;
                 }
-            } else {
+            }
+            if (ok) {
+                return;
+            }
+        }
+        throw "UPDATE-ERROR", sprintf("%s: the %s columns passed to the bulk update closure (%y) do not match the "
+            "columns of the example row passed to AbstractTable::getBulkUpdateClosure() (%y)", getDesc(), desc,
+            keys data, expected);
+    }
+
+    #! Returns a bulk update closure executing one statement per row
+    private code<int(hash<auto>, hash<auto>)> getPerRowBulkUpdateClosure() {
+        return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            if (set_data.firstValue().typeCode() != NT_LIST) {
                 # single row
-                if (first) {
+                return self.update(set_data, cond_data);
+            }
+            # hash-of-lists: execute the first row to generate the SQL, then prepare it for the remaining rows
+            *AbstractSQLStatement stmt;
+            int uc = 0;
+            foreach hash<auto> row in (set_data.contextIterator()) {
+                int row_idx = $#;
+                hash<auto> row_cond = (map {$1.key: $1.value[row_idx]}, cond_data.pairIterator());
+                if (!stmt) {
                     string sql;
-                    uc += self.update(set_data, cond_data, \sql);
-                    stmt = self.getStatement();
+                    uc += self.update(row, row_cond, \sql);
+                    # get an unexecuted statement for the datasource; getStatement() would execute a select
+                    stmt = ds.getSQLStatement();
                     stmt.prepare(sql);
-                    first = False;
                 } else {
-                    stmt.execArgs(set_data.values() + cond_data.values());
+                    stmt.execArgs(row.values() + row_cond.values());
                     uc += stmt.affectedRows();
                 }
             }

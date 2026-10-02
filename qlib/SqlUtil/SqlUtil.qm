@@ -121,6 +121,12 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_2_0 SqlUtil v3.2.0
+    - @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executes a single
+      statement for all rows passed to the closure on drivers that support array binds, instead of one statement
+      per row; the columns passed to such a closure are bound by name and must match those of the example rows
+    - fixed the bulk update closure returned by
+      @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executing an
+      unrestricted \c select on the table in each call that updated more than one row row by row
     - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
       @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by BulkSqlUtil
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for

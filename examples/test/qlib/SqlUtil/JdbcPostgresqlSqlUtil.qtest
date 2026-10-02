@@ -162,6 +162,11 @@ class PgsqlTest inherits SqlTestBase {
         };
     }
 
+    #! PgsqlTable implements bulk updates natively with UNNEST when array binds are supported
+    private bool hasNativeBulkUpdate() {
+        return table.hasArrayBind();
+    }
+
     constructor() : SqlTestBase("PgsqlTest", "1.0", \ARGV, MyOpts) {
         Datasource ds;
         try {

@@ -2614,6 +2614,15 @@ while (*binary chunk = input.read(65536)) {
         SQLSTATE), and exception chain are preserved, so restart classification is unaffected
       - fixed an exception raised by an \c sql_callback for a list of SQL statements writing the failed statement to
         standard output; the statement is only passed to the \c error_callback
+      - @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" now executes
+        a single statement for all rows passed to the closure on drivers that support array binds, such as Oracle;
+        it executed one statement per row, so a bulk update of thousands of rows issued thousands of statements.
+        Example rows with update operators, expressions, or a @ref NULL condition still update row by row.  The
+        columns passed to an array-bind closure are bound by name and must be those of the example rows, otherwise
+        an \c UPDATE-ERROR exception is raised
+      - fixed the bulk update closure returned by
+        @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executing an
+        unrestricted \c select on the table in each call that updated more than one row row by row
 
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"

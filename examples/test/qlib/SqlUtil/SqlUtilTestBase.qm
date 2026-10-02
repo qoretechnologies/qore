@@ -1181,37 +1181,131 @@ public class SqlTestBase inherits QUnit::Test {
         # ensure we have insert_data rows in the table
         assertGt(1, insert_data.size(), "need at least 2 rows for bulk update test");
 
+        # array-bind drivers update all rows of a closure call with a single statement; other drivers issue one
+        # statement per row
+        int multi_row_statements = table.hasArrayBind() ? 1 : insert_data.size();
+
         # build hash-of-lists for SET and COND from insert_data
-        # SET: update id_ to a new value per row; COND: match on id
-        hash<auto> set_hash = {"id_": ()};
+        # SET: update id_ and null_f to new values per row, including a NULL; COND: match on id
+        hash<auto> set_hash = {"id_": (), "null_f": ()};
         hash<auto> cond_hash = {"id": ()};
         list<hash<auto>> expected;
         foreach hash<auto> row in (insert_data) {
             int new_id_ = row.id * 100;
+            auto new_null_f = $# ? sprintf("bulk-%d", row.id) : NULL;
             set_hash."id_" += (new_id_,);
+            set_hash."null_f" += (new_null_f,);
             cond_hash."id" += (row.id,);
-            expected += {"id": row.id, "id_": new_id_};
+            expected += {"id": row.id, "id_": new_id_, "null_f": new_null_f};
         }
 
         # get bulk update closure and execute with hash-of-lists
-        code bulk_update = table.getBulkUpdateClosure({"id_": expected[0]."id_"}, {"id": expected[0].id});
-        int rows_updated = bulk_update(set_hash, cond_hash);
+        code<int(hash<auto>, hash<auto>)> bulk_update = table.getBulkUpdateClosure(
+            {"id_": expected[1]."id_", "null_f": expected[1]."null_f"}, {"id": expected[1].id});
+        int statements;
+        int rows_updated = countBulkUpdateStatements(\statements, bulk_update, set_hash, cond_hash);
         assertEq(insert_data.size(), rows_updated, "bulk update row count");
-
-        # verify each row was updated with the correct value
-        foreach hash<auto> exp in (expected) {
-            *hash<auto> actual = table.selectRow({"columns": ("id", "id_"), "where": {"id": exp.id}});
-            assertEq(exp."id_", actual."id_", sprintf("bulk update row id=%d", exp.id));
-        }
+        assertEq(multi_row_statements, statements, "bulk update statement count");
+        checkBulkUpdateRows(expected, "bulk update");
 
         # test single-row path through the same closure
-        int single_rows = bulk_update({"id_": -1}, {"id": insert_data[0].id});
+        int single_rows = countBulkUpdateStatements(\statements, bulk_update, {"id_": -1, "null_f": "single"},
+            {"id": insert_data[0].id});
         assertEq(1, single_rows, "single row update via bulk closure");
-        assertEq(-1, table.selectRow({"columns": ("id_",), "where": {"id": insert_data[0].id}})."id_",
-            "single row update value");
+        assertEq(1, statements, "single row update statement count");
+        expected[0] += {"id_": -1, "null_f": "single"};
+        checkBulkUpdateRows(expected, "single row update");
+
+        # an empty set of rows updates nothing
+        assertEq(0, bulk_update({"id_": (), "null_f": ()}, {"id": ()}), "empty bulk update");
+        checkBulkUpdateRows(expected, "empty bulk update");
+
+        if (hasNativeBulkUpdate()) {
+            # the driver provides its own bulk update implementation; the remaining assertions test the generic
+            # array-bind implementation and its per-row fallback
+            map table.update($1 - "id", {"id": $1.id}), insert_data;
+            return;
+        }
+
+        # columns are bound by name: the data may list the columns in a different order than the example row
+        hash<auto> reordered_set = {"null_f": (), "id_": ()};
+        foreach hash<auto> row in (insert_data) {
+            reordered_set."null_f" += sprintf("reordered-%d", row.id);
+            reordered_set."id_" += row.id * 1000;
+        }
+        rows_updated = countBulkUpdateStatements(\statements, bulk_update, reordered_set, cond_hash);
+        assertEq(insert_data.size(), rows_updated, "reordered bulk update row count");
+        assertEq(multi_row_statements, statements, "reordered bulk update statement count");
+        expected = map $1 + {"id_": $1.id * 1000, "null_f": sprintf("reordered-%d", $1.id)}, expected;
+        checkBulkUpdateRows(expected, "reordered bulk update");
+
+        if (table.hasArrayBind()) {
+            # data columns that do not match the example row are rejected instead of being bound to the wrong
+            # placeholders
+            assertThrows("UPDATE-ERROR", "set columns", bulk_update, ({"id_": set_hash."id_"}, cond_hash));
+            assertThrows("UPDATE-ERROR", "set columns", bulk_update,
+                (set_hash + {"def_test2": set_hash."id_"}, cond_hash));
+            assertThrows("UPDATE-ERROR", "condition columns", bulk_update,
+                (set_hash, {"id_": cond_hash.id}));
+            assertThrows("UPDATE-ERROR", "condition columns", bulk_update,
+                (set_hash, cond_hash + {"id_": cond_hash.id}));
+            # nothing was updated by the rejected calls
+            checkBulkUpdateRows(expected, "rejected bulk update");
+        }
+
+        # a NULL example condition cannot be array-bound ("is null" has no placeholder): the closure falls back to
+        # one statement per row and still updates every row correctly
+        code<int(hash<auto>, hash<auto>)> fallback_update = table.getBulkUpdateClosure(
+            {"id_": 1, "null_f": "x"}, {"id": NULL});
+        rows_updated = countBulkUpdateStatements(\statements, fallback_update, set_hash, cond_hash);
+        assertEq(insert_data.size(), rows_updated, "fallback bulk update row count");
+        assertEq(insert_data.size(), statements, "fallback bulk update statement count");
+        expected = map $1 + {"id_": set_hash."id_"[$#], "null_f": set_hash."null_f"[$#]}, expected;
+        checkBulkUpdateRows(expected, "fallback bulk update");
+
+        # an update operator in the example row cannot be array-bound either; a single-row call works
+        code<int(hash<auto>, hash<auto>)> uop_update = table.getBulkUpdateClosure(
+            {"id_": uop_plus(1)}, {"id": insert_data[0].id});
+        rows_updated = countBulkUpdateStatements(\statements, uop_update, {"id_": uop_plus(1)},
+            {"id": insert_data[0].id});
+        assertEq(1, rows_updated, "update operator bulk update row count");
+        assertEq(1, statements, "update operator bulk update statement count");
+        expected[0]."id_" += 1;
+        checkBulkUpdateRows(expected, "update operator bulk update");
 
         # restore original data
         map table.update($1 - "id", {"id": $1.id}), insert_data;
+    }
+
+    #! returns True if the driver-specific table class provides its own bulk update implementation
+    private bool hasNativeBulkUpdate() {
+        return False;
+    }
+
+    #! executes a bulk update closure and returns the number of statements executed in the statements reference
+    private int countBulkUpdateStatements(reference<int> statements, code<int(hash<auto>, hash<auto>)> bulk_update,
+            hash<auto> set_data, hash<auto> cond_data) {
+        int count = 0;
+        AbstractDatasource ds = table.getDatasource();
+        ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> event) {
+            if (event.event == SQL_MUTATION_EVENT_PRE_EXEC) {
+                ++count;
+            }
+        });
+        on_exit ds.clearMutationObserver();
+
+        int rv = bulk_update(set_data, cond_data);
+        statements = count;
+        return rv;
+    }
+
+    #! verifies the id_ and null_f values of the given rows
+    private checkBulkUpdateRows(list<hash<auto>> expected, string desc) {
+        foreach hash<auto> exp in (expected) {
+            *hash<auto> actual = table.selectRow({"columns": ("id", "id_", "null_f"), "where": {"id": exp.id}});
+            assertEq(exp."id_", actual."id_", sprintf("%s: row id=%d id_", desc, exp.id));
+            assertEq(exp."null_f", actual."null_f", sprintf("%s: row id=%d null_f", desc, exp.id));
+        }
     }
 
     upsertTest() {
