@@ -63,6 +63,18 @@ def extract(archive, destination):
         source.extractall(destination, filter="data")
 
 
+def extract_component(archive, destination):
+    """Unpack one orig component without retaining its archive root name."""
+    if destination.exists() or destination.is_symlink():
+        raise RuntimeError(f"refusing to replace source component: {destination}")
+    with tempfile.TemporaryDirectory(dir=destination.parent, prefix="unpack-") as directory:
+        extract(archive, directory)
+        roots = list(Path(directory).iterdir())
+        if len(roots) != 1 or not roots[0].is_dir() or roots[0].is_symlink():
+            raise RuntimeError("expected one upstream component directory")
+        roots[0].rename(destination)
+
+
 def verify_signature(source, signature, archive):
     """Verify upstream signatures with the key from the pinned Debian packaging."""
     key = source / "debian/upstream/signing-key.asc"
@@ -130,8 +142,13 @@ def prepare(name, package, manifest, destination, cache, offline):
     output = destination / name
     if output.exists():
         raise RuntimeError(f"refusing to replace existing package workspace: {output}")
+    for component in package.get("orig_components", {}):
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9-]*", component):
+            raise ValueError(f"invalid orig component name: {component}")
     orig = download(package["orig_url"], package["orig_sha256"], cache, offline)
-    packaging = download(package["packaging_url"], package["packaging_sha256"], cache, offline)
+    own_recipe = name == "pyarrow"
+    packaging = (None if own_recipe else
+                 download(package["packaging_url"], package["packaging_sha256"], cache, offline))
     signature = (download(package["signature_url"], package["signature_sha256"], cache, offline)
                  if "signature_url" in package else None)
     output.mkdir()
@@ -142,13 +159,36 @@ def prepare(name, package, manifest, destination, cache, offline):
         if len(roots) != 1 or not roots[0].is_dir() or roots[0].is_symlink():
             raise RuntimeError(f"expected one upstream source directory: {name}")
         roots[0].rename(source)
-    extract(packaging, source)
+    if own_recipe:
+        shutil.copytree(CONFIG / name, source / "debian")
+    else:
+        extract(packaging, source)
     extension = ".tar.xz" if package["orig_url"].endswith(".tar.xz") else ".tar.gz"
     orig_path = output / f"{name}_{package['upstream_version']}.orig{extension}"
     shutil.copyfile(orig, orig_path)
+    for component, record in package.get("orig_components", {}).items():
+        archive = download(record["url"], record["sha256"], cache, offline)
+        extension = ".tar.xz" if record["url"].endswith(".tar.xz") else ".tar.gz"
+        component_path = output / f"{name}_{package['upstream_version']}.orig-{component}{extension}"
+        shutil.copyfile(archive, component_path)
+        extract_component(archive, source / component)
     if signature:
         verify_signature(source, signature, orig)
         shutil.copyfile(signature, str(orig_path) + ".asc")
+    if name in ("llhttp", "acorn"):
+        # Debian 13's dh-nodejs discovers watch-v4 components but does not
+        # understand watch-v5's Deb822 Component fields. Declare the pinned
+        # components through its supported, explicit configuration instead.
+        components = source / "debian/nodejs/additional_components"
+        entries = components.read_text().splitlines() if components.exists() else []
+        for component in package["orig_components"]:
+            metadata = source / component / "package.json"
+            if not json.loads(metadata.read_text()).get("name"):
+                raise RuntimeError(f"missing Node package name: {component}")
+            if component not in entries:
+                entries.append(component)
+        components.parent.mkdir(exist_ok=True)
+        components.write_text("\n".join(entries) + "\n")
     if name == "c-ares":
         cares_patch(source)
     elif name == "qore-tree-sitter":
@@ -160,6 +200,86 @@ def prepare(name, package, manifest, destination, cache, offline):
         symbols.write_text(lines[0] + "\n" + "\n".join(sorted(lines[1:])) + "\n")
     elif name == "qore-onnx":
         runtime_packaging(source, "qore-onnx")
+    elif name == "nodejs":
+        rules = source / "debian/rules"
+        updated = rules.read_text()
+        old = "esbuild --platform=node --bundle /usr/share/nodejs/minimatch/index.cjs"
+        if updated.count(old) != 1:
+            raise RuntimeError("expected one minimatch bundle entry point")
+        # Debian 13's minimatch exports index.js; newer packaging uses index.cjs.
+        # Resolve the installed CommonJS entry point through Node's package API.
+        updated = updated.replace(old,
+            "esbuild --platform=node --bundle \"$$(node -p 'require.resolve(\"minimatch\")')\"")
+        old = "export DEB_BUILD_MAINT_OPTIONS = hardening=+all\n"
+        if updated.count(old) != 1 or "include /usr/share/dpkg/buildflags.mk" in updated:
+            raise RuntimeError("unexpected Node build-flags setup")
+        # Its exported CFLAGS/CXXFLAGS otherwise suppress debhelper's defaults,
+        # losing both hardening and reproducible debug/source prefix maps.
+        rules.write_text(updated.replace(old, old +
+            "DPKG_EXPORT_BUILDFLAGS = 1\ninclude /usr/share/dpkg/buildflags.mk\n"))
+    elif name == "llhttp":
+        rules = source / "debian/rules"
+        updated = rules.read_text()
+        old = "\tln -sf /usr/share/nodejs/@types/markdown-it debian/tests/test_modules/mdgator/node_modules/@types/markdown-it"
+        if updated.count(old) != 1:
+            raise RuntimeError("expected one markdown-it type declaration link")
+        updated = updated.replace(old,
+            "\ttype_dir=$$(node -p 'require(\"path\").dirname(require.resolve(\"@types/markdown-it/package.json\", "
+            "{paths: [require.resolve(\"markdown-it\")]}))'); \\\n"
+            "\t\ttest -r \"$$type_dir/index.d.ts\"; \\\n"
+            "\t\tln -sf \"$$type_dir\" debian/tests/test_modules/mdgator/node_modules/@types/markdown-it")
+        old = "override_dh_auto_install-indep:\n\tdh_auto_install --buildsystem=nodejs"
+        if updated.count(old) != 1:
+            raise RuntimeError("expected one llhttp JavaScript install override")
+        # dh_install copies the generated release directory into libllhttp-source.
+        # The Node runtime needs the native library, not a new JS generator package.
+        updated = updated.replace(old, "override_dh_auto_install-indep:\n\t# Installed by libllhttp-source.install.")
+        rules.write_text(updated)
+        for filename in ("node-llhttp.install", "node-llhttp.examples"):
+            (source / "debian" / filename).unlink()
+        source_install = source / "debian/libllhttp-source.install"
+        if source_install.read_text().strip() != "release/* /usr/src/llhttp/":
+            raise RuntimeError("unexpected llhttp generated-source install manifest")
+        # A full build also writes a host-specific pkg-config file into release/.
+        # Architecture: all must contain only the portable generated sources.
+        source_install.write_text("".join(f"release/{path} /usr/src/llhttp/\n" for path in (
+            "CMakeLists.txt", "LICENSE", "README.md", "common.gypi", "include",
+            "libllhttp.map", "libllhttp.pc.in", "llhttp.gyp", "src")))
+        overrides = source / "debian/source/lintian-overrides"
+        if overrides.read_text().strip() != "llhttp: inconsistency-debian-watch":
+            raise RuntimeError("unexpected llhttp source Lintian overrides")
+        overrides.unlink()  # This retired tag is itself an error in current Lintian.
+        shutil.copytree(CONFIG / "llhttp/tests", source / "debian/tests", dirs_exist_ok=True)
+    elif name in ("ada-url", "libuv1"):
+        shutil.copytree(CONFIG / name / "tests", source / "debian/tests", dirs_exist_ok=True)
+        if name == "libuv1":
+            rules = source / "debian/rules"
+            updated = rules.read_text()
+            old = "\nDEB_BUILD_MAINT_OPTIONS=hardening=+all\n"
+            if updated.count(old) != 1:
+                raise RuntimeError("expected one unexported libuv hardening setting")
+            rules.write_text(updated.replace(old, "\nexport DEB_BUILD_MAINT_OPTIONS=hardening=+all\n"))
+    elif name == "cython":
+        rules = source / "debian/rules"
+        updated = rules.read_text()
+        ignored = 'echo "=============== $$P done (FAILURES IGNORED) ===============";'
+        if updated.count(ignored) != 1:
+            raise RuntimeError("expected one Cython test failure handler")
+        if not updated.startswith("#!/usr/bin/make -f\n"):
+            raise RuntimeError("expected Cython's executable makefile")
+        updated = updated.replace(ignored, 'echo "=============== $$P failed ==============="; exit 1;')
+        rules.write_text(updated.replace("#!/usr/bin/make -f\n", "#!/usr/bin/make -f\n"
+                                        "export DEB_BUILD_MAINT_OPTIONS = hardening=+all\n", 1))
+    elif name == "simdutf":
+        # CMake removes the tools' build RPATH during installation, after the
+        # linker has hashed it into their build IDs. Make that path relative
+        # so independent build directories produce identical tools/debug files.
+        rules = source / "debian/rules"
+        updated = rules.read_text()
+        old = "dh_auto_configure -- -DBUILD_SHARED_LIBS=ON"
+        if updated.count(old) != 1:
+            raise RuntimeError("expected one simdutf shared-library configuration")
+        rules.write_text(updated.replace(old, old + " -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON"))
     elif name == "boost1.90":
         # The engine's gcc bootstrap adds -s and ignores Debian's flags.
         # Its cxx toolset accepts complete caller-supplied flags without
@@ -270,6 +390,12 @@ def prepare(name, package, manifest, destination, cache, offline):
         added_patches.append("debian/patches/" + patch.name)
     control_path = source / "debian/control"
     control = control_path.read_text()
+    if name == "llhttp":
+        stanzas = control.split("\n\n")
+        selected = [s for s in stanzas if not s.startswith("Package: node-llhttp\n")]
+        if len(selected) != len(stanzas) - 1:
+            raise RuntimeError("expected one llhttp JavaScript package stanza")
+        control = "\n\n".join(selected)
     if name == "boost1.90":
         # g++ is already supplied by build-essential; an unversioned duplicate
         # in Build-Depends is rejected by Lintian.
@@ -308,7 +434,7 @@ def prepare(name, package, manifest, destination, cache, offline):
     entry += "".join(textwrap.fill(line, width=78, initial_indent="  * ", subsequent_indent="    ")
                      + "\n" for line in package["changes"])
     entry += f"\n -- {manifest['maintainer']}  {manifest['date']}\n\n"
-    changelog.write_text(entry + changelog.read_text())
+    changelog.write_text(entry + (changelog.read_text() if changelog.exists() else ""))
     provenance = {"package": name, "version": version, "ppa": manifest["ppa"], **package}
     (source / "debian/qore-backport.json").write_text(json.dumps(provenance, indent=2) + "\n")
     copyright_file = source / "debian/copyright"
@@ -318,9 +444,13 @@ def prepare(name, package, manifest, destination, cache, offline):
             " 2020-2026 James McCoy <jamessan@debian.org>\n",
             " 2020-2026 James McCoy <jamessan@debian.org>\n 2026 Qore Technologies, s.r.o.\n")
     license_name = package.get("metadata_license", "Expat" if "\nLicense: Expat\n" in copyright_text else "MIT")
+    if name in ("llhttp", "acorn"):
+        added_patches.append("debian/nodejs/additional_components")
+    if name == "llhttp":
+        added_patches += ["debian/tests/control", "debian/tests/runtime*"]
     if name == "qore-onnx":
         added_patches += ["debian/control", "debian/rules", "debian/source/format", "debian/tests/*"]
-    elif name == "nats.c":
+    elif name in ("nats.c", "ada-url", "libuv1"):
         added_patches.append("debian/tests/*")
     elif name == "onnxruntime":
         added_patches.append("debian/tests/coexistence.py")

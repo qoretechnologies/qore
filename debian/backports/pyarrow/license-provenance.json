@@ -1,0 +1,15 @@
+{
+  "docscrape.py": {
+    "upstream_license": "https://raw.githubusercontent.com/numpy/numpydoc/4ae1e00e72e522c126403c1814f0b99dc5978622/LICENSE.txt",
+    "sha256": "426a5a484480f57a295db48c2c04f47bb3274752dd82a7fd6541dfa2cb90f641"
+  },
+  "version.py": {
+    "upstream_revision": "https://github.com/pypa/packaging/tree/b5878c977206f60302536db969a8cef420853ade",
+    "selected_license": "Apache-2.0"
+  },
+  "includes/common.pxd": {
+    "source": "LICENSE.txt in the pinned PyArrow source distribution",
+    "copyright": "2019 Omer Ozarslan",
+    "license": "Expat"
+  }
+}

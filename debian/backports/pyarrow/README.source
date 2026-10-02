@@ -1,0 +1,31 @@
+Debian PyArrow package for Qore gRPC qualification
+=================================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Prepare this source with tools/prepare-debian-backports.py --suite trixie.
+The manifest pins the upstream PyPI source distribution by URL and SHA-256.
+The package builds offline through PEP 517 with Debian build dependencies,
+including the separately qualified Cython backport and Apache's Arrow 25
+library packages. No wheel or Arrow C++ library is downloaded during the build.
+
+The recipe retains the upstream private libarrow_python bridge libraries and
+their $ORIGIN runtime search path inside the Python package. They are not a
+public C++ ABI and do not replace the system Arrow libraries. Debian's compiler
+flags, hardening, automatic debug symbols and normal debhelper stripping apply.
+The CMake build directory stays below the source root so Debian's prefix maps
+also cover generated Cython C++ files and their debug information.
+
+The libcst build requirement is removed because upstream 25.0.1 disables the
+only feature that uses it: extracting docstrings for the unfinished type stubs.
+The patch does not disable any enabled upstream feature or runtime test.
+
+Array, compute, IPC, Acero, dataset, Parquet and loopback Flight checks run
+during the build and against the installed package. They are bounded, offline
+public API checks, not a claim that the full upstream suite has been run.
+CUDA, Gandiva, Substrait, ORC, HDFS, Parquet encryption and cloud integrations
+are outside this recipe's feature scope.
+
+Native amd64 and arm64 qualification, source/binary reproducibility, package
+lifecycle checks and downstream Flight interoperability must pass before
+publication. These recipes alone do not establish release qualification.

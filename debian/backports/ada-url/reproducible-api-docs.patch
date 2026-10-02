@@ -1,0 +1,74 @@
+Description: Generate valid API documentation without build directory paths
+ Doxygen interprets @example as a file command; use example paragraphs for
+ inline fenced samples. Exclude Debian staging and CMake build output from
+ the recursive source scan. Label the main page explicitly so Debian 13
+ Doxygen emits working relative search links instead of source file paths.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-02
+
+--- a/doxygen
++++ b/doxygen
+@@ -1033,7 +1033,7 @@
+ # Note that the wildcards are matched against the file with absolute path, so to
+ # exclude all test directories for example use the pattern */test/*
+ 
+-EXCLUDE_PATTERNS       = "*/test/*"
++EXCLUDE_PATTERNS       = "*/test/*" "*/obj-*/*" "*/debian/*"
+ 
+ # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
+ # (namespaces, classes, functions, etc.) that should be excluded from the
+@@ -1131,7 +1131,7 @@
+ # (index.html). This can be useful if you have a project on for instance GitHub
+ # and want to reuse the introduction page also for the doxygen output.
+ 
+-USE_MDFILE_AS_MAINPAGE = README.md
++USE_MDFILE_AS_MAINPAGE =
+ 
+ # The Fortran standard specifies that for fixed formatted Fortran code all
+ # characters from position 72 are to be considered as comment. A common
+--- a/include/ada.h
++++ b/include/ada.h
+@@ -11,7 +11,7 @@
+  * - URL pattern matching via `ada::url_pattern` (URLPattern API)
+  * - IDNA (Internationalized Domain Names) support
+  *
+- * @example
++ * @par Example
+  * ```cpp
+  * #include "ada.h"
+  *
+--- a/include/ada/implementation.h
++++ b/include/ada/implementation.h
+@@ -30,7 +30,7 @@
+  *
+  * @tparam result_type The URL type to return (default: `ada::url_aggregator`)
+  *
+- * @example
++ * @par Example
+  * ```cpp
+  * ada::result<ada::url_aggregator> result = ada::parse("https://example.com");
+  * if (result) {
+@@ -65,7 +65,7 @@
+  *
+  * @note The parser is fully compliant with the WHATWG URL Standard.
+  *
+- * @example
++ * @par Example
+  * ```cpp
+  * // Parse an absolute URL
+  * auto url = ada::parse("https://user:pass@example.com:8080/path?query#hash");
+@@ -111,7 +111,7 @@
+  *
+  * @return `true` if the URL can be parsed successfully, `false` otherwise.
+  *
+- * @example
++ * @par Example
+  * ```cpp
+  * // Check absolute URL
+  * bool valid = ada::can_parse("https://example.com"); // true
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-# Ada
++# Ada {#mainpage}

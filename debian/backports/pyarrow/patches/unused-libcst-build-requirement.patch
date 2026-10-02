@@ -1,0 +1,18 @@
+Description: Remove the unused build dependency for disabled stub docstrings
+ Arrow 25.0.1 comments out the only libcst consumer (GH-49831). Its CMake
+ configuration rejects PYARROW_REQUIRE_STUB_DOCSTRINGS while that feature
+ is disabled. The bindings and their tests do not require libcst.
+Author: Qore Technologies, s.r.o.
+Forwarded: not-needed
+Last-Update: 2026-10-02
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -18,8 +18,6 @@
+ requires = [
+     "scikit-build-core",
+     "cython >= 3.1",
+-    # Needed for build-time stub docstring extraction
+-    "libcst>=1.8.6",
+     "numpy>=1.25",
+     "setuptools_scm[toml]>=8",
+ ]

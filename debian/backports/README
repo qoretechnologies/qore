@@ -36,8 +36,9 @@ The trixie target additionally prepares qore-onnx 1.20.0 and ONNX Runtime
 1.23.2+dfsg from Debian's repacked source archives, pinned by SHA-256 from
 authenticated Debian source metadata. Ubuntu uses its archive's ONNX packages.
 It also prepares Boost 1.90 and NATS C 3.13 for the independent process and
-nats modules. These four recipes are Debian-only; selecting them for resolute
-fails before preparing a source workspace.
+nats modules. Debian-only pins also cover the Python and Node dependencies
+described below. Selecting these additional recipes for resolute fails before
+preparing a source workspace.
 ONNX Runtime derives its Python library links from VERSION_NUMBER instead of
 a stale hard-coded version. The ABI-version generator writes SOVERSION_NUMBER
 so an in-source build cannot overwrite the upstream release version.
@@ -121,6 +122,66 @@ reproducibility, ELF hardening, matching detached debug symbols and installed
 tests before accepting the downstream modules. Keep the source and dependency
 maintenance records with the binary artifacts; these recipes do not establish
 a published Debian archive or a final Qore release.
+
+Python and Node dependencies
+----------------------------
+
+The gRPC module's Flight interoperability tests require PyArrow. The trixie
+recipes build Cython 3.1.6 and PyArrow 25.0.1 from pinned source archives.
+PyArrow uses the separately installed Arrow 25 C++ libraries, including
+compute, Acero, datasets, Flight and Parquet. It does not bundle a second Arrow
+runtime. Its private Python bridge libraries remain inside the Python package;
+see pyarrow/README.source for feature scope, licensing and qualification.
+Cython's upstream Debian recipe must propagate test failures and export full
+hardening flags. PyArrow declares both the NumPy runtime and development build
+dependencies and generates the NumPy ABI dependency with dh_numpy3. Its CMake
+build tree stays below the source directory so Debian's prefix maps cover
+generated Cython sources as well as upstream files.
+
+The V8 module needs Node 22 and TypeScript 5.2. The Debian-only pins are:
+
+  nodejs 22.22.2, node-typescript 5.2.2, simdjson 4.6.11, simdutf 8.2.0,
+  ada-url 3.4.4, libuv1 1.52.1, acorn 8.17.0, llhttp 9.3.0 and
+  node-rollup-plugin-buble 1.0.3.
+
+These retain the pinned Debian patches and library packaging. Orig components
+are downloaded and verified separately, then unpacked beneath their named
+source directories. Debian 13's dh-nodejs does not discover watch-v5 component
+fields, so the Acorn and llhttp recipes explicitly list every pinned component
+in debian/nodejs/additional_components. This ensures the generator dependencies
+and Acorn plugins are built and installed rather than silently omitted.
+
+Build simdjson and simdutf before Ada, and the Rollup Buble plugin before Acorn.
+llhttp uses Debian's two-stage bootstrap: first build the architecture-independent
+libllhttp-source package with dpkg-buildpackage -A, install it in a fresh builder,
+then perform the full build. Its parser generator and upstream parser tests run
+offline. This backport provides the C runtime, development files and generated
+sources; it does not publish a replacement node-llhttp JavaScript package.
+Its source package manifest excludes the host-specific pkg-config file produced
+by native CMake builds, keeping Architecture: all payloads identical on both CPUs.
+Node can therefore use Debian 13's existing Undici package. Once the native
+dependencies are available, build Node and then the V8 module with TypeScript.
+Node resolves minimatch's installed CommonJS entry point when bundling it,
+supporting Debian 13's index.js layout as well as newer index.cjs layouts.
+Its rules import dpkg build flags before adding and exporting custom options,
+preserving hardening and reproducible source/debug path mappings.
+Node 22 changes the Node module ABI and replaces the distribution's Node runtime;
+this qualification does not establish compatibility for arbitrary third-party
+Node addons. Final deployment must account for other Node users on the system.
+
+simdutf uses relative build RPATHs so linker build IDs do not contain temporary
+build directories. libuv exports its hardening settings to dpkg-buildflags.
+Ada's documentation excludes generated build files, labels inline examples
+correctly and names its Markdown main page explicitly, producing reproducible
+documentation with working relative search links. Installed C API tests cover
+libuv scheduling and file I/O, Ada URL normalization and relative resolution,
+and llhttp incremental requests, chunked responses and invalid input.
+
+These are source preparation recipes, not a qualification claim. Each candidate
+still requires its own source/binary reproduction, Lintian, applicable ELF and
+debug checks, installed tests and lifecycle checks on both native CPUs. Keep
+bootstrap artifacts separate from publishable packages and verify that their
+generated C sources match those regenerated by the final llhttp build.
 
 c-ares patch maintenance
 ------------------------

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+set -eu
+unset PYTHONPATH PYTHONHOME LD_LIBRARY_PATH LD_PRELOAD
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+trap 'exit 1' HUP INT TERM
+cp debian/tests/test_runtime.py "$work/"
+cd "$work"
+timeout 120 python3 -I -m pytest -v test_runtime.py

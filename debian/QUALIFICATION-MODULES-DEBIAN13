@@ -1,12 +1,12 @@
-Debian 13 independent module qualification: 2026-10-01
+Debian 13 independent module qualification: 2026-10-02
 ====================================================
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Result: PASS for development snapshots from 31 of the 36 independent module
+Result: PASS for development snapshots from 35 of the 36 independent module
 repositories on native amd64 and arm64 (aarch64 Linux on hoppy). This comprises
 UUID from QUALIFICATION-DEBIAN13, the original 24-module batch below, and the
-six-module dependency chain described in the additional qualification section.
+six-module dependency chain and four additional modules described below.
 These are unsigned local packages, not final releases or a published archive.
 
 Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13.
@@ -23,6 +23,7 @@ amqp, cairo, fsevent, geos, git, imagemagick, kalman, magic, msgpack, mysql,
 ncurses, odbc, openldap, pgsql, sqlite3, ssh, ssh2, sybase (freetds), sysconf,
 tar, treesitter, vss, zip and zmq. UUID was qualified with the core SDK earlier.
 The additional chain qualifies process, xml, python, xmlsec, proj and nats.
+The final batch has also qualified grpc, jni, pdf and oracle individually.
 Bundled modules, including JSON and YAML, remain part of Qore's packages.
 
 Original 24-module batch checks
@@ -113,15 +114,57 @@ libxml2 orig component, prepared by its existing pinned-source repacker. This
 required no XML code change. Original failures and corrected candidates are
 retained.
 
+Final dependency batch: four completed modules
+---------------------------------------------
+
+Evidence bundle: qore-debian13-final-modules-20261001. Its
+PARTIAL-QUALIFICATION.json records grpc, jni, pdf and oracle, their exact source
+commits and source/binary hashes, all 71 audit checks and module push records.
+On each CPU, each module passes two full offline builds, exact reproduction,
+a third clean architecture-only build, source/binary Lintian, applicable
+hardening/debug/AOT checks, installed suites and SDK-free package lifecycle
+checks. All architecture-independent module packages match across CPUs.
+This adds 16 full builds, 8 architecture-only builds, 28 first-build binary
+artifacts and 18 installed suite executions. Final combined integration with
+these four modules and V8 remains pending; the combined result above covers 31.
+
+PDFium is rebuilt for Debian ICU 76 on both CPUs. The Ubuntu binary packages
+need newer system libraries. The Debian rendering/text-extraction API tests,
+reproducibility and lifecycle checks pass. Oracle's Basic/SDK archive contents
+remain unchanged; native OCI client/SDK checks pass locally on both CPUs.
+These offline package checks do not repeat live database qualification.
+JNI passes runtime/compiler/Kotlin suites with the approved pinned-JAR policy.
+Its private JVM RUNPATH is restricted to the exact packaged OpenJDK 21 library.
+
+Ten additional source packages pass two native offline builds per CPU,
+exact binary reproducibility, source/binary Lintian, applicable hardening/debug
+checks, installed tests and purge/autoremove/reinstall with repeated tests:
+Cython, PyArrow, simdjson, simdutf, Ada URL, libuv, Acorn, llhttp, TypeScript
+and Rollup Buble. Their portable Architecture: all packages match across CPUs.
+PyArrow uses system Arrow 25 libraries; array/compute/IPC, dataset/Parquet,
+Acero and loopback Flight checks pass, followed by gRPC's Flight interoperability
+suite. This is not a claim of full upstream PyArrow test coverage.
+
+Qualification corrected missing hardening flags, random Cython build paths,
+absolute paths in Ada documentation, dh-nodejs watch-v5 component discovery,
+and llhttp test typings. llhttp's native-library/source scope avoids replacing
+Debian's JavaScript generator package. Its portable source manifest excludes
+host-specific pkg-config output, and its generated sources match the bootstrap
+on both CPUs. See debian/backports/README and the dependency evidence reports.
+
 Remaining work
 --------------
 
-Five repositories still need Debian qualification: grpc, pdf, v8, jni and
-oracle. Remaining dependency work includes PyArrow, PDFium and the Node/V8
-stack. Boost 1.90, NATS C and the process/XML/Python/XMLSec/PROJ chain pass the
-additional qualification above.
-JNI retains the approved pinned-JAR policy. Oracle dependency hosting and
-the optional V8 app catalogue's redistribution review remain separate gates.
+V8 is the remaining repository. Node 22's independent source preparation and
+source Lintian pass; native builds and subsequent installed/reproducibility
+checks remain in progress. Its recipe resolves minimatch's installed entry
+point and imports Debian build flags before exporting custom flags. V8's
+full/repeat/architecture-only builds and final combined 36-module integration
+must pass after the Node dependency is qualified.
+
+Oracle dependency hosting approval, fresh Debian live-server tests and the
+optional V8 app catalogue remain separate gates. This checkpoint covers the
+native V8 bridge packaging plan, not the separately built app catalogue.
 
 No prior Debian upgrade/ABI baseline is available. Only the service scenarios
 exercised by package tests are qualified. Final ABI/release freeze, acceptance
