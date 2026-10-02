@@ -29,7 +29,8 @@
         },
         "node-rollup-plugin-buble": {
           "upstream_version": "1.0.3+ds1",
-          "revision": "2~qore1",
+          "revision": "2~qore2",
+          "date": "Fri, 02 Oct 2026 13:45:00 +0000",
           "orig_url": "https://deb.debian.org/debian/pool/main/n/node-rollup-plugin-buble/node-rollup-plugin-buble_1.0.3+ds1.orig.tar.xz",
           "orig_sha256": "59f3276c05e5bd808b1adf089d14dcd11861e02bcacf7f57df69dff69abd978e",
           "packaging_url": "https://deb.debian.org/debian/pool/main/n/node-rollup-plugin-buble/node-rollup-plugin-buble_1.0.3+ds1-2.debian.tar.xz",
@@ -37,7 +38,8 @@
           "metadata_license": "Expat",
           "changes": [
             "Backport node-rollup-plugin-buble to {distribution_name} for Qore module qualification.",
-            "Retain Debian source patches, library packaging and tests."
+            "Drop the TypeScript 6-only configuration patch for the supported 4.9 and 5.2 compilers.",
+            "Retain the remaining Debian patches, library packaging and tests."
           ]
         },
         "nodejs": {

@@ -158,6 +158,10 @@ in debian/nodejs/additional_components. This ensures the generator dependencies
 and Acorn plugins are built and installed rather than silently omitted.
 
 Build simdjson and simdutf before Ada, and the Rollup Buble plugin before Acorn.
+The Buble backport excludes Debian unstable's TypeScript 6-only configuration
+patch and bounds its compiler dependency below version 6. Qualification covers
+both stable's TypeScript 4.9 and the project's 5.2 backport; all upstream tests
+remain enabled in both environments.
 llhttp uses Debian's two-stage bootstrap: first build the architecture-independent
 libllhttp-source package with dpkg-buildpackage -A, install it in a fresh builder,
 then perform the full build. Its parser generator and upstream parser tests run

@@ -200,6 +200,24 @@ def prepare(name, package, manifest, destination, cache, offline):
         symbols.write_text(lines[0] + "\n" + "\n".join(sorted(lines[1:])) + "\n")
     elif name == "qore-onnx":
         runtime_packaging(source, "qore-onnx")
+    elif name == "node-rollup-plugin-buble":
+        # The pinned unstable recipe suppresses a TypeScript 6 deprecation.
+        # TypeScript 5.2 rejects that value; neither it nor stable's 4.9 needs
+        # the suppression. Retain the other Debian fixes and all tests.
+        series = source / "debian/patches/series"
+        entries = series.read_text().splitlines()
+        if entries.count("ts6-tsconfig.patch") != 1:
+            raise RuntimeError("expected one TypeScript 6 compatibility patch")
+        entries.remove("ts6-tsconfig.patch")
+        series.write_text("\n".join(entries) + "\n")
+        (series.parent / "ts6-tsconfig.patch").unlink()
+        control = source / "debian/control"
+        original = control.read_text()
+        dependency = " , node-typescript\n"
+        if original.count(dependency) != 1:
+            raise RuntimeError("unexpected Rollup TypeScript dependency")
+        control.write_text(original.replace(dependency,
+            " , node-typescript (>= 4.9)\n , node-typescript (<< 6~)\n"))
     elif name == "nodejs":
         rules = source / "debian/rules"
         updated = rules.read_text()
