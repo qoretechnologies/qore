@@ -48,6 +48,13 @@ preparing a source workspace.
 ONNX Runtime derives its Python library links from VERSION_NUMBER instead of
 a stale hard-coded version. The ABI-version generator writes SOVERSION_NUMBER
 so an in-source build cannot overwrite the upstream release version.
+The recipe disables CMake RPATH generation for both build and installed files.
+Its patch makes the runtime, Python, DNNL and executable linker settings honor
+CMAKE_SKIP_RPATH; upstream adds explicit linker flags that bypass this option.
+Python extensions are copied from the build tree by pybuild, so disabling only
+install RPATH would leave their search paths embedded. Runtime and provider
+libraries use the standard multiarch loader directories; installed tests check
+provider loading and Python imports without a private runtime search path.
 
 Debian unstable's ONNX 1.20 library has a different protobuf ABI from Debian
 13's ONNX 1.17 and replaces the libraries used by stable PyTorch. The qore-onnx

@@ -330,13 +330,14 @@
         },
         "onnxruntime": {
           "upstream_version": "1.23.2+dfsg",
-          "revision": "6.1~qore1",
-          "extra_patches": ["onnxruntime/private-namespace.patch", "onnxruntime/preserve-upstream-version.patch", "onnxruntime/gemm-dynamic-batch.patch"],
+          "revision": "6.1~qore2",
+          "date": "Fri, 02 Oct 2026 16:00:00 +0000",
+          "extra_patches": ["onnxruntime/private-namespace.patch", "onnxruntime/preserve-upstream-version.patch", "onnxruntime/gemm-dynamic-batch.patch", "onnxruntime/honor-skip-rpath.patch"],
           "orig_url": "https://deb.debian.org/debian/pool/main/o/onnxruntime/onnxruntime_1.23.2+dfsg.orig.tar.xz",
           "orig_sha256": "c601bdc18b542435e5a0149ca18dc353106e0ed87a38d96ed759f1a82a52ef43",
           "packaging_url": "https://deb.debian.org/debian/pool/main/o/onnxruntime/onnxruntime_1.23.2+dfsg-6.1.debian.tar.xz",
           "packaging_sha256": "140fe4766a37f1a57451bef8f21174ae43ff206d0dc80e467f52e6e9694c37f9",
-          "changes": ["Backport ONNX Runtime 1.23.2 to {distribution_name} for Qore's ML module.", "Retain Debian's repack and CPU execution providers, linking the private static Qore ONNX dependency."]
+          "changes": ["Backport ONNX Runtime 1.23.2 to {distribution_name} for Qore's ML module.", "Retain Debian's repack and CPU execution providers, linking the private static Qore ONNX dependency.", "Disable build and install RPATH for public libraries, providers and Python extensions."]
         }
       }
     }

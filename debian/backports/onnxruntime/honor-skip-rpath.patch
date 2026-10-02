@@ -1,0 +1,49 @@
+Description: Honor CMAKE_SKIP_RPATH in Linux runtime and provider linker options
+ Explicit linker options bypass CMake's RPATH policy. Respect the standard
+ option for the shared runtime, Python extension, DNNL provider and executables.
+ Use target_link_options for DNNL so CMake escapes $ORIGIN consistently with
+ the runtime and Python extension when RPATH is enabled.
+Author: Qore Technologies, s.r.o.
+Copyright: 2026 Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-02
+
+--- a/cmake/onnxruntime.cmake
++++ b/cmake/onnxruntime.cmake
+@@ -127,5 +127,5 @@
+       onnxruntime_add_shared_library(onnxruntime ${CMAKE_CURRENT_BINARY_DIR}/generated_source.c )
+     endif()
+-    if(NOT APPLE)
++    if(NOT APPLE AND NOT CMAKE_SKIP_RPATH)
+       include(CheckLinkerFlag)
+       check_linker_flag(CXX "LINKER:-rpath=\$ORIGIN" LINKER_SUPPORT_RPATH)
+--- a/cmake/onnxruntime_framework.cmake
++++ b/cmake/onnxruntime_framework.cmake
+@@ -100,5 +100,5 @@
+ # But our test files don't use the shared library so this must be set for them.
+ # For Win32 it generates an absolute path for shared providers based on the location of the executable/onnxruntime.dll
+-if (UNIX AND NOT APPLE AND NOT onnxruntime_MINIMAL_BUILD AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten" AND NOT CMAKE_SYSTEM_NAME MATCHES "AIX")
++if (UNIX AND NOT APPLE AND NOT CMAKE_SKIP_RPATH AND NOT onnxruntime_MINIMAL_BUILD AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten" AND NOT CMAKE_SYSTEM_NAME MATCHES "AIX")
+   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
+ endif()
+--- a/cmake/onnxruntime_python.cmake
++++ b/cmake/onnxruntime_python.cmake
+@@ -243,5 +243,5 @@
+     INSTALL_RPATH_USE_LINK_PATH FALSE)
+ else()
+-  if (NOT CMAKE_SYSTEM_NAME MATCHES "AIX")
++  if (NOT CMAKE_SYSTEM_NAME MATCHES "AIX" AND NOT CMAKE_SKIP_RPATH)
+      target_link_options(onnxruntime_pybind11_state PRIVATE "LINKER:-rpath=\$ORIGIN")
+   endif()
+--- a/cmake/onnxruntime_providers_dnnl.cmake
++++ b/cmake/onnxruntime_providers_dnnl.cmake
+@@ -43,5 +43,8 @@
+       INSTALL_RPATH_USE_LINK_PATH FALSE)
+   elseif(UNIX)
+-    set_property(TARGET onnxruntime_providers_dnnl APPEND_STRING PROPERTY LINK_FLAGS "-Xlinker --version-script=${ONNXRUNTIME_ROOT}/core/providers/dnnl/version_script.lds -Xlinker --gc-sections -Xlinker -rpath=\$ORIGIN")
++    set_property(TARGET onnxruntime_providers_dnnl APPEND_STRING PROPERTY LINK_FLAGS "-Xlinker --version-script=${ONNXRUNTIME_ROOT}/core/providers/dnnl/version_script.lds -Xlinker --gc-sections")
++    if(NOT CMAKE_SKIP_RPATH)
++      target_link_options(onnxruntime_providers_dnnl PRIVATE "LINKER:-rpath=\$ORIGIN")
++    endif()
+   elseif(WIN32)
+     set_property(TARGET onnxruntime_providers_dnnl APPEND_STRING PROPERTY LINK_FLAGS "-DEF:${ONNXRUNTIME_ROOT}/core/providers/dnnl/symbols.def")

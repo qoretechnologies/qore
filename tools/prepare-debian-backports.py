@@ -380,7 +380,10 @@ def prepare(name, package, manifest, destination, cache, offline):
             "\tdh_auto_configure -- \\\n",
             "\tdh_auto_configure -- \\\n"
             "\t\t-Donnx_DIR=/usr/lib/$(DEB_HOST_MULTIARCH)/qore-onnx/cmake/ONNX \\\n"
-            "\t\t-DFETCHCONTENT_FULLY_DISCONNECTED=ON \\\n", 1)
+            "\t\t-DFETCHCONTENT_FULLY_DISCONNECTED=ON \\\n"
+            # Python extensions are copied from the build tree by pybuild;
+            # disabling only install RPATH would not cover those libraries.
+            "\t\t-DCMAKE_SKIP_RPATH=ON \\\n", 1)
         # Track the statically incorporated source for rebuilds and carry its
         # complete copyright/license record in every incorporating binary.
         updated += (
