@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 16%{?dist}
+Release: 17%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -422,6 +422,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Fri Oct 02 2026 David Nichols <david@qore.org> - 3.0.0-17
+- Include binary module metadata ownership cleanup and its regression test.
+
 * Fri Oct 02 2026 David Nichols <david@qore.org> - 3.0.0-16
 - Capture fresh timeout cores from OBS kernel paths and include debugger support.
 - Print test-case progress for native build failure diagnosis.
