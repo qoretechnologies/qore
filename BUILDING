@@ -237,3 +237,16 @@ The cache invalidation optimization is not safe on platforms without an atomic r
 Modules
 -------
 Note that binary modules are delivered separately from the qore library, see the file README-MODULES for more information.
+
+Test timeout diagnostics
+------------------------
+
+The test runner aborts timed-out tests with GNU timeout and uses gdb, when
+available, to report thread stacks. It recognizes absolute Linux core-file
+patterns with fixed directory paths, including OBS's /.build/cores/%p. Only
+core files newer than the current test are considered. Piped core handlers
+remain the responsibility of the host crash collector.
+
+Run the isolated runner regression tests with:
+
+    python3 -B -W error examples/test/runner/test_timeout_diagnostics.py -v

@@ -329,6 +329,57 @@ if [ -f /proc/sys/kernel/core_pattern ]; then
     fi
 fi
 
+# OBS keeps core files under an absolute kernel pattern such as /.build/cores/%p.
+# Derive a find(1) name pattern without eval, and only inspect files newer than
+# the current test. Never mistake an earlier test's core for the current failure.
+SYSTEM_CORE_DIR=""
+SYSTEM_CORE_NAME=""
+case "$KERN_CORE_PATTERN" in
+    /*)
+        SYSTEM_CORE_DIR=$(dirname "$KERN_CORE_PATTERN")
+        case "$SYSTEM_CORE_DIR" in
+            *%*) SYSTEM_CORE_DIR="" ;; # Dynamic directory components cannot be resolved here.
+            *)
+                SYSTEM_CORE_NAME=$(basename "$KERN_CORE_PATTERN" | awk '
+                    {
+                        for (i = 1; i <= length($0); ++i) {
+                            c = substr($0, i, 1)
+                            if (c == "%" && i < length($0)) {
+                                n = substr($0, i + 1, 1)
+                                if (n == "%") { printf "%%"; ++i; continue }
+                                if (n ~ /[[:alpha:]]/) { printf "*"; ++i; continue }
+                            }
+                            if (c == "*" || c == "?" || c == "[" || c == "]" || c == "\\") {
+                                printf "\\"
+                            }
+                            printf "%s", c
+                        }
+                    }')
+                ;;
+        esac
+        ;;
+esac
+
+find_test_core() {
+    CORE_FILE=""
+    for CORE_SEARCH_DIR in "$CORE_DIR_ABS" "$SYSTEM_CORE_DIR" . /tmp /var/lib/apport/coredump /var/crash; do
+        if [ -z "$CORE_SEARCH_DIR" ] || [ ! -d "$CORE_SEARCH_DIR" ]; then
+            continue
+        fi
+        CORE_SEARCH_NAME='core*'
+        if [ "$CORE_SEARCH_DIR" = "$SYSTEM_CORE_DIR" ]; then
+            CORE_SEARCH_NAME=$SYSTEM_CORE_NAME
+        elif [ "$CORE_SEARCH_DIR" = /var/crash ]; then
+            CORE_SEARCH_NAME='*.crash'
+        fi
+        CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" \
+            -newer "$TEST_START_MARKER" -print 2>/dev/null | head -1)
+        if [ -n "$CORE_FILE" ]; then
+            break
+        fi
+    done
+}
+
 # Print info about used variables etc.
 echo "Using qore: $QORE"
 echo "Using libqore: $LIBQORE"
@@ -428,6 +479,10 @@ if [ -n "$TIMEOUT_CMD" ] && $TIMEOUT_CMD --version 2>/dev/null | grep -q GNU; th
     TIMEOUT_SIGNAL_OPTS="-s ABRT -k 60"
 fi
 
+# A separate marker per runner also permits concurrent test shards.
+TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
+trap 'rm -f "$TEST_START_MARKER"' 0
+
 # Run tests.
 i=1
 for test in $TESTS; do
@@ -445,6 +500,7 @@ for test in $TESTS; do
         THIS_TEST_TIMEOUT=$TEST_TIMEOUT
     fi
 
+    touch "$TEST_START_MARKER"
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
             eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
@@ -465,7 +521,8 @@ for test in $TESTS; do
         echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
         # the stacks of the threads of a test aborted by the timeout show where it hangs
         if [ -n "$TIMEOUT_SIGNAL_OPTS" ] && command -v gdb > /dev/null 2>&1; then
-            TIMEOUT_CORE=`ls -t "$CORE_DIR"/core.* 2>/dev/null | head -1`
+            find_test_core
+            TIMEOUT_CORE=$CORE_FILE
             if [ -n "$TIMEOUT_CORE" ]; then
                 echo "*** Core dump of the hung test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
                 BT_FILE="$CORE_DIR/backtrace-`basename "$test" .qtest`-timeout.txt"
@@ -486,15 +543,7 @@ for test in $TESTS; do
         if [ $test_exit -gt 128 ] && [ $test_exit -ne 143 ]; then
             SIG_NUM=`expr $test_exit - 128`
             echo "*** CRASH: test killed by signal $SIG_NUM (exit code $test_exit) ***"
-            # Check for core dump in known locations
-            CORE_FILE=""
-            for cf in "$CORE_DIR"/core.* "$CORE_DIR_ABS"/core.* core core.* /tmp/core.* \
-                       /var/lib/apport/coredump/core.* /var/crash/*.crash; do
-                if [ -f "$cf" ] 2>/dev/null; then
-                    CORE_FILE="$cf"
-                    break
-                fi
-            done
+            find_test_core
             TEST_BASENAME=$(basename "$test" .qtest)
             if [ -n "$CORE_FILE" ] && command -v gdb > /dev/null 2>&1; then
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"

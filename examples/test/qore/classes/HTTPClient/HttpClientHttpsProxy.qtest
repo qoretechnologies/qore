@@ -28,14 +28,14 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
-%requires Util
-%requires FsUtil
-%requires Logger
-%requires Mime
-%requires HttpServerUtil
-%requires HttpServer
-%requires HttpClientIo
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/FsUtil.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/Mime.qm
+%requires ../../../../../qlib/HttpServerUtil.qm
+%requires ../../../../../qlib/HttpServer.qm
+%requires ../../../../../qlib/HttpClientIo
 
 %include ../TestConnectProxy.qc
 
@@ -193,7 +193,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         TestConnectProxy wrong_proxy;
     }
 
-    constructor() : Test("HttpClientHttpsProxyTest", "1.0") {
+    constructor() : Test("HttpClientHttpsProxyTest", "1.0", \ARGV) {
         addTestCase("TLS through a proxy tunnel is made for the target", \tunnelTargetTest());
         addTestCase("TLS through an HTTPS proxy tunnel", \httpsProxyTunnelTest());
         addTestCase("plain HTTP through an HTTPS proxy", \httpsProxyPlainTest());
