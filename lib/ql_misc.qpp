@@ -354,7 +354,7 @@ const RESOLVE_URL_NO_FRAGMENT = QRU_NO_FRAGMENT;
 const RESOLVE_URL_RELATIVE_BASE = QRU_RELATIVE_BASE;
 
 //! Percent-encode octets that cannot appear in a URI in the path, query, and fragment of the target
-/** Controls, space, non-ASCII octets (as their UTF-8 encoding), and the characters \c "<>\\^`{|}" are encoded,
+/** Controls, space, non-ASCII octets (as their UTF-8 encoding), and the characters <tt>&lt;&gt;\\^&#96;{|}</tt> are encoded,
     which maps an IRI to a URI (RFC 3987 section 3.1); existing percent-encoded octets and all URI delimiters are
     kept, and the scheme and authority are not changed
 */
@@ -3104,7 +3104,7 @@ nothing decode_url() [flags=RUNTIME_NOOP] {
     characters, the following reserved characters
     (according to <a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a>) are also encoded: \c '!', \c '*',
     \c '\'', \c '(', \c ')', \c ';', \c ':', \c '@', \c '&', \c '=', \c '+', \c '$', \c ',', \c '/', \c '?', \c '#',
-    \c '[', \c ']', plus the following characters: \c '<', \c '>', \c '\\', \c '^', \c '`', \c '{', \c '}', \c '|',
+    \c '[', \c ']', plus the following characters: \c '<', \c '>', \c '\\', \c '^', <tt>&#96;</tt>, \c '{', \c '}', \c '|',
     \c '~', and the space character.
 
     @return the URL string with encoded according to the arguments
