@@ -98,7 +98,12 @@ sub touch(reference<*int> r) {
 const RssIterations = 200000;
 
 int sub rssKb() {
-    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmRSS:\s+([0-9]+)/);
+    # VmRSS uses asynchronous accounting; smaps_rollup walks the page tables
+    # so delayed accounting updates cannot be mistaken for leaked nodes.
+    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/smaps_rollup") =~ x/^Rss:\s+([0-9]+) kB$/m);
+    if (!m) {
+        throw "RSS-MEASUREMENT-ERROR", "smaps_rollup did not report resident memory";
+    }
     return m[0].toInt();
 }
 

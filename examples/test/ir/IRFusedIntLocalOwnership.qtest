@@ -110,8 +110,8 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
     }
 
     private checkGrowth(string mode, string env) {
-        if (!is_readable("/proc/self/status")) {
-            testSkip("resident set size is only measured through /proc");
+        if (!is_readable("/proc/self/smaps_rollup")) {
+            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
         }
         string output = run(mode, env, "rss");
         list<string> lines = output.split("\n");
@@ -138,7 +138,7 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
         assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
         assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
             shellQuote(exe))), "AOT output");
-        if (is_readable("/proc/self/status")) {
+        if (is_readable("/proc/self/smaps_rollup")) {
             string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
                 shellQuote(exe)));
             foreach string line in (output.split("\n")) {

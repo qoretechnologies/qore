@@ -420,6 +420,12 @@ creates a new heap node for a large int stored natively;
 `LValueHelper::getInternalNode()` returns the stored node without creating one.
 `IRFusedIntLocalOwnership.qtest` checks values across the immediate boundary and
 bounds resident set growth over repeated updates in every tier and in AOT.
+Both this test and `NanBoxDoubleTagCollision.qtest` read Linux's
+`/proc/self/smaps_rollup` for these measurements. `VmRSS` in `/proc/self/status`
+uses asynchronous accounting, so delayed updates can look like allocation growth.
+Platforms without readable `smaps_rollup` skip memory measurements while retaining
+value checks. The 2 MiB leak threshold is unchanged; a negative control retains
+200,000 boxed doubles and verifies that the measurement exceeds that threshold.
 
 ## Large Function Bodies and Cleanup Scaling
 

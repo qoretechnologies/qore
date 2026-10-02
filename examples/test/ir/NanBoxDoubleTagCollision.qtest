@@ -81,6 +81,7 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
             });
         }
         addTestCase("colliding doubles: AOT", \testAot());
+        addTestCase("resident memory detects retained boxed values", \testRetainedGrowth());
 
         set_return_value(main());
     }
@@ -114,8 +115,8 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
     }
 
     private checkGrowth(string mode, string env) {
-        if (!is_readable("/proc/self/status")) {
-            testSkip("resident set size is only measured through /proc");
+        if (!is_readable("/proc/self/smaps_rollup")) {
+            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
         }
         checkGrowthOutput(sprintf("exec-mode=%s %s", mode, env), run(mode, env, "rss"));
     }
@@ -129,6 +130,18 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
             if (m) {
                 assertTrue(m[1].toInt() < MaxGrowthKb, sprintf("%s: %s grew by %s kB", label, m[0], m[1]));
             }
+        }
+    }
+
+    testRetainedGrowth() {
+        if (!is_readable("/proc/self/smaps_rollup")) {
+            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
+        }
+        string output = run("ast", "", "rss-retained");
+        *list<*string> m = (output =~ x/^retained: ([0-9]+)\nvalues: 200000\n$/);
+        assertTrue(exists m, "all retained values remain live: " + output);
+        if (m) {
+            assertTrue(m[0].toInt() >= MaxGrowthKb, "retained values exceed the leak threshold: " + output);
         }
     }
 
@@ -150,7 +163,7 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
         }
         assertEq(astOutput(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
             shellQuote(exe))), "AOT output matches AST");
-        if (is_readable("/proc/self/status")) {
+        if (is_readable("/proc/self/smaps_rollup")) {
             checkGrowthOutput("AOT", backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
                 shellQuote(exe))));
         }
