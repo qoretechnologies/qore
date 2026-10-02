@@ -34,11 +34,36 @@ The current testing archive fingerprint is
 064EECD97DD60E822006EC8A2324C51F64E7B4EA; verify it against Launchpad before
 trusting a downloaded key. This is the archive key, not an uploader's key.
 APT provisioning has network access. Compilation, documentation and tests run
-without networking as an unprivileged user. The incoming HOME is
+without networking as an unprivileged user. Both IPv4 and IPv6 localhost
+mappings are explicit, so local socket tests do not depend on the host's
+hosts-file configuration or attempt external DNS lookups. The incoming HOME is
 /sbuild-nonexistent; debhelper gives build commands a private generated HOME.
 All Build-Depends must resolve; the helper rejects nocheck. Binary Lintian
 errors fail the run. Inspect warnings too. The provisioned image is retained
 and identified in build-image.txt for diagnosis.
+
+Binary checking runs separately from compilation, offline, with the packages
+mounted read-only. By default it uses the provisioned build image and Debian's
+Lintian profile. Set QORE_DEB_LINTIAN_IMAGE to a pinned image containing Bash and
+Lintian to use a newer checker without changing the target's build dependencies
+or runtime libraries. QORE_DEB_LINTIAN_PROFILE selects another profile if needed.
+The lintian/ results directory records the checker image, version, profile,
+output and exit status. BUILD-PASS records compilation/tests only; PASS is
+written only after the binary checker succeeds.
+
+Debian 13's Lintian 2.122 reports library-not-linked-against-libc for Qore's AOT
+plugins, which link to libqore rather than directly to libc. Lintian removed
+this unreliable check in 2.128 (Debian bug #896012):
+https://bugs.debian.org/896012
+Use Lintian >= 2.128 for this qualification; do not add redundant linker
+dependencies or suppress all library errors to accommodate the retired check.
+A checker may run on a different distribution: keep the target build image
+unchanged and explicitly select the appropriate checking profile.
+
+To recheck existing artifacts without rebuilding them:
+
+  tools/lint-debian-packages.sh /path/to/packages /path/to/new-lintian-results \
+    /pinned/checker-image debian
 
 The package rules set TZ=UTC for compile-time schema dates and QCC_JOBS=1 so
 transient GNU make jobserver tokens cannot change LLVM codegen partitions.
@@ -78,6 +103,21 @@ Debian -dbgsym .deb packages are supported. Missing symbols fail this check.
 Keep each version/profile in its own directory. Compiler fortification and
 stack-protector coverage still require build-flag review; ELF checks alone do
 not establish those properties for every function.
+
+Qore JNI links to OpenJDK's private libjvm.so. When inspecting that package,
+add --allow-private-jvm to permit its exact Java 21 server-library RUNPATH.
+This policy applies only to qore-jni-module's versioned native JNI plugin on
+amd64 or arm64, with an explicit openjdk-21-jre-headless dependency and a
+libjvm.so link. Legacy RPATH, additional directories and other package files
+remain disallowed. The default inspection policy is unchanged.
+
+The Debian PyArrow 25 package keeps its Python bridge libraries beside the
+Python 3.13 extension modules. Inspect it with --allow-private-pyarrow to allow
+an exact $ORIGIN RUNPATH only in those files on amd64 or arm64. This requires
+an explicit libarrow2500 dependency, the expected ELF dependencies and matching
+private bridge SONAMEs in the same package. Legacy RPATH, additional search
+directories, missing bridges and unrelated packages or files still fail. This
+opt-in does not relax hardening or detached-debug-symbol checks.
 
 Build the same source twice in fresh containers, with the same dependency
 versions and build options. Vary the build path/time/locale deliberately when

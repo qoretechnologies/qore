@@ -1,0 +1,57 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+set -eu
+export LC_ALL=C.UTF-8
+unset LD_LIBRARY_PATH LD_PRELOAD CPATH C_INCLUDE_PATH LIBRARY_PATH PKG_CONFIG_PATH
+work=$(mktemp -d)
+server_pid=
+cleanup() {
+    if [ -n "$server_pid" ]; then
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+    fi
+    rm -rf "$work"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+if [ "$#" -eq 1 ]; then
+    build=$(realpath "$1")
+    mkdir "$work/include"
+    ln -s "$PWD/src" "$work/include/nats"
+    cc -Wall -Wextra -Werror -I"$work/include" debian/tests/runtime.c \
+        -L"$build/lib" -Wl,-rpath,"$build/lib" -lnats -o "$work/runtime"
+elif [ "$#" -eq 0 ]; then
+    # pkg-config supplies compiler/linker arguments, intentionally word-split.
+    cc -Wall -Wextra -Werror $(pkg-config --cflags libnats) debian/tests/runtime.c \
+        $(pkg-config --libs libnats) -o "$work/runtime"
+else
+    echo "Usage: $0 [BUILD_DIRECTORY]" >&2
+    exit 2
+fi
+port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+/usr/sbin/nats-server -a 127.0.0.1 -p "$port" -js -sd "$work/data" > "$work/server.log" 2>&1 &
+server_pid=$!
+if ! python3 - "$port" "$server_pid" <<'PY'
+import os, socket, sys, time
+port, pid = map(int, sys.argv[1:])
+for attempt in range(100):
+    os.kill(pid, 0)
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.2) as connection:
+            if connection.recv(4096).startswith(b"INFO "):
+                break
+    except OSError:
+        pass
+    time.sleep(0.05)
+else:
+    raise SystemExit("NATS broker did not become ready")
+PY
+then
+    cat "$work/server.log" >&2
+    exit 1
+fi
+if ! "$work/runtime" "nats://127.0.0.1:$port"; then
+    cat "$work/server.log" >&2
+    exit 1
+fi

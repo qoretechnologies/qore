@@ -1,0 +1,2 @@
+Tests: runtime
+Depends: libnats-dev, build-essential, pkgconf, nats-server, python3

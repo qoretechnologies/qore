@@ -1,0 +1,2 @@
+Tests: runtime
+Depends: libuv1-dev, build-essential, pkgconf

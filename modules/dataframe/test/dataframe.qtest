@@ -9,14 +9,14 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 
-%requires ../../../qlib/Util.qm
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/DataProvider
+%requires Util
+%requires QUnit
+%requires DataProvider
 %requires reflection
 
 %requires dataframe
 
-%requires ../../../qlib/DataProviderDataFrame
+%requires DataProviderDataFrame
 
 %exec-class DataFrameTest
 
@@ -1739,7 +1739,7 @@ sub invalid_dataframe_api() {
             "amount": new buffer<float64>((90.0, 220.0, 180.0, 125.0)),
             "name": ("Alice", "Bob", "Carol", "Dave"),
         });
-        auto columns = df.toColumnarResult();
+        ColumnarResult columns = df.toColumnarResult();
 
         assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(columns),
             "ColumnarResult values are detected as BufferColumns shape");

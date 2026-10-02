@@ -46,6 +46,54 @@ class ArtifactChecksTest(unittest.TestCase):
         self.assertEqual({"non_executable_stack", "relro", "bind_now", "no_rpath", "position_independent"},
                          set(failures))
 
+    def test_private_jvm_policy_is_limited_to_its_package_and_dependency(self):
+        if not shutil.which("cc") or not shutil.which("dpkg-deb"):
+            self.skipTest("cc and dpkg-deb are required")
+        library_source = self.root / "jvm.c"
+        library_source.write_text("int jvm_fixture(void) { return 0; }\n")
+        subprocess.run(["cc", "-shared", "-fPIC", str(library_source), "-Wl,-soname,libjvm.so",
+                        "-o", str(self.root / "libjvm.so")], check=True, capture_output=True)
+        package = self.root / "package"
+        (package / "DEBIAN").mkdir(parents=True)
+        output = self.root / "packages"
+        output.mkdir()
+
+        def inspect_package(data, member, name="qore-jni-module", architecture="amd64",
+                            depends="openjdk-21-jre-headless", opt_in=True):
+            for old in package.rglob("*.qmod"):
+                old.unlink()
+            target = package / member
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            (package / "DEBIAN/control").write_text(
+                f"Package: {name}\nVersion: 1.0-1\nArchitecture: {architecture}\n"
+                f"Depends: {depends}\nMaintainer: Qore <david@qore.org>\nDescription: fixture\n")
+            subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(package),
+                            str(output / "fixture.deb")], check=True, capture_output=True)
+            return artifacts.inspect(output, allow_private_jvm=opt_in)["passed"]
+
+        for architecture, multiarch in (("amd64", "x86_64-linux-gnu"), ("arm64", "aarch64-linux-gnu")):
+            path = f"/usr/lib/jvm/java-21-openjdk-{architecture}/lib/server"
+            member = f"usr/lib/{multiarch}/qore-modules/jni-api-2.0.qmod"
+            flags = ["-fPIE", "-pie", "-Wl,-z,relro,-z,now,-z,noexecstack",
+                     "-Wl,--no-as-needed", "-L" + str(self.root), "-ljvm"]
+            data = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + path)
+            with self.subTest(architecture=architecture):
+                self.assertTrue(inspect_package(data, member, architecture=architecture))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, opt_in=False))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, name="other-module"))
+                self.assertFalse(inspect_package(data, member, architecture=architecture, depends="libc6"))
+                self.assertFalse(inspect_package(data, member, architecture=architecture,
+                                                depends="openjdk-21-jre-headless | java-runtime"))
+                self.assertFalse(inspect_package(data, "usr/lib/other-api-2.0.qmod", architecture=architecture))
+                for extra in ("/tmp", path + ":/tmp", "$ORIGIN", path.replace("21", "25")):
+                    bad = self.compile(*flags, "-Wl,--enable-new-dtags,-rpath," + extra)
+                    self.assertFalse(inspect_package(bad, member, architecture=architecture))
+                bad = self.compile(*flags, "-Wl,--disable-new-dtags,-rpath," + path)
+                self.assertFalse(inspect_package(bad, member, architecture=architecture))
+                bad = self.compile("-fPIE", "-pie", "-Wl,-z,relro,-z,now,-z,noexecstack,-rpath," + path)
+                self.assertFalse(inspect_package(bad, member, architecture=architecture))
+
     def test_read_execute_stack_is_rejected(self):
         # An executable stack need not also be writable. Exercise a real ELF
         # program header with PF_R | PF_X, which readelf prints as "R E".
@@ -63,6 +111,61 @@ class ArtifactChecksTest(unittest.TestCase):
             self.fail("Compiler did not emit PT_GNU_STACK")
         _, failures = artifacts.inspect_elf(data, self.root / "scratch")
         self.assertEqual(["non_executable_stack"], failures)
+
+    def test_private_pyarrow_policy_requires_local_bridges_and_system_arrow(self):
+        if not all(shutil.which(tool) for tool in ("cc", "dpkg-deb", "readelf")):
+            self.skipTest("cc, dpkg-deb and readelf are required")
+        source = self.root / "fixture.c"
+        source.write_text("int fixture(void) { return 42; }\n")
+        common = ["cc", "-shared", "-fPIC", str(source), "-Wl,-z,relro,-z,now,-z,noexecstack",
+                  "-Wl,--no-as-needed", "-L" + str(self.root)]
+        subprocess.run([*common, "-Wl,-soname,libarrow.so.2500", "-o", str(self.root / "libarrow.so")],
+                       check=True, capture_output=True)
+        subprocess.run([*common, "-larrow", "-Wl,-soname,libarrow_python.so.2500,-rpath,$ORIGIN",
+                        "-o", str(self.root / "libarrow_python.so")], check=True, capture_output=True)
+        bridge = (self.root / "libarrow_python.so").read_bytes()
+        prefix = "usr/lib/python3/dist-packages/pyarrow/"
+        output = self.root / "packages"
+        output.mkdir()
+        counter = 0
+
+        def check(*, name="python3-pyarrow", depends="libarrow2500", architecture="amd64",
+                  runpath="$ORIGIN", opt_in=True, with_bridge=True, with_needed=True,
+                  member=None, legacy=False, bridge_data=bridge):
+            nonlocal counter
+            counter += 1
+            package = self.root / f"case-{counter}"
+            (package / "DEBIAN").mkdir(parents=True)
+            multiarch = {"amd64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}[architecture]
+            target = package / (member or prefix + f"lib.cpython-313-{multiarch}.so")
+            target.parent.mkdir(parents=True)
+            flags = ["-Wl,--disable-new-dtags"] if legacy else ["-Wl,--enable-new-dtags"]
+            subprocess.run([*common, *(["-larrow_python"] if with_needed else []), *flags,
+                            "-Wl,-rpath," + runpath, "-o", str(target)], check=True, capture_output=True)
+            if with_bridge:
+                private = package / prefix / "libarrow_python.so.2500"
+                private.parent.mkdir(parents=True, exist_ok=True)
+                private.write_bytes(bridge_data)
+            (package / "DEBIAN/control").write_text(
+                f"Package: {name}\nVersion: 25.0.1-1\nArchitecture: {architecture}\n"
+                f"Depends: {depends}\nMaintainer: Qore <david@qore.org>\nDescription: fixture\n")
+            subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(package),
+                            str(output / "fixture.deb")], check=True, capture_output=True)
+            return artifacts.inspect(output, allow_private_pyarrow=opt_in)["passed"]
+
+        self.assertTrue(check())
+        self.assertTrue(check(architecture="arm64"))
+        for options in ({"opt_in": False}, {"name": "other-package"}, {"depends": "libc6"},
+                        {"depends": "libarrow2500 | other-library"}, {"with_bridge": False},
+                        {"with_needed": False}, {"member": "usr/lib/lib.cpython-313-x86_64-linux-gnu.so"},
+                        {"member": prefix + "lib.cpython-314-x86_64-linux-gnu.so"},
+                        {"member": prefix + "arbitrary.so"}, {"legacy": True},
+                        {"bridge_data": b"not an ELF bridge"}):
+            with self.subTest(options=options):
+                self.assertFalse(check(**options))
+        for path in ("/tmp", "$ORIGIN:/tmp", "$ORIGIN/..", "${ORIGIN}"):
+            with self.subTest(path=path):
+                self.assertFalse(check(runpath=path))
 
     def test_aot_metadata_corruption(self):
         payload = b"dependencies"

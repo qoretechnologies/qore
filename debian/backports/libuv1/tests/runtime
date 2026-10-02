@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+set -eu
+unset LD_LIBRARY_PATH LD_PRELOAD CPATH C_INCLUDE_PATH LIBRARY_PATH PKG_CONFIG_PATH
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+trap 'exit 1' HUP INT TERM
+cc -Wall -Wextra -Werror $(pkg-config --cflags libuv) debian/tests/runtime.c \
+    $(pkg-config --libs libuv) -o "$work/runtime"
+cd "$work"
+timeout 20 ./runtime

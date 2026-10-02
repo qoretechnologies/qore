@@ -3,6 +3,10 @@ Packaging qualification: 2026-09-28
 
 Copyright 2026 Qore Technologies, s.r.o.
 
+This file is the historical Ubuntu checkpoint from September 28. See
+QUALIFICATION-DEBIAN13 for the October 1 native amd64/arm64 Debian results.
+Statements below about module/PPA progress describe the earlier checkpoint.
+
 This is pre-release qualification of a development snapshot. It does not
 publish a release or qualify distributions/architectures outside the tested
 scope. See README.qualification for the repeatable procedure.

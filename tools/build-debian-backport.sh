@@ -68,7 +68,8 @@ podman run --name "$container" --volume "$input:/input:ro" "${dependency_mount[@
     ' > "$results/provision.log" 2>&1
 build_image=$(podman commit --quiet "$container")
 printf '%s\n' "$build_image" > "$results/build-image.txt"
-podman run --rm --network=none --volume "$input:/input:ro" \
+podman run --rm --network=none \
+    --add-host=localhost:127.0.0.1 --add-host=localhost:::1 --volume "$input:/input:ro" \
     --volume "$results:/output" "$build_image" \
     /bin/bash -euc '
         cp /build/installed-build-dependencies.txt /output/

@@ -1,0 +1,218 @@
+Debian 13 independent module qualification: 2026-10-02
+====================================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Result: PASS for development snapshots from all 36 independent module
+repositories on native amd64 and arm64 (aarch64 Linux on hoppy). This comprises
+UUID from QUALIFICATION-DEBIAN13, the original 24-module batch below, the
+six-module dependency chain and the final five modules described below.
+These are unsigned local packages, not final releases or a published archive.
+
+Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13.
+Final evidence bundle: qore-debian13-final-modules-20261001 under the
+qualification hosts' temporary directory. It links the earlier checkpoints.
+QUALIFICATION.json records exact package versions, source
+commits, packaging-overlay hashes and per-architecture reports. QUALIFICATION.txt
+summarizes the results. Each module has debian/QUALIFICATION-DEBIAN13, and audits/
+records all 71 audit-changes checks. commits.json records module push verification.
+
+Qualified modules
+-----------------
+
+amqp, cairo, fsevent, geos, git, imagemagick, kalman, magic, msgpack, mysql,
+ncurses, odbc, openldap, pgsql, sqlite3, ssh, ssh2, sybase (freetds), sysconf,
+tar, treesitter, vss, zip and zmq. UUID was qualified with the core SDK earlier.
+The additional chain qualifies process, xml, python, xmlsec, proj and nats.
+The final batch qualifies grpc, jni, pdf, oracle and v8, including combined
+installation.
+Bundled modules, including JSON and YAML, remain part of Qore's packages.
+
+Original 24-module batch checks
+------------------------------
+
+- All 24 source packages reproduce from independent preparations.
+- Each module passes two full offline, unprivileged builds on each CPU,
+  using different paths and parallelism and varied incoming locale/timezone.
+  All 146 first-build binary artifacts reproduce byte-for-byte on their CPU.
+- Each module also passes a clean architecture-only (-B) build without
+  Doxygen or Graphviz. Its packages match the full builds exactly.
+  Totals: 96 full builds and 48 architecture-only builds.
+- All 25 architecture-independent packages match across amd64 and arm64.
+- Source/binary Lintian has no errors. Binary checking uses the pinned
+  Lintian 2.129 checker with the Debian profile in a separate offline image.
+  Artifact manifests, ELF hardening, detached debug symbols and Qore AOT
+  metadata pass inspection on both CPUs.
+- All 96 installed autopkgtest executions pass offline as an unprivileged
+  user. Minimal runtime installation without libqore-dev, exact coinstallation
+  of documentation/debug packages, dpkg verification, purge, autoremove and
+  SDK-free reinstall pass individually for every module on both CPUs.
+- Combined installation of 76 artifacts from all 25 repositories passes
+  on both CPUs. All 55 native/AOT module names load together in forward and
+  reverse order in fresh tiered and AST processes, using only installed /usr
+  modules, without the SDK or network access. Installed file verification passes.
+
+Corrections found by qualification
+----------------------------------
+
+The ncurses and tar packages produced different AOT objects when build
+parallelism changed. Their recipes now fix QCC_JOBS=1 and remove an inherited
+QCC_SPLIT_THRESHOLD; independent make targets still build in parallel. Fsevent
+receives the same missing reproducibility policy. OpenLDAP's unprivileged
+fixture now invokes /usr/sbin/slapd because /usr/sbin is absent from that user's
+default PATH. All four corrected source candidates pass the checks above.
+Their source manifests preserve the frozen, precommit packaging overlays.
+
+Two issues were in the qualification driver: ImageMagick's own common package
+must be available to APT, and SSH/SSH2 tests can consume a driver's piped stdin.
+The corrected driver uses a local package index and passes scripts as command
+arguments with closed stdin. Original failures and corrected runs are retained.
+
+Additional six-module qualification
+-----------------------------------
+
+Evidence bundles: qore-debian13-module-chain-20261001 and
+qore-debian13-module-deps-20261001, with the same Qore SDK/runtime as above.
+The chain's QUALIFICATION.json records exact module commits, source versions,
+packaging overlays, dependency reports, combined installation and audit records.
+PROJ includes upstream documentation/CMake fixes from commit 2a36e61eca54.
+
+- All six source packages reproduce independently. 24 full offline builds
+  and 12 architecture-only builds pass across both CPUs. All
+  36 first-build artifacts reproduce on their CPU; all 6 architecture-
+  independent packages also match across CPUs. Architecture-only builds omit
+  Doxygen/Graphviz and reproduce the full-build binaries.
+- All 26 installed autopkgtest executions pass, including PROJ/Python
+  coexistence. Minimal SDK-free installation, exact debug/documentation package
+  coinstallation, file verification, purge, autoremove and reinstall pass.
+- Source/binary Lintian, ELF hardening, detached debug information and AOT
+  metadata checks pass. Each module's qualification file records its scope.
+- Combined installation now covers 94 artifacts from all 31 repositories.
+  All 82 native/AOT names load together in both orders in fresh tiered and
+  AST processes, offline and without the SDK. Installed file verification passes.
+
+Boost 1.90 (1.90.0-6.1~qore4~deb13.1) and NATS C
+(3.13.0-2~qore2~deb13.1) add 111 dependency artifacts per CPU. Both backports
+pass two full native offline builds, source/binary Lintian, exact binary
+reproducibility, hardening/debug inspection and installed tests before and
+after purge/autoremove/reinstall. Boost runs all 26 Debian installed-library
+tests; NATS exercises pub/sub, request/reply and JetStream revision history.
+
+Existing Debian Boost 1.83 and NATS 3.10 clients remain usable after installing
+the newer SDKs, with their original runtimes and loader paths preserved.
+Boost 1.83/1.90 filesystem libraries also pass same-process operations in
+both load orders. These checks do not establish compatibility for every
+possible Boost consumer; the exact tested scope is retained with the evidence.
+
+Qualification caught premature stripping and missing linker hardening in the
+Boost.Build bootstrap. The recipe now passes Debian flags to its supported
+cxx toolset and lets debhelper split debug symbols. Bootstrap failures propagate;
+the redundant unversioned g++ dependency is removed. The CMake generator
+uses relative installed paths, and assembly receives debug-prefix mapping,
+so the SDK and Boost.Context reproduce across build directories. NATS C uses
+an explicit /usr/sbin/nats-server path; the Qore NATS fixtures declare the system PATH for
+unprivileged users. The qualification driver also needed XML's separate
+libxml2 orig component, prepared by its existing pinned-source repacker. This
+required no XML code change. Original failures and corrected candidates are
+retained.
+
+Final dependency batch: five completed modules
+---------------------------------------------
+
+Evidence bundle: qore-debian13-final-modules-20261001. Its
+QUALIFICATION.json records grpc, jni, pdf, oracle and v8, their exact source
+commits and source/binary hashes, all 71 audit checks and module push records.
+On each CPU, each module passes two full offline builds, exact reproduction,
+a third clean architecture-only build, source/binary Lintian, applicable
+hardening/debug/AOT checks, installed suites and SDK-free package lifecycle
+checks. All architecture-independent module packages match across CPUs.
+This adds 20 full builds, 10 architecture-only builds,
+36 first-build binary artifacts and 22 installed suite executions.
+Final combined integration passes for all 36 repositories on both CPUs:
+112 packages and 117 native/AOT module names load together in
+forward and reverse order, in fresh tiered and AST processes. Tests run offline
+as an unprivileged user using only installed /usr modules, without libqore-dev.
+Exact package versions and dpkg file verification pass.
+All 40 architecture-independent module packages match across CPUs.
+
+PDFium is rebuilt for Debian ICU 76 on both CPUs. The Ubuntu binary packages
+need newer system libraries. The Debian rendering/text-extraction API tests,
+reproducibility and lifecycle checks pass. Oracle's Basic/SDK archive contents
+remain unchanged; native OCI client/SDK checks pass locally on both CPUs.
+Fresh Debian Oracle live checks also pass on both CPUs against a disposable
+Oracle AI Database 26ai Free 23.26.2 server with client 23.26.3. Installed
+tiered/AST runs each cover 8 suites, 41 executed cases and 169 assertions,
+plus fresh compiled clients. The inaccessible legacy system-view LONG case
+skips; an independent fixture verifies LONG text larger than 16 KiB.
+See oracle-live-20261002/QUALIFICATION.json in the final evidence bundle.
+Other server/client combinations and optional server-restart/AQ demos are
+outside this result. The temporary database and credentials were removed.
+JNI passes runtime/compiler/Kotlin suites with the approved pinned-JAR policy.
+Its private JVM RUNPATH is restricted to the exact packaged OpenJDK 21 library.
+
+Ten additional source packages pass two native offline builds per CPU,
+exact binary reproducibility, source/binary Lintian, applicable hardening/debug
+checks, installed tests and purge/autoremove/reinstall with repeated tests:
+Cython, PyArrow, simdjson, simdutf, Ada URL, libuv, Acorn, llhttp, TypeScript
+and Rollup Buble. Their portable Architecture: all packages match across CPUs.
+PyArrow uses system Arrow 25 libraries; array/compute/IPC, dataset/Parquet,
+Acero and loopback Flight checks pass, followed by gRPC's Flight interoperability
+suite. This is not a claim of full upstream PyArrow test coverage.
+
+Qualification corrected missing hardening flags, random Cython build paths,
+absolute paths in Ada documentation, dh-nodejs watch-v5 component discovery,
+and llhttp test typings. llhttp's native-library/source scope avoids replacing
+Debian's JavaScript generator package. Its portable source manifest excludes
+host-specific pkg-config output, and its generated sources match the bootstrap
+on both CPUs. See debian/backports/README and the dependency evidence reports.
+
+Node 22 and V8 qualification
+---------------------------
+
+Node 22.22.2 (3~qore4~deb13.1) passes independent source preparation, two
+native offline builds per CPU, exact binary reproducibility, source/binary
+Lintian, strict hardening/debug inspection, installed tests and full
+purge/autoremove/reinstall with repeated tests. Its portable packages match
+across CPUs. Each of the four test runs per CPU executes more than 3,000
+cases from the retained Debian message/parallel/sequential suites. The pinned
+Debian skip lists and flaky-test policy remain unchanged, including known
+HTTP2 timeouts; there are no unquarantined failures. Exact counts, skips and
+quarantined failures are recorded in dependencies/<architecture>/nodejs/
+test-policy.json. This is not a claim of full upstream Node test coverage.
+
+The Node recipe resolves minimatch's installed entry point, imports Debian
+build flags before exporting custom flags, and removes the build-tree RUNPATH
+from the staged executable before debhelper splits debug symbols. Build-tree
+execution still uses its original RUNPATH. DWZ reaches its upstream-configured
+optimization limit for the large Node library; detached debug information
+remains complete and passes the strict artifact checks.
+
+V8 uses that Node SDK and the separately qualified TypeScript 5.2 backport.
+Its four packages reproduce on each CPU; portable packages match across CPUs.
+Qualification corrected the schema-cache test's child-process module path:
+it honors the existing packaging qmod override while preserving the source
+fallback. Both modes pass all seven cache cases and 175 assertions.
+Installed tests retain eight source-only proxy fault-injection skips and two
+optional HubSpot catalogue fixture skips.
+See module-v8 commit 947892c7 and the final batch's exact source manifest.
+
+The combined check also found Node initialization replacing Qore's signal
+mask/handlers and the JVM's SIGSEGV handler. V8 now requests Node's supported
+kNoDefaultSignalHandling embedding behavior. An isolated SIGTERM regression
+fails before the fix and passes afterward, WebAssembly bounds errors remain
+correct, and all 117 native/AOT names load together in both orders and modes.
+See module-v8 commit e093a183 and the recorded signal-fix audit.
+Its normal CI pipeline 58525 passes both Ubuntu and Alpine jobs.
+
+Remaining release gates
+-----------------------
+
+Oracle dependency hosting approval and the optional V8 app catalogue remain
+separate gates. This checkpoint covers the native V8 bridge packaging plan,
+not the separately built app catalogue.
+
+No prior Debian upgrade/ABI baseline is available. Only the service scenarios
+exercised by package tests are qualified. Final ABI/release freeze, acceptance
+of exact release artifacts, dependency maintenance and durable evidence
+retention remain required. Public Debian delivery needs a signed Debian archive;
+an Ubuntu PPA does not publish these packages.

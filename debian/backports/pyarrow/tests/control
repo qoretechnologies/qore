@@ -1,0 +1,3 @@
+Tests: runtime
+Depends: python3-pyarrow, python3-pytest, python3-numpy
+Restrictions: allow-stderr

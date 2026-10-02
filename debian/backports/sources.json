@@ -13,6 +13,276 @@
       "date": "Thu, 01 Oct 2026 08:00:00 +0200",
       "ppa": null,
       "packages": {
+        "pyarrow": {
+          "upstream_version": "25.0.1",
+          "revision": "0qore5",
+          "orig_url": "https://files.pythonhosted.org/packages/3d/e3/27f57f80141379d60defe6703eb50a707325706f07fedfd1312c7a751995/pyarrow-25.0.1.tar.gz",
+          "orig_sha256": "9150a83248bfed9813ea3c3af74c3856c1984d444aa28e58bf7733b9750ddf6a",
+          "metadata_license": "Apache-2.0",
+          "changes": [
+            "Build PyArrow from its pinned source distribution on {distribution_name}.",
+            "Use system Arrow libraries with Flight, Acero, datasets and Parquet.",
+            "Retain private Python bridge libraries and run offline API tests.",
+            "Generate NumPy ABI dependencies and preserve private library filenames.",
+            "Map generated Cython build paths and retain vendored copyright notices."
+          ]
+        },
+        "node-rollup-plugin-buble": {
+          "upstream_version": "1.0.3+ds1",
+          "revision": "2~qore1",
+          "orig_url": "https://deb.debian.org/debian/pool/main/n/node-rollup-plugin-buble/node-rollup-plugin-buble_1.0.3+ds1.orig.tar.xz",
+          "orig_sha256": "59f3276c05e5bd808b1adf089d14dcd11861e02bcacf7f57df69dff69abd978e",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/n/node-rollup-plugin-buble/node-rollup-plugin-buble_1.0.3+ds1-2.debian.tar.xz",
+          "packaging_sha256": "bf04f86189eb3ff2730c5147a756f698fe1349596fe7bf7a62714fcce6460bb1",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport node-rollup-plugin-buble to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests."
+          ]
+        },
+        "nodejs": {
+          "upstream_version": "22.22.2+dfsg+~cs22.19.15",
+          "revision": "3~qore4",
+          "orig_url": "https://deb.debian.org/debian/pool/main/n/nodejs/nodejs_22.22.2+dfsg+~cs22.19.15.orig.tar.xz",
+          "orig_sha256": "f1a6dfca7ffe7f9f42942274adf9f0a12733977a4744a53f41b20836907c449b",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/n/nodejs/nodejs_22.22.2+dfsg+~cs22.19.15-3.debian.tar.xz",
+          "packaging_sha256": "07816ef1b7d43b194bbf30194ac68b9b765c3eb3ecd69415c8db6c285cd71171",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport nodejs to {distribution_name} for Qore module qualification.",
+            "Resolve the installed minimatch entry point when bundling it for Node.",
+            "Import Debian build flags before exporting custom compiler options.",
+            "Remove build-tree RUNPATH from the staged Node executable before debug splitting.",
+            "Retain Debian source patches, library packaging and tests."
+          ],
+          "orig_components": {
+            "types-node": {
+              "url": "https://deb.debian.org/debian/pool/main/n/nodejs/nodejs_22.22.2+dfsg+~cs22.19.15.orig-types-node.tar.xz",
+              "sha256": "75f7769499a60c51263b230799465c0dbd370b70c3a09230409e91531612ba9f"
+            }
+          }
+        },
+        "node-typescript": {
+          "upstream_version": "5.2.2",
+          "revision": "2~qore1",
+          "orig_url": "https://deb.debian.org/debian/pool/main/n/node-typescript/node-typescript_5.2.2.orig.tar.gz",
+          "orig_sha256": "6d07719902739f8d8528ace898087557d560c2000319208dde605711f7f478e2",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/n/node-typescript/node-typescript_5.2.2-2.debian.tar.xz",
+          "packaging_sha256": "029573c57181e98d90de2fd35d1808c556a198da186081b912ad7c8bc94770ca",
+          "metadata_license": "Apache-2.0",
+          "changes": [
+            "Backport node-typescript to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests."
+          ]
+        },
+        "ada-url": {
+          "upstream_version": "3.4.4",
+          "revision": "1~qore4",
+          "orig_url": "https://deb.debian.org/debian/pool/main/a/ada-url/ada-url_3.4.4.orig.tar.gz",
+          "orig_sha256": "db74b85968410b59d591aeebf0babe76bf5da44dd8969b0bf001039c9d697aa3",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/a/ada-url/ada-url_3.4.4-1.debian.tar.xz",
+          "packaging_sha256": "f1909d487f03dace2bb47c9f8d541de756d763a5839af0ff58eadb58d4927e6a",
+          "metadata_license": "Expat",
+          "extra_patches": ["ada-url/reproducible-api-docs.patch"],
+          "changes": [
+            "Backport ada-url to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Add an offline installed public C API and SDK test.",
+            "Fix inline API examples and exclude build outputs for reproducible docs."
+          ]
+        },
+        "llhttp": {
+          "upstream_version": "9.3.3~really9.3.0+~cs12.11.8",
+          "revision": "4~qore7",
+          "orig_url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8.orig.tar.gz",
+          "orig_sha256": "a9242958af22a424d8be7d499eb97bd2e78c6e3554c8bc01406f00d197b541f4",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8-4.debian.tar.xz",
+          "packaging_sha256": "53d178671a8b98065028e1801fba6f08136ce4367745d6878ce1b41e43b498f6",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport llhttp to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Declare all bundled Node components explicitly for Debian 13 dh-nodejs.",
+            "Resolve markdown-it test declarations from their installed module location.",
+            "Build the native C library, SDK and generated sources; retain generator tests.",
+            "Keep host-specific pkg-config output out of the portable source package.",
+            "Add installed request, chunked response and invalid message parser checks."
+          ],
+          "orig_components": {
+            "binary-search": {
+              "url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8.orig-binary-search.tar.gz",
+              "sha256": "f01fca6dafbfde3dd7a4eac5f437c7a41f88fe130aa77f3e5c2cd54a4ec4a773"
+            },
+            "llparse-builder": {
+              "url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8.orig-llparse-builder.tar.gz",
+              "sha256": "1df30714743025568f9c660b74ff4e1daa5ecf4bf58abb9b6146e8a5ece6ac50"
+            },
+            "llparse-frontend": {
+              "url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8.orig-llparse-frontend.tar.gz",
+              "sha256": "4a4a2053a6f513d533f5b72e865d69e128ad36d11833385f02ad5eed1c28426c"
+            },
+            "llparse": {
+              "url": "https://deb.debian.org/debian/pool/main/l/llhttp/llhttp_9.3.3~really9.3.0+~cs12.11.8.orig-llparse.tar.gz",
+              "sha256": "1ca15ff90a4198bc65b0010dae80d4235b5a5ad3e94074d35ffca1a65ae66dcf"
+            }
+          }
+        },
+        "simdjson": {
+          "upstream_version": "4.6.11",
+          "revision": "1~qore1",
+          "orig_url": "https://deb.debian.org/debian/pool/main/s/simdjson/simdjson_4.6.11.orig.tar.gz",
+          "orig_sha256": "aefa2d971fa203c72160a762b40f169697036cbf50d9ad8c4cc022a44c7294c0",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/s/simdjson/simdjson_4.6.11-1.debian.tar.xz",
+          "packaging_sha256": "17b259e7b9ec8184a81c8c7cf3a6b7ec301346b7e5fe307877571645ca7f050b",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport simdjson to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests."
+          ]
+        },
+        "simdutf": {
+          "upstream_version": "8.2.0",
+          "revision": "1~qore2",
+          "orig_url": "https://deb.debian.org/debian/pool/main/s/simdutf/simdutf_8.2.0.orig.tar.xz",
+          "orig_sha256": "fd88fe8182a3d706f0dbfb5586f94454977a1131341cf654134dec62c5fa674f",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/s/simdutf/simdutf_8.2.0-1.debian.tar.xz",
+          "packaging_sha256": "7d15aa3fd75cf8f5ee556c31ad7e6eb85526b7a73431652401d88266ec3c2e22",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport simdutf to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Use relative build RPATHs for reproducible tool build IDs."
+          ]
+        },
+        "libuv1": {
+          "upstream_version": "1.52.1",
+          "revision": "4~qore3",
+          "orig_url": "https://deb.debian.org/debian/pool/main/libu/libuv1/libuv1_1.52.1.orig.tar.gz",
+          "orig_sha256": "b0d728e2f3cb0204ea09caa510cc9982c600ef6ca27612ee2f6298b8e19817d3",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/libu/libuv1/libuv1_1.52.1-4.debian.tar.xz",
+          "packaging_sha256": "08ce05f0ec60638751fe922dbc189bc385769b1fceb4d2769e66daff0cd5f3a2",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport libuv1 to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Add an offline installed public C API and SDK test.",
+            "Export hardening settings so all linker protections are enabled."
+          ]
+        },
+        "acorn": {
+          "upstream_version": "8.17.0+ds+~cs28.27.25",
+          "revision": "1~qore2",
+          "orig_url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig.tar.xz",
+          "orig_sha256": "164824b517888632e3b88edd465f98c04fbfaf8905eca7db12bff9f90f1d0bc8",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25-1.debian.tar.xz",
+          "packaging_sha256": "989e86c50a1cfe59aed53311dc970e1ac8d21126ba31df426a15460570323162",
+          "metadata_license": "Expat",
+          "changes": [
+            "Backport acorn to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Declare all bundled Node components explicitly for Debian 13 dh-nodejs."
+          ],
+          "orig_components": {
+            "acorn-import-assertions": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-acorn-import-assertions.tar.xz",
+              "sha256": "fa9a72e0de55a64179902412dfdb03e2d1c3ca11b5aa29ba94c4d2250dd85c60"
+            },
+            "acorn-import-attributes": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-acorn-import-attributes.tar.xz",
+              "sha256": "4e4b52aa62f44239a20947ee06b0a2678f3bcc512864e485ca330c778151bcde"
+            },
+            "acorn-import-phases": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-acorn-import-phases.tar.xz",
+              "sha256": "cd751ebd0e3d30c77d0512235e27d072589370a8741f95363a2adf62e58423ed"
+            },
+            "node-acorn-bigint": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-bigint.tar.xz",
+              "sha256": "b80239605fefd3e9d91d0c315a18d5ca6afb5625159c8b9e845c7546b9637298"
+            },
+            "node-acorn-class-fields": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-class-fields.tar.xz",
+              "sha256": "51970331b047c3993556d8ed7e5257c138d0b511076abded40e180a57fa749f4"
+            },
+            "node-acorn-dynamic-import": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-dynamic-import.tar.xz",
+              "sha256": "eacabb9b7c9beaefc26c62e395edac05e5f6c06c4b41efe17a03286e84ce6c39"
+            },
+            "node-acorn-export-ns-from": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-export-ns-from.tar.xz",
+              "sha256": "fb232ce7ce23878af7fb34945baa5fb57d19f6a2775bae9526f5d58c48e0de17"
+            },
+            "node-acorn-globals": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-globals.tar.xz",
+              "sha256": "f5bdd1f149c97cfe7e0def5d69b4bc2acddcdcf5982a1457a14e3ecaa3574f4c"
+            },
+            "node-acorn-import-meta": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-import-meta.tar.xz",
+              "sha256": "dae1ac8b7f91aa3a82ffcc82695a478e783e6153e62a060330035818286a45a3"
+            },
+            "node-acorn-jsx": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-jsx.tar.xz",
+              "sha256": "cbffec7742ee4606bd823cc4a2110a20a421b3c1a0366720f97c2e4a79594fb2"
+            },
+            "node-acorn-node": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-node.tar.xz",
+              "sha256": "5202dd01acff82f850df8c9add0b95e2750003a73b0d75d2ec68af38f6b7b8a0"
+            },
+            "node-acorn-numeric-separator": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-numeric-separator.tar.xz",
+              "sha256": "fd82be064f1cc88023852c4f8cc1171e90bc924d59d78cb81670c0dc1f814276"
+            },
+            "node-acorn-private-class-elements": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-private-class-elements.tar.xz",
+              "sha256": "c0f7f5763626c6190d5cbc9237faf8e97695e6e838e74a34da94b5fc29db728a"
+            },
+            "node-acorn-private-methods": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-private-methods.tar.xz",
+              "sha256": "02da822cb691fd7098c6eb5a83fd5228714ce61de53fc8fb0a14c53d3eed2a81"
+            },
+            "node-acorn-static-class-features": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-node-acorn-static-class-features.tar.xz",
+              "sha256": "3e987fb8e9a04160474e8324ad7fd5dad38e5b15be141f0cba1d20ef14de0195"
+            },
+            "types-estree": {
+              "url": "https://deb.debian.org/debian/pool/main/a/acorn/acorn_8.17.0+ds+~cs28.27.25.orig-types-estree.tar.xz",
+              "sha256": "de9e38969f11ebccf48ed05e8d5b907b9226b54a0d0d90d3f887cb79da034c7f"
+            }
+          }
+        },
+        "cython": {
+          "upstream_version": "3.1.6+dfsg",
+          "revision": "3~qore2",
+          "orig_url": "https://deb.debian.org/debian/pool/main/c/cython/cython_3.1.6+dfsg.orig.tar.xz",
+          "orig_sha256": "9de56310c9a51b1de840ae817899cd287d72e8b9a42da529044fbfd7334fa77c",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/c/cython/cython_3.1.6+dfsg-3.debian.tar.xz",
+          "packaging_sha256": "09323074e48ed0212ed7a869d1dcbd367da726d3537b99fac2393d7d960ab4a7",
+          "metadata_license": "BSD-3-clause",
+          "changes": [
+            "Backport cython to {distribution_name} for Qore module qualification.",
+            "Retain Debian source patches, library packaging and tests.",
+            "Enable full hardening and propagate Cython test failures."
+          ]
+        },
+        "boost1.90": {
+          "upstream_version": "1.90.0",
+          "revision": "6.1~qore4",
+          "orig_url": "https://deb.debian.org/debian/pool/main/b/boost1.90/boost1.90_1.90.0.orig.tar.xz",
+          "orig_sha256": "72e81363dece294942cf4f0ccb86158b390b723d7b332a59a0f869709f306da6",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/b/boost1.90/boost1.90_1.90.0-6.1.debian.tar.xz",
+          "packaging_sha256": "ce301722034d9db70987d3f876ad670bda7581957e8842907d401078411f7af6",
+          "metadata_license": "MIT",
+          "changes": ["Backport Boost 1.90 to {distribution_name} for Qore's process module.", "Retain Debian's complete library packaging and installed-package tests.", "Bootstrap b2 with distribution compiler/linker flags and retain debug information for debhelper; propagate bootstrap failures.", "Remove the redundant unversioned g++ dependency already supplied by build-essential.", "Generate relocatable CMake configurations without package staging paths.", "Pass distribution flags and debug-prefix mapping to preprocessed assembly."],
+          "extra_patches": ["boost1.90/relocatable-cmake-config.patch"]
+        },
+        "nats.c": {
+          "upstream_version": "3.13.0",
+          "revision": "2~qore2",
+          "orig_url": "https://deb.debian.org/debian/pool/main/n/nats.c/nats.c_3.13.0.orig.tar.gz",
+          "orig_sha256": "9a116a4aa0986f2f50890dd65eff061cabbcaf948dc7c47ee134d81dbf3cb8f3",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/n/nats.c/nats.c_3.13.0-2.debian.tar.xz",
+          "packaging_sha256": "ce99345b551716f6d1f03326ba7e8da7015873239bdfedc894c5f3acd481e102",
+          "changes": ["Backport the NATS C client to {distribution_name} for Qore's NATS module.", "Retain Debian's shared library and development package layout.", "Test pub/sub, request/reply and JetStream key/value history against a local broker during builds and installed-package tests."]
+        },
         "c-ares": {
           "extra_patches": ["c-ares/timeout-test-offline.patch"],
           "changes": ["Backport to {distribution_name} for Qore.", "Carry both Qore c-ares lost-query and query-ID reuse fixes.", "Test timeout selection against the IPv4/IPv6 DNS mock without external network access."]
@@ -55,36 +325,39 @@
     },
     "nghttp2": {
       "upstream_version": "1.70.0",
-      "revision": "1~qore1",
+      "revision": "1~qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0.orig.tar.gz",
       "orig_sha256": "aa317e2cf9dca6afa0aed68f8fad6ff303ec6982e25a78c75c0b65e2b9b3ded5",
       "signature_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0.orig.tar.gz.asc",
       "signature_sha256": "10846bc9ec5c1bfd4f8109d62e4492f6c348a7c0113e7467924f04cf96a5a44c",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0-1.debian.tar.xz",
       "packaging_sha256": "d43abd52531c78a82df1baf29c2b8b8785ca954e5a5c6abbb525d86e32dccfc3",
-      "changes": ["Backport to {distribution_name} for Qore using debhelper compatibility 13."]
+      "changes": ["Backport to {distribution_name} for Qore using debhelper compatibility 13.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "nghttp3": {
       "upstream_version": "1.18.0",
-      "revision": "0qore1",
+      "revision": "0qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://github.com/ngtcp2/nghttp3/releases/download/v1.18.0/nghttp3-1.18.0.tar.xz",
       "orig_sha256": "aad782c23d3f01bd4bb52c8bac7a553b631ef8115fd1612703df6183449fef19",
       "signature_url": "https://github.com/ngtcp2/nghttp3/releases/download/v1.18.0/nghttp3-1.18.0.tar.xz.asc",
       "signature_sha256": "152a1d3c6a84968e2361698b5e72724220a771b3335017b6450eb658592e13d3",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp3/1.17.0-1/nghttp3_1.17.0-1.debian.tar.xz",
       "packaging_sha256": "436f5a40de284d76e8dbfe22e7cbd3fd9dafdfe1a6a404c9f37f7d197b64b3b0",
-      "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history."]
+      "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "ngtcp2": {
       "upstream_version": "1.25.0",
-      "revision": "0qore1",
+      "revision": "0qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://github.com/ngtcp2/ngtcp2/releases/download/v1.25.0/ngtcp2-1.25.0.tar.xz",
       "orig_sha256": "2a34d2484ba17847a5d11965704e9dd0fac4c6d8efc75ffe1ec7de66d8c6b6fb",
       "signature_url": "https://github.com/ngtcp2/ngtcp2/releases/download/v1.25.0/ngtcp2-1.25.0.tar.xz.asc",
       "signature_sha256": "441174c47cbeb4a282ba07e988441e4cb3e188b4b0331bd1306c696483ac8375",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ngtcp2/1.24.0-1build1/ngtcp2_1.24.0-1build1.debian.tar.xz",
       "packaging_sha256": "a1b55a51688144f95c26efc41c5b6d9f52d27e24c14a18379055258ea97ae7de",
-      "changes": ["Package upstream 1.25.0 for Qore on {distribution_name}.", "Build matching OpenSSL and GnuTLS crypto backend packages."]
+      "changes": ["Package upstream 1.25.0 for Qore on {distribution_name}.", "Build matching OpenSSL and GnuTLS crypto backend packages.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "qore-tree-sitter": {
       "upstream_version": "0.26.13",

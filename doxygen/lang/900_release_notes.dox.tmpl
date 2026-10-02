@@ -2357,6 +2357,9 @@ while (*binary chunk = input.read(65536)) {
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - a saved @ref OpenAiRestClient::OpenAiRestConnection "OpenAiRestConnection" keeps a custom endpoint URL,
+        such as a data-residency host or a gateway; previously every saved URL was replaced with the public API
+        host, and now only an automatically generated URL is
       - fixed the synchronous @ref OpenAiRestClient::OpenAiResponseSseStream "OpenAiResponseSseStream" class: it read
         the whole event stream before returning, so no event could be read, and it failed for a request given as a hash;
         events are now read incrementally with @ref Qore::HTTPClient::readServerSentEvent()

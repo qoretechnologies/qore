@@ -1,0 +1,118 @@
+Debian 13 packaging qualification: 2026-10-01
+============================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Result: PASS for the development snapshot and scope below. These are local,
+unsigned qualification packages, not a final release or published Debian archive.
+The earlier Ubuntu qualification remains recorded in QUALIFICATION-STATUS.
+
+Source and dependencies
+-----------------------
+
+Qore: 3.0.0~git20261001.1-0qore1~deb13
+Source commit: f531cbbd83fd71f8eb5b5973e96cde5d74810c75
+Targets: Debian 13 (trixie), native amd64 and arm64 (aarch64 on hoppy).
+Evidence bundle: qore-debian13-qore-20261001 under the qualification host's
+temporary directory; QUALIFICATION.json and QUALIFICATION.txt summarize the
+checks. Full commands, image IDs, source/package hashes, dependency inventories,
+initial failures and corrected runs are retained there.
+
+The seven dependency backports documented in backports/README were qualified
+on both architectures first. They preserve the c-ares development fixes and
+provide ONNX Runtime with the private ONNX dependency. Arrow/Parquet 25.0.1-1
+comes from Apache's signed Debian 13 repository. Native, unprivileged offline
+checks cover Arrow IPC, the C Data interface and Parquet with uncompressed,
+Snappy, Gzip and Zstandard data before Qore is built.
+
+Only disposable rootless containers use the local dependency repository.
+Provisioning may download dependencies; compilation and build tests run without
+network access. No host APT configuration or packages are changed.
+
+Builds and package checks
+------------------------
+
+- Two independent source preparations produce identical .dsc, orig.tar.xz and
+  debian.tar.xz files. Source Lintian has no errors; the target's older checker
+  warns about Standards-Version 4.7.4 versus its known version 4.7.2.
+- Each architecture has two full builds with documentation/debug symbols and
+  one clean architecture-only (-B) build without Doxygen or Graphviz installed.
+  Full rebuilds use the same dependency inventory but different build paths,
+  incoming locale/timezone, parallelism and wall-clock time. Package rules
+  normalize the effective timezone and QCC codegen partition count.
+- All six builds pass 397 core suites and 16 packaging regression tests. Full
+  builds pass 47 compiler/CMake tests. Architecture-only builds report 46 tests
+  with one documentation fixture skipped because Doxygen/Graphviz are absent.
+- All eleven packages (seven regular, four debug) are byte-identical between
+  the full builds on each architecture. All eight architecture-dependent
+  packages also match the architecture-only build exactly.
+- Every build passes package manifest, ELF hardening and AOT metadata checks.
+  All 410 runtime ELF files have matching detached DWARF, build IDs and debuglink
+  CRCs: 390 AOT modules, 16 bundled native modules and four core ELF files.
+- Binary checking uses Lintian 2.129.0ubuntu2.1 with the explicit Debian profile
+  in a separate pinned, offline checker image. There are no errors; seven
+  warnings concern the same long historical changelog line. Target libraries
+  are unchanged. See README.qualification for the retired Lintian 2.122 libc
+  check, checker provenance and how to repeat checking independently.
+- Second/architecture-only builds use exact package checksum equivalence to
+  the accepted first-build checker results. Raw legacy-checker failures remain
+  in the evidence bundle; they are not presented as successful checker runs.
+- The two architecture-independent tool packages match across CPUs. qore-doc
+  differs in one generated Kerberos search-index file: three entries have a
+  different order and sequential ordinal. All 298 entries' keys, text, links
+  and metadata match; every other documentation payload file is identical.
+  This cosmetic difference does not affect per-architecture reproducibility.
+  The runtime's Multi-Arch: same shared payload files match across CPUs.
+
+Installed qualification and downstream SDK
+-----------------------------------------
+
+Both architectures pass minimal installation without Recommends, all four
+installed autopkgtests (runtime, development, tools, remote-debuggers), exact
+coinstallation of all eleven artifacts, dpkg file verification, purge,
+autoremove and reinstall. Tests cover installed SDK discovery/embedding, qcc,
+qdx, source-free AOT module loading, JSON/YAML and ONNX CPU inference.
+
+Additional unprivileged offline checks load only installed /usr modules:
+
+- DataFrame: 39 cases, 1,308 assertions in both IR and AST modes.
+- ML: 344 cases, 2,473 assertions in both normal and AST modes, with ONNX enabled.
+- Installed CMake SDK compilation/execution of the Arrow C Data example.
+- 22 further suites covering JSON, YAML, astparser, protobuf, i18n, tokenizer
+  and linenoise. The i18n checkout-specific CLI fixture is outside this scope.
+
+The DataFrame test originally failed to parse a named-argument call through an
+untyped receiver. Commit 0e451b033 declares ColumnarResult and uses ordinary
+module imports. Its installed fixture is byte-identical to that corrected test
+after removing only the repository module-path directive. This test correction
+does not change the qualified runtime snapshot.
+
+UUID validates the new SDK as an independent Debian package:
+1.4.2+git20261001.1-0qore1~deb13, source commit
+83a2d5908e14ad16c8226e77e152aaa98131a64d. Two clean offline builds on each CPU
+produce three identical packages, including debug symbols. Artifact checking,
+Lintian, minimal runtime installation without the SDK, installed runtime/compiler
+autopkgtests, file verification, purge and reinstall all pass.
+
+Qualification helper commit 019b5d337 separates binary checking from building.
+It passes accepted/rejected checker fixtures and the native UUID builds. Both
+helper and test commits passed all 71 audit-changes checks (applicable checks
+Pass, remaining checks N/A); detailed reports are retained in audits/.
+
+Limits and next steps
+---------------------
+
+- No prior Debian Qore package baseline exists here, so Debian upgrade/ABI
+  comparisons are not claimed. The older Ubuntu ABI analysis is separate.
+- GPU/Metal and service-dependent database tests are not qualified by these
+  offline runs. DataFrame's PostgreSQL test skips without a connection string.
+- The subsequent batch in QUALIFICATION-MODULES-DEBIAN13 qualifies 24 more
+  independent repositories on both CPUs, bringing the total with UUID to 25
+  of 36. Eleven still need Debian qualification; existing Ubuntu results do
+  not establish Debian support. Bundled modules remain part of Qore's packages.
+- A signed Debian repository, dependency security-maintenance policy and
+  retention of release artifacts/evidence are needed before public delivery.
+  Launchpad Ubuntu PPA uploads do not publish these Debian artifacts.
+- Final release freeze, supported ABI decision and acceptance of the exact
+  final artifacts remain release gates. Oracle dependency-hosting approval is
+  separate and still pending; this run publishes no Oracle files.

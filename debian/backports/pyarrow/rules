@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export PYBUILD_NAME = pyarrow
+export PYBUILD_SYSTEM = pyproject
+export PYBUILD_TEST_PYTEST = 1
+export PYBUILD_TEST_ARGS = {dir}/debian/tests/test_runtime.py
+export SKBUILD_CMAKE_BUILD_TYPE = RelWithDebInfo
+export SKBUILD_INSTALL_STRIP = false
+export SKBUILD_BUILD_DIR = .pybuild/cmake/{wheel_tag}
+export PYARROW_BUNDLE_ARROW_CPP = OFF
+export PYARROW_WITH_ACERO = ON
+export PYARROW_WITH_DATASET = ON
+export PYARROW_WITH_FLIGHT = ON
+export PYARROW_WITH_PARQUET = ON
+export PYARROW_WITH_PARQUET_ENCRYPTION = OFF
+export PYARROW_WITH_CUDA = OFF
+export PYARROW_WITH_GANDIVA = OFF
+export PYARROW_WITH_SUBSTRAIT = OFF
+export PYARROW_WITH_ORC = OFF
+export PYARROW_WITH_HDFS = OFF
+export PYARROW_WITH_AZURE = OFF
+export PYARROW_WITH_GCS = OFF
+export PYARROW_WITH_S3 = OFF
+export CMAKE_BUILD_PARALLEL_LEVEL = $(or $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS))),1)
+
+%:
+	dh $@ --buildsystem=pybuild
+
+override_dh_python3:
+	dh_python3 --no-ext-rename
+	dh_numpy3
+
+# The Python bridge libraries live alongside their importing extensions.
+# They link to the system Arrow libraries; no Arrow C++ copies are bundled.
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(CURDIR)/debian/python3-pyarrow/usr/lib/python3/dist-packages/pyarrow
+
+override_dh_makeshlibs:
+	dh_makeshlibs -Xlibarrow_python

@@ -123,6 +123,8 @@ stream.close();
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
 
+    - saved connections keep a custom endpoint URL such as a data-residency host or a gateway; only an
+      automatically generated URL is still replaced with the default endpoint
     - Per-call LLM timeouts now govern synchronous requests and stream setup;
       explicit streaming deadlines include all response chunks without changing
       concurrent calls' client settings.
@@ -391,11 +393,14 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
     }
 
     #! Sets the update options code for the connection
+    /** A saved URL that was generated automatically (see @ref isGeneratedUrl()) is replaced with
+        @ref DefaultUrl; any other endpoint, such as a data-residency host or a gateway, is kept.
+    */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
             hash<auto> update;
-            if (url != DefaultUrl) {
+            if (isGeneratedUrl(url)) {
                 update.url = DefaultUrl;
             }
             if (opts.ping_path =~ /^\//) {
@@ -405,6 +410,26 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
                 doUpdateOptions(self, update);
             }
         }
+    }
+
+    #! Returns @ref True if a saved URL was generated rather than chosen
+    /** @param url the saved connection URL
+
+        @return @ref True if the URL is a non-canonical form of the public OpenAI host
+        (\c api.openai.com with another scheme or a path) or an automatic URL placeholder (host \c x, or
+        \c localhost without a port); @ref False for @ref DefaultUrl and for every other endpoint
+
+        @since OpenAiRestClient 1.1
+    */
+    static bool isGeneratedUrl(string url) {
+        if (url == DefaultUrl) {
+            return False;
+        }
+        hash<UrlInfo> info = parse_url(url);
+        if (info.host == "api.openai.com" || info.host == "x") {
+            return True;
+        }
+        return info.host == "localhost" && !exists info.port;
     }
 
     #! Sets child data provider capabilities

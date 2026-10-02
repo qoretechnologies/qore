@@ -60,7 +60,8 @@ build_image=$(podman commit --quiet "$container")
 printf '%s\n' "$build_image" > "$results/build-image.txt"
 printf '%s\n' "$options" > "$results/build-options.txt"
 printf '%s\n' "${QORE_DEB_BUILD_PROFILES:-}" > "$results/build-profiles.txt"
-podman run --rm --network=none -v "$results:/results" \
+podman run --rm --network=none \
+    --add-host=localhost:127.0.0.1 --add-host=localhost:::1 -v "$results:/results" \
     -e "DEB_BUILD_OPTIONS=$options" -e "DEB_BUILD_PROFILES=${QORE_DEB_BUILD_PROFILES:-}" \
     "$build_image" /bin/bash -euc '
         cp /qualification/build-dependencies.txt /results/
@@ -70,8 +71,11 @@ podman run --rm --network=none -v "$results:/results" \
         shopt -s nullglob
         packages=(/qualification/*.deb /qualification/*.ddeb)
         cp "${packages[@]}" /qualification/*.changes /qualification/*.buildinfo /results/
-        lintian --allow-root --fail-on error "${packages[@]}"
-        printf "%s\n" "PASS: offline build, tests and binary Lintian" > /results/PASS
+        printf "%s\n" "PASS: offline build and tests" > /results/BUILD-PASS
     ' > "$results/build.log" 2>&1
+script_dir=$(dirname -- "$(realpath "$0")")
+"$script_dir/lint-debian-packages.sh" "$results" "$results/lintian" \
+    "${QORE_DEB_LINTIAN_IMAGE:-$build_image}" "${QORE_DEB_LINTIAN_PROFILE:-debian}"
+printf '%s\n' 'PASS: offline build, tests and binary Lintian' > "$results/PASS"
 test -s "$results/PASS"
 echo "Offline build results: $results"
