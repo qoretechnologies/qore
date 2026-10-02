@@ -1744,6 +1744,16 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 
 // --- AsyncIoControllerPriv implementation ---
 
+AsyncIoControllerPriv::IoThreadContext::~IoThreadContext() {
+    assert(!tid);
+    delete loop;
+    if (notifier) {
+        ExceptionSink xsink;
+        notifier->deref(&xsink);
+        xsink.clear();
+    }
+}
+
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : num_io_threads(1), autostop_flag(autostop), shutting_down(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
@@ -1788,17 +1798,6 @@ AsyncIoControllerPriv::~AsyncIoControllerPriv() {
             }
         }
         cancel_cond_map.clear();
-    }
-    for (auto& tp : io_threads) {
-        delete tp->loop;
-        ExceptionSink xsink;
-        if (tp->notifier) {
-            tp->notifier->deref(&xsink);
-            tp->notifier = nullptr;
-        }
-        if (xsink) {
-            xsink.clear();
-        }
     }
 }
 
@@ -2684,6 +2683,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 
     auto close_direct = [&]() -> int {
         sock->closeIo(xsink);
+        wakeSocketAfterClose(sock_hash);
         return *xsink ? -1 : 0;
     };
 
@@ -3492,6 +3492,41 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     }
 }
 
+void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash) {
+    // Cancellation and descriptor close are separate controller commands. An
+    // operation submitted between them can already be waiting in epoll/kqueue
+    // when close removes its fd. The kernel does not report that removal as
+    // readiness, so explicitly schedule the closed socket once more. Existing
+    // generation validation then delivers SOCKET-CLOSED to the waiting caller.
+    // Broadcast because callers may use different thread_key routes for the
+    // same socket; no I/O thread may retain a waiter on the removed descriptor.
+    AutoLocker al(m);
+    if (shutting_down || io_exiting) {
+        return; // teardown already completes all outstanding operations
+    }
+    int tid = q_gettid();
+    for (auto& tp : io_threads) {
+        if (!tp->running.load(std::memory_order_acquire)) {
+            continue;
+        }
+        // Match the actual thread, since another controller can have the same
+        // thread index. Only the owning thread may change this set directly.
+        if (tp->tid == tid) {
+            tp->wake_socket_hashes.insert(sock_hash);
+            continue;
+        }
+        Command cmd;
+        cmd.cmd = IoCommand::WakeSocket;
+        cmd.sock_hash = sock_hash;
+        tp->cmdq.push(std::move(cmd));
+        ++submit_seq;
+        ++tp->submit_seq;
+        // notify() is nonblocking. Keep the context alive under m until it
+        // returns, including when another thread stops/resizes the controller.
+        tp->notifier->notify();
+    }
+}
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     // Look up which thread owns this socket
     int thread_idx = 0;
@@ -4074,12 +4109,11 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
     if (num_threads == num_io_threads) {
         return;
     }
-    // Resize — create new contexts with fresh event loops and notifiers
-    num_io_threads = num_threads;
-    io_threads.clear();
-    sock_to_thread.clear();
-    obj_to_sock_hash.clear();
-    for (int i = 0; i < num_io_threads; ++i) {
+    // Prepare the replacement before changing the usable controller. Context
+    // destructors release both resources if any allocation/setup fails.
+    std::vector<std::unique_ptr<IoThreadContext>> new_threads;
+    new_threads.reserve(num_threads);
+    for (int i = 0; i < num_threads; ++i) {
         auto tp = std::make_unique<IoThreadContext>();
         tp->thread_idx = i;
         tp->loop = new QoreEventLoop(xsink);
@@ -4090,8 +4124,12 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
         if (*xsink) {
             return;
         }
-        io_threads.push_back(std::move(tp));
+        new_threads.push_back(std::move(tp));
     }
+    io_threads.swap(new_threads);
+    num_io_threads = num_threads;
+    sock_to_thread.clear();
+    obj_to_sock_hash.clear();
 }
 
 // --- Internal methods ---
@@ -5931,6 +5969,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 case IoCommand::CloseSocket: {
                     if (cmd.close_sock) {
                         cmd.close_sock->closeIo(xsink);
+                        wakeSocketAfterClose(cmd.sock_hash);
                         cmd.close_sock->deref(xsink);
                         cmd.close_sock = nullptr;
                     }

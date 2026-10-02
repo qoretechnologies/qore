@@ -935,6 +935,24 @@ Representative bridges:
   controller cancel that waits for any deferred worker `continuePoll()` aborts, then
   submits a controller-side close command; direct helpers remain direct only after
   ownership has moved to the I/O thread.
+  An operation can be submitted between the cancellation barrier and descriptor
+  close. After closing the descriptor, the controller explicitly wakes matching
+  operations on every live I/O context, including operations routed with a custom
+  `thread_key`. Closing a descriptor removes its epoll/kqueue registration without
+  delivering a readiness event; this explicit wake lets the existing descriptor
+  generation check complete a late operation with `SOCKET-CLOSED`. For example,
+  closing a listening socket while another thread enters `accept()` must release
+  that caller even when its operation has no timeout. The native close regression
+  forces this interleaving with a processing barrier and verifies exactly one
+  completion with both one and two I/O threads.
+  Each I/O context owns its event loop and notifier and releases them when the
+  context is destroyed. Resizing a stopped controller constructs a complete
+  replacement before swapping contexts, so setup failure retains the previous
+  usable configuration. Running controllers reject resizing.
+  HTTP promise completion actions retain the descriptor-owning `EventNotifier`
+  Qore object as well as its private data until action cleanup. Releasing an
+  abandoned poll operation can therefore precede late response or cancellation
+  delivery without closing the descriptor that the completion action signals.
 - `QoreSocketObject` uses `qore_socket_object_exec_poll_operation()` to run existing
   Socket poll operations through the controller.
 - The QPP `Socket`, `QoreSocketObject`, and raw C++ `QoreSocket` bridge helpers

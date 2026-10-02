@@ -4,6 +4,14 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Closing a socket now wakes operations submitted concurrently with its cancellation
+    phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
+    waiting indefinitely after the descriptor has been removed from the event loop.
+    Changing the I/O thread count on a stopped controller also releases the previous
+    event loops and notifiers and retains the old configuration if setup fails.
+    HTTP completion actions keep their notification descriptor alive when callers
+    release a poll operation before the response or cancellation is delivered.
+
     The operator reference now exports its complete page and anchors with modern Doxygen;
     literal backticks no longer start an unterminated markup block. External module
     references to background execution and binary operators resolve through the SDK index.

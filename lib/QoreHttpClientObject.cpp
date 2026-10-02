@@ -8266,13 +8266,20 @@ public:
         // Submit the request now.  Dispatch via the virtual
         // submitRequestWithAction — H1 and H2 both implement it, H3
         // raises HTTPCLIENT-NOT-IMPLEMENTED.
-        // PromiseNotifierAction refs both promise and notifier; we still
-        // hold our own refs, which are deref'd via clearPending / ~dtor.
+        ReferenceHolder<QoreObject> notifier_obj(getReferencedSocketObject(xsink), xsink);
+        if (!notifier_obj || *xsink) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+        // The action retains the promise and the descriptor-owning notifier object
+        // until completion, even if cancellation destroys this poll operation.
         AbstractAsyncAction* action = pending_streaming_response
             ? static_cast<AbstractAsyncAction*>(
-                new StreamingHeadersPromiseNotifierAction(pending_promise, notifier))
+                new StreamingHeadersPromiseNotifierAction(pending_promise, notifier, *notifier_obj))
             : static_cast<AbstractAsyncAction*>(
-                new PromiseNotifierAction(pending_promise, notifier));
+                new PromiseNotifierAction(pending_promise, notifier, *notifier_obj));
         attachEventSink(action);
         reportSendEvent(pending_method.c_str(), pending_path.c_str(),
             priv_ref && !priv_ref->http11 ? "1.0" : "1.1", pending_headers);
@@ -8662,10 +8669,15 @@ public:
             }
 
             if (conn->isReady()) {
+                ReferenceHolder<QoreObject> notifier_obj(getReferencedSocketObject(xsink), xsink);
+                if (!notifier_obj || *xsink) {
+                    mgr.releaseConnection(conn);
+                    return -1;
+                }
                 AbstractAsyncAction* action = request->streaming_response
                     ? static_cast<AbstractAsyncAction*>(
-                        new StreamingHeadersPromiseNotifierAction(*promise, notifier))
-                    : static_cast<AbstractAsyncAction*>(new PromiseNotifierAction(*promise, notifier));
+                        new StreamingHeadersPromiseNotifierAction(*promise, notifier, *notifier_obj))
+                    : static_cast<AbstractAsyncAction*>(new PromiseNotifierAction(*promise, notifier, *notifier_obj));
                 attachEventSink(action);
                 reportSendEvent(request->method.c_str(), request->target.c_str(),
                     request->http_version.c_str(), request->headers);
@@ -9167,9 +9179,9 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         // are both supported.
         AbstractAsyncAction* action = streaming_response
             ? static_cast<AbstractAsyncAction*>(
-                new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
+                new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj))
             : static_cast<AbstractAsyncAction*>(
-                new PromiseNotifierAction(promise_raw, notifier_raw));
+                new PromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj));
         action->setEventSink(event_sink);
         reportPollSendEvent(method, msgpath, *nh);
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
@@ -9245,9 +9257,9 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             // READY now — fall into the fast-path synchronous submit.
             AbstractAsyncAction* action = streaming_response
                 ? static_cast<AbstractAsyncAction*>(
-                    new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
+                    new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj))
                 : static_cast<AbstractAsyncAction*>(
-                    new PromiseNotifierAction(promise_raw, notifier_raw));
+                    new PromiseNotifierAction(promise_raw, notifier_raw, *notifier_obj));
             action->setEventSink(event_sink);
             reportPollSendEvent(method, msgpath, *nh);
             int64_t stream_id = conn->submitRequestWithAction(method,

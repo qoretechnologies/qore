@@ -41,6 +41,9 @@
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Queue.h"
+#include "qore/intern/QC_EventNotifier.h"
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/ManagedDatasource.h"
@@ -963,6 +966,191 @@ static void ut_asyncio_construction(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds without exception");
 }
 
+#ifdef DEBUG
+//! Forces a submission between close's cancellation barrier and descriptor close.
+class AsyncIoCloseTest {
+    struct Cleanup {
+        AsyncIoControllerPriv* ctrl;
+        ExceptionSink& xsink;
+        UnitTestCounters& c;
+
+        ~Cleanup() {
+            xsink.clear();
+            ctrl->stopClear(&xsink);
+            UT_ASSERT(c, !xsink, "late-close controller cleanup succeeds");
+            xsink.clear();
+        }
+    };
+
+public:
+    static void resize(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "resize test controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink, c};
+        for (int threads : {4, 2, 1}) {
+            int old_threads = static_cast<int>(ctrl->io_threads.size());
+            QoreEventNotifier* original = ctrl->io_threads.front()->notifier;
+            original->ref();
+            ReferenceHolder<QoreEventNotifier> original_holder(original, &xsink);
+            ctrl->setMaxIoThreads(threads, &xsink);
+            UT_ASSERT(c, !xsink, "stopped controller resizes");
+            if (xsink) {
+                return;
+            }
+            UT_ASSERT_EQ(c, threads, static_cast<int>(ctrl->io_threads.size()), "resize creates every context");
+            UT_ASSERT_EQ(c, old_threads == threads ? 2 : 1, original->reference_count(),
+                "resize releases the old notifier reference only when replacing contexts");
+            QoreEventLoop* loop = ctrl->io_threads.front()->loop;
+            ctrl->setMaxIoThreads(threads, &xsink);
+            UT_ASSERT(c, !xsink && loop == ctrl->io_threads.front()->loop,
+                "setting the same thread count preserves existing resources");
+            if (xsink) {
+                return;
+            }
+            ctrl->start(&xsink);
+            UT_ASSERT(c, !xsink, "resized controller starts");
+            if (xsink) {
+                return;
+            }
+            bool ready = ctrl->waitReady(5000, &xsink);
+            UT_ASSERT(c, ready && !xsink, "resized controller becomes ready");
+            if (!ready || xsink) {
+                return;
+            }
+            ctrl->setMaxIoThreads(threads + 1, &xsink);
+            UT_ASSERT(c, xsink, "resizing a running controller is rejected");
+            if (xsink) {
+                QoreStringDataHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, err == "ASYNC-IO-ERROR", "running resize reports ASYNC-IO-ERROR");
+            }
+            xsink.clear();
+            UT_ASSERT_EQ(c, threads, static_cast<int>(ctrl->io_threads.size()),
+                "rejected resize preserves the running controller");
+            ctrl->stop(&xsink);
+            UT_ASSERT(c, !xsink && !ctrl->running(), "resized controller stops");
+            if (xsink) {
+                return;
+            }
+        }
+    }
+
+    static void run(UnitTestCounters& c) {
+        for (int threads : {1, 2}) {
+            ExceptionSink xsink;
+            ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+            UT_ASSERT(c, !xsink, "late-close controller construction succeeds");
+            if (xsink) {
+                xsink.clear();
+                continue;
+            }
+            Cleanup cleanup{*ctrl, xsink, c};
+            ctrl->setMaxIoThreads(threads, &xsink);
+            UT_ASSERT(c, !xsink, "late-close controller thread count is set");
+            if (xsink) {
+                continue;
+            }
+            QoreSocketObject* sock = new QoreSocketObject;
+            ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+            int rc = sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "late-close test listener binds");
+            if (rc || xsink) {
+                xsink.clear();
+                continue;
+            }
+            rc = sock->listen(20);
+            UT_ASSERT_EQ(c, 0, rc, "late-close test listener listens");
+            if (rc) {
+                continue;
+            }
+            // Execute close's first phase with no operation yet submitted.
+            bool canceled = ctrl->cancel(sock, &xsink);
+            UT_ASSERT(c, !canceled && !xsink, "the initial cancellation finds no operation");
+            if (xsink) {
+                continue;
+            }
+            sock->ref();
+            SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, sock, false, true);
+            ReferenceHolder<QoreObject> op_obj(
+                new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+            UT_ASSERT(c, !xsink, "late accept operation construction succeeds");
+            if (xsink) {
+                continue;
+            }
+            accept->setSelf(*op_obj);
+            op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+            UT_ASSERT(c, !xsink, "late accept socket member is initialized");
+            if (xsink) {
+                continue;
+            }
+            op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+            UT_ASSERT(c, !xsink, "late accept goal is initialized");
+            if (xsink) {
+                continue;
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+            UT_ASSERT(c, !xsink, "late accept submission info is created");
+            if (xsink) {
+                continue;
+            }
+            info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+            info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+            info->setKeyValue("owner", new QoreStringNode("late-close-unit-test"), &xsink);
+            info->setKeyValue("key", new QoreStringNode("late-close-accept"), &xsink);
+            info->setKeyValue("thread_key", new QoreStringNode("late-close-route"), &xsink);
+            info->setKeyValue("to", -1, &xsink);
+            UT_ASSERT(c, !xsink, "late accept submission info is initialized");
+            if (xsink) {
+                continue;
+            }
+            ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+            UT_ASSERT(c, !xsink && queue_obj, "late accept is submitted with a result queue");
+            if (xsink || !queue_obj) {
+                continue;
+            }
+            bool processed = ctrl->waitForProcessing(5000, &xsink);
+            UT_ASSERT(c, processed && !xsink, "late accept reaches its first poll without sleeps");
+            if (!processed || xsink) {
+                continue;
+            }
+            UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(), "late accept is waiting for a client");
+
+            // Execute the second phase without another cancellation: this is
+            // exactly the interleaving observed in Socket::close().
+            rc = ctrl->closeSocketOnController(sock, sock->getIoIdentityHash(), &xsink);
+            UT_ASSERT(c, !rc && !xsink, "descriptor closes after the late submission");
+            if (rc || xsink) {
+                continue;
+            }
+            ReferenceHolder<Queue> queue(static_cast<Queue*>(
+                queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)), &xsink);
+            UT_ASSERT(c, queue && !xsink, "the completion queue remains valid");
+            if (queue && !xsink) {
+                bool timed_out = false;
+                ValueHolder result(queue->shift(&xsink, 5000, &timed_out), &xsink);
+                UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+                    "closing wakes a late accept and delivers its completion");
+                if (result->getType() == NT_HASH) {
+                    QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+                    UT_ASSERT(c, ex.getType() == NT_HASH, "late accept reports a socket exception");
+                    if (ex.getType() == NT_HASH) {
+                        QoreStringDataHelper err(ex.get<QoreHashNode>()->getKeyValue("err"));
+                        UT_ASSERT(c, err == "SOCKET-CLOSED", "late accept reports SOCKET-CLOSED");
+                    }
+                }
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "late-close controller stops after completion");
+                UT_ASSERT_EQ(c, 0, static_cast<int>(queue->size()), "close delivers exactly one completion");
+            }
+        }
+    }
+};
+#endif
+
 static void ut_asyncio_poll_timeout_rounding(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 0, qore_async_io_deadline_to_poll_timeout_ms(1000, 1000),
         "an elapsed poll deadline is immediate");
@@ -1355,6 +1543,82 @@ static void ut_future_get_blocking_error(UnitTestCounters& c) {
 // Future wakes, and q_future_get_blocking returns the value to the
 // sync caller.  Any missing glue in the chain surfaces here instead
 // of in a full integration test.
+
+static void ut_promise_notifier_action_lifetime(UnitTestCounters& c) {
+    // Cover ordinary success/error and streaming headers/error/early close.
+    for (int mode = 0; mode < 5; ++mode) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), "completion notifier is created");
+        if (xsink || !notifier->isValid()) {
+            xsink.clear();
+            continue;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(
+            new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+        ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && future, "completion future is created");
+        if (xsink || !future) {
+            xsink.clear();
+            continue;
+        }
+        ReferenceHolder<AbstractAsyncAction> action(mode < 2
+            ? static_cast<AbstractAsyncAction*>(new PromiseNotifierAction(*promise, *notifier, *notifier_obj))
+            : static_cast<AbstractAsyncAction*>(
+                new StreamingHeadersPromiseNotifierAction(*promise, *notifier, *notifier_obj)), &xsink);
+
+        // Simulate releasing the caller's poll operation before the connection
+        // delivers its result. A private-data reference alone cannot keep the
+        // EventNotifier Qore destructor from closing the descriptor.
+        notifier_obj = nullptr;
+        UT_ASSERT(c, notifier->isValid(), "completion action retains the descriptor-owning object");
+        if (!notifier->isValid()) {
+            continue;
+        }
+        QoreEventLoop loop(&xsink);
+        UT_ASSERT(c, !xsink, "completion event loop is created");
+        if (xsink) {
+            xsink.clear();
+            continue;
+        }
+        int rc = loop.add(notifier->fd(), QORE_EV_READ, nullptr, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "completion descriptor is registered");
+        if (rc || xsink) {
+            xsink.clear();
+            continue;
+        }
+        bool error = mode == 1 || mode >= 3;
+        if (mode == 4) {
+            action->complete(&xsink);
+        } else if (error) {
+            action->executeError("COMPLETION-TEST-ERROR", "expected cancellation", &xsink);
+        } else {
+            ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), &xsink);
+            response->setKeyValue("status_code", 200, &xsink);
+            UT_ASSERT(c, !xsink, "completion response is initialized");
+            if (xsink) {
+                xsink.clear();
+                continue;
+            }
+            action->execute(response.release(), &xsink);
+        }
+        UT_ASSERT(c, !xsink && future->isDone(), "completion resolves the future");
+        UT_ASSERT(c, future->isError() == error, "completion preserves success/error state");
+        if (xsink) {
+            xsink.clear();
+            continue;
+        }
+        std::vector<QoreEventInfo> events;
+        rc = loop.poll(events, 1000, &xsink);
+        UT_ASSERT(c, !xsink && rc == 1, "completion signals the retained descriptor");
+        action = nullptr;
+        UT_ASSERT(c, !notifier->isValid(), "releasing the action closes the unowned descriptor");
+        UT_ASSERT(c, !xsink, "completion action cleanup succeeds");
+        xsink.clear();
+    }
+}
 
 static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -4696,6 +4960,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
+#ifdef DEBUG
+    AsyncIoCloseTest::resize(c);
+    AsyncIoCloseTest::run(c);
+#endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
     ut_asyncio_get_info(c);
@@ -4707,6 +4975,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_future_get_blocking_error(c);
     ut_promise_action_execute_then_get(c);
     ut_promise_action_execute_error(c);
+    ut_promise_notifier_action_lifetime(c);
     ut_http1_connection_simple_request(c);
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);

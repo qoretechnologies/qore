@@ -450,6 +450,9 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
     @since %Qore 3.0
 */
 class AsyncIoControllerPriv : public AbstractPrivateData {
+#ifdef DEBUG
+    friend class AsyncIoCloseTest;
+#endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 
 public:
@@ -1011,6 +1014,9 @@ private:
         @since %Qore 3.0
     */
     struct IoThreadContext {
+        //! Release the event loop and notifier on resize, failed setup, or destruction
+        DLLLOCAL ~IoThreadContext();
+
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
         std::atomic<bool> running{false};  //!< True when this thread accepts commands
         int tid = 0;                       //!< Thread ID (0 if not running)
@@ -1306,6 +1312,12 @@ private:
     //! Submit a controller-side close command after socket operations are canceled
     DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
         const std::string& sock_hash, ExceptionSink* xsink);
+
+    //! Wake late submissions after descriptor close removes kernel readiness registration
+    /** Called without m held, after closeIo(). The current I/O context is updated
+        directly; other live contexts receive a WakeSocket command.
+    */
+    DLLLOCAL void wakeSocketAfterClose(const std::string& sock_hash);
 
     //! True if a PollInfo belongs to the socket hash currently being targeted
     DLLLOCAL static bool pollInfoMatchesSocketHash(const PollInfo& pinfo,

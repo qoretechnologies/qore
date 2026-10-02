@@ -334,12 +334,20 @@ private:
 */
 class PromiseNotifierAction : public AbstractAsyncAction {
 public:
-    DLLLOCAL PromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier)
-        : promise(promise), notifier(notifier) {
+    //! References the promise, private notifier, and its descriptor-owning Qore object
+    /** @param promise result destination (referenced)
+        @param notifier notifier private data (referenced)
+        @param notifier_obj EventNotifier object retaining the open descriptor (referenced)
+    */
+    DLLLOCAL PromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier,
+            QoreObject* notifier_obj)
+        : promise(promise), notifier(notifier), notifier_obj(notifier_obj) {
         assert(promise);
         assert(notifier);
+        assert(notifier_obj);
         promise->ref();
         notifier->ref();
+        notifier_obj->ref();
     }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
@@ -358,6 +366,10 @@ public:
             promise->deref(xsink);
             promise = nullptr;
         }
+        if (notifier_obj) {
+            notifier_obj->deref(xsink);
+            notifier_obj = nullptr;
+        }
         if (notifier) {
             notifier->deref(xsink);
             notifier = nullptr;
@@ -367,6 +379,7 @@ public:
 private:
     QorePromise* promise;
     QoreEventNotifier* notifier;
+    QoreObject* notifier_obj;
 };
 
 //! Resolves a Promise on streaming response headers and signals an EventNotifier
@@ -377,12 +390,20 @@ private:
 */
 class StreamingHeadersPromiseNotifierAction : public AbstractAsyncAction {
 public:
-    DLLLOCAL StreamingHeadersPromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier)
-        : promise(promise), notifier(notifier) {
+    //! References the promise, private notifier, and its descriptor-owning Qore object
+    /** @param promise response-header result destination (referenced)
+        @param notifier notifier private data (referenced)
+        @param notifier_obj EventNotifier object retaining the open descriptor (referenced)
+    */
+    DLLLOCAL StreamingHeadersPromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier,
+            QoreObject* notifier_obj)
+        : promise(promise), notifier(notifier), notifier_obj(notifier_obj) {
         assert(promise);
         assert(notifier);
+        assert(notifier_obj);
         promise->ref();
         notifier->ref();
+        notifier_obj->ref();
     }
 
     DLLLOCAL bool isStreaming() const override { return true; }
@@ -421,6 +442,10 @@ public:
             promise->deref(xsink);
             promise = nullptr;
         }
+        if (notifier_obj) {
+            notifier_obj->deref(xsink);
+            notifier_obj = nullptr;
+        }
         if (notifier) {
             notifier->deref(xsink);
             notifier = nullptr;
@@ -430,6 +455,7 @@ public:
 private:
     QorePromise* promise;
     QoreEventNotifier* notifier;
+    QoreObject* notifier_obj;
     bool done = false;
 };
 
