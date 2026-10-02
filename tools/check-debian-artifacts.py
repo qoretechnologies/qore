@@ -83,7 +83,7 @@ def trailers(data):
     return result
 
 
-def inspect_elf(data, scratch, debug=False, private_jvm_runpath=None):
+def inspect_elf(data, scratch, debug=False, private_jvm_runpath=None, private_pyarrow_needed=None):
     scratch.write_bytes(data)
     info = subprocess.check_output(
         ["readelf", "--wide", "--file-header", "--program-headers", "--dynamic",
@@ -128,12 +128,63 @@ def inspect_elf(data, scratch, debug=False, private_jvm_runpath=None):
                               and runpaths == [private_jvm_runpath]
                               and "libjvm.so" in needed)
         symbols["private_jvm_runpath"] = runpaths
+    if private_pyarrow_needed is not None:
+        runpaths = re.findall(r"\(RUNPATH\).*?\[([^]]+)\]", info)
+        needed = re.findall(r"\(NEEDED\).*?\[([^]]+)\]", info)
+        checks["no_rpath"] = ("(RPATH)" not in info and runpaths == ["$ORIGIN"]
+                              and private_pyarrow_needed.issubset(needed))
+        symbols["private_pyarrow_needed"] = needed
+        soname = re.findall(r"\(SONAME\).*?\[([^]]+)\]", info)
+        symbols["private_pyarrow_soname"] = soname[0] if len(soname) == 1 else None
     # ET_EXEC is not PIE; shared libraries and PIE executables are ET_DYN.
     checks["position_independent"] = kind == "DYN"
     return {"type": kind, **symbols, **checks}, [key for key, passed in checks.items() if not passed]
 
 
-def archive_members(path, control=False, scratch=None, debug=False, private_jvm=None):
+def pyarrow_dependencies(name, multiarch):
+    """Return the required linkage for a supported private PyArrow 25 ELF."""
+    prefix = "usr/lib/python3/dist-packages/pyarrow/"
+    if not name.startswith(prefix):
+        return None
+    filename = name[len(prefix):]
+    if re.fullmatch(r"libarrow_python\.so(?:\.2500(?:\.1\.0)?)?", filename):
+        return {"libarrow.so.2500"}
+    if re.fullmatch(r"libarrow_python_flight\.so(?:\.2500(?:\.1\.0)?)?", filename):
+        return {"libarrow_python.so.2500", "libarrow_flight.so.2500"}
+    if re.fullmatch(rf"[A-Za-z0-9_]+\.cpython-313-{re.escape(multiarch)}\.so", filename):
+        return {"libarrow_python.so.2500"}
+    return None
+
+
+def check_pyarrow_bridges(payload):
+    """Require each private bridge dependency to resolve inside this package."""
+    prefix = "usr/lib/python3/dist-packages/pyarrow/"
+    findings = []
+    for name, entry in payload.items():
+        for dependency in entry.get("elf", {}).get("private_pyarrow_needed", []):
+            if not dependency.startswith("libarrow_python"):
+                continue
+            target = prefix + dependency
+            visited = set()
+            while target in payload and target not in visited:
+                visited.add(target)
+                item = payload[target]
+                if "elf" in item:
+                    break
+                link = item.get("link", "")
+                if item["type"] == "2" and link and "/" not in link and link not in (".", ".."):
+                    target = prefix + link
+                elif item["type"] == "1" and link.removeprefix("./").startswith(prefix):
+                    target = link.removeprefix("./")
+                else:
+                    break
+            bridge = payload.get(target, {}).get("elf", {})
+            if bridge.get("private_pyarrow_soname") != dependency:
+                findings.append(f"{name}: missing or invalid private bridge {dependency}")
+    return findings
+
+
+def archive_members(path, control=False, scratch=None, debug=False, private_jvm=None, private_pyarrow=None):
     flag = "--ctrl-tarfile" if control else "--fsys-tarfile"
     process = subprocess.Popen(["dpkg-deb", flag, str(path)], stdout=subprocess.PIPE)
     members, findings = {}, []
@@ -157,7 +208,9 @@ def archive_members(path, control=False, scratch=None, debug=False, private_jvm=
                         if private_jvm and re.fullmatch(private_jvm[0], name):
                             jvm_path = private_jvm[1]
                         entry["elf"], failures = inspect_elf(data, scratch, debug=debug,
-                                                           private_jvm_runpath=jvm_path)
+                            private_jvm_runpath=jvm_path,
+                            private_pyarrow_needed=(pyarrow_dependencies(name, private_pyarrow)
+                                                    if private_pyarrow else None))
                         findings.extend(f"{name}: {failure}" for failure in failures)
                     if not control and name.endswith(".qmod") and "-api-" not in name:
                         entry["trailers"] = trailers(data)
@@ -202,7 +255,7 @@ def check_debug_symbols(packages):
     return {"checked": checked, "passed": not findings}, findings
 
 
-def inspect(directory, require_debug=False, allow_private_jvm=False):
+def inspect(directory, require_debug=False, allow_private_jvm=False, allow_private_pyarrow=False):
     packages, findings = {}, []
     inputs = sorted([*directory.glob("*.deb"), *directory.glob("*.ddeb")])
     if not inputs:
@@ -227,7 +280,17 @@ def inspect(directory, require_debug=False, allow_private_jvm=False):
                                      for item in depends.split(",")):
                     private_jvm = (rf"usr/lib/{multiarch}/qore-modules/jni-api-[0-9]+\.[0-9]+\.qmod",
                                    f"/usr/lib/jvm/java-21-openjdk-{architecture}/lib/server")
-            payload, errors = archive_members(path, scratch=scratch, debug=debug, private_jvm=private_jvm)
+            private_pyarrow = None
+            if allow_private_pyarrow and package == "python3-pyarrow":
+                multiarch = {"amd64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}.get(architecture)
+                depends = subprocess.check_output(["dpkg-deb", "-f", str(path), "Depends"], text=True)
+                if multiarch and any(re.fullmatch(r"libarrow2500(?:\s+\([^()]+\))?", item.strip())
+                                     for item in depends.split(",")):
+                    private_pyarrow = multiarch
+            payload, errors = archive_members(path, scratch=scratch, debug=debug, private_jvm=private_jvm,
+                                               private_pyarrow=private_pyarrow)
+            if private_pyarrow:
+                errors.extend(check_pyarrow_bridges(payload))
             control, _ = archive_members(path, control=True)
             findings.extend(f"{key}: {error}" for error in errors)
             packages[key] = {"version": version, "sha256": file_digest(path), "debug_package": debug,
@@ -238,6 +301,7 @@ def inspect(directory, require_debug=False, allow_private_jvm=False):
         findings.extend(errors)
     return {"schema": 1, "packages": packages, "findings": findings, "checksums": manifest,
             "private_jvm_policy": allow_private_jvm,
+            "private_pyarrow_policy": allow_private_pyarrow,
             "debug_symbols": symbols, "passed": not findings}
 
 
@@ -271,6 +335,8 @@ def main():
                        help="Require matching detached DWARF, build IDs and debuglink CRCs for every runtime ELF")
     check.add_argument("--allow-private-jvm", action="store_true",
                        help="Allow only Qore JNI's packaged OpenJDK 21 RUNPATH on amd64/arm64")
+    check.add_argument("--allow-private-pyarrow", action="store_true",
+                       help="Allow PyArrow 25's private Python 3.13 bridges with an exact $ORIGIN RUNPATH")
     diff = commands.add_parser("compare", help="Compare JSON reports from two builds")
     diff.add_argument("left", type=Path)
     diff.add_argument("right", type=Path)
@@ -279,7 +345,8 @@ def main():
     args = parser.parse_args()
     if args.command == "inspect":
         result = inspect(args.directory, require_debug=args.require_debug_symbols,
-                         allow_private_jvm=args.allow_private_jvm)
+                         allow_private_jvm=args.allow_private_jvm,
+                         allow_private_pyarrow=args.allow_private_pyarrow)
         passed = result["passed"]
         print(f"Inspected {len(result['packages'])} packages; {len(result['findings'])} findings")
     else:

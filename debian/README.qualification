@@ -109,6 +109,14 @@ amd64 or arm64, with an explicit openjdk-21-jre-headless dependency and a
 libjvm.so link. Legacy RPATH, additional directories and other package files
 remain disallowed. The default inspection policy is unchanged.
 
+The Debian PyArrow 25 package keeps its Python bridge libraries beside the
+Python 3.13 extension modules. Inspect it with --allow-private-pyarrow to allow
+an exact $ORIGIN RUNPATH only in those files on amd64 or arm64. This requires
+an explicit libarrow2500 dependency, the expected ELF dependencies and matching
+private bridge SONAMEs in the same package. Legacy RPATH, additional search
+directories, missing bridges and unrelated packages or files still fail. This
+opt-in does not relax hardening or detached-debug-symbol checks.
+
 Build the same source twice in fresh containers, with the same dependency
 versions and build options. Vary the build path/time/locale deliberately when
 investigating reproducibility. Inspect each build, then compare:
