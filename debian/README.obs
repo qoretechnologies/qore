@@ -1,0 +1,96 @@
+Debian 13 testing packages on Open Build Service
+==============================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+The staging project is home:davidnichols:qore:testing:debian on
+https://build.opensuse.org/. Its Debian_13 repository builds native x86_64
+(Debian amd64) and aarch64 (Debian arm64) packages. Ubuntu packages remain in
+the qore-packagers/qore-testing Launchpad PPA. Neither staging qualification
+nor publication of development snapshots constitutes a final Qore release.
+
+Source imports and publication
+------------------------------
+
+Import the exact locally qualified .dsc, Debian tarball and every orig source
+component, checking their SHA-256 values against the qualification manifest.
+Do not regenerate sources from a moving branch during an import. Record the
+OBS source revision, qualified Git commit, source hashes and native build
+results. Source archives remain available alongside the binary packages.
+
+Keep publication disabled at both project and package level until acceptance
+of the actual OBS outputs. The project defaults to builds disabled; enable
+each qualified source package explicitly for the two supported architectures.
+Set package hardware constraints appropriate to its measured build memory and
+disk requirements. An OBS commit starts the package build independently of
+Git CI; use [skip ci] on Git packaging changes not exercised by Git CI.
+
+The project configuration uses:
+
+    Type: dsc
+    BinaryType: deb
+    Repotype: debian
+    PublishFlags: archsync noearlypublish nofailedpackages
+    Keep: libuv1t64
+
+Keep preserves CMake's installed libuv runtime while building libuv itself.
+Without it, OBS removes the package's own output from the build environment
+and CMake fails to start. The library recipe and upstream tests stay intact.
+
+Debian dependency selection
+---------------------------
+
+Repository paths use Debian:13/security, update, standard, then backports.
+The official trixie-backports compiler packages provide Clang 21 for PDFium;
+record and qualify their exact versions separately from the stable packages.
+
+OBS resolves duplicate package names by repository order. This differs from
+APT's highest-candidate-version selection: an older security or updates copy
+can hide a newer point-release package. Putting standard first instead can
+hide security updates. Neither ordering alone establishes version parity.
+
+The build-only debian-point-release-base package aggregates selected original
+Debian:13/standard/_repository binaries whose point-release versions supersede
+the earlier copies. Its _aggregate uses resign="false", explicit binary names
+and a standard-to-Debian_13 repository mapping. It is never published. Verify
+each aggregated binary hash against authenticated Debian APT metadata on both
+architectures, and retain the original source-package provenance.
+
+Before accepting builds, compare every selected stable-distribution build
+dependency from OBS _buildinfo with an authenticated, current native APT
+candidate. Include aggregated binaries in that comparison. Missing or empty
+inventories and unresolved build graphs are pending checks, not successes.
+Refresh or remove aggregate entries when Debian security updates overtake
+them; rebuild affected packages and recheck the complete graph. Do not reuse
+a previous successful comparison after dependencies change.
+
+The llhttp/Node dependency cycle uses a separate llhttp-bootstrap source-only
+build. It retains the qualified original source archives and Debian control
+file, omits Build-Depends-Arch only from the bootstrap scheduler .dsc, and
+invokes dpkg-buildpackage -A. Compare the generated libllhttp-source files
+with the full native llhttp build on both CPUs before accepting the cycle.
+Bootstrap packages are build inputs, not a separate user-facing release.
+
+Acceptance and evidence
+------------------------
+
+A successful OBS build is one qualification step. Download its exact packages
+and retain the build log, _buildinfo, source revision and artifact hashes.
+Check package contents, architecture, dependencies, hardening, detached debug
+symbols and source/binary Lintian results. Run installed runtime/SDK tests in
+fresh native Debian environments without source-tree module paths, including
+package removal/reinstallation and the combined independent-module tests.
+Revalidate artifacts after dependency-triggered rebuilds.
+
+Qualify Qore and UUID first, then the remaining independent modules against
+the OBS SDK. Bundled modules, including JSON and YAML, remain in the Qore
+source package. Oracle's proprietary dependency hosting approval and the
+optional V8 app catalogue's schema licensing remain separate publication
+gates; local qualification does not remove either requirement.
+
+Before enabling APT publication, verify the repository signature, architecture
+indexes, install/upgrade behavior and exact package hashes. Retain source
+archives, logs, manifests and qualification reports in an independent durable
+backup. Completed local build containers/images can then be removed; keep
+the qualified artifacts and evidence. Never archive authentication tokens,
+private signing keys or desktop keyring contents with package evidence.
