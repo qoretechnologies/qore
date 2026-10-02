@@ -3836,16 +3836,33 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             try {
                 rt = getRequestTypeWithData(req);
             } catch (hash<ExceptionInfo> ex) {
-                LoggerWrapper::error("Failed to request arg type with data, options: %y, ignoring options: %s",
-                    req, get_exception_string(ex));
+                logCaughtError("%s (%s): failed to get the request type for data of type %y; using the request "
+                    "type without the data: %s", getName(), self.className(), req.fullType(),
+                    get_exception_string(ex));
                 rt = getRequestType();
             }
             if (rt && (*hash<auto> fields = rt.getFields())) {
                 return DataProviderActionCatalog::getActionOptionFromFields(fields);
             }
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get request arg type with data (%y), cannot return options: %s", req,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the request type for data of type %y; no action options can be "
+                "returned: %s", getName(), self.className(), req.fullType(), get_exception_string(ex));
+        }
+    }
+
+    #! Logs an error caught by an API that returns no value instead of raising it
+    /** The error is logged with the data provider's logger, or with the global data provider logger if the data
+        provider has none, so that it is not lost; messages must not contain option or data values, which can hold
+        credentials
+
+        @param message the message format string for @ref Qore::vsprintf() "vsprintf()"
+
+        @since %DataProvider 3.9
+    */
+    private logCaughtError(string message, ...) {
+        *LoggerInterface logger = getLogger() ?? DataProvider::getGlobalLogger();
+        if (logger) {
+            logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }
     }
 
@@ -4065,7 +4082,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         try {
             return tryGetActionOptionsWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options with options (%y): %s", options,
+            logCaughtError("%s (%s): failed to get the options of action %s/%s with options %y; no action options "
+                "can be returned: %s", getName(), self.className(), action.app, action.action, keys options,
                 get_exception_string(ex));
         }
     }
@@ -4088,8 +4106,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkObservable();
             return tryGetActionOptionsForEventWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for event with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of event action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4111,8 +4130,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkRequest();
             return tryGetActionOptionsForRequestWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for request with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of request action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4134,8 +4154,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkMessages();
             return tryGetActionOptionsForMessageWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for message with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of message action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4157,8 +4178,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkRead();
             return tryGetActionOptionsForSearchWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for search with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of search action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4180,8 +4202,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkCreate();
             return tryGetActionOptionsForCreateWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for create with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of create action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4203,8 +4226,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkUpsert();
             return tryGetActionOptionsForUpsertWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for upsert with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of upsert action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4224,8 +4248,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkUpdate();
             return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for update with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of update action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4247,8 +4272,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkDelete();
             return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for delete with options (%y): %s", options,
-                get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of delete action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -4270,8 +4296,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             checkPipelineProcessor();
             return tryGetActionOptionsForPipelineProcessorWithOptionsImpl(action, options);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to get action options for pipeline processor with options (%y): %s",
-                options, get_exception_string(ex));
+            logCaughtError("%s (%s): failed to get the options of pipeline processor action %s/%s with options %y; no "
+                "action options can be returned: %s", getName(), self.className(), action.app, action.action,
+                keys options, get_exception_string(ex));
         }
     }
 
@@ -5803,7 +5830,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             rv.recs = <ActionOptionInfo>{
                 "display_name": "Record Data",
                 "desc": "The records to create",
-                "type": new SoftListDataType("RecordSet", record_type),
+                # a provider with an open record type accepts records with any fields
+                "type": new SoftListDataType("RecordSet", record_type ?? AbstractDataProviderTypeMap."hash"),
             };
         } else if (record_type) {
             rv.recs.type = new SoftListDataType("RecordSet", record_type);

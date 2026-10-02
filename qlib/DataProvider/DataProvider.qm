@@ -1377,6 +1377,10 @@ fetch
       or JSON document generated in memory, with
       @ref DataProvider::GeneratedDataOutputDataType "GeneratedDataOutputDataType" and
       @ref DataProvider::GeneratedDataInfo "GeneratedDataInfo" describing the generated data
+    - fixed create and upsert actions of data providers with an open record type losing their \c recs option
+    - errors caught while determining action options or request types are now logged with the global data provider
+      logger when the data provider has no logger of its own, and no longer log option or request values, which can
+      hold credentials
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns
