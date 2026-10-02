@@ -32,6 +32,12 @@ SHA-256; it does not have a release archive signature in this recipe.
   qore-tree-sitter 0.26.13: C runtime and development packages only, retaining
     Debian's SONAME-qualified library package and symbol history.
 
+The nghttp2, nghttp3 and ngtcp2 recipes explicitly export full hardening,
+including immediate symbol binding (BIND_NOW). Debian's default linker flags
+do not enable this protection; it must not depend on the builder environment.
+Package-specific changelog dates also set the generated packaging timestamps,
+so a recipe update does not alter the dates or archives of unrelated packages.
+
 The trixie target additionally prepares qore-onnx 1.20.0 and ONNX Runtime
 1.23.2+dfsg from Debian's repacked source archives, pinned by SHA-256 from
 authenticated Debian source metadata. Ubuntu uses its archive's ONNX packages.

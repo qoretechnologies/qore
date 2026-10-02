@@ -325,36 +325,39 @@
     },
     "nghttp2": {
       "upstream_version": "1.70.0",
-      "revision": "1~qore1",
+      "revision": "1~qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0.orig.tar.gz",
       "orig_sha256": "aa317e2cf9dca6afa0aed68f8fad6ff303ec6982e25a78c75c0b65e2b9b3ded5",
       "signature_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0.orig.tar.gz.asc",
       "signature_sha256": "10846bc9ec5c1bfd4f8109d62e4492f6c348a7c0113e7467924f04cf96a5a44c",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp2/1.70.0-1/nghttp2_1.70.0-1.debian.tar.xz",
       "packaging_sha256": "d43abd52531c78a82df1baf29c2b8b8785ca954e5a5c6abbb525d86e32dccfc3",
-      "changes": ["Backport to {distribution_name} for Qore using debhelper compatibility 13."]
+      "changes": ["Backport to {distribution_name} for Qore using debhelper compatibility 13.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "nghttp3": {
       "upstream_version": "1.18.0",
-      "revision": "0qore1",
+      "revision": "0qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://github.com/ngtcp2/nghttp3/releases/download/v1.18.0/nghttp3-1.18.0.tar.xz",
       "orig_sha256": "aad782c23d3f01bd4bb52c8bac7a553b631ef8115fd1612703df6183449fef19",
       "signature_url": "https://github.com/ngtcp2/nghttp3/releases/download/v1.18.0/nghttp3-1.18.0.tar.xz.asc",
       "signature_sha256": "152a1d3c6a84968e2361698b5e72724220a771b3335017b6450eb658592e13d3",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp3/1.17.0-1/nghttp3_1.17.0-1.debian.tar.xz",
       "packaging_sha256": "436f5a40de284d76e8dbfe22e7cbd3fd9dafdfe1a6a404c9f37f7d197b64b3b0",
-      "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history."]
+      "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "ngtcp2": {
       "upstream_version": "1.25.0",
-      "revision": "0qore1",
+      "revision": "0qore2",
+      "date": "Fri, 02 Oct 2026 11:45:00 +0000",
       "orig_url": "https://github.com/ngtcp2/ngtcp2/releases/download/v1.25.0/ngtcp2-1.25.0.tar.xz",
       "orig_sha256": "2a34d2484ba17847a5d11965704e9dd0fac4c6d8efc75ffe1ec7de66d8c6b6fb",
       "signature_url": "https://github.com/ngtcp2/ngtcp2/releases/download/v1.25.0/ngtcp2-1.25.0.tar.xz.asc",
       "signature_sha256": "441174c47cbeb4a282ba07e988441e4cb3e188b4b0331bd1306c696483ac8375",
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ngtcp2/1.24.0-1build1/ngtcp2_1.24.0-1build1.debian.tar.xz",
       "packaging_sha256": "a1b55a51688144f95c26efc41c5b6d9f52d27e24c14a18379055258ea97ae7de",
-      "changes": ["Package upstream 1.25.0 for Qore on {distribution_name}.", "Build matching OpenSSL and GnuTLS crypto backend packages."]
+      "changes": ["Package upstream 1.25.0 for Qore on {distribution_name}.", "Build matching OpenSSL and GnuTLS crypto backend packages.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
     },
     "qore-tree-sitter": {
       "upstream_version": "0.26.13",

@@ -392,6 +392,17 @@ def prepare(name, package, manifest, destination, cache, offline):
                 "Architecture: amd64 arm64\n"
                 "Features: test-name=stable-onnx-pytorch-coexistence\n")
     added_patches = []
+    if name in ("nghttp2", "nghttp3", "ngtcp2"):
+        rules = source / "debian/rules"
+        original = rules.read_text()
+        header = "#!/usr/bin/make -f\n"
+        if not original.startswith(header) or "DEB_BUILD_MAINT_OPTIONS" in original:
+            raise RuntimeError(f"unexpected {name} hardening setup")
+        # Debian does not enable immediate symbol binding by default. Put the
+        # policy in the recipe so OBS and local builders produce the same flags.
+        rules.write_text(original.replace(header, header +
+                         "\nexport DEB_BUILD_MAINT_OPTIONS = hardening=+all\n", 1))
+        added_patches.append("debian/rules")
     for relative in package.get("extra_patches", []):
         patch = (CONFIG / relative).resolve()
         if not patch.is_relative_to(CONFIG.resolve()) or not patch.is_file():
@@ -449,7 +460,8 @@ def prepare(name, package, manifest, destination, cache, offline):
     entry = f"{name} ({version}) {manifest['distribution']}; urgency=medium\n\n"
     entry += "".join(textwrap.fill(line, width=78, initial_indent="  * ", subsequent_indent="    ")
                      + "\n" for line in package["changes"])
-    entry += f"\n -- {manifest['maintainer']}  {manifest['date']}\n\n"
+    date = package.get("date", manifest["date"])
+    entry += f"\n -- {manifest['maintainer']}  {date}\n\n"
     changelog.write_text(entry + (changelog.read_text() if changelog.exists() else ""))
     provenance = {"package": name, "version": version, "ppa": manifest["ppa"], **package}
     (source / "debian/qore-backport.json").write_text(json.dumps(provenance, indent=2) + "\n")
@@ -483,7 +495,7 @@ def prepare(name, package, manifest, destination, cache, offline):
     copyright_file.write_text(copyright_text)
     # Stabilize generated packaging timestamps even if the build host's clock
     # precedes the changelog date. Upstream archive contents remain untouched.
-    epoch = parsedate_to_datetime(manifest["date"]).timestamp()
+    epoch = parsedate_to_datetime(date).timestamp()
     for path in (source / "debian").rglob("*"):
         os.utime(path, (epoch, epoch), follow_symlinks=False)
     os.utime(source / "debian", (epoch, epoch))
