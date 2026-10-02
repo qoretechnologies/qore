@@ -217,6 +217,24 @@ public class JsonFileWriteDataProvider inherits DataProvider::AbstractDataProvid
         committed = True;
     }
 
+    #! Completes the create operations: writes the JSON array to its path or stream, if any
+    /** @return the generated JSON array and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+
+        @throw JSON-FILE-WRITE-ERROR if writing fails
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (exists path || exists output_stream) {
+            commit();
+            return;
+        }
+        committed = True;
+        return <GeneratedDataInfo>{
+            "data": getJsonData(),
+            "record_count": records.size(),
+        };
+    }
+
     #! Returns the accumulated data as binary JSON
     /** @return the JSON array of all accumulated records as binary data
     */

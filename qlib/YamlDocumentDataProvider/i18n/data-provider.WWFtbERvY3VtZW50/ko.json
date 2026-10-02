@@ -196,8 +196,8 @@
           "message": "YAML 인라인 데이터 읽기"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML 문서 레코드를 다중 문서 스트림으로 특정 파일 위치에 씁니다.\n\n레코드는 누적되며 `commit()`이(가) 호출되거나 공급자가 소멸될 때 `---` 문서 구분 기호와 함께 기록됩니다.\n\n**주요 옵션**\n- `path`: 출력 파일 위치(필수)\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "YAML 문서 레코드를 다중 문서 스트림으로 특정 파일 위치에 씁니다.\n\n레코드는 누적되었다가 작업이 완료될 때 `---` 문서 구분자와 함께 기록됩니다.\n\n**주요 옵션**\n- `path`: 출력 파일 위치(필수)\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
           "source": "Write YAML Document File",
@@ -304,8 +304,8 @@
           "message": "특정 파일 위치에 YAML 문서 데이터 쓰기"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML 문서 레코드를 다중 문서 스트림으로 출력 스트림에 쓰거나 결과를 바이너리 데이터로 검색합니다.\n\n레코드는 누적되며 `commit()`이(가) 호출되거나 공급자가 소멸될 때 `---` 문서 구분 기호와 함께 기록됩니다.\n\n**주요 옵션**\n- `stream`: 쓸 대상 출력 스트림\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "레코드에서 다중 문서 YAML 스트림을 생성하여 데이터로 반환합니다. 예를 들어 이메일에 첨부하거나 다른 작업으로 업로드할 수 있습니다.\n\n각 레코드는 `---` 마커로 구분된 하나의 YAML 문서가 됩니다. 작업은 생성된 데이터를 `data`에, 문서 수를 `record_count`에 반환합니다.\n\n**주요 옵션**\n- `flow_style`: 압축 인라인 YAML 출력 사용(기본값: `False`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Write YAML Inline Data",
@@ -395,21 +395,9 @@
           "source": "Use compact inline YAML output",
           "message": "압축 인라인 YAML 출력 사용"
         },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "YAML 문서를 쓸 `OutputStream` 객체입니다. 네트워크 연결, 압축 파일 또는 기타 대상에 쓰는 데 사용합니다."
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "출력 스트림"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "쓸 대상 출력 스트림"
-        },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "스트림에 YAML 데이터 쓰기"
+          "source": "Generate YAML document data from records",
+          "message": "레코드에서 YAML 문서 데이터 생성"
         },
         "app.WWFtbERvY3VtZW50.desc": {
           "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",

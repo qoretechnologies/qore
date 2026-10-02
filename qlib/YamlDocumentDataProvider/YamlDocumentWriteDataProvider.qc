@@ -162,6 +162,9 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
 
         #! Internal buffer for YAML content
         string buffer = "";
+
+        #! The number of records written to the buffer
+        int created = 0;
     }
 
     #! Creates the provider from typed options
@@ -213,7 +216,25 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
         } else {
             buffer += make_yaml(rec, YAML::BlockStyle);
         }
+        ++created;
         return rec;
+    }
+
+    #! Completes the create operations: writes the document stream to its path or stream, if any
+    /** @return the generated document stream and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+
+        @throw YAML-WRITE-ERROR if writing to path or stream fails
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (opts.path || opts.stream) {
+            commit();
+            return;
+        }
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
     }
 
     #! Commits the buffer to the configured output path or stream

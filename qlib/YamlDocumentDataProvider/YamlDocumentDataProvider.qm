@@ -144,8 +144,8 @@ module YamlDocumentDataProvider {
             "display_name": "Write YAML Document File",
             "short_desc": "Write YAML document data to a specific file location",
             "desc": "Write YAML document records as a multi-document stream to a specific file location.\n\n"
-                "Records are accumulated and written with `---` document separators when `commit()` is "
-                "called or the provider is destroyed.\n\n"
+                "Records are accumulated and written with `---` document separators when the action "
+                "completes.\n\n"
                 "**Key Options**\n"
                 "- `path`: the output file location (required)\n"
                 "- `flow_style`: use compact inline YAML output (default: `False`)\n"
@@ -171,25 +171,19 @@ module YamlDocumentDataProvider {
             "action": "write-data",
             "subtype": "yamldocwrite",
             "display_name": "Write YAML Inline Data",
-            "short_desc": "Write YAML data to a stream",
-            "desc": "Write YAML document records as a multi-document stream to an output stream or "
-                "retrieve the result as binary data.\n\n"
-                "Records are accumulated and written with `---` document separators when `commit()` is "
-                "called or the provider is destroyed.\n\n"
+            "short_desc": "Generate YAML document data from records",
+            "desc": "Generate a YAML multi-document stream from records and return it as data, for example to "
+                "attach it to an email or upload it with another action.\n\n"
+                "Each record becomes one YAML document, separated by `---` markers; the action returns the "
+                "generated data in `data` and the number of documents in `record_count`.\n\n"
                 "**Key Options**\n"
-                "- `stream`: the output stream to write to\n"
                 "- `flow_style`: use compact inline YAML output (default: `False`)\n"
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
             "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
-            "output_type": AbstractDataProviderTypeMap."auto",
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                YamlDocumentWriteDataProvider::ConstructorOptions{"stream",}, {
-                    "preselected": True,
-                    "required": True,
-                    "loc": "constructor",
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 YamlDocumentWriteDataProvider::ConstructorOptions - ("path", "stream"), {
                     "loc": "constructor",
                 }

@@ -160,8 +160,8 @@
           "message": "Записати стандартні дані файлу JSON у розташування файлу"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
-          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Записати записи як стандартний масив JSON у конкретне розташування файлу.\n\nЗаписи накопичуються та записуються як масив JSON під час виклику `commit()` або після знищення провайдера.\n\n### Основні параметри\n- `path`: розташування вихідного файлу (обов'язково)\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when the action completes.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Записати записи як стандартний масив JSON у конкретне розташування файлу.\n\nЗаписи накопичуються та записуються як масив JSON після завершення дії.\n\n### Основні параметри\n- `path`: розташування вихідного файлу (обов'язково)\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Output File Path",
@@ -260,24 +260,12 @@
           "message": "Записати дані JSON"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write standard JSON data to an output stream",
-          "message": "Записати стандартні дані JSON у вихідний потік"
+          "source": "Generate standard JSON data from records",
+          "message": "Згенерувати стандартні дані JSON із записів"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Записати записи як стандартний масив JSON у вихідний потік або отримати результат у вигляді бінарних даних.\n\nЗаписи накопичуються та записуються як масив JSON під час виклику `commit()` або після знищення провайдера.\n\n### Основні параметри\n- `stream`: вихідний потік для запису\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Вихідний потік"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "An output stream object for the JSON data",
-          "message": "Об'єкт вихідного потоку для даних JSON"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
-          "message": "Вихідний потік для запису даних JSON; взаємовиключний з `path`"
+          "source": "Generate a standard JSON array from records and return it as data, for example to attach it to an email or upload it with another action.\n\nThe action returns the generated JSON in `data` and the number of records in `record_count`.\n\n### Key Options\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Генерує із записів стандартний масив JSON і повертає його як дані, наприклад, щоб вкласти його в електронний лист або завантажити іншою дією.\n\nДія повертає згенерований JSON у `data` і кількість записів у `record_count`.\n\n### Основні параметри\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",

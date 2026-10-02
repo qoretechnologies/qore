@@ -160,8 +160,8 @@
           "message": "파일 위치에 표준 JSON 파일 데이터 쓰기"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
-          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "특정 파일 위치에 레코드를 표준 JSON 배열로 작성합니다.\n\n`commit()`이 호출되거나 제공자가 파괴될 때 레코드가 누적되어 JSON 배열로 기록됩니다.\n\n### 주요 옵션\n- `path`: 출력 파일 위치(필수)\n- `pretty_print`: 들여쓰기를 적용하여 JSON 출력 서식 지정(기본값: `True`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when the action completes.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "특정 파일 위치에 레코드를 표준 JSON 배열로 작성합니다.\n\n레코드는 누적되었다가 작업이 완료될 때 JSON 배열로 기록됩니다.\n\n### 주요 옵션\n- `path`: 출력 파일 위치(필수)\n- `pretty_print`: 들여쓰기를 적용하여 JSON 출력 서식 지정(기본값: `True`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Output File Path",
@@ -260,24 +260,12 @@
           "message": "JSON 데이터 쓰기"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write standard JSON data to an output stream",
-          "message": "표준 JSON 데이터를 출력 스트림에 쓰기"
+          "source": "Generate standard JSON data from records",
+          "message": "레코드에서 표준 JSON 데이터 생성"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "레코드를 표준 JSON 배열로 출력 스트림에 기록하거나 결과를 바이너리 데이터로 검색합니다.\n\n`commit()`이 호출되거나 제공자가 파괴될 때 레코드가 누적되어 JSON 배열로 기록됩니다.\n\n### 주요 옵션\n- `stream`: 기록할 출력 스트림\n- `pretty_print`: 들여쓰기를 적용하여 JSON 출력 서식 지정(기본값: `True`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "출력 스트림"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "An output stream object for the JSON data",
-          "message": "JSON 데이터용 출력 스트림 객체"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
-          "message": "JSON 데이터를 쓸 출력 스트림; `path`와(과) 상호 배타적임"
+          "source": "Generate a standard JSON array from records and return it as data, for example to attach it to an email or upload it with another action.\n\nThe action returns the generated JSON in `data` and the number of records in `record_count`.\n\n### Key Options\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "레코드에서 표준 JSON 배열을 생성하여 데이터로 반환합니다. 예를 들어 이메일에 첨부하거나 다른 작업으로 업로드할 수 있습니다.\n\n작업은 생성된 JSON을 `data`에, 레코드 수를 `record_count`에 반환합니다.\n\n### 주요 옵션\n- `pretty_print`: 들여쓰기를 적용하여 JSON 출력 서식 지정(기본값: `True`)\n- `encoding`: 문자 인코딩(기본값: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",

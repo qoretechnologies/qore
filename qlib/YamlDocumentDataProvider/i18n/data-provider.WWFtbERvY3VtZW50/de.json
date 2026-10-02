@@ -196,8 +196,8 @@
           "message": "YAML-Inline-Daten lesen"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML-Dokumentdatensätze als Multi-Dokument-Stream an einen bestimmten Dateispeicherort schreiben.\n\nDatensätze werden akkumuliert und mit `---`-Dokumenttrennzeichen geschrieben, wenn `commit()` aufgerufen oder der Provider zerstört wird.\n\n**Wichtige Optionen**\n- `path`: der Ausgabedateispeicherort (erforderlich)\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "YAML-Dokumentdatensätze als Multi-Dokument-Stream an einen bestimmten Dateispeicherort schreiben.\n\nDatensätze werden gesammelt und beim Abschluss der Aktion mit `---`-Dokumenttrennzeichen geschrieben.\n\n**Wichtige Optionen**\n- `path`: der Ausgabedateispeicherort (erforderlich)\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
           "source": "Write YAML Document File",
@@ -304,8 +304,8 @@
           "message": "YAML-Dokumentdaten an einen bestimmten Dateispeicherort schreiben"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML-Dokumentdatensätze als Multi-Dokument-Stream in einen Ausgabestream schreiben oder das Ergebnis als Binärdaten abrufen.\n\nDatensätze werden akkumuliert und mit `---`-Dokumenttrennzeichen geschrieben, wenn `commit()` aufgerufen oder der Provider zerstört wird.\n\n**Wichtige Optionen**\n- `stream`: der Ausgabestream, in den geschrieben werden soll\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Erzeugt aus Datensätzen einen YAML-Stream mit mehreren Dokumenten und gibt ihn als Daten zurück, zum Beispiel um ihn an eine E-Mail anzuhängen oder mit einer anderen Aktion hochzuladen.\n\nJeder Datensatz wird zu einem YAML-Dokument, getrennt durch `---`-Markierungen; die Aktion gibt die erzeugten Daten in `data` und die Anzahl der Dokumente in `record_count` zurück.\n\n**Wichtige Optionen**\n- `flow_style`: kompakte Inline-YAML-Ausgabe verwenden (Standard: `False`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Write YAML Inline Data",
@@ -395,21 +395,9 @@
           "source": "Use compact inline YAML output",
           "message": "Kompakte Inline-YAML-Ausgabe verwenden"
         },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "Ein `OutputStream`-Objekt, in das YAML-Dokumente geschrieben werden sollen. Verwenden Sie dies zum Schreiben in Netzwerkverbindungen, komprimierte Dateien oder andere Ziele."
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Ausgabestream"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "Ausgabestream, in den geschrieben werden soll"
-        },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "YAML-Daten in einen Stream schreiben"
+          "source": "Generate YAML document data from records",
+          "message": "YAML-Dokumentdaten aus Datensätzen erzeugen"
         },
         "app.WWFtbERvY3VtZW50.desc": {
           "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",

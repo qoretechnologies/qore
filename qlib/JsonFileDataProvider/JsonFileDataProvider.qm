@@ -191,8 +191,7 @@ namespace Priv {
             "display_name": "Write JSON File",
             "short_desc": "Write standard JSON file data to a file location",
             "desc": "Write records as a standard JSON array to a specific file location.\n\n"
-                "Records are accumulated and written as a JSON array when `commit()` is called or the "
-                "provider is destroyed.\n\n"
+                "Records are accumulated and written as a JSON array when the action completes.\n\n"
                 "### Key Options\n"
                 "- `path`: the output file location (required)\n"
                 "- `pretty_print`: format JSON output with indentation (default: `True`)\n"
@@ -217,19 +216,19 @@ namespace Priv {
             "action": "write-data",
             "subtype": "jsonwrite",
             "display_name": "Write JSON Data",
-            "short_desc": "Write standard JSON data to an output stream",
-            "desc": "Write records as a standard JSON array to an output stream or retrieve the result "
-                "as binary data.\n\n"
-                "Records are accumulated and written as a JSON array when `commit()` is called or the "
-                "provider is destroyed.\n\n"
+            "short_desc": "Generate standard JSON data from records",
+            "desc": "Generate a standard JSON array from records and return it as data, for example to attach it "
+                "to an email or upload it with another action.\n\n"
+                "The action returns the generated JSON in `data` and the number of records in `record_count`.\n\n"
                 "### Key Options\n"
-                "- `stream`: the output stream to write to\n"
                 "- `pretty_print`: format JSON output with indentation (default: `True`)\n"
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
             "cls": "JsonFileDataProvider::JsonFileWriteDataProvider",
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                JsonFileWriteDataProvider::ConstructorOptions - ("path",), {
+                JsonFileWriteDataProvider::ConstructorOptions - ("path", "stream"), {
                     "loc": "constructor",
                 }
             ),

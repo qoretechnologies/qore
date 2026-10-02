@@ -196,8 +196,8 @@
           "message": "YAML インラインデータを読み取り"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして特定のファイル場所に書き込みます。\n\nレコードは蓄積され、`commit()` が呼び出されるかプロバイダーが破棄されたときに `---` ドキュメント区切り文字とともに出力されます。\n\n**主要オプション**\n- `path`: 出力ファイルの場所 (必須)\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして特定のファイル場所に書き込みます。\n\nレコードは蓄積され、アクションの完了時に `---` ドキュメント区切りを付けて書き込まれます。\n\n**主要オプション**\n- `path`: 出力ファイルの場所 (必須)\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
           "source": "Write YAML Document File",
@@ -304,8 +304,8 @@
           "message": "特定のファイル場所に YAML ドキュメントデータを書き込み"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "YAML ドキュメントレコードをマルチドキュメントストリームとして出力ストリームに書き込むか、結果をバイナリデータとして取得します。\n\nレコードは蓄積され、`commit()` が呼び出されるかプロバイダーが破棄されたときに `---` ドキュメント区切り文字とともに出力されます。\n\n**主要オプション**\n- `stream`: 書き込み先の出力ストリーム\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "レコードから複数ドキュメントの YAML ストリームを生成し、データとして返します。たとえば、メールに添付したり、別のアクションでアップロードしたりできます。\n\n各レコードは `---` マーカーで区切られた 1 つの YAML ドキュメントになります。アクションは生成されたデータを `data` に、ドキュメント数を `record_count` に返します。\n\n**主要オプション**\n- `flow_style`: コンパクトなインライン YAML 出力を使用 (デフォルト: `False`)\n- `encoding`: 文字エンコーディング (デフォルト: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Write YAML Inline Data",
@@ -395,21 +395,9 @@
           "source": "Use compact inline YAML output",
           "message": "コンパクトなインライン YAML 出力を使用"
         },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "YAML ドキュメントを書き込む `OutputStream` オブジェクト。ネットワーク接続、圧縮ファイル、またはその他の宛先への書き込みに使用します。"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "出力ストリーム"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "書き込み先の出力ストリーム"
-        },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "YAML データをストリームに書き込み"
+          "source": "Generate YAML document data from records",
+          "message": "レコードから YAML ドキュメントデータを生成"
         },
         "app.WWFtbERvY3VtZW50.desc": {
           "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",

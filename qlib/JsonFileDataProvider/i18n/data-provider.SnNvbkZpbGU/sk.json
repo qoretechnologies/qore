@@ -160,8 +160,8 @@
           "message": "Zapísať štandardné dáta zo súboru JSON do umiestnenia súboru"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
-          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Zápis záznamov ako štandardného poľa JSON do špecifického umiestnenia súboru.\n\nZáznamy sa zhromažďujú a zapíšu ako pole JSON, keď sa zavolá `commit()` alebo sa zničí poskytovateľ.\n\n### Kľúčové možnosti\n- `path`: umiestnenie výstupného súboru (požadované)\n- `pretty_print`: formátovať výstup JSON s odsadením (predvolené: `True`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when the action completes.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Zápis záznamov ako štandardného poľa JSON do špecifického umiestnenia súboru.\n\nZáznamy sa zhromažďujú a zapisujú ako pole JSON po dokončení akcie.\n\n### Kľúčové možnosti\n- `path`: umiestnenie výstupného súboru (požadované)\n- `pretty_print`: formátovať výstup JSON s odsadením (predvolené: `True`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Output File Path",
@@ -260,24 +260,12 @@
           "message": "Zapísať JSON dáta"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write standard JSON data to an output stream",
-          "message": "Zapísať štandardné JSON dáta do výstupného toku"
+          "source": "Generate standard JSON data from records",
+          "message": "Generovať štandardné údaje JSON zo záznamov"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Zápis záznamov ako štandardného poľa JSON do výstupného toku alebo získanie výsledku ako binárnych dát.\n\nZáznamy sa zhromažďujú a zapíšu ako pole JSON, keď sa zavolá `commit()` alebo sa zničí poskytovateľ.\n\n### Kľúčové možnosti\n- `stream`: výstupný tok, do ktorého sa má zapisovať\n- `pretty_print`: formátovať výstup JSON s odsadením (predvolené: `True`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Výstupný tok"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "An output stream object for the JSON data",
-          "message": "Objekt výstupného toku pre JSON dáta"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
-          "message": "Výstupný tok na zápis JSON dát; vzájomne sa vylučuje s `path`"
+          "source": "Generate a standard JSON array from records and return it as data, for example to attach it to an email or upload it with another action.\n\nThe action returns the generated JSON in `data` and the number of records in `record_count`.\n\n### Key Options\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Vygeneruje zo záznamov štandardné pole JSON a vráti ho ako údaje, napríklad na priloženie k e-mailu alebo nahratie inou akciou.\n\nAkcia vráti vygenerovaný JSON v `data` a počet záznamov v `record_count`.\n\n### Kľúčové možnosti\n- `pretty_print`: formátovať výstup JSON s odsadením (predvolené: `True`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",

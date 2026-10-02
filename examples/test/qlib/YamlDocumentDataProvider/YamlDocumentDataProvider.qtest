@@ -56,6 +56,8 @@ class YamlDocumentDataProviderTest inherits QUnit::Test {
         addTestCase("write unicode content", \testWriteUnicodeContent());
         addTestCase("write factory create", \testWriteFactoryCreate());
         addTestCase("write factory info", \testWriteFactoryInfo());
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("write action writes its file when the action completes", \testWriteActionFile());
         set_return_value(main());
     }
 
@@ -538,5 +540,45 @@ scalar value";
         hash<DataProviderFactoryInfo> info = factory.getInfo();
         assertEq("yamlwrite", info.name);
         assertTrue(exists info.desc);
+    }
+
+    # runs a create action the way an action runner does: the provider is built from the action's class and
+    # constructor options, the records are created, and finishCreate() completes the action
+    private auto runCreateAction(string action, *hash<auto> opts, hash<auto> recs) {
+        hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("YamlDocument", action);
+        AbstractDataProvider prov = Class::forName(info.cls).newObject(opts);
+        prov.createRecordsBulkWithOptions({"recs": recs});
+        return prov.finishCreate();
+    }
+
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("YamlDocument", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, info.output_data_type);
+        assertEq("GeneratedDataOutput", info.output_type.getName());
+        # an output stream cannot be configured on an action
+        assertFalse(exists info.options.stream);
+        assertFalse(exists info.options.path);
+
+        hash<GeneratedDataInfo> output = runCreateAction("write-data", NOTHING,
+            {"sku": ("A-1", "B-2"), "qty": (5, 7)});
+        assertEq(2, output.record_count);
+        assertEq(output, info.output_type.acceptsValue(output));
+        # the generated data reads back as the records
+        YamlDocumentDataProvider::YamlDocumentReadDataProvider rdp({"data": output.data.toString()});
+        assertEq(({"sku": "A-1", "qty": 5}, {"sku": "B-2", "qty": 7}), (map $1, rdp.searchRecords()));
+
+        # no records: an empty document stream
+        output = runCreateAction("write-data", NOTHING, {});
+        assertEq(0, output.record_count);
+        assertEq(binary(), output.data);
+    }
+
+    testWriteActionFile() {
+        string path = tmp_location() + "/yaml_action_" + get_random_string(8) + ".yaml";
+        on_exit if (is_file(path)) unlink(path);
+        # the file is written when the action completes, and no output is returned
+        assertEq(NOTHING, runCreateAction("write", {"path": path}, {"sku": ("A-1",), "qty": (5,)}));
+        YamlDocumentDataProvider::YamlDocumentReadDataProvider rdp({"path": path});
+        assertEq(({"sku": "A-1", "qty": 5},), (map $1, rdp.searchRecords()));
     }
 }

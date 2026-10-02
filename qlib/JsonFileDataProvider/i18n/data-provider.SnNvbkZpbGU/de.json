@@ -160,8 +160,8 @@
           "message": "Standard-JSON-Dateidaten an einen Dateispeicherort schreiben"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
-          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Schreiben Sie Datensätze als Standard-JSON-Array an einen bestimmten Dateispeicherort.\n\nDatensätze werden gesammelt und als JSON-Array geschrieben, wenn `commit()` aufgerufen oder der Provider zerstört wird.\n\n### Hauptoptionen\n- `path`: der Ausgabedateispeicherort (erforderlich)\n- `pretty_print`: JSON-Ausgabe mit Einrückung formatieren (Standard: `True`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when the action completes.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Schreiben Sie Datensätze als Standard-JSON-Array an einen bestimmten Dateispeicherort.\n\nDatensätze werden gesammelt und beim Abschluss der Aktion als JSON-Array geschrieben.\n\n### Hauptoptionen\n- `path`: der Ausgabedateispeicherort (erforderlich)\n- `pretty_print`: JSON-Ausgabe mit Einrückung formatieren (Standard: `True`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Output File Path",
@@ -260,24 +260,12 @@
           "message": "JSON-Daten schreiben"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write standard JSON data to an output stream",
-          "message": "Standard-JSON-Daten in einen Ausgabestream schreiben"
+          "source": "Generate standard JSON data from records",
+          "message": "Standard-JSON-Daten aus Datensätzen erzeugen"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Schreiben Sie Datensätze als Standard-JSON-Array in einen Ausgabestream oder rufen Sie das Ergebnis als Binärdaten ab.\n\nDatensätze werden gesammelt und als JSON-Array geschrieben, wenn `commit()` aufgerufen oder der Provider zerstört wird.\n\n### Hauptoptionen\n- `stream`: der Ausgabestream, in den geschrieben werden soll\n- `pretty_print`: JSON-Ausgabe mit Einrückung formatieren (Standard: `True`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Ausgabestream"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "An output stream object for the JSON data",
-          "message": "Ein Ausgabestream-Objekt für die JSON-Daten"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
-          "message": "Ein Ausgabestream, in den JSON-Daten geschrieben werden; schließt sich mit `path` gegenseitig aus"
+          "source": "Generate a standard JSON array from records and return it as data, for example to attach it to an email or upload it with another action.\n\nThe action returns the generated JSON in `data` and the number of records in `record_count`.\n\n### Key Options\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Erzeugt aus Datensätzen ein Standard-JSON-Array und gibt es als Daten zurück, zum Beispiel um es an eine E-Mail anzuhängen oder mit einer anderen Aktion hochzuladen.\n\nDie Aktion gibt das erzeugte JSON in `data` und die Anzahl der Datensätze in `record_count` zurück.\n\n### Hauptoptionen\n- `pretty_print`: JSON-Ausgabe mit Einrückung formatieren (Standard: `True`)\n- `encoding`: Zeichenkodierung (Standard: `UTF-8`)\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",

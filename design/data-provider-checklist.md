@@ -165,6 +165,17 @@ See [Action Path Resolution](data-provider-development-guide.md#action-path-reso
 - [ ] Provider has `"supports_observable": True` in `ProviderInfo`
 - [ ] `action_val` matches an event key in `getEventTypesImpl()`
 
+### DPAT_CREATE Actions for File and Document Writers
+- [ ] A provider that buffers created records (file, spreadsheet, document, or archive writers) writes them in
+      `finishCreateImpl()`; action runners call `finishCreate()` once after the action's records are created and
+      never call `commit()` (the transaction hook) on non-transactional providers, so a write left to the destructor
+      loses its errors
+- [ ] An action that generates the document in memory instead of writing it to a location (a `write-data` action)
+      sets `"output_data_type": DPAD_CREATE_OUTPUT` and an `output_type` of `GeneratedDataOutputDataType` (or a
+      subclass adding provider-specific fields); its `finishCreateImpl()` returns `GeneratedDataInfo` (`data`,
+      `record_count`) when the provider has no output location, and no value when it wrote to one
+- [ ] A `write-data` action does not offer a `stream` option: an output stream cannot be configured on an action
+
 ---
 
 ## 4. Action Option Sufficiency

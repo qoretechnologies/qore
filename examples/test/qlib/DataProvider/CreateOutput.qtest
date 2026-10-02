@@ -1,0 +1,282 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class CreateOutputTest
+
+class TestSimulationRecorder inherits AbstractSimulationRecorder {
+    private {
+        list<hash<auto>> actions = ();
+    }
+
+    record(string app, string action, auto input, string fidelity = "app-simulator") {
+        actions += {
+            "app": app,
+            "action": action,
+            "input": input,
+            "fidelity": fidelity,
+        };
+    }
+
+    list<hash<auto>> recorded(*string app, *string action) {
+        return (map $1, actions, (!app || $1.app == app) && (!action || $1.action == action));
+    }
+}
+
+#! Buffers created records and generates a CSV-like document from them, like a spreadsheet writer
+class DocumentWriteProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "DocumentWriteProvider",
+            "supports_create": True,
+            "has_record": True,
+        };
+
+        list<hash<auto>> recs = ();
+        int finish_count = 0;
+        # where the document is written if has_destination is set; otherwise it is returned as generated output
+        *reference<binary> destination;
+        bool has_destination = False;
+    }
+
+    constructor() {
+    }
+
+    constructor(reference<binary> destination) {
+        self.destination = \destination;
+        has_destination = True;
+    }
+
+    string getName() {
+        return "document-write";
+    }
+
+    int getFinishCount() {
+        return finish_count;
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        recs += rec;
+        return rec;
+    }
+
+    private auto finishCreateImpl() {
+        ++finish_count;
+        binary data = binary((map ($1.values()).join(","), recs).join("\n"));
+        if (has_destination) {
+            destination = data;
+            return;
+        }
+        return <GeneratedDataInfo>{
+            "data": data,
+            "record_count": recs.size(),
+        };
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private hash<auto> getExampleRecordDataImpl() {
+        return {"record": True};
+    }
+}
+
+#! A record provider that does not override finishCreateImpl()
+class RecordProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "RecordProvider",
+            "supports_create": True,
+        };
+    }
+
+    string getName() {
+        return "record";
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        return rec;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private hash<auto> getExampleRecordDataImpl() {
+        return {"record": True};
+    }
+}
+
+class CreateOutputTest inherits QUnit::Test {
+    constructor() : Test("CreateOutputTest", "1.0", \ARGV) {
+        addTestCase("generated data output type", \testOutputType());
+        addTestCase("finishCreate default", \testFinishCreateDefault());
+        addTestCase("finishCreate returns generated data", \testFinishCreateOutput());
+        addTestCase("finishCreate writes to a destination", \testFinishCreateDestination());
+        addTestCase("create-output action registration", \testRegistration());
+        addTestCase("negative: invalid create-output registrations", \testRegistrationErrors());
+        addTestCase("create-output action simulation", \testSimulation());
+
+        set_return_value(main());
+    }
+
+    testOutputType() {
+        assertEq(("data", "record_count"), keys GeneratedDataOutputDataType.getFields());
+        assertEq("binary", GeneratedDataOutputDataType.getFields().data.getType().getBaseTypeName());
+        assertEq("int", GeneratedDataOutputDataType.getFields().record_count.getType().getBaseTypeName());
+
+        hash<GeneratedDataInfo> output = <GeneratedDataInfo>{"data": binary("a,b"), "record_count": 1};
+        assertEq(output, GeneratedDataOutputDataType.acceptsValue(output));
+        assertThrows("RUNTIME-TYPE-ERROR", \GeneratedDataOutputDataType.acceptsValue(),
+            {"data": "not binary", "record_count": 1});
+
+        # the type can be extended with provider-specific fields
+        GeneratedDataOutputDataType extended("ReportOutput");
+        extended.addQoreFields({
+            "format": {
+                "display_name": "Format",
+                "type": StringType,
+                "desc": "The format of the generated report",
+            },
+        });
+        assertEq(("data", "record_count", "format"), keys extended.getFields());
+        assertEq("ReportOutput", extended.getName());
+    }
+
+    testFinishCreateDefault() {
+        RecordProvider prov();
+        prov.createRecordsBulk({"a": (1, 2)});
+        assertEq(NOTHING, prov.finishCreate());
+    }
+
+    testFinishCreateOutput() {
+        DocumentWriteProvider prov();
+        prov.createRecordsBulkWithOptions({"recs": {"sku": ("A-1", "B-2"), "qty": (5, 7)}});
+        hash<GeneratedDataInfo> output = prov.finishCreate();
+        assertEq(binary("A-1,5\nB-2,7"), output.data);
+        assertEq(2, output.record_count);
+        assertEq(1, prov.getFinishCount());
+
+        # no records: the generated output is still returned
+        prov = new DocumentWriteProvider();
+        output = prov.finishCreate();
+        assertEq(binary(), output.data);
+        assertEq(0, output.record_count);
+    }
+
+    testFinishCreateDestination() {
+        binary written;
+        DocumentWriteProvider prov(\written);
+        prov.createRecord({"sku": "A-1", "qty": 5});
+        # output written to its destination is not returned
+        assertEq(NOTHING, prov.finishCreate());
+        assertEq(binary("A-1,5"), written);
+    }
+
+    testRegistration() {
+        string app = registerApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        registerAction(app, "write-data", DPAT_CREATE, DPAD_CREATE_OUTPUT, GeneratedDataOutputDataType);
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertEq("GeneratedDataOutput", action.output_type.getName());
+        # create actions still accept records in every bulk form
+        assertTrue(action.input_data_types{DPAD_RECORD_SET});
+        assertTrue(action.input_data_types{DPAD_RECORD_STREAM});
+
+        # an output type set with get_output_type is accepted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "path": "/",
+            "action": "write-lazy",
+            "display_name": "write-lazy",
+            "short_desc": "write-lazy",
+            "desc": "write-lazy",
+            "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "get_output_type": AbstractDataProviderType sub () { return GeneratedDataOutputDataType; },
+        });
+        action = DataProviderActionCatalog::getAppActionEx(app, "write-lazy");
+        assertEq("GeneratedDataOutput", action.output_type.getName());
+
+        # an ordinary create action keeps the record-set output data type
+        registerAction(app, "write", DPAT_CREATE);
+        assertEq(DPAD_RECORD_SET, DataProviderActionCatalog::getAppActionEx(app, "write").output_data_type);
+    }
+
+    testRegistrationErrors() {
+        string app = registerApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        # only create actions can return create output
+        assertThrows("ACTION-ERROR", "only valid for create actions", sub () {
+            registerAction(app, "find-data", DPAT_FIND, DPAD_CREATE_OUTPUT, GeneratedDataOutputDataType);
+        });
+        # the generated output must be described
+        assertThrows("ACTION-ERROR", "no output type", sub () {
+            registerAction(app, "write-data", DPAT_CREATE, DPAD_CREATE_OUTPUT);
+        });
+        assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "find-data"));
+        assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, "write-data"));
+    }
+
+    testSimulation() {
+        string app = registerApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        registerAction(app, "write-data", DPAT_CREATE, DPAD_CREATE_OUTPUT, GeneratedDataOutputDataType);
+
+        DocumentWriteProvider prov();
+        TestSimulationRecorder recorder();
+        # a create-output action simulates its generated output
+        hash<auto> simulated = prov.simulateRequest(app, "write-data", {"sku": "A-1"}, recorder);
+        assertEq(("data", "record_count"), keys simulated);
+        assertEq(Type::Binary, simulated.data.type());
+        assertEq(Type::Int, simulated.record_count.type());
+        # simulation has no side effects
+        assertEq(0, prov.getFinishCount());
+
+        list<hash<auto>> recorded = recorder.recorded();
+        assertEq(1, recorded.size());
+        assertEq("write-data", recorded[0].action);
+        assertEq("example", recorded[0].fidelity);
+    }
+
+    private string registerApp() {
+        string app = "CreateOutputTest" + get_random_string();
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Create Output Test",
+            "short_desc": "Create output test app",
+            "desc": "Create output test app",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        return app;
+    }
+
+    private registerAction(string app, string action, int action_code, *string output_data_type,
+            *AbstractDataProviderType output_type) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "path": "/",
+            "action": action,
+            "display_name": action,
+            "short_desc": action,
+            "desc": action,
+            "action_code": action_code,
+            "output_data_type": output_data_type ?? "",
+            "output_type": output_type,
+        });
+    }
+}

@@ -216,8 +216,8 @@
           "message": "Write YAML document data to a specific file location"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "File Path",
@@ -320,24 +320,12 @@
           "message": "Write YAML Inline Data"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "Write YAML data to a stream"
+          "source": "Generate YAML document data from records",
+          "message": "Generate YAML document data from records"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Output Stream"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "Output stream to write to"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations."
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Character Encoding",

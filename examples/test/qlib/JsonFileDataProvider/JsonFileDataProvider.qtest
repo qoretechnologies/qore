@@ -66,6 +66,8 @@ class JsonFileDataProviderTest inherits QUnit::Test {
         addTestCase("read non-existent file", \testReadNonExistentFile());
         addTestCase("scalar JSON value", \testScalarJsonValue());
         addTestCase("empty array", \testEmptyArray());
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("write action writes its file when the action completes", \testWriteActionFile());
         set_return_value(main());
     }
 
@@ -384,5 +386,39 @@ class JsonFileDataProviderTest inherits QUnit::Test {
             push results, iter.getValue();
         }
         assertEq(0, results.size());
+    }
+
+    # runs a create action the way an action runner does: the provider is built from the action's class and
+    # constructor options, the records are created, and finishCreate() completes the action
+    private auto runCreateAction(string action, *hash<auto> opts, hash<auto> recs) {
+        hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("JsonFile", action);
+        AbstractDataProvider prov = Class::forName(info.cls).newObject(opts);
+        prov.createRecordsBulkWithOptions({"recs": recs});
+        return prov.finishCreate();
+    }
+
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("JsonFile", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, info.output_data_type);
+        assertEq("GeneratedDataOutput", info.output_type.getName());
+        assertFalse(exists info.options.stream);
+        assertFalse(exists info.options.path);
+
+        hash<GeneratedDataInfo> output = runCreateAction("write-data", {"pretty_print": False},
+            {"sku": ("A-1", "B-2"), "qty": (5, 7)});
+        assertEq(2, output.record_count);
+        assertEq(output, info.output_type.acceptsValue(output));
+        assertEq(({"sku": "A-1", "qty": 5}, {"sku": "B-2", "qty": 7}), parse_json(output.data.toString()));
+
+        output = runCreateAction("write-data", NOTHING, {});
+        assertEq(0, output.record_count);
+        assertEq((), parse_json(output.data.toString()));
+    }
+
+    testWriteActionFile() {
+        string path = tmp_location() + "/json_action_" + get_random_string(8) + ".json";
+        on_exit if (is_file(path)) unlink(path);
+        assertEq(NOTHING, runCreateAction("write", {"path": path}, {"sku": ("A-1",), "qty": (5,)}));
+        assertEq(({"sku": "A-1", "qty": 5},), parse_json(ReadOnlyFile::readTextFile(path)));
     }
 }

@@ -196,8 +196,8 @@
           "message": "讀取 YAML 行內資料"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "將 YAML 文件記錄作為多文件串流寫入特定檔案位置。\n\n當呼叫 `commit()` 或提供者被銷毀時，記錄將累積並以 `---` 文件分隔符號寫入。\n\n**主要選項**\n- `path`：輸出檔案位置（必填）\n- `flow_style`：使用緊湊行內 YAML 輸出（預設值：`False`）\n- `encoding`：字元編碼（預設值：`UTF-8`）\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "將 YAML 文件記錄作為多文件串流寫入特定檔案位置。\n\n記錄會累積，並在動作完成時以 `---` 文件分隔符號寫入。\n\n**主要選項**\n- `path`：輸出檔案位置（必填）\n- `flow_style`：使用緊湊行內 YAML 輸出（預設值：`False`）\n- `encoding`：字元編碼（預設值：`UTF-8`）\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
           "source": "Write YAML Document File",
@@ -304,8 +304,8 @@
           "message": "將 YAML 文件資料寫入特定檔案位置"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "將 YAML 文件記錄作為多文件串流寫入輸出串流，或以二進位資料形式擷取結果。\n\n當呼叫 `commit()` 或提供者被銷毀時，記錄將累積並以 `---` 文件分隔符號寫入。\n\n**主要選項**\n- `stream`：要寫入的輸出串流\n- `flow_style`：使用緊湊行內 YAML 輸出（預設值：`False`）\n- `encoding`：字元編碼（預設值：`UTF-8`）\n"
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "從記錄產生多文件 YAML 串流並以資料形式傳回，例如附加至電子郵件或透過其他動作上傳。\n\n每筆記錄成為一份 YAML 文件，以 `---` 標記分隔；動作會在 `data` 中傳回產生的資料，並在 `record_count` 中傳回文件數。\n\n**主要選項**\n- `flow_style`：使用緊湊行內 YAML 輸出（預設值：`False`）\n- `encoding`：字元編碼（預設值：`UTF-8`）\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Write YAML Inline Data",
@@ -395,21 +395,9 @@
           "source": "Use compact inline YAML output",
           "message": "使用緊湊行內 YAML 輸出"
         },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "用於寫入 YAML 文件的 `OutputStream` 物件。適用於寫入網路連線、壓縮檔案或其他目的地。"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "輸出串流"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "要寫入的輸出串流"
-        },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "將 YAML 資料寫入串流"
+          "source": "Generate YAML document data from records",
+          "message": "從記錄產生 YAML 文件資料"
         },
         "app.WWFtbERvY3VtZW50.desc": {
           "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",

@@ -437,6 +437,17 @@ public const string DPAD_PASS_THROUGH = "pass-through";
     @since %DataProvider 3.6
 */
 public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
+
+#! Create output data
+/** Only valid for @ref DPAT_CREATE actions: the action creates the input records with the data provider, and its
+    output is the single value the data provider generates from them, as returned by
+    @ref AbstractDataProvider::finishCreate() "AbstractDataProvider::finishCreate()" and described by the action's
+    output type (for example a spreadsheet generated in memory, described by @ref GeneratedDataOutputDataType),
+    instead of the created records
+
+    @since %DataProvider 3.9
+*/
+public const string DPAD_CREATE_OUTPUT = "create-output";
 #/@}
 
 #! DataProvider action definition without its options and output type
@@ -2641,6 +2652,16 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         if (action.output_type && has_get_output_type) {
             throw "ACTION-ERROR", sprintf("action has both \"output_type\" and \"get_output_type\"; path: %y",
                 action.path);
+        }
+        if (action.output_data_type == DPAD_CREATE_OUTPUT) {
+            if (action.action_code != DPAT_CREATE) {
+                throw "ACTION-ERROR", sprintf("action %s/%s has output data type %y, which is only valid for create "
+                    "actions", action.app, action.action, DPAD_CREATE_OUTPUT);
+            }
+            if (!action.output_type && !has_get_output_type) {
+                throw "ACTION-ERROR", sprintf("action %s/%s has output data type %y but no output type describing the "
+                    "generated output", action.app, action.action, DPAD_CREATE_OUTPUT);
+            }
         }
 
         if (action.hasKey("get_dynamic_options") && !action.has_dynamic_options) {

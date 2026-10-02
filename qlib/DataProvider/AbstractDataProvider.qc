@@ -2503,6 +2503,36 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return createRecordsBulk(options.recs, options - "recs");
     }
 
+    #! Completes the create operations made with this data provider
+    /** Called once by the code running a create action after all of the action's records have been created; a data
+        provider that buffers created records writes them to their destination here, so that errors are reported to
+        the caller instead of being raised when the data provider is destroyed.
+
+        A data provider that generates data in memory, for example a spreadsheet with no output location, returns it
+        as the output of actions with the @ref DPAD_CREATE_OUTPUT "create-output" output data type.
+
+        @return the output generated from the created records, if any; for actions with the
+        @ref DPAD_CREATE_OUTPUT "create-output" output data type, a value of the action's output type (normally
+        @ref GeneratedDataInfo, described by @ref GeneratedDataOutputDataType)
+
+        @note
+        - This is not a transaction commit; data providers that require transaction management are committed or
+          rolled back with commit() and rollback() as before
+        - The default implementation does nothing and returns no value
+
+        @par Example
+        @code{.py}
+AbstractDataProvider prov = DataProvider::getFactoryObject("excelwrite", {"headers": ("sku", "qty")});
+prov.createRecordsBulk({"sku": ("A-1", "B-2"), "qty": (5, 7)});
+hash<GeneratedDataInfo> output = prov.finishCreate();
+        @endcode
+
+        @since %DataProvider 3.9
+    */
+    auto finishCreate() {
+        return finishCreateImpl();
+    }
+
     #! Creates the given records in the data provider
     /** @param recs a hash representing multiple input records, where the keys are field names and values are either
         lists of field values or a single value that applies to all records
@@ -8002,6 +8032,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getExampleRecordDataImpl();
     }
 
+    #! Completes the create operations made with this data provider
+    /** @return the output generated from the created records, if any
+
+        @see finishCreate()
+
+        @since %DataProvider 3.9
+    */
+    private auto finishCreateImpl() {
+    }
+
     #! Returns simulated response data for a request without side effects
     /** @param app stable data-provider application name used in recorder entries
         @param action data-provider action name
@@ -8014,6 +8054,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private auto simulateRequestImpl(string app, string action, auto input, AbstractSimulationRecorder recorder) {
         if (*hash<DataProviderActionInfo> action_info = DataProviderActionCatalog::getAppAction(app, action)) {
+            # a create-output action returns the data generated from the records, not the records
+            if (action_info.output_data_type == DPAD_CREATE_OUTPUT && supportsCreate()) {
+                recorder.record(app, action, input, "example");
+                # output types are resolved when the action is returned
+                return action_info.output_type ? action_info.output_type.getExampleValue() : NOTHING;
+            }
             return simulateRequestForActionCode(app, action, input, recorder, action_info.action_code);
         }
 

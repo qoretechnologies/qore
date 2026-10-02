@@ -160,8 +160,8 @@
           "message": "將標準 JSON 檔案資料寫入至檔案位置"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
-          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "將記錄作為標準 JSON 陣列寫入至特定檔案位置。\n\n當呼叫 `commit()` 或解構提供者時，記錄會累積並寫入為 JSON 陣列。\n\n### 主要選項\n- `path`：輸出檔案位置（必填）\n- `pretty_print`：使用縮排格式化 JSON 輸出（預設：`True`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when the action completes.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "將記錄作為標準 JSON 陣列寫入至特定檔案位置。\n\n記錄會累積，並在動作完成時以 JSON 陣列寫入。\n\n### 主要選項\n- `path`：輸出檔案位置（必填）\n- `pretty_print`：使用縮排格式化 JSON 輸出（預設：`True`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Output File Path",
@@ -260,24 +260,12 @@
           "message": "寫入 JSON 資料"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write standard JSON data to an output stream",
-          "message": "將標準 JSON 資料寫入輸出串流"
+          "source": "Generate standard JSON data from records",
+          "message": "從記錄產生標準 JSON 資料"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "將記錄作為標準 JSON 陣列寫入至輸出串流，或將結果作為二進位資料擷取。\n\n當呼叫 `commit()` 或解構提供者時，記錄會累積並寫入為 JSON 陣列。\n\n### 主要選項\n- `stream`：要寫入的輸出串流\n- `pretty_print`：使用縮排格式化 JSON 輸出（預設：`True`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "輸出串流"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "An output stream object for the JSON data",
-          "message": "用於 JSON 資料的輸出串流物件"
-        },
-        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
-          "message": "用於寫入 JSON 資料的輸出串流；與 `path` 互斥"
+          "source": "Generate a standard JSON array from records and return it as data, for example to attach it to an email or upload it with another action.\n\nThe action returns the generated JSON in `data` and the number of records in `record_count`.\n\n### Key Options\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "從記錄產生標準 JSON 陣列並以資料形式傳回，例如附加至電子郵件或透過其他動作上傳。\n\n動作會在 `data` 中傳回產生的 JSON，並在 `record_count` 中傳回記錄數。\n\n### 主要選項\n- `pretty_print`：使用縮排格式化 JSON 輸出（預設：`True`）\n- `encoding`：字元編碼（預設：`UTF-8`）\n"
         },
         "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",

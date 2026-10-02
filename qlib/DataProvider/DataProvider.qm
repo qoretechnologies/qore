@@ -1369,6 +1369,14 @@ fetch
       \c es, and \c es-MX once instead of once per variant
     - added @ref DataProvider::DataProviderPresentationCatalog::getCatalogFiles() "DataProviderPresentationCatalog::getCatalogFiles()"
       and @ref DataProvider::DataProviderPresentationCatalog::getDomain() "DataProviderPresentationCatalog::getDomain()"
+    - added @ref DataProvider::AbstractDataProvider::finishCreate() "AbstractDataProvider::finishCreate()", called
+      once after a create action's records are created: data providers that buffer created records write them to
+      their destination there, so write errors are reported to the caller instead of when the provider is destroyed
+    - added the @ref DataProvider::DPAD_CREATE_OUTPUT "DPAD_CREATE_OUTPUT" (\c "create-output") action output data
+      type for create actions that return the data a provider generates from the records, such as a spreadsheet
+      or JSON document generated in memory, with
+      @ref DataProvider::GeneratedDataOutputDataType "GeneratedDataOutputDataType" and
+      @ref DataProvider::GeneratedDataInfo "GeneratedDataInfo" describing the generated data
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns

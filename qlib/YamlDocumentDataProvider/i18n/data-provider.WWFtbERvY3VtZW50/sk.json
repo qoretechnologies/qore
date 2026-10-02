@@ -196,8 +196,8 @@
           "message": "Čítať inline dáta YAML"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.desc": {
-          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Zápis záznamov dokumentov YAML ako viacdokumentového streamu do konkrétneho umiestnenia súboru.\n\nZáznamy sa akumulujú a zapisujú s oddeľovačmi dokumentov `---`, keď sa zavolá `commit()` alebo sa zničí poskytovateľ.\n\n**Kľúčové možnosti**\n- `path`: umiestnenie výstupného súboru (povinné)\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
+          "source": "Write YAML document records as a multi-document stream to a specific file location.\n\nRecords are accumulated and written with `---` document separators when the action completes.\n\n**Key Options**\n- `path`: the output file location (required)\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Zápis záznamov dokumentov YAML ako viacdokumentového streamu do konkrétneho umiestnenia súboru.\n\nZáznamy sa zhromažďujú a zapisujú s oddeľovačmi dokumentov `---` po dokončení akcie.\n\n**Kľúčové možnosti**\n- `path`: umiestnenie výstupného súboru (povinné)\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGU.display_name": {
           "source": "Write YAML Document File",
@@ -304,8 +304,8 @@
           "message": "Zapísať dáta dokumentov YAML do konkrétneho umiestnenia súboru"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Write YAML document records as a multi-document stream to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written with `---` document separators when `commit()` is called or the provider is destroyed.\n\n**Key Options**\n- `stream`: the output stream to write to\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
-          "message": "Zápis záznamov dokumentov YAML ako viacdokumentového streamu do výstupného streamu alebo získanie výsledku ako binárnych dát.\n\nZáznamy sa akumulujú a zapisujú s oddeľovačmi dokumentov `---`, keď sa zavolá `commit()` alebo sa zničí poskytovateľ.\n\n**Kľúčové možnosti**\n- `stream`: výstupný stream na zápis\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
+          "source": "Generate a YAML multi-document stream from records and return it as data, for example to attach it to an email or upload it with another action.\n\nEach record becomes one YAML document, separated by `---` markers; the action returns the generated data in `data` and the number of documents in `record_count`.\n\n**Key Options**\n- `flow_style`: use compact inline YAML output (default: `False`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Vygeneruje zo záznamov viacdokumentový prúd YAML a vráti ho ako údaje, napríklad na priloženie k e-mailu alebo nahratie inou akciou.\n\nKaždý záznam sa stane jedným dokumentom YAML, oddeleným značkami `---`; akcia vráti vygenerované údaje v `data` a počet dokumentov v `record_count`.\n\n**Kľúčové možnosti**\n- `flow_style`: použiť kompaktný inline výstup YAML (predvolené: `False`)\n- `encoding`: kódovanie znakov (predvolené: `UTF-8`)\n"
         },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Write YAML Inline Data",
@@ -395,21 +395,9 @@
           "source": "Use compact inline YAML output",
           "message": "Použiť kompaktný inline výstup YAML"
         },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
-          "source": "An `OutputStream` object to write YAML documents to. Use this for writing to network connections, compressed files, or other destinations.",
-          "message": "Objekt `OutputStream`, do ktorého sa majú zapisovať dokumenty YAML. Použite na zápis do sieťových spojení, komprimovaných súborov alebo iných cieľov."
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
-          "source": "Output Stream",
-          "message": "Výstupný tok"
-        },
-        "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
-          "source": "Output stream to write to",
-          "message": "Výstupný stream na zápis"
-        },
         "app.WWFtbERvY3VtZW50.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Write YAML data to a stream",
-          "message": "Zapísať dáta YAML do streamu"
+          "source": "Generate YAML document data from records",
+          "message": "Generovať údaje dokumentov YAML zo záznamov"
         },
         "app.WWFtbERvY3VtZW50.desc": {
           "source": "Provides read and write access to **YAML document streams** — files or inline data containing one or more YAML documents separated by `---` markers.\n\nUse this app when you need to:\n- Parse multi-document YAML configuration files or data exports\n- Transform YAML data between systems as part of an integration pipeline\n- Generate YAML output for configuration management or data exchange\n\nSupports configurable character encoding, empty-document filtering, and both block (indented) and flow (compact inline) YAML output styles.\n\n[Qore](https://qore.org)",
