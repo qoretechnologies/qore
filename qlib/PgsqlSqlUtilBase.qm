@@ -248,6 +248,8 @@ $function$
       exception chain are preserved
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
+    - native PostgreSQL UNNEST optimizations now require the native \c pgsql driver; JDBC retains its
+      batch-statement bind format for inserts, bulk updates, and bulk upserts
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
       at runtime to detect driver support (requires pgsql driver v3.3+)
     - added UNNEST-based bulk insert SQL generation in \c insertIntern(): when bulk data (hash-of-lists)
@@ -2979,6 +2981,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return (ds.getCapabilities() & DBI_CAP_HAS_ARRAY_BIND) != 0;
     }
 
+    #! Native UNNEST binds use the pgsql driver's typed array protocol, not JDBC batch binds.
+    private bool hasPgsqlArrayBind() {
+        return ds.getDriverName() == "pgsql" && hasArrayBind();
+    }
+
     #! transforms bind arguments for bulk DML operations with UNNEST
     /** Separates scalar and array bind values to match the UNNEST SQL parameter ordering,
         and creates typed array bind hashes using the column's native PostgreSQL type so
@@ -2990,6 +2997,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @since %Qore 3.0
     */
     list<auto> transformBulkBindArgs(hash<auto> data) {
+        if (!hasPgsqlArrayBind()) {
+            return AbstractTable::transformBulkBindArgs(data);
+        }
         # ensure columns are loaded for type lookup
         if (!columns) {
             l.lock();
@@ -3073,8 +3083,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
         }
 
-        if (!is_bulk || !hasArrayBind()) {
-            # delegate to base class for single-row inserts or when driver lacks array bind support
+        if (!is_bulk || !hasPgsqlArrayBind()) {
+            # delegate for single-row inserts or drivers without native typed-array binds
             return AbstractTable::insertIntern(row, \sql, opt, \args);
         }
 
@@ -3239,9 +3249,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! Returns a closure for performing bulk upsert operations using UNNEST + ON CONFLICT
     code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
             *hash<auto> opt) {
-        if (!hasAtomicUpsert() || !hasArrayBind()) {
+        if (!hasAtomicUpsert() || !hasPgsqlArrayBind()) {
             # fall back to default row-by-row closure for old PostgreSQL versions
-            # or when the driver does not support array binding
+            # or when the driver does not support native typed-array binds
             return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
         }
 
@@ -3386,7 +3396,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @see getBulkUpsertClosure()
     */
     code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
-        if (!hasArrayBind()) {
+        if (!hasPgsqlArrayBind()) {
             return AbstractTable::getBulkUpdateClosure(example_set, example_cond);
         }
 

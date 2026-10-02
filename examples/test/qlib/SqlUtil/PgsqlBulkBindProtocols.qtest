@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/PgsqlSqlUtilBase.qm
+%requires ../../../../qlib/JdbcPostgresqlSqlUtil.qm
+%requires ../../../../qlib/BulkSqlUtil
+
+%try-module jni
+%define NO_JNI
+%endtry
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%exec-class PgsqlBulkBindProtocolsTest
+
+class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
+    constructor() : Test("PostgreSQL bulk bind protocols", "1.0", \ARGV) {
+        addTestCase("JDBC batch bind protocol", \jdbc());
+        addTestCase("native PostgreSQL typed arrays", \native());
+        set_return_value(main());
+    }
+
+    private jdbc() {
+%ifdef NO_JNI
+        testSkip("jni is not available");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_JDBC_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_JDBC_PGSQL is not configured");
+        }
+        runProtocol(ENV.QORE_DB_CONNSTR_JDBC_PGSQL, "jdbc");
+    }
+
+    private native() {
+%ifdef NO_PGSQL
+        testSkip("pgsql is not available");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
+        }
+        runProtocol(ENV.QORE_DB_CONNSTR_PGSQL, "pgsql");
+    }
+
+    private runProtocol(string connstr, string driver) {
+        Datasource ds(connstr);
+        Table table(ds, "qore_bulk_bind_protocol_test");
+        assertEq(driver, ds.getDriverName());
+        table.addColumn("id", {"qore_type": "integer"}, False);
+        table.addColumn("value", {"qore_type": "integer"}, False);
+        table.addPrimaryKey("qore_bulk_bind_protocol_test_pk", ("id",));
+        table.create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            table.drop();
+            ds.commit();
+        }
+
+        assertTrue(table.hasArrayBind());
+        list<auto> binds = table.transformBulkBindArgs({"id": (1, 2), "value": (10, 20)});
+        if (driver == "jdbc") {
+            assertEq(((1, 2), (10, 20)), binds);
+        } else {
+            assertTrue(binds[0] instanceof hash);
+            assertEq((1, 2), binds[0]."^value^");
+            assertTrue(binds[0]."^pgtype^".endsWith("[]"));
+        }
+
+        BulkSqlUtil::BulkInsertOperation insert(table);
+        insert.queueData({"id": 1, "value": 10});
+        insert.queueData({"id": 2, "value": 20});
+        insert.flush();
+        insert.commit();
+        assertEq(2, table.rowCount());
+        # Exercise the prepared-statement path after the initial bulk insert.
+        insert.queueData({"id": 3, "value": 30});
+        insert.queueData({"id": 4, "value": 40});
+        insert.flush();
+        insert.commit();
+        assertEq(4, table.rowCount());
+
+        code<int(hash<auto>, hash<auto>)> update = table.getBulkUpdateClosure({"value": 0}, {"id": 0});
+        assertEq(2, update({"value": (11, 22)}, {"id": (1, 2)}));
+        ds.commit();
+        assertEq(11, table.selectRow({"where": {"id": 1}}).value);
+        assertEq(22, table.selectRow({"where": {"id": 2}}).value);
+
+        code<int(hash<auto>)> upsert = table.getBulkUpsertClosure({"id": 0, "value": 0});
+        upsert({"id": (2, 5), "value": (25, 50)});
+        ds.commit();
+        assertEq(5, table.rowCount());
+        assertEq(25, table.selectRow({"where": {"id": 2}}).value);
+        assertEq(50, table.selectRow({"where": {"id": 5}}).value);
+    }
+}
