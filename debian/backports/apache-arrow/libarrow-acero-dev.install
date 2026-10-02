@@ -1,0 +1,3 @@
+usr/lib/*/libarrow_acero.so
+usr/lib/*/cmake/ArrowAcero/
+usr/lib/*/pkgconfig/arrow-acero.pc

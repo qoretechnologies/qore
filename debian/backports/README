@@ -134,6 +134,12 @@ Python and Node dependencies
 
 The gRPC module's Flight interoperability tests require PyArrow. The trixie
 recipes build Cython 3.1.6 and PyArrow 25.0.1 from pinned source archives.
+The apache-arrow recipe builds Arrow 25 C++ libraries offline, with pinned
+xsimd headers and upstream test fixtures. It runs the configured upstream
+CTest suite, exports full hardening flags and provides installed CMake and
+pkg-config SDK tests. It keeps baseline amd64 instructions with runtime SIMD
+dispatch and baseline arm64 NEON. See apache-arrow/README.source for feature
+scope, source provenance and qualification requirements.
 PyArrow uses the separately installed Arrow 25 C++ libraries, including
 compute, Acero, datasets, Flight and Parquet. It does not bundle a second Arrow
 runtime. Its private Python bridge libraries remain inside the Python package;

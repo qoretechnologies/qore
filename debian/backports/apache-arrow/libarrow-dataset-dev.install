@@ -1,0 +1,3 @@
+usr/lib/*/libarrow_dataset.so
+usr/lib/*/cmake/ArrowDataset/
+usr/lib/*/pkgconfig/arrow-dataset.pc

@@ -1,0 +1,3 @@
+usr/lib/*/libarrow_flight_sql.so
+usr/lib/*/cmake/ArrowFlightSql/
+usr/lib/*/pkgconfig/arrow-flight-sql.pc

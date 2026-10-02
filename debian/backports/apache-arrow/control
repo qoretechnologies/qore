@@ -1,0 +1,209 @@
+Source: apache-arrow
+Section: libs
+Priority: optional
+Maintainer: David Nichols <david@qore.org>
+Build-Depends: debhelper-compat (= 13),
+ cmake,
+ ninja-build,
+ pkgconf,
+ libboost-filesystem-dev,
+ libboost-system-dev,
+ libboost-date-time-dev,
+ libboost-context-dev,
+ libgflags-dev,
+ libgtest-dev <!nocheck>,
+ libgmock-dev <!nocheck>,
+ rapidjson-dev,
+ libsnappy-dev,
+ libthrift-dev,
+ libssl-dev,
+ libbrotli-dev,
+ liblz4-dev,
+ libzstd-dev,
+ zlib1g-dev,
+ libbz2-dev,
+ libgrpc++-dev,
+ libprotobuf-dev,
+ libprotoc-dev,
+ protobuf-compiler,
+ protobuf-compiler-grpc,
+ libre2-dev,
+ libutf8proc-dev,
+ libxxhash-dev,
+ libabsl-dev,
+ nlohmann-json3-dev,
+ libsqlite3-dev <!nocheck>,
+ python3 <!nocheck>,
+ tzdata <!nocheck>,
+ tzdata-legacy <!nocheck>,
+ locales-all <!nocheck>
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://arrow.apache.org/
+Vcs-Git: https://github.com/qorelanguage/qore.git
+Vcs-Browser: https://github.com/qorelanguage/qore/tree/develop/debian/backports
+
+Package: libarrow2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow columnar arrays and IPC library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for columnar arrays and IPC.
+
+Package: libarrow-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow2500 (= ${binary:Version}),
+ libabsl-dev,
+ libboost-dev,
+ libbrotli-dev,
+ libbz2-dev,
+ liblz4-dev,
+ libprotobuf-dev,
+ libprotoc-dev,
+ libre2-dev,
+ libsnappy-dev,
+ libssl-dev,
+ libutf8proc-dev,
+ libxxhash-dev,
+ libzstd-dev,
+ nlohmann-json3-dev,
+ zlib1g-dev
+Description: Apache Arrow columnar arrays and IPC development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for columnar arrays and IPC.
+
+Package: libarrow-compute2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow vectorized compute library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for vectorized compute.
+
+Package: libarrow-compute-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow-compute2500 (= ${binary:Version}),
+ libarrow-dev (= ${binary:Version})
+Description: Apache Arrow vectorized compute development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for vectorized compute.
+
+Package: libarrow-acero2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow Acero query execution library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for Acero query execution.
+
+Package: libarrow-acero-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow-acero2500 (= ${binary:Version}),
+ libarrow-compute-dev (= ${binary:Version})
+Description: Apache Arrow Acero query execution development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for Acero query execution.
+
+Package: libarrow-dataset2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow dataset scanning library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for dataset scanning.
+
+Package: libarrow-dataset-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow-dataset2500 (= ${binary:Version}),
+ libarrow-acero-dev (= ${binary:Version}),
+ libparquet-dev (= ${binary:Version})
+Description: Apache Arrow dataset scanning development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for dataset scanning.
+
+Package: libarrow-flight2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow Flight RPC library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for Flight RPC.
+
+Package: libarrow-flight-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow-flight2500 (= ${binary:Version}),
+ libarrow-dev (= ${binary:Version}),
+ libgrpc++-dev,
+ libc-ares-dev
+Description: Apache Arrow Flight RPC development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for Flight RPC.
+
+Package: libarrow-flight-sql2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow Flight SQL library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for Flight SQL.
+
+Package: libarrow-flight-sql-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libarrow-flight-sql2500 (= ${binary:Version}),
+ libarrow-flight-dev (= ${binary:Version})
+Description: Apache Arrow Flight SQL development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for Flight SQL.
+
+Package: libparquet2500
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache Arrow Parquet columnar files library
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains the shared C++ library
+ for Parquet columnar files.
+
+Package: libparquet-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+ libparquet2500 (= ${binary:Version}),
+ libarrow-dev (= ${binary:Version}),
+ libthrift-dev
+Description: Apache Arrow Parquet columnar files development files
+ Apache Arrow provides columnar data structures and interoperable tools for
+ analytical data processing. This package contains headers, CMake targets
+ and pkg-config metadata for Parquet columnar files.

@@ -1,0 +1,242 @@
+Description: Keep baseline amd64 builds with runtime SSE4.2 dispatch
+Origin: upstream, https://github.com/apache/arrow/commit/d048f71964fe2df5540be2256048eb15f830962b
+Author: Dominique Belhachemi <db@domibel.de>
+Bug: https://github.com/apache/arrow/issues/50542
+Applied-Upstream: https://github.com/apache/arrow/commit/d048f71964fe2df5540be2256048eb15f830962b
+Last-Update: 2026-10-02
+
+From d048f71964fe2df5540be2256048eb15f830962b Mon Sep 17 00:00:00 2001
+From: Dominique Belhachemi <db@domibel.de>
+Date: Sun, 16 Aug 2026 16:19:12 -0400
+Subject: [PATCH] GH-50542: [C++] Fix ARROW_SIMD_LEVEL=NONE build, compile
+ SSE4.2 kernels (#50547)
+
+### Rationale for this change
+
+Building with ARROW_SIMD_LEVEL=NONE and ARROW_RUNTIME_SIMD_LEVEL=MAX failed with:
+
+  bpacking.cc:39:49: error: 'unpack_sse4_2' is not a member of
+  'arrow::internal::bpacking'
+
+The SSE4.2 dispatch table entries are emitted when either the compile-time or the runtime macro is set, but the kernels themselves were only compiled when the compile-time macro was set.
+
+### What changes are included in this PR?
+
+I moved the byte_stream_split SSE4.2 instantiations into a dedicated translation unit, keeping the dispatcher's own unit at the baseline ISA.
+
+### Are these changes tested?
+
+Yes
+
+### Are there any user-facing changes?
+
+No
+
+* GitHub Issue: #50542
+
+Authored-by: Dominique Belhachemi <db@domibel.de>
+Signed-off-by: Sutou Kouhei <kou@clear-code.com>
+---
+ .github/workflows/cpp_extra.yml               |  6 +++
+ cpp/src/arrow/CMakeLists.txt                  | 15 +++++++
+ cpp/src/arrow/util/bpacking_simd_128.cc       |  2 +-
+ cpp/src/arrow/util/bpacking_simd_internal.h   |  2 +-
+ cpp/src/arrow/util/bpacking_test.cc           |  8 +++-
+ .../arrow/util/byte_stream_split_internal.h   | 24 ++++++++++-
+ .../util/byte_stream_split_internal_sse4_2.cc | 43 +++++++++++++++++++
+ 7 files changed, 94 insertions(+), 6 deletions(-)
+ create mode 100644 cpp/src/arrow/util/byte_stream_split_internal_sse4_2.cc
+
+diff --git a/.github/workflows/cpp_extra.yml b/.github/workflows/cpp_extra.yml
+index c384f5f0f7f..60332f08f66 100644
+--- a/.github/workflows/cpp_extra.yml
++++ b/.github/workflows/cpp_extra.yml
+@@ -122,6 +122,12 @@ jobs:
+               -e CMAKE_CXX_STANDARD=23
+             runs-on: ubuntu-latest
+             title: AMD64 Debian C++23
++          - image: debian-cpp
++            run-options: >-
++              -e ARROW_SIMD_LEVEL=NONE
++              -e ARROW_CXXFLAGS=-march=x86-64
++            runs-on: ubuntu-latest
++            title: AMD64 Debian SIMD Level NONE
+     env:
+       ARCHERY_DEBUG: 1
+       ARROW_ENABLE_TIMING_TESTS: OFF
+diff --git a/cpp/src/arrow/CMakeLists.txt b/cpp/src/arrow/CMakeLists.txt
+index 2569b9bcd4f..c5bc01c8ef9 100644
+--- a/cpp/src/arrow/CMakeLists.txt
++++ b/cpp/src/arrow/CMakeLists.txt
+@@ -325,6 +325,13 @@ function(ADD_ARROW_BENCHMARK REL_TEST_NAME)
+                 ${ARG_UNPARSED_ARGUMENTS})
+ endfunction()
+ 
++macro(append_runtime_sse4_2_src SRCS SRC)
++  if(ARROW_HAVE_RUNTIME_SSE4_2 AND ARROW_SIMD_LEVEL STREQUAL "NONE")
++    list(APPEND ${SRCS} ${SRC})
++    set_source_files_properties(${SRC} PROPERTIES COMPILE_OPTIONS "${ARROW_SSE4_2_FLAG}")
++  endif()
++endmacro()
++
+ macro(append_runtime_avx2_src SRCS SRC)
+   if(ARROW_HAVE_RUNTIME_AVX2)
+     list(APPEND ${SRCS} ${SRC})
+@@ -612,9 +619,17 @@ set(ARROW_UTIL_SRCS
+ 
+ append_runtime_avx2_src(ARROW_UTIL_SRCS util/byte_stream_split_internal_avx2.cc)
+ 
++append_runtime_sse4_2_src(ARROW_UTIL_SRCS util/byte_stream_split_internal_sse4_2.cc)
++
+ append_runtime_avx2_src(ARROW_UTIL_SRCS util/bpacking_simd_256.cc)
+ append_runtime_avx512_src(ARROW_UTIL_SRCS util/bpacking_simd_avx512.cc)
+ 
++# also provides the NEON kernels on aarch64, so it stays in ARROW_UTIL_SRCS
++if(ARROW_CPU_FLAG STREQUAL "x86" AND ARROW_HAVE_RUNTIME_SSE4_2)
++  set_source_files_properties(util/bpacking_simd_128.cc PROPERTIES COMPILE_OPTIONS
++                                                                   "${ARROW_SSE4_2_FLAG}")
++endif()
++
+ append_runtime_sve256_src(ARROW_UTIL_SRCS util/bpacking_simd_256.cc)
+ 
+ if(ARROW_WITH_BROTLI)
+diff --git a/cpp/src/arrow/util/bpacking_simd_128.cc b/cpp/src/arrow/util/bpacking_simd_128.cc
+index 1bc756b2aa7..9f35667d2ad 100644
+--- a/cpp/src/arrow/util/bpacking_simd_128.cc
++++ b/cpp/src/arrow/util/bpacking_simd_128.cc
+@@ -18,7 +18,7 @@
+ #if defined(ARROW_HAVE_NEON)
+ #  define UNPACK_PLATFORM unpack_neon
+ #  define KERNEL_PLATFORM KernelNeon
+-#elif defined(ARROW_HAVE_SSE4_2)
++#elif defined(ARROW_HAVE_SSE4_2) || defined(ARROW_HAVE_RUNTIME_SSE4_2)
+ #  define UNPACK_PLATFORM unpack_sse4_2
+ #  define KERNEL_PLATFORM KernelSse42
+ #endif
+diff --git a/cpp/src/arrow/util/bpacking_simd_internal.h b/cpp/src/arrow/util/bpacking_simd_internal.h
+index 78aaa4a8f92..88df5f6bb01 100644
+--- a/cpp/src/arrow/util/bpacking_simd_internal.h
++++ b/cpp/src/arrow/util/bpacking_simd_internal.h
+@@ -26,7 +26,7 @@ namespace arrow::internal::bpacking {
+ 
+ #if defined(ARROW_HAVE_NEON)
+ #  define UNPACK_ARCH128 unpack_neon
+-#elif defined(ARROW_HAVE_SSE4_2)
++#elif defined(ARROW_HAVE_SSE4_2) || defined(ARROW_HAVE_RUNTIME_SSE4_2)
+ #  define UNPACK_ARCH128 unpack_sse4_2
+ #endif
+ 
+diff --git a/cpp/src/arrow/util/bpacking_test.cc b/cpp/src/arrow/util/bpacking_test.cc
+index 0503a15110b..52c67dbd798 100644
+--- a/cpp/src/arrow/util/bpacking_test.cc
++++ b/cpp/src/arrow/util/bpacking_test.cc
+@@ -27,7 +27,8 @@
+ #include "arrow/util/bpacking_scalar_internal.h"
+ #include "arrow/util/bpacking_simd_internal.h"
+ 
+-#if defined(ARROW_HAVE_RUNTIME_AVX2) || defined(ARROW_HAVE_RUNTIME_AVX512) || \
++#if defined(ARROW_HAVE_SSE4_2) || defined(ARROW_HAVE_RUNTIME_SSE4_2) ||       \
++    defined(ARROW_HAVE_RUNTIME_AVX2) || defined(ARROW_HAVE_RUNTIME_AVX512) || \
+     defined(ARROW_HAVE_RUNTIME_SVE128) || defined(ARROW_HAVE_RUNTIME_SVE256)
+ #  include "arrow/util/cpu_info.h"
+ #endif
+@@ -273,8 +274,11 @@ TYPED_TEST(TestUnpack, UnpackScalar) {
+   this->TestAll(&bpacking::unpack_scalar<TypeParam>);
+ }
+ 
+-#if defined(ARROW_HAVE_SSE4_2)
++#if defined(ARROW_HAVE_SSE4_2) || defined(ARROW_HAVE_RUNTIME_SSE4_2)
+ TYPED_TEST(TestUnpack, UnpackSse4_2) {
++  if (!CpuInfo::GetInstance()->IsSupported(CpuInfo::SSE4_2)) {
++    GTEST_SKIP() << "Test requires SSE4.2";
++  }
+   this->TestAll(&bpacking::unpack_sse4_2<TypeParam>);
+ }
+ #endif
+diff --git a/cpp/src/arrow/util/byte_stream_split_internal.h b/cpp/src/arrow/util/byte_stream_split_internal.h
+index 2e713dd42f2..79543e1cf88 100644
+--- a/cpp/src/arrow/util/byte_stream_split_internal.h
++++ b/cpp/src/arrow/util/byte_stream_split_internal.h
+@@ -286,11 +286,31 @@ void ByteStreamSplitEncodeSimd(const uint8_t* raw_values, int width,
+   }
+ }
+ 
+-#  if defined(ARROW_HAVE_RUNTIME_AVX2)
+-
+ // The extern template declaration are used internally and need export
+ // to be used in tests and benchmarks.
+ 
++#  if defined(ARROW_HAVE_RUNTIME_SSE4_2) && !defined(ARROW_HAVE_SSE4_2)
++
++// instantiated in byte_stream_split_internal_sse4_2.cc
++
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 2>(
++    const uint8_t*, int, int64_t, int64_t, uint8_t*);
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 4>(
++    const uint8_t*, int, int64_t, int64_t, uint8_t*);
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 8>(
++    const uint8_t*, int, int64_t, int64_t, uint8_t*);
++
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 2>(
++    const uint8_t*, int, const int64_t, uint8_t*);
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 4>(
++    const uint8_t*, int, const int64_t, uint8_t*);
++extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 8>(
++    const uint8_t*, int, const int64_t, uint8_t*);
++
++#  endif
++
++#  if defined(ARROW_HAVE_RUNTIME_AVX2)
++
+ extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitDecodeSimd<xsimd::avx2, 2>(
+     const uint8_t*, int, int64_t, int64_t, uint8_t*);
+ extern template ARROW_TEMPLATE_EXPORT void ByteStreamSplitDecodeSimd<xsimd::avx2, 4>(
+diff --git a/cpp/src/arrow/util/byte_stream_split_internal_sse4_2.cc b/cpp/src/arrow/util/byte_stream_split_internal_sse4_2.cc
+new file mode 100644
+index 00000000000..e96a24d67ff
+--- /dev/null
++++ b/cpp/src/arrow/util/byte_stream_split_internal_sse4_2.cc
+@@ -0,0 +1,43 @@
++// Licensed to the Apache Software Foundation (ASF) under one
++// or more contributor license agreements.  See the NOTICE file
++// distributed with this work for additional information
++// regarding copyright ownership.  The ASF licenses this file
++// to you under the Apache License, Version 2.0 (the
++// "License"); you may not use this file except in compliance
++// with the License.  You may obtain a copy of the License at
++//
++//   http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing,
++// software distributed under the License is distributed on an
++// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++// KIND, either express or implied.  See the License for the
++// specific language governing permissions and limitations
++// under the License.
++
++#include "arrow/util/byte_stream_split_internal.h"
++#include "arrow/util/math_internal.h"
++#include "arrow/util/simd.h"
++
++#include <xsimd/types/xsimd_sse4_2_register.hpp>
++#include <xsimd/xsimd.hpp>
++
++#include <cstdint>
++
++namespace arrow::util::internal {
++
++template void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 2>(const uint8_t*, int, int64_t,
++                                                          int64_t, uint8_t*);
++template void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 4>(const uint8_t*, int, int64_t,
++                                                          int64_t, uint8_t*);
++template void ByteStreamSplitDecodeSimd<xsimd::sse4_2, 8>(const uint8_t*, int, int64_t,
++                                                          int64_t, uint8_t*);
++
++template void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 2>(const uint8_t*, int,
++                                                          const int64_t, uint8_t*);
++template void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 4>(const uint8_t*, int,
++                                                          const int64_t, uint8_t*);
++template void ByteStreamSplitEncodeSimd<xsimd::sse4_2, 8>(const uint8_t*, int,
++                                                          const int64_t, uint8_t*);
++
++}  // namespace arrow::util::internal

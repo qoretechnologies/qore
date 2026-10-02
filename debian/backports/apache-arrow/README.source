@@ -1,0 +1,32 @@
+Debian Apache Arrow libraries for Qore
+======================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Prepare with tools/prepare-debian-backports.py --suite trixie apache-arrow.
+The manifest pins the Apache 25.0.1 release and independent arrow-testing,
+parquet-testing and xsimd components by HTTPS URL and SHA-256. All downloads
+and verification happen before the source package is built. Native builds
+run without network access, using the declared Debian build dependencies.
+
+The package includes shared Arrow, compute, Acero, dataset, Flight, Flight SQL
+and Parquet libraries and their development packages. CSV, JSON, IPC,
+filesystems, supported compression codecs and Parquet encryption are enabled.
+CUDA, Gandiva, Substrait, ORC, HDFS, cloud storage backends, GLib bindings and
+command-line utilities are not included. PyArrow is a separate source package.
+
+The pinned xsimd headers are exposed through a private build-tree CMake package.
+No xsimd library or headers are installed, and consumers need no private xsimd
+path. Security updates to these headers require rebuilding Arrow. Preserve
+all orig source components alongside the packages. Upstream LICENSE.txt and
+NOTICE.txt and xsimd's license are installed with every binary package; the
+complete fixture and third-party license records remain in debian/copyright.
+
+The upstream runtime-SSE4.2 fix keeps amd64 code at the baseline instruction
+set while dispatching optimized kernels on capable CPUs. The patch retains
+upstream's regression checks and arm64 NEON handling. Native qualification
+must exercise the full configured CTest suite, installed SDK consumers,
+package lifecycle, detached debug symbols, hardening and reproducibility on
+both amd64 and arm64 before repository publication. tzdata-legacy supplies
+historical zone aliases and locales-all enables the locale-dependent tests.
+Tests run unprivileged and require no external services.

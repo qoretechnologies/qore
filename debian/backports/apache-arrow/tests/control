@@ -1,0 +1,3 @@
+Tests: sdk
+Depends: @, build-essential, cmake, pkgconf
+Restrictions: allow-stderr

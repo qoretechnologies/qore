@@ -13,6 +13,34 @@
       "date": "Thu, 01 Oct 2026 08:00:00 +0200",
       "ppa": null,
       "packages": {
+        "apache-arrow": {
+          "upstream_version": "25.0.1",
+          "revision": "1~qore1",
+          "date": "Fri, 02 Oct 2026 13:45:00 +0000",
+          "orig_url": "https://archive.apache.org/dist/arrow/arrow-25.0.1/apache-arrow-25.0.1.tar.gz",
+          "orig_sha256": "43d5de0a581f43cf63a2c06b4dcf13b9ff6fcd800f023324596e5781093bc500",
+          "metadata_license": "Apache-2.0",
+          "changes": [
+            "Build Arrow C++ libraries and SDKs offline on {distribution_name}.",
+            "Enable compute, Acero, datasets, Flight, Flight SQL and Parquet.",
+            "Run upstream tests with pinned fixtures and retain full hardening and debug symbols.",
+            "Backport upstream baseline SIMD dispatch fix and pin private xsimd headers."
+          ],
+          "orig_components": {
+            "arrow-testing": {
+              "url": "https://codeload.github.com/apache/arrow-testing/tar.gz/9ff285c88565f0f6abc855918c6a342e70e4909c",
+              "sha256": "507609ccd0912a111f2ee89d108176baded8c8f22fd845c1686d7ddd462c3510"
+            },
+            "parquet-testing": {
+              "url": "https://codeload.github.com/apache/parquet-testing/tar.gz/e74785d85a4ecee829e1e405444d6a1b24b8bc9c",
+              "sha256": "6b3d9c1d9b9f059cf3b84b10af2b8a861db167f7809ecef555e610d26fd16433"
+            },
+            "xsimd": {
+              "url": "https://github.com/xtensor-stack/xsimd/archive/14.2.0.tar.gz",
+              "sha256": "21e841ab684b05331e81e7f782431753a029ef7b7d9d6d3ddab837e7782a40ee"
+            }
+          }
+        },
         "pyarrow": {
           "upstream_version": "25.0.1",
           "revision": "0qore5",

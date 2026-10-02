@@ -1,0 +1,12 @@
+# Upstream builds these helpers for its tests; they are not public SDKs.
+usr/lib/*/libarrow_testing.so*
+usr/lib/*/libarrow_acero_testing.so*
+usr/lib/*/libarrow_flight_testing.so*
+usr/lib/*/cmake/ArrowTesting/*
+usr/lib/*/cmake/ArrowAceroTesting/*
+usr/lib/*/cmake/ArrowFlightTesting/*
+usr/lib/*/pkgconfig/arrow-testing.pc
+usr/lib/*/pkgconfig/arrow-acero-testing.pc
+usr/lib/*/pkgconfig/arrow-flight-testing.pc
+# Debian installs the complete license/notice records in each package instead.
+usr/share/doc/arrow/*

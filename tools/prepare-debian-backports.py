@@ -146,7 +146,7 @@ def prepare(name, package, manifest, destination, cache, offline):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9-]*", component):
             raise ValueError(f"invalid orig component name: {component}")
     orig = download(package["orig_url"], package["orig_sha256"], cache, offline)
-    own_recipe = name == "pyarrow"
+    own_recipe = name in ("pyarrow", "apache-arrow")
     packaging = (None if own_recipe else
                  download(package["packaging_url"], package["packaging_sha256"], cache, offline))
     signature = (download(package["signature_url"], package["signature_sha256"], cache, offline)

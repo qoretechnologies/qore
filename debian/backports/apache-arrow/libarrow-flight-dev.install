@@ -1,0 +1,3 @@
+usr/lib/*/libarrow_flight.so
+usr/lib/*/cmake/ArrowFlight/
+usr/lib/*/pkgconfig/arrow-flight.pc

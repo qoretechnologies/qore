@@ -1,0 +1,15 @@
+#!/bin/sh
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+set -eu
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+cp debian/tests/CMakeLists.txt debian/tests/sdk.cpp "$work/"
+cmake -S "$work" -B "$work/build" \
+    -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF
+cmake --build "$work/build" --parallel 2
+timeout 60 "$work/build/arrow-sdk"
+# Exercise pkg-config consumers independently of CMake's imported targets.
+c++ -std=c++20 "$work/sdk.cpp" -pthread -o "$work/arrow-pkgconfig" \
+    $(pkg-config --cflags --libs arrow arrow-compute arrow-acero arrow-dataset arrow-flight arrow-flight-sql parquet)
+timeout 60 "$work/arrow-pkgconfig"

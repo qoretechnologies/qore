@@ -1,0 +1,67 @@
+#!/usr/bin/make -f
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: Apache-2.0
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+include /usr/share/dpkg/architecture.mk
+builddir = obj-$(DEB_HOST_GNU_TYPE)
+parallel = $(or $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS))),1)
+export ARROW_TEST_DATA = $(CURDIR)/arrow-testing/data
+export PARQUET_TEST_DATA = $(CURDIR)/parquet-testing/data
+export PYTHON = /usr/bin/python3
+
+ifeq ($(DEB_HOST_ARCH),arm64)
+arrow_simd = NEON
+else
+arrow_simd = NONE
+endif
+
+ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+arrow_tests = OFF
+else
+arrow_tests = ON
+endif
+
+%:
+	dh $@ --sourcedirectory=cpp --builddirectory=$(builddir)/arrow --buildsystem=cmake+ninja
+
+override_dh_auto_configure:
+	# Export the pinned header-only component from this build tree. It is
+	# private to the build and never replaces the distribution's xsimd SDK.
+	cmake -S xsimd -B $(builddir)/xsimd -DBUILD_TESTS=OFF -DENABLE_XTL_COMPLEX=OFF
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_SKIP_INSTALL_RPATH=ON -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON \
+		-DARROW_DEPENDENCY_SOURCE=SYSTEM -Dxsimd_SOURCE=SYSTEM \
+		-Dxsimd_DIR=$(CURDIR)/$(builddir)/xsimd -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+		-DARROW_BUILD_SHARED=ON -DARROW_BUILD_STATIC=OFF \
+		-DARROW_BUILD_TESTS=$(arrow_tests) -DARROW_BUILD_BENCHMARKS=OFF \
+		-DARROW_BUILD_EXAMPLES=OFF -DARROW_BUILD_UTILITIES=OFF \
+		-DARROW_COMPUTE=ON -DARROW_ACERO=ON -DARROW_DATASET=ON \
+		-DARROW_CSV=ON -DARROW_JSON=ON -DARROW_FILESYSTEM=ON -DARROW_IPC=ON \
+		-DARROW_PARQUET=ON -DARROW_FLIGHT=ON -DARROW_FLIGHT_SQL=ON \
+		-DARROW_S3=OFF -DARROW_GCS=OFF -DARROW_AZURE=OFF \
+		-DARROW_JEMALLOC=OFF -DARROW_MIMALLOC=OFF \
+		-DARROW_WITH_BROTLI=ON -DARROW_WITH_BZ2=ON -DARROW_WITH_LZ4=ON \
+		-DARROW_WITH_SNAPPY=ON -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON \
+		-DARROW_USE_OPENSSL=ON -DPARQUET_REQUIRE_ENCRYPTION=ON \
+		-DARROW_SIMD_LEVEL=$(arrow_simd) -DARROW_RUNTIME_SIMD_LEVEL=MAX \
+		-DARROW_PACKAGE_KIND=deb -DARROW_USE_CCACHE=OFF
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	ctest --test-dir $(builddir)/arrow --output-on-failure --parallel $(parallel) --timeout 600
+endif
+
+override_dh_auto_install:
+	dh_auto_install
+	# Test helpers are built and exercised above, but not part of the SDK.
+	rm -rf debian/tmp/usr/include/arrow/testing
+	rm -f debian/tmp/usr/include/arrow/acero/test_util.h
+	rm -f debian/tmp/usr/include/arrow/flight/test_*.h
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf $(builddir)
