@@ -2662,6 +2662,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 "max_completion_tokens": 2048,
                 "parallel_tool_calls": False,
                 "service_tier": "default",
+                "prompt_cache_key": "fixture-cache-key",
                 "response_format": {"type": "json_object"},
                 "tools": ({"type": "function", "function": {
                     "name": "fixture", "strict": True,
@@ -2677,8 +2678,23 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             assertFalse(body.parallel_tool_calls);
             assertTrue(body.hasKey("parallel_tool_calls"));
             assertEq("default", body.service_tier);
+            # a cache-routing hint only OpenAI itself defines is not sent to another server
+            assertFalse(body.hasKey("prompt_cache_key"));
             assertEq("json_object", body.response_format.type);
             assertTrue(body.tools[0].function.strict);
+        }
+
+        # OpenAI itself receives the cache-routing hint
+        foreach hash<auto> endpoint in (({"url": "https://api.openai.com", "native": True},
+                {"url": "https://eu.api.openai.com/v1", "native": True},
+                {"url": "http://localhost:" + port, "native": False},
+                {"url": "https://api.openai.com.example.net", "native": False})) {
+            OpenAiLlmProvider provider(<LlmBackendConfig>{"mode": "http", "url": endpoint.url,
+                "model": "gpt-5.5", "api_key": "openai-test-key"});
+            hash<auto!> body_options = {};
+            provider.applyOpenAiRequestControls(\body_options, {"prompt_cache_key": "design-42"});
+            assertEq(endpoint.native ? "design-42" : NOTHING, body_options.prompt_cache_key, endpoint.url);
+            assertEq(endpoint.native, provider.isNativeOpenAiEndpoint(), endpoint.url);
         }
 
         llm.chatCompletions({

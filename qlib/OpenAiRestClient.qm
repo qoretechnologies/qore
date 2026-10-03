@@ -1089,6 +1089,18 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 body_options{key} = request{key};
             }
         }
+        # a cache-routing hint only OpenAI itself defines; another
+        # OpenAI-compatible server may reject the unknown field
+        if (request.prompt_cache_key.typeCode() == NT_STRING && request.prompt_cache_key.val()
+                && isNativeOpenAiEndpoint()) {
+            body_options.prompt_cache_key = request.prompt_cache_key;
+        }
+    }
+
+    #! Returns True if this client talks to OpenAI's own API rather than another OpenAI-compatible server
+    bool isNativeOpenAiEndpoint() {
+        return getMode() == "http"
+            && getConfig().url =~ /^https:\/\/(api|us\.api|eu\.api)\.openai\.com(:443)?(\/|$)/;
     }
 
     hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
@@ -1386,8 +1398,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (!inlist(api, ("auto", "responses", "chat_completions"))) {
             throw "LLM-CONFIG-ERROR", "openai_api must be auto, responses, or chat_completions";
         }
-        bool native_openai = getMode() == "http"
-            && getConfig().url =~ /^https:\/\/(api|us\.api|eu\.api)\.openai\.com(:443)?(\/|$)/;
+        bool native_openai = isNativeOpenAiEndpoint();
         bool modern_model = body.model.val() && openAiModelUsesMaxCompletionTokens(body.model);
         bool responses = api == "responses" || (api == "auto" && native_openai
             && modern_model && body.reasoning_effort != "none");
