@@ -97,9 +97,14 @@ class JitCompileThreadStackTest inherits QUnit::Test {
     }
 
     #! Runs the script in the given execution mode and appends the child's exit status
+    /** QORE_JIT_SYNC_COMPILE makes the calling thread wait for each compilation, which still runs on the
+        background compile thread: without it the program can finish first, and Program teardown cancels a
+        compilation that is still queued, so the compile thread would never run.
+    */
     private string run(string mode, string path) {
         return backquote(sprintf(
-            "QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; "
+            "QORE_JIT_THRESHOLD=1 QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1 LD_LIBRARY_PATH=%s %s -b "
+            "--exec-mode=%s %s 2>&1; "
             "echo \"exit=$?\"",
             shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(path)));
     }
