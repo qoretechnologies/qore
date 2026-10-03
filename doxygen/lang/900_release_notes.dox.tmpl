@@ -3970,6 +3970,8 @@ while (*binary chunk = input.read(65536)) {
     - Fixed converting a string to a character encoding that needs more bytes than the source, such as UTF-8 text to
       UTF-16 with @ref Qore::convert_encoding() "convert_encoding()", taking time quadratic in the length of the
       string: a megabyte took more than half a minute, and now takes milliseconds
+      - Buffer growth also preserves all characters with older macOS encoding converters, which could otherwise
+        drop characters or raise \c ENCODING-CONVERSION-ERROR when converting valid text to ISO-2022-JP
 
     - Fixed @ref dataprovider_dpql "DPQL" string literals and quoted field names containing multibyte
       characters retaining a closing quote, including literals passed to the existing \c unaccent() operator.

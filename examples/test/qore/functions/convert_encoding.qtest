@@ -13,6 +13,7 @@ public class ConvertEncodingTest inherits QUnit::Test {
     constructor() : Test("ConvertEncodingTest", "1.0") {
         addTestCase("a large string converts in linear time", \linearTime());
         addTestCase("conversions that grow the target round-trip exactly", \roundTrip());
+        addTestCase("stateful conversions preserve bytes across buffer growth", \statefulGrowth());
         addTestCase("a lossy conversion that grows the target is rejected", \lossyGrowth());
         addTestCase("small and empty strings", \smallStrings());
         set_return_value(main());
@@ -50,12 +51,28 @@ public class ConvertEncodingTest inherits QUnit::Test {
         assertEq(strmul("äöüß", 100000), utf8);
     }
 
+    statefulGrowth() {
+        # Switching between Japanese and ASCII more than doubles the output size, forcing repeated growth.
+        # Vary the prefix to fill the buffer at different points in a character or shift sequence.  On older
+        # Apple iconv, resuming after E2BIG lost bytes from the final batch written before the buffer filled.
+        foreach int count in (1, 64, 65, 1024, 50000) {
+            for (int padding = 0; padding < 9; ++padding) {
+                string prefix = strmul("x", padding);
+                string text = prefix + strmul("日a", count);
+                string converted = convert_encoding(text, "ISO-2022-JP");
+                assertEq(binary(prefix + strmul("\x1b$BF|\x1b(Ba", count)), binary(converted),
+                    sprintf("exact ISO-2022-JP bytes: count=%d padding=%d", count, padding));
+                assertEq(text, convert_encoding(converted, "UTF-8"));
+            }
+        }
+    }
+
     lossyGrowth() {
         # the target grows several times before reaching a character it cannot represent
-        string text = strmul("日本語", 50000) + "€";
+        string text = strmul("日a", 50000) + "€";
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (text, "ISO-2022-JP"));
         # and one at the start
-        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("€" + strmul("日本語", 50000),
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("€" + strmul("日a", 50000),
             "ISO-2022-JP"));
     }
 

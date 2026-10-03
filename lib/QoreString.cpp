@@ -809,24 +809,19 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     if (!c.isValid())
         return -1;
 
-    // now convert value: when the output buffer is full, it is enlarged and the conversion continues from where
-    // it stopped; restarting from the beginning after growing by a fixed block made converting to a wider encoding
-    // (ex: UTF-8 to UTF-16) quadratic in the length of the string
+    // Grow geometrically so retries take linear time in the size of the output.  Restart each attempt with a
+    // reset descriptor: older Apple iconv implementations consume input without accounting for all the output
+    // written on E2BIG (for example with ISO-2022-JP), so resuming can silently drop characters.  A complete
+    // attempt also preserves iconv's count of non-reversible conversions, which is not returned on E2BIG.
     size_t al = src_len + STR_CLASS_BLOCK;
     targ.allocate(al + 1);
-    char* ib = (char*)src;
-    size_t ilen = src_len;
-    // the number of bytes already written to the target
-    size_t done = 0;
-    // iconv() does not return the count of non-reversible conversions from a call that stopped because the target
-    // was full, so a conversion that had to grow its target is verified by the round trip below
-    bool grew = false;
     while (true) {
-        char* ob = targ.priv->buf + done;
-        size_t olen = al - done;
+        char* ib = const_cast<char*>(src);
+        size_t ilen = src_len;
+        char* ob = targ.priv->buf;
+        size_t olen = al;
         size_t rc = c.iconv(&ib, &ilen, &ob, &olen);
-        done = ob - targ.priv->buf;
-        if (rc == (size_t)-1) {
+        if (rc == static_cast<size_t>(-1)) {
             switch (errno) {
                 case EINVAL:
                 case EILSEQ:
@@ -834,9 +829,13 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
                     targ.clear();
                     return -1;
                 case E2BIG:
+                    if (c.iconv(nullptr, nullptr, nullptr, nullptr) == static_cast<size_t>(-1)) {
+                        c.reportUnknownError(xsink);
+                        targ.clear();
+                        return -1;
+                    }
                     al *= 2;
                     targ.allocate(al + 1);
-                    grew = true;
                     break;
                 default: {
                     c.reportUnknownError(xsink);
@@ -851,8 +850,8 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             return -1;
         } else {
             // terminate string
-            targ.priv->buf[done] = '\0';
-            targ.priv->len = done;
+            targ.priv->buf[al - olen] = '\0';
+            targ.priv->len = al - olen;
             break;
         }
     }
@@ -863,7 +862,7 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     // the real conversion.  Establish representability the same way concat_case_mapped() does:
     // convert the result back and require it to reproduce the source exactly.  Platforms whose
     // iconv reports the loss keep the original path and never pay for a second conversion.
-    if (verify && (grew || !IconvHelper::reportsNonReversibleConversions())
+    if (verify && !IconvHelper::reportsNonReversibleConversions()
             && conversion_needs_roundtrip_check(from, nccs, src, src_len)) {
         QoreString check(from);
         if (convert_encoding_intern(targ.priv->buf, targ.priv->len, nccs, check, from, nullptr, false)
