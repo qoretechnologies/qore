@@ -809,15 +809,23 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     if (!c.isValid())
         return -1;
 
-    // now convert value
+    // now convert value: when the output buffer is full, it is enlarged and the conversion continues from where
+    // it stopped; restarting from the beginning after growing by a fixed block made converting to a wider encoding
+    // (ex: UTF-8 to UTF-16) quadratic in the length of the string
     size_t al = src_len + STR_CLASS_BLOCK;
     targ.allocate(al + 1);
+    char* ib = (char*)src;
+    size_t ilen = src_len;
+    // the number of bytes already written to the target
+    size_t done = 0;
+    // iconv() does not return the count of non-reversible conversions from a call that stopped because the target
+    // was full, so a conversion that had to grow its target is verified by the round trip below
+    bool grew = false;
     while (true) {
-        size_t ilen = src_len;
-        size_t olen = al;
-        char* ib = (char*)src;
-        char* ob = targ.priv->buf;
+        char* ob = targ.priv->buf + done;
+        size_t olen = al - done;
         size_t rc = c.iconv(&ib, &ilen, &ob, &olen);
+        done = ob - targ.priv->buf;
         if (rc == (size_t)-1) {
             switch (errno) {
                 case EINVAL:
@@ -826,8 +834,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
                     targ.clear();
                     return -1;
                 case E2BIG:
-                    al += STR_CLASS_BLOCK;
+                    al *= 2;
                     targ.allocate(al + 1);
+                    grew = true;
                     break;
                 default: {
                     c.reportUnknownError(xsink);
@@ -842,8 +851,8 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             return -1;
         } else {
             // terminate string
-            targ.priv->buf[al - olen] = '\0';
-            targ.priv->len = al - olen;
+            targ.priv->buf[done] = '\0';
+            targ.priv->len = done;
             break;
         }
     }
@@ -854,7 +863,7 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     // the real conversion.  Establish representability the same way concat_case_mapped() does:
     // convert the result back and require it to reproduce the source exactly.  Platforms whose
     // iconv reports the loss keep the original path and never pay for a second conversion.
-    if (verify && !IconvHelper::reportsNonReversibleConversions()
+    if (verify && (grew || !IconvHelper::reportsNonReversibleConversions())
             && conversion_needs_roundtrip_check(from, nccs, src, src_len)) {
         QoreString check(from);
         if (convert_encoding_intern(targ.priv->buf, targ.priv->len, nccs, check, from, nullptr, false)

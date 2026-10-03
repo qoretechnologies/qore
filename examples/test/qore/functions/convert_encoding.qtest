@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConvertEncodingTest
+
+#! Tests converting strings whose target encoding is larger than the source
+public class ConvertEncodingTest inherits QUnit::Test {
+    constructor() : Test("ConvertEncodingTest", "1.0") {
+        addTestCase("a large string converts in linear time", \linearTime());
+        addTestCase("conversions that grow the target round-trip exactly", \roundTrip());
+        addTestCase("a lossy conversion that grows the target is rejected", \lossyGrowth());
+        addTestCase("small and empty strings", \smallStrings());
+        set_return_value(main());
+    }
+
+    linearTime() {
+        # converting to UTF-16 doubles the size of ASCII text; this took tens of seconds per megabyte when the
+        # conversion restarted every time the target grew by a fixed block
+        string text = strmul("y", 4 * 1024 * 1024);
+        date start = now_us();
+        string utf16 = convert_encoding(text, "UTF-16LE");
+        date elapsed = now_us() - start;
+        assertEq(8 * 1024 * 1024, utf16.size());
+        assertLt(5s, elapsed, "4 MiB converts in well under 5 seconds");
+        assertEq(text, convert_encoding(utf16, "UTF-8"));
+    }
+
+    roundTrip() {
+        foreach hash<auto> c in (
+                {"text": strmul("Žluťoučký kůň ", 20000), "enc": "UTF-16BE"},
+                {"text": strmul("日本語のテキスト", 20000), "enc": "UTF-32LE"},
+                {"text": strmul("Straße Köln ", 30000), "enc": "UTF-32"},
+                {"text": strmul("日本語abc", 50000), "enc": "ISO-2022-JP"},
+            ) {
+            string converted = convert_encoding(c.text, c.enc);
+            assertGt(c.text.size(), converted.size(), c.enc + " needs a larger target");
+            assertEq(c.text, convert_encoding(converted, "UTF-8"), c.enc + " round-trips exactly");
+        }
+
+        # an 8-bit source whose UTF-8 form is larger
+        string latin1 = convert_encoding(strmul("äöüß", 100000), "ISO-8859-1");
+        assertEq(400000, latin1.size());
+        string utf8 = convert_encoding(latin1, "UTF-8");
+        assertEq(800000, utf8.size());
+        assertEq(strmul("äöüß", 100000), utf8);
+    }
+
+    lossyGrowth() {
+        # the target grows several times before reaching a character it cannot represent
+        string text = strmul("日本語", 50000) + "€";
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (text, "ISO-2022-JP"));
+        # and one at the start
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("€" + strmul("日本語", 50000),
+            "ISO-2022-JP"));
+    }
+
+    smallStrings() {
+        assertEq("", convert_encoding("", "UTF-16LE"));
+        assertEq("a", convert_encoding(convert_encoding("a", "UTF-16LE"), "UTF-8"));
+        assertEq(binary("a\x00"), binary(convert_encoding("a", "UTF-16LE")));
+    }
+}
