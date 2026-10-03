@@ -1695,7 +1695,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for both filename and archive parameter
 
         |!Conversion character|!Meaning
-        |\c %%s|Used to output the OS directory separator, i.e. "\" or "/"
+        |\c %%s|Used to output the OS directory separator, i.e. <tt>\\</tt> or <tt>/</tt>
         |\c %%c|Used to output the appender name
         |\c %%C|Used to output the appender class name
         |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
@@ -2037,7 +2037,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for both filename and archive parameter
 
         |!Conversion character|!Meaning
-        |\c %%s|Used to output the OS directory separator, i.e. "\" or "/"
+        |\c %%s|Used to output the OS directory separator, i.e. <tt>\\</tt> or <tt>/</tt>
         |\c %%c|Used to output the appender name
         |\c %%C|Used to output the appender class name
         |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"

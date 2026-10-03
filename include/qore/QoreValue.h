@@ -848,8 +848,8 @@ public:
     DLLEXPORT QoreListNode* getOpaqueList() const;
 
     //! Returns the target of a weak or opaque reference; any other value is returned unchanged
-    /** %Qore stores a value assigned with the @ref weak_assignment_operator "weak assignment
-        operator (:=)" as a node that holds its target indirectly.  Reading such a value through
+    /** %Qore stores a value assigned with the @ref weak_assignment_operator "weak assignment operator (:=)"
+        as a node that holds its target indirectly.  Reading such a value through
         the language unwraps it, but code that walks a hash or a list itself sees the stored node,
         and a \c switch on QoreValue::getType() that only handles \c NT_OBJECT, \c NT_HASH and
         \c NT_LIST silently misses it.  A value assigned with the

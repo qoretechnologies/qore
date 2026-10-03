@@ -292,6 +292,14 @@ more than one "type" of content — split it into topical subpages.
   release notes; do not hardcode `index.html` URLs or substitute a helper-page
   section for the module's introduction. References to particular API classes
   and methods still use their qualified symbol names.
+- Keep `@ref` and `@subpage` outside `@htmlonly` blocks: Doxygen copies those
+  blocks literally, leaving raw commands in the page without a warning. Keep
+  quoted reference labels on one physical line for Doxygen 1.9 compatibility.
+  For literal backslashes, use `<tt>\\</tt>` (for example `<tt>\\F\\</tt>`)
+  instead of a quoted `\c` argument ending in a backslash, which can consume
+  subsequent documentation commands.
+  Paragraph titles (`@par ...`) are also plain text: put references in the body
+  below the title.
 - Reuse companion `*DataProvider` SVG application icons in the mainpage's user
   module list. Set `QORE_DOXYGEN_IMAGES` to their source paths before registering
   the binary documentation target. The shared configuration adds image search
@@ -355,6 +363,15 @@ substitutions survive and external modules can configure on CMake versions befor
 `python3 examples/test/cmake/test_two_phase_docs.py -v`; set `CMAKE_EXECUTABLE` to
 exercise an older CMake executable. The test covers reconfiguration, dependency
 targets, disabled documentation and missing dependency diagnostics.
+
+After building, check rendered guide and class pages as well as mainpages:
+`python3 doxygen/check-rendered-refs.py build/docs ../module-zip/build/docs`.
+The checker follows composed-documentation symlinks and rejects unprocessed link
+commands with display labels, qualified symbols, or module intro targets outside
+literal examples. Doxygen warnings alone do not catch raw HTML and quote parsing
+errors. Run its regression tests with
+`python3 examples/test/cmake/test_rendered_doc_refs.py -v`; `DOXYGEN_EXECUTABLE`
+selects the Doxygen version for its rendering integration test.
 
 External modules should use the `qore_binary_module_two_phase_docs()` macro from
 `QoreMacros.cmake`. It handles all three phases, including the correct relative
