@@ -2496,10 +2496,15 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw DUPLICATE-RECORD this exception should be thrown if the provider fails due to an attempt to create a
         duplicate record
+        @throw CREATE-RECORD-ERROR no \c recs option was given; an empty list of records creates no records
 
         @since DataProvider 3.3
     */
     *hash<auto> createRecordsBulkWithOptions(*hash<auto> options) {
+        if (!exists options.recs) {
+            throw "CREATE-RECORD-ERROR", sprintf("data provider %y (%s): no records were given to create; the "
+                "\"recs\" option is required", getName(), self.className());
+        }
         return createRecordsBulk(options.recs, options - "recs");
     }
 
@@ -2611,7 +2616,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         duplicate record
     */
     *hash<auto> createRecordsBulk(list<auto> recs, *hash<auto> create_options) {
-        hash<auto> h;
+        # an empty list is no records, not a single record with no value
+        hash<auto> h = {};
         foreach auto rec in (recs) {
             if (rec.typeCode() != NT_HASH) {
                 throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
@@ -2723,10 +2729,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
+        @throw CREATE-RECORD-ERROR no \c recs option was given; an empty list of records upserts no records
 
         @since DataProvider 3.3
     */
     *list<string> upsertRecordsBulkWithOptions(*hash<auto> options) {
+        if (!exists options.recs) {
+            throw "CREATE-RECORD-ERROR", sprintf("data provider %y (%s): no records were given to upsert; the "
+                "\"recs\" option is required", getName(), self.className());
+        }
         return upsertRecordsBulk(options.recs, options - "recs");
     }
 
@@ -2794,7 +2805,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
             }
         }
-        hash<auto> h;
+        # an empty list is no records, not a single record with no value
+        hash<auto> h = {};
         foreach auto rec in (recs) {
             if (rec.typeCode() != NT_HASH) {
                 throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());

@@ -119,6 +119,33 @@ class RecordProvider inherits AbstractDataProvider {
     }
 }
 
+#! A provider that supports upserting records
+class UpsertProvider inherits AbstractDataProvider {
+    public {
+        list<hash<auto>> upserted = ();
+    }
+
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "UpsertProvider",
+            "supports_upsert": True,
+        };
+    }
+
+    string getName() {
+        return "upsert";
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        upserted += rec;
+        return UpsertResultInserted;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
 #! Captures log messages with their levels
 class LogCapture inherits LoggerWrapper {
     public {
@@ -152,6 +179,7 @@ class CreateOutputTest inherits QUnit::Test {
         addTestCase("create-output action simulation", \testSimulation());
         addTestCase("create action options with an open record type", \testOpenRecordTypeOptions());
         addTestCase("caught option errors are logged", \testCaughtErrorLogged());
+        addTestCase("empty and missing records", \testEmptyAndMissingRecords());
 
         set_return_value(main());
     }
@@ -352,5 +380,29 @@ class CreateOutputTest inherits QUnit::Test {
         assertNothing(prov.tryGetActionOptionsForCreateWithOptions(action, {"token": "s3cr3t"}));
         assertEq(1, own_log.messages.size());
         assertEq(1, global_log.messages.size());
+    }
+
+    testEmptyAndMissingRecords() {
+        # an empty list of records creates no records, and the generated output is an empty document
+        DocumentWriteProvider prov();
+        assertNothing(prov.createRecordsBulk(()));
+        assertNothing(prov.createRecordsBulkWithOptions({"recs": ()}));
+        hash<GeneratedDataInfo> output = prov.finishCreate();
+        assertEq(0, output.record_count);
+        assertEq(binary(), output.data);
+
+        # a missing records option is an error that says so
+        assertThrows("CREATE-RECORD-ERROR", "no records were given to create", \prov.createRecordsBulkWithOptions(),
+            {});
+        assertThrows("CREATE-RECORD-ERROR", "no records were given to create", \prov.createRecordsBulkWithOptions());
+
+        # the same for upserts
+        UpsertProvider uprov();
+        assertEq((), uprov.upsertRecordsBulkWithOptions({"recs": ()}));
+        assertEq((), uprov.upserted);
+        assertEq((UpsertResultInserted,), uprov.upsertRecordsBulkWithOptions({"recs": ({"sku": "A-1"},)}));
+        assertEq(({"sku": "A-1"},), uprov.upserted);
+        assertThrows("CREATE-RECORD-ERROR", "no records were given to upsert", \uprov.upsertRecordsBulkWithOptions(),
+            {});
     }
 }

@@ -1378,6 +1378,8 @@ fetch
       @ref DataProvider::GeneratedDataOutputDataType "GeneratedDataOutputDataType" and
       @ref DataProvider::GeneratedDataInfo "GeneratedDataInfo" describing the generated data
     - fixed create and upsert actions of data providers with an open record type losing their \c recs option
+    - fixed creating or upserting an empty list of records failing with a \c PROCESSOR-SHAPE-ERROR about a record
+      with no value; an empty list creates no records, and a missing \c recs option is reported as such
     - errors caught while determining action options or request types are now logged with the global data provider
       logger when the data provider has no logger of its own, and no longer log option or request values, which can
       hold credentials
