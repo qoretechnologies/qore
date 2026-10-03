@@ -3238,6 +3238,14 @@ void qore_exit_process(int rc) {
 #endif
         && !tp_thread_counter.getCount()
     ) {
+#ifdef HAVE_SIGNAL_HANDLING
+        // TID 0 is not included in the application-thread count. Its signal wait can wake during
+        // static destruction and access the destroyed manager mutex unless it has been joined.
+        // A running callback can depend on this thread, so it requires immediate process exit.
+        if (!QSM.stopForExit()) {
+            _Exit(rc);
+        }
+#endif
         // The native JIT compiler uses a dedicated C++ thread that is not part of
         // thread_list.  Stop it while LLVM's process-wide state is still intact;
         // otherwise exit() can run LLVM static destructors concurrently with an

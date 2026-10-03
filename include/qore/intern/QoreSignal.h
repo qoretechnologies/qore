@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -147,6 +147,8 @@ private:
    QoreCondition cond;     // to ensure atomicity of set and remove calls
    bool block;
    int waiting;
+   // Includes callback and thread-resource cleanup; protected by mutex.
+   bool handler_running = false;
 
    DLLLOCAL void reload();
    DLLLOCAL void wake_signal_thread_unlocked();
@@ -175,6 +177,8 @@ public:
    DLLLOCAL QoreSignalManager();
    DLLLOCAL void init(bool disable_signal_mask = false);
    DLLLOCAL void del();
+   // Join the idle signal thread before C exit(); an active callback requires _Exit().
+   DLLLOCAL bool stopForExit();
    DLLLOCAL int setHandler(int sig, const ResolvedCallReferenceNode* fr, ExceptionSink* xsink);
    DLLLOCAL int removeHandler(int sig, ExceptionSink* xsink);
    DLLLOCAL const char* getSignalName(int sig);

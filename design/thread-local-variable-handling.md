@@ -287,11 +287,15 @@ instead of continuing unsafe module teardown.
 Explicit `exit()` does not unwind the active Qore program and cannot call full
 `qore_cleanup()`. It uses C `exit()` only from a non-signal thread when at most
 one Qore thread remains and the external completion counter is zero. This path
-stops the JIT worker and joins the idle native reaper before static destruction,
+joins the idle signal thread, stops the JIT worker, and joins the idle native reaper before static destruction,
 preserving stdio flushing and `atexit` callbacks. If external workers or their
-native TLS destructors are still active, it uses `_Exit()` immediately, as it
+native TLS destructors or a signal callback are still active, it uses `_Exit()` immediately, as it
 already does for multiple Qore threads and signal-handler exits. It must not
 wait for those workers: they may depend on the caller or be the caller itself.
+The signal manager tracks callback execution independently of handler registration:
+replacing or removing a handler does not make an in-flight callback idle. Once an
+idle signal thread accepts the exit command, it starts no further callbacks and
+is joined through native TLS destruction before any static object is destroyed.
 
 The regression `examples/test/qore/classes/ThreadPool/native_thread_cleanup.cpp`
 blocks native TLS destructors at barriers and checks that their threads remain

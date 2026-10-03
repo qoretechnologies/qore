@@ -51,6 +51,10 @@ It checks exit statuses 0, 17 and 255, Qore output, and deterministic C stdio an
 `atexit` markers: idle exits flush and run callbacks, while immediate exits with
 active native cleanup or from signal handlers bypass both. Native barriers stay
 closed in active cases, so an accidental wait for native cleanup fails by timeout.
+The managed-signal modes check native signal-thread TLS completion from an `atexit`
+callback, detecting a missing join without depending on timing. They also cover an
+idle registered handler and a blocked callback, including one whose registration
+was replaced while it was running; blocked callbacks must not be joined by exit.
 
 Run the existing `ThreadPool.qtest`, AsyncIoController unit/logger suites, and
 HTTP shutdown/consumer regressions with the new `libqore`, debugging enabled,

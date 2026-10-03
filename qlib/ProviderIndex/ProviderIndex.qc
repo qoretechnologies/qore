@@ -43,7 +43,7 @@ public hashdecl ProviderIndexCreateOptions {
     *list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected_inventory;
 
     #! The maximum number of worker processes run at the same time; 0 builds the index in the calling process
-    /** Worker builds require the \c process module 2.1 or later.
+    /** Worker builds require the \c process module 2.2 or later.
 
         With workers, the calling process loads no provider modules: each worker is a new process that loads a
         batch of the provider modules, and writes the index metadata of their apps, and the calling process merges
@@ -1146,8 +1146,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     private static hash<auto> createDataProviderIndexWithWorkers(hash<DataProviderIndexInfo> index,
             hash<ProviderIndexCreateOptions> opts, date start) {
 %ifdef NoProcess
-        throw "PROVIDER-INDEX-WORKER-ERROR", "the process module is not available; index worker processes cannot "
-            "be started";
+        throw "PROVIDER-INDEX-WORKER-ERROR", "the process module 2.2 or later is required; index worker processes "
+            "cannot be started";
 %else
         list<hash<auto>> batches = planWorkerBatches(opts);
         list<string> command = opts.worker_command ?? getDefaultWorkerCommand();

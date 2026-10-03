@@ -33,6 +33,10 @@ def main():
         expected = "buffered output\natexit\n" if mode in ("empty", "idle") else ""
         cases.append(("native exit " + mode, [native, "--exit-" + mode], 17, expected))
 
+    for mode in ("empty", "handler", "blocked", "replaced", "native-blocked"):
+        expected = "buffered output\nsignal joined\n" if mode in ("empty", "handler") else ""
+        cases.append(("managed signal exit " + mode, [native, "--exit-managed-" + mode], 17, expected))
+
     stopped = """
 pool.stopWait();
 delete pool;
@@ -58,11 +62,11 @@ while (True) { usleep(1000); }
     for name, setup in setups.items():
         for finish, status in (("return 17;", 17), ("exit(17);", 17), ("exit(0);", 0), ("exit(255);", 255)):
             source = "%modern\n" + setup + 'print("pool output");' + finish
-            cases.append((name + " " + finish, [qore, "-e", source], status, "pool output"))
+            cases.append((name + " " + finish, [qore, "--enable-debug", "-e", source], status, "pool output"))
     for name, setup in (("active pool", active), ("signal after stopped pool", setups["empty stopped pool"]),
                         ("signal with active pool", active)):
         source = "%modern\n" + setup + (signal_exit if name.startswith("signal") else "exit(17);")
-        cases.append((name, [qore, "-e", source], 17, ""))
+        cases.append((name, [qore, "--enable-debug", "-e", source], 17, ""))
 
     for iteration in range(args.repeat):
         for name, command, status, output in cases:

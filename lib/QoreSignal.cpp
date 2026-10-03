@@ -234,6 +234,18 @@ void QoreSignalManager::stop_signal_thread() {
     wait_signal_thread_stopped();
 }
 
+bool QoreSignalManager::stopForExit() {
+    SafeLocker sl(mutex);
+    // A callback may be waiting for the exiting application thread. Do not join it or run its cleanup here.
+    if (handler_running) {
+        return false;
+    }
+    stop_signal_thread_unlocked();
+    sl.unlock();
+    wait_signal_thread_stopped();
+    return true;
+}
+
 void QoreSignalManager::wait_signal_thread_stopped() {
     tcount.waitForZero();
 
@@ -377,7 +389,9 @@ void QoreSignalManager::signal_handler_thread() {
             }
 
             //printd(5, "sigwait() sig: %d (cmd: %d) set: %d\n", sig, cmd, handlers[sig].isSet());
-            if (sig == QORE_STATUS_SIGNAL && cmd != C_None) {
+            // Exit wins even if a user signal, rather than the internal wakeup, ended the wait. Once
+            // stopForExit() has observed an idle thread, no new callback may start before the join.
+            if (cmd == C_Exit || (sig == QORE_STATUS_SIGNAL && cmd != C_None)) {
                 continue;
             }
 
@@ -400,7 +414,11 @@ void QoreSignalManager::signal_handler_thread() {
                         raise(sig);
                     } else {
                         assert(sa_int.sa_handler);
+                        handler_running = true;
+                        sl.unlock();
                         (*sa_int.sa_handler)(SIGINT);
+                        sl.lock();
+                        handler_running = false;
                     }
                 } else if (sig == SIGTERM /*|| sig == SIGHUP*/) {
                     qore_exit_process(128 + sig);
@@ -411,6 +429,7 @@ void QoreSignalManager::signal_handler_thread() {
             // set in progress status while in the lock
             assert(handlers[sig].status == QoreSignalHandler::SH_OK);
             handlers[sig].status = QoreSignalHandler::SH_InProgress;
+            handler_running = true;
 
             // unlock to run handler code
             sl.unlock();
@@ -448,6 +467,7 @@ void QoreSignalManager::signal_handler_thread() {
             // SH_Delete: removeHandler() (and no replacement) — proceed to cleanup
             if (handlers[sig].status != QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
+                handler_running = false;
                 continue;
             }
 
@@ -459,6 +479,7 @@ void QoreSignalManager::signal_handler_thread() {
             sl.unlock();
             old.del(&xsink);
             sl.lock();
+            handler_running = false;
         }
 
         thread_running = false;

@@ -5,15 +5,15 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires FsUtil
-%requires DataProvider
-%requires ProviderIndex
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
 
 %requires yaml
 
-%try-module process >= 2.1
+%try-module process >= 2.2
 %define NoProcess
 %endtry
 
@@ -33,6 +33,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
 
     constructor() : Test("ProviderIndex workers test", "1.0") {
         addTestCase("build mode never reads the published index", \buildModeTest());
+        addTestCase("workers reject an unavailable process dependency before publishing", \missingProcessTest());
         addTestCase("a worker build writes the same index as a single-process build", \equivalenceTest());
         addTestCase("a failed worker publishes nothing", \workerFailureTest());
         addTestCase("workers that describe an action differently fail the build", \conflictTest());
@@ -46,7 +47,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
     private checkModules(*bool workers) {
 %ifdef NoProcess
         if (workers) {
-            testSkip("no process module 2.1 or later");
+            testSkip("no process module 2.2 or later");
         }
 %endif
         if (workers && !ProviderIndexUtil::hasMessagePack()) {
@@ -100,6 +101,29 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
             rv{file} = ReadOnlyFile::readBinaryFile(dir + DirSep + file);
         }
         return rv;
+    }
+
+    missingProcessTest() {
+%ifdef NoProcess
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("no MessagePack support");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", NOTHING);
+        *hash<ExceptionInfo> error;
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions(1));
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+        assertEq("PROVIDER-INDEX-WORKER-ERROR", error.err);
+        assertRegex("process module 2[.]2 or later is required", error.desc);
+        assertEq({}, readIndexFiles(dir), "unsupported workers publish no index or staging files");
+%else
+        testSkip("process module 2.2 or later is available");
+%endif
     }
 
     buildModeTest() {
@@ -260,6 +284,7 @@ public hash<string, string> sub get_data_provider_map() {
 
     cancelTest() {
         checkModules(True);
+%ifndef NoProcess
 
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
@@ -329,6 +354,7 @@ q.get();
         assertEq(0, ProviderIndex::cancelWorkers(), "no worker is running");
         ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", getOptions(1));
         assertEq(published, readIndexFiles(dir + "/index"), "a later build publishes the same index");
+%endif
     }
 
     setupErrorTest() {

@@ -5,12 +5,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires FsUtil
-%requires Logger
-%requires DataProvider
-%requires ProviderIndex
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
 
 %requires yaml
 
@@ -18,7 +18,7 @@
 %define NoMsgPack
 %endtry
 
-%try-module process >= 2.1
+%try-module process >= 2.2
 %define NoProcess
 %endtry
 
@@ -80,7 +80,7 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
 %endif
 %ifdef NoProcess
         if (workers) {
-            testSkip("no process module 2.1 or later");
+            testSkip("no process module 2.2 or later");
         }
 %endif
     }

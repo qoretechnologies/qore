@@ -5,26 +5,22 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires FsUtil
-%requires DataProvider
-%requires ProviderIndex
-%requires Logger
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
+%requires ../../../../qlib/Logger.qm
 
-%try-module yaml
-%define NoYaml
-%endtry
+%requires yaml
 
 %try-module msgpack
 %define NoMsgPack
 %endtry
 
-%try-module json
-%define NoJson
-%endtry
+%requires json
 
-%try-module process >= 2.1
+%try-module process >= 2.2
 %define NoProcess
 %endtry
 
@@ -74,18 +70,10 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private checkModules(*bool process) {
-%ifdef NoYaml
-        testSkip("no yaml module");
-%endif
+    private checkModules() {
 %ifdef NoMsgPack
         testSkip("no msgpack module");
 %endif
-        if (process) {
-%ifdef NoJson
-            testSkip("no json module");
-%endif
-        }
     }
 
     #! Sets a process environment variable until restoreEnv() is called; child processes inherit it
@@ -331,9 +319,6 @@ public hash<string, string> sub get_data_provider_map() {
         @param mod the module of the factory
     */
     private hash<auto> runReader(string index_dir, string module_dir, string factory, string mod) {
-%ifdef NoJson
-        return {};
-%else
         string script = module_dir + DirSep + "reader.q";
         writeFile(script, "%modern
 %requires DataProvider
@@ -366,7 +351,6 @@ printf(\"%s\\n\", make_json({
         } catch (hash<ExceptionInfo> ex) {
             throw "READER-ERROR", out;
         }
-%endif
     }
 
     #! Returns a quoted shell argument
@@ -914,7 +898,7 @@ printf(\"%s\\n\", make_json({
     workerBuildTest() {
         checkModules();
 %ifdef NoProcess
-        testSkip("no process module 2.1 or later");
+        testSkip("no process module 2.2 or later");
 %endif
         if (!ProviderIndexUtil::hasMessagePack()) {
             testSkip("no MessagePack support");
@@ -980,9 +964,7 @@ printf(\"%s\\n\", make_json({
         assertTrue(exists index.factoryinfomap.swagger);
         assertTrue(exists index.factoryinfomap.restclient);
         foreach hash<auto> i in (index.factoryinfomap.pairIterator()) {
-%ifndef NoJson
             assertEq(i.value, parse_json(make_json(i.value)), i.key + ": JSON");
-%endif
 %ifndef NoMsgPack
             assertEq(i.value, msgpack_unpack(msgpack_pack(i.value)), i.key + ": MessagePack");
 %endif
@@ -1030,7 +1012,7 @@ printf(\"%s\\n\", make_json({
     }
 
     readerProcessTest() {
-        checkModules(True);
+        checkModules();
 
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
@@ -1068,7 +1050,7 @@ printf(\"%s\\n\", make_json({
     }
 
     readerProcessFallbackTest() {
-        checkModules(True);
+        checkModules();
 
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);

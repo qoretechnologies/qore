@@ -9,15 +9,19 @@
 #endif
 #include <cassert>
 #include <chrono>
+#include <csignal>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <array>
+#include <atomic>
 #include <thread>
 #ifdef __linux__
 #include <sys/resource.h>
+#endif
+#ifndef _Q_WINDOWS
 #include <unistd.h>
 #endif
 
@@ -189,6 +193,53 @@ static void checkNativeCreationFailure() {
 }
 #endif
 
+static std::atomic<bool> signal_tls_finished{false};
+static pthread_key_t signal_tls_key;
+static NativeCleanup* native_signal_state = nullptr;
+
+static void checkManagedSignalExit(const char* mode) {
+    // The cleanup hook installs native TLS on the signal thread. The atexit check must observe
+    // its destructor, proving that explicit exit joined the pthread, not merely stopped its loop.
+    assert(!pthread_key_create(&signal_tls_key, [](void*) {
+        signal_tls_finished.store(true);
+    }));
+    tclist.push([](void*) {
+        assert(!pthread_setspecific(signal_tls_key, &signal_tls_key));
+    }, nullptr);
+    assert(!atexit([]() {
+        assert(signal_tls_finished.load());
+        fputs("signal joined\n", stdout);
+    }));
+    fputs("buffered output\n", stdout);
+
+    ExceptionSink xsink;
+    QoreProgramHelper pgm(PO_MODERN | PO_ENABLE_DEBUG, xsink);
+#ifndef _Q_WINDOWS
+    if (native_signal_state) {
+        assert(!kill(getpid(), SIGINT));
+        native_signal_state->waitForDestructor();
+    }
+#endif
+    const char* source = !strcmp(mode, "--exit-managed-blocked")
+        ? "%modern\nQueue ready(); Queue release();"
+          "set_signal_handler(SIGUSR1, sub(int sig) { ready.push(True); release.get(); });"
+          "kill(getpid(), SIGUSR1); ready.get(); exit(17);"
+        : !strcmp(mode, "--exit-managed-replaced")
+        ? "%modern\nQueue ready(); Queue release();"
+          "set_signal_handler(SIGUSR1, sub(int sig) { ready.push(True); release.get(); });"
+          "kill(getpid(), SIGUSR1); ready.get();"
+          "set_signal_handler(SIGUSR1, sub(int sig) {}); exit(17);"
+        : !strcmp(mode, "--exit-managed-handler")
+        ? "%modern\nset_signal_handler(SIGUSR1, sub(int sig) {}); exit(17);"
+        : "%modern\nexit(17);";
+    pgm->parse(source, "managed-signal-exit", &xsink);
+    if (!xsink) {
+        pgm->run(&xsink).discard(&xsink);
+    }
+    xsink.handleExceptions();
+    abort();
+}
+
 static void checkExplicitExit(const char* mode) {
     // Both markers stay in stdio's buffer until exit() flushes it. _Exit() must
     // skip the atexit callback and flushing while native workers are still active.
@@ -235,8 +286,19 @@ int main(int argc, char** argv) {
     // Force buffering even when the native helper is run directly from a terminal.
     static char output_buffer[BUFSIZ];
     assert(!setvbuf(stdout, output_buffer, _IOFBF, sizeof(output_buffer)));
-    bool signal = argc > 1 && !strncmp(argv[1], "--exit-signal", 13);
+    bool managed_signal = argc > 1 && !strncmp(argv[1], "--exit-managed-", 15);
+    bool signal = managed_signal || (argc > 1 && !strncmp(argv[1], "--exit-signal", 13));
+    if (managed_signal && !strcmp(argv[1], "--exit-managed-native-blocked")) {
+        static NativeCleanup state;
+        native_signal_state = &state;
+        assert(std::signal(SIGINT, [](int) {
+            NativeCleanup::blockedWorker(nullptr, native_signal_state);
+        }) != SIG_ERR);
+    }
     qore_init(QL_MIT, "UTF-8", true, signal ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
+    if (managed_signal) {
+        checkManagedSignalExit(argv[1]);
+    }
     if (argc > 1 && !strcmp(argv[1], "--return-with-idle-reaper")) {
         checkNativeCleanup(false);
         assert(tp_thread_counter.getCount() == 0);

@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# test-timeout: 30
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class ExplicitExitTest
+
+class ExplicitExitTest inherits QUnit::Test {
+    constructor() : Test("Explicit process exit", "1.0") {
+        addTestCase("idle signal thread is joined through native TLS cleanup", sub() {
+            check("empty", "buffered output\nsignal joined\n");
+        });
+        addTestCase("an idle registered handler preserves normal exit", sub() {
+            check("handler", "buffered output\nsignal joined\n");
+        });
+        addTestCase("an active signal callback cannot block exit", sub() { check("blocked", ""); });
+        addTestCase("replacing an active handler cannot hide its callback", sub() { check("replaced", ""); });
+        addTestCase("a native SIGINT callback cannot block exit", sub() { check("native-blocked", ""); });
+        set_return_value(main());
+    }
+
+    private check(string mode, string expected) {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = dirname(qore) + "/qore-native-thread-cleanup-test";
+        if (PlatformOS == "Windows" || !is_file(native)) {
+            testSkip("the POSIX native thread cleanup test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("exec " + "'" + replace(native, "'", "'\\''")
+            + "' --exit-managed-" + mode + " 2>&1", \rc);
+        assertEq(17, rc, output);
+        assertEq(expected, output);
+    }
+}

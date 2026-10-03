@@ -2718,7 +2718,7 @@ add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
 target_include_directories(qore-number-round-trip-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-number-round-trip-test PRIVATE libqore)
-add_executable(qore-native-thread-cleanup-test EXCLUDE_FROM_ALL
+add_executable(qore-native-thread-cleanup-test
     examples/test/qore/classes/ThreadPool/native_thread_cleanup.cpp)
 target_include_directories(qore-native-thread-cleanup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)

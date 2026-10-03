@@ -8,6 +8,9 @@
     security policy denies an internal thread wakeup. The denied wakeup is reported and the pending operation
     completes through a bounded wait. On other platforms, a denied wakeup reports a fatal error instead of hanging.
     Concurrent signal-handler changes also release all callers waiting for the updated signal mask.
+    Explicit <tt>exit()</tt> joins an idle signal thread before static destruction, preventing a signal
+    wakeup from accessing the destroyed manager mutex. If a signal callback is still running, exit remains
+    immediate so a callback waiting for the exiting thread cannot deadlock shutdown.
 
     External module documentation locates shared HTML assets beside the installed
     SDK template, independently of the module's installation prefix. Custom SDK

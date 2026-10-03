@@ -1,0 +1,123 @@
+CI 59127 change audit
+====================
+
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
+Skill: /home/david/.codex/skills/audit-changes/SKILL.md
+
+Root causes
+-----------
+
+* Three ProviderIndex worker tests accepted process 2.1 while ProviderIndex requires 2.2.
+* The Ubuntu core shows the signal thread in SafeLocker::lock() after sigtimedwait(), while the main thread destroys globals from C exit(). Signal TID 0 is excluded from the application-thread count, so it was never joined on this exit path.
+
+Checks
+------
+
+.. list-table:: Audit results
+   :header-rows: 1
+   :widths: 26 10 64
+
+   * - Check
+     - Status
+     - Evidence
+   * - Changed-file classification
+     - Pass
+     - Runtime C++, ProviderIndex diagnostic/docs, Qore and native regressions, CMake test registration, durable shutdown documentation.
+   * - Module docs / introduction sections
+     - N/A
+     - No new module or module introduction; ProviderIndex registration is unchanged.
+   * - Release notes
+     - Pass
+     - Qore 3.0.0 release notes describe idle signal-thread joining and active callback exit.
+   * - CMake / QMOD / Makefile registration
+     - Pass
+     - Existing native cleanup helper is now in the default build; no new module or QMOD entry is required.
+   * - Module structure and directives
+     - Pass
+     - No new .qm or .qc directive; no includes or duplicate module paths. ProviderIndex workers still require process >= 2.2.
+   * - QPP namespace paths
+     - N/A
+     - No QPP class is added.
+   * - Test modern mode / executable bits / local imports
+     - Pass
+     - Changed Qore tests use %modern, local relative imports with a prepended qlib path, executable bits; embedded native test uses PO_MODERN and PO_ENABLE_DEBUG.
+   * - External and bundled dependencies
+     - Pass
+     - process >= 2.2 and msgpack remain optional external dependencies; bundled yaml/json use hard requires. Three worker suites match ProviderIndex version requirements.
+   * - Copyright
+     - Pass
+     - New/modified C++ and tests carry 2026 copyright.
+   * - Sandboxing
+     - Pass
+     - No new production filesystem/network access. Test filesystem/process actions are isolated fixtures using existing checked Qore APIs.
+   * - Cooperative cancellation
+     - Pass
+     - No new production loop or user I/O. Exit uses an internal non-interruptible counter/join after excluding active callbacks; abandoning process teardown would be unsafe.
+   * - DP action registration / options / output_type / supports_request
+     - N/A
+     - No action or provider registration changes.
+   * - DP data types / Fields / examples / allowed values / sensitive fields
+     - N/A
+     - No input, output, or credential schema changes.
+   * - DP app groups / logos / scheme path vs cls / descriptions
+     - N/A
+     - No app registration or description changes.
+   * - FactoryMap / getRecordTypeImpl signatures
+     - N/A
+     - No provider factory or record type changes.
+   * - JNI dependency JARs / install rules
+     - N/A
+     - No JNI or dependency packaging changes.
+   * - Workarounds / stubs
+     - Pass
+     - Stops and joins the actual uncounted signal thread; dependency tests enforce the existing supported minimum. No retry, sleep, or fallback added.
+   * - Exception safety
+     - Pass
+     - SafeLocker scopes protect exit state, no new production allocation, no fallible Qore operations without sinks; native tests abort on setup failure.
+   * - Thread safety
+     - Pass
+     - handler_running is read/written only under the signal mutex and covers callbacks plus resource cleanup. Exit command prevents new callbacks before joining.
+   * - Type safety
+     - Pass
+     - C++ bool for state, atomic bool for cross-thread native test evidence, typed Qore arguments/results; no C casts or untyped public callbacks added.
+   * - Performance
+     - Pass
+     - Constant-time exit check and one native join; no changes to normal signal-wait frequency or algorithm complexity.
+   * - Error handling
+     - Pass
+     - Active callbacks preserve immediate exit to avoid dependency deadlock; unsupported worker dependency reports the minimum required process version.
+   * - Documentation / examples
+     - Pass
+     - Durable shutdown design, release notes, worker option requirement, and native test invocation examples updated.
+   * - QPP flags
+     - N/A
+     - No QPP methods modified; stopForExit is an internal non-exported runtime method.
+   * - Security
+     - Pass
+     - No credentials or externally supplied format strings added; native helper path is shell-quoted; test mode arguments are fixed literals.
+   * - Correctness / regression coverage
+     - Pass
+     - Deterministic TLS-completion regression fails against the old runtime and passes after the fix. Both build types, all four execution modes, supported/unsupported process dependencies, the AOT driver, and Valgrind pass; details below.
+
+Validation
+----------
+
+* Release and Debug configured with CMAKE_INSTALL_PREFIX=/usr; the installed Qore is /usr/bin/qore.
+* Both qore and qore-native-thread-cleanup-test targets built without warnings/errors.
+* ProviderIndex-qmod rebuilt after the module edit. Util-qmod refreshed to remove a stale local artifact; affected tests rerun without warnings.
+* explicit_exit.py --repeat 5: 150 subprocess checks in Debug and 150 in Release, including signal-disabled controls and native SIGINT callbacks.
+* denied_wakeup.py: 10 normal/denied-wakeup checks per build type.
+* explicit-exit.qtest: 5 cases / 10 assertions per build type.
+* signals.qtest: 4 cases / 57 assertions per build type.
+* program-cleanup-at-exit.qtest: 5 cases / 5 assertions per build type.
+* AOTSccIncrementalDriver.qtest: Debug, 32 cases / 542 assertions, including concurrent publication; warning-free final run.
+* thread-exit-program-release.qtest: Debug, 4 cases / 9 assertions.
+* ProviderIndexWorkers, ProviderIndexAppFailures, and ProviderIndexFactoryInfo: process 2.1 and a separately built process 2.2 (2a8c9cc6f), each in AST/IR/JIT/tiered mode. All 24 suite runs pass: 272 cases / 9,424 assertions. Only the intentionally unavailable capabilities are skipped.
+* Valgrind native cleanup helper (signal handling disabled): zero errors; zero definitely, indirectly, or possibly lost bytes.
+* Valgrind qore -b --enable-debug ThreadPool.qtest: 6 cases / 9 assertions, zero errors; zero definitely, indirectly, or possibly lost bytes. No suppressions were used.
+* check-module-release-notes.py: two changed/relevant documentation sources, zero errors.
+* git diff --check passes. Changed/new Qore tests are executable and use relative local module paths (directories for split modules).
+
+The core evidence and command logs were retained in /tmp/qore-ci-59127 during the investigation.
+No external module installation or external repository commit was required.
