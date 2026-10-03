@@ -98,6 +98,17 @@ public class DpqlParser {
         int line = 1;
         #! Current column number for error reporting
         int column = 1;
+        #! The opening parenthesis directly following a prefix operator name
+        /** A group there is the operator's first argument, unless it holds a comma-separated list, which is
+            function-call syntax and is reported as such
+
+            @since %DataProvider 3.9
+        */
+        *hash<DpqlTokenInfo> prefix_op_paren_tok;
+        #! The prefix operator name token preceding \c prefix_op_paren_tok
+        /** @since %DataProvider 3.9
+        */
+        *hash<DpqlTokenInfo> prefix_op_name_tok;
     }
 
     #! Creates a parser with optional expression map and fields for validation
@@ -185,6 +196,8 @@ public class DpqlParser {
         # Reset state
         errors = ();
         tokens = ();
+        remove prefix_op_paren_tok;
+        remove prefix_op_name_tok;
 
         # Initialize tokenizer
         tokenizer = new DpqlTokenizer(text);
@@ -1165,24 +1178,39 @@ public class DpqlParser {
                 nextToken();
                 return NOTHING;
 
-            case DPQL_TOK_LPAREN:
-                # Could be grouped expression or function call
+            case DPQL_TOK_LPAREN: {
+                # Grouped expression; function calls are handled with their identifier
                 nextToken();  # consume (
+                # a group directly after a prefix operator name is the operator's first argument
+                *hash<DpqlTokenInfo> prefix_name_tok;
+                if (prefix_op_paren_tok && prefix_op_paren_tok.line == tok.line
+                        && prefix_op_paren_tok.column == tok.column) {
+                    prefix_name_tok = prefix_op_name_tok;
+                }
+                remove prefix_op_paren_tok;
+                remove prefix_op_name_tok;
                 skipWhitespace();
                 auto exp = parseOrExpr();
                 skipWhitespace();
+                if (prefix_name_tok && !atEnd() && peek().type == DPQL_TOK_COMMA) {
+                    addError(sprintf("Operator '%s' uses prefix syntax, not function-call syntax",
+                        prefix_name_tok.value), "DPQL-E001", prefix_name_tok);
+                    throw "DPQL-PARSE-ERROR", "Invalid operator syntax";
+                }
                 expect(DPQL_TOK_RPAREN, "')'");
                 return exp;
+            }
 
             case DPQL_TOK_IDENTIFIER: {
                 hash<DpqlTokenInfo> id_tok = nextToken();
                 skipWhitespace();
                 string name = resolveExpressionName(id_tok.value);
                 if (isPrefixExpressionOperator(name)) {
+                    # a parenthesized first argument is accepted (ex: "map (@x + 1) * 2, @list"), but a
+                    # parenthesized argument list is reported as function-call syntax when its comma is reached
                     if (!atEnd() && peek().type == DPQL_TOK_LPAREN) {
-                        addError(sprintf("Operator '%s' uses prefix syntax, not function-call syntax",
-                            id_tok.value), "DPQL-E001", id_tok);
-                        throw "DPQL-PARSE-ERROR", "Invalid operator syntax";
+                        prefix_op_paren_tok = peek();
+                        prefix_op_name_tok = id_tok;
                     }
                     return parsePrefixExpressionOperator(id_tok, name);
                 }
@@ -1719,22 +1747,16 @@ public class DpqlParser {
             int expected = info.args.size();
             int actual = args.size();
             if (info.varargs) {
-                int min = info.min_args ?? (expected > 0 ? expected : 0);
+                int min = info.min_args ?? getMinRequiredArgs(info);
                 if (actual < min) {
                     addWarning(
                         sprintf("Function '%s' expects at least %d argument%s, got %d",
                             token_name, min, min == 1 ? "" : "s", actual),
                         "DPQL-W002", name_tok);
                 }
-            } else if (expected > 0 && actual != expected) {
-                # calculate minimum required args by excluding trailing args with default values
-                int min_required = expected;
-                if (info.arg_info) {
-                    while (min_required > 0
-                            && exists info.arg_info[min_required - 1].default_value) {
-                        --min_required;
-                    }
-                }
+            } else if (exists info.args && actual != expected) {
+                # an expression without an argument signature is not checked; an empty one takes no arguments
+                int min_required = getMinRequiredArgs(info);
                 if (actual < min_required) {
                     addWarning(
                         sprintf("Function '%s' expects %s%d argument%s, got %d",
@@ -1758,6 +1780,36 @@ public class DpqlParser {
             "exp": name,
             "args": args,
         };
+    }
+
+    #! Returns the minimum number of arguments a call to the given expression must provide
+    /** Positional arguments can only be omitted from the end of the argument list, so the trailing run of
+        optional arguments is excluded from the count.  An argument is optional when the registry declares it
+        so, either:
+        - with a signature type that is typed and also accepts @ref nothing (ex: \c *string), or
+        - with a \c default_value in its @ref DataProviderArgInfo "argument info"
+
+        A wildcard signature type (\c any / \c auto) also accepts @ref nothing, but it does not declare the
+        argument optional; such an argument is required unless it has a default value.
+
+        @param info the expression info from the expression registry
+
+        @return the minimum number of arguments required
+
+        @since %DataProvider 3.9
+    */
+    private static int getMinRequiredArgs(hash<DataProviderExpressionInfo> info) {
+        int min_required = info.args.size();
+        while (min_required > 0) {
+            hash<DataProviderSignatureTypeInfo> sig = info.args[min_required - 1];
+            bool optional = (sig.type.hasType() && !sig.type.isMandatory())
+                || exists info.arg_info[min_required - 1].default_value;
+            if (!optional) {
+                break;
+            }
+            --min_required;
+        }
+        return min_required;
     }
 
     #! Parses prefix expression operators such as \c map and \c hash_map

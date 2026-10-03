@@ -1133,8 +1133,15 @@ public class DpqlTokenizer {
     }
 
     #! Returns True if the next token is a list literal
+    /** A parenthesized group with a top-level delimiter is a list literal unless it opens with a prefix
+        expression operator (ex: <tt>(count \@age > 28, \@users)</tt>); the operator's arguments are separated
+        by commas, so the group is a grouped expression and is tokenized normally.
+    */
     private bool looksLikeListLiteral() {
         if (chr(input.getByte(pos)) != "(") {
+            return False;
+        }
+        if (startsWithPrefixOperator(pos + 1)) {
             return False;
         }
 
@@ -1213,6 +1220,52 @@ public class DpqlTokenizer {
             }
         }
         return False;
+    }
+
+    #! Returns True if the input at the given offset starts with a prefix expression operator applied to an argument
+    /** Leading whitespace is skipped.  The identifier is scanned like @ref scanIdentifier() and matched
+        case-insensitively against the prefix expression operators.  The operator name only introduces an operator
+        when an argument follows; when it is followed by a list or hash delimiter (\c ",", \c "=", \c ")"), a
+        function-call parenthesis, or the end of input, it is a plain word in a list literal.
+
+        @param offset the byte offset to start scanning from
+
+        @return True if the input at \a offset starts with a prefix expression operator followed by an argument
+    */
+    private bool startsWithPrefixOperator(int offset) {
+        int i = offset;
+        while (i < len && isWhitespaceByte(input.getByte(i))) {
+            ++i;
+        }
+        string word = "";
+        while (i < len) {
+            string c = chr(input.getByte(i));
+            if (c =~ /[a-zA-Z0-9_]/) {
+                word += c;
+                ++i;
+            } else if (c == "-" && (i + 1) < len && chr(input.getByte(i + 1)) =~ /[a-zA-Z]/) {
+                word += c;
+                ++i;
+            } else {
+                break;
+            }
+        }
+        if (!word || !DpqlPrefixOperatorSpecs{word.lwr()}) {
+            return False;
+        }
+        while (i < len && isWhitespaceByte(input.getByte(i))) {
+            ++i;
+        }
+        if (i >= len) {
+            return False;
+        }
+        string next = chr(input.getByte(i));
+        return next != "," && next != "=" && next != ")" && next != "(";
+    }
+
+    #! Returns True if the byte is a whitespace character
+    private static bool isWhitespaceByte(int b) {
+        return b == ord(" ") || b == ord("\t") || b == ord("\r") || b == ord("\n");
     }
 
     #! Scans a list literal (parse_to_qore_value format)

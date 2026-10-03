@@ -128,6 +128,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("type-aware completion tests", \typeAwareCompletionTests());
         addTestCase("infix comparison operator tests", \infixComparisonOperatorTests());
         addTestCase("new expression DPQL tests", \newExpressionDpqlTests());
+        addTestCase("parenthesized prefix operator tests", \parenthesizedPrefixOperatorTests());
+        addTestCase("optional argument count tests", \optionalArgumentCountTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -7273,6 +7275,446 @@ public class DpqlTest inherits QUnit::Test {
                     sprintf("new expr round-trip failed for: %s (serialized: %s)", expr, serialized));
                 assertEq(parsed.args.size(), reparsed.args.size(),
                     sprintf("new expr round-trip args size for: %s", expr));
+            }
+        }
+    }
+
+    #! Returns the parse result after asserting that it parsed without any diagnostics
+    private hash<DataProviderExpression> parseClean(string text) {
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+        assertTrue(result.success, text);
+        assertEq((), result.diagnostics, text);
+        return result.expression;
+    }
+
+    #! Asserts that the expression serializes to the given DPQL, which parses back to the same expression
+    private assertRoundTrip(hash<DataProviderExpression> exp, string expected_dpql) {
+        string dpql = DataProvider::serializeDpqlExpression(exp);
+        assertEq(expected_dpql, dpql);
+        assertEq(exp, DataProvider::parseDpqlExpression(dpql), expected_dpql);
+    }
+
+    #! Prefix expression operators and the number of arguments each accepts
+    const PrefixOperatorArgs = {
+        DP_OP_MAP: {"min": 2, "max": 3},
+        DP_OP_HASH_MAP: {"min": 3, "max": 4},
+        DP_OP_SELECT: {"min": 2, "max": 2},
+        DP_OP_FIRST: {"min": 1, "max": 2},
+        DP_OP_ANY: {"min": 1, "max": 2},
+        DP_OP_ALL: {"min": 2, "max": 2},
+        DP_OP_COUNT: {"min": 1, "max": 2},
+        DP_OP_TAKE: {"min": 2, "max": 2},
+        DP_OP_DROP: {"min": 2, "max": 2},
+        DP_OP_TAKEWHILE: {"min": 2, "max": 2},
+        DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
+    };
+
+    parenthesizedPrefixOperatorTests() {
+        hash<DataProviderFieldReference> users = <DataProviderFieldReference>{"field": "users"};
+        hash<DataProviderFieldReference> l = <DataProviderFieldReference>{"field": "l"};
+        hash<DataProviderExpression> age_gt_28 = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_GT,
+            "args": (<DataProviderFieldReference>{"field": "age"}, 28),
+        };
+
+        # the reported case: a predicate and a source inside parentheses, compared afterwards
+        {
+            hash<DataProviderExpression> exp = parseClean('(count @age > 28, @users) > 1');
+            assertEq(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GT,
+                "args": (
+                    <DataProviderExpression>{"exp": DP_OP_COUNT, "args": (age_gt_28, users)},
+                    1,
+                ),
+            }, exp);
+            hash<auto> rec = {"users": ({"age": 30}, {"age": 40}, {"age": 20})};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+            rec = {"users": ({"age": 30}, {"age": 20})};
+            assertFalse(AbstractDataProvider::evalGenericExpression(rec, exp));
+            assertRoundTrip(exp, '(count @age > 28, @users) > 1');
+        }
+
+        # the one-argument form is unchanged
+        {
+            hash<DataProviderExpression> exp = parseClean('(count @users) > 1');
+            assertEq(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GT,
+                "args": (<DataProviderExpression>{"exp": DP_OP_COUNT, "args": (users,)}, 1),
+            }, exp);
+            assertTrue(AbstractDataProvider::evalGenericExpression({"users": (1, 2)}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"users": (1,)}, exp));
+            # serialized without the parentheses, it would read as "count (@users > 1)"
+            assertRoundTrip(exp, '(count @users) > 1');
+        }
+
+        # every prefix operator, with each number of arguments it accepts, inside parentheses as the
+        # operand of a comparison
+        {
+            list<string> arg_texts = ("@a > 1", "@b", "@c", "@d");
+            list<auto> arg_exps = (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_GT,
+                    "args": (<DataProviderFieldReference>{"field": "a"}, 1),
+                },
+                <DataProviderFieldReference>{"field": "b"},
+                <DataProviderFieldReference>{"field": "c"},
+                <DataProviderFieldReference>{"field": "d"},
+            );
+            int checked = 0;
+            foreach hash<auto> i in (PrefixOperatorArgs.pairIterator()) {
+                for (int n = i.value.min; n <= i.value.max; ++n) {
+                    string op_text = sprintf("%s %s", i.key, arg_texts[0..(n - 1)].join(", "));
+                    string text = sprintf("(%s) == 2", op_text);
+                    hash<DataProviderExpression> expected = <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (<DataProviderExpression>{"exp": i.key, "args": arg_exps[0..(n - 1)]}, 2),
+                    };
+                    hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                    assertTrue(result.success, text);
+                    assertEq(expected, result.expression, text);
+                    assertRoundTrip(expected, text);
+
+                    # unparenthesized at the top level, the same operator needs no parentheses
+                    assertRoundTrip(expected.args[0], op_text);
+                    ++checked;
+                }
+            }
+            # 11 operators: map 2-3, hash_map 3-4, select 2, first 1-2, any 1-2, all 2, count 1-2, take 2, drop 2,
+            # takewhile 2, takeuntil 2
+            assertEq(16, checked);
+        }
+
+        # the operator name is case-insensitive, and whitespace inside the parentheses is allowed
+        {
+            hash<DataProviderExpression> exp = parseClean('( COUNT @age > 28 , @users ) > 1');
+            assertEq(DP_OP_COUNT, exp.args[0].exp);
+            assertEq((age_gt_28, users), exp.args[0].args);
+        }
+
+        # nested parentheses, logical operators, and negation
+        {
+            hash<DataProviderExpression> exp = parseClean('((count @age > 28, @users)) > 1 && @active');
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq(DP_SEARCH_OP_GT, exp.args[0].exp);
+            assertEq(DP_OP_COUNT, exp.args[0].args[0].exp);
+            assertEq((age_gt_28, users), exp.args[0].args[0].args);
+
+            exp = parseClean('!(any @age > 28, @users)');
+            assertEq(DP_SEARCH_OP_NOT, exp.exp);
+            assertEq(<DataProviderExpression>{"exp": DP_OP_ANY, "args": (age_gt_28, users)}, exp.args[0]);
+            assertTrue(AbstractDataProvider::evalGenericExpression({"users": ({"age": 1},)}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"users": ({"age": 30},)}, exp));
+            assertRoundTrip(exp, '!(any @age > 28, @users)');
+
+            exp = parseClean('(map @x * 2, @l) == (2, 4)');
+            assertEq(<DataProviderExpression>{
+                "exp": DP_OP_MAP,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_OP_MULT,
+                        "args": (<DataProviderFieldReference>{"field": "x"}, 2),
+                    },
+                    l,
+                ),
+            }, exp.args[0]);
+            assertEq((2, 4), exp.args[1].args[0] ?? exp.args[1]);
+        }
+
+        # the tokenizer emits a parenthesis, not a list literal, for a group that opens with a prefix operator
+        {
+            DpqlTokenizer tok('(count @age > 28, @users)');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_LPAREN, tokens[0].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[1].type);
+            assertEq("count", tokens[1].value);
+            assertEq(DPQL_TOK_RPAREN, tokens.last().type);
+        }
+
+        # a group that does not open with a prefix operator applied to an argument is still a list literal
+        {
+            foreach string text in ('(1, 2, 3)', '(count, 1)', '(counter @x, 1)', '(counting, 1)',
+                    '(count-x, 1)', '(count = 1, b = 2)') {
+                DpqlTokenizer tok(text);
+                list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+                assertEq(1, tokens.size(), text);
+                assertEq(DPQL_TOK_LIST, tokens[0].type, text);
+            }
+            assertEq(<DataProviderExpression>{"exp": DP_EXPR_VALUE, "args": (("count", 1),)},
+                parseClean('(count, 1)'));
+            assertEq(<DataProviderExpression>{"exp": DP_EXPR_VALUE, "args": ({"count": 1, "b": 2},)},
+                parseClean('(count = 1, b = 2)'));
+        }
+
+        # a prefix operator nested where commas follow it is parenthesized when serialized, and parses back
+        {
+            # as the non-last argument of a function call
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_FUNC_SUBSTR,
+                "args": (<DataProviderExpression>{"exp": DP_OP_COUNT, "args": (l,)}, 1),
+            };
+            assertRoundTrip(exp, 'substr((count @l), 1)');
+            # as the last argument of a function call it needs none
+            exp = <DataProviderExpression>{
+                "exp": DP_FUNC_SUBSTR,
+                "args": ("abc", <DataProviderExpression>{"exp": DP_OP_COUNT, "args": (l,)}),
+            };
+            assertRoundTrip(exp, 'substr("abc", count @l)');
+            # as the non-last argument of a prefix operator
+            exp = <DataProviderExpression>{
+                "exp": DP_OP_MAP,
+                "args": (<DataProviderExpression>{"exp": DP_OP_COUNT, "args": (<DataProviderFieldReference>{"field": "x"},)}, l),
+            };
+            assertRoundTrip(exp, 'map (count @x), @l');
+            # as the operand of arithmetic
+            exp = parseClean('(count @l) + 1 > 2');
+            assertEq(DP_OP_PLUS, exp.args[0].exp);
+            assertEq(<DataProviderExpression>{"exp": DP_OP_COUNT, "args": (l,)}, exp.args[0].args[0]);
+            assertRoundTrip(exp, '(count @l) + 1 > 2');
+            # as the operand of between
+            exp = parseClean('(count @age > 28, @users) between 1 and 3');
+            assertEq(DP_SEARCH_OP_BETWEEN, exp.exp);
+            assertRoundTrip(exp, '(count @age > 28, @users) between 1 and 3');
+        }
+
+        # a prefix operator's first argument may be a parenthesized group
+        {
+            hash<DataProviderExpression> exp = parseClean('map (@value + 1) * 2, @l');
+            assertEq(DP_OP_MAP, exp.exp);
+            assertEq(DP_OP_MULT, exp.args[0].exp);
+            assertEq(DP_OP_PLUS, exp.args[0].args[0].exp);
+            assertEq(l, exp.args[1]);
+            assertEq((4, 6), AbstractDataProvider::evalGenericExpression({"l": (1, 2)}, exp));
+            assertRoundTrip(exp, 'map (@value + 1) * 2, @l');
+
+            # a single parenthesized argument is the same as the argument without them
+            assertEq(parseClean('count @users'), parseClean('count(@users)'));
+            assertEq(parseClean('count @users'), parseClean('count (@users)'));
+        }
+
+        # negative: function-call syntax with an argument list is rejected for every prefix operator
+        {
+            foreach string op in (keys PrefixOperatorArgs) {
+                foreach string text in (sprintf('%s(@a, @b)', op), sprintf('%s (@a, @b)', op),
+                        sprintf('(%s(@a, @b)) > 1', op)) {
+                    hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                    assertFalse(result.success, text);
+                    assertEq("DPQL-E001", result.diagnostics[0].code, text);
+                    assertRegex("prefix syntax", result.diagnostics[0].message, text);
+                }
+            }
+        }
+
+        # negative: argument count errors inside parentheses
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('(count @a, @l, @x) > 1');
+            assertFalse(result.success);
+            assertEq("DPQL-E001", result.diagnostics[0].code);
+            assertRegex("at most 2 arguments", result.diagnostics[0].message);
+
+            result = DataProvider::parseDpqlExpressionWithInfo('(select @a > 1) == ()');
+            assertFalse(result.success);
+            assertEq("DPQL-E001", result.diagnostics[0].code);
+            assertRegex("at least 2 arguments", result.diagnostics[0].message);
+
+            result = DataProvider::parseDpqlExpressionWithInfo('(count @a > 1,) > 1');
+            assertFalse(result.success);
+            assertEq("DPQL-E001", result.diagnostics[0].code);
+
+            result = DataProvider::parseDpqlExpressionWithInfo('(count @a > 1, @l > 1');
+            assertFalse(result.success);
+            assertEq("DPQL-E001", result.diagnostics.last().code);
+            assertThrows("DPQL-PARSE-ERROR", \DataProvider::parseDpqlExpression(), '(count @a > 1, @l > 1');
+        }
+    }
+
+    optionalArgumentCountTests() {
+        # the reported functions, called with only their required arguments
+        {
+            foreach string text in ('trim(@s) == "a"', 'ltrim(@s) == "a"', 'rtrim(@s) == "a"',
+                    'trim(@s, "x") == "a"', 'digest(@s, "SHA256")', 'digest(@s, "SHA256", "hex")',
+                    'encrypt(@s, "aes256", @k)', 'encrypt(@s, "aes256", @k, @iv)',
+                    'decrypt(@s, "aes256", @k)', 'decrypt(@s, "aes256", @k, @iv)',
+                    'regex-subst(@s, "a", "b") == "x"', 'substr(@s, 1)', 'to-base64(@s)', 'toDate(@s)',
+                    'like(@s, "a%")', 'replace(@s, "a", "b")', 'split_quoted(@s, ",")', 'encode_url(@s)',
+                    'format_number(@n)') {
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                assertTrue(result.success, text);
+                assertEq((), (select result.diagnostics, $1.code == "DPQL-W002"), text);
+            }
+        }
+
+        # every non-variadic function in the registry: the minimum declared by its optional arguments
+        # gives no warning, one fewer and one more than the maximum do
+        {
+            int checked = 0;
+            int with_optional = 0;
+            foreach hash<auto> i in (DataProviderGenericExpressions.pairIterator()) {
+                hash<DataProviderExpressionInfo> info = i.value;
+                if (info.type != DET_Function || info.varargs || !info.symbol || info.symbol !~ /\(\)$/
+                        || PrefixOperatorArgs{info.name}) {
+                    continue;
+                }
+                string sym = info.symbol.substr(0, -2);
+                int max = info.args.size();
+                int min = max;
+                while (min > 0 && ((info.args[min - 1].type.hasType() && !info.args[min - 1].type.isMandatory())
+                        || exists info.arg_info[min - 1].default_value)) {
+                    --min;
+                }
+                if (min < max) {
+                    ++with_optional;
+                }
+                list<string> args = map sprintf("@f%d", $1), xrange(max + 1);
+                string text = sprintf("%s(%s)", sym, args[0..(min - 1)].join(", "));
+                if (!min) {
+                    text = sym + "()";
+                }
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                assertEq((), (select result.diagnostics, $1.code == "DPQL-W002"), text);
+
+                if (min > 0) {
+                    text = sprintf("%s(%s)", sym, min > 1 ? args[0..(min - 2)].join(", ") : "");
+                    result = DataProvider::parseDpqlExpressionWithInfo(text);
+                    list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
+                    assertEq(1, w.size(), text);
+                    assertRegex(sprintf("expects %s%d argument", min < max ? "at least " : "", min), w[0].message,
+                        text);
+                }
+
+                text = sprintf("%s(%s)", sym, args.join(", "));
+                result = DataProvider::parseDpqlExpressionWithInfo(text);
+                list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
+                assertEq(1, w.size(), text);
+                assertRegex(sprintf("expects at most %d argument", max), w[0].message, text);
+                ++checked;
+            }
+            # the registry has many functions, and many of them with optional arguments
+            assertGt(30, checked);
+            assertGt(10, with_optional);
+        }
+
+        # the minimum counts of the reported functions, as declared in the registry
+        {
+            foreach hash<auto> i in ({
+                    "trim": 1, "digest": 2, "encrypt": 3, "decrypt": 3, "regex-subst": 3,
+                }.pairIterator()) {
+                string text = sprintf("%s(%s)", i.key, (map sprintf("@f%d", $1), xrange(i.value - 1)).join(", "));
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+                list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
+                assertEq(1, w.size(), text);
+                assertEq(sprintf("Function '%s' expects at least %d argument%s, got %d", i.key, i.value,
+                    i.value == 1 ? "" : "s", i.value - 1), w[0].message, text);
+            }
+        }
+
+        # the optional data signature type declares the argument optional
+        {
+            assertTrue(DataProviderSignatureOptionalDataType.type.hasType());
+            assertFalse(DataProviderSignatureOptionalDataType.type.isMandatory());
+            assertTrue(DataProviderSignatureOptionalDataType.type.isAssignableFrom(StringType));
+            assertTrue(DataProviderSignatureOptionalDataType.type.isAssignableFrom(BinaryType));
+            # a value of another type for the optional IV is reported
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('encrypt(@s, "aes256", @k, 1)');
+            assertTrue(result.success);
+            list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W004";
+            assertEq(1, w.size());
+            assertEq((), (select result.diagnostics, $1.code == "DPQL-W002"));
+        }
+
+        # negative: required arguments are still required
+        {
+            foreach hash<auto> i in ({
+                    "trim()": "Function 'trim' expects at least 1 argument, got 0",
+                    'trim(@s, "a", "b")': "Function 'trim' expects at most 2 arguments, got 3",
+                    "digest(@s)": "Function 'digest' expects at least 2 arguments, got 1",
+                    'encrypt(@s, "aes256")': "Function 'encrypt' expects at least 3 arguments, got 2",
+                    'encrypt(@s, "aes256", @k, @iv, @x)': "Function 'encrypt' expects at most 4 arguments, got 5",
+                    'regex-subst(@s, "a")': "Function 'regex-subst' expects at least 3 arguments, got 2",
+                    # the key of hmac is typed "any", which does not declare it optional
+                    'hmac(@s, "sha1")': "Function 'hmac' expects 3 arguments, got 2",
+                }.pairIterator()) {
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(i.key);
+                assertTrue(result.success, i.key);
+                list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
+                assertEq(1, w.size(), i.key);
+                assertEq(i.value, w[0].message, i.key);
+            }
+        }
+
+        # custom registry entries: typed optional, wildcard, and an optional argument before a required one
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+                "fopt": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "fopt",
+                    "display_name": "fopt",
+                    "short_desc": "test",
+                    "desc": "test",
+                    "symbol": "fopt()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{
+                            "type": AbstractDataProviderType::get(IntOrNothingType),
+                        },
+                        <DataProviderSignatureTypeInfo>{
+                            "type": AbstractDataProviderType::get(StringOrNothingType),
+                        },
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+                "fany": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "fany",
+                    "display_name": "fany",
+                    "short_desc": "test",
+                    "desc": "test",
+                    "symbol": "fany()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderTypeMap."any"},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+                "fmid": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "fmid",
+                    "display_name": "fmid",
+                    "short_desc": "test",
+                    "desc": "test",
+                    "symbol": "fmid()",
+                    "args": (
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                        <DataProviderSignatureTypeInfo>{
+                            "type": AbstractDataProviderType::get(StringOrNothingType),
+                        },
+                        <DataProviderSignatureTypeInfo>{"type": AbstractDataProviderType::get(StringType)},
+                    ),
+                    "return_type": AbstractDataProviderType::get(StringType),
+                },
+            };
+            hash<string, *string> cases = {
+                "fopt(@a)": NOTHING,
+                "fopt(@a, 1)": NOTHING,
+                'fopt(@a, 1, "x")': NOTHING,
+                "fopt()": "Function 'fopt' expects at least 1 argument, got 0",
+                'fopt(@a, 1, "x", "y")': "Function 'fopt' expects at most 3 arguments, got 4",
+                'fany(@a, @b)': NOTHING,
+                # a wildcard type accepts nothing, but does not declare the argument optional
+                'fany(@a)': "Function 'fany' expects 2 arguments, got 1",
+                'fmid(@a, @b, @c)': NOTHING,
+                # only trailing optional arguments can be omitted
+                'fmid(@a, @b)': "Function 'fmid' expects 3 arguments, got 2",
+            };
+            foreach hash<auto> i in (cases.pairIterator()) {
+                hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(i.key, expmap);
+                assertTrue(result.success, i.key);
+                list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
+                if (i.value) {
+                    assertEq(1, w.size(), i.key);
+                    assertEq(i.value, w[0].message, i.key);
+                } else {
+                    assertEq((), w, i.key);
+                }
             }
         }
     }

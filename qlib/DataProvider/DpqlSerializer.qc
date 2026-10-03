@@ -45,6 +45,14 @@ public const DPQL_PREC_COMPARISON = 4;
 public const DPQL_PREC_AND = 5;
 #! @copydoc DPQL_PREC_PRIMARY
 public const DPQL_PREC_OR = 6;
+#! Precedence of prefix expression operators such as \c count and \c map
+/** A prefix operator's last argument extends to the end of the enclosing expression, and its arguments are
+    separated by commas, so it binds looser than every other operator: as an operand of another operator, or
+    anywhere but last in a comma-separated argument list, it must be parenthesized.
+
+    @since %DataProvider 3.9
+*/
+public const DPQL_PREC_PREFIX = 7;
 
 #! Operator precedence by operator name (lower = binds tighter)
 /** Shared, so that everything that renders an expression parenthesises it by the same rule the
@@ -75,6 +83,17 @@ public const DpqlOperatorPrecedence = {
         DP_OP_MULT: DPQL_PREC_MULTIPLICATIVE,
         DP_OP_DIV: DPQL_PREC_MULTIPLICATIVE,
         DP_OP_MOD: DPQL_PREC_MULTIPLICATIVE,
+        DP_OP_MAP: DPQL_PREC_PREFIX,
+        DP_OP_HASH_MAP: DPQL_PREC_PREFIX,
+        DP_OP_SELECT: DPQL_PREC_PREFIX,
+        DP_OP_FIRST: DPQL_PREC_PREFIX,
+        DP_OP_ANY: DPQL_PREC_PREFIX,
+        DP_OP_ALL: DPQL_PREC_PREFIX,
+        DP_OP_COUNT: DPQL_PREC_PREFIX,
+        DP_OP_TAKE: DPQL_PREC_PREFIX,
+        DP_OP_DROP: DPQL_PREC_PREFIX,
+        DP_OP_TAKEWHILE: DPQL_PREC_PREFIX,
+        DP_OP_TAKEUNTIL: DPQL_PREC_PREFIX,
 };
 
 #! Operators whose grouping cannot change the result
@@ -212,6 +231,22 @@ public class DpqlSerializer {
     static int getArgumentContext(string op, int argn) {
         int prec = DpqlSerializer::getOperatorPrecedence(op);
         return (!argn || DpqlAssociativeOperators{op}) ? prec : prec - 1;
+    }
+
+    #! Returns the precedence context an element of a comma-separated argument list is rendered in
+    /** The commas of an argument list delimit every operator except a prefix expression operator, which reads
+        the commas that follow it as separating its own arguments; such an operator is therefore parenthesized
+        anywhere but in the last position.
+
+        @param argn the element's position
+        @param count the number of elements in the list
+
+        @return the precedence context to render that element in
+
+        @since %DataProvider 3.9
+    */
+    static int getListElementContext(int argn, int count) {
+        return argn < (count - 1) ? DPQL_PREC_OR : DPQL_PREC_OR + 1;
     }
 
     #! Serializes an expression to DPQL string
@@ -364,8 +399,8 @@ public class DpqlSerializer {
     private string serializePrefixOperator(string name, list<auto> args) {
         string sym = name_to_symbol{name} ?? name;
         list<string> arg_strs = ();
-        foreach auto arg in (args) {
-            arg_strs += serializeArg(arg, DPQL_PREC_OR + 1);
+        for (int i = 0; i < args.size(); ++i) {
+            arg_strs += serializeArg(args[i], DpqlSerializer::getListElementContext(i, args.size()));
         }
         return sym + " " + arg_strs.join(", ");
     }
@@ -513,8 +548,8 @@ public class DpqlSerializer {
         # Use symbol for DPQL output when available
         string sym = name_to_symbol{name} ?? name;
         list<string> arg_strs = ();
-        foreach auto arg in (args) {
-            arg_strs += serializeArg(arg, DPQL_PREC_OR + 1);
+        for (int i = 0; i < args.size(); ++i) {
+            arg_strs += serializeArg(args[i], DpqlSerializer::getListElementContext(i, args.size()));
         }
         return sym + "(" + arg_strs.join(", ") + ")";
     }

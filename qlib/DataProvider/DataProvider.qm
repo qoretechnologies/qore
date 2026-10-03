@@ -1346,6 +1346,21 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - fixed DPQL prefix expression operators (\c map, \c hash_map, \c select, \c first, \c any, \c all,
+      \c count, \c take, \c drop, \c takewhile, \c takeuntil) with more than one argument inside parentheses,
+      such as <tt>(count \@age > 28, \@users) > 1</tt>, being parsed as a list of strings
+    - fixed DPQL prefix expression operators whose first argument starts with parentheses, such as
+      <tt>map (\@value + 1) * 2, \@list</tt>, being rejected as function-call syntax
+    - fixed DPQL serialization of a prefix expression operator used as an operand or before another argument
+      leaving out the parentheses it needs, so that <tt>(count \@users) > 1</tt> was serialized as
+      <tt>count \@users > 1</tt>, which is a different expression; added @ref DataProvider::DPQL_PREC_PREFIX
+      "DPQL_PREC_PREFIX" and @ref DataProvider::DpqlSerializer::getListElementContext()
+      "DpqlSerializer::getListElementContext()"
+    - fixed the DPQL argument count warning (\c DPQL-W002) being raised when optional arguments of functions such
+      as \c trim(), \c digest(), \c encrypt(), and \c regex-subst() are omitted, and not being raised for
+      arguments given to functions that take none, such as \c now();
+      @ref DataProvider::DataProviderSignatureOptionalDataType "DataProviderSignatureOptionalDataType" now has
+      type \c *data, declaring its argument optional
     - fixed DPQL string literals and quoted field names containing multibyte characters retaining a closing
       quote; accent-removal expressions such as \c unaccent("café") now receive the correct string value
     - fixed DPQL serialization of multibyte strings raising \c RUNTIME-TYPE-ERROR and embedded double quotes

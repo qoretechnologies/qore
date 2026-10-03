@@ -1108,10 +1108,12 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         }
         if (info.type == DET_Function) {
             # a call's arguments are delimited by the call's own parentheses and commas, so nothing
-            # inside them can be misread: rendered in the loosest context, which never parenthesises
+            # inside them can be misread, except a prefix operator, which reads the commas after it as its
+            # own: the same rule the DPQL serializer uses for argument lists
             list<string> args = ();
             for (int i = 0; i < exp.args.size(); ++i) {
-                args += renderExpressionArg(exp.args[i], emap, info.arg_info[i], DPQL_PREC_OR + 1);
+                args += renderExpressionArg(exp.args[i], emap, info.arg_info[i],
+                    DpqlSerializer::getListElementContext(i, exp.args.size()));
             }
             str = sprintf("%s(%s)", info.name, args.join(", "));
         } else if (info.render_template) {

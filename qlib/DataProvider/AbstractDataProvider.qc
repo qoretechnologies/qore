@@ -692,10 +692,13 @@ public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureDataType =
 };
 
 #! Data provider signature optional data type (*string or *binary)
-/** @since DataProvider 3.3
+/** The type also accepts @ref nothing, which declares the argument optional
+
+    @since DataProvider 3.3
+    @since %DataProvider 3.9 the type is \c *data instead of \c any, so the argument is declared optional
 */
 public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."any",
+    "type": AbstractDataProviderTypeMap."*data",
     "type_code": ST_Any,
 };
 
