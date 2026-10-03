@@ -2003,8 +2003,17 @@ ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
 # Export a generated module index without requiring the large HTML tree.
 function(QORE_INSTALL_MODULE_DOXYGEN_TAG _module _tagfile)
+    # External modules need not include GNUInstallDirs. Keep the default and
+    # relative datadirs relative so --prefix and DESTDIR work during packaging.
+    if (CMAKE_INSTALL_DATADIR)
+        set(_qore_doc_datadir "${CMAKE_INSTALL_DATADIR}")
+    elseif (CMAKE_INSTALL_FULL_DATADIR)
+        set(_qore_doc_datadir "${CMAKE_INSTALL_FULL_DATADIR}")
+    else()
+        set(_qore_doc_datadir "share")
+    endif()
     install(FILES "${_tagfile}" RENAME "${_module}.tag"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/qore/module-tags"
+        DESTINATION "${_qore_doc_datadir}/qore/module-tags"
         OPTIONAL COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 endfunction()
 

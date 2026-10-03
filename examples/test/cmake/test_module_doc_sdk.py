@@ -199,19 +199,36 @@ qore_configure_module_doxygen("absent.in" "output")
             self.assertIn("Invalid QORE_DOXYGEN_MODULES name", result.stderr)
 
     def test_external_native_module_installs_index_only_when_built(self):
-        with tempfile.TemporaryDirectory(prefix="qore external index ") as directory:
-            root = Path(directory)
-            source = root / "source"
-            build = root / "build"
-            prefix = root / "sdk"
-            (source / "cmake").mkdir(parents=True)
-            (source / "cmake/cmake_uninstall.cmake.in").write_text("# fixture\n")
-            (source / "fixture.c").write_text("void fixture(void) {}\n")
-            (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
-            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+        for datadir in ("default", "gnu", "empty", "relative", "absolute", "legacy-full"):
+            with self.subTest(datadir=datadir), tempfile.TemporaryDirectory(
+                    prefix="qore external index ") as directory:
+                root = Path(directory)
+                source = root / "source"
+                build = root / "build"
+                prefix = root / "relocated sdk"
+                stage = root / "stage"
+                data_path = prefix / "share"
+                data_config = ""
+                if datadir == "gnu":
+                    data_config = "include(GNUInstallDirs)"
+                elif datadir == "empty":
+                    data_config = 'set(CMAKE_INSTALL_DATADIR "")'
+                elif datadir == "relative":
+                    data_config = 'set(CMAKE_INSTALL_DATADIR "custom data")'
+                    data_path = prefix / "custom data"
+                elif datadir in ("absolute", "legacy-full"):
+                    data_path = root / "absolute data"
+                    variable = ("CMAKE_INSTALL_DATADIR" if datadir == "absolute"
+                                else "CMAKE_INSTALL_FULL_DATADIR")
+                    data_config = f'set({variable} "{data_path}")'
+                (source / "cmake").mkdir(parents=True)
+                (source / "cmake/cmake_uninstall.cmake.in").write_text("# fixture\n")
+                (source / "fixture.c").write_text("void fixture(void) {}\n")
+                (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
+                (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
 project(ExternalNativeIndex C)
 include("{ROOT}/cmake/QoreMacros.cmake")
-set(CMAKE_INSTALL_FULL_DATADIR "{prefix}/custom data")
+{data_config}
 set(QORE_INSTALL_COMPONENT_BOOTSTRAP doc-index)
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE "${{CMAKE_SOURCE_DIR}}/Doxyfile.in")
 set(QORE_MODULES_DIR lib/qore-modules)
@@ -220,14 +237,26 @@ set(QORE_GENERATE_JAVA_BINDINGS OFF)
 add_library(fixture MODULE fixture.c)
 qore_binary_module_intern2(fixture 1.0 "" "2")
 ''')
-            self.run_command([CMAKE, "-S", str(source), "-B", str(build)], root)
-            install = [CMAKE, "--install", str(build), "--component", "doc-index"]
-            self.run_command(install, root)
-            installed = prefix / "custom data/qore/module-tags/fixture.tag"
-            self.assertFalse(installed.exists())
-            tag = self.make_tag(build, "fixture")
-            self.run_command(install, root)
-            self.assertEqual(tag.read_bytes(), installed.read_bytes())
+                self.run_command([CMAKE, "-S", str(source), "-B", str(build),
+                                  f"-DCMAKE_INSTALL_PREFIX={root / 'original sdk'}"], root)
+                self.run_command([CMAKE, "--build", str(build), "--target", "fixture"], root)
+                # Stage the complete install, just as packaging does, before any
+                # documentation exists. DESTDIR also confines a bad absolute
+                # destination to the fixture instead of touching the host root.
+                install = [CMAKE, "-E", "env", f"DESTDIR={stage}", CMAKE,
+                           "--install", str(build), "--prefix", str(prefix)]
+                self.run_command(install, root)
+                self.assertTrue((stage / prefix.relative_to(prefix.anchor)
+                                 / "lib/qore-modules/fixture-api-2.0.qmod").is_file())
+                self.assertFalse((stage / "qore").exists())
+                installed = (stage / data_path.relative_to(data_path.anchor)
+                             / "qore/module-tags/fixture.tag")
+                self.assertFalse(installed.exists())
+                tag = self.make_tag(build, "fixture")
+                self.run_command(install + ["--component", "doc-index"], root)
+                self.assertEqual(tag.read_bytes(), installed.read_bytes())
+                self.assertEqual([installed], list(stage.rglob("*.tag")))
+                self.assertFalse((root / "original sdk").exists())
 
     def test_language_and_module_references_with_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="qore doc sdk ") as directory:

@@ -9,6 +9,9 @@
     data directories and paths containing spaces are supported.
     Native module installations also export their generated documentation indexes,
     allowing dependent modules to resolve cross-module references through the SDK.
+    Index installation defaults to the module's <tt>share</tt> directory when an
+    external project does not initialize GNUInstallDirs and honors custom data
+    directories, install-prefix overrides, and package staging.
     Documentation template generation publishes output only after successful conversion
     and reruns when qpp changes, preventing partial files from surviving failed builds.
 

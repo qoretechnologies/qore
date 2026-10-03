@@ -25,8 +25,13 @@ with a Qore SDK installed under `/usr`, including custom data directories and
 paths containing spaces. Keep these assets together when relocating the template.
 
 Bundled and external native module indexes are installed in `share/qore/module-tags`
-when their documentation has been built before installation. Select the modules
-whose API documentation you reference before configuring your documentation:
+when their documentation has been built before installation. The data directory
+defaults to `share` under the module's install prefix even when the external project
+does not include `GNUInstallDirs`. `CMAKE_INSTALL_DATADIR` overrides it; relative
+values honor `cmake --install --prefix`, and both relative and absolute values
+support `DESTDIR` staging. Projects defining only `CMAKE_INSTALL_FULL_DATADIR`
+retain that absolute destination. Select the modules whose API documentation you
+reference before configuring your documentation:
 
 ```cmake
 set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
