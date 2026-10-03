@@ -289,6 +289,12 @@ more than one "type" of content — split it into topical subpages.
   doxygen tree navigation; subpages link peers via `@ref`.
 - Release notes always live on their own page — they only grow, and nobody visiting
   the mainpage for orientation wants a changelog.
+- Describe changes from the last released branch (`2.x` for the Qore 3.0 release).
+  Fold unreleased development versions into the upcoming release, retaining the
+  feature introductions and fixes to previously shipped behavior. Omit fixes,
+  optimizations, and documentation corrections to functionality first introduced
+  in that same release; those belong in the API documentation and tests, not in
+  a release history. Bundled native modules version with Qore.
 - Cookbook examples always live on their own page — examples dwarf the index content.
 - A major feature warrants its own guide page when it has **non-example** content
   (reference tables, decision guides, operational recommendations, caveats) — not

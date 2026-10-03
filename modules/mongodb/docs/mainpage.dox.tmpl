@@ -26,7 +26,7 @@
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires mongodb @endcode
+    @code{.py} %requires mongodb @endcode
 
     Classes provided by this module:
     - @ref mongodb::MongoClient "MongoClient" - MongoDB client connection management
@@ -80,11 +80,5 @@ list<hash<auto>> docs = users.aggregate((
 
     @section mongodbreleasenotes mongodb Module Release Notes
 
-    @subsection mongodb_1_0 mongodb Module Version 1.0
-    - Initial release with full CRUD support
-    - Aggregation pipeline support
-    - Cursor-based iteration with
-      <tt>MongoCursor&lt;DocT: hash&lt;auto&gt; = hash&lt;auto&gt;&gt;</tt>
-    - ObjectId type support
-    - BSON to Qore type conversion
+    @subpage mongodbreleasehistory
 */

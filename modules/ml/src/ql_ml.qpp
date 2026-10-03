@@ -745,8 +745,8 @@ hashdecl Qore::ML::MLCapabilities {
 }
 
 //! Decision tree classification prediction result
-/** Returned by @ref DecisionTree::predict() and @ref DecisionTree::predictMatrix()
-    when the tree is configured for classification.
+/** Returned by @ref DecisionTree::predictClassification() and
+    @ref DecisionTree::predictClassificationMatrix().
 */
 hashdecl Qore::ML::DecisionTreeClassificationResult {
     //! predicted class label
@@ -760,8 +760,8 @@ hashdecl Qore::ML::DecisionTreeClassificationResult {
 }
 
 //! Decision tree regression prediction result
-/** Returned by @ref DecisionTree::predict() and @ref DecisionTree::predictMatrix()
-    when the tree is configured for regression.
+/** Returned by @ref DecisionTree::predictRegression() and
+    @ref DecisionTree::predictRegressionMatrix().
 */
 hashdecl Qore::ML::DecisionTreeRegressionResult {
     //! predicted target value
@@ -780,8 +780,8 @@ hashdecl Qore::ML::FeatureImportanceInfo {
 }
 
 //! Random forest classification prediction result
-/** Returned by @ref RandomForest::predict() and @ref RandomForest::predictMatrix()
-    when configured for classification.
+/** Returned by @ref RandomForest::predictClassification() and
+    @ref RandomForest::predictClassificationMatrix().
 */
 hashdecl Qore::ML::RandomForestClassificationResult {
     //! predicted class label
@@ -795,8 +795,8 @@ hashdecl Qore::ML::RandomForestClassificationResult {
 }
 
 //! Random forest regression prediction result
-/** Returned by @ref RandomForest::predict() and @ref RandomForest::predictMatrix()
-    when configured for regression.
+/** Returned by @ref RandomForest::predictRegression() and
+    @ref RandomForest::predictRegressionMatrix().
 */
 hashdecl Qore::ML::RandomForestRegressionResult {
     //! predicted target value
@@ -804,8 +804,8 @@ hashdecl Qore::ML::RandomForestRegressionResult {
 }
 
 //! GBT classification prediction result
-/** Returned by @ref GradientBoostedTrees::predict() and
-    @ref GradientBoostedTrees::predictMatrix() when configured for classification.
+/** Returned by @ref GradientBoostedTrees::predictClassification() and
+    @ref GradientBoostedTrees::predictClassificationMatrix().
 */
 hashdecl Qore::ML::GBTClassificationResult {
     //! predicted class label
@@ -819,8 +819,8 @@ hashdecl Qore::ML::GBTClassificationResult {
 }
 
 //! GBT regression prediction result
-/** Returned by @ref GradientBoostedTrees::predict() and
-    @ref GradientBoostedTrees::predictMatrix() when configured for regression.
+/** Returned by @ref GradientBoostedTrees::predictRegression() and
+    @ref GradientBoostedTrees::predictRegressionMatrix().
 */
 hashdecl Qore::ML::GBTRegressionResult {
     //! predicted target value

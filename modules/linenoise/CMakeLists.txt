@@ -56,11 +56,13 @@ elseif(TARGET LLVM::LLVM)
     target_link_libraries(linenoise-unicode-test LLVM::LLVM)
 endif()
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/linenoise/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/linenoise/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/linenoise/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${linenoise_module_name} "${VERSION}" "/${VERSION}")
 
 set(QORE_DOX_LINENOISE_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 if (DOXYGEN_FOUND)

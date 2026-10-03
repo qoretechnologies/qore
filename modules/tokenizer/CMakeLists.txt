@@ -115,6 +115,7 @@ set(TOK_CPP_SRC
 
 set(QORE_DOX_TOK_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 # Process QPP files
@@ -135,7 +136,8 @@ endif()
 target_link_libraries(${tok_module_name} ${UTF8PROC_LIBRARIES} ${PCRE2_LIBRARIES})
 add_dependencies(${tok_module_name} libqore TOK_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/tokenizer/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/tokenizer/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/tokenizer/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${tok_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

@@ -225,6 +225,7 @@ endif()
 
 set(QORE_DOX_ML_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 # Process QPP files
@@ -257,7 +258,8 @@ if (HAVE_ONNXRUNTIME)
 endif()
 add_dependencies(${ml_module_name} libqore ML_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ml/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ml/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/ml/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${ml_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

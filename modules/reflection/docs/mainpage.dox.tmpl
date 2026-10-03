@@ -12,7 +12,7 @@
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires reflection @endcode
+    @code{.py} %requires reflection @endcode
 
     To prohibit reflection in a @ref Qore::Program "Program" object; use the @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION"
     sandbox restriction when creating the object or when setting sandboxing restrictions on the
@@ -111,5 +111,5 @@ foreach string mod_name in (registry.getProcessModules()) {
 
     @section reflectionreleasenotes reflection Module Release Notes
 
-    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+    @subpage reflectionreleasehistory
 */

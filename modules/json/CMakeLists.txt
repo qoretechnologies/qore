@@ -72,6 +72,7 @@ set(JSON_CPP_SRC
 
 set(QORE_DOX_JSON_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 # Process QPP files
@@ -85,7 +86,8 @@ add_library(${json_module_name} MODULE ${JSON_CPP_SRC} ${JSON_QPP_SOURCES})
 target_link_libraries(${json_module_name} ${OPENSSL_LIBRARIES})
 add_dependencies(${json_module_name} libqore JSON_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/json/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/json/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/json/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${json_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

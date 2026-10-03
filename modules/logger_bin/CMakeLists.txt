@@ -77,6 +77,7 @@ set(LOGGER_H_SRC
 
 set(QORE_DOX_LOGGER_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 foreach (it ${LOGGER_H_SRC})
@@ -129,7 +130,8 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(${logger_module_name} libqore LOGGER_QPP_GENERATED_FILES)
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/logger_bin/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/logger_bin/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/logger_bin/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${logger_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

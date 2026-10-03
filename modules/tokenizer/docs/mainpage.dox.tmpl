@@ -140,7 +140,7 @@ printf("Text 2 length: %d\n", batch[1].input_ids.size());
     For ONNX inference, use the model-input APIs to avoid materializing
     per-token Qore lists. These methods return row-major \c buffer<int64>
     values and shape metadata that can be converted directly to
-    @ref Qore::ML::Tensor values.
+    <a href="../../ml/html/classQore_1_1ML_1_1Tensor.html">ML::Tensor</a> values.
 
     @code{.py}
 %requires ml
@@ -235,19 +235,19 @@ string clean = tok.decode(enc.input_ids, True);
     @section tokenizer_api_summary API Summary
 
     |!Method|!Description
-    |@ref Tokenizer::HFTokenizer::encode "encode(text)"|Basic encoding with special tokens
-    |@ref Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
-    |@ref Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
-    |@ref Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
-    |@ref Tokenizer::HFTokenizer::encodeForModel "encodeForModel(text, options)"|Single-row dense model input buffers
-    |@ref Tokenizer::HFTokenizer::encodeBatchForModel "encodeBatchForModel(texts, options)"|Batch dense model input buffers
-    |@ref Tokenizer::HFTokenizer::encodeBatchPairsForModel "encodeBatchPairsForModel(texts, text_pairs, options)"|Sentence-pair dense model input buffers
-    |@ref Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
-    |@ref Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
-    |@ref Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
-    |@ref Tokenizer::HFTokenizer::tokenToId "tokenToId(token)"|Convert token string to ID
-    |@ref Tokenizer::HFTokenizer::getVocab "getVocab()"|Return full vocabulary as hash
-    |@ref Tokenizer::HFTokenizer::getPadTokenId "getPadTokenId()"|Return the pad token ID
+    |@ref Qore::Tokenizer::HFTokenizer::encode "encode(text)"|Basic encoding with special tokens
+    |@ref Qore::Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
+    |@ref Qore::Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
+    |@ref Qore::Tokenizer::HFTokenizer::encodeForModel "encodeForModel(text, options)"|Single-row dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchForModel "encodeBatchForModel(texts, options)"|Batch dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchPairsForModel "encodeBatchPairsForModel(texts, text_pairs, options)"|Sentence-pair dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
+    |@ref Qore::Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
+    |@ref Qore::Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
+    |@ref Qore::Tokenizer::HFTokenizer::tokenToId "tokenToId(token)"|Convert token string to ID
+    |@ref Qore::Tokenizer::HFTokenizer::getVocab "getVocab()"|Return full vocabulary as hash
+    |@ref Qore::Tokenizer::HFTokenizer::getPadTokenId "getPadTokenId()"|Return the pad token ID
 
     @section tokenizer_encoding_result Encoding Result Fields
 
@@ -263,7 +263,7 @@ string clean = tok.decode(enc.input_ids, True);
 
     @section tokenizer_model_input_result Model Input Result Fields
 
-    The dense model-input methods return @ref Qore::Tokenizer::TokenizerModelInputBatch:
+    The dense model-input methods return @ref Qore::Tokenizer::TokenizerModelInputBatch "TokenizerModelInputBatch":
 
     |!Field|!Type|!Description
     |\c input_ids|buffer\<int64\>|Row-major token ID buffer
@@ -277,27 +277,5 @@ string clean = tok.decode(enc.input_ids, True);
 
     @section tokenizer_relnotes tokenizer Module Release Notes
 
-    @subsection tokenizer_1_2 tokenizer Module Version 1.2
-    - Dense model-input APIs: \c encodeForModel(), \c encodeBatchForModel(),
-      and \c encodeBatchPairsForModel() return row-major \c buffer<int64>
-      values for direct ONNX tensor creation without per-token list/hash
-      materialization
-    - \c Replace normalizers support HuggingFace \c {"Regex": "..."} patterns
-
-    @subsection tokenizer_1_0 tokenizer Module Version 1.0
-    - BPE, WordPiece, and Unigram tokenization models
-    - Full HuggingFace \c tokenizer.json support with auto-detection of model type
-    - Precompiled normalizer (SentencePiece Darts DoubleArray trie)
-    - GPT-2 byte-level BPE with hand-coded pattern matcher
-    - Truncation: \c longest_first, \c only_first, \c only_second strategies
-    - Padding: \c max_length and batch-longest modes
-    - Batch encoding: \c encodeBatch() for multi-text processing
-    - Byte-level offset mapping and special tokens mask
-    - Added token matching before tokenization pipeline
-    - Sentence pair encoding with correct \c token_type_ids
-    - O(n log n) BPE merge algorithm using priority queue + doubly linked list
-    - Vocabulary access: \c getVocab(), \c getVocabSize(), \c tokenToId(), \c idToToken()
-    - Cooperative cancellation support via \c qore_check_cancel()
-    - utf8proc-based Unicode normalization (NFC/NFD/NFKC/NFKD) and digit classification
-    - Verified against Python \c tokenizers for BERT, GPT-2, T5, and Llama
+    @subpage tokenizerreleasehistory
 */

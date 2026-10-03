@@ -76,26 +76,26 @@
     @section dataframeapi dataframe Module API
 
     Main classes:
-    - @ref DataFrame::DataFrame "DataFrame" - the columnar data structure
-    - @ref DataFrame::ColumnRef "ColumnRef" - lazy column reference for predicate masks
-    - @ref DataFrame::RowMask "RowMask" - bitmap row selector returned by column comparisons
-    - @ref DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
+    - @ref Qore::DataFrame::DataFrame "DataFrame" - the columnar data structure
+    - @ref Qore::DataFrame::ColumnRef "ColumnRef" - lazy column reference for predicate masks
+    - @ref Qore::DataFrame::RowMask "RowMask" - bitmap row selector returned by column comparisons
+    - @ref Qore::DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
 
     Result hashdecls:
-    - @ref DataFrame::DataFrameShape "DataFrameShape" - returned by
-      @ref DataFrame::DataFrame::shape() "DataFrame::shape()"
-    - @ref DataFrame::ColumnStats "ColumnStats" - returned by
-      @ref DataFrame::DataFrame::describe() "DataFrame::describe()"
-    - @ref DataFrame::CsvOptions "CsvOptions" - accepted by
-      @ref DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" and
-      @ref DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()"
+    - @ref Qore::DataFrame::DataFrameShape "DataFrameShape" - returned by
+      @ref Qore::DataFrame::DataFrame::shape() "DataFrame::shape()"
+    - @ref Qore::DataFrame::ColumnStats "ColumnStats" - returned by
+      @ref Qore::DataFrame::DataFrame::describe() "DataFrame::describe()"
+    - @ref Qore::DataFrame::CsvOptions "CsvOptions" - accepted by
+      @ref Qore::DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" and
+      @ref Qore::DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()"
 
     @section dataframe_typed_examples Typed DataFrame Examples
 
     DataFrame methods that produce another frame now declare
-    @ref DataFrame::DataFrame "DataFrame" directly, and grouped operations
-    declare @ref DataFrame::GroupedDataFrame "GroupedDataFrame" or
-    @ref DataFrame::DataFrame "DataFrame" according to the value returned.
+    @ref Qore::DataFrame::DataFrame "DataFrame" directly, and grouped operations
+    declare @ref Qore::DataFrame::GroupedDataFrame "GroupedDataFrame" or
+    @ref Qore::DataFrame::DataFrame "DataFrame" according to the value returned.
     Methods that return fixed record shapes use typed hashdecls:
 
     @code{.py}
@@ -132,9 +132,9 @@ DataFrame::DataFrame from_second = employees[1..];
     @endcode
 
     Predicate masks use explicit column references so direct column access stays
-    simple and predictable. Compare a @ref DataFrame::ColumnRef "ColumnRef" with
-    a scalar to get a @ref DataFrame::RowMask "RowMask"; then pass the mask to
-    \c frame[mask] or @ref DataFrame::DataFrame::filter(DataFrame::RowMask) "filter(mask)".
+    simple and predictable. Compare a @ref Qore::DataFrame::ColumnRef "ColumnRef" with
+    a scalar to get a @ref Qore::DataFrame::RowMask "RowMask"; then pass the mask to
+    \c frame[mask] or @ref Qore::DataFrame::DataFrame::filter(Qore::DataFrame::RowMask) "filter(mask)".
     The comparison operators are registered plugin operations and work in AST,
     IR, and JIT execution. In JIT/AOT-generated code, the hot subscript,
     comparison, and mask-composition operators use direct module-helper calls
@@ -223,11 +223,11 @@ DataFrame::DataFrame ranked_df = scores.takeRows((3, 0, 2));
     @endcode
 
     Use @ref Qore::SQL::ColumnarResult::take() "ColumnarResult::take()" and
-    @ref DataFrame::DataFrame::takeRows() "DataFrame::takeRows()" when row order
+    @ref Qore::DataFrame::DataFrame::takeRows() "DataFrame::takeRows()" when row order
     matters, for example after ranking model scores. These APIs gather explicit
     row indices and keep primitive columns in dense buffer form.
 
-    Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
+    Use @ref Qore::DataFrame::DataFrame::concat() "DataFrame::concat()" with
     \c axis:1 for horizontal concat. This shares existing column data when
     possible and rejects mismatched row counts or duplicate output column names:
 
@@ -249,11 +249,11 @@ DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis
 
     The companion \c DataProviderDataFrame user module wraps a DataFrame as a
     DataProvider and lets DataFrames flow through
-    @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in
-    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock" shape.
+    <a href="../../DataProvider/html/class_data_provider_1_1_data_provider_pipeline.html">DataProviderPipeline</a> in
+    \c DataFrameBlock shape.
     DataFrames can also be submitted as ColumnarResult values, which the
     pipeline treats as
-    @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" shape.
+    \c BufferColumns shape.
     DataFrame-aware processors can keep DataFrameBlock representation,
     dense-column processors can keep BufferColumns representation, and other
     bulk-aware processors receive a hash-of-lists or row conversion.
@@ -299,8 +299,8 @@ pipeline.waitDone();
     Supported compiled filter forms include \c &&, \c ||, \c !,
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
     scalar comparisons over top-level fields, expression-to-expression
-    comparisons such as \c @amount \c >= \c @target or
-    \c @amount \c + \c @tax \c >= \c @limit, scalar functions including
+    comparisons such as \c \@amount \c >= \c \@target or
+    \c \@amount \c + \c \@tax \c >= \c \@limit, scalar functions including
     \c abs(), \c round(), \c floor(), \c ceil(), \c lwr(), \c upr(),
     \c trim(), \c ltrim(), \c rtrim(), \c concat(), \c coalesce(),
     \c nullif(), and date-part functions such as \c get_year() and
@@ -310,8 +310,8 @@ pipeline.waitDone();
     \c isNull and \c isNotNull checks, case-sensitive \c contains,
     \c containsAny, \c starts-with, and \c ends-with string predicates,
     \c listContains and \c listContainsAny membership predicates, list index,
-    slice, and hash key accessors such as \c @scores[0] and
-    \c @payload{region}, structured ternary expressions, and BufferColumns
+    slice, and hash key accessors such as \c \@scores[0] and
+    \c \@payload{region}, structured ternary expressions, and BufferColumns
     \c like, \c =~, and \c !~ pattern predicates. Unsupported expressions,
     including expressions whose semantics require row materialization, fall
     back to generic row evaluation and rebuild the negotiated output shape when
@@ -408,32 +408,5 @@ salary.writeParquet("employees-filtered.parquet", write_options);
 
     @section dataframerelease dataframe Module Release History
 
-    @subsection dataframe_1_0 dataframe Module Version 1.0
-    - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
-      and ML integration
-    - native plugin-operator access with column, row, and inclusive row-range
-      subscripts, plus ColumnRef comparison predicates returning RowMask
-      objects accepted by \c df[mask] and \c df.filter(mask)
-    - dense \c buffer<T> column interop through DataFrame construction,
-      \c getColumnBuffer(), \c toColumnarResult(), and
-      \c fromColumnarResult(), preserving buffer-backed primitive columns under
-      Qore copy-on-write semantics where possible
-    - ColumnarResult filtering with dense boolean masks and horizontal
-      DataFrame concat with \c DataFrame::concat(axis:1)
-    - integration with DataProvider pipelines through the \c DataProviderDataFrame
-      module, including DataFrame bulk reads, DataFrameBlock propagation,
-      BufferColumns propagation for ColumnarResult values, and vectorized
-      DPQL/DataProvider filter masks for supported scalar and computed
-      comparisons, \c between, \c in / \c notIn, structured strict
-      equality/inequality, \c containsAny and other string predicates,
-      list membership predicates, list/hash accessors, ternary computed values,
-      and null checks
-    - API metadata and generated Doxygen signatures identify DataFrame-returning
-      operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
-      @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
-      hashes as @ref DataFrame::DataFrameShape "DataFrameShape",
-      @ref DataFrame::ColumnStats "ColumnStats",
-      @ref DataFrame::CsvOptions "CsvOptions",
-      @ref DataFrame::ParquetReadOptions "ParquetReadOptions", and
-      @ref DataFrame::ParquetWriteOptions "ParquetWriteOptions"
+    @subpage dataframereleasehistory
 */

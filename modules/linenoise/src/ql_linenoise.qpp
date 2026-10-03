@@ -38,7 +38,7 @@ namespace Qore::Linenoise;
 
     <b>Features:</b>
     - accept basic user input: regular characters, cursor keys, TAB, ENTER keys
-    - accept advanced edits: Ctrl+key, @ref key_shortcuts
+    - accept advanced edits: Ctrl+key shortcuts
     - waits until the ENTER is pressed
 
     <b>Example:</b>
@@ -181,14 +181,12 @@ int rows() {
 
 //! Set auto-completion callback function
 /**
-    @param code a function/method reference or a closure to handle completion callback
+    @param callback a function/method reference or a closure to handle completion callback
 
     @see @ref line_completion
 
-    @warning Qore language does not support complex types yet so you can register
-             any code with this function. But if the function/code will not accept
-             the string argument the \c RUNTIME-OVERLOAD-ERROR exception will be
-             thrown
+    @warning The callback must accept a string argument; otherwise a
+             \c RUNTIME-OVERLOAD-ERROR exception is thrown when completion is requested.
  */
 nothing set_callback(code callback) {
     AutoLocker al(lock);
@@ -961,8 +959,7 @@ nothing edit_set_silent(int session, bool silent) {
 
 //! Get the key type from the last resolved async editing session result
 /**
-    Returns the type of key that caused the session to resolve. This is
-    analogous to @ref Qore::Linenoise::key_type() for the blocking API.
+    Returns the type of key that caused the session to resolve.
 
     @param session the session ID returned by @ref Qore::Linenoise::edit_start()
 

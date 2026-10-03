@@ -120,7 +120,7 @@ hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
     - \c add_special_tokens (*bool): whether to add special tokens (default True)
     - \c pad_token_id (*int): override pad token ID
     - \c is_pretokenized (*bool): if True, treat input as pre-tokenized words
-    - \c words (*list<string>): explicit word list for pre-tokenized input
+    - \c words (<tt>*list&lt;string&gt;</tt>): explicit word list for pre-tokenized input
     - \c stride (*int): overlap size for sliding window when truncation produces overflow
     - \c return_overflowing_tokens (*bool): if True, include overflowing token chunks
 
@@ -152,7 +152,7 @@ list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> option
     \c columns, \c sequence_lengths, and \c dtype metadata
 
     This method avoids materializing per-token Qore lists and is intended for
-    direct conversion to @ref Qore::ML::Tensor values with
+    direct conversion to <a href="../../ml/html/classQore_1_1ML_1_1Tensor.html">ML::Tensor</a> values with
     \c ML::Tensor::fromBuffer().
 
     @par Example:

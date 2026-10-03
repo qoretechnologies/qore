@@ -110,6 +110,7 @@ set(REFLECTION_H_SRC
 
 set(QORE_DOX_REFLECTION_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 foreach (it ${REFLECTION_H_SRC})
@@ -162,7 +163,8 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(${reflection_module_name} libqore REFLECTION_QPP_GENERATED_FILES)
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/reflection/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/reflection/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/reflection/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${reflection_module_name} "${VERSION}" "/${VERSION}")
 qore_install_qpp_metadata(${reflection_module_name} ${REFLECTION_QPP_META_SRC})
 

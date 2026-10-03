@@ -799,7 +799,7 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires ml @endcode
+    @code{.py} %requires ml @endcode
 
     @section mlthread Thread Safety
 
@@ -1014,120 +1014,5 @@ if (!caps.has_onnx) {
 
     @section mlreleasenotes ml Module Release Notes
 
-    @subsection ml_1_1 ml Module Version 1.1
-    - Fixed an async session pool race: completion/error counters are visible
-      immediately after an inference future returns, including dynamic batches.
-      Resetting counters after completed futures no longer carries their late
-      completion updates into the next measurement interval.
-
-    - Added @ref Qore::ML::Tensor "Tensor" and
-      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()" for dense
-      ONNX inference with \c buffer<T> storage and explicit shape metadata
-    - @ref Qore::ML::OnnxModel::run() "OnnxModel::run()",
-      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()",
-      @ref Qore::ML::OnnxModel::runBatch() "OnnxModel::runBatch()", and the
-      synchronous @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" inference
-      methods can request selected ONNX output tensors by name, avoiding
-      unnecessary materialization for multi-output models
-    - Added @ref Qore::ML::Tensor::fromColumns() "Tensor::fromColumns()" to
-      pack equal-length dense column buffers into a row-major tensor without
-      row hash or nested list materialization
-    - Added @ref Qore::ML::Tensor::reshape() "Tensor::reshape()",
-      @ref Qore::ML::Tensor::sliceRows() "Tensor::sliceRows()", and
-      @ref Qore::ML::Tensor::concatRows() "Tensor::concatRows()" for
-      zero-copy tensor reshaping, row slicing, and native batch assembly
-    - Added @ref Qore::ML::Tensor::sigmoid() "Tensor::sigmoid()",
-      @ref Qore::ML::Tensor::softmax() "Tensor::softmax()",
-      @ref Qore::ML::Tensor::argmax() "Tensor::argmax()",
-      @ref Qore::ML::Tensor::topK() "Tensor::topK()",
-      @ref Qore::ML::Tensor::poolTokenEmbeddings() "Tensor::poolTokenEmbeddings()",
-      and @ref Qore::ML::Tensor::l2NormalizeRows() "Tensor::l2NormalizeRows()"
-      for dense ONNX postprocessing without nested list materialization
-    - Added @ref Qore::ML::Tensor::toColumnBuffers() "Tensor::toColumnBuffers()"
-      to split rank-1 and rank-2 tensor outputs into dense column buffers for
-      DataFrame and DataProvider pipelines
-    - ONNX tensor conversion now supports float, double, int8, int16, int32,
-      int64, and bool inputs and outputs
-    - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
-      falls back to CPU when an advertised GPU provider cannot create a session,
-      for example when CUDA libraries are not installed; explicit provider
-      configurations still report provider initialization errors to the caller
-    - DataFrame and columnar workflows are documented through
-      \c DataFrame::toMatrix() for direct model APIs and through shape-aware
-      \c DataProviderML processors for pipeline use
-
-    @subsection ml_1_0 ml Module Version 1.0
-    - Initial release with native ML algorithms, preprocessing tools, feature engineering,
-      and statistical functions:
-      - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
-      - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
-      - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
-      - @ref Qore::ML::KMeans "KMeans" — k-means clustering with online updates
-      - @ref Qore::ML::GMM "GMM" — Gaussian Mixture Model probabilistic clustering
-      - @ref Qore::ML::LinearRegression "LinearRegression" — ordinary least squares regression
-      - @ref Qore::ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
-      - @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
-      - @ref Qore::ML::PCA "PCA" — principal component analysis
-      - @ref Qore::ML::LogisticRegression "LogisticRegression" — binary and multiclass classification
-      - @ref Qore::ML::KNN "KNN" — k-nearest neighbors for classification and regression
-    - Data preprocessing:
-      - @ref Qore::ML::StandardScaler "StandardScaler" — put fields on the same scale (zero mean, unit variance)
-      - @ref Qore::ML::MinMaxScaler "MinMaxScaler" — normalize values to a configurable range (e.g., 0 to 1)
-      - @ref Qore::ML::Imputer "Imputer" — fill missing values using average, median, most common, or fixed value
-      - @ref Qore::ML::MLPipeline "MLPipeline" — chain preprocessing and analysis into a single fit/predict unit
-    - Model evaluation:
-      - Classification metrics: @ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_confusion_matrix() "ml_confusion_matrix()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"
-      - Regression metrics: @ref Qore::ML::ml_mse() "ml_mse()", @ref Qore::ML::ml_rmse() "ml_rmse()", @ref Qore::ML::ml_mae() "ml_mae()", @ref Qore::ML::ml_r2_score() "ml_r2_score()", @ref Qore::ML::ml_explained_variance() "ml_explained_variance()"
-      - Clustering metrics: @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()", @ref Qore::ML::ml_calinski_harabasz_score() "ml_calinski_harabasz_score()"
-      - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
-    - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
-    - Typed model hierarchy under @ref Qore::ML::AbstractMLModel "AbstractMLModel":
-      - @ref Qore::ML::AbstractMLEstimator "AbstractMLEstimator" — fit/predict-style models (regressors, classifiers, clusterers, anomaly detectors)
-      - @ref Qore::ML::AbstractMLRegressor "AbstractMLRegressor", @ref Qore::ML::AbstractMLClassifier "AbstractMLClassifier",
-        @ref Qore::ML::AbstractMLClusterer "AbstractMLClusterer", @ref Qore::ML::AbstractMLAnomalyDetector "AbstractMLAnomalyDetector"
-      - @ref Qore::ML::AbstractMLTransformer "AbstractMLTransformer" — fit/transform-style preprocessors
-      - @ref Qore::ML::AbstractMLTimeSeries "AbstractMLTimeSeries" — time-series forecasting models
-      - All concrete model classes inherit from the appropriate base; ml_serialize / ml_deserialize / ml_save_model / ml_load_model
-        accept any @ref Qore::ML::AbstractMLModel "AbstractMLModel" and route via virtual dispatch
-    - Model persistence: @ref Qore::ML::ml_serialize() "ml_serialize()" / @ref Qore::ML::ml_deserialize() "ml_deserialize()" for in-memory round-trip,
-      @ref Qore::ML::ml_save_model() "ml_save_model()" / @ref Qore::ML::ml_load_model() "ml_load_model()" for file-based persistence (.qml native format).
-      @ref Qore::ML::MLPipeline "MLPipeline" composes through serialization: each step's state is packed by algorithm tag so a pipeline
-      round-trips end-to-end and produces identical predictions after restore
-    - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
-    - All algorithms use Eigen3 for efficient matrix operations
-    - All algorithms support cooperative cancellation for responsive interrupt handling
-    - \c NOTHING values in input data are treated as missing values for Imputer compatibility
-    - @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()" function for runtime capability and ONNX support discovery
-    - Tree-based algorithms:
-      - @ref Qore::ML::DecisionTree "DecisionTree" — CART with Gini, entropy, and MSE criteria; feature importance
-      - @ref Qore::ML::RandomForest "RandomForest" — bagging ensemble with bootstrap sampling and random feature subsets
-      - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — gradient boosting with log-loss and MSE; early stopping; row subsampling
-      - Shared FlatTree CART engine with flat-array node storage
-      - @ref Qore::ML::FeatureImportanceInfo "FeatureImportanceInfo" hashdecl for tree-based feature importance
-    - Additional classifiers:
-      - @ref Qore::ML::SVM "SVM" — support vector machine with simplified SMO, linear and RBF kernels, multiclass via one-vs-one voting
-      - @ref Qore::ML::NaiveBayes "NaiveBayes" — Gaussian Naive Bayes with online learning (incremental mean/variance updates via Welford's algorithm)
-    - Statistical functions:
-      - Descriptive: @ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_iqr() "ml_iqr()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"
-      - Correlation: @ref Qore::ML::ml_correlation_matrix() "ml_correlation_matrix()", @ref Qore::ML::ml_covariance_matrix() "ml_covariance_matrix()"
-      - Hypothesis testing: @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's, exact p-values via Cephes incbet), @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
-      - Normal distribution: @ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"
-    - Feature engineering:
-      - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — categorical-to-binary column encoding with drop_first option
-      - @ref Qore::ML::LabelEncoder "LabelEncoder" — string/integer-to-consecutive-integer mapping with inverse transform
-      - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — feature selector removing low-variance features (population variance)
-      - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
-      - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
-      - @ref Qore::ML::RFE "RFE" — recursive feature elimination using decision tree importances
-      - @ref Qore::ML::DateTimeFeatures "DateTimeFeatures" — extract numeric components (day_of_week, hour, quarter, is_weekend, etc.) from dates
-      - @ref Qore::ML::TextFeatures "TextFeatures" — TF-IDF and bag-of-words text vectorization
-    - Concept drift detection for monitoring deployed models:
-      - @ref Qore::ML::ADWIN "ADWIN" — adaptive windowing with O(log N) memory
-      - @ref Qore::ML::PageHinkley "PageHinkley" — cumulative sum test for mean shifts
-      - @ref Qore::ML::DDM "DDM" — error rate monitoring with warning and drift levels
-    - Vector similarity functions for embedding/RAG pipelines:
-      - @ref Qore::ML::ml_cosine_similarity() "ml_cosine_similarity()" — direction similarity (-1 to 1)
-      - @ref Qore::ML::ml_dot_product() "ml_dot_product()" — element-wise product sum
-      - @ref Qore::ML::ml_euclidean_distance() "ml_euclidean_distance()" — straight-line distance
-      - @ref Qore::ML::ml_manhattan_distance() "ml_manhattan_distance()" — city-block distance
+    @subpage mlreleasehistory
 */

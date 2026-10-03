@@ -1,0 +1,30 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframereleasehistory dataframe Module Release Notes
+
+    @tableofcontents
+
+    @section dataframe_3_0 dataframe Module Version 3.0
+
+    Initial release, shipped with %Qore 3.0.
+
+    - SQL-like query operations, CSV/Parquet/database I/O,
+      and ML integration
+    - native plugin-operator access with column, row, and inclusive row-range
+      subscripts, plus ColumnRef comparison predicates returning RowMask
+      objects accepted by \c df[mask] and \c df.filter(mask)
+    - dense \c buffer<T> column interop through DataFrame construction,
+      \c getColumnBuffer(), \c toColumnarResult(), and
+      \c fromColumnarResult(), preserving buffer-backed primitive columns under
+      Qore copy-on-write semantics where possible
+    - ColumnarResult filtering with dense boolean masks and horizontal
+      DataFrame concat with \c DataFrame::concat(axis:1)
+    - integration with DataProvider pipelines through the \c DataProviderDataFrame
+      module, including DataFrame bulk reads, DataFrameBlock propagation,
+      BufferColumns propagation for ColumnarResult values, and vectorized
+      DPQL/DataProvider filter masks for supported scalar and computed
+      comparisons, \c between, \c in / \c notIn, structured strict
+      equality/inequality, \c containsAny and other string predicates,
+      list membership predicates, list/hash accessors, ternary computed values,
+      and null checks
+*/
