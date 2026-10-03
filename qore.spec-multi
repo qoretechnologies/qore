@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 20%{?dist}
+Release: 21%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -89,8 +89,14 @@ BuildRequires: pkgconfig(libcurl)
 BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(lept)
 BuildRequires: pkgconfig(liburing) >= 2.0
+%if 0%{?suse_version}
+# openSUSE's unversioned package selects its repository's default major.
+# Name the SDK used by Qore so another compiler repository cannot replace it.
+BuildRequires: llvm%{llvm_major}-devel
+%else
 BuildRequires: llvm-devel >= %{llvm_major}
 BuildRequires: llvm-devel < %{expr:%{llvm_major}+1}
+%endif
 # Upstream CI uses 1.22.0; qualify the matched distro headers/library together.
 # Debian's >= 1.23.2 is its qualified archive baseline, not a CMake API minimum.
 BuildRequires: onnxruntime-devel >= 1.22.2
@@ -183,8 +189,12 @@ Requires: %{libname}%{?_isa} = %{version}-%{release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: gcc-c++
 Requires: pkgconfig(openssl)
+%if 0%{?suse_version}
+Requires: llvm%{llvm_major}-devel%{?_isa}
+%else
 Requires: llvm-devel%{?_isa} >= %{llvm_major}
 Requires: llvm-devel%{?_isa} < %{expr:%{llvm_major}+1}
+%endif
 
 %description devel
 Public headers, qpp, qcc, qdx, qjar, compiler metadata, linker configuration,
@@ -422,6 +432,9 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Sat Oct 03 2026 David Nichols <david@qore.org> - 3.0.0-21
+- Require the versioned openSUSE LLVM SDK independently of other compilers.
+
 * Fri Oct 02 2026 David Nichols <david@qore.org> - 3.0.0-20
 - Distinguish PostgreSQL native-array binds from JDBC batch arguments.
 - Export URL function documentation indexes correctly with modern Doxygen.

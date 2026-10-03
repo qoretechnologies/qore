@@ -14,6 +14,9 @@ The package split separates the interpreter, SONAME library, architecture-
 dependent standard library, SDK, RPM build helpers, command-line tools,
 debugger tools, and documentation. ONNX support is mandatory for packaged ML.
 The SDK requires the LLVM major used to build its public plugin headers.
+On openSUSE, the build and SDK depend on the versioned ``llvm19-devel`` package
+rather than the unversioned default selector. This keeps SDK headers matched
+when a repository also supplies a newer compiler for another dependency.
 The runtime also declares minimum HTTP/2, QUIC, HTTP/3 and tree-sitter package
 versions: their SONAME dependencies alone cannot enforce API additions or the
 qualified patch level within an ABI series.
