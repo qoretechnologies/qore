@@ -274,6 +274,14 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - fixed an ordered \c forupdate select with \c limit or \c offset so that its cost no longer grows with the
+      size of the table: the rows of the page were selected with a <tt>rowid in (subquery)</tt> predicate, which
+      the optimizer could execute as a full scan of the table or of an index, and a plan chosen while the table
+      was empty or had no statistics stayed cached as the table grew; the page is now joined to the table by
+      \c ROWID and only the table's rows are locked
+    - fixed the sort direction of a select with \c limit or \c offset when \c forupdate is used or the server
+      is older than Oracle 12c: a \c "-column" \c orderby was sorted ascending, and the \c desc option sorted
+      only the last \c orderby column descending
     - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in table
       alignment: the column is now given in parentheses, since Oracle otherwise fails with \c ORA-03050
     - added temporary-table support: pre-created global temporary tables (the \c "precreated" option; no runtime
@@ -2155,6 +2163,19 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         #! The keyword introducing the "from" clause of a select query
         const FromKeyword = " from ";
 
+        #! The alias of the base table in a locked page query; see doSelectForUpdateWithLimitSqlIntern()
+        const ForUpdatePageTableAlias = "qore_fu_t";
+
+        #! The alias of the inline view holding the \c ROWIDs of a locked page
+        const ForUpdatePageViewAlias = "qore_fu_p";
+
+        #! The column of the page view holding the \c ROWID of each row of the page
+        const ForUpdatePageRowidColumn = "qore_fu_rid";
+
+        #! The join predicate that identifies a locked page query; see doForUpdate()
+        const ForUpdatePageJoin = " where " + ForUpdatePageTableAlias + ".rowid = " + ForUpdatePageViewAlias + "."
+            + ForUpdatePageRowidColumn + " order by ";
+
         #! maps oracle type names to type descriptions
         const OraTypeMap = {
             "number": ("qore": Type::Number, "size": SZ_NUM, "size_range": (1, 38), "scale_range": (-84, 127)),
@@ -3661,12 +3682,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             return;
         }
 
-        list<auto> ce = getOrderByListIntern(info, coll);
-        string sort = foldl $1 + ", " + $2, ce;
-        string desc = info.query_hash.desc ? " desc" : "";
+        string sort = getOrderByExpressionIntern(info, coll);
 
         if (info.query_hash.forupdate) {
-            doSelectForUpdateWithLimitSqlIntern(\info, \sql, sort, desc, limit, offset);
+            doSelectForUpdateWithLimitSqlIntern(\info, \sql, sort, limit, offset);
             return;
         }
 
@@ -3676,8 +3695,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         # is calculated; see:
         # - https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/ROWNUM-Pseudocolumn.html#GUID-2E40EC12-3FCF-4A4F-B5F2-6BC669021726
         # - https://stackoverflow.com/questions/15091849/how-to-use-oracle-order-by-and-rownum-correctly/15091900
-        sql = sprintf("select * from (select /*+ first_rows(%d) */ a.*, rownum rnum from (%s order by %s%s) a "
-            "where rownum <= %v%s) where rnum > %v", limit, sql, sort, desc);
+        sql = sprintf("select * from (select /*+ first_rows(%d) */ a.*, rownum rnum from (%s order by %s) a "
+            "where rownum <= %v) where rnum > %v", limit, sql, sort);
         if (offset) {
             limit += offset;
         }
@@ -3685,20 +3704,53 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         info.args += offset;
     }
 
+    #! Returns the \c ORDER BY expression list of an ordered page with the sort direction of every column
+    /** Applies the global \c desc option, the \c "-column" prefix and the qualifier-hash \c desc and \c nulls
+        settings to each column, exactly as @ref SqlUtil::AbstractTable::doSelectOrderBySqlIntern() does for a query
+        without \c limit or \c offset.
+
+        @param info the query being generated
+        @param coll the columns selected, for numeric \c orderby references
+
+        @return the comma-separated \c ORDER BY expressions, without the \c "order by" keywords
+    */
+    private string getOrderByExpressionIntern(hash<QueryInfo> info, list<auto> coll) {
+        list<auto> ce = getOrderByListIntern(info, coll);
+        list<string> ol;
+        for (int i = 0; i < ce.size(); ++i) {
+            string entry = ce[i];
+            if (info.query_hash.desc || info.query_hash.orderbydesc{entry} || info.query_hash.orderbydescidx{i}) {
+                entry += " desc";
+            }
+            if (info.query_hash.orderbynulls{i}) {
+                entry += " nulls " + info.query_hash.orderbynulls{i};
+            }
+            ol += entry;
+        }
+        return foldl $1 + ", " + $2, ol;
+    }
+
     #! Rewrites an ordered, paged query so that the selected rows can be locked with \c FOR UPDATE
     /** An ordered page has to be produced with an inline view, because \c ROWNUM is assigned before \c ORDER BY is
-        applied.  Oracle rejects \c FOR UPDATE against an inline view (\c ORA-02014), and also rejects it in
+        applied.  Oracle rejects a plain \c FOR UPDATE against an inline view (\c ORA-02014), and also rejects it in
         combination with <tt>FETCH NEXT ... ROWS ONLY</tt> (see @ref optimizedLimit()), so the rows of the page
         cannot be locked by the query that selects them.
 
-        Instead the page is reduced to the \c ROWIDs of its rows in a subquery, and the rows of the page are then
-        located and locked in the base table itself, which Oracle does allow.
+        Instead the page is reduced to the \c ROWIDs of its rows in an inline view, which is joined to the base
+        table by \c ROWID; @ref doForUpdate() then locks only the rows of the base table with
+        <tt>FOR UPDATE OF</tt>, which Oracle allows.
+
+        The page view must be joined rather than used as a <tt>rowid in (subquery)</tt> predicate: the optimizer
+        may unnest such a subquery into a hash semi-join driven by a full scan of the base table or of one of its
+        indexes, and when the statement is parsed while the table is empty or has no statistics (a new schema),
+        that plan is cached and reused after the table has grown, so every execution reads the whole table.  An
+        inline view containing \c ROWNUM cannot be merged or unnested, so the join is always driven by the page
+        and the base table is always accessed by \c ROWID, whatever its size.
 
         @param info the query being generated
         @param sql the query SQL generated so far; the leading \c "select" keyword and the \c "from" clause are
             reused as-is, so any bind arguments in the column list and in the \c where clause keep their positions
-        @param sort the \c ORDER BY expression list
-        @param desc \c " desc" if the sort order is descending, otherwise an empty string
+        @param sort the \c ORDER BY expression list, with the sort direction of every column
         @param limit the maximum number of rows in the page
         @param offset the number of rows to skip before the page
 
@@ -3706,7 +3758,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             attributed to a single base table in that case
     */
     private doSelectForUpdateWithLimitSqlIntern(reference<hash<QueryInfo>> info, reference<string> sql, string sort,
-            string desc, softint limit, softint offset) {
+            softint limit, softint offset) {
         int fpos = sql.find(FromKeyword);
         if (fpos < 0) {
             throw "ORACLE-SELECT-ERROR", sprintf("cannot generate a 'for update' query with 'limit' or 'offset' "
@@ -3719,19 +3771,39 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         }
 
         # the column list (with the leading "select" keyword) and the "from" clause are reused unchanged, so that
-        # any bind arguments they contain keep the same relative order as the arguments added for limit / offset
+        # any bind arguments they contain keep the same relative order as the arguments added for limit / offset;
+        # the page view's only column has a reserved name, so unqualified column references still resolve to the
+        # base table, except for a bare "*", which would also return the page view's column
         string collist = sql.substr(0, fpos);
+        if (collist =~ /^select\s+\*\s*$/) {
+            collist = SelectKeyword + " " + ForUpdatePageTableAlias + ".*";
+        }
         string from = sql.substr(fpos);
 
-        sql = sprintf("%s from %s where rowid in (select rid from (select /*+ first_rows(%d) */ rid, rownum rnum "
-            "from (select rowid rid%s order by %s%s) where rownum <= %v) where rnum > %v) order by %s%s",
-            collist, getSqlName(), limit, from, sort, desc, sort, desc);
+        sql = sprintf("%s from %s %s, (select %s from (select /*+ first_rows(%d) */ %s, rownum rnum from "
+            "(select rowid %s%s order by %s) where rownum <= %v) where rnum > %v) %s%s%s",
+            collist, getSqlName(), ForUpdatePageTableAlias, ForUpdatePageRowidColumn, limit,
+            ForUpdatePageRowidColumn, ForUpdatePageRowidColumn, from, sort, ForUpdatePageViewAlias,
+            ForUpdatePageJoin, sort);
 
         if (offset) {
             limit += offset;
         }
         info.args += limit;
         info.args += offset;
+    }
+
+    #! Appends the \c FOR UPDATE clause to a select query
+    /** A locked page (see doSelectForUpdateWithLimitSqlIntern()) joins the base table to an inline view, which
+        a plain \c FOR UPDATE would also try to lock (\c ORA-02014), so only the base table's rows are locked
+        with <tt>FOR UPDATE OF</tt> there.
+    */
+    private doForUpdate(reference<string> sql) {
+        if (sql.find(ForUpdatePageJoin) >= 0) {
+            sql += sprintf(" for update of %s.%s", ForUpdatePageTableAlias, getColumnSqlName(describe().keys()[0]));
+            return;
+        }
+        sql += " for update";
     }
 
     #! processes a string for use in SQL select statements when there is a "limit" argument, but no "orderby" or "offset" arguments

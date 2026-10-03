@@ -254,6 +254,8 @@ class OracleTest inherits SqlTestBase {
             addTestCase("for update and limit", \forupdateAndLimitTest());
             addTestCase("for update with orderby and limit", \forupdateWithOrderbyAndLimitTest());
             addTestCase("for update with limit and join", \forupdateWithLimitAndJoinTest());
+            addTestCase("for update page sort directions", \forupdatePageSortDirectionTest());
+            addTestCase("for update page plan is independent of table size", \forupdatePagePlanStabilityTest());
             addTestCase("issue 2795", \issue2785());
             addTestCase("sequence operators", \testSequenceOperators());
             addTestCase("pseudo-columns", \testPseudoColumns());
@@ -460,6 +462,123 @@ class OracleTest inherits SqlTestBase {
             NOTHING, "the rows of the page are locked");
         assertEq(1, ds2.selectRows("select id from oracle_forupdate_test where id = 5 for update nowait").size(),
             "rows outside the page are not locked");
+    }
+
+    #! An ordered page honors the sort direction of every column, with and without "forupdate"
+    /** The paged rendering used to append one global \c desc after the whole column list (so only the last column
+        was sorted descending) and ignored the \c "-column" prefix, so a locked "latest row" probe returned the
+        earliest row instead.
+    */
+    forupdatePageSortDirectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        Datasource ds = table.getDatasource();
+        ds.execRaw("create table oracle_fu_sort_test (id number(10) primary key, grp varchar2(10), k number(10))");
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table oracle_fu_sort_test");
+            ds.commit();
+        }
+        for (int i = 1; i <= 6; ++i) {
+            ds.exec("insert into oracle_fu_sort_test (id, grp, k) values (%v, %v, %v)", i, i % 2 ? "odd" : "even",
+                10 - i);
+        }
+        ds.commit();
+
+        AbstractTable t = (new Table(ds, "oracle_fu_sort_test")).getTable();
+        hash<auto> base = {
+            "columns": ("id",),
+            "where": {"grp": "odd"},
+        };
+
+        assertEq((5, 3), map $1.id, t.selectRows(base + {"orderby": "-id", "forupdate": True, "limit": 2}),
+            "a '-column' orderby is descending in a locked page");
+        assertEq((3, 1), map $1.id, t.selectRows(base + {"orderby": "-id", "forupdate": True, "limit": 2,
+            "offset": 1}), "a '-column' orderby is descending in a locked page with an offset");
+        ds.rollback();
+        assertEq((5, 3), map $1.id, t.selectRows(base + {"orderby": ("grp", "id"), "desc": True, "forupdate": True,
+            "limit": 2}), "the global 'desc' option applies to every column of a locked page");
+        ds.rollback();
+
+        # "select *" returns the columns of the table only, not the ROWID column of the page
+        *hash<auto> row = t.selectRow({"where": {"grp": "odd"}, "orderby": "-id", "forupdate": True, "limit": 1});
+        assertEq(("id", "grp", "k"), keys row, "a locked page selecting '*' returns only the table's columns");
+        assertEq(5, row.id);
+        ds.rollback();
+    }
+
+    #! A locked page reads only the rows of the page whatever the size of the table
+    /** The page used to be selected with <tt>rowid in (subquery)</tt>, which the optimizer may unnest into a hash
+        semi-join driven by a full scan of the table or of an index.  Parsed while the table is empty or without
+        statistics, that plan is cached and reused after the table has grown, and every execution then reads the
+        whole table.  The page view is now joined by \c ROWID, which cannot be unnested, and only the base table's
+        rows are locked with <tt>FOR UPDATE OF</tt>.
+    */
+    forupdatePagePlanStabilityTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        Datasource ds = table.getDatasource();
+        ds.execRaw("create table oracle_fu_plan_test (grp varchar2(32) not null, id number(10) not null, "
+            "status varchar2(10), ended timestamp, constraint pk_oracle_fu_plan_test primary key (grp, id))");
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table oracle_fu_plan_test");
+            ds.commit();
+        }
+        ds.execRaw("create index oracle_fu_plan_test_ix on oracle_fu_plan_test (grp, ended, id)");
+        ds.execRaw("insert into oracle_fu_plan_test select 'g0', level, 'ok', systimestamp + "
+            "numtodsinterval(level, 'second') from dual connect by level <= 3");
+        ds.commit();
+
+        AbstractTable t = (new Table(ds, "oracle_fu_plan_test")).getTable();
+        hash<auto> q = {
+            "columns": ("id", "ended"),
+            "where": {"grp": "g0", "status": op_ne("open"), "ended": op_ne(NOTHING)},
+            "orderby": ("-ended", "grp", "id"),
+            "forupdate": True,
+            "limit": 1,
+        };
+
+        # the generated statement joins the page and locks only the base table
+        list<auto> args;
+        string sql = t.getSelectSql(q, \args);
+        assertEq(-1, sql.find("rowid in ("), "the page is not selected with a 'rowid in' subquery");
+        assertRegex(" for update of [a-z_]+\\.", sql, "only the base table's rows are locked");
+
+        # parse the statement while the table is (almost) empty, then grow it and reuse the cached cursor
+        assertEq(3, t.selectRow(q).id, "the latest row of the page is locked");
+        ds.rollback();
+        ds.execRaw("insert into oracle_fu_plan_test select 'g' || level, 1, 'ok', systimestamp from dual "
+            "connect by level <= 50000");
+        ds.commit();
+        assertEq(3, t.selectRow(q).id, "the latest row is still found after the table has grown");
+        ds.rollback();
+
+        # the cached cursor still reads only the rows of the page: the logical reads of one execution do not
+        # depend on the size of the table
+        code get_reads = int sub () {
+            return ds.selectRow("select s.value from v$mystat s, v$statname n where n.statistic# = "
+                "s.statistic# and n.name = 'session logical reads'").value;
+        };
+        int before;
+        try {
+            before = get_reads();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /ORA-00942/) {
+                testSkip("v$mystat is not readable for this user");
+            }
+            rethrow;
+        }
+        assertEq(3, t.selectRow(q).id);
+        # the session statistics query itself is included in the difference; it takes no more than a few reads
+        int reads = get_reads() - before;
+        ds.rollback();
+        # a full scan of the 50,000-row index takes several hundred logical reads; the page takes a few
+        assertLt(100, reads, "a locked page reads only the rows of the page");
     }
 
     #! The rows of a page cannot be attributed to a single base table when the query joins
