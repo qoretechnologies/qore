@@ -3,11 +3,56 @@ Debian 13 testing packages on Open Build Service
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-The staging project is home:davidnichols:qore:testing:debian on
+The testing project is home:davidnichols:qore:testing:debian on
 https://build.opensuse.org/. Its Debian_13 repository builds native x86_64
 (Debian amd64) and aarch64 (Debian arm64) packages. Ubuntu packages remain in
 the qore-packagers/qore-testing Launchpad PPA. Neither staging qualification
 nor publication of development snapshots constitutes a final Qore release.
+
+Installing testing snapshots
+----------------------------
+
+The Debian 13 repository supports amd64 and arm64. Configure it only on Debian
+13 (trixie); Ubuntu users should use the qore-packagers/qore-testing PPA.
+Install the repository key with its pinned fingerprint, then add the signed
+binary and source indexes:
+
+    sudo apt-get install ca-certificates curl gnupg
+    (
+        set -eu
+        qore_key_file=$(mktemp)
+        trap 'rm -f "$qore_key_file"' EXIT
+        curl -fsSL -o "$qore_key_file" \
+            https://download.opensuse.org/repositories/home:/davidnichols:/qore:/testing:/debian/Debian_13/Release.key
+        test "$(gpg --batch --show-keys --with-colons "$qore_key_file" \
+            | awk -F: '$1 == "pub" { primary = 1 } $1 == "fpr" && primary { print $10; primary = 0 }')" \
+            = 14BE051DACCE33336EEC09D5361BDFBA77CA501E
+        sudo install -D -m 0644 "$qore_key_file" \
+            /etc/apt/keyrings/qore-debian-testing.asc
+    )
+    printf '%s\n' \
+        'Types: deb deb-src' \
+        'URIs: https://download.opensuse.org/repositories/home:/davidnichols:/qore:/testing:/debian/Debian_13/' \
+        'Suites: /' \
+        'Architectures: amd64 arm64' \
+        'Signed-By: /etc/apt/keyrings/qore-debian-testing.asc' \
+        | sudo tee /etc/apt/sources.list.d/qore-testing.sources >/dev/null
+    sudo apt-get update
+    sudo apt-get install qore
+
+Install libqore-dev for the SDK. Independent integrations have separate
+packages, for example qore-python-module, qore-v8-module and qore-xml-module.
+JSON, YAML and the other bundled modules are included with Qore. Source
+packages can be retrieved with apt-get source, for example:
+
+    apt-get source qore
+
+During a new publication, a download mirror or CDN can serve an older
+Packages.gz alongside a newer signed Release file. If APT reports an unexpected
+size or checksum, wait for synchronization and retry apt-get update. Keep
+signature and checksum verification enabled. Publication is accepted only
+after the ordinary repository URL passes those checks and native installation
+and upgrade tests.
 
 Source imports and publication
 ------------------------------
@@ -114,7 +159,16 @@ optional V8 app catalogue's schema licensing remain separate publication
 gates; local qualification does not remove either requirement.
 
 Complete artifact and native installed-package acceptance before enabling APT
-publication. Once OBS generates the repository, verify its signature,
+publication. For the initial publication, keep the project publish flag
+disabled while removing publish overrides from the accepted source packages.
+Keep explicit publish-disable overrides on build-only sources, including
+debian-point-release-base and llhttp-bootstrap. Then enable publication once
+at project level. Package-level publish-enable overrides take precedence over
+a disabled project flag and can expose intermediate, incomplete indexes while
+the package flags are being updated. Mirrors can retain those earlier indexes
+after the final Release file appears.
+
+Once OBS generates the repository, verify its signature,
 architecture indexes, install/upgrade behavior and exact package hashes before
 advertising it as ready to use. A local unsigned qualification repository does
 not establish that the published signature or indexes are correct. Retain source
