@@ -420,7 +420,7 @@ module DbDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
     @subsection dbdataprovider_v1_0 DbDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the DbDataProvider module

@@ -4,11 +4,7 @@
 
     @section mongodbintro mongodb Module Introduction
 
-    @htmlonly
-    <div class="image">
-      <img src="mongodb-logo.svg" alt="MongoDB Logo" style="width:150px;">
-    </div>
-    @endhtmlonly
+    <img src="mongodb-logo.svg" width="96" alt="mongodb module logo"/>
 
     The \c mongodb module provides MongoDB database connectivity for %Qore programs, allowing
     applications to interact with MongoDB servers for document storage, retrieval, and management.
@@ -34,6 +30,14 @@
     - @ref mongodb::MongoCollection "MongoCollection" - MongoDB collection CRUD operations
     - <tt>MongoCursor&lt;DocT&gt;</tt> - Cursor for iterating query results
     - @ref mongodb::ObjectId "ObjectId" - MongoDB ObjectId type
+
+    @section mongodbqlibmodules Qore User Modules
+
+    - @ref mongodbdataproviderintro "MongoDbDataProvider" — a data provider API for MongoDB servers
+
+    @par Documentation
+
+    - @anchor mongodbreleasenotes @subpage mongodbreleasehistory
 
     @section mongodb_generic_cursor Typed Cursor Example
 
@@ -77,13 +81,5 @@ list<hash<auto>> docs = users.aggregate((
     # Connect to replica set
     MongoClient client("mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=myReplicaSet");
     @endcode
-
-    @section mongodbreleasenotes mongodb Module Release Notes
-
-    @subpage mongodbreleasehistory
-
-    @section mongodbqlibmodules Qore User Modules
-
-    - <img src="mongodb-logo.svg" width="28" height="28" alt="MongoDbDataProvider app icon"/> @ref mongodbdataproviderintro "MongoDbDataProvider" — a data provider API for MongoDB servers
 
 */

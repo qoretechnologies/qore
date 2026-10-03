@@ -91,7 +91,7 @@ client.close();
     @section yamlrpcclientio_relnotes Release History
 
     @subsection yamlrpcclientio_v1_0 YamlRpcClientIo v1.0
-    - initial release with full YAML-RPC support over async I/O
+    - initial release
 */
 
 #! the YamlRpcClientIo namespace holds all public definitions in the YamlRpcClientIo module

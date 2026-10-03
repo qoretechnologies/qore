@@ -28,7 +28,7 @@ public namespace DataProviderML {
 /** Accumulates records, then re-ranks the text field against a query using
     a cross-encoder model and emits the top-k records with relevance scores.
 
-    This is a @ref DPC_AGGREGATE processor because it needs to see all
+    This is a @ref DataProvider::DPC_AGGREGATE processor because it needs to see all
     candidate records before it can produce ranked output.
 
     @par Example:

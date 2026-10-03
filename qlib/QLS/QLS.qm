@@ -164,52 +164,7 @@ server.main();
     @section qlsrelnotes Release Notes
 
     @subsection qls_v1_0 v1.0
-    - initial release as part of the %Qore repository
-    - migrated from standalone qls repository
-
-    <b>Navigation</b>
-    - @c textDocument/hover: type info, documentation, and source location
-    - @c textDocument/definition: go to symbol definition
-    - @c textDocument/typeDefinition: go to type definition
-    - @c textDocument/implementation: go to implementation of abstract methods
-    - @c textDocument/references: find all references with cross-document support
-
-    <b>Code Intelligence</b>
-    - @c textDocument/completion: context-aware code completion using
-      @ref qorecodecompletionintro "QoreCodeCompletion" (@c CSTCompletionProvider with
-      CSTSearcher); supports identifier, @c new, dot-access (@c .), and scope (@c ::) contexts
-    - @c textDocument/signatureHelp: function/method parameter hints (triggers: @c ( and @c ,)
-    - @c textDocument/inlayHint: parameter names at call sites
-    - @c textDocument/semanticTokens/full and @c .../range: semantic syntax highlighting
-    - @c textDocument/documentHighlight: highlight all occurrences of symbol under cursor
-
-    <b>Refactoring</b>
-    - @c textDocument/rename with @c textDocument/prepareRename: cross-document symbol rename
-    - @c textDocument/codeAction: sort imports, add @c %modern directive
-
-    <b>Code Structure</b>
-    - @c textDocument/documentSymbol: hierarchical document outline
-    - @c workspace/symbol: workspace-wide symbol search
-    - @c textDocument/foldingRange: code folding for declarations, blocks, and comments
-    - @c textDocument/selectionRange: syntax-aware expanding selection
-
-    <b>Hierarchy</b>
-    - @c textDocument/prepareTypeHierarchy, @c typeHierarchy/supertypes,
-      @c typeHierarchy/subtypes: class inheritance navigation
-    - @c textDocument/prepareCallHierarchy, @c callHierarchy/incomingCalls,
-      @c callHierarchy/outgoingCalls: call graph navigation
-
-    <b>Formatting and Display</b>
-    - @c textDocument/formatting: whole-document formatting via
-      @ref qorecodeformatintro "QoreCodeFormat"
-    - @c textDocument/onTypeFormatting: auto-indent on Enter, auto-dedent on @c }
-    - @c textDocument/codeLens: reference counts above declarations
-    - @c textDocument/publishDiagnostics: parse error diagnostics
-
-    <b>Infrastructure</b>
-    - installed as @c qls system command, usable from any editor supporting LSP
-    - JSON-RPC transport over stdin/stdout with @c Content-Length headers
-    - workspace scanning and standard module indexing on initialization
+    - initial release
 */
 
 #! Main namespace for the QLS module

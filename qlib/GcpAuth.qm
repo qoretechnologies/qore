@@ -110,17 +110,7 @@ string token = GcpAuth::getAccessTokenFromServiceAccountFile(
     - preserved cooperative cancellation while sanitizing authentication failures
 
     @subsection gcpauth_v1_0 GcpAuth v1.0
-    - initial release: GCP credential broker that mints bearer access tokens via the
-      Application Default Credentials chain, supporting:
-      - service-account JSON keys (\c "service_account") via the OAuth2 JWT-bearer grant
-      - user credentials (\c "authorized_user") written by
-        \c "gcloud auth application-default login" via the OAuth2 refresh-token grant
-      - the GCE/GKE/Cloud-Run metadata server / workload identity
-    - tokens are cached and reused until within a safety window of expiry
-    - explicit credential files are read as @ref filelocationhandlerintro
-      "FileLocationHandler" locations, so a credential location may be a bare
-      filesystem path or any registered scheme (\c file://, \c http(s)://,
-      \c sftp://, ...)
+    - initial release
 */
 
 #! Contains all public definitions in the GcpAuth module

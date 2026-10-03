@@ -552,15 +552,6 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         configured = True;
     }
 
-    #! Returns current ONNX Runtime diagnostics for this processor
-    /** @param finish_profile if True, ends ONNX Runtime profiling and includes
-        a structured profile summary when profiling was enabled
-
-        @return provider diagnostics, input/output metadata, inference counters,
-        and optional profile summary
-
-        @since DataProviderML 1.4
-    */
     #! Returns the content identity of the ONNX model this processor infers with
     /** Returns the identity of the content loaded into \b this processor's ONNX session, so the
         fingerprint describes the same model instance that produces the processor's output; no
@@ -569,11 +560,11 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         Request capture with the \c content_identity constructor option; otherwise an identity
         with \c complete = @ref False is returned.
 
-        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+        @return an @ref Qore::ML::OnnxContentIdentity hash describing the loaded content
 
         @throw PROCESSOR-ERROR the processor is not configured
 
-        @see @ref ML::OnnxModel::getContentIdentity()
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
     hash<ML::OnnxContentIdentity> getContentIdentity() {
         if (!configured) {
@@ -583,6 +574,15 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         return model.getContentIdentity();
     }
 
+    #! Returns current ONNX Runtime diagnostics for this processor
+    /** @param finish_profile if True, ends ONNX Runtime profiling and includes
+        a structured profile summary when profiling was enabled
+
+        @return provider diagnostics, input/output metadata, inference counters,
+        and optional profile summary
+
+        @since DataProviderML 1.4
+    */
     hash<auto> getDiagnostics(bool finish_profile = False) {
         if (!configured) {
             throw "PROCESSOR-ERROR",

@@ -602,5 +602,5 @@ module SegmentDataProvider {
     @section segmentdataproviderrelnotes Release Notes
 
     @subsection segmentdataproviderv1_0 SegmentDataProvider v1.0
-    - initial release of the module
+    - initial release
 */

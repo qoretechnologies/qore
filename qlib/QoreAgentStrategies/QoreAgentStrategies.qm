@@ -117,9 +117,5 @@ ParallelToolDispatcher dispatcher({
     @section qoreagentstrategiesrelnotes QoreAgentStrategies Module Release Notes
 
     @subsection qoreagentstrategies_1_0 QoreAgentStrategies Module Version 1.0
-    - Initial release with @ref QoreAgentStrategies::PlanningAgentStrategy "PlanningAgentStrategy",
-      @ref QoreAgentStrategies::ReflexionAgentStrategy "ReflexionAgentStrategy", and
-      @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher";
-      supports sandboxed execution under @ref Qore::PO_NO_THREAD_CONTROL via the
-      \c start_thread option
+    - initial release
 */

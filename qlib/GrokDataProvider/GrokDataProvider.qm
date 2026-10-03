@@ -318,14 +318,7 @@ stream.doRequest({
     @section grokdataprovider_relnotes Release Notes
 
     @subsection grokdataprovider_v1_0 GrokDataProvider v1.0
-    - initial release of the module
-    - chat completions (multi and simple)
-    - responses API (create, get, delete)
-    - SSE streaming via DelayedObservable pattern
-    - deferred completion retrieval
-    - conversation context store for response continuation
-    - built with RestClientIo for async HTTP/1.x, HTTP/2, and HTTP/3 support (with
-      connection multiplexing on HTTP/2 and HTTP/3)
+    - initial release
 */
 
 #! contains all public definitions in the GrokDataProvider module

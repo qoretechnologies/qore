@@ -120,7 +120,7 @@ foreach int uid in (imap.uidSearch("UNSEEN FROM \"boss@example.com\"")) {
     @section imapclient_relnotes ImapClient Release Notes
 
     @subsection imapclient_v1_0 ImapClient 1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the main namespace for the ImapClient module

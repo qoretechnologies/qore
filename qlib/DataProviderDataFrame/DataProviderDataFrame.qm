@@ -45,7 +45,7 @@ module DataProviderDataFrame {
 
     @section dataproviderdataframeintro DataProviderDataFrame Module Introduction
 
-    Provides DataProvider integration for the @ref dataframe "dataframe" binary module,
+    Provides DataProvider integration for the @ref dataframeintro "dataframe" binary module,
     enabling DataFrames to participate in DataProvider pipelines.
 
     The module registers a \c dataframe data provider factory that creates DataFrames
@@ -104,7 +104,7 @@ pipeline.waitDone();
     @endcode
 
     When a pipeline receives a \c DataFrame, it is detected as
-    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
+    @ref DataProvider::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
     keep the DataFrame representation; processors that only support bulk records receive a hash-of-lists conversion.
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
     @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" both support \c DataFrameBlock, so common
@@ -118,19 +118,5 @@ pipeline.waitDone();
     @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
 
     @subsection dataproviderdataframe_v1_0 DataProviderDataFrame v1.0
-    - Initial release of the module
-    - DataFrame record iterators declare
-      <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> because row
-      shape is determined by the DataFrame schema at runtime
-    - DataFrame bulk reads use DataFrame column blocks and return hash-of-lists blocks without first materializing
-      every row
-    - DataFrame searches now support DPQL strings and \c hash<DataProviderExpression> values directly; bulk DPQL
-      searches preserve \c DataFrameBlock shape through \c getShapedValue() and share the DataProvider dense-mask
-      lowering support for computed comparisons, \c between, \c in / \c notIn, structured strict
-      equality/inequality, \c containsAny and other string predicates, list membership predicates,
-      list/hash accessors, ternary computed values, null checks, and boolean combinations
-    - DataFrames submitted to a @ref DataProvider::DataProviderPipeline "DataProviderPipeline" can remain in
-      \c DataFrameBlock shape through DataFrame-aware processors such as
-      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
-      @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor"
+    - initial release
 */

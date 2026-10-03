@@ -263,9 +263,9 @@ ConnectClient client("https://example.com:8080", NOTHING,
     - Low latency matters more than guaranteed delivery
     - Messages are small (bounded by the QUIC MTU, typically ~1200 bytes)
 
-    Use <b>stream</b> RPCs (@ref ConnectClient::serverStream() "serverStream()",
-    @ref ConnectClient::clientStream() "clientStream()",
-    @ref ConnectClient::bidiStream() "bidiStream()") when:
+    Use <b>stream</b> RPCs (@ref Connect::ConnectClient::serverStream() "serverStream()",
+    @ref Connect::ConnectClient::clientStream() "clientStream()",
+    @ref Connect::ConnectClient::bidiStream() "bidiStream()") when:
     - Every message must be delivered (reliable, ordered)
     - Messages may be large (streams support arbitrary sizes with framing)
     - Backpressure / flow control is needed
@@ -278,9 +278,9 @@ ConnectClient client("https://example.com:8080", NOTHING,
     @par Datagram RPC patterns
 
     Two datagram RPC patterns are supported:
-    - <b>Fire-and-forget</b> (@ref ConnectClient::sendDatagram() "sendDatagram()"):
+    - <b>Fire-and-forget</b> (@ref Connect::ConnectClient::sendDatagram() "sendDatagram()"):
       client sends a single unreliable message, no response expected
-    - <b>Datagram bidirectional</b> (@ref ConnectClient::datagramBidi() "datagramBidi()"):
+    - <b>Datagram bidirectional</b> (@ref Connect::ConnectClient::datagramBidi() "datagramBidi()"):
       both sides exchange unreliable messages until the channel is closed
 
     @par Client example
@@ -335,7 +335,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     @subsection connectreflection_server Server Side
 
     Type information is attached to methods via overloaded \c register* methods
-    that accept optional @ref AbstractDataProviderType parameters:
+    that accept optional @ref DataProvider::AbstractDataProviderType parameters:
 
     @code{.py}
 HashDataType req_type("SayHelloRequest");
@@ -435,17 +435,7 @@ hash<string, hash<auto>> all = refl.discoverAll();
       serialization via CBOR (RFC 8949; available when the \c json module is installed)
 
     @subsection connect_v1_0 Connect Module Version 1.0
-
-    - initial release implementing the Connect RPC protocol v1
-    - YAML as the primary codec with full Qore type fidelity
-    - all 4 RPC patterns: unary, server streaming, client streaming, bidirectional
-    - server handler integrates with HttpServer as AbstractHttpRequestHandler
-    - client supports HTTP/2 and HTTP/3 via HttpClientIo connection pooling with auto-protocol selection
-    - HTTP/2 and HTTP/3 streaming on the server side
-    - Connect protocol error model with 16 status codes
-    - standard 5-byte framed envelopes (compatible with gRPC tooling)
-    - extensible codec system via AbstractConnectCodec
-    - conditional gRPC interoperability when grpc module is available
+    - initial release
 */
 
 #! Main Connect namespace

@@ -45,6 +45,8 @@ module A2aClientDataProvider {
 
     @section a2aclientdataproviderintro Introduction to the A2aClientDataProvider Module
 
+    <img src="a2a-logo.svg" width="96" alt="A2aClientDataProvider module logo"/>
+
     The %A2aClientDataProvider module provides a data provider API for
     A2A (Agent-to-Agent) agents, enabling integration with AI agents via the
     A2A protocol.
@@ -72,7 +74,7 @@ module A2aClientDataProvider {
     @section a2aclientdataprovider_relnotes Release Notes
 
     @subsection a2aclientdataprovider_v1_0 A2aClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the A2aClientDataProvider module

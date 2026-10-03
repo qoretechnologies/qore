@@ -95,10 +95,7 @@ module RestSchemaDataProvider {
       connection's own without changing anything else about the request
 
     @subsection restschemamdataprovider_v2_3 RestSchemaDataProvider v2.3
-    - initial release of the module supporting both Swagger 2.0 and OpenAPI 3.0 schemas
-    - uses abstract base classes from RestSchemaValidator module for polymorphic access to
-      operation and path item objects
-      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
+    - initial release
 */
 
 #! contains all public definitions in the RestSchemaDataProvider module

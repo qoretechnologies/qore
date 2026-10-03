@@ -80,7 +80,7 @@ string token = AzureAuth::getEntraTokenClientCredentials(
     @section azureauthrelnotes Release Notes
 
     @subsection azureauth_v1_0 AzureAuth v1.0
-    - initial release: client_credentials + managed_identity flows with token caching
+    - initial release
 */
 
 #! Contains all public definitions in the AzureAuth module

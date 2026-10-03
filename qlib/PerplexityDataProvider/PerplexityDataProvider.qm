@@ -209,7 +209,7 @@ printf("Citations: %y\n", result.citations);
     @section perplexitydataprovider_relnotes Release Notes
 
     @subsection perplexitydataproviderv1_0 PerplexityDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the PerplexityDataProvider module

@@ -4,6 +4,8 @@
 
     @section jsonintro Introduction
 
+    <img src="json-file-logo.svg" width="96" alt="json module logo"/>
+
     The json module allows for easy serialization and deserialization between <a href="http://www.json.org/">JSON</a>
     strings and %Qore data structures.  The module also provides functions for @ref JSONRPC support as well as a
     @ref Qore::Json::JsonRpcClient "JsonRpcClient" class for easier integration with JavaScript clients.
@@ -42,44 +44,15 @@
     @note JSON functionality was included in the main %Qore shared library until version 0.8.1, at which time the code
     was removed to make this module.
 
-    @section jsonserialization Automatic JSON Serialization and Deserialization
-
-    @subpage jsonserializationguide
-
-
-    @section toonserialization TOON Serialization and Deserialization
-
-    @subpage jsontoonserializationguide
-
-
-    @section JSONRPC JSON-RPC
-
-    @subpage JSONRPCguide
-
-
-    @section jsoncppapisec C++ API for Other Binary Modules
-
-    @subpage jsoncppapisecguide
-
-
-    @section codetags Function and Method Tags
-
-    JSON functions and methods use the standard @ref code_flags "Qore code flags".
-    Their definitions are shared with the runtime documentation.
-
-    @section jsonreleasenotes Release Notes
-
-    @subpage jsonreleasehistory
-
     @section jsonqlibmodules Qore User Modules
 
     - @ref a2aclientintro "A2aClient" — %A2aClient module for connecting to A2A agents
-    - <img src="a2a-logo.svg" width="28" height="28" alt="A2aClientDataProvider app icon"/> @ref a2aclientdataproviderintro "A2aClientDataProvider" — a data provider API for A2A agents
+    - @ref a2aclientdataproviderintro "A2aClientDataProvider" — a data provider API for A2A agents
     - @ref a2aserverhandlerintro "A2aServerHandler" — %A2aServerHandler module for use with the Qore HttpServer module
     - @ref aguiintro "AgUi" — the AG-UI (Agent User Interaction) protocol
     - @ref fhirrestclientintro "FhirRestClient" — FHIR REST client module for JSON-based FHIR servers
-    - <img src="fhir-logo.svg" width="28" height="28" alt="FhirRestDataProvider app icon"/> @ref fhirrestdataproviderintro "FhirRestDataProvider" — FHIR REST data provider module for JSON-based FHIR servers
-    - <img src="json-file-logo.svg" width="28" height="28" alt="JsonFileDataProvider app icon"/> @ref jsonfiledataproviderintro "JsonFileDataProvider" — standard JSON file read/write support and data provider integration
+    - @ref fhirrestdataproviderintro "FhirRestDataProvider" — FHIR REST data provider module for JSON-based FHIR servers
+    - @ref jsonfiledataproviderintro "JsonFileDataProvider" — standard JSON file read/write support and data provider integration
     - @ref jsonldintro "JsonLd" — JSON-LD 1.1 processing module implementing W3C JSON-LD 1.1 algorithms
     - @ref jsonpatchintro "JsonPatch" — JSON Pointer (RFC 6901) and JSON Patch (RFC 6902) support
     - @ref jsonrpcclientiointro "JsonRpcClientIo" — Pure-Qore JSON-RPC client module with async I/O via HttpClientIo
@@ -91,5 +64,18 @@
     - @ref ndjsondataproviderintro "NdjsonDataProvider" — NDJSON (Newline Delimited JSON) support and data provider integration
     - @ref onerecordclientintro "OneRecordClient" — IATA ONE Record client module for air cargo data sharing via REST/JSON-LD
     - @ref onerecordserverhandlerintro "OneRecordServerHandler" — %OneRecordServerHandler module for use with the Qore HttpServer module
+
+    @section jsondocumentation Documentation
+
+    - @anchor jsonserialization @subpage jsonserializationguide
+    - @anchor toonserialization @subpage jsontoonserializationguide
+    - @anchor JSONRPC @subpage JSONRPCguide
+    - @anchor jsoncppapisec @subpage jsoncppapisecguide
+    - @anchor jsonreleasenotes @subpage jsonreleasehistory
+
+    @section codetags Function and Method Tags
+
+    JSON functions and methods use the standard @ref code_flags "Qore code flags".
+    Their definitions are shared with the runtime documentation.
 
 */

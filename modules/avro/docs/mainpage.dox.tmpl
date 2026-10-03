@@ -20,6 +20,10 @@
     - an <b>object container file</b>, which is self-describing: the schema and codec are in the
       header, followed by blocks of records
 
+    @section avroqlibmodules Qore User Modules
+
+    - @ref avroutilintro "AvroUtil" — maps Apache Avro schemas to DataProvider types
+
     @section avrocapabilities Key Capabilities
 
     - full schema parsing with a named-type registry, so recursive and re-referenced types work
@@ -126,9 +130,5 @@ hash<auto> event = schema.decode(data);
     @section avrolicense License
 
     The \c avro module is released under the MIT license.
-
-    @section avroqlibmodules Qore User Modules
-
-    - @ref avroutilintro "AvroUtil" — maps Apache Avro schemas to DataProvider types
 
 */

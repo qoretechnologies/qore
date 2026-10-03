@@ -33,7 +33,7 @@ public namespace DataProviderML {
     generation. Records are batched for efficiency; the batch is flushed when
     `window_size` is reached or at pipeline end.
 
-    This is a @ref DPC_AGGREGATE processor because it buffers records and emits
+    This is a @ref DataProvider::DPC_AGGREGATE processor because it buffers records and emits
     them in batches.
 
     @par Example:

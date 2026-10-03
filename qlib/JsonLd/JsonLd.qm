@@ -88,12 +88,7 @@ module JsonLd {
     @section jsonldrelnotes JsonLd Release Notes
 
     @subsection jsonldv1_0 JsonLd v1.0
-    - initial release with full W3C JSON-LD 1.1 support
-    - expansion, compaction, flattening, framing algorithms
-    - toRdf/fromRdf with N-Quads serialization
-    - thread-safe context caching
-    - pluggable document loaders
-    - comprehensive W3C error codes
+    - initial release
 */
 
 #! the %JsonLd namespace holds all public definitions in the %JsonLd module

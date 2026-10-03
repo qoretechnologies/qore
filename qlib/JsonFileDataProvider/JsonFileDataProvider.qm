@@ -46,6 +46,8 @@ module JsonFileDataProvider {
 
     @section jsonfiledataproviderintro Introduction to the JsonFileDataProvider Module
 
+    <img src="json-file-logo.svg" width="96" alt="JsonFileDataProvider module logo"/>
+
     The %JsonFileDataProvider module provides support for reading and writing standard JSON files
     using the data provider API. This module handles standard JSON files containing either an array
     of objects or a single object, distinct from the NdjsonDataProvider module which handles
@@ -87,7 +89,7 @@ module JsonFileDataProvider {
     @section jsonfiledataprovider_relnotes Release Notes
 
     @subsection jsonfiledataprovider_v1_0 JsonFileDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the JsonFileDataProvider module

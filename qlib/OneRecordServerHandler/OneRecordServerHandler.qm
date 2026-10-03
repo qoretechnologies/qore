@@ -178,18 +178,7 @@ module OneRecordServerHandler {
     @section onerecordserverhandlerrelnotes OneRecordServerHandler Release Notes
 
     @subsection onerecordserverhandlerv1_0 OneRecordServerHandler v1.0
-    - initial release with IATA ONE Record API v2.2.0 support
-    - REST handler with full URL routing for all API endpoints
-    - pluggable storage backend (abstract interface + in-memory implementation)
-    - pluggable authorization (abstract interface + permissive implementation)
-    - logistics object CRUD with revision tracking and optimistic concurrency
-    - change request lifecycle (submit, accept, reject, revoke) with atomic application
-    - logistics events (immutable event records per object)
-    - subscriptions with webhook notification delivery via bounded thread pool
-    - access delegations and verification requests
-    - audit trail with per-object change history
-    - notification receive handler with callback mechanism
-    - JSON-LD integration via the JsonLd module
+    - initial release
 */
 
 #! the %OneRecordServerHandler namespace holds all public definitions in the %OneRecordServerHandler module

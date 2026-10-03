@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AsyncApiDataProvider module definition
 
-/*  AsyncApiDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  AsyncApiDataProvider.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -148,9 +148,7 @@ AsyncApiDataProvider provider({
       one endpoint
 
     @subsection asyncapidataprovider_v1_0 AsyncApiDataProvider v1.0
-    - initial release of the module
-    - protocol-agnostic design with pluggable transports
-    - built-in WebSocket transport support
+    - initial release
 */
 
 #! contains all public definitions in the AsyncApiDataProvider module

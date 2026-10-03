@@ -155,7 +155,7 @@ module DiscordDataProvider {
       the response headers from it
 
     @subsection Discorddataprovider_v1_0 DiscordDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the DiscordDataProvider module

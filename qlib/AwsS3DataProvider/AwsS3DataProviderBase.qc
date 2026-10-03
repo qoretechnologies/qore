@@ -552,7 +552,7 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns a response with its headers gathered under \c "hdr"
-    /** Every caller here reads a header as \c resp.hdr.<name>, and a response hash that carries no \c hdr key
+    /** Every caller here reads a header as <tt>resp.hdr.&lt;name&gt;</tt>, and a response hash that carries no \c hdr key
         answers all of them with @ref nothing and no error: an object's MIME type, size, entity tag,
         modification time, and version ID, the entity tag and version ID of every write, and the location of a
         newly created bucket were all silently empty when this was first written against a client whose

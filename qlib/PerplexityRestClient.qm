@@ -79,7 +79,7 @@ module PerplexityRestClient {
     @section perplexityrestclientrelnotes Release Notes
 
     @subsection perplexityrestclientv1_0 PerplexityRestClient v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the PerplexityRestClient namespace contains all the objects in the PerplexityRestClient module

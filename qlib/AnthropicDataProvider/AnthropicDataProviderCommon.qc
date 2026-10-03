@@ -384,6 +384,7 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
         @param path the API path (e.g. "skills" or "skills/{id}")
         @param skill_md the SKILL.md file content
         @param display_title the display title for the skill
+        @param skill_name the directory name used for the uploaded SKILL.md file
 
         @return a hash with the response body
     */

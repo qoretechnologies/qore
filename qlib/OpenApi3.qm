@@ -298,88 +298,17 @@ describe an intersection nothing can satisfy, and are left unconstrained rather 
     |\c oneOf / \c anyOf|exposed as a union type that preserves the keyword's matching rule; \c "null" members are \
 excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead
 
-    @section openapi3_relnotes OpenApi3 Module Release Notes
-    - Fixed document-level security requirements with multiple simultaneous schemes (for example Trello's
-      API key and token). @ref OpenApi3Schema::security now preserves the list of requirement hashes, matching
-      operation-level security: schemes within a hash are AND, hashes are OR, and an empty hash allows anonymous
-      access. Code inspecting this member must iterate the list instead of treating it as a flattened hash.
-      Invalid scope lists and undefined schemes are rejected.
+    @section openapi3_security Security Requirements
 
+    @ref OpenApi3::OpenApi3Schema::security stores document-level requirements as a list of hashes.
+    Schemes within a hash are combined with AND, hashes are alternatives (OR), and an empty hash
+    allows anonymous access. This supports APIs requiring simultaneous credentials, such as an
+    API key and token. Invalid scope lists and undefined schemes are rejected.
+
+    @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
-    - use valid declared examples, including OpenAPI 3.1 `examples`, and generate only examples accepted by the
-      schema's field type, including complete union members
-    - retain OpenAPI 3.1 positional `prefixItems` and boolean `items` constraints through native type serialization
-    - preserve positional array response direction and bound recursive schema type construction
-    - keep schema validation context alive for independently serialized composition types and repeated round trips
-    - preserve raw binary request bodies, including empty uploads, and honor binary multipart media types
-    - validate declared object properties even when `additionalProperties: true` also permits unknown keys
-    - expand server-variable defaults before deriving the request base path
-    - support discriminator-only inheritance mappings and escaped local schema references; a mapped branch
-      is selected by its discriminator in optional, soft and mandatory type forms alike, and a cyclic
-      mapping is reported as an invalid reference
-    - accept empty `required` arrays in OpenAPI 3.1 and later
-    - serialize structured multipart fields using their Encoding Objects and preserve repeated file arrays
-    - respect request/response direction for required read-only and write-only properties
-    - support named uploads and URLs in multipart file-or-URL unions, including arrays without losing
-      composition constraints, filenames, or media types
-    - expose distinct JSON, text, and binary response representations and validate the selected media schema
-    - preserve composed allOf types when they are used as required or optional object fields
-    - retain explicit null alternatives when generating nullable composition data types
-    - parse parameter \c content schemas and serialize JSON query, path and header parameters
-      without losing their types or confusing object properties with other query arguments
-    - preserve binary values accepted by nullable compositions, including named multipart uploads
-    - validate JSON Schema `const` values, including model discriminators in composed request bodies,
-      and expose scalar constants as finite field choices
-    - enforce scalar and array composition constraints, including bounds in nullable scalar alternatives
-    - multipart binary inputs accept named `FileDataType` values as well as raw bytes;
-      file names and media types are preserved, and ordinary form fields precede file parts
-    - preserve literal prefixes and suffixes in path templates such as `/v2/batches/{id}:cancel`,
-      prefer these over whole-component wildcards, and extract all path parameters together
-    - initial release of the %OpenApi3 module
-    - YAML MIME type equivalence: \c "application/yaml" (RFC 9512), \c "text/x-yaml",
-      \c "application/x-yaml", and \c "text/yaml" are treated as interchangeable when
-      validating content types against API schemas
-    - @ref OpenApi3::SchemaObject "SchemaObject" now merges \c allOf member schemas into
-      the containing schema during construction; \c properties and \c required sets from
-      each member are union-merged (local fields take precedence), so
-      @ref OpenApi3::SchemaObject::getDataType() "getDataType()" exposes the composed
-      field set directly instead of falling back to an opaque \c auto type
-    - @ref OpenApi3::ParameterGroup "ParameterGroup" now inherits @ref Qore::Serializable
-      "Serializable" so that @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" instances
-      (and any data provider that holds one) can be round-tripped through
-      @ref Qore::Serializable::serialize() "Serializable::serialize()"
-    - classes inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
-      - @ref OpenApi3::SchemaBase "SchemaBase": inherits
-        @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"
-      - @ref OpenApi3::SchemaObject "SchemaObject": inherits
-        @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
-      - @ref OpenApi3::ParameterBase "ParameterBase": inherits
-        @ref RestSchemaValidator::AbstractParameterObject "AbstractParameterObject"
-      - @ref OpenApi3::ResponseObject "ResponseObject": inherits
-        @ref RestSchemaValidator::AbstractResponseObject "AbstractResponseObject"
-      - @ref OpenApi3::ResponsesObject "ResponsesObject": inherits
-        @ref RestSchemaValidator::AbstractResponsesObject "AbstractResponsesObject"
-      - @ref OpenApi3::PathItemObject "PathItemObject": inherits
-        @ref RestSchemaValidator::AbstractPathItemObject "AbstractPathItemObject"
-      - @ref OpenApi3::OperationObject "OperationObject": inherits
-        @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject"
-      (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
-    - Schema tokenizer now recognises \c \@x-ai-tool-name in \c \@SCHEMA
-      blocks and emits it as the \c x-ai-tool-name extension on the
-      generated OpenAPI operation.  Consumers (MCP / LLM-agent gateways
-      that derive tool names from operationIds) use this extension to
-      override the default verb+path name transform for individual
-      endpoints where the auto-derived name is awkward, collides with
-      another endpoint, or misses a domain-specific verb that reads more
-      naturally than the HTTP method.
-    - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" now supports retrieving and replacing the data type for a
-      reusable \c "#/components/schemas/..." reference via the
-      @ref RestSchemaValidator::AbstractRestSchemaValidator::getTypeForReference() "getTypeForReference()" and
-      @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "replaceTypeForReference()"
-      methods inherited from @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
-    - OpenAPI 3.1 documents are supported in addition to 3.0; see @ref openapi3_31 for the constructs handled and
-      how each is exposed
+    - initial release
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -2901,7 +2830,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         /**
             The list of values describes alternative security schemes that can be
             used (that is, there is a logical OR between the security requirements).
-            This definition overrides any declared top-level @ref OpenApi3Schema::security "security".
+            This definition overrides any declared top-level @ref OpenApi3::OpenApi3Schema::security "security".
             To remove a top-level security declaration, an empty array can be used.
 
             Individual values are hashes in the form of Security Requirement Objects.

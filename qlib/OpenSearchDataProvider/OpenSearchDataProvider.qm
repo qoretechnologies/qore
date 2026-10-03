@@ -413,7 +413,7 @@ module OpenSearchDataProvider {
     @section opensearchdataprovider_relnotes Release Notes
 
     @subsection opensearchdataprovider_v1_0 OpenSearchDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the OpenSearchDataProvider module

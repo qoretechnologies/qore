@@ -161,7 +161,7 @@ module BulkSqlUtil {
     - fixed a bug in the @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation" class where inserts would fail or silently insert invalid data in the second or later blocks when constant hashes were used (<a href="https://github.com/qoretechnologies/qore/issues/1625">issue 1625</a>)
 
     @subsection bulksqlutil_v1_0 BulkSqlUtil v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the BulkSqlUtil namespace contains all the definitions in the BulkSqlUtil module

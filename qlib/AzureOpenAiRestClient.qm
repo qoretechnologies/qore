@@ -133,13 +133,7 @@ hash<ChatResponse> r = p.chat((<ChatMessage>{"role": "user", "content": "hi"},))
     @section azureopenairestclientrelnotes Release Notes
 
     @subsection azureopenairestclient_v1_0 AzureOpenAiRestClient v1.0
-    - initial release: authenticated synchronous and asynchronous REST clients, including raw requests
-      and client copies, with api-key + Entra client_credentials + managed-identity auth modes and the
-      LLM provider registered under mode \c "azure-openai"
-    - connections expose the Azure OpenAI app and verify credentials with the v1 model listing
-    - Foundry project endpoints preserve their resource path and use the project conversation listing for pings
-    - conditional required credentials and a dedicated optional managed-identity client ID clarify setup
-    - the dated API version remains scoped to the legacy deployment-routed LLM interface
+    - initial release
 */
 
 #! Contains all public definitions in the AzureOpenAiRestClient module

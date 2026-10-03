@@ -5,28 +5,5 @@
     @tableofcontents
 
     @section tokenizer_3_0 tokenizer Module Version 3.0
-
-    Initial release, shipped with %Qore 3.0.
-
-    - BPE, WordPiece, and Unigram tokenization models
-    - Full HuggingFace \c tokenizer.json support with auto-detection of model type
-    - Precompiled normalizer (SentencePiece Darts DoubleArray trie)
-    - GPT-2 byte-level BPE with hand-coded pattern matcher
-    - Truncation: \c longest_first, \c only_first, \c only_second strategies
-    - Padding: \c max_length and batch-longest modes
-    - Batch encoding: \c encodeBatch() for multi-text processing
-    - Byte-level offset mapping and special tokens mask
-    - Added token matching before tokenization pipeline
-    - Sentence pair encoding with correct \c token_type_ids
-    - O(n log n) BPE merge algorithm using priority queue + doubly linked list
-    - Vocabulary access: \c getVocab(), \c getVocabSize(), \c tokenToId(), \c idToToken()
-    - Cooperative cancellation support via \c qore_check_cancel()
-    - utf8proc-based Unicode normalization (NFC/NFD/NFKC/NFKD) and digit classification
-    - Verified against Python \c tokenizers for BERT, GPT-2, T5, and Llama
-    - Dense model-input APIs: \c encodeForModel(), \c encodeBatchForModel(),
-      and \c encodeBatchPairsForModel() return row-major \c buffer<int64>
-      values for direct ONNX tensor creation without per-token list/hash
-      materialization
-    - \c Replace normalizers support HuggingFace \c {"Regex": "..."} patterns
-
+    - initial release
 */

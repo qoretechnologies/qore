@@ -73,7 +73,7 @@ module TerminalFormat {
     @section terminalformat_relnotes Release Notes
 
     @subsection terminalformat_v1_0 TerminalFormat v1.0
-    - initial release with markdown and table rendering, and progress display
+    - initial release
 */
 
 public namespace TerminalFormat {

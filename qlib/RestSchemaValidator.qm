@@ -202,7 +202,7 @@ module RestSchemaValidator {
     - fixed handling of messages with non-object (i.e. non-hash) bodies (<a href="https://github.com/qoretechnologies/qore/issues/2366">issue 2366</a>)
 
     @subsection restschemavalidator_1_0 RestSchemaValidator v1.0
-    - initial release of the RestSchemaValidator module
+    - initial release
 */
 
 #! main namespace for all public RestSchemaValidator declarations

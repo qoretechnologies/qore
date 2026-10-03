@@ -424,7 +424,7 @@ module CdsRestDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection cdsrestdataprovider_v1_0 CdsRestDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the CdsRestDataProvider module

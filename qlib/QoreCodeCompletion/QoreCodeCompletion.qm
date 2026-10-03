@@ -66,10 +66,7 @@ module QoreCodeCompletion {
     @section qorecodecompletion_relnotes Release Notes
 
     @subsection qorecodecompletion_v1_0 v1.0
-    - initial release: shared code completion engine for %Qore
-    - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
-    - abstract provider interface for pluggable symbol resolution backends
-    - %Qore keyword and built-in type completions
+    - initial release
 */
 
 #! Main namespace for the QoreCodeCompletion module

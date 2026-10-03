@@ -839,8 +839,7 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     - added APIs to handle image generation
 
     @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0
-    - initial release of the module
-
+    - initial release
     @section openaidataprovider_migration Migration Notes
 
     - Response output items are now typed; downstream code should prefer `output_text`, `tool_calls`, and

@@ -82,45 +82,7 @@ module HttpServerAsyncIo {
     @section httpserverasyncio_relnotes Release Notes
 
     @subsection httpserverasyncio_v1_0 Version 1.0
-    - persistent queue deregistration can be restricted to the expected queue, preserving replacement
-      sessions when delayed cleanup runs for an earlier session on the same connection
-    - added @ref HttpServerAsyncIo::SseStreamCloseNotifier "SseStreamCloseNotifier" and
-      @ref HttpServerAsyncIo::AbstractSseConnection::setPeerCloseCallback() "AbstractSseConnection::setPeerCloseCallback()"
-      so that an SSE response stream on a multiplexed transport (HTTP/2, HTTP/3) is torn down when the peer resets
-      the stream or its connection dies; under HTTP/1.x the socket is the stream, so nothing was needed there.
-      The teardown notification is delivered even when the peer reset arrives before the notifier is registered:
-      the transport records the reset whether or not a listener exists yet, and
-      @ref HttpServerAsyncIo::Http2PollOperation::registerStreamListener() "Http2PollOperation::registerStreamListener()"
-      replays it at registration time.  A reset event is one-shot — a reset stream produces no further wakeups —
-      so without this the SSE connection stayed registered on the server for the life of the connection
-    - added @ref HttpServerAsyncIo::Http2PollOperation::deregisterStreamListener() "Http2PollOperation::deregisterStreamListener()"
-      so that a long-lived multiplexed connection does not accumulate one listener entry per completed stream, and
-      moved listener dispatch outside the registration lock so a listener may deregister itself from its own
-      callback
-    - Initial release of HttpServer async I/O, HTTP/2, and HTTP/3 support
-    - Provides callback-based I/O controller delegating all polling to
-      @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController"
-    - Native HTTP/1.x and HTTP/2 response sending from the controller
-    - Type-safe enums: @ref HttpServerAsyncIo::HttpConnectionState "HttpConnectionState",
-      @ref HttpServerAsyncIo::HttpPollType "HttpPollType",
-      @ref HttpServerAsyncIo::HttpVersionMode "HttpVersionMode"
-    - Protocol-agnostic SSE and WebSocket abstractions
-    - body-streaming HTTP/2 dispatches drain inbound DATA via
-      @c cx."header-info".register_body_queue (the I/O thread pushes one
-      binary chunk per DATA frame and a NOTHING sentinel at END_STREAM).
-      Outbound DATA / HEADERS / trailers go through the async-safe
-      @c Socket HTTP/2 methods that wake the owning controller.  All built-in
-      response paths (regular, send_callback, InputStream, SSE setup,
-      RST_STREAM-on-error) use this convention.
-    - HTTP/1.x connections that the server closes after a response are closed with a lingering close (see
-      @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" option
-      \c lingering_close_timeout), so a client still sending unread data receives the response instead of a reset
-    - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
-      and HTTP/3; callers can opt out with the stream's \c setHeartbeat(0)
-      method.
-    - @ref HttpServerAsyncIo::HttpRequestResultInfo "HttpRequestResultInfo"
-      supports a protocol-neutral \c response_delay for non-blocking,
-      server-enforced overload backpressure.
+    - initial release
 */
 
 #! Main namespace for HttpServerAsyncIo module

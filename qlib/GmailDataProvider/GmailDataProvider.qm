@@ -783,7 +783,7 @@ module GmailDataProvider {
       remaining messages are delivered by the following cycles rather than skipped
 
     @subsection gmaildataprovider_v1_0 GmailDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the GmailDataProvider module

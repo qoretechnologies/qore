@@ -1382,7 +1382,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     #! Builds the webhook body for a push notification
     /** The A2A specification defines the webhook body independently of the JSON-RPC binding:
-        - v0.3 posts the bare @ref A2aClient::A2aTaskInfo "Task" object
+        - v0.3 posts the bare @ref A2aServerHandler::A2aTaskInfo "Task" object
         - v1.0 posts a \c StreamResponse object, a single-key hash discriminated by \c task, \c message,
           \c statusUpdate, or \c artifactUpdate
 

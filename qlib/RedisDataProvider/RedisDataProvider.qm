@@ -210,10 +210,7 @@ module RedisDataProvider {
     @section redisdataprovider_relnotes Release Notes
 
     @subsection redisdataprovider_v1_0 RedisDataProvider v1.0
-    - initial release of the module
-    - support for all Redis data types: strings, hashes, lists, sets, sorted sets
-    - support for pub/sub, streams, and transactions
-    - connection provider with redis:// and rediss:// schemes
+    - initial release
 */
 
 #! Contains all public definitions in the RedisDataProvider module

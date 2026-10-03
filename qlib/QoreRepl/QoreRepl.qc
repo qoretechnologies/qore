@@ -525,7 +525,7 @@ if (!exists result) {
         - Extract first word (ignoring leading * for nullable types)
         - Check if it's a known type keyword or starts with uppercase (class name)
         - Verify the next identifier starts lowercase (variable name)
-        - Pattern: [*]Type[<params>] varName [= | ( | ;]
+        - Pattern: [*]Type[&lt;params&gt;] varName [= | ( | ;]
     */
     private string autoPromoteToGlobal(string code) {
         string trimmed = ltrim(code);

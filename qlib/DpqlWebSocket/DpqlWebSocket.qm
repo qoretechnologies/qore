@@ -69,7 +69,7 @@ server.start();
     is defined in @c DpqlWebSocket/DpqlApi.asyncapi.yaml.
 
     @subsection dpqlws_v1_0 v1.0
-    - initial release of DPQL WebSocket language services
+    - initial release
 */
 
 #! Main namespace for the DpqlWebSocket module

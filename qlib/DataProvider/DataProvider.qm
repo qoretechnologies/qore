@@ -608,11 +608,7 @@ module DataProvider {
 
     @section dataproviderintro Introduction to the DataProvider Module
 
-    @htmlonly
-    <div class="image">
-      <img src="DataProvider-Full.svg" alt="DataProvider Logo" style="width:40%;">
-    </div>
-    @endhtmlonly
+    <img src="Qore-Q-square.svg" width="96" alt="DataProvider module logo"/>
 
     The %DataProvider module provides APIs for hierarchical data structures from arbitrary sources to be described,
     queried, introspected, and updated.  It supports data providers supporting record-based APIs as well as
@@ -2176,7 +2172,7 @@ fetch
       (<a href="https://github.com/qoretechnologies/qore/issues/3810">issue 3810</a>)
 
     @subsection dataprovider_v1_0 DataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the DataProvider module

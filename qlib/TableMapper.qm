@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file TableMapper.qm provides mapping functionality to an SQL Table target
 
-/*  TableMapper.qm Copyright 2014 - 2024 Qore Technologies, s.r.o.
+/*  TableMapper.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -275,7 +275,7 @@ on_error table1.rollback();
     - added the @ref TableMapper::SqlStatementOutboundMapper "SqlStatementOutboundMapper" class
 
     @subsection tablemapperv1_0 TableMapper v1.0
-    - Initial release.
+    - initial release
 */
 
 #! the TableMapper namespace contains all the definitions in the TableMapper module

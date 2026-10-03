@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WaveDataProvider module definition
 
-/*  WaveDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  WaveDataProvider.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1081,7 +1081,7 @@ printf("Created invoice: %s\n", invoice.id);
     @section wavedataproviderrelnotes Release Notes
 
     @subsection wavedataproviderv1_0 WaveDataProvider v1.0
-    - Initial release of the %WaveDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the WaveDataProvider module

@@ -149,7 +149,7 @@ module FtpClientDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection ftpclientdataprovider_v1_0 FtpClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the FtpClientDataProvider module

@@ -3202,13 +3202,23 @@ MACRO (QORE_USER_MODULE _module_file)
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
         endif()
 
+        # qdx regenerates the base configuration at build time. Keep phase
+        # overrides in a wrapper so regeneration cannot erase them, and clean
+        # configuration does not need a pre-existing generated Doxyfile.
+        set(_qore_user_doxyfile "${MOD_DOXYFILE}")
+        if (QORE_DOC_EXTRA_MODULES_${f})
+            set(_qore_user_doxyfile "${MOD_DOXYFILE}.initial")
+            file(WRITE "${_qore_user_doxyfile}"
+                "@INCLUDE = \"${MOD_DOXYFILE}\"\nWARN_IF_DOC_ERROR = NO\n")
+        endif()
+
         # add CMake target for the documentation
         if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
             add_custom_target(docs-${f}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
                 ${_qore_user_java_step}
@@ -3220,7 +3230,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
                 ${_qore_user_java_step}
@@ -3233,7 +3243,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
                 ${_qore_user_java_step}
@@ -3245,7 +3255,7 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
                 ${_qore_user_java_step}
@@ -3442,6 +3452,8 @@ endfunction()
 
 function(_QORE_COLLECT_MODULE_DOC_TAGS _mod _out_var)
     _qore_doc_module_requires(${_mod} _pending)
+    # Optional documentation-only roots are used by the final rendering pass.
+    list(APPEND _pending ${ARGN})
     set(_seen "${_mod}")
     set(_tags "")
     while(_pending)
@@ -3469,6 +3481,39 @@ endfunction()
 function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
     get_property(_qore_user_modules GLOBAL PROPERTY QORE_USER_MODULE_TARGETS)
     foreach(_mod ${_qore_user_modules})
+        if (TARGET docs-${_mod} AND QORE_DOC_EXTRA_MODULES_${_mod})
+            # Reverse references must not create cycles in the initial tag or
+            # AOT graphs. Render them only after the peer indexes exist.
+            set(_doc_dependencies docs-${_mod})
+            foreach(_doc_dep IN LISTS QORE_DOC_EXTRA_MODULES_${_mod})
+                if (TARGET docs-${_doc_dep})
+                    list(APPEND _doc_dependencies docs-${_doc_dep})
+                endif()
+            endforeach()
+            _qore_collect_module_doc_tags(${_mod} _doc_tags ${QORE_DOC_EXTRA_MODULES_${_mod}})
+            _qore_collect_module_doc_tags(${_mod} _runtime_doc_tags)
+            if (_runtime_doc_tags)
+                list(REMOVE_ITEM _doc_tags ${_runtime_doc_tags})
+            endif()
+            set(_quoted_doc_tags "")
+            foreach(_tag IN LISTS _doc_tags)
+                string(APPEND _quoted_doc_tags " \"${_tag}\"")
+            endforeach()
+            set(_base "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${_mod}")
+            set(_html "${CMAKE_BINARY_DIR}/docs/modules/${_mod}/html")
+            file(WRITE "${_base}.final"
+                "@INCLUDE = \"${_base}\"\nTAGFILES += ${_quoted_doc_tags}\n"
+                "WARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+            add_custom_target(docs-${_mod}-final
+                COMMAND ${DOXYGEN_EXECUTABLE} "${_base}.final"
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
+                    --post "${_html}" "${_html}/search"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+                COMMENT "Generating docs-${_mod} with documentation-only cross-references"
+                VERBATIM)
+            add_dependencies(docs-${_mod}-final ${_doc_dependencies})
+            add_dependencies(docs docs-${_mod}-final)
+        endif()
         # Build-order dependencies are derived solely from the module's own
         # %requires directives -- the single source of truth.  A module's AOT
         # compile loads exactly what it %requires (directly or transitively), so

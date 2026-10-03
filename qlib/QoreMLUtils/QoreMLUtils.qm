@@ -57,5 +57,5 @@ module QoreMLUtils {
     @section qoremlutilsrelnotes QoreMLUtils Module Release Notes
 
     @subsection qoremlutils_1_0 QoreMLUtils Module Version 1.0
-    - Initial release with GridSearch, RandomSearch, PermutationImportance, MLScoringUtils
+    - initial release
 */

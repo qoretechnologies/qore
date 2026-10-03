@@ -259,7 +259,7 @@ module FileDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection filedataprovider_v1_0 FileDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the FileDataProvider module

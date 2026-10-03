@@ -422,7 +422,7 @@ module QdrantDataProvider {
     @section qdrantdataprovider_relnotes Release Notes
 
     @subsection qdrantdataprovider_v1_0 QdrantDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the QdrantDataProvider module

@@ -65,7 +65,7 @@ module GoogleDataProvider {
     - implemented support for the Discovery API
 
     @subsection googledataprovider_v1_0 GoogleDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the GoogleDataProvider module

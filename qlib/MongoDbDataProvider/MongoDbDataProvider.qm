@@ -217,11 +217,7 @@ module MongoDbDataProvider {
 
     @section mongodbdataproviderintro Introduction to the MongoDbDataProvider Module
 
-    @htmlonly
-    <div class="image">
-      <img src="mongodb-logo.svg" alt="MongoDB Logo" style="width:150px;">
-    </div>
-    @endhtmlonly
+    <img src="mongodb-logo.svg" width="96" alt="MongoDbDataProvider module logo"/>
 
     The %MongoDbDataProvider module provides a @ref dataproviderintro "data provider" API for
     MongoDB servers. It uses the builtin \c mongodb module which wraps libmongoc for efficient
@@ -315,10 +311,7 @@ while (iter.next()) {
     @section mongodbdataprovider_relnotes Release Notes
 
     @subsection mongodbdataprovider_v1_0 MongoDbDataProvider v1.0
-    - Initial release of the module
-    - MongoDB collection record iterators declare
-      <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> and internal
-      cursor references use <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>
+    - initial release
 */
 
 public namespace MongoDbDataProvider {

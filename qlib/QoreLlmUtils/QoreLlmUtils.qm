@@ -141,5 +141,5 @@ printf("Structured output: %s\n", result.content);
     @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
-    - Initial release
+    - initial release
 */

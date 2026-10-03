@@ -617,7 +617,12 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     }
 
     #! Makes a request and returns the response; the response status is checked unless errors are passed through
-    /** @param decode_text if @ref False, the response body is the octets of the resource: binary data after its
+    /** @param scheme the URI scheme
+        @param location the resource URI
+        @param opts optional request settings
+        @param default_method the HTTP method used when not overridden by options
+        @param body optional request body
+        @param decode_text if @ref False, the response body is the octets of the resource: binary data after its
         content encoding is decoded, including any byte order mark of text
     */
     private hash<auto> request(string scheme, string location, *hash<auto> opts, string default_method,

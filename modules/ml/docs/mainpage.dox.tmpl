@@ -4,6 +4,8 @@
 
     @section mlintro ml Module Introduction
 
+    <img src="ml-logo.svg" width="96" alt="ml module logo"/>
+
     The \c ml module provides machine learning algorithms for %Qore programs, enabling
     automated detection of anomalies, discovery of natural groupings, forecasting of future
     values, and simplification of complex data — all thread-safe and without external
@@ -13,48 +15,24 @@
     implementations of common ML algorithms. Optional ONNX Runtime support allows running
     pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
 
-    @section mldata Matrix, DataFrame, and Pipeline Data
-
-    @subpage mldataguide
-
-
-    @section mlalgorithms Available Algorithms
-
-    @subpage mlalgorithmsguide
-
-
-    @section mlpersistence Model Persistence
-
-    @subpage mlpersistenceguide
-
-
-    @section mlchoosing Choosing the Right Algorithm
-
-    @subpage mlchoosingguide
-
-
-    @section mlthread Thread Safety
-
-    @subpage mlthreadguide
-
-
-    @section mlexamples Usage Examples
-
-    @subpage mlexamplesguide
-
-
-    @section mlreleasenotes ml Module Release Notes
-
-    @subpage mlreleasehistory
-
     @section mlqlibmodules Qore User Modules
 
-    - <img src="ml-logo.svg" width="28" height="28" alt="DataProviderML app icon"/> @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module
+    - @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module
     - @ref qoremlutilsintro "QoreMLUtils" — hyperparameter optimization and model explainability for Qore ML
     - @ref qoremodelregistryintro "QoreModelRegistry" — an ML model registry with pluggable storage backends for versioning, tagging, and deployment management
     - @ref qoreonnxtoolsintro "QoreOnnxTools" — ONNX deployment tooling helpers
     - @ref qoreonnxexportintro "QoreOnnxExport" — ONNX model export for trained ML models
     - @ref qoreragutilsintro "QoreRagUtils" — a composable RAG abstraction layer
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" — document chunking, token counting, embeddings, and re-ranking for RAG pipelines
+
+    @section mldocumentation Documentation
+
+    - @anchor mldata @subpage mldataguide
+    - @anchor mlalgorithms @subpage mlalgorithmsguide
+    - @anchor mlpersistence @subpage mlpersistenceguide
+    - @anchor mlchoosing @subpage mlchoosingguide
+    - @anchor mlthread @subpage mlthreadguide
+    - @anchor mlexamples @subpage mlexamplesguide
+    - @anchor mlreleasenotes @subpage mlreleasehistory
 
 */

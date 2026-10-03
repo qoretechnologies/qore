@@ -64,7 +64,7 @@ module SegmentRestClient {
     @section segmentrestclientrelnotes Release Notes
 
     @subsection segmentrestclientv1_0 SegmentRestClient v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the SegmentRestClient namespace contains all the objects in the SegmentRestClient module

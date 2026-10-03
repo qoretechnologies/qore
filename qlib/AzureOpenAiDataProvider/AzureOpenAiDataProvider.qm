@@ -162,14 +162,7 @@ AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
     @section azureopenaidataproviderrelnotes Release Notes
 
     @subsection azureopenaidataprovider_v1_0 AzureOpenAiDataProvider v1.0
-    - initial release: 99 reviewed Azure OpenAI operations plus the generic API-call action, registered
-      under the \c azure-openai app + scheme, with resource dropdowns and media uploads
-    - deployment-based transcription and translation with typed JSON, text, and subtitle responses
-    - Foundry project paths remain intact through actions, copied clients, and connection pings
-    - explicit speech formats and named image arrays retain their wire values and upload metadata
-    - authenticated connection clients preserve credentials across copies and raw requests
-    - pinned, pruned schema imports include checked repairs for documented upstream contract defects
-    - recursive presentation catalogs, exact discovery inventory, and value/serialization regressions
+    - initial release
 */
 
 #! Contains all public definitions in the AzureOpenAiDataProvider module

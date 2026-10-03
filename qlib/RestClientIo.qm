@@ -140,23 +140,7 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
-    - Polling pings retain their originating connection for the operation lifetime, preserving
-      authentication and validation errors when the caller uses a temporary connection
-    - Renews expiring client-credentials tokens without requiring a refresh token
-    - Fixed @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" children losing their
-      shared connection manager when the originating client was destroyed; internally created
-      managers now remain active until the last related client is destroyed
-    - Initial release of RestClientIo module
-    - Implements @ref RestClient::AbstractRestClient "AbstractRestClient" interface
-    - HTTP/1.1, HTTP/2, and HTTP/3 support via @ref HttpClientIo::HttpClientConnectionManager
-    - Data serialization/deserialization via @ref RestSchemaValidator::NullRestSchemaValidator
-    - Support for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
-    - Opt-in shared @ref HttpClientIo::HttpClientConnectionManager for connection sharing across
-      multiple RestClientIo instances
-    - Async API: \c restGetAsync(), \c restPostAsync(), etc. returning Future for non-blocking calls
-    - @ref RestClientIoPool for thread-safe connection pooling; options-based constructor
-      automatically creates a shared @ref HttpClientIo::HttpClientConnectionManager so all
-      pooled instances multiplex over the same connections
+    - initial release
 */
 
 #! Main namespace for the RestClientIo module

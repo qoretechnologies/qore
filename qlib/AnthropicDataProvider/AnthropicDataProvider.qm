@@ -619,13 +619,7 @@ if (result.tool_calls) {
     @section anthropicdataprovider_relnotes Release Notes
 
     @subsection anthropicdataprovider_v1_0 AnthropicDataProvider v1.0
-    - initial release of the module
-    - Messages API with create and stream support
-    - Models listing API
-    - Token counting API
-    - Conversation context store for multi-turn conversations
-    - Action session for Creator WebSocket integration
-    - Built on RestClientIo for async-capable multiplexed HTTP connections
+    - initial release
 */
 
 #! contains all public definitions in the AnthropicDataProvider module

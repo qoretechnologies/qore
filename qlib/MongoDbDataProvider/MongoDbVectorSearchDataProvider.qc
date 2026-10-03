@@ -30,7 +30,7 @@ public namespace MongoDbDataProvider {
 
     This is a thin specialization of @ref MongoDbAggregateDataProvider — it
     just constructs the `$vectorSearch` stage from named fields, then runs
-    it through the same `MongoCollection::aggregate()` path.
+    it through the same @ref mongodb::MongoCollection::aggregate() "MongoCollection::aggregate()" path.
 
     @par Index setup
 

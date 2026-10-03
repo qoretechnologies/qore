@@ -48,6 +48,8 @@ module FhirRestDataProvider {
 
     @section fhirrestdataproviderintro FhirRestDataProvider Module Introduction
 
+    <img src="fhir-logo.svg" width="96" alt="FhirRestDataProvider module logo"/>
+
     The %FhirRestDataProvider module exposes HL7 FHIR JSON servers through the
     Qore DataProvider API. It builds on the @ref FhirRestClient::FhirRestClient
     "FhirRestClient" module and targets FHIR R4-compatible servers.

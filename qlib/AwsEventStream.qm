@@ -89,7 +89,7 @@ dec.finish();  # reject truncated data at EOF
     - validates protocol size limits, duplicate headers, truncated header values, and partial frames at EOF
 
     @subsection awseventstream_v1_0 AwsEventStream v1.0
-    - initial release: prelude + header + payload + CRC32 validation
+    - initial release
 */
 
 #! Contains all public definitions in the AwsEventStream module

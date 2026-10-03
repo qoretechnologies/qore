@@ -89,18 +89,7 @@ module GeminiBodyShape {
     @section geminibodyshaperelnotes Release Notes
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
-    - initial release: extracted from \c GeminiRestClient.qm so Vertex AI and any
-      other Gemini-fronting transport can reuse the body shapers
-    - provides @ref AbstractGeminiModelProvider, the common provider base shared by
-      \c GeminiRestClient (Gemini on AI Studio) and \c VertexAiRestClient (Gemini
-      on Vertex); both differ only in transport and auth (URL, request path, auth
-      headers, REST client), so OpenAI tool/option/response handling cannot diverge
-      between them
-    - provides @ref requestErrorDetail() to surface the upstream provider error
-      message and status from a failed request
-    - unconstrained array parameters in function tools receive a
-      provider-safe item schema so Gemini and Vertex AI accept MCP and data
-      provider tools with soft-list inputs
+    - initial release
 */
 
 #! Contains all public definitions in the GeminiBodyShape module

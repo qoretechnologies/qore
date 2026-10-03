@@ -29,7 +29,7 @@ public namespace DataProviderML {
     record with `_guardrail_passed`, `_guardrail_violations`, and optionally
     redacted text. Records always pass through (unlike the filter processor).
 
-    This is a @ref DPC_TRANSFORM processor — records are enriched, never dropped.
+    This is a @ref DataProvider::DPC_TRANSFORM processor — records are enriched, never dropped.
 
     @par Example:
     @code{.py}

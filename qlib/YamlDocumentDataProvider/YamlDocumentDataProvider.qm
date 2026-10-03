@@ -196,7 +196,9 @@ module YamlDocumentDataProvider {
 
 @section yamldocumentdataproviderintro Introduction
 
-The %YamlDocumentDataProvider module provides data provider support for YAML
+    <img src="yaml-document-logo.svg" width="96" alt="YamlDocumentDataProvider module logo"/>
+
+    The %YamlDocumentDataProvider module provides data provider support for YAML
 document streams, enabling integration with Qore's data provider framework
 for reading multi-document YAML files.
 

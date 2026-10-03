@@ -256,7 +256,7 @@ public class EmbeddingModel {
         The tokenizer configuration and the pooling strategy applied around the model are not part
         of this identity and must be bound separately by the producer that applies them.
 
-        @return an @ref ML::OnnxContentIdentity hash, or @ref nothing in HTTP mode, where there is
+        @return an @ref Qore::ML::OnnxContentIdentity hash, or @ref nothing in HTTP mode, where there is
             no local model content to identify
 
         @par Example:
@@ -267,7 +267,7 @@ if (identity.complete) {
 }
         @endcode
 
-        @see @ref ML::OnnxModel::getContentIdentity()
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
     *hash<ML::OnnxContentIdentity> getContentIdentity() {
         if (mode != "onnx" || !onnx_model) {

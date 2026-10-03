@@ -98,9 +98,5 @@ if (!result.passed) {
     @section qoreguardrailsrelnotes QoreGuardrails Module Release Notes
 
     @subsection qoreguardrails_1_0 QoreGuardrails Module Version 1.0
-    - Initial release with @ref QoreGuardrails::GuardrailEngine "GuardrailEngine",
-      @ref QoreGuardrails::PiiDetector "PiiDetector",
-      @ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector",
-      @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule", and
-      @ref QoreGuardrails::OutputFormatEnforcer "OutputFormatEnforcer"
+    - initial release
 */

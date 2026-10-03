@@ -139,25 +139,7 @@ hash<ChatResponse> r = p.chat((
     @section vertexairestclientrelnotes Release Notes
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
-    - initial release: Gemini-on-Vertex generateContent (chat + tools +
-      multimodal), Gecko embeddings, and ADC/service-account authentication via
-      @ref gcpauthintro "GcpAuth"
-    - the optional \c gcp_quota_project_id provider/connection option is sent as
-      the \c x-goog-user-project header so quota and billing can be attributed to
-      a specific project (matches the official Google client libraries); applies
-      to both \c :generateContent and \c :predict requests
-    - request failures surface the upstream Vertex error message and status (from
-      the response body) instead of only the bare HTTP status, so the cause of a
-      rejection (e.g. an unsupported tool-schema field) is visible
-    - OpenAI-compatible request handling: an OpenAI \c tool_choice is translated
-      to Vertex's \c toolConfig, \c response_format \c json_schema is routed to the
-      request output schema, and passthrough \c generationConfig options are
-      deep-merged — matching GeminiRestClient
-    - provider registry metadata now advertises the same Gemini-specific tool
-      catalogue, dispatch, and payload-shaping preferences as GeminiRestClient;
-      both providers use the same GeminiBodyShape request implementation
-    - endpoint selection supports Google Vertex AI regional, \c us / \c eu
-      multi-region, and \c global locations
+    - initial release
 */
 
 #! Contains all public definitions in the VertexAiRestClient module

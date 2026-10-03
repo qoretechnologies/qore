@@ -361,7 +361,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
     @subsection restclientdataprovider_v1_0 RestClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the RestClientDataProvider module

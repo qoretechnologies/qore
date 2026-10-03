@@ -143,7 +143,7 @@ public class GmailListWithMetadataDataProvider inherits GmailApiDataProviderBase
 
         @return the response body
 
-        @note any error response is included in the exception as with @ref GoogleApiDataProvider requests
+        @note any error response is included in the exception as with @ref googledataproviderintro "GoogleDataProvider" requests
     */
     private auto restGet(string uri) {
         try {

@@ -257,9 +257,7 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       modules with API-version suffixes; legacy explicit-path indexes remain readable
 
     @subsection providerindexutil_v1_0 ProviderIndexUtil v1.0
-    - added an optional, versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and
-      canonical YAML fallback
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the ProviderIndexUtil module

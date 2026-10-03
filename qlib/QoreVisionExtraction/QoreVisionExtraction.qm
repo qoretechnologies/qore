@@ -74,8 +74,5 @@ printf("Description: %s\n", result.text);
     @section qorevisionextractionrelnotes QoreVisionExtraction Module Release Notes
 
     @subsection qorevisionextraction_1_0 QoreVisionExtraction Module Version 1.0
-    - Initial release with @ref QoreVisionExtraction::VisionLlmClient "VisionLlmClient"
-      supporting OpenAI, Anthropic, Gemini, and callback gateway modes
-    - Image description, table extraction, text extraction, and structured extraction
-    - Custom system prompts and output schemas
+    - initial release
 */

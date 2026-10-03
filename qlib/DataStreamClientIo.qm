@@ -78,7 +78,7 @@ ds.recvDataStream(
     @section datastreamclientiorelnotes Release Notes
 
     @subsection datastreamclientiov1_0 DataStreamClientIo v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the DataStreamClient namespace contains all the public objects in the DataStreamClientIo module
@@ -123,7 +123,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         #! Streams currently in-flight from this client, keyed by an
         #! internal registration token. Used by @ref cancelActiveStreams()
-        #! to unblock I/O threads blocked in @ref HttpClientStreamHandle::readData()
+        #! to unblock I/O threads blocked in @ref HttpClientIo::HttpClientStreamHandle::readData()
         #! when the caller wants to abort (for example, when a user of
         #! this client performs an application-level \c disconnect).
         hash<string, HttpClientIo::HttpClientStreamHandle> m_active_streams;
@@ -258,7 +258,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     }
 
     #! sets the request and desired response encoding for the object
-    /** @param enc the data content encoding (compression) option; see @ref EncodingSupport for valid
+    /** @param enc the data content encoding (compression) option; see @ref RestClient::RestClient::EncodingSupport for valid
         options; if \c "auto" is passed then \c "gzip" encoding is used
 
         @throw RESTCLIENT-ERROR invalid or unsupported data content encoding option
@@ -316,7 +316,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         return buildAndWrapResponse(raw, prepared, method, path, hdr);
     }
 
-    #! Calls @ref RestClientIo::buildResponse and rewrites generic error responses
+    #! Calls \c RestClientIo::buildResponse() and rewrites generic error responses
     /** Mirrors the synchronous @ref DataStreamClient::DataStreamClient typed-error
         contract: any HTTP error response that the underlying
         @ref RestClientIo::RestClientIo would surface as a generic
@@ -387,11 +387,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         @param info optional output reference for request info
         @param hdr optional extra headers
 
-        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamProtocol::Connect "Connect" and
+        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamClient::Connect "Connect" and
         \a method is \c GET
 
         @note A Connect streaming call always sends its request as a framed request body, which a \c GET
-        request cannot have, so in @ref DataStreamProtocol::Auto "Auto" mode a \c GET receive stream is made
+        request cannot have, so in @ref DataStreamClient::Auto "Auto" mode a \c GET receive stream is made
         with the DataStream protocol, without changing the protocol detected for other requests; a \c GET
         request cannot have a \a body in any protocol
     */
@@ -775,11 +775,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     }
 
     #! Cancels all streams currently in flight on this client
-    /** Each active streaming call registers its @ref HttpClientStreamHandle
+    /** Each active streaming call registers its @ref HttpClientIo::HttpClientStreamHandle
         with the client while the call is running. Calling this method
-        cancels each one via @ref HttpClientStreamHandle::cancel(), which
+        cancels each one via @ref HttpClientIo::HttpClientStreamHandle::cancel(), which
         unblocks any reader threads waiting in
-        @ref HttpClientStreamHandle::readData() with an
+        @ref HttpClientIo::HttpClientStreamHandle::readData() with an
         \c HTTPCLIENT-STREAM-CLOSED exception.
 
         Intended for application-level \c disconnect semantics on
@@ -941,7 +941,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     #! Returns @ref True if a receive stream with the given HTTP method is made with the Connect protocol
     /** A Connect streaming call always sends a framed request body, and a \c GET request cannot have one
 
-        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamProtocol::Connect "Connect" and
+        @throw CONNECT-PROTOCOL-ERROR the protocol is set to @ref DataStreamClient::Connect "Connect" and
         \a method is \c GET
     */
     private bool useConnectForRecv(string method, string path) {
@@ -1737,11 +1737,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Internal: extract response headers after stream completion
     /** HTTP/2 and HTTP/3 streams commonly deliver headers and body bytes
-        inline together; the channel-based @ref readData() returns body
+        inline together; the channel-based @ref HttpClientIo::HttpClientStreamHandle::readData() returns body
         bytes in those cases and does not surface a standalone headers
         event. This helper pulls headers out of the stream handle's
         accumulated response state — which is populated synchronously by
-        @ref readData() as soon as headers are available — and returns
+        @ref HttpClientIo::HttpClientStreamHandle::readData() as soon as headers are available — and returns
         them in the shape produced by @ref readStreamHeaders() (status_code
         folded into the headers hash).
 

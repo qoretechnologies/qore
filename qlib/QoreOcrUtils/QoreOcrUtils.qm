@@ -74,6 +74,5 @@ printf("Text: %s (confidence: %.0f%%)\n", result.text, result.confidence * 100);
     @section qoreocrutilsrelnotes QoreOcrUtils Module Release Notes
 
     @subsection qoreocrutilsrelnotes_1_0 QoreOcrUtils Module Version 1.0
-    - Initial release with @ref QoreOcrUtils::OcrEngine "OcrEngine" (native + HTTP)
-      and @ref QoreOcrUtils::ScannedPdfDetector "ScannedPdfDetector"
+    - initial release
 */

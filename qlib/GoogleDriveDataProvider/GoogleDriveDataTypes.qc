@@ -783,7 +783,7 @@ public class GoogleDriveListSharedDrivesResponseDataType inherits HashDataType {
 public const GoogleDriveListSharedDrivesResponseDataType = new GoogleDriveListSharedDrivesResponseDataType();
 
 #! Request type for an action that takes no arguments
-/** A @ref DPAT_API action still has to declare a request type: without one the framework raises
+/** A @ref DataProvider::DPAT_API action still has to declare a request type: without one the framework raises
     \c UNIMPLEMENTED before \c doRequestImpl() is reached, so an argument-less action would appear in the
     catalog and fail on use.  Having no fields is what keeps it from advertising options it does not accept.
 */

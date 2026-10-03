@@ -216,15 +216,7 @@ module OneRecordClient {
     @section onerecordclientrelnotes OneRecordClient Release Notes
 
     @subsection onerecordclientv1_0 OneRecordClient v1.0
-    - initial release with IATA ONE Record API v2.2.0 support
-    - async I/O via @ref HttpClientIo::HttpClientConnectionManager with automatic
-      protocol negotiation (HTTP/3 → HTTP/2 → HTTP/1.1) and connection pooling
-    - logistics object CRUD with JSON-LD
-    - change request lifecycle management
-    - logistics events, audit trail, subscriptions
-    - access delegations and verification requests
-    - OAuth 2.0 token management with automatic refresh
-    - ConnectionProvider integration with 1r:// and 1rs:// schemes
+    - initial release
 */
 
 #! the %OneRecordClient namespace holds all public definitions in the %OneRecordClient module

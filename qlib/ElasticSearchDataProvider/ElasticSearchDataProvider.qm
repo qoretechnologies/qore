@@ -271,7 +271,7 @@ module ElasticSearchDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
     @subsection elasticsearchdataprovider_v1_0 ElasticSearchDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the ElasticSearchDataProvider module

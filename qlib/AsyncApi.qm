@@ -303,15 +303,7 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
     @section asyncapi_relnotes AsyncApi Module Release Notes
 
     @subsection asyncapi_1_0 AsyncApi v1.0
-    - initial release of the %AsyncApi module
-    - supports AsyncAPI 3.0 specification
-    - protocol-agnostic message validation
-    - built-in WebSocket integration via WebSocketClient and WebSocketHandler modules
-    - added @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
-    - added @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT,
-      \@WEBSOCKET, \@SSE, \@MQTT, and \@KAFKA blocks
-    - added @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
-    - added \c qore-asyncapi-gen CLI tool for generating schemas from source files
+    - initial release
 */
 
 #! main namespace for all public %AsyncApi declarations

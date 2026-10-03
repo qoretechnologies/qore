@@ -4,6 +4,8 @@
 
     @section tokenizerintro tokenizer Module Introduction
 
+    <img src="ml-logo.svg" width="96" alt="tokenizer module logo"/>
+
     The \c tokenizer module provides HuggingFace-compatible text tokenization for %Qore.
     It can load any \c tokenizer.json file from
     <a href="https://huggingface.co/">HuggingFace Hub</a> and produce the same token IDs
@@ -43,73 +45,25 @@
     - \c ByteFallback — decodes \c \<0xHH\> byte tokens to UTF-8
     - \c Fuse / \c Strip / \c Replace / \c Sequence
 
-    @section tokenizer_basic Basic Usage
-
-    @subpage tokenizer_basicguide
-
-
-    @section tokenizer_sentence_pairs Sentence Pair Encoding
-
-    @subpage tokenizer_sentence_pairsguide
-
-
-    @section tokenizer_advanced Advanced Encoding with Truncation and Padding
-
-    @subpage tokenizer_advancedguide
-
-
-    @section tokenizer_batch Batch Encoding
-
-    @subpage tokenizer_batchguide
-
-
-    @section tokenizer_model_inputs Dense Model Input Buffers
-
-    @subpage tokenizer_model_inputsguide
-
-
-    @section tokenizer_offsets Offset Mapping and Special Tokens Mask
-
-    @subpage tokenizer_offsetsguide
-
-
-    @section tokenizer_vocab Vocabulary Access
-
-    @subpage tokenizer_vocabguide
-
-
-    @section tokenizer_decode Decoding
-
-    @subpage tokenizer_decodeguide
-
-
-    @section tokenizer_models Verified Model Families
-
-    @subpage tokenizer_modelsguide
-
-
-    @section tokenizer_api_summary API Summary
-
-    @subpage tokenizer_api_summaryguide
-
-
-    @section tokenizer_encoding_result Encoding Result Fields
-
-    @subpage tokenizer_encoding_resultguide
-
-
-    @section tokenizer_model_input_result Model Input Result Fields
-
-    @subpage tokenizer_model_input_resultguide
-
-
-    @section tokenizer_relnotes tokenizer Module Release Notes
-
-    @subpage tokenizerreleasehistory
-
     @section tokenizerqlibmodules Qore User Modules
 
-    - <img src="ml-logo.svg" width="28" height="28" alt="DataProviderML app icon"/> @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module
+    - @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" — document chunking, token counting, embeddings, and re-ranking for RAG pipelines
+
+    @section tokenizerdocumentation Documentation
+
+    - @anchor tokenizer_basic @subpage tokenizer_basicguide
+    - @anchor tokenizer_sentence_pairs @subpage tokenizer_sentence_pairsguide
+    - @anchor tokenizer_advanced @subpage tokenizer_advancedguide
+    - @anchor tokenizer_batch @subpage tokenizer_batchguide
+    - @anchor tokenizer_model_inputs @subpage tokenizer_model_inputsguide
+    - @anchor tokenizer_offsets @subpage tokenizer_offsetsguide
+    - @anchor tokenizer_vocab @subpage tokenizer_vocabguide
+    - @anchor tokenizer_decode @subpage tokenizer_decodeguide
+    - @anchor tokenizer_models @subpage tokenizer_modelsguide
+    - @anchor tokenizer_api_summary @subpage tokenizer_api_summaryguide
+    - @anchor tokenizer_encoding_result @subpage tokenizer_encoding_resultguide
+    - @anchor tokenizer_model_input_result @subpage tokenizer_model_input_resultguide
+    - @anchor tokenizer_relnotes @subpage tokenizerreleasehistory
 
 */

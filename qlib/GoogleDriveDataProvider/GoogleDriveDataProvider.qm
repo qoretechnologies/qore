@@ -666,8 +666,7 @@ module GoogleDriveDataProvider {
     @section googledrivedataprovider_relnotes Release Notes
 
     @subsection googledrivedataprovider_v1_0 GoogleDriveDataProvider v1.0
-    - initial release of the module
-      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - initial release
 */
 
 #! contains all public definitions in the GoogleDriveDataProvider module

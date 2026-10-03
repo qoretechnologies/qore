@@ -215,8 +215,5 @@ string plaintext = cipher.decryptToString(
       @ref qorecrypto_fips "FIPS posture"
 
     @subsection qorecrypto_1_0 QoreCrypto Module Version 1.0
-    - Initial release with @ref QoreCrypto::EnvelopeCipher "EnvelopeCipher",
-      @ref QoreCrypto::AbstractKeyProvider "AbstractKeyProvider",
-      @ref QoreCrypto::StaticKeyProvider "StaticKeyProvider", and
-      @ref QoreCrypto::FileKeyProvider "FileKeyProvider".
+    - initial release
 */

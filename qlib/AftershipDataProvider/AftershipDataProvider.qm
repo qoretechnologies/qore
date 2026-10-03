@@ -616,12 +616,7 @@ module AftershipDataProvider {
     @section aftershipdataproviderrelnotes Release Notes
 
     @subsection aftershipdataprovider_v1_0 AftershipDataProvider v1.0
-    - initial release of the module
-    - Tracking API: create, get, list/search, update, delete, retrack, mark as completed, get last checkpoint
-    - Courier API: list all couriers, detect courier from tracking number
-    - Returns API: create, get, approve, reject, resolve, add shipment
-    - Polling-based event: tracking status changed
-    - Built on RestClientIo for async-capable multiplexed HTTP connections
+    - initial release
 */
 
 #! contains all public definitions in the AftershipDataProvider module

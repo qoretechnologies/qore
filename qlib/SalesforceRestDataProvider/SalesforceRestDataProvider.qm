@@ -263,7 +263,7 @@ module SalesforceRestDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/3908">issue 3908</a>)
 
     @subsection salesforcerestdataprovider_v1_0 SalesforceRestDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the SalesforceRestDataProvider module

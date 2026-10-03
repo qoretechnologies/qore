@@ -323,7 +323,7 @@ message: "Hello, Hello, World!!"
     - added Connect protocol constants for dual-protocol (Connect + DataStream v1) support
     - added @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE constant (4 MB default, matching gRPC)
     - added \c max_message_size parameter to @ref connect_unframe_message() and
-      @ref connect_get_recv() for frame size validation
+      @ref DataStreamUtil::connect_get_recv() for frame size validation
     - updated copyright year to 2026
 
     @subsection datastreamutil_v1_2 DataStreamUtil v1.2
@@ -337,7 +337,7 @@ message: "Hello, Hello, World!!"
     - fixed a bug handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
     @subsection datastreamutil_v1_0 DataStreamUtil v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the DataStreamUtil namespace contains all the public objects in the DataStreamUtil module
@@ -377,7 +377,7 @@ public namespace DataStreamUtil {
     #! YAML deserialization support hash
     /** Contains:
         - \c code: "yaml" - the serialization code
-        - \c in: a call reference to @ref Qore::parse_yaml() for deserializing YAML data
+        - \c in: a call reference to @ref Qore::YAML::parse_yaml() for deserializing YAML data
     */
     public const DataStreamDeserializeYaml = {
         "code": "yaml",
@@ -444,7 +444,7 @@ public namespace DataStreamUtil {
         - \c "bzip2", \c "x-bzip2": returns a call reference to @ref Qore::bunzip2_to_string() "bunzip2_to_string()"
         - \c "br": returns a call reference to @ref Qore::unbrotli_to_string() "unbrotli_to_string()"
         - \c "zstd": returns a call reference to @ref Qore::unzstd_to_string() "unzstd_to_string()"
-        - \c "identity", @ref nothing: returns @ref nothing
+        - \c "identity", @ref nothing "nothing": returns @ref nothing
 
         @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
 
@@ -472,6 +472,60 @@ public namespace DataStreamUtil {
                 return;
         }
         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", ce);
+    }
+
+    #! Splits a concatenated stream of YAML documents into individual document strings
+    /** The DataStream v1 protocol emits one YAML document per record, separated by
+        \c "%YAML" directive markers at document boundaries. HTTP/1.x chunked transfer
+        preserves record boundaries naturally (one chunk per doc), but multiplexed
+        transports (HTTP/2, HTTP/3) may batch N docs into one DATA frame, leaving the
+        client with a single concatenated-docs string. This helper splits on the
+        \c "%YAML" directive to recover individual document strings that the single-
+        document @ref Qore::YAML::parse_yaml() can handle.
+
+        The first document may omit the directive (it always starts the stream), so
+        the split preserves any leading chunk before the first \c "%YAML" marker.
+        Empty trailing segments after the final newline are discarded.
+
+        @param data the concatenated YAML stream
+        @return one string per YAML document, each suitable for @ref Qore::YAML::parse_yaml()
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_split_yaml_documents(string data) {
+        return ds_extract_yaml_documents(\data, True);
+    }
+
+    #! Extracts complete DataStream YAML documents from an incremental receive buffer
+    /** DataStream v1 emits one YAML document per record. HTTP/2 and HTTP/3
+        DATA frames can split or coalesce those records, so receivers need to
+        parse only complete documents and keep the trailing partial document in
+        the buffer until another \c "%YAML" directive or end-of-stream arrives.
+
+        @param data the mutable receive buffer
+        @param is_final if True, the trailing buffered document is complete and is
+        returned as well
+
+        @return complete YAML document strings removed from \a data
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_extract_yaml_documents(reference<string> data,
+            bool is_final = False) {
+        list<string> out = ();
+        while (True) {
+            int pos = data.find("\n%YAML ");
+            if (pos < 0) {
+                break;
+            }
+            out += data.substr(0, pos + 1);
+            data = data.substr(pos + 1);
+        }
+        if (is_final && data.val()) {
+            out += data;
+            data = "";
+        }
+        return out;
     }
 
     #! Applies @a dce to each concatenated compressed stream in @a data
@@ -512,60 +566,6 @@ public namespace DataStreamUtil {
 
         @since DataStreamUtil 1.4
     */
-    #! Splits a concatenated stream of YAML documents into individual document strings
-    /** The DataStream v1 protocol emits one YAML document per record, separated by
-        \c "%YAML" directive markers at document boundaries. HTTP/1.x chunked transfer
-        preserves record boundaries naturally (one chunk per doc), but multiplexed
-        transports (HTTP/2, HTTP/3) may batch N docs into one DATA frame, leaving the
-        client with a single concatenated-docs string. This helper splits on the
-        \c "%YAML" directive to recover individual document strings that the single-
-        document @ref Qore::parse_yaml() can handle.
-
-        The first document may omit the directive (it always starts the stream), so
-        the split preserves any leading chunk before the first \c "%YAML" marker.
-        Empty trailing segments after the final newline are discarded.
-
-        @param data the concatenated YAML stream
-        @return one string per YAML document, each suitable for @ref Qore::parse_yaml()
-
-        @since DataStreamUtil 1.4
-    */
-    public list<string> sub ds_split_yaml_documents(string data) {
-        return ds_extract_yaml_documents(\data, True);
-    }
-
-    #! Extracts complete DataStream YAML documents from an incremental receive buffer
-    /** DataStream v1 emits one YAML document per record. HTTP/2 and HTTP/3
-        DATA frames can split or coalesce those records, so receivers need to
-        parse only complete documents and keep the trailing partial document in
-        the buffer until another \c "%YAML" directive or end-of-stream arrives.
-
-        @param data the mutable receive buffer
-        @param is_final if True, the trailing buffered document is complete and is
-        returned as well
-
-        @return complete YAML document strings removed from \a data
-
-        @since DataStreamUtil 1.4
-    */
-    public list<string> sub ds_extract_yaml_documents(reference<string> data,
-            bool is_final = False) {
-        list<string> out = ();
-        while (True) {
-            int pos = data.find("\n%YAML ");
-            if (pos < 0) {
-                break;
-            }
-            out += data.substr(0, pos + 1);
-            data = data.substr(pos + 1);
-        }
-        if (is_final && data.val()) {
-            out += data;
-            data = "";
-        }
-        return out;
-    }
-
     public list<string> sub ds_decode_content_streams(code dce, binary data, string enc) {
         # Fast path: buffer is a single compressed stream — succeeds on
         # HTTP/1.x chunked transfer and whenever the sender did not pack
@@ -639,7 +639,7 @@ public namespace DataStreamUtil {
         - \c "bzip2": returns a call reference to @ref Qore::bzip2() "bzip2()"
         - \c "br": returns a call reference to @ref Qore::brotli() "brotli()"
         - \c "zstd": returns a call reference to @ref Qore::zstd() "zstd()"
-        - \c "identity", @ref nothing: returns @ref nothing
+        - \c "identity", @ref nothing "nothing": returns @ref nothing
 
         @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding"
         header value for encoding HTTP encoded data
@@ -724,7 +724,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
 
         @param recv_callback the data callback; this is called once for each deserialized chunked transfer from the
         remote end with the deserialized data, and then once with @ref nothing when all data has been received
-        @param eod_callback the "end of data" callback; this must accept a @ref string_or_nothing "*string" argument;
+        @param eod_callback the "end of data" callback; this must accept a \c *string argument;
         this is called with no arguments once all data has been received if the sender does not report a send error,
         otherwise it's called with a single string giving the send error reported by the sending side in the
         \c DataStream-Error trailer record

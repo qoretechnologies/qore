@@ -70,7 +70,7 @@ module FirecrawlRestClient {
     @section firecrawlrestclientrelnotes Release Notes
 
     @subsection firecrawlrestclientv1_0 FirecrawlRestClient v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the FirecrawlRestClient namespace contains all the objects in the FirecrawlRestClient module

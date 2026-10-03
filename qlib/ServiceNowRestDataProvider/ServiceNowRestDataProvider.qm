@@ -287,7 +287,7 @@ module ServiceNowRestDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4104">issue 4104</a>)
 
     @subsection servicenowrestdataprovider_v1_0 ServiceNowRestDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the ServiceNowRestDataProvider module

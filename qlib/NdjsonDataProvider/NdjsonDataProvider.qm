@@ -98,7 +98,7 @@ module NdjsonDataProvider {
     @section ndjsondataprovider_relnotes Release Notes
 
     @subsection ndjsondataprovider_v1_0 NdjsonDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the NdjsonDataProvider module

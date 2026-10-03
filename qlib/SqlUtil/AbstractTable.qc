@@ -905,7 +905,7 @@ table.setStatsPreferencesCommit({"incremental": True, "granularity": "AUTO"});
         @param preferences a hash keyed by statistics preference name
         @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
 
-        @return no value
+        This method does not return a value.
 
         @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
         @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
@@ -927,7 +927,7 @@ table.setStatsPreferences({"incremental": True, "granularity": "AUTO"});
         @param preferences a hash keyed by statistics preference name
         @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
 
-        @return no value
+        This method does not return a value.
 
         @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
         @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
@@ -5376,7 +5376,7 @@ string sql = table.getSelectSql(sh, \args);
     /** Pure determinism guard — no DB rejects non-unique orderby+offset+limit
         at the SQL level; the check exists so pagination across pages doesn't
         silently mis-order rows that share an orderby key.  Strict callers
-        should opt in via the @ref select_option_orderby_no_unique
+        should opt in via the @ref select_option_orderby
         "orderby_no_unique" select option (default: False — i.e. require
         uniqueness) or override this method in a DB-specific subclass.
 
@@ -6851,7 +6851,7 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        those columns, field references (@ref DataProvider::DataProviderFieldReference), data provider expressions
         (@ref DataProvider::DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
@@ -6905,7 +6905,7 @@ int ucnt = table.update(("id": id), ("name": name));
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        those columns, field references (@ref DataProvider::DataProviderFieldReference), data provider expressions
         (@ref DataProvider::DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
@@ -6949,7 +6949,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        those columns, field references (@ref DataProvider::DataProviderFieldReference), data provider expressions
         (@ref DataProvider::DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
@@ -7099,7 +7099,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
     #! Returns the SQL for the given update parameters
     /** @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
+        those columns, field references (@ref DataProvider::DataProviderFieldReference), data provider expressions
         (@ref DataProvider::DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
 
         @param cond the update condition

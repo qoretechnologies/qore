@@ -140,7 +140,7 @@ module HttpClientDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
     @subsection httpclientdataprovider_v1_0 HttpClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the HttpClientDataProvider module

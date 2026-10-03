@@ -132,8 +132,7 @@ hash<ChatResponse> r = p.chat((
     - signs the encoded model identifiers in Converse and embedding requests without extra URI escaping
 
     @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
-    - initial release: BedrockRestConnection + BedrockRestClient(Io),
-      BedrockLlmProvider (Converse), BedrockEmbedder (Titan + Cohere)
+    - initial release
 */
 
 #! Contains all public definitions in the BedrockRestClient module

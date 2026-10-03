@@ -193,7 +193,7 @@ module OpenSearchLoggerAppender {
     @endcode
 
     Each key must be a non-empty string that is not the name of a field the appender writes itself
-    (\c @timestamp, \c level, \c level_value, \c logger, \c message, \c thread_id, \c location,
+    (\c \@timestamp, \c level, \c level_value, \c logger, \c message, \c thread_id, \c location,
     \c exception and \c host), so that a constant field can never replace event data.
 
     @section opensearchloggerappenderrelnotes Release Notes
@@ -202,7 +202,7 @@ module OpenSearchLoggerAppender {
     - Added the \c fields option, which adds constant fields to every document
 
     @subsection opensearchloggerappenderv10 v1.0
-    - Initial release with batching support
+    - initial release
 */
 
 #! Main namespace for the OpenSearchLoggerAppender module

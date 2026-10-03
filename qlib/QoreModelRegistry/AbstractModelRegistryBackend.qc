@@ -119,7 +119,7 @@ public hashdecl ModelExecutionInfo {
     #! Optional runtime configuration
     *hash<auto> config;
     #! Optional device-buffer binding policy for GPU/accelerator execution providers
-    /** Mirrors @ref ML::OnnxDeviceBindingConfig fields (\c enabled,
+    /** Mirrors @ref Qore::ML::OnnxDeviceBindingConfig fields (\c enabled,
         \c default_output_device, \c allow_host_fallback, \c materialize_outputs,
         \c require_zero_copy_inputs, \c require_zero_copy_outputs). When present it is
         propagated into the ONNX session's \c device_binding policy as the version is

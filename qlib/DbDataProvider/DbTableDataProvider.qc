@@ -664,7 +664,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
         @note this method acquires a transaction lock if one is not already acquired; the iterator returned performs a
         rollback in the destructor if a new transaction lock was acquired by this call and
-        @ref SqlUtil::DbTableRecordIterator::keepTransactionLock() "DbTableRecordIterator::keepTransactionLock()" is
+        @ref DbDataProvider::DbTableRecordIterator::keepTransactionLock() "DbTableRecordIterator::keepTransactionLock()" is
         not called
     */
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,

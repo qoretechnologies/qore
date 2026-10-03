@@ -290,7 +290,7 @@ public class History {
 
     #! Loads history from a file, replacing any existing entries
     /** Automatically detects the file format:
-        - New format: lines starting with \c #<epoch> mark entry boundaries
+        - New format: lines starting with \c #&lt;epoch&gt; mark entry boundaries
           with timestamps (epoch-microseconds for new files, epoch-seconds for
           older files)
         - Legacy format: one entry per line (no timestamp markers)
@@ -318,7 +318,7 @@ public class History {
         if (!lines.size()) {
             return;
         }
-        # Detect format: new format starts with #<epoch>
+        # Detect format: new format starts with #&lt;epoch&gt;
         if (regex(lines[0], "^#[0-9]+$")) {
             loadNewFormat(lines);
         } else {

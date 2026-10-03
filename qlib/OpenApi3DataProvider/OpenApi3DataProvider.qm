@@ -85,7 +85,7 @@ module OpenApi3DataProvider {
     @section openapi3dataprovider_relnotes Release Notes
 
     @subsection openapi3dataprovider_v1_0 OpenApi3DataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the OpenApi3DataProvider module

@@ -104,5 +104,5 @@ foreach hash<auto> chunk in (chunks) {
     @section qoretokenizerutilsrelnotes QoreTokenizerUtils Module Release Notes
 
     @subsection qoretokenizerutils_1_0 QoreTokenizerUtils Module Version 1.0
-    - Initial release with DocumentChunker and TokenCounter
+    - initial release
 */

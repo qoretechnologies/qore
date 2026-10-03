@@ -101,8 +101,7 @@ hash<auto> result = semantic_index.search({
     @section loggersemanticsearchrelnotes Release Notes
 
     @subsection loggersemanticsearchv10 LoggerSemanticSearch v1.0
-    - Initial release with appender indexing, direct-entry indexing, and
-      backend-neutral semantic search over QoreRagTypes vector stores.
+    - initial release
 */
 
 #! Public namespace for generic semantic Logger search
@@ -110,7 +109,7 @@ public namespace LoggerSemanticSearch {
 #! Backend-neutral semantic index for rendered Logger entries
 /** This class composes an @ref QoreRagUtils::AbstractEmbedder and an
     @ref QoreRagUtils::AbstractVectorStore.  It can index rendered entries
-    returned by @ref Qore::Logger::LoggerSearchUtil "LoggerSearchUtil" or
+    returned by @ref Logger::LoggerSearchUtil "LoggerSearchUtil" or
     caller-supplied entry hashes, then query the vector store by semantic
     similarity.
 
@@ -221,7 +220,7 @@ public class LoggerSemanticSearchIndex {
     }
 
     #! Indexes rendered history from a searchable Logger appender
-    /** This method calls @ref Qore::Logger::LoggerSearchUtil::searchRenderedEvents()
+    /** This method calls @ref Logger::LoggerSearchUtil::searchRenderedEvents()
         one or more times, embeds returned rendered entries, and upserts them
         to the configured vector store.
 

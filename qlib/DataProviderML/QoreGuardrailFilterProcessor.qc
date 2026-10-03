@@ -28,7 +28,7 @@ public namespace DataProviderML {
 /** Evaluates a text field against configured guardrail rules. Records that
     fail are dropped (return NOTHING). Records that pass are forwarded unchanged.
 
-    This is a @ref DPC_FILTER processor because it either passes or drops records.
+    This is a @ref DataProvider::DPC_FILTER processor because it either passes or drops records.
 
     @par Example:
     @code{.py}

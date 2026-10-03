@@ -90,8 +90,7 @@ module QoreRagTypes {
     @section qoreragtypesrelnotes Release Notes
 
     @subsection qoreragtypes_1_0 QoreRagTypes 1.0
-    - Initial release; extracted from the QoreRagUtils module to break a
-      future dependency cycle with RAG provider modules
+    - initial release
 */
 
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)

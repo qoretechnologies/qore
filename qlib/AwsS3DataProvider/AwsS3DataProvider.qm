@@ -603,8 +603,7 @@ module AwsS3DataProvider {
     @section awss3dataprovider_relnotes Release Notes
 
     @subsection awss3dataprovider_v1_0 AwsS3DataProvider v1.0
-    - initial release of the module
-      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - initial release
 */
 
 #! contains all public definitions in the AwsS3DataProvider module

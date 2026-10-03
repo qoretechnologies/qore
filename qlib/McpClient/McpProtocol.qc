@@ -60,7 +60,7 @@ public const MCP_ExtensionTasks = "io.modelcontextprotocol/tasks";
 /** @defgroup mcp_task_support MCP Tool Task Support
     A tool declares whether it can be executed as a task with
     \c execution.taskSupport in its registration metadata.  A tool that declares nothing is
-    treated as @ref MCP_TaskSupportOptional: the client decides per request by sending the
+    treated as @ref MCP_TaskSupportOptional "MCP_TaskSupportOptional": the client decides per request by sending the
     \c task augmentation with \c tools/call.
 */
 #/@{

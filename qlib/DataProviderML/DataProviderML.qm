@@ -1580,6 +1580,8 @@ module DataProviderML {
 
     @section dataprovidermlintro DataProviderML Module Introduction
 
+    <img src="ml-logo.svg" width="96" alt="DataProviderML module logo"/>
+
     The %DataProviderML module brings machine learning to data pipelines, enabling automated
     detection of anomalies, discovery of natural groupings, forecasting of future values, and
     simplification of complex datasets — all without external dependencies like Python.
@@ -1947,7 +1949,7 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     @section dataproviderml_relnotes Release Notes
 
     @subsection dataproviderml_v1_0 DataProviderML v1.0
-    - initial release with 9 core ML pipeline processors and optional ONNX inference processor
+    - initial release
 */
 
 #! Contains all public definitions in the DataProviderML module

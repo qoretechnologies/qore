@@ -159,8 +159,7 @@ AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
     @section vertexaidataproviderrelnotes Release Notes
 
     @subsection vertexaidataprovider_v1_0 VertexAiDataProvider v1.0
-    - initial release: GenerateContent + Embed actions registered under
-      the \c vertex-ai app + scheme
+    - initial release
 */
 
 #! Contains all public definitions in the VertexAiDataProvider module

@@ -78,10 +78,7 @@ module QoreLlmTypes {
     @section qorellmtypesrelnotes Release Notes
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
-    - Initial release; extracted from the QoreLlmUtils module to break a
-      future dependency cycle with LLM provider modules
-    - Fixed OpenAI-compatible streamed function calls so progressive tool-call
-      deltas are accumulated in the final chat response
+    - initial release
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)

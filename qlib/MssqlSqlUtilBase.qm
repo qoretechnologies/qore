@@ -120,8 +120,6 @@ module MssqlSqlUtilBase {
       rejects, and with a quoted new column name, which would have made the quoting part of the name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
-    - added targeted logical partition-name metadata lookup without loading all partition-function boundaries
-    - added catalog-estimated row-count and allocated-size partition metadata
     - initial release
 */
 

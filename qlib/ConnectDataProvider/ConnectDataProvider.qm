@@ -93,6 +93,8 @@ module ConnectDataProvider {
 
     @section connectdataproviderintro ConnectDataProvider Module Introduction
 
+    <img src="connect-logo.svg" width="96" alt="ConnectDataProvider module logo"/>
+
     The %ConnectDataProvider module provides DataProvider and ConnectionProvider
     integration for the Connect RPC protocol (DataStream 2.0).
 
@@ -224,19 +226,7 @@ auto result = provider.getChildProvider("Greeter/SayHello").doRequest({"name": "
     @section connectdataproviderrelnotes Release Notes
 
     @subsection connectdataprovider_v1_0 ConnectDataProvider Module Version 1.0
-
     - initial release
-    - automatic service discovery via Connect reflection protocol
-      (@ref Connect::ConnectReflectionClient "ConnectReflectionClient")
-    - DataProvider integration for all Connect RPC patterns (unary,
-      server-streaming, client-streaming, bidirectional, datagram fire-and-forget,
-      datagram bidirectional)
-    - request/response type information from reflection for type-aware navigation
-    - observable event providers for server-streaming, bidirectional, and
-      datagram-bidi methods
-    - \c use_discovery option to control automatic reflection (default: enabled)
-    - ConnectionProvider with \c connect:// (plaintext) and \c connects:// (TLS) schemes
-    - factory registration as \c "connect"
 */
 
 #! Main ConnectDataProvider namespace

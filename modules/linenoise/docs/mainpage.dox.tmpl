@@ -20,6 +20,15 @@
 
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
+    @section linenoiseqlibmodules Qore User Modules
+
+    - @ref qorehistoryintro "QoreHistory" — Shared history management module for Qore tools
+    - @ref debuglinenoisecmdlineintro "DebugLinenoiseCmdLine" — common Linenoise command line debug stuff
+
+    @par Documentation
+
+    - @anchor linenoisereleasenotes @subpage linenoisereleasehistory
+
     @section basic_usage Basic Usage
 
     The core of functionality is the Qore::Linenoise::line() function. It waits for user input
@@ -86,14 +95,5 @@ list sub my_callback(string value) {
 
 Linenoise::set_callback(\my_callback());
     @endcode
-
-    @section linenoisereleasenotes linenoise Module Release Notes
-
-    @subpage linenoisereleasehistory
-
-    @section linenoiseqlibmodules Qore User Modules
-
-    - @ref qorehistoryintro "QoreHistory" — Shared history management module for Qore tools
-    - @ref debuglinenoisecmdlineintro "DebugLinenoiseCmdLine" — common Linenoise command line debug stuff
 
 */

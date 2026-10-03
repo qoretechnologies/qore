@@ -154,7 +154,7 @@ private nothing recvDataImpl(auto data) {
     - updated copyright year to 2026
 
     @subsection datastreamrequesthandler_v1_0 DataStreamRequestHandler v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! the DataStreamRequestHandler namespace contains all the public objects in the DataStreamRequestHandler module

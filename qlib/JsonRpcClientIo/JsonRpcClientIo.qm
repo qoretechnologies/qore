@@ -92,7 +92,7 @@ client.close();
     @section jsonrpcclientio_relnotes Release History
 
     @subsection jsonrpcclientio_v1_0 JsonRpcClientIo v1.0
-    - initial release with full JSON-RPC 1.0/1.1/2.0 support over async I/O
+    - initial release
 */
 
 #! the JsonRpcClientIo namespace holds all public definitions in the JsonRpcClientIo module

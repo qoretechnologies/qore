@@ -110,7 +110,7 @@ module McpClientDataProvider {
     @section mcpclientdataprovider_relnotes Release Notes
 
     @subsection mcpclientdataprovider_v1_0 McpClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the McpClientDataProvider module

@@ -167,18 +167,7 @@ hash<auto> ast_node = QoreCodeFormat::CSTTranslator::translate(cst_node);
     @section qorecodeformatrelnotes Release Notes
 
     @subsection qorecodeformat_v1_0 v1.0
-    - retain abstract method parameter declarations and defaults in translated ASTs
-    - initial release providing canonical %Qore code formatting using tree-sitter CST
-    - 4-space indentation, same-line opening braces, mandatory braces for control flow
-    - space around binary operators, after keywords, no trailing whitespace
-    - parse directives at column 0, blank lines between top-level declarations
-    - comment, string literal, regex literal, and number literal preservation
-    - line-length-aware wrapping (120 character limit) with intelligent binary expression
-      chain and ternary operator wrapping
-    - idempotent formatting (formatting already-formatted code produces identical output)
-    - @ref QoreCodeFormat::CSTTranslator "CSTTranslator" for legacy AST consumers
-    - AST node type constants (@c ANT_*, @c ADK_*, @c AEK_*, @c ASK_*) and operator/parse-option
-      string maps
+    - initial release
 */
 
 #! Main QoreCodeFormat namespace

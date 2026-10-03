@@ -24,7 +24,7 @@
 
 #! @brief Adapter bridging QoreHistory::History to Linenoise::AbstractHistoryProvider
 /**
-    Implements the @ref Linenoise::AbstractHistoryProvider interface by delegating
+    Implements the @ref Qore::Linenoise::AbstractHistoryProvider interface by delegating
     to a @ref QoreHistory::History instance, making QoreHistory the single source
     of truth for history while linenoise handles interactive line editing.
 

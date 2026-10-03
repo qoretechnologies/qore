@@ -146,7 +146,7 @@ module Pop3ClientDataProvider {
     - updated for new data provider API
 
     @subsection Pop3Clientdataprovider_v1_0 Pop3ClientDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the Pop3ClientDataProvider module

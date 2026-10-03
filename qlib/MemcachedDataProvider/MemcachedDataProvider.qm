@@ -291,7 +291,7 @@ module MemcachedDataProvider {
     @section memcacheddataprovider_relnotes Release Notes
 
     @subsection memcacheddataprovider_v1_0 MemcachedDataProvider v1.0
-    - Initial release of the module
+    - initial release
 */
 
 public namespace MemcachedDataProvider {

@@ -406,7 +406,7 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       (<a href="https://github.com/qoretechnologies/qore/issues/4424">issue 4424</a>)
 
     @subsection filelocationhandler_v1_0 FileLocationHandler v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the FileLocationHandler module

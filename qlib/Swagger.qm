@@ -302,8 +302,7 @@ RestHandler handler(NOTHING, swagger);
     - fixed path matching for paths not beginning with a slash (<a href="https://github.com/qoretechnologies/qore/issues/2516">issue 2516</a>)
 
     @subsection swagger_1_0 Swagger v1.0
-
-    - initial release of the %Swagger module
+    - initial release
 */
 
 #! main namespace for all public %Swagger declarations

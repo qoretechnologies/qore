@@ -50,24 +50,7 @@ module HttpClientStreamingIo {
     @section httpclientstreamingioreleasenotes Release Notes
 
     @subsection httpclientstreamingio_v1_0 HttpClientStreamingIo v1.0
-    - initial release with @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader",
-      @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor", and
-      @ref HttpClientStreamingIo::SseObservable "SseObservable" class for push-based SSE
-      event delivery using I/O-thread parsing via C++ SseAction
-    - SSE event constants: @ref HttpClientStreamingIo::EVENT_SSE_DATA, @ref HttpClientStreamingIo::EVENT_SSE_CLOSED, @ref HttpClientStreamingIo::EVENT_SSE_CONNECTED,
-      @ref HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
-    - @ref HttpClientStreamingIo::SseObservable "SseObservable" gains \c idle_timeout and
-      \c emit_heartbeat options for dead-connection detection and heartbeat delivery
-    - @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader" consumes
-      comment-only SSE keep-alive frames internally and returns only dispatchable
-      SSE events to callers.
-    - @ref HttpClientStreamingIo::SseObservable "SseObservable" supports AsyncAPI 3.0 validation of
-      deserialized SSE event data via the \c asyncapi, \c validator, and \c asyncapi_channel options.
-    - the data held in memory at once is bounded: @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader"
-      limits an event and the data decompressed from one received chunk to a maximum event size
-      (@ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize" by default), and
-      @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor" accepts a maximum size for the data
-      decompressed at once, so that a small compressed stream that expands to a huge one cannot exhaust memory
+    - initial release
 */
 
 #! Main namespace for the HttpClientStreamingIo module

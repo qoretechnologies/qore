@@ -559,7 +559,7 @@ module MewsRestDataProvider {
       enables HTTP/2 and HTTP/3 support against Mews REST endpoints
 
     @subsection mewsrestdataprovider_v1_0 MewsRestDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the MewsRestDataProvider module

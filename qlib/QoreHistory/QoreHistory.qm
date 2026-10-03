@@ -39,7 +39,7 @@ module QoreHistory {
     @section qorehistoryintro Introduction to the QoreHistory Module
 
     The %QoreHistory module provides a shared history management class for Qore
-    tools such as @ref QoreRepl, @ref qdp, and ncurses-based REPL UIs.
+    tools such as @ref qorereplintro "QoreRepl", \c qdp, and ncurses-based REPL UIs.
 
     Features:
     - Timestamped history entries
@@ -70,7 +70,7 @@ h.save("~/.my-history");
     %QoreHistory is the single source of truth for history. Linenoise delegates
     all history navigation (Up/Down, Ctrl+R/Ctrl+S) to %QoreHistory via the
     built-in @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider" adapter
-    class that implements @ref Linenoise::AbstractHistoryProvider "AbstractHistoryProvider".
+    class that implements @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider".
 
     The integration pattern is:
 
@@ -78,9 +78,9 @@ h.save("~/.my-history");
        @code Linenoise::history_load() @endcode or
        @code Linenoise::history_save() @endcode
     -# Register a @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider"
-       instance via @ref Linenoise::set_history_provider() "set_history_provider()"
+       instance via @ref Qore::Linenoise::set_history_provider() "set_history_provider()"
        — no @code Linenoise::history_add() @endcode calls needed
-    -# When the user enters a line, only call @ref History::add() "add()" —
+    -# When the user enters a line, only call @ref QoreHistory::History::add() "add()" —
        Linenoise gets the entry via the provider on the next navigation
     -# Use %QoreHistory for the @c /history command, history expansion
        (@c !!, @c !n, etc.), timestamps, search, and all data-oriented features
@@ -111,8 +111,7 @@ hist.save(history_path);
     @section qorehistoryrelnotes Release Notes
 
     @subsection qorehistory_1_0 QoreHistory 1.0
-    - Initial release with full history management, persistence, navigation,
-      search, expansion, and deduplication support
+    - initial release
 */
 
 #! Main namespace for the QoreHistory module

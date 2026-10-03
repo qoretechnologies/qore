@@ -838,7 +838,7 @@ printf("Created issue: %s\n", issue.identifier);
     @section lineardataproviderrelnotes Release Notes
 
     @subsection lineardataproviderv1_0 LinearDataProvider v1.0
-    - Initial release of the %LinearDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the LinearDataProvider module

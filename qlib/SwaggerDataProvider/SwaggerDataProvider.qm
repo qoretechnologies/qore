@@ -142,7 +142,7 @@ module SwaggerDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/3784">issue 3784</a>)
 
     @subsection swaggerdataprovider_v1_0 SwaggerDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the SwaggerDataProvider module
