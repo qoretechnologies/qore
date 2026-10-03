@@ -37,6 +37,62 @@ GENERATE_TAGFILE = "{tag}"
         self.run_command(["doxygen", str(config)], root)
         return tag
 
+    def configure_installed_assets(self, root, *, missing_header=False, relative_template=False):
+        source = root / "module source"
+        (source / "docs").mkdir(parents=True)
+        sdk = root / "sdk prefix/custom data/qore"
+        sdk.mkdir(parents=True)
+        for name in ("Doxyfile.in", "header_template.html", "dox_qore.css", "Qore-Q.ico",
+                     "qore-logo-55x151-white.png"):
+            if name != "header_template.html" or not missing_header:
+                shutil.copyfile(ROOT / "doxygen" / name, sdk / name)
+        shutil.copyfile(ROOT / "doxygen/footer_template.html", source / "docs/footer_template.html")
+        (source / "fixture.dox").write_text("/** @mainpage SDK asset fixture */\n")
+        template = sdk / "Doxyfile.in"
+        if relative_template:
+            template = Path(os.path.relpath(template, source))
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(InstalledDocAssets NONE)
+include("{ROOT}/cmake/QoreMacros.cmake")
+set(module_name fixture)
+set(CURRENT_MODULE_NAME fixture)
+set(VERSION_MAJOR 1)
+set(VERSION_MINOR 0)
+set(VERSION_PATCH 0)
+set(_dox_input "\\\"${{CMAKE_SOURCE_DIR}}/fixture.dox\\\"")
+set(_dox_output "${{CMAKE_BINARY_DIR}}/docs")
+qore_configure_module_doxygen("{template}" "${{CMAKE_BINARY_DIR}}/Doxyfile")
+file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
+''')
+        build = root / "build"
+        for prefix in (root / "consumer prefix", root / "another prefix"):
+            self.run_command([CMAKE, "-S", str(source), "-B", str(build),
+                              f"-DCMAKE_INSTALL_PREFIX={prefix}"], root)
+            config = (build / "Doxyfile").read_text()
+            self.assertNotIn(str(prefix), config)
+            self.assertIn(f'HTML_HEADER            = "{sdk}/header_template.html"', config)
+        return build, sdk
+
+    def test_installed_assets_ignore_consumer_prefix_and_support_spaces(self):
+        for relative in (False, True):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory(
+                    prefix="qore doc assets ") as directory:
+                build, sdk = self.configure_installed_assets(Path(directory), relative_template=relative)
+                self.run_command(["doxygen", "Doxyfile"], build)
+                html = build / "docs/html"
+                self.assertIn("SDK asset fixture", (html / "index.html").read_text())
+                for name in ("dox_qore.css", "Qore-Q.ico", "qore-logo-55x151-white.png"):
+                    self.assertEqual((sdk / name).read_bytes(), (html / name).read_bytes())
+
+    def test_missing_sdk_header_fails_instead_of_using_consumer_assets(self):
+        with tempfile.TemporaryDirectory(prefix="qore missing doc asset ") as directory:
+            build, sdk = self.configure_installed_assets(Path(directory), missing_header=True)
+            result = subprocess.run(["doxygen", "Doxyfile"], cwd=build,
+                                    capture_output=True, text=True, timeout=60)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(str(sdk / "header_template.html"), result.stderr)
+            self.assertIn("does not exist", result.stderr)
+
     def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False):
         source = root / "module source"
         source.mkdir(exist_ok=True)

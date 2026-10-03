@@ -2009,6 +2009,10 @@ endfunction()
 # Configure external-module documentation with the installed language index and
 # only existing image directories. Keep TAGFILES supplied by the module intact.
 function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
+    # SDK assets are installed beside the template, independently of the
+    # consuming module's CMAKE_INSTALL_PREFIX (and with arbitrary datadirs).
+    get_filename_component(_template_absolute "${_template}" ABSOLUTE)
+    get_filename_component(QORE_MODULE_DOXYGEN_ASSET_DIR "${_template_absolute}" DIRECTORY)
     set(QORE_MODULE_DOXYGEN_IMAGE_PATH "")
     foreach(_image_dir IN ITEMS "${CMAKE_SOURCE_DIR}/doxygen" "${CMAKE_SOURCE_DIR}/docs")
         if(IS_DIRECTORY "${_image_dir}")

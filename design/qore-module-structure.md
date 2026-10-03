@@ -18,6 +18,11 @@ find_package(Qore REQUIRED)
 
 The Doxygen image search includes a module's `doxygen/` and `docs/` directories only
 when they exist. An SDK built without documentation remains usable for compilation.
+Shared HTML headers, stylesheets, icons, and logos are resolved beside the SDK's
+installed `Doxyfile.in`. They do not use the external module's
+`CMAKE_INSTALL_PREFIX`, so a module installed under `/opt/my-module` can build docs
+with a Qore SDK installed under `/usr`, including custom data directories and
+paths containing spaces. Keep these assets together when relocating the template.
 
 Bundled module indexes are installed in `share/qore/module-tags`. Select the modules
 whose API documentation you reference before configuring your documentation:

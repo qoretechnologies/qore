@@ -47,7 +47,7 @@ PROJECT_BRIEF          =
 # exceed 55 pixels and the maximum width should not exceed 200 pixels.
 # Doxygen will copy the logo to the output directory.
 
-PROJECT_LOGO           = "@CMAKE_INSTALL_PREFIX@/share/qore/qore-logo-55x151-white.png"
+PROJECT_LOGO           = "@QORE_MODULE_DOXYGEN_ASSET_DIR@/qore-logo-55x151-white.png"
 
 # The OUTPUT_DIRECTORY tag is used to specify the (relative or absolute)
 # base path where the generated documentation will be put.
@@ -880,7 +880,7 @@ HTML_FILE_EXTENSION    = .html
 # have to redo this when upgrading to a newer version of doxygen or when
 # changing the value of configuration settings such as GENERATE_TREEVIEW!
 
-HTML_HEADER            = @CMAKE_INSTALL_PREFIX@/share/qore/header_template.html
+HTML_HEADER            = "@QORE_MODULE_DOXYGEN_ASSET_DIR@/header_template.html"
 
 # The HTML_FOOTER tag can be used to specify a personal HTML footer for
 # each generated HTML page. If it is left blank doxygen will generate a
@@ -905,7 +905,7 @@ HTML_STYLESHEET        =
 # robust against future updates. Doxygen will copy the style sheet file to
 # the output directory.
 
-HTML_EXTRA_STYLESHEET  = @CMAKE_INSTALL_PREFIX@/share/qore/dox_qore.css
+HTML_EXTRA_STYLESHEET  = "@QORE_MODULE_DOXYGEN_ASSET_DIR@/dox_qore.css"
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -914,7 +914,7 @@ HTML_EXTRA_STYLESHEET  = @CMAKE_INSTALL_PREFIX@/share/qore/dox_qore.css
 # files. In the HTML_STYLESHEET file, use the file name only. Also note that
 # the files will be copied as-is; there are no commands or markers available.
 
-HTML_EXTRA_FILES       = @CMAKE_INSTALL_PREFIX@/share/qore/Qore-Q.ico
+HTML_EXTRA_FILES       = "@QORE_MODULE_DOXYGEN_ASSET_DIR@/Qore-Q.ico"
 
 HTML_COLORSTYLE        = DARK
 

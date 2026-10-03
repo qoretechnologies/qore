@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    External module documentation locates shared HTML assets beside the installed
+    SDK template, independently of the module's installation prefix. Custom SDK
+    data directories and paths containing spaces are supported.
+
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
     waiting indefinitely after the descriptor has been removed from the event loop.
