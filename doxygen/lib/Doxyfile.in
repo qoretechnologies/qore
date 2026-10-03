@@ -1413,7 +1413,10 @@ ALLEXTERNALS           = NO
 # in the modules index. If set to NO, only the current project's groups will
 # be listed.
 
-EXTERNAL_GROUPS        = YES
+EXTERNAL_GROUPS        = NO
+
+# Imported tag files resolve explicit links without populating local navigation.
+EXTERNAL_PAGES         = NO
 
 #---------------------------------------------------------------------------
 # Configuration options related to the dot tool

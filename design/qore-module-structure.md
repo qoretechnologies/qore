@@ -299,6 +299,10 @@ more than one "type" of content — split it into topical subpages.
   rendered URLs stay stable.
 - The mainpage links subpages via `@subpage` (not `@ref`) so they appear in the
   doxygen tree navigation; subpages link peers via `@ref`.
+- Doxygen configurations set `EXTERNAL_PAGES = NO` and `EXTERNAL_GROUPS = NO`.
+  Imported tag files resolve explicit cross-references, but their pages and groups
+  do not belong in the current module's sidebar or indexes. This also prevents
+  development-only Qore pages from appearing as broken published-documentation links.
 - Group guide links into a compact documentation list, with short descriptions
   where they help readers choose a page. Do not create a separate large section
   heading followed only by a link repeating that heading. Preserve old section
