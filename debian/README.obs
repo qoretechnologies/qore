@@ -40,7 +40,8 @@ binary and source indexes:
     sudo apt-get update
     sudo apt-get install qore
 
-Install libqore-dev for the SDK. Independent integrations have separate
+Install libqore-dev for the SDK. Building native C++ modules with CMake also
+requires build-essential, cmake and pkgconf. Independent integrations have separate
 packages, for example qore-python-module, qore-v8-module and qore-xml-module.
 JSON, YAML and the other bundled modules are included with Qore. Source
 packages can be retrieved with apt-get source, for example:

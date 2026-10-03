@@ -3,7 +3,7 @@ Depends: qore
 Restrictions: allow-stderr
 
 Tests: development
-Depends: libqore-dev, cmake, pkgconf
+Depends: libqore-dev, build-essential, cmake, pkgconf
 Restrictions: allow-stderr
 
 Tests: tools
