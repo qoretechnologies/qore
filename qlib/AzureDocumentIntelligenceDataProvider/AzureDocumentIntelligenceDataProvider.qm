@@ -166,8 +166,7 @@ hash<auto> invoice = provider.getChildProvider("analyze-document").doRequest({
     @section AzureDocumentIntelligenceDataProviderRelnotes Release Notes
 
     @subsection AzureDocumentIntelligenceDataProviderv1_0 AzureDocumentIntelligenceDataProvider v1.0
-    - the initial version of the %AzureDocumentIntelligenceDataProvider module
-    - complete stable API coverage, nested types and choices, resource references, and twelve complete locales
+    - initial release
 */
 
 #! contains all public definitions in the AzureDocumentIntelligenceDataProvider module

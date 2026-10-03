@@ -2300,5 +2300,5 @@ module WooCommerceDataProvider {
     @section woocommercedataproviderrelnotes Release Notes
 
     @subsection woocommercedataproviderv1_0 WooCommerceDataProvider v1.0
-    - the initial version of the %WooCommerceDataProvider module
+    - initial release
 */

@@ -64,7 +64,7 @@ module DebugHandler {
     - updated to new WebSocket APIs
 
     @subsection debughandler_v0_1 DebugHandler Version 0.1
-    - the initial version of the DebugHandler module
+    - initial release
 */
 
 #! the DebugHandler namespace contains all the objects in the DebugHandler module

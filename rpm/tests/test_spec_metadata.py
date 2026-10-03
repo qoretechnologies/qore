@@ -112,6 +112,54 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertIn("-DQORE_REQUIRE_ONNXRUNTIME=ON", output)
         self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_CUDAToolkit=ON", output)
 
+    @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
+                         "requires the target build dependency image")
+    def test_llvm_sdk_dependency_selects_the_compiled_header_major(self):
+        import tempfile
+        suse = subprocess.check_output(["rpm", "--eval", "%{?suse_version}"], text=True).strip()
+        fedora = subprocess.check_output(["rpm", "--eval", "%{?fedora}"], text=True).strip()
+        major = 19 if suse else (22 if fedora else 21)
+        isa = subprocess.check_output(["rpm", "--eval", "%{?_isa}"], text=True).strip()
+        name = f"llvm{major}-devel" if suse else "llvm-devel"
+        build = set(subprocess.check_output([
+            "rpmspec", "-q", "--buildrequires", str(SPEC)], text=True).splitlines())
+        sdk = self.requirements()["qore-devel"]
+        if suse:
+            self.assertIn(name, build)
+            self.assertIn(name + isa, sdk)
+            self.assertFalse(any(value.startswith("llvm-devel") for value in build | sdk))
+        else:
+            for operator, version in [(">=", major), ("<", major + 1)]:
+                self.assertIn(f"{name} {operator} {version}", build)
+                self.assertIn(f"{name}{isa} {operator} {version}", sdk)
+        with tempfile.TemporaryDirectory() as directory:
+            spec = Path(directory) / "probe.spec"
+            for dependency, valid in [(f"{name} >= {major}", True),
+                                      (f"{name} < {major}", False)]:
+                spec.write_text("Name: qore-llvm-dependency-probe\nVersion: 1\nRelease: 1\n"
+                                "Summary: LLVM SDK dependency probe\nLicense: MIT\n"
+                                f"BuildRequires: {dependency}\n"
+                                "%description\nLLVM SDK dependency probe.\n%prep\n:\n%files\n"
+                                "%changelog\n* Sat Oct 03 2026 Qore <info@qore.org> - 1-1\n"
+                                "- Verify matching LLVM development headers.\n")
+                result = subprocess.run([
+                    "rpmbuild", "-bp", "--define", f"_topdir {directory}",
+                    "--define", "_buildhost qore-rpm-builder", str(spec)],
+                    capture_output=True, text=True)
+                if valid:
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    self.assertNotIn("warning:", result.stderr.lower())
+                else:
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("Failed build dependencies", result.stderr)
+            include = subprocess.check_output(["llvm-config", "--includedir"], text=True).strip()
+            source = ("#include <llvm/Config/llvm-config.h>\n"
+                      f"static_assert(LLVM_VERSION_MAJOR == {major}, \"LLVM SDK mismatch\");\n")
+            result = subprocess.run(["c++", "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+                                     "-I" + include, "-x", "c++", "-"],
+                                    input=source, capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_snapshot_compatibility_does_not_obsolete_itself(self):
         # Source preparation substitutes a snapshot version before rpmbuild.
         import tempfile

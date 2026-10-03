@@ -89,7 +89,7 @@ printf("Organization: %s\n", result.body.organization_name);
     @section constantcontactrestclientrelnotes Release Notes
 
     @subsection constantcontactrestclientv1_0 ConstantContactRestClient v1.0
-    - the initial version of the %ConstantContactRestClient module
+    - initial release
 */
 
 #! the ConstantContactRestClient namespace contains all the objects in the ConstantContactRestClient module

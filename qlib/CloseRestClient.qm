@@ -88,7 +88,7 @@ printf("Lead: %s\n", result.body.data[0].display_name);
     @section closerestclientrelnotes Release Notes
 
     @subsection closerestclientv1_0 CloseRestClient v1.0
-    - the initial version of the %CloseRestClient module
+    - initial release
 */
 
 #! the CloseRestClient namespace contains all the objects in the CloseRestClient module

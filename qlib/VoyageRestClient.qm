@@ -89,7 +89,7 @@ printf("%Y\n", ans.body);
     @section VoyageRestClientRelnotes Release Notes
 
     @subsection VoyageRestClientv1_0 VoyageRestClient v1.0
-    - the initial version of the %VoyageRestClient module
+    - initial release
 */
 
 #! the VoyageRestClient namespace contains all the objects in the VoyageRestClient module

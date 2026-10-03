@@ -1930,7 +1930,7 @@ module FreshBooksDataProvider {
     @section freshbooksdataproviderrelnotes Release Notes
 
     @subsection freshbooksdataproviderv1_0 FreshBooksDataProvider v1.0
-    - the initial version of the %FreshBooksDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the FreshBooksDataProvider module

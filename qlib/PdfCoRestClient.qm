@@ -80,7 +80,7 @@ printf("PDF Info: %Y\n", result.body);
     @section pdfcorestclientrelnotes Release Notes
 
     @subsection pdfcorestclientv1_0 PdfCoRestClient v1.0
-    - the initial version of the %PdfCoRestClient module
+    - initial release
 */
 
 #! the PdfCoRestClient namespace contains all the objects in the PdfCoRestClient module

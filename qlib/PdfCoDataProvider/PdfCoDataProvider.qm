@@ -817,7 +817,7 @@ module PdfCoDataProvider {
     @section pdfcodataproviderrelnotes Release Notes
 
     @subsection pdfcodataproviderv1_0 PdfCoDataProvider v1.0
-    - the initial version of the %PdfCoDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the PdfCoDataProvider module

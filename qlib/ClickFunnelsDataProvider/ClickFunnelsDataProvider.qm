@@ -1442,7 +1442,7 @@ module ClickFunnelsDataProvider {
     @section clickfunnelsdataproviderrelnotes Release Notes
 
     @subsection clickfunnelsdataproviderv1_0 ClickFunnelsDataProvider v1.0
-    - the initial version of the %ClickFunnelsDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ClickFunnelsDataProvider module

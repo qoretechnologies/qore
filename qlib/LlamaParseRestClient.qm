@@ -103,7 +103,7 @@ module LlamaParseRestClient {
     @section LlamaParseRestClientRelnotes Release Notes
 
     @subsection LlamaParseRestClientv1_0 LlamaParseRestClient v1.0
-    - the initial version of the %LlamaParseRestClient module
+    - initial release
 */
 
 %requires json
@@ -331,7 +331,7 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
         @param poll_interval_ms how long to wait between polls
 
         @return the final job status hash from
-            \c GET /job/<id> (terminal state)
+            \c GET /job/&lt;id&gt; (terminal state)
 
         @throw LLAMAPARSE-ERROR overall timeout exceeded
     */

@@ -45,7 +45,24 @@ module AsyncSocketIo {
 
     @section asyncsocketiointro AsyncSocketIo Module Introduction
 
-    The %AsyncSocketIo module provides an API for async socket I/O.
+    The %AsyncSocketIo module provides async socket I/O using the native
+    @ref Qore::AsyncIoController controller and the operating system's event loop
+    (epoll on Linux, kqueue on macOS/BSD).
+
+    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" submits operations,
+      cancels them by key or owner, schedules timers, and dispatches callbacks to worker threads.
+    - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" gives protocols a common
+      stream interface, implemented for HTTP/2 and HTTP/3 with backpressure and controller wakeups.
+      Its @ref AsyncSocketIo::AbstractStreamContext::trySendData() "trySendData()" method returns
+      @ref False when the send buffer is full, allowing callers to drop a slow consumer without blocking.
+    - @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream" sends HTTP/2 headers,
+      data, and trailers through the async controller, including gRPC responses.
+    - @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" waits for event notifiers
+      through the I/O controller instead of polling sockets on handler threads.
+
+    Timers can carry an owner identifier. Before destroying their owner, cancel outstanding timers
+    and drain dispatched callbacks with
+    @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner() "flushCallbacksByOwner()".
 
     To use this module, use \c "%requires AsyncSocketIo" in your code.
 
@@ -66,76 +83,7 @@ module AsyncSocketIo {
     @section asyncsocketiorelnotes Release Notes
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
-    - the initial version of the AsyncSocketIo module
-    - @ref AsyncSocketIo::AbstractStreamContext::trySendData() "AbstractStreamContext::trySendData()": a
-      non-blocking send that returns @ref False instead of blocking or waiting when the stream send buffer is full
-      (backpressure).  HTTP/2 and HTTP/3 stream contexts override it so a caller (e.g. a WebSocket broadcast) can
-      drop a slow or non-reading client immediately rather than stalling on it
-    - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" accepts an optional \c owner
-      argument; when set, the timer's callback dispatch is tracked under that owner so a teardown path can
-      deterministically drain a fired-but-not-yet-run callback via
-      @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner() "flushCallbacksByOwner()" — this
-      closes the race where a timer fires and its callback is dispatched to a worker just as the object that
-      owns the callback is destroyed
-    - thin wrapper around the native C++ @ref Qore::AsyncIoController class for high-performance
-      async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
-    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(),
-      cancel(), cancelByKey(), cancelByOwner() operations
-    - custom key support in \c SocketPollOperationInfo
-    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive
-      helper for HTTP/2 sockets;
-      @ref AsyncSocketIo::Http2StreamContext::sendData() "sendData()" and
-      @ref AsyncSocketIo::Http2StreamContext::sendTrailers() "sendTrailers()" use the
-      async-safe \c Socket HTTP/2 methods (handler threads do not hold the
-      socket wrapper lock during HTTP/2 frame submission).  Constructor accepts
-      an optional trailing \c wake_callback closure that is invoked after each
-      write to nudge the I/O thread to flush promptly, matching the
-      @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" pattern.
-    - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
-      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
-    - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
-      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
-    - @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream":
-      async-only HTTP/2 server stream handle that routes writes through the
-      async-safe \c Socket HTTP/2 methods so handler threads do not hold the
-      socket wrapper lock while performing HTTP/2 I/O.  Purpose-built for gRPC
-      and other
-      protocols that drive \c headers → \c DATA* → \c trailers responses from
-      an async I/O controller.  Constructor accepts an optional
-      \c wake_callback closure (typically @c HttpConnectionInfo.header_info.io_wake)
-      that is invoked after each \c sendHeaders / \c sendData / \c sendTrailers
-      to wake the I/O thread for prompt frame flushing — without it, writes are
-      only flushed on the controller's next scheduled tick.
-    - @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" +
-      @ref AsyncSocketIo::AsyncSocketIoController::waitForNotifier()
-      "AsyncSocketIoController::waitForNotifier()": async replacement for the
-      handler-thread @c Socket::poll() pattern used to wait on an
-      @ref Qore::EventNotifier "EventNotifier".  The fd wait runs on the I/O
-      thread; the caller blocks on the submit Queue via condition variable.
-      Used by <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> happy-eyeballs connection
-      racing to eliminate the last remaining handler-thread sync I/O in that
-      module.
-    - thread scaling: the I/O thread count adapts automatically to the host CPU count and can
-      be overridden with the \c QORE_IO_THREADS environment variable; callback workers and
-      tasks submitted with @ref AsyncSocketIo::AsyncSocketIoController::submitTask()
-      "submitTask()" are bounded by default to \c hardware_concurrency() * 4 capped at 512.
-    - autostop race fix: eliminated a race condition where the I/O thread could exit during the
-      autostop grace period while new operations were being submitted
-    - \c onComplete/abort refactor: poll operations implement
-      @ref Qore::AbstractPollOperation::onComplete() "onComplete()" and
-      @ref Qore::AbstractPollOperation::abort() "abort()" methods instead of using the
-      \c SocketPollOperationInfo.callback field; callbacks are dispatched to the thread pool
-      to avoid blocking the I/O thread
-    - @ref Qore::DelegatingPollOperation "DelegatingPollOperation": new C++ wrapper for poll
-      operations that cannot be subclassed directly (SSL handshake, ping, synchronous wait),
-      delegating \c onComplete()/\c abort() to user-provided closures
-    - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience
-      method for submitting work to the thread pool
-    - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" and
-      @ref AsyncSocketIo::AsyncSocketIoController::cancelTimer() "cancelTimer()" for scheduling
-      code callbacks on the I/O thread via the C++ event-loop timer API
-    - global singleton via @ref AsyncSocketIo::getGlobalAsyncIoController() "getGlobalAsyncIoController()"
-      (lazily initialized on first access; lifecycle managed by libqore)
+    - initial release
 
     @section asyncsocketiointernals Internal Design
 

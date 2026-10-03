@@ -322,7 +322,7 @@ if (laq.isFull()) {
       (<a href="https://github.com/qoretechnologies/qore/issues/3492">issue 3492</a>)
 
     @subsection logger_v0_1 v0.1
-    - the initial version of the Logger module
+    - initial release
 */
 
 #! The Logger namespace contains all the definitions in the Logger module

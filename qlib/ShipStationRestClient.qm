@@ -84,7 +84,7 @@ printf("Stores: %Y\n", result.body);
     @section shipstationrestclientrelnotes Release Notes
 
     @subsection shipstationrestclientv1_0 ShipStationRestClient v1.0
-    - the initial version of the %ShipStationRestClient module
+    - initial release
 */
 
 #! the ShipStationRestClient namespace contains all the objects in the ShipStationRestClient module

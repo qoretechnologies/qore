@@ -68,7 +68,7 @@ module SmartSheetRestClient {
     @section smartsheetrestclientrelnotes Release Notes
 
     @subsection smartsheetrestclientv1_0 SmartSheetRestClient v1.0
-    - the initial version of the %SmartSheetRestClient module
+    - initial release
 */
 
 #! the SmartSheetRestClient namespace contains all the objects in the SmartSheetRestClient module

@@ -690,5 +690,5 @@ module TallyDataProvider {
     @section tallydataproviderrelnotes Release Notes
 
     @subsection tallydataproviderv1_0 TallyDataProvider v1.0
-    - the initial version of the %TallyDataProvider module
+    - initial release
 */

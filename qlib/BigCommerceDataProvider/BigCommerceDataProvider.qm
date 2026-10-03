@@ -1110,7 +1110,7 @@ module BigCommerceDataProvider {
     @section bigcommercedataproviderrelnotes Release Notes
 
     @subsection bigcommercedataproviderv1_0 BigCommerceDataProvider v1.0
-    - the initial version of the %BigCommerceDataProvider module
+    - initial release
 */
 
 #! the BigCommerceDataProvider namespace contains all the objects in the BigCommerceDataProvider module

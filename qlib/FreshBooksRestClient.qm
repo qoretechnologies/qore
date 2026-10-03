@@ -90,7 +90,7 @@ printf("User: %s %s\n", result.body.response.first_name, result.body.response.la
     @section freshbooksrestclientrelnotes Release Notes
 
     @subsection freshbooksrestclientv1_0 FreshBooksRestClient v1.0
-    - the initial version of the %FreshBooksRestClient module
+    - initial release
 */
 
 #! the FreshBooksRestClient namespace contains all the objects in the FreshBooksRestClient module

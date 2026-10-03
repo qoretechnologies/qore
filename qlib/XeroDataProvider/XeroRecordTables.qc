@@ -27,7 +27,7 @@ public namespace XeroDataProvider {
 #! The Xero record-based tables
 /** Xero is the other application in this family whose API publishes a real filter expression language, and
     the accounting tables therefore declare
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search": a whole search
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search": a whole search
     expression is rendered into Xero's \c where clause and Xero does the searching.
 
     @section xerorecord_where The where Clause
@@ -62,7 +62,7 @@ public namespace XeroDataProvider {
     @section xerorecord_settings The Settings Listings Do Not Page
 
     \c Items has no \c page or \c pageSize at all - Xero returns the whole collection in one response - so
-    that table declares @ref RSRP_NONE and reads it once.  Declaring paging it does not have would send
+    that table declares @ref RestSchemaActions::RSRP_NONE and reads it once.  Declaring paging it does not have would send
     arguments Xero ignores and then loop forever waiting for a short page.
 
     @section xerorecord_projects Projects Are a Second Document

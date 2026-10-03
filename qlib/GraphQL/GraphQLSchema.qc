@@ -71,15 +71,15 @@ public hashdecl GraphQLTypeDef {
     string name;
     #! the description, if any
     *string description;
-    #! for @ref TYPE_OBJECT and @ref TYPE_INTERFACE: the fields, keyed by name (insertion-ordered)
+    #! for @ref TYPE_OBJECT and @ref TYPE_INTERFACE "TYPE_INTERFACE": the fields, keyed by name (insertion-ordered)
     hash<string, hash<GraphQLFieldDef>> fields = {};
-    #! for @ref TYPE_OBJECT: the names of implemented interfaces
+    #! for @ref TYPE_OBJECT "TYPE_OBJECT": the names of implemented interfaces
     list<string> interfaces = ();
-    #! for @ref TYPE_UNION: the member type names
+    #! for @ref TYPE_UNION "TYPE_UNION": the member type names
     list<string> unionTypes = ();
-    #! for @ref TYPE_ENUM: the enum value names
+    #! for @ref TYPE_ENUM "TYPE_ENUM": the enum value names
     list<string> enumValues = ();
-    #! for @ref TYPE_INPUT_OBJECT: the input fields, keyed by name (insertion-ordered)
+    #! for @ref TYPE_INPUT_OBJECT "TYPE_INPUT_OBJECT": the input fields, keyed by name (insertion-ordered)
     hash<string, hash<GraphQLInputValueDef>> inputFields = {};
 }
 

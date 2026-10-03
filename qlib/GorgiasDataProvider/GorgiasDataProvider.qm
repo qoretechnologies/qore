@@ -612,5 +612,5 @@ module GorgiasDataProvider {
     @section gorgiasdataproviderrelnotes Release Notes
 
     @subsection gorgiasdataproviderv1_0 GorgiasDataProvider v1.0
-    - the initial version of the %GorgiasDataProvider module
+    - initial release
 */

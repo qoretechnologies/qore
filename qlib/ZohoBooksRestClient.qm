@@ -91,7 +91,7 @@ printf("Invoices: %y\n", result.body.invoices);
     @section zohobooksrestclientrelnotes Release Notes
 
     @subsection zohobooksrestclientv1_0 ZohoBooksRestClient v1.0
-    - the initial version of the %ZohoBooksRestClient module
+    - initial release
 */
 
 #! the ZohoBooksRestClient namespace contains all the objects in the ZohoBooksRestClient module

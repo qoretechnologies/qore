@@ -524,7 +524,7 @@ Content-Length: 16
     - added support for URL form encoded formatted message bodies (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
 
     @subsection rh_1_0 RestHandler v1.0
-    - the initial version of the RestHandler module
+    - initial release
 */
 
 #! the RestHandler namespace contains all the objects in the RestHandler module

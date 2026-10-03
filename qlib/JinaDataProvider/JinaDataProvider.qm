@@ -263,7 +263,7 @@ hash<auto> vectors = provider.getChildProvider("create-embeddings").doRequest({
     - adds offline wire tests and optional live API integration tests
 
     @subsection JinaDataProviderv1_0 JinaDataProvider v1.0
-    - the initial version of the %JinaDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the JinaDataProvider module

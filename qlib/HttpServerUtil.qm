@@ -266,17 +266,8 @@ module HttpServerUtil {
     - aligned version with HttpServer module version
 
     @subsection httputil0311 HttpServerUtil 0.3.11
-    - initial version of the module
-    - implemented support for notifying persistent connections when the connection is terminated while a persistent
-      connection is in place
-    - removed unused AbstractStreamRequestHandler class
-    - fixed @ref HttpServer::parse_uri_query() to always return \a params as a hash
-      (<a href="https://github.com/qoretechnologies/qore/issues/569">issue 569</a>)
-    - added \c root_path to the context hash if the path was matched by a URL path prefix
-      (<a href="https://github.com/qoretechnologies/qore/issues/570">issue 570</a>)
-    - implemented support for custom timeout values in stream handlers
-      (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
- */
+    - initial release
+*/
 
 #! the main namespace for the HttpServer and HttpServerUtil modules
 /** To use this module, use \c "%requires HttpServerUtil" in your code.

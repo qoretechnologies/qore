@@ -120,7 +120,7 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4295">issue 4295</a>)
 
     @subsection ServiceNowrestclientv1_0 ServiceNowRestClient v1.0
-    - the initial version of the %ServiceNowRestClient module
+    - initial release
 */
 
 #! the ServiceNowRestClient namespace contains all the objects in the ServiceNowRestClient module

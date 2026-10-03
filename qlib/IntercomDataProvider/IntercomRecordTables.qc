@@ -27,7 +27,7 @@ public namespace IntercomDataProvider {
 #! The Intercom record-based tables
 /** Intercom publishes two real search endpoints - one for contacts and one for conversations - and both
     take a **filter tree in the request body** rather than a query string.  Those two tables therefore
-    declare @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search"; the other
+    declare @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search"; the other
     five list a collection and are searched here, as the records arrive.
 
     @section intercomrecord_tree The Query Is a Tree, Not a String

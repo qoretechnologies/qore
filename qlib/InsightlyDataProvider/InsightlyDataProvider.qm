@@ -1054,5 +1054,5 @@ module InsightlyDataProvider {
     @section insightlydataproviderrelnotes Release Notes
 
     @subsection insightlydataproviderv1_0 InsightlyDataProvider v1.0
-    - the initial version of the %InsightlyDataProvider module
+    - initial release
 */

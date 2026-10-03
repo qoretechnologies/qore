@@ -120,7 +120,7 @@ stream.close();
     @section GrokRestClientRelnotes Release Notes
 
     @subsection GrokRestClientv1_0 GrokRestClient v1.0
-    - the initial version of the %GrokRestClient module
+    - initial release
 */
 
 %requires json

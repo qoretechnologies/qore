@@ -68,7 +68,7 @@ module SystemeIoRestClient {
     @section systemeiorestclientrelnotes Release Notes
 
     @subsection systemeiorestclientv1_0 SystemeIoRestClient v1.0
-    - the initial version of the %SystemeIoRestClient module
+    - initial release
 */
 
 #! the SystemeIoRestClient namespace contains all the objects in the SystemeIoRestClient module

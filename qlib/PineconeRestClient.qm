@@ -115,7 +115,7 @@ module PineconeRestClient {
     @section PineconeRestClientRelnotes Release Notes
 
     @subsection PineconeRestClientv1_0 PineconeRestClient v1.0
-    - the initial version of the %PineconeRestClient module
+    - initial release
 */
 
 %requires json

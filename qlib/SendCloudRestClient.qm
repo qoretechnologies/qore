@@ -106,7 +106,7 @@ printf("User: %Y\n", result.body);
     @section sendcloudrestclientrelnotes Release Notes
 
     @subsection sendcloudrestclientv1_0 SendCloudRestClient v1.0
-    - the initial version of the %SendCloudRestClient module
+    - initial release
 */
 
 #! the SendCloudRestClient namespace contains all the objects in the SendCloudRestClient module
@@ -259,7 +259,7 @@ public class SendCloudRestClientBase {
     }
 
     #! Computes the retry delay for a 429 response based on headers or a default
-    /** @param info the response info hash returned by @ref RestClient::doRequest()
+    /** @param info the response info hash returned by @ref RestClient::RestClient::doRequest()
         @param default_delay the default delay to fall back on when no header is supplied
 
         @return the delay before the next retry attempt

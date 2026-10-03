@@ -59,7 +59,6 @@ public class GitHubEventDataType {
     /** @param name the type name
         @param fields the payload fields, in order, each a hash of \c desc and either \c component (a
             component schema name) or \c type (a type map key)
-        @param optional the fields that are not always present
 
         @return the payload type
     */

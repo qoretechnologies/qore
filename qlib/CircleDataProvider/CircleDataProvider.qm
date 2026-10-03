@@ -741,5 +741,5 @@ module CircleDataProvider {
     @section circledataproviderrelnotes Release Notes
 
     @subsection circledataproviderv1_0 CircleDataProvider v1.0
-    - the initial version of the %CircleDataProvider module
+    - initial release
 */

@@ -89,7 +89,7 @@ printf("%Y\n", ans.body);
     @endcode
 
     @note Model identifiers on Fireworks use the
-    `accounts/<owner>/models/<name>` format.  See the
+    `accounts/&lt;owner&gt;/models/&lt;name&gt;` format.  See the
     [Fireworks model catalog](https://fireworks.ai/models).
 
     @section FireworksRestClientRelnotes Release Notes
@@ -101,7 +101,7 @@ printf("%Y\n", ans.body);
     - associate connections with the Fireworks AI application
 
     @subsection FireworksRestClientv1_0 FireworksRestClient v1.0
-    - the initial version of the %FireworksRestClient module
+    - initial release
 */
 
 %requires json

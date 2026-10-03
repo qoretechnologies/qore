@@ -108,7 +108,7 @@ printf("User: %Y\n", result.body);
     @section bitbucketrestclientrelnotes Release Notes
 
     @subsection bitbucketrestclientv1_0 BitbucketRestClient v1.0
-    - the initial version of the %BitbucketRestClient module
+    - initial release
 */
 
 #! the BitbucketRestClient namespace contains all the objects in the BitbucketRestClient module

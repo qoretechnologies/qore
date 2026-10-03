@@ -233,7 +233,7 @@ printf("%s\n", transcript.text);
     transport tests; live tests do not submit batches or deploy adapters.
 
     @subsection GroqDataProviderv1_0 GroqDataProvider v1.0
-    - the initial version of the %GroqDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the GroqDataProvider module

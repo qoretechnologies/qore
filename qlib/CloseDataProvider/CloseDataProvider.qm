@@ -1975,7 +1975,7 @@ module CloseDataProvider {
     @section closedataproviderrelnotes Release Notes
 
     @subsection closedataproviderv1_0 CloseDataProvider v1.0
-    - the initial version of the %CloseDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the CloseDataProvider module

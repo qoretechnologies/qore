@@ -88,7 +88,7 @@ printf("Customers: %Y\n", result.body);
     @section cin7corerestclientrelnotes Release Notes
 
     @subsection cin7corerestclientv1_0 Cin7CoreRestClient v1.0
-    - the initial version of the %Cin7CoreRestClient module
+    - initial release
 */
 
 #! the Cin7CoreRestClient namespace contains all the objects in the Cin7CoreRestClient module

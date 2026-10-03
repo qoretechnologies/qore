@@ -27,7 +27,7 @@ public namespace KlaviyoDataProvider {
 #! The Klaviyo record-based tables
 /** Klaviyo's collections are JSON:API resource collections, and every one of them is filtered with the same
     \c filter query argument.  Six of the seven tables therefore declare
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search": a whole search
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search": a whole search
     expression is rendered into that argument and Klaviyo does the searching.
 
     @section klaviyorecord_filter The Filter Syntax

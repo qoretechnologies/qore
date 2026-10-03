@@ -69,7 +69,7 @@ module WeaviateRestClient {
     @section WeaviateRestClientRelnotes Release Notes
 
     @subsection WeaviateRestClientv1_0 WeaviateRestClient v1.0
-    - the initial version of the %WeaviateRestClient module
+    - initial release
 */
 
 %requires json

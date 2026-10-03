@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WaveRestClient.qm Qore user module for calling Wave GraphQL API services
 
-/*  WaveRestClient.qm Copyright (C) 2025 Qore Technologies, s.r.o.
+/*  WaveRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -85,7 +85,7 @@ printf("User: %s %s\n", result.body.data.user.firstName, result.body.data.user.l
     @section waverestclientrelnotes Release Notes
 
     @subsection waverestclientv1_0 WaveRestClient v1.0
-    - the initial version of the %WaveRestClient module
+    - initial release
 */
 
 #! the WaveRestClient namespace contains all the objects in the WaveRestClient module

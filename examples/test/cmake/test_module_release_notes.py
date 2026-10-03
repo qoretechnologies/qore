@@ -33,6 +33,8 @@ class ModuleReleaseNotesTest(unittest.TestCase):
 
     def test_initial_release_rejects_features_and_development_fixes(self):
         for entry in ('- Initial release', '- initial public release',
+                      '- the initial version of the Example module', '- initial version',
+                      '- first release', '- first public version',
                       '- initial release\n    - supports streaming',
                       '- fixed a crash\n- initial release',
                       'Initial release, shipped with Qore 3.0.'):
@@ -71,6 +73,7 @@ string value = "initial release with features";
     - added a module
       - initial release: provides streaming
     - fixed a regression introduced in the initial release
+    - 2024-11-05 (initial version of the protocol)
 */"""
         self.assertEqual([], checker.inspect_source(announcements))
 

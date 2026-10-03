@@ -894,7 +894,7 @@ module ApolloDataProvider {
     @section apollodataproviderrelnotes Release Notes
 
     @subsection apollodataproviderv1_0 ApolloDataProvider v1.0
-    - the initial version of the %ApolloDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ApolloDataProvider module

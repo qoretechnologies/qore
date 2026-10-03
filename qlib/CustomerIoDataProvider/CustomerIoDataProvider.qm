@@ -1345,7 +1345,7 @@ cio.getChildProvider("track-event").doRequest({
     @section customeriodataproviderrelnotes Release Notes
 
     @subsection customeriodataproviderv1_0 CustomerIoDataProvider v1.0
-    - the initial version of the %CustomerIoDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the CustomerIoDataProvider module

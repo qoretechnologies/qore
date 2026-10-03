@@ -409,7 +409,7 @@ module GeminiDataProvider {
     @section geminidataproviderRelnotes Release Notes
 
     @subsection geminidataproviderv1_0 GeminiDataProvider v1.0
-    - the initial version of the %GeminiDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the GeminiDataProvider module

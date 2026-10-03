@@ -423,7 +423,7 @@ if (shipment.rates) {
     @section shippodataproviderrelnotes Release Notes
 
     @subsection shippodataproviderv1_0 ShippoDataProvider v1.0
-    - the initial version of the %ShippoDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ShippoDataProvider module

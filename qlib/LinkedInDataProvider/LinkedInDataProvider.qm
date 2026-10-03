@@ -451,7 +451,7 @@ Delighted to be working with @[Qore Technologies](urn:li:organization:2414183) o
     @section linkedindataproviderrelnotes Release Notes
 
     @subsection linkedindataproviderv1_0 LinkedInDataProvider v1.0
-    - the initial version of the %LinkedInDataProvider module
+    - initial release
 */
 
 public namespace LinkedInDataProvider {

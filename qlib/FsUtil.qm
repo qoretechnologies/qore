@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FsUtil.qm Qore user module providing file system related functionality
 
-/*  FsUtil.qm Copyright 2018 - 2024 Qore Technologies, s.r.o.
+/*  FsUtil.qm Copyright 2018 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -103,7 +103,7 @@ module FsUtil {
       (<a href="https://github.com/qoretechnologies/qore/issues/3945">issue 3945</a>)
 
     @subsection fsutil_v1_0 Version 1.0
-    - initial version of module
+    - initial release
 */
 
 # private namespace

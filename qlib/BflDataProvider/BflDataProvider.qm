@@ -164,7 +164,7 @@ module BflDataProvider {
     - preserve model-specific null, empty, false, zero, and structured video inputs
 
     @subsection BflDataProviderv1_0 BflDataProvider v1.0
-    - the initial version of the %BflDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the BflDataProvider module

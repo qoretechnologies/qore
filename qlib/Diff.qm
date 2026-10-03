@@ -79,7 +79,7 @@ module Diff {
     - added @ref Diff::diff_unified()
 
     @subsection diff_1_0 Diff 1.0
-    - the initial version of the Diff module
+    - initial release
 */
 
 #! the Diff namespace contains all the objects in the Diff module

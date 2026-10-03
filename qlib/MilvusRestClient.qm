@@ -62,7 +62,7 @@ module MilvusRestClient {
     @section MilvusRestClientRelnotes Release Notes
 
     @subsection MilvusRestClientv1_0 MilvusRestClient v1.0
-    - the initial version of the %MilvusRestClient module
+    - initial release
 */
 
 %requires json

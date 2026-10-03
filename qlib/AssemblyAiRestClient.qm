@@ -111,7 +111,7 @@ printf("Transcript: %s\nSummary: %s\n", result.text, result.summary);
     @section AssemblyAiRestClientRelnotes Release Notes
 
     @subsection AssemblyAiRestClientv1_0 AssemblyAiRestClient v1.0
-    - the initial version of the %AssemblyAiRestClient module
+    - initial release
 */
 
 %requires json

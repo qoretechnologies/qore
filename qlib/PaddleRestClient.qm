@@ -109,7 +109,7 @@ printf("Customers: %Y\n", result.body);
     @section paddlerestclientrelnotes Release Notes
 
     @subsection paddlerestclientv1_0 PaddleRestClient v1.0
-    - the initial version of the %PaddleRestClient module
+    - initial release
 */
 
 #! the PaddleRestClient namespace contains all the objects in the PaddleRestClient module

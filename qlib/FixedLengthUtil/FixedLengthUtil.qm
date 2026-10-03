@@ -365,7 +365,7 @@ w.write(data);
     - fixes and improvements to errors and exceptions (<a href="https://github.com/qoretechnologies/qore/issues/1828">issue 1828</a>)
 
     @subsection fixedlengthutil_v1_0 Version 1.0
-    - initial version of module
+    - initial release
 */
 
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module

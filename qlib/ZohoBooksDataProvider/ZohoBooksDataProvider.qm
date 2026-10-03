@@ -2177,7 +2177,7 @@ map printf("Invoice: %s - %s\n", $1.invoice_number, $1.total),
     @section zohobooksdataproviderrelnotes Release Notes
 
     @subsection zohobooksdataproviderv1_0 ZohoBooksDataProvider v1.0
-    - the initial version of the %ZohoBooksDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ZohoBooksDataProvider module

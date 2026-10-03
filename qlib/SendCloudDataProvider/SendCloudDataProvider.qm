@@ -685,7 +685,7 @@ printf("Created parcel: %d\n", result.id);
     @section sendclouddataproviderrelnotes Release Notes
 
     @subsection sendclouddataproviderv1_0 SendCloudDataProvider v1.0
-    - the initial version of the %SendCloudDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the SendCloudDataProvider module

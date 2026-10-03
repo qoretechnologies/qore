@@ -185,8 +185,8 @@ public class FreshsalesDataProviderBase inherits DataProvider::AbstractDataProvi
 
     #! Returns an enriched error description that includes the Freshsales API error message if available
     /** Freshsales uses three distinct error envelopes depending on where the error originates:
-        - Endpoint/validation: \c {"errors": {"code": <status>, "message": ["<msg1>", ...]}}
-        - Malformed JSON at the gateway: \c {"status": <status>, "error": "..."}
+        - Endpoint/validation: \c {"errors": {"code": &lt;status&gt;, "message": ["&lt;msg1&gt;", ...]}}
+        - Malformed JSON at the gateway: \c {"status": &lt;status&gt;, "error": "..."}
         - Auth failure: \c {"login": "failed", "message": "Incorrect or expired API key"}
 
         The standard \c errors.message field is a list but may arrive as a scalar string. An

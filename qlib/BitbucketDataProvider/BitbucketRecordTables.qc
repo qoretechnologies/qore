@@ -28,7 +28,7 @@ public namespace BitbucketDataProvider {
 /** Bitbucket is one of the two applications in this family whose API publishes a real filter expression
     language, so a whole search expression can be sent over the wire rather than a handful of query
     arguments.  That is what
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" means, and the
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" means, and the
     \c repositories and \c commit-comments tables declare it because Bitbucket really does the searching.
 
     @section bitbucketrecord_bbql BBQL
@@ -104,7 +104,7 @@ public class BitbucketRecordTables {
         const RecordGroup = "Record-Based";
 
         #! Bitbucket Query Language, as sent in the \c q argument
-        /** \c ~ is declared in @ref RestSchemaRecordQueryInfo::inexact_ops "inexact_ops" by every table that
+        /** \c ~ is declared in @ref RestSchemaActions::RestSchemaRecordQueryInfo::inexact_ops "inexact_ops" by every table that
             uses this syntax, because Bitbucket does not document whether it matches case-sensitively.
         */
         const Bbql = <RestSchemaQuerySyntaxInfo>{

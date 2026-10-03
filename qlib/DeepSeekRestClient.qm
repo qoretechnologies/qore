@@ -110,7 +110,7 @@ printf("%Y\n", ans.body);
     - Honored immediate versus deferred connection construction for the synchronous client.
 
     @subsection DeepSeekRestClientv1_0 DeepSeekRestClient v1.0
-    - the initial version of the %DeepSeekRestClient module
+    - initial release
 */
 
 %requires json

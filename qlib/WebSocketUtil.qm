@@ -103,7 +103,7 @@ module WebSocketUtil {
     - converted to @ref new-style "%new-style"
 
     @subsection wsu_v10 v1.0
-    - the initial version of the WebSocketUtil module
+    - initial release
 */
 
 #! the WebSocketUtil namespace contains all the definitions in the WebSocketUtil module

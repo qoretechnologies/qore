@@ -57,7 +57,7 @@ module DebugUtil {
       (<a href="https://github.com/qoretechnologies/qore/issues/4635">issue 4635</a>)
 
     @subsection du_v0_1 v0.1
-    - the initial version of the DebugUtil module
+    - initial release
 */
 
 #! the DebugUtil namespace contains all the definitions in the DebugUtil module

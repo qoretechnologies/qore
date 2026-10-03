@@ -89,7 +89,7 @@ module MilvusDataProvider {
     @section MilvusDataProviderRelnotes Release Notes
 
     @subsection MilvusDataProviderv1_0 MilvusDataProvider v1.0
-    - the initial version of the %MilvusDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the MilvusDataProvider module

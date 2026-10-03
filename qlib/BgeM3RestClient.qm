@@ -122,7 +122,7 @@ printf("%Y\n", ans.body.dense);
     @section BgeM3RestClientRelnotes Release Notes
 
     @subsection BgeM3RestClientv1_0 BgeM3RestClient v1.0
-    - the initial version of the %BgeM3RestClient module
+    - initial release
 */
 
 #! the BgeM3RestClient namespace contains all the objects in the BgeM3RestClient module

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SalesforceRestClient.qm Qore user module for calling Salesforce.com REST services
 
-/*  SalesforceRestClient.qm Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+/*  SalesforceRestClient.qm Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -207,7 +207,7 @@ rc.bulkJobClose(h.id);
     - updated for complex types
 
     @subsection salesforcerestclientv1_0 SalesforceRestClient v1.0
-    - the initial version of the %SalesforceRestClient module
+    - initial release
 */
 
 #! the SalesforceRestClient namespace contains all the objects in the SalesforceRestClient module

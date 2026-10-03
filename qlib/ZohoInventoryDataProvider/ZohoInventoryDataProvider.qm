@@ -2713,7 +2713,7 @@ map printf("Item: %s - %s\n", $1.name, $1.rate),
     @section zohoinventorydataproviderrelnotes Release Notes
 
     @subsection zohoinventorydataproviderv1_0 ZohoInventoryDataProvider v1.0
-    - the initial version of the %ZohoInventoryDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ZohoInventoryDataProvider module

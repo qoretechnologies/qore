@@ -163,7 +163,7 @@ public hashdecl RestSchemaRecordFilterInfo {
 /** Several of the applications in this family publish a real filter expression language - Xero's \c where,
     Bitbucket's BBQL, Klaviyo's \c filter and Intercom's search tree - and for those an entire expression tree
     maps onto the wire rather than one predicate at a time.  That is the difference between a table that
-    declares @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" honestly and
+    declares @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" honestly and
     one that only narrows what it fetches.
 
     The syntax is declared rather than coded because most of it is small and entirely regular: a token per
@@ -192,7 +192,7 @@ public hashdecl RestSchemaRecordFilterInfo {
     @ref render_query takes the rendering over entirely, for a language whose query is not a string at all:
     Intercom's search takes a **tree of hashes** in the request body.  The operator tables are still declared
     alongside it and still decide what is pushed down, so
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" and the residual
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" and the residual
     predicate stay declarative; only the spelling moves into the hook.
 */
 public hashdecl RestSchemaQuerySyntaxInfo {

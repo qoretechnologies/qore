@@ -160,7 +160,7 @@ hash<auto> result = exa.getChildProviderEx("get-agent-run").doRequest({"id": run
     @section ExaDataProviderRelnotes Release Notes
 
     @subsection ExaDataProviderv1_0 ExaDataProvider v1.0
-    - the initial version of the %ExaDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the ExaDataProvider module

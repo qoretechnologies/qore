@@ -82,7 +82,7 @@ printf("Accounts: %y\n", result.body);
     @section unbouncerestclientrelnotes Release Notes
 
     @subsection unbouncerestclientv1_0 UnbounceRestClient v1.0
-    - the initial version of the %UnbounceRestClient module
+    - initial release
 */
 
 #! the UnbounceRestClient namespace contains all the objects in the UnbounceRestClient module

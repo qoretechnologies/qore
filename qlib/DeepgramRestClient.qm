@@ -102,13 +102,13 @@ f.write(resp.body);
     @section DeepgramRestClientRelnotes Release Notes
 
     @subsection DeepgramRestClientv1_1 DeepgramRestClient v1.1
-    - the `Authorization: Token <key>` header built from the `apikey` option is now placed in the `headers`
+    - the `Authorization: Token &lt;key&gt;` header built from the `apikey` option is now placed in the `headers`
       option read by the REST clients; it was previously put in an unread `default_headers` option, so
       requests and the connection ping were sent without authentication and failed with HTTP 401
       (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
 
     @subsection DeepgramRestClientv1_0 DeepgramRestClient v1.0
-    - the initial version of the %DeepgramRestClient module
+    - initial release
 */
 
 %requires json
@@ -128,7 +128,7 @@ public class DeepgramRestClientBase {
     }
 
     #! Returns options for the DeepgramRestClient constructors
-    /** Maps the \c apikey option into an \c "Authorization: Token <key>" entry in the \c headers option,
+    /** Maps the \c apikey option into an \c "Authorization: Token &lt;key&gt;" entry in the \c headers option,
         which both the sync and the async REST clients send on every request — Deepgram's non-Bearer auth
         format.  Any \c default_headers entries supplied by the caller are folded into \c headers as well.
 
@@ -152,7 +152,7 @@ public class DeepgramRestClientBase {
 
 #! Sync REST client for Deepgram
 /** Pass an API key via the \c apikey option; the module rewrites it to a
-    \c "Authorization: Token <key>" header injected on every request.
+    \c "Authorization: Token &lt;key&gt;" header injected on every request.
 */
 public class DeepgramRestClient inherits RestClient::RestClient, DeepgramRestClientBase {
     #! Creates the object with the given options

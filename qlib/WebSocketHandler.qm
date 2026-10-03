@@ -255,7 +255,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - implemented support for a variable send timeout
 
     @subsection websockethandler_v2_0 Version 2.0
-    - implemented support for @ref Logger::Logger "Logger" objects for logging
+    - implemented support for @ref Qore::Logger::Logger "Logger" objects for logging
 
     @subsection websockethandler_v1_5_4 Version 1.5.4
     - fixed a bug in @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
@@ -311,7 +311,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - added the WebSocketConnection::connectionClosed() method which is called when the connection is closed
 
     @subsection websockethandler_v1_0 Version 1.0
-    - the initial version of the WebSocketHandler module
+    - initial release
 */
 
 #! the WebSocketHandler namespace contains all the objects in the WebSocketHandler module
@@ -543,7 +543,7 @@ public class WebSocketConnection {
     /** Internal API used by WebSocketHandler::startImpl().
 
         The transition and the drain of the frames buffered on @ref channel before it are
-        performed atomically under @ref send_lock: a frame handed to @ref send() by another
+        performed atomically under @ref send_lock "send_lock": a frame handed to @ref send() by another
         thread (for example an echo sent from @ref gotMessage() on an I/O worker) either
         lands on @ref channel before the drain — and is therefore written by the drain — or
         blocks until the drain has finished and is written after it.  Without that, a frame
@@ -741,7 +741,7 @@ public class WebSocketConnection {
 
     #! Sends an encoded frame over the H2/H3 stream context, dropping the connection on backpressure when a limit is set
     /** Enforces the per-connection outbound backpressure limit for the H2/H3 stream-context send path (the
-        @ref getMaxQueueSize() "max_queue_size" frame counter applies only to the H1 async send queue).  When a
+        @ref WebSocketHandler::getMaxQueueSize() "max_queue_size" frame counter applies only to the H1 async send queue).  When a
         limit is configured, a non-blocking @ref AsyncSocketIo::AbstractStreamContext::trySendData() "trySendData()"
         is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
         not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
@@ -1838,18 +1838,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         #! default heartbeat message
         const DefaultHeartbeatMsg = "heartbeat";
 
-        #! Maximum retries when HTTP/2 flow control backpressure is detected
-        /** When @ref trySendDirect() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
-            it pumps I/O to drain the buffer and retries up to this many times before
-            returning \c False to signal backpressure to the caller.
+        #! Legacy flow-control retry count retained for compatibility
+        /** The asynchronous stream implementation does not use this retry loop. Backpressure
+            is handled by the stream context and I/O controller.
         */
         const FlowControlMaxRetries = 10;
 
-        #! Timeout per flow control retry iteration (milliseconds)
-        /** Each retry calls @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()"
-            with this timeout to flush outgoing data and read incoming HTTP/2 frames
-            (including \c WINDOW_UPDATE) from the peer.
-        */
+        #! Legacy flow-control retry timeout retained for compatibility
+        /** The asynchronous stream implementation does not use this timeout. */
         const FlowControlRetryMs = 50ms;
 
         #! Maximum bytes buffered in pending_sends before dropping frames
@@ -1862,13 +1858,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         */
         const MaxPendingSendBytes = 4 * 1024 * 1024;
 
-        #! Maximum frames to drain from the pending send buffer per handler loop iteration
-        /** Caps the time spent in @ref drainPendingSends() so that incoming data is not
-            starved while flushing a large backlog.  Each frame may incur up to
-            @ref FlowControlMaxRetries retries of @ref FlowControlRetryMs each, so the
-            worst-case drain time per iteration is roughly
-            \c MaxDrainFramesPerIteration * \c FlowControlMaxRetries * \c FlowControlRetryMs.
-
+        #! Legacy synchronous frame-drain limit retained for compatibility
+        /** The asynchronous stream implementation does not use this per-iteration limit.
             @since WebSocketHandler 2.5
         */
         const MaxDrainFramesPerIteration = 10;
@@ -1962,7 +1953,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           (default: 20 seconds)
         - \c heartbeat_msg: a string giving the payload to send in heartbeat messages (default: \c "heartbeat"); may
           be an empty string meaning no message
-        - \c logger: a @ref Logger::Logger "Logger" object to use for logging (default: no logging)
+        - \c logger: a @ref Qore::Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
           (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
         - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
@@ -2327,12 +2318,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     /** This method should not return until the connection is closed or the stop() method is called.
 
         Depending on the transport, the method delegates I/O to different async mechanisms:
-        - <b>HTTP/1.1 async</b>: an @ref HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" C++ poll
+        - <b>HTTP/1.1 async</b>: an @ref Qore::HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" C++ poll
           operation drives frame decode/encode, heartbeat, and close handshake on the I/O thread; this handler
-          thread blocks on a @ref Counter until the connection closes
+          thread blocks on a @ref Qore::Thread::Counter until the connection closes
         - <b>HTTP/2 and HTTP/3</b>: a @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor"
           handles WebSocket frame decode/dispatch on worker threads while the I/O controller manages transport-level
-          I/O; this handler thread blocks on a @ref Counter until the stream closes
+          I/O; this handler thread blocks on a @ref Qore::Thread::Counter until the stream closes
 
         @param lid the unique HTTP listener ID
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the

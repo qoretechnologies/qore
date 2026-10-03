@@ -110,7 +110,7 @@ printf("%d contacts\n", result.body.Contacts.size());
     @section xerorestclientrelnotes Release Notes
 
     @subsection xerorestclientv1_0 XeroRestClient v1.0
-    - the initial version of the %XeroRestClient module
+    - initial release
 */
 
 #! the XeroRestClient namespace contains all the objects in the XeroRestClient module

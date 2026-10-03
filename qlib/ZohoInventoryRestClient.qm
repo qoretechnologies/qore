@@ -91,7 +91,7 @@ printf("Items: %y\n", result.body.items);
     @section zohoinventoryrestclientrelnotes Release Notes
 
     @subsection zohoinventoryrestclientv1_0 ZohoInventoryRestClient v1.0
-    - the initial version of the %ZohoInventoryRestClient module
+    - initial release
 */
 
 #! the ZohoInventoryRestClient namespace contains all the objects in the ZohoInventoryRestClient module

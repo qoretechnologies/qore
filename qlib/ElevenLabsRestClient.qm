@@ -81,7 +81,7 @@ printf("%Y\n", ans.body);
     @section ElevenLabsRestClientRelnotes Release Notes
 
     @subsection ElevenLabsRestClientv1_0 ElevenLabsRestClient v1.0
-    - the initial version of the %ElevenLabsRestClient module
+    - initial release
 */
 
 #! the ElevenLabsRestClient namespace contains all the objects in the ElevenLabsRestClient module

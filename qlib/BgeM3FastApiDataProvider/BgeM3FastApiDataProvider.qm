@@ -160,7 +160,7 @@ module BgeM3FastApiDataProvider {
     @section BgeM3FastApiDataProviderRelnotes Release Notes
 
     @subsection BgeM3FastApiDataProviderv1_0 BgeM3FastApiDataProvider v1.0
-    - the initial version of the %BgeM3FastApiDataProvider module
+    - initial release
 */
 
 #! App logo loaded from file

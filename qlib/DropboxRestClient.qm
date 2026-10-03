@@ -112,8 +112,7 @@ printf("%Y\n", ans.body);
     @section dropboxrestclientrelnotes Release Notes
 
     @subsection dropboxrestclientv1_0 DropboxRestClient v1.0
-    - the initial version of the %DropboxRestClient module
-      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - initial release
 */
 
 #! the DropboxRestClient namespace contains all the objects in the DropboxRestClient module

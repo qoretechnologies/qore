@@ -1108,8 +1108,8 @@ public class DataProviderGraphQLSchema {
     }
 
     #! recursively determines whether a parsed DPQL expression contains a template reference
-    /** @param node a parsed DPQL node (@ref DataProviderExpression, @ref DataProviderFieldReference,
-        @ref DataProviderTemplateReference, or a literal value)
+    /** @param node a parsed DPQL node (@ref DataProvider::DataProviderExpression, @ref DataProvider::DataProviderFieldReference,
+        @ref DataProvider::DataProviderTemplateReference, or a literal value)
 
         @return @ref True if a template reference appears anywhere in the expression tree
     */
@@ -1142,6 +1142,7 @@ public class DataProviderGraphQLSchema {
 
     #! maps a data provider field to a GraphQL type string
     /** @param field the data provider field
+        @param name_hint the suggested name for a generated GraphQL type
         @param force_optional if @ref True, the type is never marked non-null (used for the
         \c SetInput type where every field is optional)
     */

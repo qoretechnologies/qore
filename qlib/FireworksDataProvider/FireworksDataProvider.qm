@@ -152,7 +152,7 @@ auto models = provider.getChildProvider("list-models").doRequest({
     to retrieve more results.
 
     @subsection FireworksDataProviderv1_0 FireworksDataProvider v1.0
-    - the initial version of the %FireworksDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the FireworksDataProvider module

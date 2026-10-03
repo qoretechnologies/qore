@@ -67,7 +67,7 @@ module BitlyRestClient {
     @section bitlyrestclientrelnotes Release Notes
 
     @subsection bitlyrestclientv1_0 BitlyRestClient v1.0
-    - the initial version of the %BitlyRestClient module
+    - initial release
 */
 
 #! the BitlyRestClient namespace contains all the objects in the BitlyRestClient module

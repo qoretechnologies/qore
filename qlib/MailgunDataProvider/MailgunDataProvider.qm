@@ -610,7 +610,7 @@ printf("Sent: %s\n", result.id);
     @section mailgundataproviderrelnotes Release Notes
 
     @subsection mailgundataproviderv1_0 MailgunDataProvider v1.0
-    - the initial version of the %MailgunDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the MailgunDataProvider module

@@ -130,7 +130,7 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     - More flexible SSE handler support
 
     @subsection serversenteventhandler_v1_0 Version 1.0
-    - the initial version of the ServerSentEventHandler module
+    - initial release
 */
 
 #! the ServerSentEventHandler namespace contains all the objects in the ServerSentEventHandler module

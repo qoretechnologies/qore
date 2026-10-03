@@ -1862,7 +1862,7 @@ module KeapDataProvider {
     @section keapdataproviderrelnotes Release Notes
 
     @subsection keapdataproviderv1_0 KeapDataProvider v1.0
-    - the initial version of the %KeapDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the KeapDataProvider module

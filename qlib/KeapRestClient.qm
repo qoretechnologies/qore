@@ -82,7 +82,7 @@ printf("Contacts: %y\n", result.body.contacts);
     @section keaprestclientrelnotes Release Notes
 
     @subsection keaprestclientv1_0 KeapRestClient v1.0
-    - the initial version of the %KeapRestClient module
+    - initial release
 */
 
 #! the KeapRestClient namespace contains all the objects in the KeapRestClient module

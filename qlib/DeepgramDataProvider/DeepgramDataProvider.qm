@@ -157,7 +157,7 @@ module DeepgramDataProvider {
       the two must be given
 
     @subsection DeepgramDataProviderv1_0 DeepgramDataProvider v1.0
-    - the initial version of the %DeepgramDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the DeepgramDataProvider module

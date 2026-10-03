@@ -631,5 +631,5 @@ module SmartSheetDataProvider {
     @section smartsheetdataproviderrelnotes Release Notes
 
     @subsection smartsheetdataproviderv1_0 SmartSheetDataProvider v1.0
-    - the initial version of the %SmartSheetDataProvider module
+    - initial release
 */

@@ -84,7 +84,7 @@ hash<auto> result = executor.execute("{ hello(name: \"Ada\") }");
     @section graphqlrelnotes Release Notes
 
     @subsection graphqlv1_0 GraphQL v1.0
-    - the initial version of the %GraphQL module
+    - initial release
 */
 
 #! the GraphQLHandler namespace contains all the objects in the GraphQL and GraphQLHandler modules

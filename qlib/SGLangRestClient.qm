@@ -106,7 +106,7 @@ printf("%Y\n", ans.body);
     @section SGLangRestClientRelnotes Release Notes
 
     @subsection SGLangRestClientv1_0 SGLangRestClient v1.0
-    - the initial version of the %SGLangRestClient module
+    - initial release
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module

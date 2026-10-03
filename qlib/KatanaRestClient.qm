@@ -94,7 +94,7 @@ printf("Tax rates: %N\n", result.body);
     @section katanarestclientrelnotes Release Notes
 
     @subsection katanarestclientv1_0 KatanaRestClient v1.0
-    - the initial version of the %KatanaRestClient module
+    - initial release
 */
 
 #! the KatanaRestClient namespace contains all the objects in the KatanaRestClient module

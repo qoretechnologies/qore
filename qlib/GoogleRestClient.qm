@@ -94,7 +94,7 @@ printf("%Y\n", ans.body);
       @ref GoogleRestClient::GoogleRestConnection::DefaultConnectionUrl "GoogleRestConnection::DefaultConnectionUrl"
 
     @subsection Googlerestclientv1_0 GoogleRestClient v1.0
-    - the initial version of the %GoogleRestClient module
+    - initial release
 */
 
 #! the GoogleRestClient namespace contains all the objects in the GoogleRestClient module

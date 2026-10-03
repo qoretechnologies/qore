@@ -268,7 +268,7 @@ printf("%d merged pull requests\n", all.size());
     @section bitbucketdataproviderrelnotes Release Notes
 
     @subsection bitbucketdataproviderv1_0 BitbucketDataProvider v1.0
-    - the initial version of the %BitbucketDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the BitbucketDataProvider module

@@ -91,7 +91,7 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection sap4hanarestclientv1_0 Sap4HanaRestClient v1.0
-    - the initial version of the %Sap4HanaRestClient module
+    - initial release
 */
 
 #! the Sap4HanaRestClient namespace contains all the objects in the Sap4HanaRestClient module

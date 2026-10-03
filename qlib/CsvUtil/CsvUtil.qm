@@ -433,7 +433,7 @@ while (i.next()) {
     - added @ref CsvUtil::CsvFileIterator::lineNumber() to return the current line number in the file
 
     @subsection csvutil_v1_0 Version 1.0
-    - initial version of module
+    - initial release
 */
 
 #! the CsvUtil namespace contains all the objects in the CsvUtil module

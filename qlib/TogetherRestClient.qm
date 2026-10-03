@@ -96,7 +96,7 @@ printf("%Y\n", ans.body);
     - the authenticated model catalog ping performs no inference; an invalid API key fails the ping
 
     @subsection TogetherRestClientv1_0 TogetherRestClient v1.0
-    - the initial version of the %TogetherRestClient module
+    - initial release
 */
 
 %requires json

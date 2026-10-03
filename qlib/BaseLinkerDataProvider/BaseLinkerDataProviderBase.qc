@@ -29,7 +29,7 @@ public namespace BaseLinkerDataProvider {
 /** All data-provider REST traffic is dispatched through @ref callMethod() which
     wraps BaseLinker's single-endpoint RPC-over-HTTP protocol: every operation
     is a POST to `/connector.php` with a form-encoded body of the shape
-    `method=<name>&parameters=<URL-encoded JSON>`. Responses are always HTTP 200;
+    `method=&lt;name&gt;&parameters=&lt;URL-encoded JSON&gt;`. Responses are always HTTP 200;
     success/failure is signalled by the JSON body's `status` field.
 */
 public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvider {
@@ -103,7 +103,7 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         BaseLinker API. It serializes `parameters` as JSON, pre-escapes `+` to
         `%2B` (so BaseLinker's form decoder does not convert `+` back to space —
         this matters for base64 payloads), URL-encodes the JSON, builds the
-        form-encoded body `method=<name>&parameters=<encoded-json>`, and POSTs to
+        form-encoded body `method=&lt;name&gt;&parameters=&lt;encoded-json&gt;`, and POSTs to
         the root endpoint. The parsed JSON response body is then validated by
         @ref checkResponse(); on API errors a `BASELINKER-API-ERROR` is thrown.
 
@@ -318,8 +318,8 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns reference data for the requested type
-    /** Signature must match @ref AbstractDataProvider::getReferenceDataImpl() exactly
-        (\c string \c type, \c *hash<auto> \c action_opts) — Qore's method dispatch will not
+    /** Signature must match @ref DataProvider::AbstractDataProvider::getReferenceDataImpl() exactly
+        (\c string \c type, <tt>*hash&lt;auto&gt;</tt> \c action_opts) — Qore's method dispatch will not
         invoke an override with a different signature, so any deviation silently disables
         ref_data resolution for every action option in the module.
     */

@@ -499,13 +499,6 @@ public class RestSchemaImporter {
         return rv;
     }
 
-    #! Downloads a document and describes it
-    /** @param source a URL or file path
-
-        @return the document, its checksum and size as downloaded, and its counts
-
-        @throw REST-SCHEMA-IMPORT-ERROR the document is not a hash, or declares no paths
-    */
     #! Parses a vendor YAML document
     /** A vendor document is JSON-compatible YAML.  Parsed with the yaml module's default resolution, a plain
         scalar that looks like a Qore date or duration becomes one, so an example timestamp would be written back
@@ -567,6 +560,13 @@ public class RestSchemaImporter {
         return True;
     }
 
+    #! Downloads a document and describes it
+    /** @param source a URL or file path
+
+        @return the document, its checksum and size as downloaded, and its counts
+
+        @throw REST-SCHEMA-IMPORT-ERROR the document is not a hash, or declares no paths
+    */
     static hash<RestSchemaSourceInfo> fetch(string source) {
         binary raw = FileLocationHandler::getBinaryFileFromLocation(source);
         # the checksum and size describe the bytes as downloaded, so they are taken before any decoding

@@ -43,7 +43,7 @@ public namespace StripeDataProvider {
       a user supplies a date and the conversion happens once, in one place.
     - the previous invoice-ID selector called the payment-intents endpoint.  The only option in this
       application that takes an invoice ID is the \c invoice filter on
-      @ref stripe_action_list_customer_balance_transactions "list-customer-balance-transactions", and it is
+      \c list-customer-balance-transactions, and it is
       populated from the invoice listing.
 */
 public class StripeManifest {

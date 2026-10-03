@@ -68,7 +68,7 @@ module FreshsalesRestClient {
     @section freshsalesrestclientrelnotes Release Notes
 
     @subsection freshsalesrestclientv1_0 FreshsalesRestClient v1.0
-    - the initial version of the %FreshsalesRestClient module
+    - initial release
 */
 
 #! the FreshsalesRestClient namespace contains all the objects in the FreshsalesRestClient module

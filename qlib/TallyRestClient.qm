@@ -81,7 +81,7 @@ printf("%Y\n", ans.body);
     @section TallyRestClientRelnotes Release Notes
 
     @subsection TallyRestClientv1_0 TallyRestClient v1.0
-    - the initial version of the %TallyRestClient module
+    - initial release
 */
 
 #! the TallyRestClient namespace contains all the objects in the TallyRestClient module

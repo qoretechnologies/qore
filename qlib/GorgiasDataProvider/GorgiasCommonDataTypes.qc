@@ -208,7 +208,7 @@ public class GorgiasRoleDataType inherits HashDataType {
 }
 
 #! Data type for assignee (user or team) references
-/** Used when assigning a user or team to a ticket. Provide `{"id": <user_id>}`.
+/** Used when assigning a user or team to a ticket. Provide `{"id": &lt;user_id&gt;}`.
 */
 public class GorgiasAssigneeRefDataType inherits HashDataType {
     public {

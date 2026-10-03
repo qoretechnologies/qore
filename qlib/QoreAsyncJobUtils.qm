@@ -79,8 +79,7 @@ hash<auto> final_status = poller.poll("job-123", 5m, 1500ms);
     @section qoreasyncjobutilsrelnotes Release Notes
 
     @subsection qoreasyncjobutils_1_0 QoreAsyncJobUtils v1.0
-    - convert polling intervals from milliseconds to microseconds for the default sleeper
-    - initial version
+    - initial release
 */
 
 #! contains all public symbols of the %QoreAsyncJobUtils module
@@ -130,7 +129,7 @@ public class AsyncJobPoller {
         @param terminal closure invoked with each status hash;
             returns @c True when the status represents a terminal state
             (success or failure) at which point @ref poll() returns
-        @param label human-readable identifier for the job kind
+        @param lbl human-readable identifier for the job kind
             (used in timeout error messages); defaults to "async job"
         @param exception_class exception class raised when the overall
             timeout expires before a terminal status is observed;

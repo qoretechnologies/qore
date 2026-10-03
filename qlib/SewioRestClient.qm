@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SewioRestClient.qm Qore user module for calling Sewio.net REST services
 
-/*  SewioRestClient.qm Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+/*  SewioRestClient.qm Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -109,7 +109,7 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
     @subsection sewiorestclientv1_0 SewioRestClient v1.0
-    - the initial version of the %SewioRestClient module
+    - initial release
 */
 
 #! the SewioRestClient namespace contains all the objects in the SewioRestClient module

@@ -126,7 +126,7 @@ printf("%Y\n", ans.body);
     @section linkedinrestclientrelnotes Release Notes
 
     @subsection linkedinrestclientv1_0 LinkedInRestClient v1.0
-    - the initial version of the %LinkedInRestClient module
+    - initial release
 */
 
 #! the LinkedInRestClient namespace contains all the objects in the LinkedInRestClient module

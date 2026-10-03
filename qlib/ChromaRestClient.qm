@@ -67,7 +67,7 @@ module ChromaRestClient {
     @section ChromaRestClientRelnotes Release Notes
 
     @subsection ChromaRestClientv1_0 ChromaRestClient v1.0
-    - the initial version of the %ChromaRestClient module
+    - initial release
 */
 
 %requires json

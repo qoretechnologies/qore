@@ -39,7 +39,7 @@ public namespace RestSchemaActions {
     @section restschematable_search How a Search Is Answered
 
     Every table declares
-    @ref DataProvider::DataProviderInfo::supports_search_expressions "supports_search_expressions", so a
+    @ref DataProvider::DataProviderBaseInfo::supports_search_expressions "supports_search_expressions", so a
     search arrives as an expression tree whatever the caller wrote, and is answered in three steps:
 
     -# @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" splits the tree into the part
@@ -58,12 +58,12 @@ public namespace RestSchemaActions {
 
     @section restschematable_native What "Native Search" Means Here
 
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" is declared only by a
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" is declared only by a
     table whose API takes a filter **expression** - Xero's \c where, Bitbucket's BBQL - and can therefore
     evaluate a whole tree.  A table that can only narrow a listing with a handful of query arguments declares
     it @ref False, however many arguments it has, because a caller reading that flag is asking whether the
     search happens on the server and for such a table the answer is "partly, and which part depends on what
-    you asked".  @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown" is where
+    you asked".  @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown" is where
     that per-operator detail is published.
 
     @section restschematable_write Updating and Deleting

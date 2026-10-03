@@ -380,7 +380,7 @@ if (report.status == "completed") {
     @section TavilyDataProviderRelnotes Release Notes
 
     @subsection TavilyDataProviderv1_0 TavilyDataProvider v1.0
-    - the initial version of the %TavilyDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the TavilyDataProvider module

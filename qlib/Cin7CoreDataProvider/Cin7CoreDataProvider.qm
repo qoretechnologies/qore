@@ -814,7 +814,7 @@ printf("Created customer: %s\n", new_customer.ID);
     @section cin7coredataproviderrelnotes Release Notes
 
     @subsection cin7coredataproviderv1_0 Cin7CoreDataProvider v1.0
-    - the initial version of the %Cin7CoreDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the Cin7CoreDataProvider module

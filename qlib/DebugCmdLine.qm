@@ -57,7 +57,7 @@ module DebugCmdLine {
     - improved breakpoint usability (<a href="https://github.com/qoretechnologies/qore/issues/2604">issue 2604</a>)
 
     @subsection dcl_v0_1 v0.1
-    - the initial version of the DebugCommandLine module
+    - initial release
 */
 
 #! the DebugCmdLine namespace contains all the definitions in the DebugCmdLine module

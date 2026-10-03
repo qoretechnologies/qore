@@ -104,7 +104,7 @@ foreach hash<auto> block in (resp.body.Blocks) {
     - exact AWS JSON 1.1 media type and temporary-credential propagation
 
     @subsection AwsTextractRestClientv1_0 AwsTextractRestClient v1.0
-    - the initial version of the %AwsTextractRestClient module
+    - initial release
 */
 
 #! contains all public symbols in the AwsTextractRestClient module

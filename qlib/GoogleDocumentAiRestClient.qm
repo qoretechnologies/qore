@@ -103,7 +103,7 @@ printf("Text: %s\n", resp.body.document.text);
     - verified project ID/number aliases for canonical resource names without relaxing parent scope
 
     @subsection GoogleDocumentAiRestClientv1_0 GoogleDocumentAiRestClient v1.0
-    - the initial version of the %GoogleDocumentAiRestClient module
+    - initial release
 */
 
 #! contains all public symbols of the GoogleDocumentAiRestClient module

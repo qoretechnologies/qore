@@ -163,7 +163,7 @@ module GoogleDocumentAiDataProvider {
     - shared authenticated transport for actions, references, generic calls, and connection ping
 
     @subsection GoogleDocumentAiDataProviderv1_0 GoogleDocumentAiDataProvider v1.0
-    - the initial version of the %GoogleDocumentAiDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the GoogleDocumentAiDataProvider module

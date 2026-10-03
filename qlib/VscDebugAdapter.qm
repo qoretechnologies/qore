@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file VscDebugAdapter Visual Studio Code debug adapter
 
-/*  VscDebugAdapter.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  VscDebugAdapter.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,7 +73,7 @@ module VscDebugAdapter {
     - updated to use a Logger
 
     @subsection vda_v0_1
-    - the initial version of the VscDebugAdapter module
+    - initial release
 */
 
 #! the VscDebugAdapter namespace contains all the definitions in the VscDebugAdapter module

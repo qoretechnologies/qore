@@ -1561,7 +1561,7 @@ module ConstantContactDataProvider {
     @section constantcontactdataproviderrelnotes Release Notes
 
     @subsection constantcontactdataproviderv1_0 ConstantContactDataProvider v1.0
-    - the initial version of the %ConstantContactDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ConstantContactDataProvider module

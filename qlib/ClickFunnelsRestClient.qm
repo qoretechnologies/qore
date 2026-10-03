@@ -83,7 +83,7 @@ printf("Teams: %y\n", result.body);
     @section clickfunnelsrestclientrelnotes Release Notes
 
     @subsection clickfunnelsrestclientv1_0 ClickFunnelsRestClient v1.0
-    - the initial version of the %ClickFunnelsRestClient module
+    - initial release
 */
 
 #! the ClickFunnelsRestClient namespace contains all the objects in the ClickFunnelsRestClient module

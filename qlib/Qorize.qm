@@ -58,7 +58,7 @@ module Qorize {
       + converted to new-style
 
     * 2013-08-15 v 0.0.9: Petr Vanek <petr@yarpen.cz>
-      + initial version
+      - initial release
 */
 
 /** @mainpage Qorize Module

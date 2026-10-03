@@ -34,7 +34,7 @@ public namespace QoreRagUtils {
     - \c options.tokenizer_config (required): tokenizer JSON hash
     - \c options.max_length (optional): maximum query+passage tokens; default 512
     - \c options.activation (optional): \c "sigmoid" (default), \c "softmax", or \c "none"
-    - \c options.session_config (optional): an @ref ML::OnnxSessionConfig hash passed to the
+    - \c options.session_config (optional): an @ref Qore::ML::OnnxSessionConfig hash passed to the
       underlying ONNX session; set its \c content_identity key to make
       @ref getContentIdentity() report the content actually loaded
 */
@@ -62,7 +62,10 @@ public class LocalOnnxReranker inherits AbstractReranker {
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
-    /** @param opts ignored by the local ONNX backend — there are no
+    /** @param query the search query
+        @param documents the texts to rank
+        @param top_k the maximum number of results to return
+        @param opts ignored by the local ONNX backend — there are no
         per-call options (model + tokenizer are fixed at construction time)
     */
     list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
@@ -110,9 +113,9 @@ public class LocalOnnxReranker inherits AbstractReranker {
         Request capture by setting \c content_identity in \c options.session_config; otherwise
         an identity with \c complete = @ref False is returned.
 
-        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+        @return an @ref Qore::ML::OnnxContentIdentity hash describing the loaded content
 
-        @see @ref ML::OnnxModel::getContentIdentity()
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
     *hash<ML::OnnxContentIdentity> getContentIdentity() {
         ensureReranker();

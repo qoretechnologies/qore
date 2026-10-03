@@ -1684,7 +1684,7 @@ module SquareDataProvider {
     @section squaredataproviderrelnotes Release Notes
 
     @subsection squaredataproviderv1_0 SquareDataProvider v1.0
-    - the initial version of the %SquareDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the SquareDataProvider module

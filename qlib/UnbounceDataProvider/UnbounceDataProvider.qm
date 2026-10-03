@@ -706,7 +706,7 @@ module UnbounceDataProvider {
     @section unbouncedataproviderrelnotes Release Notes
 
     @subsection unbouncedataproviderv1_0 UnbounceDataProvider v1.0
-    - the initial version of the %UnbounceDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the UnbounceDataProvider module

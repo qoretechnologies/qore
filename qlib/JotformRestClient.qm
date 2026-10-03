@@ -84,7 +84,7 @@ printf("User: %s <%s>\n", result.body.content.name, result.body.content.email);
     @section jotformrestclientrelnotes Release Notes
 
     @subsection jotformrestclientv1_0 JotformRestClient v1.0
-    - the initial version of the %JotformRestClient module
+    - initial release
 */
 
 #! the JotformRestClient namespace contains all the objects in the JotformRestClient module

@@ -67,7 +67,7 @@ module CircleRestClient {
     @section circlerestclientrelnotes Release Notes
 
     @subsection circlerestclientv1_0 CircleRestClient v1.0
-    - the initial version of the %CircleRestClient module
+    - initial release
 */
 
 #! the CircleRestClient namespace contains all the objects in the CircleRestClient module

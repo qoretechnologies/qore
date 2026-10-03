@@ -72,7 +72,10 @@ public class SGLangReranker inherits AbstractReranker {
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
-    /** @param opts ignored by the SGLang backend — the served model and
+    /** @param query the search query
+        @param documents the texts to rank
+        @param top_k the maximum number of results to return
+        @param opts ignored by the SGLang backend — the served model and
         endpoint are fixed at construction time
 
         @note @ref AbstractReranker::rerankEx() reports a length-based token

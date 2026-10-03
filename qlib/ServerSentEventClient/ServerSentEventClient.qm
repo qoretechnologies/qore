@@ -160,17 +160,7 @@ sse.observersReady();
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection serversenteventclient_v1_0 Version 1.0
-    - the initial version of the ServerSentEventClient module
-    - added @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" class for async I/O
-      SSE connections across HTTP/1.x, HTTP/2, and HTTP/3
-    - added \c SseConnectPollOperation for async connect support
-    - added \c ServerSentEventConnection::supportsPollingApi() and
-      \c ServerSentEventConnection::startPollConnect() for connection monitoring
-    - added \c method and \c body options to support HTTP POST and other methods for SSE connections,
-      enabling integration with streaming APIs (OpenAI, Anthropic, etc.) that use POST with JSON
-      request bodies
-    - added AsyncAPI 3.0 validation support for received SSE event data via the \c asyncapi,
-      \c validator, and \c asyncapi_channel options
+    - initial release
 */
 
 #! the ServerSentEventClient namespace contains all the objects in the ServerSentEventClient module

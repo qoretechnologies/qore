@@ -140,7 +140,7 @@ stream.close();
     - fixed streaming chat completions to preserve function-call-only deltas
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
-    - the initial version of the %OpenAiRestClient module
+    - initial release
 */
 
 %requires json >= 1.11

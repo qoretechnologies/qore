@@ -120,7 +120,7 @@ module DiscordWebSocketClient {
       (<a href="https://github.com/qoretechnologies/qore/issues/4986">issue 4986</a>)
 
     @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0
-    - the initial version of the %DiscordWebSocketClient module
+    - initial release
 */
 
 #! the DiscordWebSocketClient namespace contains all the objects in the DiscordWebSocketClient module

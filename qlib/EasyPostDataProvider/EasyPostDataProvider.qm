@@ -1252,5 +1252,5 @@ module EasyPostDataProvider {
     @section easypostdataproviderrelnotes Release Notes
 
     @subsection easypostdataproviderv1_0 EasyPostDataProvider v1.0
-    - the initial version of the %EasyPostDataProvider module
+    - initial release
 */

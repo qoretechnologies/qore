@@ -726,5 +726,5 @@ module LemlistDataProvider {
     @section lemlistdataproviderrelnotes Release Notes
 
     @subsection lemlistdataproviderv1_0 LemlistDataProvider v1.0
-    - the initial version of the %LemlistDataProvider module
+    - initial release
 */

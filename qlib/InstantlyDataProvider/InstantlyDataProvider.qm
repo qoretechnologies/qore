@@ -2053,7 +2053,7 @@ printf("Created lead: %s\n", result.id);
     @section instantlydataproviderrelnotes Release Notes
 
     @subsection instantlydataproviderv1_0 InstantlyDataProvider v1.0
-    - the initial version of the %InstantlyDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the InstantlyDataProvider module

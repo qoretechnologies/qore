@@ -60,7 +60,7 @@ module DebugProgramControl {
     - improved breakpoint usability (<a href="https://github.com/qoretechnologies/qore/issues/2604">issue 2604</a>)
 
     @subsection dc_v0_1 v0.1
-    - the initial version of the DebugProgramControl module
+    - initial release
 */
 
 #! the DebugProgramControl namespace contains all the definitions in the DebugProgramControl module

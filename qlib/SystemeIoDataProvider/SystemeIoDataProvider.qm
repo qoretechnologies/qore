@@ -751,5 +751,5 @@ module SystemeIoDataProvider {
     @section systemeio_dataprovider_relnotes Release Notes
 
     @subsection systemeio_dataprovider_v1_0 SystemeIoDataProvider v1.0
-    - the initial version of the %SystemeIoDataProvider module
+    - initial release
 */

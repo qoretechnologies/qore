@@ -1184,5 +1184,5 @@ module BaseLinkerDataProvider {
     @section baselinker_dataprovider_relnotes Release Notes
 
     @subsection baselinker_dataprovider_v1_0 BaseLinkerDataProvider v1.0
-    - the initial version of the %BaseLinkerDataProvider module
+    - initial release
 */

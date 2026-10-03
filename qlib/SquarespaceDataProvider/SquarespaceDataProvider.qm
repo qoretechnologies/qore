@@ -656,7 +656,7 @@ module SquarespaceDataProvider {
     @section squarespacedataproviderrelnotes Release Notes
 
     @subsection squarespacedataproviderv1_0 SquarespaceDataProvider v1.0
-    - the initial version of the %SquarespaceDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the SquarespaceDataProvider module

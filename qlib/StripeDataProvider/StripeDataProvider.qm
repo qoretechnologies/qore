@@ -376,7 +376,7 @@ module StripeDataProvider {
     @section stripedataproviderrelnotes Release Notes
 
     @subsection stripedataproviderv1_0 StripeDataProvider v1.0
-    - the initial version of the %StripeDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the StripeDataProvider module

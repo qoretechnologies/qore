@@ -63,7 +63,7 @@ public namespace GitLabDataProvider {
     @section gitlabrecord_wikis Wiki Pages Are Not Paged
 
     GitLab's wiki listing takes no \c page or \c per_page: it answers with every page in the project's wiki.
-    That table therefore declares @ref RSRP_NONE and reads it once, rather than sending arguments GitLab
+    That table therefore declares @ref RestSchemaActions::RSRP_NONE and reads it once, rather than sending arguments GitLab
     ignores and then waiting for a short page that never comes.
 */
 public class GitLabRecordTables {

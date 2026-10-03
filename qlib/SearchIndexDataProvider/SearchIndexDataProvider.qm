@@ -62,5 +62,5 @@ module SearchIndexDataProvider {
     @section searchindexdataprovider_relnotes Release Notes
 
     @subsection searchindexdataprovider_v1_0 SearchIndexDataProvider v1.0
-    - the initial version of the %SearchIndexDataProvider module
+    - initial release
 */

@@ -80,7 +80,7 @@ printf("Legal Entities: %Y\n", result.body);
     @section deelrestclientrelnotes Release Notes
 
     @subsection deelrestclientv1_0 DeelRestClient v1.0
-    - the initial version of the %DeelRestClient module
+    - initial release
 */
 
 #! the DeelRestClient namespace contains all the objects in the DeelRestClient module

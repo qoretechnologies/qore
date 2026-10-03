@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DiscordRestClient.qm Qore user module for calling Discord REST services
 
-/*  DiscordRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  DiscordRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -93,7 +93,7 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection discordrestclientv1_0 DiscordRestClient v1.0
-    - the initial version of the %DiscordRestClient module
+    - initial release
 */
 
 #! the DiscordRestClient namespace contains all the objects in the DiscordRestClient module

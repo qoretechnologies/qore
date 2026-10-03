@@ -84,7 +84,7 @@ printf("Addresses: %Y\n", result.body);
     @section shipporestclientrelnotes Release Notes
 
     @subsection shipporestclientv1_0 ShippoRestClient v1.0
-    - the initial version of the %ShippoRestClient module
+    - initial release
 */
 
 #! the ShippoRestClient namespace contains all the objects in the ShippoRestClient module

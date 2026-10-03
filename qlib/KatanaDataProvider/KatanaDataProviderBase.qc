@@ -345,8 +345,8 @@ public class KatanaDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Runs a list/search and returns a record iterator
-    /** When @ref use_ids_filter is @ref True, single-record lookups by @ref id_field use the
-        @c ids= query parameter on the list endpoint instead of @c GET @c <resource>/<id>;
+    /** When \a use_ids_filter is @ref True, single-record lookups by \a id_field use the
+        @c ids= query parameter on the list endpoint instead of @c GET @c &lt;resource&gt;/&lt;id&gt;;
         this is required for Katana resources that do not expose @c GET on the single-record
         path (customers, suppliers, customer_addresses, sales_order_addresses, stock_adjustments).
     */

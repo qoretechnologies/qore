@@ -80,13 +80,13 @@ module QoreRagUtils {
 
     Concrete backends are pluggable: callers can use a built-in
     implementation, register their own subclass, or pass a fully-constructed
-    object directly into @ref RagPipeline.
+    object directly into @ref QoreRagUtils::RagPipeline.
 
     @par Design rationale
 
     Without this abstraction, every consumer of the underlying primitives
-    (@ref QoreTokenizerUtils for ONNX embeddings/rerankers, @ref OpenAiRestClient,
-    @ref VoyageRestClient, @ref SGLangRestClient, Qdrant, pgvector, etc.)
+    (@ref QoreTokenizerUtils for ONNX embeddings/rerankers, @ref openairestclientintro "OpenAiRestClient",
+    @ref voyagerestclientintro "VoyageRestClient", @ref sglangrestclientintro "SGLangRestClient", Qdrant, pgvector, etc.)
     has to write its own backend-selection ladder and orchestration logic.
     %QoreRagUtils centralises that pattern so multiple consumers —
     applications, HTTP gateways, and standalone tools — converge on the
@@ -148,7 +148,7 @@ foreach hash<RetrievalHit> hit in (hits) {
     @section QoreRagUtilsRelnotes Release Notes
 
     @subsection QoreRagUtilsv1_0 QoreRagUtils v1.0
-    - the initial version of the %QoreRagUtils module
+    - initial release
 */
 
 #! Public namespace for QoreRagUtils
@@ -176,7 +176,7 @@ public namespace QoreRagUtils {
     The pipeline itself is backend-agnostic and does not inspect the hash —
     callers pass backend-native payload predicates (Qdrant filter clauses,
     pgvector \c WHERE fragments, etc.) that the concrete store understands.
-    When a @ref fallback_stores "fallback vector store chain" is configured,
+    When a @ref QoreRagUtils::RagPipeline::constructor() "fallback vector store chain" is configured,
     the same filter is forwarded to every store in the chain until one
     returns results.
 */

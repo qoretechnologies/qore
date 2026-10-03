@@ -80,7 +80,7 @@ printf("Subscribers: %y\n", result.body.subscribers);
     @section kitrestclientrelnotes Release Notes
 
     @subsection kitrestclientv1_0 KitRestClient v1.0
-    - the initial version of the %KitRestClient module
+    - initial release
 */
 
 #! the KitRestClient namespace contains all the objects in the KitRestClient module

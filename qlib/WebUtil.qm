@@ -142,7 +142,7 @@ module WebUtil {
     - added logic to the default file serving code to determine if the file is a binary or text file from the MIME type
 
     @subsection webutil_v1_0 WebUtil v1.0
-    - the initial version of the WebUtil module
+    - initial release
 */
 
 #! the WebUtil namespace contains all the objects in the WebUtil module
@@ -886,7 +886,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             will be read into memory and returned as binary data, allowing the HTTP server transport
             layer to apply automatic compression.
 
-            Larger files are compressed through @ref TransformInputStream with bounded buffers.
+            Larger files are compressed through @ref Qore::TransformInputStream with bounded buffers.
             Set to zero to stream all files eligible for compression. This option does not disable
             compression; clients can request the identity representation with \c Accept-Encoding.
 

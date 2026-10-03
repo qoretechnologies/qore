@@ -144,7 +144,7 @@ printf("%Y\n", ans.body);
     - updated to use the OAuth2 infrastructure
 
     @subsection cdsrestclientv1_0 CdsRestClient v1.0
-    - the initial version of the %CdsRestClient module
+    - initial release
 */
 
 #! the CdsRestClient namespace contains all the objects in the CdsRestClient module

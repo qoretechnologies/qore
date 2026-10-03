@@ -88,7 +88,7 @@ server.setHandler("graphql", "/graphql", MimeTypeJson, gh, NOTHING, False);
     @section graphqldataproviderrelnotes Release Notes
 
     @subsection graphqldataproviderv1_0 GraphQLDataProvider v1.0
-    - the initial version of the %GraphQLDataProvider module
+    - initial release
 */
 
 #! the GraphQLHandler namespace contains all the objects in the GraphQL-related modules

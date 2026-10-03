@@ -88,7 +88,7 @@ printf("%Y\n", ans.body);
     - associates connections with the Jina AI app and provides separate embedding/reranking choices
 
     @subsection JinaRestClientv1_0 JinaRestClient v1.0
-    - the initial version of the %JinaRestClient module
+    - initial release
 */
 
 %requires json

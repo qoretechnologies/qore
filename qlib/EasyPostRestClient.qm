@@ -87,7 +87,7 @@ printf("Addresses: %Y\n", result.body);
     @section easypostrestclientrelnotes Release Notes
 
     @subsection easypostrestclientv1_0 EasyPostRestClient v1.0
-    - the initial version of the %EasyPostRestClient module
+    - initial release
 */
 
 #! the EasyPostRestClient namespace contains all the objects in the EasyPostRestClient module

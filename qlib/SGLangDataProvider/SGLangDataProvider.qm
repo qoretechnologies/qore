@@ -227,7 +227,7 @@ module SGLangDataProvider {
     @section SGLangDataProviderRelnotes Release Notes
 
     @subsection SGLangDataProviderv1_0 SGLangDataProvider v1.0
-    - the initial version of the %SGLangDataProvider module
+    - initial release
 */
 
 #! App logo loaded from file

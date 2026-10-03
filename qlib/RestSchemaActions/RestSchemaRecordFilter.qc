@@ -595,7 +595,7 @@ public class RestSchemaRecordFilter {
     #! Returns the expression metadata the table publishes, annotated with what the API evaluates
     /** Every generic search operator is published, because a predicate the API cannot evaluate is still
         answered - on the client side, over the records the listing returns.  What varies by table is
-        @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown", which says
+        @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown", which says
         whether the API can do the work itself.
     */
     hash<string, hash<DataProviderExpressionInfo>> getExpressionInfo() {

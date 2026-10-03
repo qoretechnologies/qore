@@ -374,7 +374,7 @@ printf("%d flows\n", res.body.data.size());
     @section klaviyodataproviderrelnotes Release Notes
 
     @subsection klaviyodataproviderv1_0 KlaviyoDataProvider v1.0
-    - the initial version of the %KlaviyoDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the KlaviyoDataProvider module

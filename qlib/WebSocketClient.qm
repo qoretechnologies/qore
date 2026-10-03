@@ -443,7 +443,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - added socket instrumention support from Qore 0.8.9
 
     @subsection wsc_v1_0 v1.0
-    - the initial version of the WebSocketClient module
+    - initial release
 */
 
 #! the WebSocketClient namespace contains all the definitions in the WebSocketClient module
@@ -618,7 +618,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! Async-mode idle timeout in milliseconds (0 = disabled)
         /** When positive and no data has been received for this many milliseconds, the async
-            poll operation closes the connection with code @ref WSCC_GoingAway and surfaces
+            poll operation closes the connection with code @ref WebSocketUtil::WSCC_GoingAway and surfaces
             \c {reason: "idle-timeout"} on @ref EVENT_WS_CLOSED.  Use together with
             @ref async_heartbeat_ms to detect peers that silently stopped responding to PINGs.
             Override via the \c "idle_timeout" option to the constructor.  Default: 0 (disabled).
@@ -860,7 +860,7 @@ WebSocketClient ws(\event(), {
           \c Cookie header with the initial HTTP WebSocket upgrade request
         - \c extensions: a list of @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" instances
           to offer to the server (e.g., @ref WebSocketUtil::PerMessageDeflateExtension for compression)
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
@@ -870,7 +870,7 @@ WebSocketClient ws(\event(), {
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object for message validation;
           overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: @ref Qore::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
@@ -3681,14 +3681,14 @@ class MyObserver inherits Observer {
 
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raise_ping_events: if @ref True then events will be raised when pings are received
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: @ref Qore::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
@@ -4079,7 +4079,7 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     all @ref ConnectionProvider::HttpConnection "HttpConnection" options.
 
     Also supports the following runtime options in getImpl():
-    - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+    - \c "logger": a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
     - \c "start_thread": a closure to start a new thread (signature:
       @verbatim int sub start_thread(code callable) {} @endverbatim )
     - \c "yield": a closure to yield current thread execution
@@ -4225,7 +4225,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
     #! returns runtime options
     /** @return a hash with the following keys reflecting support for the corresponding runtime options in getImpl():
-        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {} @endverbatim )
         - \c "yield": a closure to yield current thread execution
@@ -4289,7 +4289,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
     #! returns a @ref WebSocketClientWithSerialization object
     /** @param connect if @ref True "True", then @ref WebSocketClient::WebSocketClient::connect() is called
         @param rtopts supports the following runtime options in getImpl():
-        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "reconnect": try to reconnect when the connection is closed or lost (default @ref False)
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {} @endverbatim )
@@ -4806,6 +4806,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
 
     #! Sends a message from message-capable data providers
     /**
+        @param message_id the message type identifier
         @param msg the message to send
         @param send_message_options the options for sending the message
     */
@@ -5175,7 +5176,7 @@ public class WebSocketClientDataProviderFactory inherits AbstractDataProviderFac
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by @ref DataProvider::AbstractDataProviderFactory::getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;
@@ -5612,7 +5613,7 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     Works with both HTTP/2 (\c Http2ClientConnection) and HTTP/3 (\c Http3ClientConnection).
 
     Large-frame fix: DATA chunks are decoded into complete WS messages in
-    pure C++ (@ref WebSocketStreamFrameState), so there is no Qore-level
+    pure C++ (\c WebSocketStreamFrameState), so there is no Qore-level
     binary accumulation of raw transport bytes and no O(N²) concatenation
     for multi-megabyte messages.
 

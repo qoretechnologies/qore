@@ -82,7 +82,7 @@ printf("Contact: %N\n", result.body);
     @section insightlyrestclientrelnotes Release Notes
 
     @subsection insightlyrestclientv1_0 InsightlyRestClient v1.0
-    - the initial version of the %InsightlyRestClient module
+    - initial release
 */
 
 #! the InsightlyRestClient namespace contains all the objects in the InsightlyRestClient module

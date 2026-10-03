@@ -350,8 +350,7 @@ printf("%d event types\n", res.body.data.size());
     @section paddledataproviderrelnotes Release Notes
 
     @subsection paddledataproviderv1_0 PaddleDataProvider v1.0
-    - customer creation no longer exposes the read-only customer ID as an import option
-    - the initial version of the %PaddleDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the PaddleDataProvider module

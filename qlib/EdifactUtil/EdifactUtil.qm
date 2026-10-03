@@ -585,19 +585,7 @@ auto schema = EdifactSchemaRegistry::loadRelease("D01B", (
     @section edifactutil_relnotes Release Notes
 
     @subsection edifactutil_v1_0 Version 1.0
-    - initial version of module
-    - support for parsing and generating UN/EDIFACT messages
-    - automatic UNA segment detection and custom delimiter support
-    - release character escaping/unescaping
-    - service segment filtering option
-    - DataProvider integration for read and write operations
-    - support for file, stream, and string I/O
-    - directory flat-file loader (EDMD/EDSD/EDCD/EDED/UNCL/EDCL) with strict validation mode
-    - on-disk schema cache with deterministic serialization and cache error handling
-    - schema registry with cache-only and skip-cache-read options
-    - schema data provider and schema summary action support
-    - CLI example for schema loading with cache controls
-    - fixture generator/validator scripts and expanded release fixtures
+    - initial release
 */
 
 #! The EdifactUtil namespace contains all the definitions in the EdifactUtil module

@@ -107,7 +107,7 @@ printf("%d tags\n", result.body.data.size());
     @section intercomrestclientrelnotes Release Notes
 
     @subsection intercomrestclientv1_0 IntercomRestClient v1.0
-    - the initial version of the %IntercomRestClient module
+    - initial release
 */
 
 #! the IntercomRestClient namespace contains all the objects in the IntercomRestClient module

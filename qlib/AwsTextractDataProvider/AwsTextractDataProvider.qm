@@ -174,7 +174,7 @@ module AwsTextractDataProvider {
     - authenticated connection checks and shared discovery and presentation qualification
 
     @subsection AwsTextractDataProviderv1_0 AwsTextractDataProvider v1.0
-    - the initial version of the %AwsTextractDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the AwsTextractDataProvider module

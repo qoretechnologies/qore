@@ -287,7 +287,7 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpSocketHandler {
     }
 
     #! resolves the GraphQL query text for a request, honoring Automatic Persisted Queries
-    /** @return \c {"query": <text>} on success, or \c {"errors": (...)} if the query could not be
+    /** @return <tt>{"query": &lt;text&gt;}</tt> on success, or \c {"errors": (...)} if the query could not be
         resolved (APQ hash mismatch, not-found, or no query provided)
     */
     private hash<auto> resolveQuery(hash<auto> req) {

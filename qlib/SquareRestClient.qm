@@ -88,7 +88,7 @@ printf("Merchant: %s\n", result.body.merchant[0].business_name);
     @section squarerestclientrelnotes Release Notes
 
     @subsection squarerestclientv1_0 SquareRestClient v1.0
-    - the initial version of the %SquareRestClient module
+    - initial release
 */
 
 #! the SquareRestClient namespace contains all the objects in the SquareRestClient module

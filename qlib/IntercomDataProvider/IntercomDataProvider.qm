@@ -338,7 +338,7 @@ printf("%d teams\n", res.body.teams.size());
     @section intercomdataproviderrelnotes Release Notes
 
     @subsection intercomdataproviderv1_0 IntercomDataProvider v1.0
-    - the initial version of the %IntercomDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the IntercomDataProvider module

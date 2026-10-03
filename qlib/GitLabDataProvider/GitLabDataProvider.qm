@@ -374,7 +374,7 @@ printf("%d pipelines\n", res.body.size());
     @section gitlabdataproviderrelnotes Release Notes
 
     @subsection gitlabdataproviderv1_0 GitLabDataProvider v1.0
-    - the initial version of the %GitLabDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the GitLabDataProvider module

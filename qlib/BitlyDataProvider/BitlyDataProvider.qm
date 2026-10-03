@@ -610,5 +610,5 @@ module BitlyDataProvider {
     @section bitlydataproviderrelnotes Release Notes
 
     @subsection bitlydataproviderv1_0 BitlyDataProvider v1.0
-    - the initial version of the %BitlyDataProvider module
+    - initial release
 */

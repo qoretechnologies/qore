@@ -81,7 +81,7 @@ printf("%Y\n", ans.body);
     @section AftershipRestClientRelnotes Release Notes
 
     @subsection AftershipRestClientv1_0 AftershipRestClient v1.0
-    - the initial version of the %AftershipRestClient module
+    - initial release
 */
 
 #! the AftershipRestClient namespace contains all the objects in the AftershipRestClient module

@@ -1077,7 +1077,7 @@ printf("Created subscription: %s\n", result.id);
     @section chargebeedataproviderrelnotes Release Notes
 
     @subsection chargebeedataproviderv1_0 ChargebeeDataProvider v1.0
-    - the initial version of the %ChargebeeDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ChargebeeDataProvider module

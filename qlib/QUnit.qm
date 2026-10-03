@@ -229,7 +229,7 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - fixed showing the assertion location when there are test modules on top of QUnit.qm (<a href="https://github.com/qoretechnologies/qore/issues/1046">issue 1046</a>)
 
     @subsection qunit_v0_1 Version 0.1
-    - initial version of module
+    - initial release
 */
 
 #! the main namespace for all public definitions in the %QUnit module
@@ -731,7 +731,7 @@ public class TestReporter {
         #! blacklist patterns - matching tests are skipped
         list<string> m_exclude_patterns = ();
 
-        #! 0-based index of this shard when sharding is enabled (see @ref main())
+        #! 0-based index of this shard when sharding is enabled (see @ref QUnit::Test::main())
         int m_shard_index = 0;
 
         #! total number of shards when sharding is enabled; 0/1 disables sharding

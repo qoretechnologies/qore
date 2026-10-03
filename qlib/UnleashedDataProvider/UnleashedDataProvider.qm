@@ -553,7 +553,7 @@ printf("Created customer: %s\n", new_customer.CustomerCode);
     @section unleashedataproviderrelnotes Release Notes
 
     @subsection unleashedataproviderv1_0 UnleashedDataProvider v1.0
-    - the initial version of the %UnleashedDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the UnleashedDataProvider module

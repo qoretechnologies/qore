@@ -468,7 +468,7 @@ FileLocationHandler::writeFileToLocation("conn://gcs/reports/2026/q2.csv{contain
     @section googlecloudstoragedataproviderrelnotes Release Notes
 
     @subsection googlecloudstoragedataproviderv1_0 GoogleCloudStorageDataProvider v1.0
-    - the initial version of the %GoogleCloudStorageDataProvider module
+    - initial release
 */
 
 public namespace GoogleCloudStorageDataProvider {

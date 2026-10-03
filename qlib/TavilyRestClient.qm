@@ -78,7 +78,7 @@ module TavilyRestClient {
 
     @par Agent integration
 
-    The @ref TavilyAgentTools namespace exports helpers for wiring
+    The @ref TavilyRestClient::TavilyAgentTools namespace exports helpers for wiring
     Tavily into a @ref QoreAgentStrategies::SimpleAgentStrategy
     "SimpleAgentStrategy":
 
@@ -102,7 +102,7 @@ hash<AgentResult> result = agent.execute(<AgentContext>{
     @section TavilyRestClientRelnotes Release Notes
 
     @subsection TavilyRestClientv1_0 TavilyRestClient v1.0
-    - the initial version of the %TavilyRestClient module
+    - initial release
 */
 
 %requires json
@@ -270,8 +270,8 @@ public class TavilyRestConnection inherits RestClient::RestConnection {
 #! and a dispatch callable for plugging Tavily into agent strategies
 /** No central tool registry exists in QoreLlmUtils / QoreAgentStrategies;
     these helpers produce the data structures needed to populate
-    @ref QoreAgentStrategies::AgentContext.tools and
-    @ref QoreAgentStrategies::AgentContext.tool_dispatch directly.
+    @ref QoreAgentStrategies::AgentContext::tools and
+    @ref QoreAgentStrategies::AgentContext::tool_dispatch directly.
 */
 public namespace TavilyAgentTools {
     #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
@@ -354,7 +354,7 @@ public namespace TavilyAgentTools {
 
     #! Builds a tool-dispatcher callable wired to the given Tavily REST client
     /** The returned callable matches the signature expected by
-        @ref QoreAgentStrategies::AgentContext.tool_dispatch:
+        @ref QoreAgentStrategies::AgentContext::tool_dispatch "tool_dispatch":
         `auto sub (string tool_name, hash<auto> args)`.
 
         Recognised tool names: `tavily_search`, `tavily_extract`.  Other

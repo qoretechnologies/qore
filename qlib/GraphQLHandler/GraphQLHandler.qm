@@ -108,7 +108,7 @@ int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     @section graphqlhandlerrelnotes Release Notes
 
     @subsection graphqlhandlerv1_0 GraphQLHandler v1.0
-    - the initial version of the %GraphQLHandler module
+    - initial release
 */
 
 #! the GraphQLHandler namespace contains all the objects in the GraphQL and GraphQLHandler modules

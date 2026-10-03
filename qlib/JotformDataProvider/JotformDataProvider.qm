@@ -417,7 +417,7 @@ map printf("Submission %s: %y\n", $1.id, $1.answers),
     @section jotformdataproviderrelnotes Release Notes
 
     @subsection jotformdataproviderv1_0 JotformDataProvider v1.0
-    - the initial version of the %JotformDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the JotformDataProvider module

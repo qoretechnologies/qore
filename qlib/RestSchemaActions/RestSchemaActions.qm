@@ -271,12 +271,12 @@ module RestSchemaActions {
 
     @subsection restschemaactions_records_native What Native Search Means
 
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" is declared only by
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" is declared only by
     a table whose API takes a filter **expression** and can therefore evaluate a whole tree.  A table that
     can only narrow a listing with query arguments declares it @ref False however many arguments it has,
     because a caller reading that flag is asking whether the search happens on the server, and for such a
     table the answer is "partly".  The per-operator detail is published as
-    @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown", and every generic
+    @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown", and every generic
     search operator is answered whether the service can evaluate it or not.
 
     @ref RestSchemaActions::RestSchemaQuerySyntaxInfo "RestSchemaQuerySyntaxInfo" declares such a language
@@ -298,8 +298,8 @@ module RestSchemaActions {
 
     The split matters: the operator tables still decide **what is pushed down** even when \c render_query
     decides **how it is spelled**, so
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search",
-    @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown" and the residual
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search",
+    @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown" and the residual
     predicate all stay declarative.  A hook that also decided pushdown would put the honesty of those flags
     inside a closure.
 
@@ -408,24 +408,7 @@ module RestSchemaActions {
     @section restschemaactionsrelnotes Release Notes
 
     @subsection restschemaactionsv1_0 RestSchemaActions v1.0
-    - preserve valid schema examples when presentation overrides rebuild fields without replacing their types
-    - add a JSON base64 media codec for bytes, named files, and existing base64/URL strings, preserving explicit null
-    - add a boolean-string codec for APIs with literal true/false string fields
-    - select a declared response representation with \c response_content_type, including its output type and
-      outgoing \c Accept header
-    - retain schemas reached through discriminator mappings when pruning vendor documents
-    - permit identical field codecs across union alternatives, preserving wire constraints and serialization
-    - support checked schema value repairs and declared server selection during import
-    - support filtered and grouped reference data, identity records, and resource-name templates
-    - preserve schema nullability independently of required-property presence when applying overlays
-    - schema imports support checked path repairs, positional parameter renaming and merging of
-      disjoint operations; conflicting members and stale repairs are rejected
-    - generated multipart actions expose named files alongside raw binary inputs, preserving upload metadata
-    - the initial version of the %RestSchemaActions module
-    - omit schema `readOnly` properties from flattened request options, including unwrapped bodies
-    - enforce overlay required groups and mutually exclusive options before sending requests
-    - schema imports can repair incorrect required-property lists with explicit expected values;
-      stale repairs, duplicate names, and undeclared replacement properties are rejected
+    - initial release
 */
 
 public namespace RestSchemaActions {

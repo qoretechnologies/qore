@@ -82,7 +82,7 @@ printf("Users: %y\n", result.body.users);
     @section apollorestclientrelnotes Release Notes
 
     @subsection apollorestclientv1_0 ApolloRestClient v1.0
-    - the initial version of the %ApolloRestClient module
+    - initial release
 */
 
 #! the ApolloRestClient namespace contains all the objects in the ApolloRestClient module

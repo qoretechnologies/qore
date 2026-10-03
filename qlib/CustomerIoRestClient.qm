@@ -89,7 +89,7 @@ printf("Activities: %y\n", result.body);
     @section customeriorestclientrelnotes Release Notes
 
     @subsection customeriorestclientv1_0 CustomerIoRestClient v1.0
-    - the initial version of the %CustomerIoRestClient module
+    - initial release
 */
 
 #! the CustomerIoRestClient namespace contains all the objects in the CustomerIoRestClient module

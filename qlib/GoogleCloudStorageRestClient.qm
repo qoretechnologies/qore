@@ -107,7 +107,7 @@ printf("%d object(s)\n", resp.body.items.size());
     @section GoogleCloudStorageRestClientRelnotes Release Notes
 
     @subsection GoogleCloudStorageRestClientv1_0 GoogleCloudStorageRestClient v1.0
-    - the initial version of the %GoogleCloudStorageRestClient module
+    - initial release
 */
 
 #! contains all public symbols of the GoogleCloudStorageRestClient module

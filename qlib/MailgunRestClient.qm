@@ -84,7 +84,7 @@ printf("Domains: %Y\n", result.body);
     @section mailgunrestclientrelnotes Release Notes
 
     @subsection mailgunrestclientv1_0 MailgunRestClient v1.0
-    - the initial version of the %MailgunRestClient module
+    - initial release
 */
 
 #! the MailgunRestClient namespace contains all the objects in the MailgunRestClient module

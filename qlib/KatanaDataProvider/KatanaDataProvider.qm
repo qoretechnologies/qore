@@ -2268,5 +2268,5 @@ module KatanaDataProvider {
     @section katanadataproviderrelnotes Release Notes
 
     @subsection katanadataproviderv1_0 KatanaDataProvider v1.0
-    - the initial version of the %KatanaDataProvider module
+    - initial release
 */

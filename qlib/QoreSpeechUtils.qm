@@ -61,8 +61,8 @@ module QoreSpeechUtils {
 
     Each provider module (Deepgram, AssemblyAI, ...) registers its
     factories on module load; callers select a backend by name via
-    @ref TranscriberConfig::backend and
-    @ref SynthesizerConfig::backend.  The registry lazy-loads the
+    @ref QoreSpeechUtils::TranscriberConfig::backend and
+    @ref QoreSpeechUtils::SynthesizerConfig::backend.  The registry lazy-loads the
     providing module on first lookup, so callers do not need to
     `%requires` every provider module up front.
 
@@ -97,7 +97,7 @@ hash<QoreSpeechUtils::SynthesisResult> s = tts.synthesize("Hello, world!");
     @section qorespeechutilsrelnotes Release Notes
 
     @subsection qorespeechutils_1_0 QoreSpeechUtils v1.0
-    - initial version
+    - initial release
 */
 
 #! contains all public symbols of the %QoreSpeechUtils module
@@ -400,7 +400,7 @@ public class SpeechProviderRegistry {
     }
 
     #! Constructs a transcriber for the given @ref TranscriberConfig
-    /** @throw SPEECH-CONFIG-ERROR @ref TranscriberConfig::backend is missing or unknown
+    /** @throw SPEECH-CONFIG-ERROR @ref QoreSpeechUtils::TranscriberConfig::backend is missing or unknown
     */
     static AbstractTranscriber createTranscriber(hash<TranscriberConfig> config) {
         if (!config.backend.val()) {
@@ -411,7 +411,7 @@ public class SpeechProviderRegistry {
     }
 
     #! Constructs a speech synthesizer for the given @ref SynthesizerConfig
-    /** @throw SPEECH-CONFIG-ERROR @ref SynthesizerConfig::backend is missing or unknown
+    /** @throw SPEECH-CONFIG-ERROR @ref QoreSpeechUtils::SynthesizerConfig::backend is missing or unknown
     */
     static AbstractSpeechSynthesizer createSynthesizer(hash<SynthesizerConfig> config) {
         if (!config.backend.val()) {

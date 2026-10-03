@@ -733,5 +733,5 @@ module FreshsalesDataProvider {
     @section freshsalesdataproviderrelnotes Release Notes
 
     @subsection freshsalesdataproviderv1_0 FreshsalesDataProvider v1.0
-    - the initial version of the %FreshsalesDataProvider module
+    - initial release
 */

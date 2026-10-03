@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file JsonRpcConnection.qm JSON-RPC client connection module implementation
 
-/*  JsonRpcConnections.qm Copyright 2013 - 2023 Qore Technologies, s.r.o.
+/*  JsonRpcConnections.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,7 +98,7 @@ module JsonRpcConnection {
       (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
 
     @subsection jsonrpcconnection_v1_0 JsonRpcConnection v1.0
-    - the initial version of the JsonRpcConnection module
+    - initial release
 */
 
 #! the JsonRpcConnection namespace contains all the definitions in the JsonRpcConnection module

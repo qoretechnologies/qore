@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file TextWrap.qm Text wrapping and filling
 
-/*  TextWrap.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  TextWrap.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -67,7 +67,7 @@ module TextWrap {
     @section textwraprelnotes TextWrap Module Release Notes
 
     @subsection textwrap_1_0 TextWrap 1.0
-    - initial version of the TextWrap module
+    - initial release
 */
 
 namespace Init {

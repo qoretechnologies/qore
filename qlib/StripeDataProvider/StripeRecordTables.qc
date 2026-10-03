@@ -32,7 +32,7 @@ public namespace StripeDataProvider {
 
     A Stripe listing takes \c starting_after - the ID of the last record of the previous page - rather than a
     page number or an opaque cursor, and reports \c has_more beside the records.  \c limit is capped at 100
-    and is asked for in full.  @ref RSRP_AFTER_ID is exactly this contract, and \c has_more is what ends a
+    and is asked for in full.  @ref RestSchemaActions::RSRP_AFTER_ID is exactly this contract, and \c has_more is what ends a
     walk.
 
     @section striperecord_pushdown What Stripe Filters

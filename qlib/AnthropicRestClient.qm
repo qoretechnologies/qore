@@ -107,7 +107,7 @@ stream.close();
     @section AnthropicRestClientRelnotes Release Notes
 
     @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
-    - the initial version of the %AnthropicRestClient module
+    - initial release
 */
 
 %requires json

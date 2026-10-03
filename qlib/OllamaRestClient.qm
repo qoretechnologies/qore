@@ -67,7 +67,7 @@ module OllamaRestClient {
       "OllamaLlmProvider" (a thin @ref OpenAiRestClient::OpenAiLlmProvider
       subclass) so existing OpenAI-shape consumers work unchanged
     - **Native** endpoints at `/api/embed`, `/api/tags`, `/api/pull` —
-      surfaced by the @ref OllamaDataProvider for embeddings (with
+      surfaced by the @ref ollamadataproviderintro "OllamaDataProvider" for embeddings (with
       Ollama's richer native body shape) and model management
 
     @par Configuration
@@ -78,7 +78,7 @@ module OllamaRestClient {
     @section OllamaRestClientRelnotes Release Notes
 
     @subsection OllamaRestClientv1_0 OllamaRestClient v1.0
-    - the initial version of the %OllamaRestClient module
+    - initial release
 */
 
 %requires json

@@ -84,7 +84,7 @@ printf("Campaigns: %Y\n", result.body);
     @section instantlyrestclientrelnotes Release Notes
 
     @subsection instantlyrestclientv1_0 InstantlyRestClient v1.0
-    - the initial version of the %InstantlyRestClient module
+    - initial release
 */
 
 #! the InstantlyRestClient namespace contains all the objects in the InstantlyRestClient module

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file MewsRestClient.qm Qore user module for calling Oracle Mews REST services
 
-/*  MewsRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  MewsRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -96,7 +96,7 @@ printf("%Y\n", ans.body);
       (ex: \c https://api.mews.com or \c https://api.mews-demo.com) and must be supplied by the user
 
     @subsection Mewsrestclientv1_0 MewsRestClient v1.0
-    - the initial version of the %MewsRestClient module
+    - initial release
 */
 
 #! the MewsRestClient namespace contains all the objects in the MewsRestClient module
@@ -107,7 +107,7 @@ public namespace MewsRestClient {
     @ref MewsRestClientIo (multiplexed RestClientIo-backed transport) via
     multi-inheritance.
 
-    Each transport subclass also holds its own thin @ref preprocessRequestBody()
+    Each transport subclass also holds its own thin @ref MewsRestClient::MewsRestClient::preprocessRequestBody()
     override that injects these fields into every outgoing request body —
     duplicated on both subclasses because Qore's multi-inheritance method
     resolution order prefers the leftmost parent (the REST client), which would

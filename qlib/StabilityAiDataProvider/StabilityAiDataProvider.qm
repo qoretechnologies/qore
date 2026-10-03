@@ -177,7 +177,7 @@ module StabilityAiDataProvider {
     - add complete registration, presentation, locale, wire, and installed qualification
 
     @subsection StabilityAiDataProviderv1_0 StabilityAiDataProvider v1.0
-    - the initial version of the %StabilityAiDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the StabilityAiDataProvider module

@@ -99,7 +99,7 @@ printf("Product count: %d\n", result.body.data.product_count);
     @section bigcommercerestclientrelnotes Release Notes
 
     @subsection bigcommercerestclientv1_0 BigCommerceRestClient v1.0
-    - the initial version of the %BigCommerceRestClient module
+    - initial release
 */
 
 #! the BigCommerceRestClient namespace contains all the objects in the BigCommerceRestClient module

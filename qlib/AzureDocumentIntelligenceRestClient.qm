@@ -80,9 +80,7 @@ module AzureDocumentIntelligenceRestClient {
     @section AzureDocumentIntelligenceRestClientRelnotes Release Notes
 
     @subsection AzureDocumentIntelligenceRestClientv1_0 AzureDocumentIntelligenceRestClient v1.0
-    - the initial version of the %AzureDocumentIntelligenceRestClient module
-    - authenticated ping, explicit key/token alternatives, endpoint normalization, and sync/async constructor parity
-    - independent per-call polling with safe service links, total deadlines, Retry-After, and retained job context
+    - initial release
 */
 
 %requires json

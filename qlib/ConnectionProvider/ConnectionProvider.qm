@@ -353,7 +353,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       (<a href="https://github.com/qoretechnologies/qore/issues/2880">issue 2880</a>)
 
     @subsection connectionprovider_1_0 ConnectionProvider 1.0
-    - the initial version of the ConnectionProvider module
+    - initial release
 */
 
 #! The ConnectionProvider namespace

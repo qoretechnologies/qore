@@ -86,7 +86,7 @@ printf("Calendars: %y\n", result.body.calendars);
     @section gohighlevelrestclientrelnotes Release Notes
 
     @subsection gohighlevelrestclientv1_0 GoHighLevelRestClient v1.0
-    - the initial version of the %GoHighLevelRestClient module
+    - initial release
 */
 
 #! the GoHighLevelRestClient namespace contains all the objects in the GoHighLevelRestClient module

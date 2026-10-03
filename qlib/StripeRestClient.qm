@@ -110,7 +110,7 @@ printf("Customers: %Y\n", result.body);
     @section striperestclientrelnotes Release Notes
 
     @subsection striperestclientv1_0 StripeRestClient v1.0
-    - the initial version of the %StripeRestClient module
+    - initial release
 */
 
 #! the StripeRestClient namespace contains all the objects in the StripeRestClient module

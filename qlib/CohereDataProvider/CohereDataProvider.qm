@@ -124,7 +124,7 @@ module CohereDataProvider {
     completed response and does not expose the streaming transport switch.
 
     @subsection CohereDataProviderv1_0 CohereDataProvider v1.0
-    - the initial version of the %CohereDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the CohereDataProvider module

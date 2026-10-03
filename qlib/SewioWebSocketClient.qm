@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SewioWebSocketClient.qm SewioWebSocketClient implementation
 
-/*  SewioWebSocketClient.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  SewioWebSocketClient.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -97,7 +97,7 @@ c.waitForZero();
     - all connection clases have unified constructor
 
     @subsection swsc_v1_0 v1.0
-    - the initial version of the SewioWebSocketClient module
+    - initial release
 */
 
 #! the SewioWebSocketClient namespace contains all the definitions in the SewioWebSocketClient module

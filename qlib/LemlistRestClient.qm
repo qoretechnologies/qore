@@ -84,7 +84,7 @@ printf("Campaigns: %Y\n", result.body);
     @section lemlistrestclientrelnotes Release Notes
 
     @subsection lemlistrestclientv1_0 LemlistRestClient v1.0
-    - the initial version of the %LemlistRestClient module
+    - initial release
 */
 
 #! the LemlistRestClient namespace contains all the objects in the LemlistRestClient module
@@ -345,12 +345,6 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
         return "Lemlist";
     }
 
-    #! returns a @ref LemlistRestClient object
-    /** @param connect if @ref True, a connection is made immediately
-        @param rtopts runtime options (ignored)
-
-        @return a @ref LemlistRestClient object
-    */
     #! Returns connection options with apikey translated to username/password for HTTP Basic Auth
     /** This ensures the polling ping mechanism gets proper Basic Auth credentials.
     */
@@ -359,6 +353,12 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
         return LemlistRestClientBase::getOptions(opts);
     }
 
+    #! returns a @ref LemlistRestClient object
+    /** @param connect if @ref True, a connection is made immediately
+        @param rtopts runtime options (ignored)
+
+        @return a @ref LemlistRestClient object
+    */
     private LemlistRestClient::LemlistRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new LemlistRestClient::LemlistRestClient(getConnectionOptions(rtopts), !connect);
     }

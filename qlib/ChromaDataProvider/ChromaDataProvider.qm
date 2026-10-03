@@ -109,7 +109,7 @@ module ChromaDataProvider {
     @section ChromaDataProviderRelnotes Release Notes
 
     @subsection ChromaDataProviderv1_0 ChromaDataProvider v1.0
-    - the initial version of the %ChromaDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the ChromaDataProvider module

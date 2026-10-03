@@ -112,7 +112,7 @@ printf("%Y\n", ans.body);
     - API version choices and authentication checks match the live service
 
     @subsection GroqRestClientv1_0 GroqRestClient v1.0
-    - the initial version of the %GroqRestClient module
+    - initial release
 */
 
 %requires json

@@ -124,7 +124,7 @@ printf("Projects: %Y\n", result.body);
     @section gitlabrestclientrelnotes Release Notes
 
     @subsection gitlabrestclientv1_0 GitLabRestClient v1.0
-    - the initial version of the %GitLabRestClient module
+    - initial release
 */
 
 #! the GitLabRestClient namespace contains all the objects in the GitLabRestClient module

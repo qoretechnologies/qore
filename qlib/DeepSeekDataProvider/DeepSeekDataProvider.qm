@@ -181,7 +181,7 @@ hash<auto> invoice = response.doRequest({
 
 
     @subsection DeepSeekDataProviderv1_0 DeepSeekDataProvider v1.0
-    - the initial version of the %DeepSeekDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the DeepSeekDataProvider module

@@ -67,7 +67,7 @@ module GorgiasRestClient {
     @section gorgiasrestclientrelnotes Release Notes
 
     @subsection gorgiasrestclientv1_0 GorgiasRestClient v1.0
-    - the initial version of the %GorgiasRestClient module
+    - initial release
 */
 
 #! the GorgiasRestClient namespace contains all the objects in the GorgiasRestClient module

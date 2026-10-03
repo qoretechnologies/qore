@@ -90,7 +90,7 @@ printf("Site: %s\n", result.body.website.siteTitle);
     @section squarespacerestclientrelnotes Release Notes
 
     @subsection squarespacerestclientv1_0 SquarespaceRestClient v1.0
-    - the initial version of the %SquarespaceRestClient module
+    - initial release
 */
 
 #! the SquarespaceRestClient namespace contains all the objects in the SquarespaceRestClient module

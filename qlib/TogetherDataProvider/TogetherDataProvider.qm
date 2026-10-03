@@ -152,7 +152,7 @@ printf("Image URL: %s\n", result.data[0].url);
     account entitlements.
 
     @subsection TogetherDataProviderv1_0 TogetherDataProvider v1.0
-    - the initial version of the %TogetherDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the TogetherDataProvider module

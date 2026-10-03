@@ -91,7 +91,7 @@ printf("Status: %Y\n", result.body);
     @section woocommercerestclientrelnotes Release Notes
 
     @subsection woocommercerestclientv1_0 WooCommerceRestClient v1.0
-    - the initial version of the %WooCommerceRestClient module
+    - initial release
 */
 
 #! the WooCommerceRestClient namespace contains all the objects in the WooCommerceRestClient module

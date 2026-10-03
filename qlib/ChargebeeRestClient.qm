@@ -78,7 +78,7 @@ printf("Subscriptions: %Y\n", result.body);
     @section chargebeerestclientrelnotes Release Notes
 
     @subsection chargebeerestclientv1_0 ChargebeeRestClient v1.0
-    - the initial version of the %ChargebeeRestClient module
+    - initial release
 */
 
 #! the ChargebeeRestClient namespace contains all the objects in the ChargebeeRestClient module

@@ -438,7 +438,7 @@ module HuggingFaceDataProvider {
     @section HuggingFaceDataProviderRelnotes Release Notes
 
     @subsection HuggingFaceDataProviderv1_0 HuggingFaceDataProvider v1.0
-    - the initial version of the %HuggingFaceDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the HuggingFaceDataProvider module

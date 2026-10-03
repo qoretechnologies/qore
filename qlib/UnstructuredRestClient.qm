@@ -122,7 +122,7 @@ module UnstructuredRestClient {
     @section UnstructuredRestClientRelnotes Release Notes
 
     @subsection UnstructuredRestClientv1_0 UnstructuredRestClient v1.0
-    - the initial version of the %UnstructuredRestClient module
+    - initial release
 */
 
 

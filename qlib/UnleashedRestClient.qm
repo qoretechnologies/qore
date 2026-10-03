@@ -87,7 +87,7 @@ printf("Customers: %Y\n", result.body);
     @section unleashedrestclientrelnotes Release Notes
 
     @subsection unleashedrestclientv1_0 UnleashedRestClient v1.0
-    - the initial version of the %UnleashedRestClient module
+    - initial release
 */
 
 #! the UnleashedRestClient namespace contains all the objects in the UnleashedRestClient module

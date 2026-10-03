@@ -82,7 +82,7 @@ printf("Projects: %y\n", result.body.projects);
     @section tableaurestclientrelnotes Release Notes
 
     @subsection tableaurestclientv1_0 TableauRestClient v1.0
-    - the initial version of the %TableauRestClient module
+    - initial release
 */
 
 #! the TableauRestClient namespace contains all the objects in the TableauRestClient module

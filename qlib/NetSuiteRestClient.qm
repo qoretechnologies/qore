@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file NetSuiteRestClient.qm Qore user module for calling Oracle NetSuite REST services
 
-/*  NetSuiteRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  NetSuiteRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,7 +87,7 @@ printf("%Y\n", ans.body);
     @section NetSuiterestclientrelnotes Release Notes
 
     @subsection NetSuiterestclientv1_0 NetSuiteRestClient v1.0
-    - the initial version of the %YetSuiteRestClient module
+    - initial release
 */
 
 #! the NetSuiteRestClient namespace contains all the objects in the NetSuiteRestClient module

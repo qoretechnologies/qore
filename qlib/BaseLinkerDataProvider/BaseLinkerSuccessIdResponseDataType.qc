@@ -5,7 +5,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! Generic success response with a newly assigned identifier
-/** BaseLinker's add*-style methods return `{"status": "SUCCESS", "<something>_id": <id>}`.
+/** BaseLinker's add*-style methods return `{"status": "SUCCESS", "&lt;something&gt;_id": &lt;id&gt;}`.
     This data type covers the common fields across those responses.
 */
 public class BaseLinkerSuccessIdResponseDataType inherits HashDataType {

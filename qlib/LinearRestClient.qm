@@ -85,7 +85,7 @@ printf("User: %s <%s>\n", result.body.data.viewer.name, result.body.data.viewer.
     @section linearrestclientrelnotes Release Notes
 
     @subsection linearrestclientv1_0 LinearRestClient v1.0
-    - the initial version of the %LinearRestClient module
+    - initial release
 */
 
 #! the LinearRestClient namespace contains all the objects in the LinearRestClient module

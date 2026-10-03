@@ -98,7 +98,7 @@ binary image = job.media.data;
     normalization details, and source/license attribution are installed in `bfl-provenance.json`.
 
     @subsection BflRestClientv1_0 BflRestClient v1.0
-    - the initial version of the %BflRestClient module
+    - initial release
 */
 
 #! contains all public symbols of the BflRestClient module

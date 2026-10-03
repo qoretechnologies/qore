@@ -226,7 +226,7 @@ string markdown = (map $1.markdown, result.markdown.pages).join("\n\n");
     @section LlamaParseDataProviderRelnotes Release Notes
 
     @subsection LlamaParseDataProviderv1_0 LlamaParseDataProvider v1.0
-    - the initial version of the %LlamaParseDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the LlamaParseDataProvider module

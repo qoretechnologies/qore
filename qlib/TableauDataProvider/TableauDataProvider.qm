@@ -685,5 +685,5 @@ module TableauDataProvider {
     @section tableaudataproviderrelnotes Release Notes
 
     @subsection tableaudataproviderv1_0 TableauDataProvider v1.0
-    - the initial version of the %TableauDataProvider module
+    - initial release
 */

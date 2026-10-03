@@ -82,7 +82,7 @@ public class GraphQLEventQueue inherits GraphQLCancellableSource {
     #! posts an event to the subscriber; wakes a thread blocked in @ref next()
     /** @param event the event value passed to the subscription's selection set; may be any type
 
-        @note posting after @ref complete()/@ref cancel() has no effect on a consumer that has
+        @note posting after @ref complete() or @ref cancel() has no effect on a consumer that has
         already stopped iterating
     */
     post(auto event) {

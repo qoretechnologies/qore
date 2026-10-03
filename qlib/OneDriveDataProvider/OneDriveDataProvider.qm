@@ -376,7 +376,7 @@ module OneDriveDataProvider {
     @section onedrivedataproviderrelnotes Release Notes
 
     @subsection onedrivedataproviderv1_0 OneDriveDataProvider v1.0
-    - the initial version of the %OneDriveDataProvider module
+    - initial release
 */
 
 public namespace OneDriveDataProvider {

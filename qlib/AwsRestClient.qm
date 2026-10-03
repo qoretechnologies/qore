@@ -130,7 +130,7 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection awsrestclientv1_0 AwsRestClient v1.0
-    - the initial version of the %AwsRestClient module
+    - initial release
 */
 
 #! the AwsRestClient namespace contains all the objects in the AwsRestClient module

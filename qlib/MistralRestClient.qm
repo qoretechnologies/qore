@@ -90,7 +90,7 @@ printf("%Y\n", ans.body);
     - expose the supported API versions and verify authentication with the model listing
 
     @subsection MistralRestClientv1_0 MistralRestClient v1.0
-    - the initial version of the %MistralRestClient module
+    - initial release
 */
 
 %requires json

@@ -130,7 +130,7 @@ auto transcript = root.getChildProvider("transcribe-audio").doRequest({
     - send each request once; callers decide whether a failed operation can safely be retried
 
     @subsection MistralDataProviderv1_0 MistralDataProvider v1.0
-    - the initial version of the %MistralDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the MistralDataProvider module

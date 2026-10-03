@@ -264,7 +264,7 @@ printf("%d pages\n", all.size());
     @section confluencedataproviderrelnotes Release Notes
 
     @subsection confluencedataproviderv1_0 ConfluenceDataProvider v1.0
-    - the initial version of the %ConfluenceDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the ConfluenceDataProvider module

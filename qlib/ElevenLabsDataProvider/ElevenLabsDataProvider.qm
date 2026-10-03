@@ -601,7 +601,7 @@ module ElevenLabsDataProvider {
     @section ElevenLabsDataProviderRelnotes Release Notes
 
     @subsection ElevenLabsDataProviderv1_0 ElevenLabsDataProvider v1.0
-    - the initial version of the %ElevenLabsDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ElevenLabsDataProvider module

@@ -989,7 +989,7 @@ printf("Created order: %d\n", result.orderId);
     @section shipstationdataproviderrelnotes Release Notes
 
     @subsection shipstationdataproviderv1_0 ShipStationDataProvider v1.0
-    - the initial version of the %ShipStationDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ShipStationDataProvider module

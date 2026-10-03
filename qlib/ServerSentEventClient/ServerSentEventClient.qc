@@ -177,7 +177,7 @@ ServerSentEventClient sse(\event(), {
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
         - \c last_event_id: Request to the server to resend messages starting after this ID
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: \c thread_yield());
@@ -355,7 +355,7 @@ sse.connect();
         return True;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnects the event stream
     disconnect() {
         # do not reconnect if an explicit disconnect is called
         if (reconnect) {
@@ -475,7 +475,7 @@ sse.connect();
         return h;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnects the event stream
     /** Whenever an event thread is running on behalf of this client (@c tid
         is set), this method unconditionally stops it.  Historically this
         was gated on @c hc.isOpen(), but a client using the conn_mgr
@@ -937,6 +937,28 @@ sse.setEventQueue();
         return 1;
     }
 
+    #! Builds a 0-arg callable that drives the event loop with a weak self ref.
+    /** Defined as a @c static method so the returned closure has no
+        implicit @c self capture (closures inside instance methods
+        always capture @c self strongly).  The closure captures only the
+        parameters @c w and @c started — neither forms a self-reference
+        cycle, and @c w is consumed via @c remove on the closure's first
+        and only execution.
+
+        Used by both the @c background and @ref start_thread spawn
+        paths in @ref start, so PO_NO_THREAD_CONTROL clients also get
+        clean auto-destruction (the legacy strong-self closure pattern
+        is gone).
+
+        @since ServerSentEventClient 1.1
+    */
+    private static code<nothing()> makeEventLoopClosure(ServerSentEventClient w,
+            Counter started, Counter connected) {
+        return sub () {
+            ServerSentEventClient::runEventLoop(remove w, started, connected);
+        };
+    }
+
     #! Background-thread entry point for the event loop (weak-ref path).
     /** Receives the owning @ref ServerSentEventClient as a strong-ref
         argument, then immediately converts it to a WEAK reference via
@@ -964,30 +986,10 @@ sse.setEventQueue();
             thread has performed the conversion, leaving the spawn
             machinery's transient ref as the only one alive.
 
-        @since ServerSentEventClient 1.1
-    */
-    #! Builds a 0-arg callable that drives the event loop with a weak self ref.
-    /** Defined as a @c static method so the returned closure has no
-        implicit @c self capture (closures inside instance methods
-        always capture @c self strongly).  The closure captures only the
-        parameters @c w and @c started — neither forms a self-reference
-        cycle, and @c w is consumed via @c remove on the closure's first
-        and only execution.
-
-        Used by both the @c background and @ref start_thread spawn
-        paths in @ref start, so PO_NO_THREAD_CONTROL clients also get
-        clean auto-destruction (the legacy strong-self closure pattern
-        is gone).
+        @param connected gates event delivery until the connected notification has been sent
 
         @since ServerSentEventClient 1.1
     */
-    private static code<nothing()> makeEventLoopClosure(ServerSentEventClient w,
-            Counter started, Counter connected) {
-        return sub () {
-            ServerSentEventClient::runEventLoop(remove w, started, connected);
-        };
-    }
-
     private static runEventLoop(ServerSentEventClient client0, Counter started, Counter connected) {
         ServerSentEventClient client := remove client0;
         # Background thread now holds only a weak reference; signal the
@@ -1046,8 +1048,8 @@ sse.setEventQueue();
     }
 
     #! Cleanup invoked after the event loop exits (weak-ref path).
-    /** Mirrors the post-loop cleanup of @ref eventLoop: closingConnection,
-        socket shutdown, clearTid, optional reconnect.  Called from
+    /** Performs post-loop cleanup: closingConnection, socket shutdown, clearTid, and optional reconnect.
+        Called from
         @ref runEventLoop via the weak ref, so it briefly re-strengthens
         @c self for the method-invocation duration only.
     */
@@ -1078,7 +1080,7 @@ sse.setEventQueue();
     }
 
     #! Starts a reconnect
-    /** Uses the same weak-self spawn pattern as @ref start: a static
+    /** Uses the same weak-self spawn pattern as @ref start "start": a static
         closure factory whose returned callable holds @c self only via
         the captured @c w parameter, which the closure body consumes via
         @c remove on first execution.  The reconnect thread therefore
@@ -1109,7 +1111,7 @@ sse.setEventQueue();
     }
 
     #! Background-thread entry point for the reconnect loop (weak-ref path).
-    /** Mirrors @ref runEventLoop: receives @c client0 as a strong-ref
+    /** Mirrors @ref runEventLoop "runEventLoop": receives @c client0 as a strong-ref
         argument, immediately converts it to a weak ref via @c remove +
         @c :=, then drives the reconnect via short instance-method
         invocations so the destructor can fire between iterations.

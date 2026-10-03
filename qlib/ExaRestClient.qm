@@ -79,14 +79,14 @@ module ExaRestClient {
 
     @par Agent integration
 
-    The @ref ExaAgentTools namespace exports `ToolDefinition` factories
+    The @ref ExaRestClient::ExaAgentTools namespace exports `ToolDefinition` factories
     and a dispatch callable for plugging Exa into
     @ref QoreAgentStrategies::SimpleAgentStrategy "SimpleAgentStrategy".
 
     @section ExaRestClientRelnotes Release Notes
 
     @subsection ExaRestClientv1_0 ExaRestClient v1.0
-    - the initial version of the %ExaRestClient module
+    - initial release
 */
 
 %requires json

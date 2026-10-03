@@ -320,7 +320,7 @@ list<hash<auto>> active = map $1, workflows.searchRecords({"status": "active"});
     @section UnstructuredDataProviderRelnotes Release Notes
 
     @subsection UnstructuredDataProviderv1_0 UnstructuredDataProvider v1.0
-    - the initial version of the %UnstructuredDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the UnstructuredDataProvider module

@@ -1082,7 +1082,7 @@ module GoHighLevelDataProvider {
     @section gohighleveldataproviderrelnotes Release Notes
 
     @subsection gohighleveldataproviderv1_0 GoHighLevelDataProvider v1.0
-    - the initial version of the %GoHighLevelDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the GoHighLevelDataProvider module

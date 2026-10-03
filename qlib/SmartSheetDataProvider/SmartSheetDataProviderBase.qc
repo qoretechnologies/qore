@@ -187,7 +187,7 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns an enriched error description that includes the Smartsheet API error message if available
-    /** Smartsheet errors use a consistent flat envelope: \c {"errorCode": <int>, "message": "...",
+    /** Smartsheet errors use a consistent flat envelope: \c {"errorCode": &lt;int&gt;, "message": "...",
         "refId": "...", "detail": {...}}. \c errorCode is a Smartsheet-specific numeric identifier
         (e.g. \c 1002 invalid token, \c 1006 not found, \c 1012 missing required attribute, \c 1133
         non-unique column titles). \c detail is a context hash whose keys vary by error (e.g.

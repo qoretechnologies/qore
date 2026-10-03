@@ -90,7 +90,7 @@ CREATE TABLE embeddings (
 CREATE INDEX ON embeddings USING hnsw (embedding vector_cosine_ops);
     @endverbatim
 
-    The @ref qlib/PgsqlSqlUtilBase.qm "PgsqlSqlUtilBase" module's
+    The @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module's
     `vector`, `halfvec`, `sparsevec` column types and the `PgsqlIndex`
     HNSW/IVFFlat method support are available for programmatic schema
     management.

@@ -215,9 +215,7 @@ hash<auto> found = pinecone.getChildProviderEx("search-records").doRequest({
     @section PineconeDataProviderRelnotes Release Notes
 
     @subsection PineconeDataProviderv1_0 PineconeDataProvider v1.0
-    - added ten record tables with complete paginated reads and schema-derived write forms
-    - added the separate Pinecone Admin application with 32 service-account actions
-    - the initial version of the %PineconeDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the PineconeDataProvider module

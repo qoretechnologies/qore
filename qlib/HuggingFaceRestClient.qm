@@ -81,7 +81,7 @@ printf("%Y\n", ans.body);
     @section HuggingFaceRestClientRelnotes Release Notes
 
     @subsection HuggingFaceRestClientv1_0 HuggingFaceRestClient v1.0
-    - the initial version of the %HuggingFaceRestClient module
+    - initial release
 */
 
 #! the HuggingFaceRestClient namespace contains all the objects in the HuggingFaceRestClient module

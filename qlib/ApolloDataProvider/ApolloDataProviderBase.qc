@@ -183,6 +183,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
         @param result_key the key in the response containing the result list
         @param params optional query parameters
         @param limit optional maximum number of results to return
+        @param extra_qs optional URL-encoded query arguments appended to each page request
         @return a list of all result records
 
         Apollo GET search endpoints use `page` and `per_page` query parameters

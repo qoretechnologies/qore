@@ -108,7 +108,7 @@ printf("%d lists\n", result.body.data.size());
     @section klaviyorestclientrelnotes Release Notes
 
     @subsection klaviyorestclientv1_0 KlaviyoRestClient v1.0
-    - the initial version of the %KlaviyoRestClient module
+    - initial release
 */
 
 #! the KlaviyoRestClient namespace contains all the objects in the KlaviyoRestClient module

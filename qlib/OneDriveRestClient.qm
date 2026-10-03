@@ -87,7 +87,7 @@ printf("%Y\n", ans.body);
     @section onedriverestclientrelnotes Release Notes
 
     @subsection onedriverestclientv1_0 OneDriveRestClient v1.0
-    - the initial version of the %OneDriveRestClient module
+    - initial release
 */
 
 #! the OneDriveRestClient namespace contains all the objects in the OneDriveRestClient module

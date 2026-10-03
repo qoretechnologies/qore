@@ -87,7 +87,7 @@ module WeaviateDataProvider {
     @section WeaviateDataProviderRelnotes Release Notes
 
     @subsection WeaviateDataProviderv1_0 WeaviateDataProvider v1.0
-    - the initial version of the %WeaviateDataProvider module
+    - initial release
 */
 
 #! contains all public definitions in the WeaviateDataProvider module

@@ -3023,7 +3023,7 @@ map printf("Invoice: %s - %s\n", $1.invoice_number, $1.total),
     @section zohoinvoicedataproviderrelnotes Release Notes
 
     @subsection zohoinvoicedataproviderv1_0 ZohoInvoiceDataProvider v1.0
-    - the initial version of the %ZohoInvoiceDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the ZohoInvoiceDataProvider module

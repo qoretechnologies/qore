@@ -102,7 +102,7 @@ stream.close();
     @section GeminiRestClientRelnotes Release Notes
 
     @subsection GeminiRestClientv1_0 GeminiRestClient v1.0
-    - the initial version of the %GeminiRestClient module
+    - initial release
 */
 
 %requires json

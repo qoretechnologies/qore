@@ -271,7 +271,7 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Returns an enriched error description that includes the Tally API error message if available
     /** Tally runs on NestJS and uses its standard exception envelope:
-        \c {"statusCode": <int>, "message": "<string>" | [<strings or {property, message} hashes>],
+        \c {"statusCode": &lt;int&gt;, "message": "&lt;string&gt;" | [&lt;strings or {property, message} hashes&gt;],
         "error": "Bad Request" | "Unauthorized" | ...}. The \c message field is polymorphic:
         scalar on auth/simple errors, list of strings from \c ValidationPipe, or list of
         \c {property, message} hashes from custom class-validator configurations.

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file BillwerkRestClient.qm Qore user module for calling billwerk.com REST services
 
-/*  BillwerkRestClient.qm Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+/*  BillwerkRestClient.qm Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -97,7 +97,7 @@ printf("Response body: %Y\n", response.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
     @subsection billwerkrestclientv1_0 BillwerkRestClient v1.0
-    - the initial version of the %BillwerkRestClient module
+    - initial release
 */
 
 #! the BillwerkRestClient namespace contains all the objects in the BillwerkRestClient module

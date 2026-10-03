@@ -10,7 +10,7 @@ import re
 import sys
 
 HEADING = re.compile(r'(?m)^[ \t]*[@\\](?:sub)*section\s+(\S+)[^\n]*')
-INITIAL = re.compile(r'\binitial\s+(?:public\s+)?release\b', re.IGNORECASE)
+INITIAL = re.compile(r'(?:the\s+)?(?:initial|first)\s+(?:public\s+)?(?:release|version)\b', re.IGNORECASE)
 
 
 def inspect_source(source):

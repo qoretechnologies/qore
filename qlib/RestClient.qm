@@ -406,7 +406,7 @@ printf("%Y\n", ans.body);
     - fixed \c "Accept" header in requests
 
     @subsection restclientv1_0 RestClient v1.0
-    - the initial version of the %RestClient module
+    - initial release
 */
 
 #! the RestClient namespace contains all the objects in the RestClient module

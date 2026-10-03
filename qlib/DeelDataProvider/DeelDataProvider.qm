@@ -1647,7 +1647,7 @@ module DeelDataProvider {
     @section deeldataproviderrelnotes Release Notes
 
     @subsection deeldataproviderv1_0 DeelDataProvider v1.0
-    - the initial version of the %DeelDataProvider module
+    - initial release
 */
 
 #! Contains all public definitions in the DeelDataProvider module

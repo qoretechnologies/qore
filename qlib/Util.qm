@@ -256,7 +256,7 @@ module Util {
     - added the Util::get_byte_size() and Util::get_marketing_byte_size() functions
 
     @subsection util_1_0 Util 1.0
-    - the initial version of the Util module
+    - initial release
 */
 
 namespace Init {
