@@ -149,6 +149,7 @@ private:
    int waiting;
 
    DLLLOCAL void reload();
+   DLLLOCAL void wake_signal_thread_unlocked();
    DLLLOCAL void stop_signal_thread_unlocked();
    DLLLOCAL int start_signal_thread(ExceptionSink* xsink);
    DLLLOCAL void stop_signal_thread();

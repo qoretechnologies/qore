@@ -1587,6 +1587,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 p = new Process(command[0], (command.size() > 1 ? command[1..] : ()) + batch_path, {
                     "stdout": out,
                     "stderr": err,
+                    # The launching thread waits below for this worker. On Linux, bind its lifetime to that
+                    # thread even when the builder crashes or is killed before cancelWorkers() can run.
+                    "kill_on_parent_exit": HAVE_PROCESS_KILL_ON_PARENT_EXIT,
                 });
                 worker_processes{batch_path} = p;
             }

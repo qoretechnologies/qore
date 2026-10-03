@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    On platforms with timed signal waits, signal-handler changes and shutdown no longer hang when a container
+    security policy denies an internal thread wakeup. The denied wakeup is reported and the pending operation
+    completes through a bounded wait. On other platforms, a denied wakeup reports a fatal error instead of hanging.
+    Concurrent signal-handler changes also release all callers waiting for the updated signal mask.
+
     External module documentation locates shared HTML assets beside the installed
     SDK template, independently of the module's installation prefix. Custom SDK
     data directories and paths containing spaces are supported.

@@ -188,13 +188,26 @@ void QoreSignalManager::del() {
 void QoreSignalManager::reload() {
     cmd = C_Reload;
     if (thread_running && tid != ::q_gettid()) {
-#ifdef DEBUG
-        int rc =
-#endif
-            pthread_kill(ptid, QORE_STATUS_SIGNAL);
-        assert(!rc);
+        wake_signal_thread_unlocked();
         // unlock lock and wait for condition
-        cond.wait(mutex);
+        while (cmd == C_Reload && thread_running) {
+            cond.wait(mutex);
+        }
+    }
+}
+
+// Must be called with mutex held. A security policy can deny even a signal sent to another thread of this
+// process. The command is already recorded under the lock; a timed wait lets the receiver observe it without
+// relying on that signal. On platforms without timed signal waits, report the fatal failure instead of hanging.
+void QoreSignalManager::wake_signal_thread_unlocked() {
+    int rc = pthread_kill(ptid, QORE_STATUS_SIGNAL);
+    if (rc) {
+#ifdef HAVE_SIGTIMEDWAIT
+        fprintf(stderr, "Qore signal manager: internal wakeup failed: %s; using timed signal wait\n", strerror(rc));
+#else
+        fprintf(stderr, "Qore signal manager: internal wakeup failed: %s\n", strerror(rc));
+        _Exit(1);
+#endif
     }
 }
 
@@ -206,16 +219,7 @@ void QoreSignalManager::stop_signal_thread_unlocked() {
 
     cmd = C_Exit;
     if (thread_running) {
-#ifdef DEBUG
-        int rc =
-#endif
-            pthread_kill(ptid, QORE_STATUS_SIGNAL);
-#ifdef DEBUG
-        if (rc) {
-            printd(0, "pthread_kill() returned %d: %s\n", rc, strerror(rc));
-        }
-        assert(!rc);
-#endif
+        wake_signal_thread_unlocked();
     }
 }
 
@@ -340,18 +344,37 @@ void QoreSignalManager::signal_handler_thread() {
                     // block only signals we are catching in this thread
                     qore_sigmask(SIG_SETMASK, &c_mask, 0);
                     // confirm that the mask has been updated so updates are atomic
-                    cond.signal();
+                    // Concurrent handler changes can share this reload; release every caller whose
+                    // predicate is now satisfied, not just one waiter.
+                    cond.broadcast();
                 }
             }
 
-            // unlock to call sigwait
+            // The bounded wait is also the independent wakeup path for a denied pthread_kill(). This is a
+            // runtime management thread, not a cancellable program thread: exit/reload use cmd under mutex.
             sl.unlock();
 
-            //printd(5, "about to call sigwait()\n");
-            sigwait(&c_mask, &sig);
+#ifdef HAVE_SIGTIMEDWAIT
+            const struct timespec timeout = {0, 500000000};
+            sig = sigtimedwait(&c_mask, nullptr, &timeout);
+            int wait_error = sig < 0 ? errno : 0;
+#else
+            int wait_error = sigwait(&c_mask, &sig);
+#endif
 
             // reacquire lock to check command and handler status
             sl.lock();
+            if (wait_error) {
+                if (wait_error == EINTR
+#ifdef HAVE_SIGTIMEDWAIT
+                        || wait_error == EAGAIN
+#endif
+                        ) {
+                    continue;
+                }
+                fprintf(stderr, "Qore signal manager: signal wait failed: %s\n", strerror(wait_error));
+                _Exit(1);
+            }
 
             //printd(5, "sigwait() sig: %d (cmd: %d) set: %d\n", sig, cmd, handlers[sig].isSet());
             if (sig == QORE_STATUS_SIGNAL && cmd != C_None) {
@@ -439,6 +462,7 @@ void QoreSignalManager::signal_handler_thread() {
         }
 
         thread_running = false;
+        cond.broadcast();
         tid = -1;
         sl.unlock();
     }

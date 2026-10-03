@@ -233,6 +233,7 @@
 #cmakedefine HAVE_NAMESPACES
 #cmakedefine HAVE_PTHREAD
 #cmakedefine HAVE_SIGNAL_HANDLING
+#cmakedefine HAVE_SIGTIMEDWAIT
 #cmakedefine HAVE_STAT_EMPTY_STRING_BUG
 #cmakedefine HAVE_STRUCT_FLOCK
 #cmakedefine HAVE_STRUCT_STAT_ST_BLKSIZE

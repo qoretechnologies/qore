@@ -1559,7 +1559,7 @@ qore_check_funcs(
     pthread_attr_getstack pthread_attr_getstacksize
     pthread_get_name_np pthread_get_stacksize_np pthread_getname_np putenv random
     readlink realloc realpath regcomp round select setegid setegid setenv
-    seteuid seteuid setgid setgroups setsid setsockopt setuid setuid sleep socket
+    seteuid seteuid setgid setgroups setsid setsockopt setuid setuid sigtimedwait sleep socket
     strcasecmp strcasestr strchr strdup strerror strncasecmp strspn strstr
     strtoll strtol symlink system tbbmalloc timegm unsetenv usleep vfork vprintf
 )
