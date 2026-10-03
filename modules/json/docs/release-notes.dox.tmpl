@@ -11,7 +11,7 @@
     - the JSON parser and serializer are published to other binary modules as a versioned C++ API
       in \c <qore/QoreJsonApi.h>, so a module whose own data format is JSON &mdash; the
       \c avro module, whose schemas are JSON documents &mdash; can parse and generate JSON from
-      C++ without %Qore-language code; see @ref jsoncppapisec
+      C++ without %Qore-language code; see @ref jsoncppapisecguide
     - the 16 companion user modules (A2aClient, A2aClientDataProvider, A2aServerHandler,
       FhirRestClient, FhirRestDataProvider, JsonFileDataProvider, JsonLd, JsonRpcClientIo,
       JsonRpcConnection, JsonRpcHandler, McpClient, McpClientDataProvider, McpServerHandler,
@@ -26,7 +26,7 @@
 
     - added TOON (Token-Oriented Object Notation) serialization support
       (@ref Qore::Json::make_toon() "make_toon()" / @ref Qore::Json::parse_toon() "parse_toon()"); see
-      @ref toonserialization
+      @ref jsontoonserializationguide
     - added the @ref jsonrpcclientiointro "JsonRpcClientIo" module: pure-Qore JSON-RPC
       client with async I/O via HttpClientIo:
       - full JSON-RPC 1.0, 1.1, and 2.0 protocol support

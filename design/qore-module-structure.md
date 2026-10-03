@@ -310,6 +310,11 @@ more than one "type" of content — split it into topical subpages.
 - Links to extracted guides, including module release notes, use the guide's `@page`
   identifier. Legacy anchors on mainpage navigation entries preserve bookmarks;
   they are not the destination for new `@ref` links to the guide content.
+  Check tracked documentation and API comments with
+  `python3 doxygen/check-guide-refs.py . ../module-*`; this catches references
+  that Doxygen accepts but renders with an obsolete bookmark as the link label
+  and a destination on the navigation page. Regression tests are in
+  `examples/test/cmake/test_guide_refs.py`.
 - A binary module's mainpage lists its companion qlib modules. Within the documentation
   build, module links use `@ref <lowercasemodulename>intro "ModuleName"`, including
   guides and release notes; do not hardcode `index.html` URLs or substitute a
