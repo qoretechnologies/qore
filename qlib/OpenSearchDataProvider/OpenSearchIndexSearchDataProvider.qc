@@ -27,7 +27,7 @@ public namespace OpenSearchDataProvider {
 #! The OpenSearch index search API data provider
 /** This class implements an API to search an index using OpenSearch's index search API
 
-    The `query` API argument takes a data structure that corresponds to OpenSearch's JSON Query DSL, for example.
+    The <tt>query</tt> API argument takes a data structure that corresponds to OpenSearch's JSON Query DSL, for example.
 */
 public class OpenSearchIndexSearchDataProvider inherits OpenSearchDataProviderBase {
     public {

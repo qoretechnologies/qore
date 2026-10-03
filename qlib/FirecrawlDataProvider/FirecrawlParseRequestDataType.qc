@@ -27,9 +27,9 @@ public namespace FirecrawlDataProvider {
 
 #! Request type for the Firecrawl parse action
 /** Uploads a local document and converts it to clean, LLM-ready data.
-    Supports `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, and `.xls`
-    files up to 50 MB. The wire format is `multipart/form-data` with a `file` part
-    (binary file content) and an `options` part (JSON-encoded options); the data
+    Supports <tt>.html</tt>, <tt>.htm</tt>, <tt>.pdf</tt>, <tt>.docx</tt>, <tt>.doc</tt>, <tt>.odt</tt>, <tt>.rtf</tt>, <tt>.xlsx</tt>, and <tt>.xls</tt>
+    files up to 50 MB. The wire format is <tt>multipart/form-data</tt> with a <tt>file</tt> part
+    (binary file content) and an <tt>options</tt> part (JSON-encoded options); the data
     provider performs the multipart packaging automatically.
 */
 public class FirecrawlParseRequestDataType inherits HashDataType {

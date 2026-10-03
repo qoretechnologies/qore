@@ -110,13 +110,13 @@ module BedrockDataProvider {
     models, model access, marketplace endpoints, evaluation, model customization, invocation jobs, prompt
     routers, provisioned throughput, Automated Reasoning, optimization, account settings, resource policies,
     and tags. The public hand-written Converse provider remains available for source compatibility; the
-    `/converse` catalog action uses the pinned schema contract.
+    <tt>/converse</tt> catalog action uses the pinned schema contract.
 
     @par Streaming operations
 
-    `ConverseStream`, `InvokeModelWithBidirectionalStream`, and `InvokeModelWithResponseStream` are deliberately
-    not registered as completed-value actions. Use `BedrockRestClientIo` for their native event-stream lifetimes,
-    including bidirectional input over HTTP/2. `BedrockLlmProvider::chatStream()` emits incremental Converse events.
+    <tt>ConverseStream</tt>, <tt>InvokeModelWithBidirectionalStream</tt>, and <tt>InvokeModelWithResponseStream</tt> are deliberately
+    not registered as completed-value actions. Use <tt>BedrockRestClientIo</tt> for their native event-stream lifetimes,
+    including bidirectional input over HTTP/2. <tt>BedrockLlmProvider::chatStream()</tt> emits incremental Converse events.
 
     @par Factory
 

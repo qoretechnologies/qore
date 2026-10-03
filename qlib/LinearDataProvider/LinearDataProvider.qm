@@ -808,8 +808,8 @@ module LinearDataProvider {
     @section lineardataproviderauth Authentication
 
     Linear supports two authentication methods:
-    - **API Key**: Personal API keys can be created in Linear settings. Use the \c token option.
-    - **OAuth 2.0**: For third-party applications. Use oauth2_client_id and oauth2_client_secret.
+    - <b>API Key</b>: Personal API keys can be created in Linear settings. Use the \c token option.
+    - <b>OAuth 2.0</b>: For third-party applications. Use oauth2_client_id and oauth2_client_secret.
 
     @par Example:
     @code{.py}

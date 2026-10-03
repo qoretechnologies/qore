@@ -50,16 +50,16 @@ module GoogleCloudStorageRestClient {
     @section googlecloudstoragerestclientintro GoogleCloudStorageRestClient Introduction
 
     The %GoogleCloudStorageRestClient module provides a REST client for
-    [Google Cloud Storage](https://cloud.google.com/storage) — Google's object
+    <a href="https://cloud.google.com/storage">Google Cloud Storage</a> — Google's object
     storage service, addressed through the
-    [JSON API](https://cloud.google.com/storage/docs/json_api) at
+    <a href="https://cloud.google.com/storage/docs/json_api">JSON API</a> at
     <tt>https://storage.googleapis.com</tt>.
 
     Authentication uses @ref gcpauthintro "GcpAuth" — either an explicit
     service-account JSON key or Application Default Credentials.  Unlike the
     consumer-facing Google products served by the \c GoogleRestClient module,
     Google Cloud Storage in a real GCP deployment is reached with a
-    **service account** rather than interactive user consent, so there is no
+    <b>service account</b> rather than interactive user consent, so there is no
     \c authorization_code grant here.
 
     The main classes are:
@@ -70,13 +70,13 @@ module GoogleCloudStorageRestClient {
     @par Object names are a flat key space
 
     A Google Cloud Storage object name is a single opaque key in a flat name
-    space; \c "/" is an ordinary character in it and **not** a path separator.
+    space; \c "/" is an ordinary character in it and <b>not</b> a path separator.
     An object may legitimately be named \c "a//b", \c "dir/" or \c "/leading".
     Names must therefore reach the service verbatim — never split, normalized,
     or collapsed.  Two helpers do the encoding without ever interpreting the
     value:
     - @ref GoogleCloudStorageRestClient::gcsEncodeObject() "gcsEncodeObject()"
-      encodes a name as a **single** JSON-API path segment (\c "/" becomes
+      encodes a name as a <b>single</b> JSON-API path segment (\c "/" becomes
       \c "%2F")
     - @ref GoogleCloudStorageRestClient::gcsEncodeObjectPath() "gcsEncodeObjectPath()"
       encodes a name for the \c "/BUCKET/OBJECT" URL form used by signed URLs,

@@ -98,9 +98,9 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Creates the object from constructor options
-    /** @param options constructor options; provide one of `fhir`, `fhirconnection`, or `url`
+    /** @param options constructor options; provide one of <tt>fhir</tt>, <tt>fhirconnection</tt>, or <tt>url</tt>
 
-        @throw FHIR-DATA-PROVIDER-ERROR if no FHIR client source is provided, or if the `fhir` option is not a FHIR
+        @throw FHIR-DATA-PROVIDER-ERROR if no FHIR client source is provided, or if the <tt>fhir</tt> option is not a FHIR
         REST client
     */
     constructor(*hash<auto> options) {
@@ -124,10 +124,10 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
     #! Returns the FHIR REST client from direct options
     /** @param options constructor options
 
-        @return the client given with the `fhir` option (a synchronous client is converted with
-        @ref getAsyncClient()), a client created for the `url` option, or no value if neither option is set
+        @return the client given with the <tt>fhir</tt> option (a synchronous client is converted with
+        @ref getAsyncClient()), a client created for the <tt>url</tt> option, or no value if neither option is set
 
-        @throw FHIR-DATA-PROVIDER-ERROR if the `fhir` option is not a FHIR REST client
+        @throw FHIR-DATA-PROVIDER-ERROR if the <tt>fhir</tt> option is not a FHIR REST client
     */
     static *FhirRestClient::FhirRestClientIo getFhirClient(*hash<auto> options) {
         if (options.fhir) {
@@ -157,7 +157,7 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
     #! Returns the FHIR REST client from a connection
     /** @param options constructor options
 
-        @return the asynchronous client of the connection given with the `fhirconnection` option (from the
+        @return the asynchronous client of the connection given with the <tt>fhirconnection</tt> option (from the
         connection's \c getAsync() method), or no value if the option is not set
 
         @throw FHIR-DATA-PROVIDER-ERROR if the connection does not provide a FHIR REST client

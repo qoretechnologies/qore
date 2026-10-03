@@ -193,7 +193,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Creates a new point in the collection
-    /** @param rec the record to create; must contain `id` and `vector`, optionally `payload`
+    /** @param rec the record to create; must contain <tt>id</tt> and <tt>vector</tt>, optionally <tt>payload</tt>
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the record as created
@@ -209,7 +209,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Upserts a point in the collection (same as create for Qdrant)
-    /** @param rec the record to upsert; must contain `id` and `vector`, optionally `payload`
+    /** @param rec the record to upsert; must contain <tt>id</tt> and <tt>vector</tt>, optionally <tt>payload</tt>
         @param upsert_options the upsert options after processing by validateUpsertOptions()
 
         @return the upsert result string
@@ -220,9 +220,9 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Updates one or more points in the collection
-    /** @param set the hash of field data to set; supports `payload` (hash) and/or `vector` (list).
+    /** @param set the hash of field data to set; supports <tt>payload</tt> (hash) and/or <tt>vector</tt> (list).
         When both are present, a single batch request is used to update both atomically.
-        @param where_cond a hash identifying the point(s) to update; must contain `id`
+        @param where_cond a hash identifying the point(s) to update; must contain <tt>id</tt>
         @param search_options the search options after processing by validateSearchOptions()
 
         @return the number of records updated
@@ -266,7 +266,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Deletes one or more points from the collection
-    /** @param where_cond a hash identifying the point(s) to delete; must contain `id`
+    /** @param where_cond a hash identifying the point(s) to delete; must contain <tt>id</tt>
         @param search_options the search options after processing by validateSearchOptions()
 
         @return the number of records deleted

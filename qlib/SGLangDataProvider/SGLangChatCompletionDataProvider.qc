@@ -25,7 +25,7 @@
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
 #! Data provider for generating chat completions via the SGLang OpenAI-compatible API
-/** Uses the `POST /v1/chat/completions` endpoint.  The `model` field is optional on
+/** Uses the <tt>POST /v1/chat/completions</tt> endpoint.  The <tt>model</tt> field is optional on
     the request and defaults to the model configured on the SGLang connection.
 */
 public class SGLangChatCompletionDataProvider inherits SGLangDataProviderCommon {

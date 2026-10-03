@@ -52,24 +52,24 @@ module GcpAuth {
     server are supported. External-account federation files and impersonated-service-account
     files are not supported; this module does not implement every Google SDK credential type.
 
-    1. **Service-account JSON file** — sign an RS256 JWT with the SA private
+    1. <b>Service-account JSON file</b> — sign an RS256 JWT with the SA private
        key, exchange at <tt>oauth2.googleapis.com/token</tt> using
        <tt>grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer</tt>.  See
        @ref GcpAuth::getAccessTokenFromServiceAccountFile() "getAccessTokenFromServiceAccountFile()".
 
-    2. **Compute metadata server** — on GCE, GKE, Cloud Run, App Engine, and
+    2. <b>Compute metadata server</b> — on GCE, GKE, Cloud Run, App Engine, and
        Cloud Functions, query
        <tt>http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token</tt>
        with the <tt>Metadata-Flavor: Google</tt> header.  See
        @ref GcpAuth::getAccessTokenFromMetadataServer() "getAccessTokenFromMetadataServer()".
 
-    3. **User (authorized_user) credentials** — the file written by
+    3. <b>User (authorized_user) credentials</b> — the file written by
        <tt>gcloud auth application-default login</tt> (JSON
        <tt>type: "authorized_user"</tt>) is exchanged via the OAuth2
        refresh-token grant (<tt>grant_type=refresh_token</tt>).  See
        @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()".
 
-    4. **Composite ADC chain** — explicit credential file → \c GOOGLE_APPLICATION_CREDENTIALS
+    4. <b>Composite ADC chain</b> — explicit credential file → \c GOOGLE_APPLICATION_CREDENTIALS
        env var → \c ~/.config/gcloud/application_default_credentials.json →
        metadata server, dispatching each resolved file to the service-account or
        authorized_user grant by its \c "type".  See

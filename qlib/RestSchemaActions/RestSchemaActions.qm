@@ -56,8 +56,8 @@ module RestSchemaActions {
 
     JSON and YAML schemas use the bundled \c json and \c yaml modules.
 
-    It exists because a schema describes a **transport contract**, and an application action is a
-    **product decision**.  A schema says which parameters an operation takes; it does not say which
+    It exists because a schema describes a <b>transport contract</b>, and an application action is a
+    <b>product decision</b>.  A schema says which parameters an operation takes; it does not say which
     of them a user should see first, which identifiers should be selectable rather than typed by
     hand, how actions should be grouped, or which wire-level integer is really a date.  Generating
     actions straight from a schema therefore produces a technically correct action with an unusable
@@ -79,7 +79,7 @@ module RestSchemaActions {
     is what keeps a large upstream document - Stripe's declares several hundred paths - from
     dominating load time and memory when an application exposes a couple of dozen of them.
 
-    Pruning is a **structural** transformation: it never edits a schema to work around an upstream
+    Pruning is a <b>structural</b> transformation: it never edits a schema to work around an upstream
     defect or a construct %Qore does not yet support.  An invalid document belongs in a
     normalization step of its own, and a valid construct that fails to parse belongs in
     @ref openapi3intro "OpenApi3".
@@ -90,7 +90,7 @@ module RestSchemaActions {
     @ref RestSchemaActions::RestSchemaActionInfo "RestSchemaActionInfo" entries, and hands them to
     @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" together with the schema.
 
-    Each entry carries a **stable action ID**.  An OpenAPI \c operationId may be recorded, and is
+    Each entry carries a <b>stable action ID</b>.  An OpenAPI \c operationId may be recorded, and is
     checked, but it is never the source of action identity: an upstream rename has to be reported as
     drift rather than silently rename an action that existing workflows call.  The manifest also makes
     additions deliberate - an endpoint appearing in an updated schema does not become a public action
@@ -115,7 +115,7 @@ module RestSchemaActions {
     |@ref RestSchemaActions::RSAL_BODY_ROOT "body-root"|the whole request body, when it is not an object
 
     Flattening removes transport groupings and nothing else: a body property that is itself an object
-    stays an object.  When two locations produce the same name the collision is **reported**, not
+    stays an object.  When two locations produce the same name the collision is <b>reported</b>, not
     resolved by picking one; the manifest renames either side with a location-qualified overlay key.
 
     The reverse mapping is part of the contract, so
@@ -131,7 +131,7 @@ module RestSchemaActions {
     them.  It is applied before action options are generated, so every override reaches
     @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
 
-    Requiredness may only be **narrowed**.  An action may present a stricter contract than the API;
+    Requiredness may only be <b>narrowed</b>.  An action may present a stricter contract than the API;
     declaring a schema-required value optional would produce requests the server rejects, so it is an
     error.
 
@@ -168,7 +168,7 @@ module RestSchemaActions {
     connection's URL the boundary sandboxing and network allow-listing are expressed against, and it is
     true of nearly every API.
 
-    It is not true of an API whose data plane is **sharded per object**.  Pinecone's control plane lives
+    It is not true of an API whose data plane is <b>sharded per object</b>.  Pinecone's control plane lives
     at \c api.pinecone.io and describes indexes; the 24 operations that read and write vectors go to a
     per-index host that only the control plane knows, and its own description says so, declaring the
     data-plane server as the template \c "https://{index_host}".  None of those operations names an index
@@ -185,11 +185,11 @@ module RestSchemaActions {
     Resolved hosts are cached by @ref RestSchemaActions::RestSchemaHostRouter "RestSchemaHostRouter", which
     is bound to the connection's client and copies it with
     @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" - so the copy keeps the connection's
-    credentials, headers and validator and shares its connection manager, and there is **one client per
-    host**, not one per endpoint.  Binding the router to the client is also what keeps two connections to
+    credentials, headers and validator and shares its connection manager, and there is <b>one client per
+    host</b>, not one per endpoint.  Binding the router to the client is also what keeps two connections to
     the same service apart: one account's resolved host can never be used with another's credentials.
 
-    @note A host that comes out of a response is a host the **service** chose, and the request that follows
+    @note A host that comes out of a response is a host the <b>service</b> chose, and the request that follows
     carries the connection's credentials to it.
     @ref RestSchemaActions::RestSchemaHostSourceInfo::allowed_host_suffixes "allowed_host_suffixes" is
     therefore required, and is matched label by label so that \c "evil-pinecone.io" does not pass for
@@ -197,7 +197,7 @@ module RestSchemaActions {
     cannot move a credentialed request onto cleartext.  Anything else fails closed, before the request is
     made.
 
-    This is deliberately narrow.  A server **variable** that the connection's own URL supplies - Confluence
+    This is deliberately narrow.  A server <b>variable</b> that the connection's own URL supplies - Confluence
     declares \c "https://{your-domain}/wiki/api/v2" - already works and needs none of this, and a path- or
     operation-level \c "servers" is refused at import time rather than silently ignored.
 
@@ -209,7 +209,7 @@ module RestSchemaActions {
     also runs the drift report below, so that an update is one reproducible command rather than an ad-hoc
     program written once per application.
 
-    It normalizes a trailing slash and a path-parameter **name** when resolving a manifest entry against a
+    It normalizes a trailing slash and a path-parameter <b>name</b> when resolving a manifest entry against a
     document, because neither changes the operation, and comparing paths as strings therefore reports
     operations as withdrawn when they are merely spelled differently.  Every match that needed normalizing
     is reported and fails the import: the manifest still has to name the path exactly as the document
@@ -223,7 +223,7 @@ module RestSchemaActions {
     which rebuilds the transport request and executes it through
     @ref restschemadataproviderintro "RestSchemaDataProvider".
 
-    The action publishes the **success response body** as its output type, not the HTTP envelope, so
+    The action publishes the <b>success response body</b> as its output type, not the HTTP envelope, so
     downstream users are not made to navigate a wrapper merely because execution also has a status and
     headers.  When an operation declares more than one success response with a body, no output
     contract is guessed: registration fails until the manifest selects one.
@@ -233,13 +233,13 @@ module RestSchemaActions {
 
     @section restschemaactions_records Record-Based Tables
 
-    An action is a request; a **record table** is a collection a caller can search, create in, update and
+    An action is a request; a <b>record table</b> is a collection a caller can search, create in, update and
     delete from with the standard record API, and with the standard search expressions the rest of the
     platform speaks.  A REST collection can be presented as one, and
     @ref RestSchemaActions::RestSchemaTableDataProvider "RestSchemaTableDataProvider" does it without a
     second implementation of the API: a table is declared as a
-    @ref RestSchemaActions::RestSchemaRecordTableInfo "RestSchemaRecordTableInfo" naming **actions the
-    manifest already exports**, so the paths, the request contracts, the escaping, the codecs and the
+    @ref RestSchemaActions::RestSchemaRecordTableInfo "RestSchemaRecordTableInfo" naming <b>actions the
+    manifest already exports</b>, so the paths, the request contracts, the escaping, the codecs and the
     published response shapes stay in one place.
 
     @subsection restschemaactions_records_hybrid Hybrid Pushdown
@@ -252,18 +252,18 @@ module RestSchemaActions {
     |!Step|!Why
     |Send what the service can evaluate|a collection of ten thousand records behind a page of 100 cannot be searched by reading all of it
     |Evaluate the rest as records arrive|the answer has to be the one the caller asked for, not the service's approximation of it
-    |Keep reading pages until the limit is met by **matching** records|otherwise a search silently under-returns
+    |Keep reading pages until the limit is met by <b>matching</b> records|otherwise a search silently under-returns
 
     @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" performs the split, and the third
     step falls out of applying the residual predicate in
-    @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" - which counts the limit **after**
+    @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" - which counts the limit <b>after</b>
     filtering - over a lazy @ref RestSchemaActions::RestSchemaRecordPageIterator "RestSchemaRecordPageIterator".
     Truncating the fetch at the limit and filtering afterwards is the way to get this wrong: asked for ten
     closed issues from a repository holding ten closed among a hundred, it answers with one.
 
     @subsection restschemaactions_records_exact Exactness Is the Load-Bearing Property
 
-    Each filter rule says whether the service's filter means **exactly** what the operator means.  It
+    Each filter rule says whether the service's filter means <b>exactly</b> what the operator means.  It
     defaults to @ref False, which is the answer that cannot produce a wrong result: the filter is sent and
     the predicate is evaluated again on what comes back, so a service that returns more than it was asked
     for costs a little client-side work and nothing else.  Declaring a rule exact is a statement about the
@@ -272,7 +272,7 @@ module RestSchemaActions {
     @subsection restschemaactions_records_native What Native Search Means
 
     @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" is declared only by
-    a table whose API takes a filter **expression** and can therefore evaluate a whole tree.  A table that
+    a table whose API takes a filter <b>expression</b> and can therefore evaluate a whole tree.  A table that
     can only narrow a listing with query arguments declares it @ref False however many arguments it has,
     because a caller reading that flag is asking whether the search happens on the server, and for such a
     table the answer is "partly".  The per-operator detail is published as
@@ -293,11 +293,11 @@ module RestSchemaActions {
     |!What varies|!How it is declared|!What it prevents
     |A language with no OR or no NOT|leave \c or_op or \c not_op unset|the connective cannot be rendered, so the expression stays whole and is evaluated client-side.  Klaviyo's \c filter has neither, and sending the arguments of an OR joined by anything else would answer with records the caller excluded
     |A language with no grouping|\c and_sep / \c or_sep give the literal separator, \c parenthesize says whether a group is wrapped|Klaviyo joins predicates with a bare comma and rejects a parenthesised one
-    |A query that is not a string|\c render_query renders the whole expression and may return any type|Intercom's search takes a **tree of hashes** in the request body
-    |A service that indexes each field for different comparisons|the table's query declares \c field_ops, field -> operator, in place of \c fields|Klaviyo takes \c equals on a profile's \c id and only the strict comparisons on its \c created, and answers an operator it does not allow on a field with an **error**
+    |A query that is not a string|\c render_query renders the whole expression and may return any type|Intercom's search takes a <b>tree of hashes</b> in the request body
+    |A service that indexes each field for different comparisons|the table's query declares \c field_ops, field -> operator, in place of \c fields|Klaviyo takes \c equals on a profile's \c id and only the strict comparisons on its \c created, and answers an operator it does not allow on a field with an <b>error</b>
 
-    The split matters: the operator tables still decide **what is pushed down** even when \c render_query
-    decides **how it is spelled**, so
+    The split matters: the operator tables still decide <b>what is pushed down</b> even when \c render_query
+    decides <b>how it is spelled</b>, so
     @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search",
     @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown" and the residual
     predicate all stay declarative.  A hook that also decided pushdown would put the honesty of those flags
@@ -305,13 +305,13 @@ module RestSchemaActions {
 
     @subsection restschemaactions_records_raw A Rendered Query Is Already in Wire Form
 
-    The argument a table renders its query into is often the same argument an **action** publishes in a
+    The argument a table renders its query into is often the same argument an <b>action</b> publishes in a
     curated form.  Klaviyo's \c filter takes a whole filter expression, and the listing actions put a wire
     codec on it that publishes the four named fields the application they replace offered.
 
     A rendered query must not be converted by that codec: it is already exactly what the wire takes, and
     Klaviyo's codec answers a shape it does not recognise with @ref nothing - which would drop the filter
-    and answer the search with the **whole collection**, with no error anywhere.  So the query value is
+    and answer the search with the <b>whole collection</b>, with no error anywhere.  So the query value is
     placed in a @ref RestSchemaActions::RestSchemaRawValue "RestSchemaRawValue", which
     @ref RestSchemaActions::RestSchemaActionOperation::unflatten() "unflatten()" places unchanged.  The
     option is still one the action has to declare and is checked as any other is; only the conversion is
@@ -320,17 +320,17 @@ module RestSchemaActions {
 
     @subsection restschemaactions_records_type What the Columns Are
 
-    A listing returns a **projection**; reading one record returns the **record**.  A vendor describes both
+    A listing returns a <b>projection</b>; reading one record returns the <b>record</b>.  A vendor describes both
     and the two rarely agree - GitLab describes a project with 24 fields in its listing and 161 in its single
     read - so the record type is derived from both and the richer one is published, with any column only the
     other declares added to it rather than lost.
 
-    That is not a cosmetic difference.  A column the table does not declare **cannot be searched at all**:
+    That is not a cosmetic difference.  A column the table does not declare <b>cannot be searched at all</b>:
     the framework rejects a predicate on an undeclared field before the table is reached.  Under-declaring
     therefore removes functionality silently, which is why the richer description wins and why the two are
     merged rather than one being chosen.
 
-    A write sends the columns the write action **declares**, and nothing else - so a column whose option is
+    A write sends the columns the write action <b>declares</b>, and nothing else - so a column whose option is
     spelled differently from the record field is dropped, and the write reports success having changed no
     value at all.  That happens wherever a manifest renames an option, which manifests do for a reason:
     Klaviyo returns a list's \c opt_in_process and its update action publishes \c optInProcess, because that
@@ -350,7 +350,7 @@ module RestSchemaActions {
     @ref RestSchemaActions::RestSchemaRecordListingInfo::records_path "records_path",
     @ref RestSchemaActions::RestSchemaRecordTableInfo::record_path "record_path" and
     @ref RestSchemaActions::RestSchemaRecordTableInfo::write_record_path "write_record_path" say where in a
-    response the records are, and a path that does not resolve fails **silently**: a single read whose record
+    response the records are, and a path that does not resolve fails <b>silently</b>: a single read whose record
     path names a wrapper the action has already unwrapped reads one record as nothing at all, and no test
     that only searches will ever notice.
 
@@ -371,8 +371,8 @@ module RestSchemaActions {
     what decides between them:
 
     |!|!Identifies|!Comes from
-    |a scope option|the **collection**, the same for every record in a search|the caller, and the listing requires it
-    |an identity part|**one record**, varying from row to row within a listing|the record itself
+    |a scope option|the <b>collection</b>, the same for every record in a search|the caller, and the listing requires it
+    |an identity part|<b>one record</b>, varying from row to row within a listing|the record itself
 
     A search whose predicate is the identity and nothing else is answered by reading that one record.  A
     predicate that also asks something more is not, because answering only the identity half would return -
@@ -388,7 +388,7 @@ module RestSchemaActions {
 
     @section restschemaactions_drift Schema Updates
 
-    Staying aligned with an API has to mean a **reproducible reviewed update**, not an uncontrolled
+    Staying aligned with an API has to mean a <b>reproducible reviewed update</b>, not an uncontrolled
     runtime one - a schema fetched at run time could change the contract of an action that existing
     workflows already call.
 

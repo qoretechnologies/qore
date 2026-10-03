@@ -495,22 +495,22 @@ printf("content: %s (%d external dependencies)\n", identity.digest, identity.dep
     @subsection mlalgo_onnx_device_macos Apple Silicon (CoreML + Metal/UMA)
 
     macOS / Apple Silicon has two distinct device paths, and the contract is
-    different from CUDA because of the Apple **Unified Memory Architecture (UMA):**
+    different from CUDA because of the Apple <b>Unified Memory Architecture (UMA):</b>
     the CPU and GPU share one physical memory pool, so a "device buffer" can be
     the same physical bytes as its host view.
 
-    - **CoreML EP** is the primary accelerator: it dispatches inference to the
+    - <b>CoreML EP</b> is the primary accelerator: it dispatches inference to the
       ANE, GPU, or CPU and manages its own opaque memory. CoreML is treated as
       an EP-acceleration provider (above) -- a device-binding request resolves
       to host with zero transfers and a \c provider_host_resolutions bump.
       Outputs are returned as host @ref Qore::ML::Tensor "Tensors".
 
-    - **Metal/UMA buffers** (via @ref Qore::ML::Tensor::toDevice()
+    - <b>Metal/UMA buffers</b> (via @ref Qore::ML::Tensor::toDevice()
       "Tensor::toDevice(\"metal\")") allocate an \c MTLBuffer with
       \c MTLStorageModeShared. On UMA, the CPU and GPU see the bytes at the same
       physical address, so binding a Metal-tagged input to any provider (CPU,
       CoreML, WebGPU) is zero-copy through CPU memory info. The transfer
-      counters report **zero** host↔device transfers truthfully -- no DMA hop
+      counters report <b>zero</b> host↔device transfers truthfully -- no DMA hop
       ever occurs. \c materialize_outputs is effectively free on UMA.
 
     - @ref Qore::ML::Tensor::pinnedHost() "Tensor::pinnedHost()" is moot on

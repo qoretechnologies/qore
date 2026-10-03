@@ -177,7 +177,7 @@ public class OneDriveRestClientBase {
             class: duplicating the Graph auth layer would mean fixing every Microsoft OAuth2 bug
             twice.
 
-            Profile values are **defaults, not overrides**: an option the caller set explicitly
+            Profile values are <b>defaults, not overrides</b>: an option the caller set explicitly
             always wins.
 
             @since %OneDriveRestClient 1.1
@@ -540,12 +540,12 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
 
     #! Returns the canonical URL for this connection type
     /** Read through a method rather than as the @ref DefaultUrl constant because a constant
-        reference is resolved **lexically**, at parse time, to the constant of the class whose body
+        reference is resolved <b>lexically</b>, at parse time, to the constant of the class whose body
         contains it: it does not dispatch on the subclass.  An inherited method that read
         \c DefaultUrl directly therefore saw OneDrive's value even for a SharePoint connection.
 
         That matters most in @ref setUpdateOptionsCode(), which is how a connection writes corrected
-        options **back to the configuration store**: reading the wrong constant there did not merely
+        options <b>back to the configuration store</b>: reading the wrong constant there did not merely
         misreport the URL, it persisted \c "onedrive://graph.microsoft.com" over the connection's own
         scheme every time the connection was loaded, so the correction survived restarts and came
         back after any manual edit.
@@ -621,7 +621,7 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
 
         #! The URL used when a connection for this app is created with a generated URL
         /** A consuming platform creates an app connection with \c auto_url by reading a URL constant off the
-            connection class **by reflection**, and it looks for \c DefaultConnectionUrl before
+            connection class <b>by reflection</b>, and it looks for \c DefaultConnectionUrl before
             \c DefaultUrl - precisely so that a class in a hierarchy where \c DefaultUrl is
             shadowed can state its URL unambiguously rather than depending on which of the two
             constants a hierarchy walk happens to return.

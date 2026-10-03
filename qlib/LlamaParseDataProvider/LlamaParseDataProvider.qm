@@ -143,7 +143,7 @@ module LlamaParseDataProvider {
     @section llamaparsedataproviderintro LlamaParseDataProvider Introduction
 
     Data-provider integration for
-    [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), LlamaIndex's document
+    <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a>, LlamaIndex's document
     platform.
 
     The application covers LlamaIndex Cloud's document surface:
@@ -160,7 +160,7 @@ module LlamaParseDataProvider {
     @section llamaparsedataproviderversion Which API Version
 
     LlamaIndex serves \c /api/v1 and \c /api/v2 side by side and publishes a v1-to-v2 migration
-    guide.  This module uses **v2 wherever the vendor has one**, and v1 only where there is no v2
+    guide.  This module uses <b>v2 wherever the vendor has one</b>, and v1 only where there is no v2
     counterpart - files, splitting, saved configurations and the account lookups.
 
     The v2 parse surface is also what makes the application usable in one step:

@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Allowed values for `predefined_package`
+#! Allowed values for <tt>predefined_package</tt>
 const PredefinedPackageAllowedValues = (
     <AllowedValueInfo>{"value": "Card", "desc": "Card"},
     <AllowedValueInfo>{"value": "Letter", "desc": "Letter"},

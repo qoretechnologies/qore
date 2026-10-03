@@ -476,8 +476,8 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Transforms a contact response from API format to user-friendly format
-    /** Extracts primary email from `email_addresses` array into `email` field,
-        and primary phone from `phone_numbers` array into `phone1` field
+    /** Extracts primary email from <tt>email_addresses</tt> array into <tt>email</tt> field,
+        and primary phone from <tt>phone_numbers</tt> array into <tt>phone1</tt> field
     */
     static hash<auto> transformContactResponse(hash<auto> contact) {
         hash<auto> result = contact;

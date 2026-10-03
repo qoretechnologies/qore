@@ -194,7 +194,7 @@ public class LinkedInOrganizationsDataProviderBase inherits DataProvider::Abstra
 
         @return the normalized organizations, in the order the IDs were given
 
-        @note the Organizations API is a \c BATCH_GET keyed by the **numeric ID**, not by the URN,
+        @note the Organizations API is a \c BATCH_GET keyed by the <b>numeric ID</b>, not by the URN,
         which is why the IDs are passed through unchanged rather than rebuilt into URNs
     */
     private list<auto> resolveOrganizations(list<string> ids) {
@@ -288,7 +288,7 @@ public class LinkedInOrganizationsDataProviderBase inherits DataProvider::Abstra
 
     #! Appends url-encoded query parameters to a path
     /** Rest.li structural values — \c "(value:APPROVED)", \c "List(a,b)", \c "(end:1,start:0)" —
-        must reach LinkedIn with their parentheses, colons and commas **literal**; encoding them
+        must reach LinkedIn with their parentheses, colons and commas <b>literal</b>; encoding them
         addresses a different query and LinkedIn rejects it.  Those values are recognized and passed
         through, and everything else is encoded strictly.
 

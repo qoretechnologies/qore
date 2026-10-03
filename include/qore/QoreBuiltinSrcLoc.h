@@ -34,14 +34,14 @@
 
 //! RAII helper that records a .qpp source location for the duration of
 //! its scope, so that builtin variant constructors running inside can
-//! stash it on the variant.  `qpp` emits one of these around each
-//! `addBuiltinVariant` / `addMethod` / `addConstructor` / `addCopy` /
-//! `addStaticMethod` / `addAbstractMethod` call it generates, so that
+//! stash it on the variant.  <tt>qpp</tt> emits one of these around each
+//! <tt>addBuiltinVariant</tt> / <tt>addMethod</tt> / <tt>addConstructor</tt> / <tt>addCopy</tt> /
+//! <tt>addStaticMethod</tt> / <tt>addAbstractMethod</tt> call it generates, so that
 //! reflection (<tt>FunctionVariant::getSourceLocation()</tt>) can report the
-//! declaring `.qpp` file and line instead of the generic <tt>&lt;builtin&gt;</tt>
+//! declaring <tt>.qpp</tt> file and line instead of the generic <tt>&lt;builtin&gt;</tt>
 //! sentinel.
 /**
-    Usage (hand-written code — normally only `qpp` emits these):
+    Usage (hand-written code — normally only <tt>qpp</tt> emits these):
     @code
         QoreBuiltinSrcLocHelper _l("my_module.qpp", 42);
         ns.addBuiltinVariant("my_fn", (q_func_t)f_my_fn_Vs, ...);
@@ -49,7 +49,7 @@
 
     Nested helpers are supported: each constructor saves the prior
     thread-local value and the destructor restores it.  Locations are
-    interned in an immortal pool keyed by `(file, line)` so memory use
+    interned in an immortal pool keyed by <tt>(file, line)</tt> so memory use
     is bounded by the number of distinct builtin registration sites,
     not by the number of times the library is loaded.
 
@@ -59,7 +59,7 @@ class QoreBuiltinSrcLocHelper {
 public:
     //! Push the given source location on the thread-local stack.
     /**
-        @param file the source file name (typically a `.qpp` path); must
+        @param file the source file name (typically a <tt>.qpp</tt> path); must
             outlive the helper, but interning ensures the stored pointer
             on the variant remains valid indefinitely
         @param line the declaring line number within the file
@@ -73,8 +73,8 @@ public:
 
 private:
     //! Opaque pointer to the previously-active thread-local source
-    //! location; restored on destruction.  Typed as `const void*` to
-    //! keep the private internal type (`QoreProgramLocation`) out of
+    //! location; restored on destruction.  Typed as <tt>const void*</tt> to
+    //! keep the private internal type (<tt>QoreProgramLocation</tt>) out of
     //! the public ABI.
     const void* saved;
 

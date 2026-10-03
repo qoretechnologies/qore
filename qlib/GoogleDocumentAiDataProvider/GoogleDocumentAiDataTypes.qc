@@ -106,9 +106,9 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
     }
 }
 
-#! Typed sub-hash for the top-level Google Document AI `Document` object
+#! Typed sub-hash for the top-level Google Document AI <tt>Document</tt> object
 /** Covers the common top-level fields of the
-    [`Document`](https://cloud.google.com/document-ai/docs/reference/rest/v1/Document)
+    <a href="https://cloud.google.com/document-ai/docs/reference/rest/v1/Document"><tt>Document</tt></a>
     proto, including recursively typed pages, entities, tables, text anchors, and normalized values.
     The retained Fields constant is legacy metadata; instances use the complete pinned contract.
 */

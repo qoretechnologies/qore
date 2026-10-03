@@ -53,11 +53,11 @@ module GroqRestClient {
     @section groqrestclientintro GroqRestClient Introduction
 
     The %GroqRestClient module provides an API for calling
-    [Groq](https://groq.com) REST API services.
+    <a href="https://groq.com">Groq</a> REST API services.
 
     Groq runs open-weight models on its custom LPU inference engine at
     exceptionally high token-per-second throughput; see the
-    [Groq models documentation](https://console.groq.com/docs/models) for
+    <a href="https://console.groq.com/docs/models">Groq models documentation</a> for
     the currently-available models.  The API is OpenAI-compatible, so
     @ref GroqRestClient::GroqLlmProvider "GroqLlmProvider" subclasses
     @ref OpenAiRestClient::OpenAiLlmProvider with the Groq default URL and
@@ -395,7 +395,7 @@ public class GroqRestConnection inherits RestClient::RestConnection {
     - \c url (optional): override the default \c https://api.groq.com/openai
     - \c api_key (required): Groq API key
     - \c model (required): Groq model name; see the
-      [Groq models documentation](https://console.groq.com/docs/models) for
+      <a href="https://console.groq.com/docs/models">Groq models documentation</a> for
       the currently-available models
 */
 public class GroqLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {

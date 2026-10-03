@@ -103,7 +103,7 @@ public class GitLabProjectIdByUrlResponseDataType inherits HashDataType {
 
     GitLab's web UI puts \c "/-/" between a project's path and whatever page is being viewed inside it, and
     reserves \c "-" so that no group or project can be named that.  That makes it an unambiguous terminator
-    for the project path, so a URL copied from **any** page of a project resolves, not only the front page:
+    for the project path, so a URL copied from <b>any</b> page of a project resolves, not only the front page:
 
     |!URL|!Project path
     |\c https://gitlab.com/group/project|\c group/project
@@ -119,7 +119,7 @@ public class GitLabProjectIdByUrlResponseDataType inherits HashDataType {
     \c path_with_namespace is the form the rest of this application takes, and
     \c encoded_path_with_namespace is that path escaped into one path segment.  Both are returned because
     the superseded application returned both and existing mappers read the names; only the unescaped one
-    should be given to another action's **Project** option, which escapes what it receives.
+    should be given to another action's <b>Project</b> option, which escapes what it receives.
 */
 public class GitLabProjectIdByUrlDataProvider inherits DataProvider::AbstractDataProvider {
     public {

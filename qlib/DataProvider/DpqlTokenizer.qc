@@ -372,8 +372,8 @@ public class DpqlTokenizer {
     #! Returns the byte at the current position as a 1-byte string, or NOTHING.
     /** Uses @ref Qore::zzz8stringzzz9::getByte() for O(1) byte access
         (vs O(N) UTF-8 walk on @c input[pos]).  Returning a 1-byte string
-        keeps existing comparisons (`c == "#"`) and concatenation
-        (`value += currentChar()`) working unchanged. */
+        keeps existing comparisons (<tt>c == "#"</tt>) and concatenation
+        (<tt>value += currentChar()</tt>) working unchanged. */
     private:internal *string currentChar() {
         *int b = input.getByte(pos);
         if (!exists b) {

@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `updateInventoryProductsPrices` bulk action data provider
+#! BaseLinker <tt>updateInventoryProductsPrices</tt> bulk action data provider
 /** Accepts up to 1000 product-price updates per call (BaseLinker limit). */
 public class BaseLinkerUpdateInventoryProductsPricesDataProvider
         inherits BaseLinkerDataProviderBase {

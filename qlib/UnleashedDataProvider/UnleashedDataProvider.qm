@@ -523,7 +523,7 @@ module UnleashedDataProvider {
     1. Log in to your Unleashed account
     2. Go to Settings > Integration > API Access
     3. Create a new API key or use an existing one
-    4. Copy the **API ID** and **API Key**
+    4. Copy the <b>API ID</b> and <b>API Key</b>
 
     @par Example:
     @code{.py}

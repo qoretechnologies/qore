@@ -101,7 +101,7 @@ module DeepSeekDataProvider {
     @section deepseekdataproviderintro DeepSeekDataProvider Introduction
 
     The %DeepSeekDataProvider module provides a data provider API for
-    [DeepSeek](https://platform.deepseek.com) chat models.
+    <a href="https://platform.deepseek.com">DeepSeek</a> chat models.
 
     The following data providers are exposed:
     - @ref DeepSeekDataProvider::DeepSeekDataProvider "DeepSeekDataProvider"
@@ -128,7 +128,7 @@ printf("Response: %s\n", result.choices[0].message.content);
 
     @section deepseekdataprovidercoverage API Coverage
 
-    Contracts follow the [DeepSeek API reference](https://api-docs.deepseek.com/api/create-chat-completion)
+    Contracts follow the <a href="https://api-docs.deepseek.com/api/create-chat-completion">DeepSeek API reference</a>
     verified in September 2026. Available models are queried at runtime.
 
     |!Action|!Endpoint|!Purpose
@@ -145,15 +145,15 @@ printf("Response: %s\n", result.choices[0].message.content);
     @note
     - Generation actions return completed responses. For streaming chat, use
       @ref DeepSeekRestClient::DeepSeekLlmProvider "DeepSeekLlmProvider".
-    - Prefix messages and strict function tools use `/beta/chat/completions` automatically.
-    - Chat JSON output supports `text` or `json_object`; JSON Schema output is available through Create Response.
+    - Prefix messages and strict function tools use <tt>/beta/chat/completions</tt> automatically.
+    - Chat JSON output supports <tt>text</tt> or <tt>json_object</tt>; JSON Schema output is available through Create Response.
     - Responses are stateless: send the entire conversation on every call. There are no stored-response actions.
     - File content downloads are not documented by DeepSeek; images are referenced by their uploaded IDs.
-    - Deprecated `frequency_penalty` and `presence_penalty`, and unsupported `seed` and `user` chat options
-      are no longer advertised. Use `user_id` for chat isolation; Responses uses `user`.
+    - Deprecated <tt>frequency_penalty</tt> and <tt>presence_penalty</tt>, and unsupported <tt>seed</tt> and <tt>user</tt> chat options
+      are no longer advertised. Use <tt>user_id</tt> for chat isolation; Responses uses <tt>user</tt>.
     - API failures propagate without replaying requests that may already have generated billable tokens.
-    - For Responses JSON Schema output, `schema: {}` accepts any JSON value. The `schema` field must still be
-      present and non-null. The `name` field must be a string; empty and whitespace-only names are preserved.
+    - For Responses JSON Schema output, <tt>schema: {}</tt> accepts any JSON value. The <tt>schema</tt> field must still be
+      present and non-null. The <tt>name</tt> field must be a string; empty and whitespace-only names are preserved.
 
     @par Example: Structured invoice extraction
     @code{.py}

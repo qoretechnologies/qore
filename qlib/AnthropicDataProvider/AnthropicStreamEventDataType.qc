@@ -29,12 +29,12 @@ public const EVENT_ANTHROPIC_MESSAGE_STREAM = "anthropic-message-stream-event";
 
 #! Delta data type for Anthropic streaming content_block_delta and message_delta events
 /** Covers all delta variants:
-    - `text_delta`: incremental text content
-    - `input_json_delta`: incremental tool input JSON
-    - `thinking_delta`: incremental thinking content
-    - `signature_delta`: thinking block integrity signature
-    - `citations_delta`: citation to append
-    - message-level delta with `stop_reason` and `stop_sequence`
+    - <tt>text_delta</tt>: incremental text content
+    - <tt>input_json_delta</tt>: incremental tool input JSON
+    - <tt>thinking_delta</tt>: incremental thinking content
+    - <tt>signature_delta</tt>: thinking block integrity signature
+    - <tt>citations_delta</tt>: citation to append
+    - message-level delta with <tt>stop_reason</tt> and <tt>stop_sequence</tt>
 */
 public class AnthropicDeltaDataType inherits HashDataType {
     public {

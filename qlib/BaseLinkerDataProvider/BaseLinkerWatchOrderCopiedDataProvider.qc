@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Copied
-/** Fires whenever An order is duplicated/copied (BaseLinker journal `log_type` 17).
+/** Fires whenever An order is duplicated/copied (BaseLinker journal <tt>log_type</tt> 17).
 */
 public class BaseLinkerWatchOrderCopiedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

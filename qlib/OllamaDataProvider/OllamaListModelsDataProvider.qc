@@ -23,7 +23,7 @@
 */
 
 public namespace OllamaDataProvider {
-#! Data provider for Ollama's `/api/tags` endpoint (list locally-installed models)
+#! Data provider for Ollama's <tt>/api/tags</tt> endpoint (list locally-installed models)
 public class OllamaListModelsDataProvider inherits OllamaDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

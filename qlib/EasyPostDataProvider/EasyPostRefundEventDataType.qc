@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Refund event payload (`refund.successful`)
+#! Refund event payload (<tt>refund.successful</tt>)
 public class EasyPostRefundEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

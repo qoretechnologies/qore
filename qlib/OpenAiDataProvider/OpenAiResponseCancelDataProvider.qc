@@ -25,7 +25,7 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! Cancels a background response
-/** Only responses created with `background` set to `True` can be cancelled.
+/** Only responses created with <tt>background</tt> set to <tt>True</tt> can be cancelled.
 
     This is the Responses API equivalent of cancelling an Assistants API run.
 

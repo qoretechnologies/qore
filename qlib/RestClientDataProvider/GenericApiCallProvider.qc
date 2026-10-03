@@ -27,7 +27,7 @@ public namespace RestClientDataProvider {
 #! Framework-injected generic "Make an API call" data provider
 /** This provider backs the auto-injected
     @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "__call__" child and the
-    `make-api-call` action that the @c DataProvider framework registers on every REST-capable app
+    <tt>make-api-call</tt> action that the @c DataProvider framework registers on every REST-capable app
     (see @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
     for the opt-out).
 
@@ -36,15 +36,15 @@ public namespace RestClientDataProvider {
     arbitrary requests through it using the shared @c restDoRequest() entry point.
 
     Beyond the basic method/path/body/header inputs, the provider supports:
-    - **Body type selection**: a `body_type` field (json / form / multipart / xml / yaml / text /
-      binary / auto) drives both the body serialization and the `Content-Type` header. The body
+    - <b>Body type selection</b>: a <tt>body_type</tt> field (json / form / multipart / xml / yaml / text /
+      binary / auto) drives both the body serialization and the <tt>Content-Type</tt> header. The body
       field's editor in the UI reshapes accordingly via the dynamic options mechanism.
-    - **Path templating**: `path_vars` substitutes `{name}` placeholders in the URI path.
-    - **Status assertions**: `expected_status` whitelists response codes; mismatches throw
-      `REST-STATUS-ERROR`.
-    - **Error passthrough**: `error_passthru` returns non-2xx responses as normal data instead of
+    - <b>Path templating</b>: <tt>path_vars</tt> substitutes <tt>{name}</tt> placeholders in the URI path.
+    - <b>Status assertions</b>: <tt>expected_status</tt> whitelists response codes; mismatches throw
+      <tt>REST-STATUS-ERROR</tt>.
+    - <b>Error passthrough</b>: <tt>error_passthru</tt> returns non-2xx responses as normal data instead of
       throwing.
-    - **Multipart upload**: when `body_type = multipart`, the body is a
+    - <b>Multipart upload</b>: when <tt>body_type = multipart</tt>, the body is a
       @ref DataProvider::FileDataType "FileDataType" structure and the framework builds the
       multipart envelope.
 
@@ -87,7 +87,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
             # multipart Content-Type includes a boundary parameter; set at build time
         };
 
-        #! Header names whose values are redacted in any `debug.request.headers` echo
+        #! Header names whose values are redacted in any <tt>debug.request.headers</tt> echo
         /** Lowercased; matched case-insensitively. Anything matching these names has its value
             replaced with @c "***" so that bearer tokens, API keys, cookies, and proxy credentials
             never leak into response payloads, logs, or pipeline state. The set is conservative —
@@ -150,7 +150,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
 
         @return the response to the request, in the shape described by @ref ResponseType
 
-        @throw REST-STATUS-ERROR the response status is not in `expected_status`
+        @throw REST-STATUS-ERROR the response status is not in <tt>expected_status</tt>
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         date start_time = now_us();
@@ -272,11 +272,11 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
 
     #! Builds the lean response hash matching @ref GenericApiCallResponseDataType
     /** Replaces @ref RestClientDataProviderBase::buildResponseHash() which echoed the full request
-        (leaking bearer tokens in `request-headers`), duplicated `response-headers` into
-        `response-headers-raw`, and included several @ref NOTHING placeholder fields.
+        (leaking bearer tokens in <tt>request-headers</tt>), duplicated <tt>response-headers</tt> into
+        <tt>response-headers-raw</tt>, and included several @ref NOTHING placeholder fields.
 
-        This builder returns only `status` / `headers` / `body` by default; when the caller set
-        `include_debug = True` on the request, it also populates a `debug` sub-hash with the
+        This builder returns only <tt>status</tt> / <tt>headers</tt> / <tt>body</tt> by default; when the caller set
+        <tt>include_debug = True</tt> on the request, it also populates a <tt>debug</tt> sub-hash with the
         request method/URL/sanitized-headers and request/response sizes plus round-trip duration.
     */
     private hash<auto> buildLeanResponse(hash<RestClient::RestResponseInfo> resp, auto req,
@@ -404,9 +404,9 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
 
     #! Generates a token-safe random boundary for multipart body construction
     /** Returns a boundary value composed only of characters that are safe to interpolate into an
-        unquoted RFC 2046 `boundary=` parameter — base64url charset (A-Z a-z 0-9 - _) prefixed with
-        a recognizable marker. Avoids `/` and `+` (which standard base64 produces and which are in
-        RFC 2045 tspecials, requiring the parameter value to be quoted) and `=` (used for padding).
+        unquoted RFC 2046 <tt>boundary=</tt> parameter — base64url charset (A-Z a-z 0-9 - _) prefixed with
+        a recognizable marker. Avoids <tt>/</tt> and <tt>+</tt> (which standard base64 produces and which are in
+        RFC 2045 tspecials, requiring the parameter value to be quoted) and <tt>=</tt> (used for padding).
 
         Includes 16 bytes of entropy from @c rand() so concurrent calls within the same microsecond
         don't collide on the timestamp alone — a boundary collision between two interleaved
@@ -460,7 +460,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
     #! Sanitizes a value for safe interpolation into a multipart Content-Disposition / Content-Type
     #! header
     /** Strips CR, LF, and NUL (which would terminate or inject header lines) and replaces literal
-        double-quote with the percent-encoded form `%22` (so the quoted-string form of the header
+        double-quote with the percent-encoded form <tt>&#37;22</tt> (so the quoted-string form of the header
         attribute is not broken). Backslashes are also stripped to avoid quoted-string escape
         ambiguities. Whitespace at the edges is trimmed.
 
@@ -479,7 +479,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Extracts the body_type value from either the wrapped or unwrapped option format
-    /** Action options may arrive as `{"body_type": "json"}` or as `{"body_type": {"value": "json"}}`
+    /** Action options may arrive as <tt>{"body_type": "json"}</tt> or as <tt>{"body_type": {"value": "json"}}</tt>
         depending on the caller. Returns the unwrapped string value, or @ref NOTHING if not set.
     */
     static *string extractBodyType(*hash<auto> opts) {

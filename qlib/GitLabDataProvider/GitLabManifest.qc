@@ -50,7 +50,7 @@ public namespace GitLabDataProvider {
     |\c getApiV4ProjectsIdMilestones|its milestone dropdown called an endpoint the application did not export
     |\c getApiV4Topics|its topic dropdown called an endpoint the application did not export
 
-    A dropdown here is produced by executing another action **in this manifest**, so one that names an
+    A dropdown here is produced by executing another action <b>in this manifest</b>, so one that names an
     unexported endpoint cannot exist: it fails when the action set is built.  Exporting these three is what
     makes those dropdowns work at all.
 
@@ -67,7 +67,7 @@ public namespace GitLabDataProvider {
 
     @section gitlabmanifest_ids_vs_iids IDs and IIDs
 
-    GitLab addresses an issue or a merge request inside a project by its **IID** - the number shown in the
+    GitLab addresses an issue or a merge request inside a project by its <b>IID</b> - the number shown in the
     web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
     different numbers for the same object, and confusing them addresses a different issue without any error,
     so each dropdown supplies whichever the endpoint takes and says which it is.
@@ -75,7 +75,7 @@ public namespace GitLabDataProvider {
     @section gitlabmanifest_pagination Pagination
 
     A GitLab listing takes \c page and \c per_page (maximum 100) and reports \c X-Total, \c X-Page and
-    \c X-Next-Page in the **response headers**, not in the body; the body is the bare array.  An action
+    \c X-Next-Page in the <b>response headers</b>, not in the body; the body is the bare array.  An action
     therefore returns the records themselves, and paging means asking for the next page until fewer than
     \c per_page records come back.
 */

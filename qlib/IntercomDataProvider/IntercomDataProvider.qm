@@ -127,7 +127,7 @@ module IntercomDataProvider {
     @section intercomdataproviderintro IntercomDataProvider Introduction
 
     The %IntercomDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [Intercom](https://www.intercom.com), the customer communications platform.
+    <a href="https://www.intercom.com">Intercom</a>, the customer communications platform.
 
     Intercom holds the people who use your product - contacts, either \c users who have signed up or
     \c leads who have not - the companies they belong to, and the conversations you have had with them,
@@ -135,7 +135,7 @@ module IntercomDataProvider {
 
     @section intercomdataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from Intercom's own OpenAPI 3 description** by the
+    The actions this application exports are <b>generated from Intercom's own OpenAPI 3 description</b> by the
     @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  A schema
     describes the transport contract precisely and is maintained by Intercom; duplicating several hundred
     request and response fields in %Qore would mean finding and reproducing every upstream change by hand.
@@ -188,21 +188,21 @@ module IntercomDataProvider {
 
     Three conventions are worth knowing before using these actions:
 
-    - **Timestamps are counts of seconds since the epoch.**  The options that take one are presented as
+    - <b>Timestamps are counts of seconds since the epoch.</b>  The options that take one are presented as
       %Qore @ref date "date" values and converted when the request is built; the values inside a search
       \c query are not, because a query is an opaque structure to the schema - compare against a number
       there.
-    - **Searching takes a filter tree.**  \c query is either a single \c "{field, operator, value}" filter
+    - <b>Searching takes a filter tree.</b>  \c query is either a single \c "{field, operator, value}" filter
       or \c "{operator: \"AND\", value: [ ... ]}" combining several, nested as deeply as needed.  A field
       Intercom does not define on a contact is searched by naming it \c "custom_attributes.<name>".
-    - **Paging is by cursor, with two exceptions.**  A listing answers \c pages.next.starting_after and
+    - <b>Paging is by cursor, with two exceptions.</b>  A listing answers \c pages.next.starting_after and
       that value is passed back as \c starting_after; \c pages is absent once the collection is exhausted.
-      **List Companies** pages by number instead, and **List Tags**, **List Teammates** and **List Tags on
-      Contact** are not paged at all.
+      <b>List Companies</b> pages by number instead, and <b>List Tags</b>, <b>List Teammates</b> and <b>List Tags on
+      Contact</b> are not paged at all.
 
     @section intercomdataprovider_events Events
 
-    Two events are reported, and both **poll**:
+    Two events are reported, and both <b>poll</b>:
 
     |!Event|!Fires
     |\c new-contact|for each contact created, optionally narrowed to users or to leads
@@ -218,7 +218,7 @@ module IntercomDataProvider {
     records outright.  These position the feed by \c created_at and keep a durable checkpoint, so a cycle
     reads only what is new and a restart resumes where it left off.
 
-    A contact edited later, or a reply to an existing conversation, does **not** fire either event: both
+    A contact edited later, or a reply to an existing conversation, does <b>not</b> fire either event: both
     feeds are positioned by when the object was created.
 
     @section intercomdataprovider_tables Record Tables
@@ -226,8 +226,8 @@ module IntercomDataProvider {
     Seven of Intercom's collections are exposed under \c tables for record-based reading and writing:
 
     |!Table|!Reads|!Writes|!Server-side search
-    |\c contacts|search, get|update, delete|**yes** - the filter tree
-    |\c conversations|search, get|create|**yes**
+    |\c contacts|search, get|update, delete|<b>yes</b> - the filter tree
+    |\c conversations|search, get|create|<b>yes</b>
     |\c companies|list, get|create, update, delete|no
     |\c articles|list, get|create, update, delete|no
     |\c collections|list, get|-|no
@@ -237,13 +237,13 @@ module IntercomDataProvider {
     Every table is assembled from actions the manifest exports; thirteen single reads and writes were added
     for them, all under new action IDs, so no ID the superseded application registered is touched.
 
-    A search on \c contacts or \c conversations is rendered into the **tree of hashes** Intercom's two
+    A search on \c contacts or \c conversations is rendered into the <b>tree of hashes</b> Intercom's two
     search endpoints take in their request body, and the rest of a search is applied to the records as they
-    arrive, with the caller's limit counting **matching** records.  Which field accepts which operator was
+    arrive, with the caller's limit counting <b>matching</b> records.  Which field accepts which operator was
     measured against a live workspace rather than read from the description, which enumerates no fields at
     all: a contact's timestamps take \c = \c < \c > and refuse \c !=, while a conversation's accept it.
 
-    Intercom has **no `>=`, no `<=`** and no negation of a sub-expression; those are evaluated here rather
+    Intercom has <b>no <tt>&gt;=</tt>, no <tt>&lt;=</tt></b> and no negation of a sub-expression; those are evaluated here rather
     than mapped onto a neighbouring operator, which would silently drop the boundary records.
 
     @see @ref IntercomDataProvider::IntercomRecordTables "IntercomRecordTables", including why a company is

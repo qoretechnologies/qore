@@ -31,8 +31,8 @@ public namespace HttpServerAsyncIo {
     to the EventLoop when transitioning from idle to header reading.
 
     The operation has two phases:
-    1. **Idle phase**: Monitors for incoming data (like HttpIdlePollOperation)
-    2. **Header phase**: Reads HTTP headers (delegates to SocketReadHttpHeaderPollOperation)
+    1. <b>Idle phase</b>: Monitors for incoming data (like HttpIdlePollOperation)
+    2. <b>Header phase</b>: Reads HTTP headers (delegates to SocketReadHttpHeaderPollOperation)
 
     When data arrives during the idle phase, the operation transitions internally to
     header reading without returning to the controller. The operation only completes when:

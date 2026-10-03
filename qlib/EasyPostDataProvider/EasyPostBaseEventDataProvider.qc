@@ -34,7 +34,7 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
     #! Returns the event type that this provider handles
     abstract string getEventType();
 
-    #! Returns the EasyPost webhook event description (e.g. `tracker.created`)
+    #! Returns the EasyPost webhook event description (e.g. <tt>tracker.created</tt>)
     abstract string getWebhookEventType();
 
     #! Returns the event data type
@@ -112,7 +112,7 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
         return getFakeEventData();
     }
 
-    #! Returns hardcoded fake example event data; subclasses override to populate `result`
+    #! Returns hardcoded fake example event data; subclasses override to populate <tt>result</tt>
     private hash<auto> getFakeEventData() {
         return {
             "id": "evt_example",

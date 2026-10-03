@@ -425,8 +425,8 @@ module GoogleCloudStorageDataProvider {
     @section googlecloudstoragedataproviderintro GoogleCloudStorageDataProvider Introduction
 
     The %GoogleCloudStorageDataProvider module provides a data provider API for
-    [Google Cloud Storage](https://cloud.google.com/storage) through its
-    [JSON API](https://cloud.google.com/storage/docs/json_api).
+    <a href="https://cloud.google.com/storage">Google Cloud Storage</a> through its
+    <a href="https://cloud.google.com/storage/docs/json_api">JSON API</a>.
 
     The following classes are provided:
     - @ref GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider
@@ -435,8 +435,8 @@ module GoogleCloudStorageDataProvider {
     @section googlecloudstoragedataprovider_flat_keys Object Names Are a Flat Key Space
 
     A Google Cloud Storage object name is a single opaque key.  \c "/" is an ordinary character in it
-    and **not** a path separator, so \c "dir/", \c "a//b" and \c "/leading" are all valid and distinct
-    object names.  Every action in this module therefore uses the name **verbatim**: it is never
+    and <b>not</b> a path separator, so \c "dir/", \c "a//b" and \c "/leading" are all valid and distinct
+    object names.  Every action in this module therefore uses the name <b>verbatim</b>: it is never
     split, normalized, resolved, or collapsed, and it is percent-encoded for transport in a way that
     round-trips exactly.
 

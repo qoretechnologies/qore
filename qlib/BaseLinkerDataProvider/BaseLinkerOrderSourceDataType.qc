@@ -5,7 +5,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! An order source (from getOrderSources)
-/** BaseLinker returns sources grouped by type (`shop`, `marketplace`, `personal`)
+/** BaseLinker returns sources grouped by type (<tt>shop</tt>, <tt>marketplace</tt>, <tt>personal</tt>)
     keyed by source ID; the collection provider flattens each entry into this
     record shape.
 */

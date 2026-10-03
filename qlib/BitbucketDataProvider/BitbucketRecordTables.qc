@@ -43,14 +43,14 @@ public namespace BitbucketDataProvider {
     evaluated here instead of being sent and turned into an error.  The fields each table will accept are
     declared with it.
 
-    \c ~ is rendered but is **not** taken as exact.  Bitbucket documents it as "contains" without saying
+    \c ~ is rendered but is <b>not</b> taken as exact.  Bitbucket documents it as "contains" without saying
     whether it is case-sensitive, so it narrows what has to be read and the predicate is applied again to
     what comes back: the search stays correct either way, and still costs one request instead of a walk.
 
     @section bitbucketrecord_pullrequests Pull Requests Cannot Be Queried
 
     Bitbucket's published description declares \c q on its repository and commit-comment listings and
-    **not** on its pull request listing, though the API accepts it there.  An overlay cannot add a
+    <b>not</b> on its pull request listing, though the API accepts it there.  An overlay cannot add a
     parameter - that is structural rather than presentational - so the pull requests table filters on
     \c state alone and evaluates the rest of a search here.  Repairing that belongs in the import
     specification's \c normalize block, where the same gap in Bitbucket's pagination arguments was repaired.
@@ -70,7 +70,7 @@ public namespace BitbucketDataProvider {
 
     @section bitbucketrecord_membership A Membership Is Not the Thing It Names
 
-    \c /user/workspaces and <tt>/workspaces/{workspace}/members</tt> both answer with **memberships**, not
+    \c /user/workspaces and <tt>/workspaces/{workspace}/members</tt> both answer with <b>memberships</b>, not
     with workspaces and not with users: a record is <tt>{type, administrator, workspace}</tt> or
     <tt>{type, links, user, workspace}</tt>, and what a caller is usually after - a slug, a display name, an
     account UUID - is one level down, under \c workspace or under \c user.
@@ -128,7 +128,7 @@ public class BitbucketRecordTables {
         const BbqlInexact = {DP_OP_CONTAINS: True};
 
         #! How every Bitbucket collection pages
-        /** \c pagelen is capped at **50**, not the 100 Bitbucket's pagination page implies.  The cap is not
+        /** \c pagelen is capped at <b>50</b>, not the 100 Bitbucket's pagination page implies.  The cap is not
             uniform across its endpoints - the repository listing accepts 100 and the pull request listing
             answers the same value with <tt>400 "Invalid pagelen"</tt> - so the tables ask for the largest
             size every endpoint accepts rather than the largest any of them does.  Found against the live
@@ -144,7 +144,7 @@ public class BitbucketRecordTables {
         #! The repositories table
         /** @section bitbucketrecord_repos_slug Addressed by a Column Bitbucket Does Not Describe
 
-            Bitbucket addresses a repository by its **slug** - the \c {repo_slug} in every path - and its
+            Bitbucket addresses a repository by its <b>slug</b> - the \c {repo_slug} in every path - and its
             description of a repository declares \c uuid and \c full_name ("workspace/slug") but no slug,
             though every response carries one.
 

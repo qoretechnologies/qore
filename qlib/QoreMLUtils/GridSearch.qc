@@ -91,17 +91,17 @@ public class GridSearch {
 
     #! Creates a GridSearch instance
     /** @param options a hash with the following keys:
-        - \c model_factory (code): closure `(hash params, list X_train, list y_train) -> model` that
+        - \c model_factory (code): closure <tt>(hash params, list X_train, list y_train) -&gt; model</tt> that
           creates and fits a model with the given parameters on the training data
-        - \c predictor (code): closure `(object model, list X_test) -> list` that returns predictions
+        - \c predictor (code): closure <tt>(object model, list X_test) -&gt; list</tt> that returns predictions
         - \c param_grid (hash): maps parameter names to lists of values, e.g.
-          `{"alpha": (0.01, 0.1, 1.0), "normalize": (True, False)}`
-        - \c scorer (code): closure `(list y_true, list y_pred) -> float` where higher is better
-        - \c n_folds (int): number of cross-validation folds (default: `5`)
-        - \c shuffle (bool): whether to shuffle data before splitting (default: `True`)
-        - \c seed (int): random seed for reproducibility (default: `0` = random)
-        - \c stratify (bool): if `True`, use stratified k-fold to preserve class ratios
-          in each fold; recommended for classification with imbalanced classes (default: `False`)
+          <tt>{"alpha": (0.01, 0.1, 1.0), "normalize": (True, False)}</tt>
+        - \c scorer (code): closure <tt>(list y_true, list y_pred) -&gt; float</tt> where higher is better
+        - \c n_folds (int): number of cross-validation folds (default: <tt>5</tt>)
+        - \c shuffle (bool): whether to shuffle data before splitting (default: <tt>True</tt>)
+        - \c seed (int): random seed for reproducibility (default: <tt>0</tt> = random)
+        - \c stratify (bool): if <tt>True</tt>, use stratified k-fold to preserve class ratios
+          in each fold; recommended for classification with imbalanced classes (default: <tt>False</tt>)
 
         @throw GRID-SEARCH-ERROR if required options are missing or param_grid is empty
     */

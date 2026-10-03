@@ -103,8 +103,8 @@ printf("state: %y\n", st.state);
     against the event set current in 2026 and validated against the reference SDK's
     cross-implementation compatibility fixtures.
 
-    That has one practical consequence for both halves: **unknown events and unknown members
-    within a known event are passed through, never rejected.**  A peer on a newer release will
+    That has one practical consequence for both halves: <b>unknown events and unknown members
+    within a known event are passed through, never rejected.</b>  A peer on a newer release will
     send things this module has never heard of, and dropping them would be worse than
     forwarding them to a caller that may understand them.
 

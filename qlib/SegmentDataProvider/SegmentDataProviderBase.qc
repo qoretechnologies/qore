@@ -249,8 +249,8 @@ public class SegmentDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Returns catalog entries (sources, destinations, or warehouses) as reference data
-    /** The catalog records use slug-based IDs of the form `catalog/&lt;kind&gt;/&lt;slug&gt;`, which is the
-        value the create endpoints accept as `metadataId`.
+    /** The catalog records use slug-based IDs of the form <tt>catalog/&lt;kind&gt;/&lt;slug&gt;</tt>, which is the
+        value the create endpoints accept as <tt>metadataId</tt>.
     */
     private *list<hash<AllowedValueInfo>> getReferenceCatalog(string path) {
         list<hash<AllowedValueInfo>> rv = ();

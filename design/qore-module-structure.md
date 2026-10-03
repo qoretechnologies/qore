@@ -311,6 +311,14 @@ more than one "type" of content — split it into topical subpages.
   external modules whose tag indexes are outside the build, use the published HTTPS
   documentation URL with the same `#<lowercasemodulename>intro` fragment. Companion
   modules built together always use tag references and the two-phase build below.
+- Module Doxygen configurations set `MARKDOWN_SUPPORT = NO`. Use HTML anchors for external
+  website links, `<tt>code</tt>` (or `\c` for a single token) for inline code, and `<b>text</b>`
+  for emphasis. Markdown links, backticks, fenced blocks, and `**bold**` otherwise remain visible in the
+  generated page, often without warnings. Put literal Markdown examples inside `<tt>` or
+  `@code` blocks. Runtime DataProvider `desc` strings still use Markdown; this rule applies
+  to Doxygen documentation comments, not application descriptions.
+  Run `python3 doxygen/check-rendered-refs.py <documentation-root>...` after building to catch
+  raw references and Markdown markup throughout the rendered pages, including subpages.
 - Keep `@ref` and `@subpage` outside `@htmlonly` blocks: Doxygen copies those
   blocks literally, leaving raw commands in the page without a warning. Keep
   quoted reference labels on one physical line for Doxygen 1.9 compatibility.

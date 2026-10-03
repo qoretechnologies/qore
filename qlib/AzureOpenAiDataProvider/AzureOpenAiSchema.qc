@@ -66,7 +66,7 @@ public hashdecl AzureOpenAiSchemaProvenanceInfo {
     int source_webhooks;
 
     #! The API version the upstream document reports for itself
-    /** The v1 data-plane API does not require an `api-version` query parameter. */
+    /** The v1 data-plane API does not require an <tt>api-version</tt> query parameter. */
     string api_version;
 }
 

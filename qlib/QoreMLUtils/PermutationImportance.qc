@@ -29,7 +29,7 @@ public namespace QoreMLUtils {
     shuffled. Features that cause the largest score drop when shuffled are the most
     important.
 
-    This method works with **any** fitted model — it only requires a predictor closure
+    This method works with <b>any</b> fitted model — it only requires a predictor closure
     and a scorer closure, making it fully model-agnostic.
 
     @par Example:
@@ -68,8 +68,8 @@ public class PermutationImportance {
 
     #! Creates a PermutationImportance instance
     /** @param options optional hash with:
-        - \c n_repeats (int): number of times to shuffle each feature (default: `5`)
-        - \c seed (int): random seed for reproducibility (default: `0` = random)
+        - \c n_repeats (int): number of times to shuffle each feature (default: <tt>5</tt>)
+        - \c seed (int): random seed for reproducibility (default: <tt>0</tt> = random)
     */
     constructor(*hash<auto> options) {
         n_repeats = options.n_repeats ?? 5;
@@ -77,12 +77,12 @@ public class PermutationImportance {
     }
 
     #! Computes permutation importance for each feature
-    /** @param predictor closure `(list X) -> list` that returns predictions for the given data
+    /** @param predictor closure <tt>(list X) -&gt; list</tt> that returns predictions for the given data
         @param X feature matrix (list of lists)
         @param y true target values
-        @param scorer closure `(list y_true, list y_pred) -> float` where higher is better
+        @param scorer closure <tt>(list y_true, list y_pred) -&gt; float</tt> where higher is better
         @param feature_names optional list of feature names; auto-generated as
-          `"feature_0"`, `"feature_1"`, ... if not provided
+          <tt>"feature_0"</tt>, <tt>"feature_1"</tt>, ... if not provided
         @return hash with:
         - \c baseline_score (float): model score on unshuffled data
         - \c importances (hash): maps feature names to hashes with

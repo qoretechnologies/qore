@@ -4,8 +4,8 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `addInventoryProduct` method (create/update upsert)
-/** If `product_id` is omitted a new product is created. If `product_id` is
+#! Request type for the BaseLinker <tt>addInventoryProduct</tt> method (create/update upsert)
+/** If <tt>product_id</tt> is omitted a new product is created. If <tt>product_id</tt> is
     provided the existing product is updated in place.
 */
 public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType {

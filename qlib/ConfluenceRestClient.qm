@@ -51,7 +51,7 @@ module ConfluenceRestClient {
     @section confluencerestclientintro ConfluenceRestClient Introduction
 
     The %ConfluenceRestClient module provides an API for calling
-    [Confluence Cloud](https://www.atlassian.com/software/confluence)'s v2 REST API services.
+    <a href="https://www.atlassian.com/software/confluence">Confluence Cloud</a>'s v2 REST API services.
 
     To use this module, use \c "%requires ConfluenceRestClient" in your code.
 
@@ -68,7 +68,7 @@ module ConfluenceRestClient {
     @section confluencerestclient_site The Site Is the Connection
 
     Confluence Cloud is per-site, and there are two ways to reach one.  The connection takes whichever
-    matches the credential, and derives the URL from it in **both directions** so a stored URL cannot
+    matches the credential, and derives the URL from it in <b>both directions</b> so a stored URL cannot
     silently retarget the connection at another site:
 
     |!Option|!Reached at|!Used with
@@ -81,7 +81,7 @@ module ConfluenceRestClient {
     @section confluencerestclient_discovery The Cloud ID Fills Itself In
 
     An Atlassian OAuth2 credential is issued against the gateway rather than against a site, so which site
-    it reaches is only knowable **after** it exists.  Asking a user for a cloud ID before that is asking
+    it reaches is only knowable <b>after</b> it exists.  Asking a user for a cloud ID before that is asking
     them to go and look one up, so the connection does it instead: it is created targeting the bare
     gateway, and every path that completes an authorization calls
     @ref ConfluenceRestClient::ConfluenceRestClientBase::AccessibleResourcesUrl "the accessible-resources endpoint", persisting \c cloud_id and the URL derived from it.  An authorized connection is therefore a
@@ -114,7 +114,7 @@ printf("Spaces: %Y\n", result.body);
 
     @section confluencerestclient_pagination Pagination
 
-    A Confluence v2 collection returns \c {results, _links}, and \c _links.next is a **relative** URL for
+    A Confluence v2 collection returns \c {results, _links}, and \c _links.next is a <b>relative</b> URL for
     the next page carrying an opaque cursor.  Page on the presence of \c _links.next; there is no total.
 
     @section confluencerestclientrelnotes Release Notes

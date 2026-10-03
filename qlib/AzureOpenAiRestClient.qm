@@ -55,15 +55,15 @@ module AzureOpenAiRestClient {
     @section azureopenairestclientintro Introduction to the AzureOpenAiRestClient Module
 
     The %AzureOpenAiRestClient module provides authenticated synchronous and asynchronous REST clients,
-    the `azure-openai` connection scheme, and an LLM provider for the
-    [QoreLlmUtils](../../QoreLlmUtils/html/index.html) agent stack. The connection supports the
-    [AzureOpenAiDataProvider](../../AzureOpenAiDataProvider/html/index.html) v1 actions. The separate LLM provider
+    the <tt>azure-openai</tt> connection scheme, and an LLM provider for the
+    @ref qorellmutilsintro "QoreLlmUtils" agent stack. The connection supports the
+    @ref azureopenaidataproviderintro "AzureOpenAiDataProvider" v1 actions. The separate LLM provider
     retains deployment URLs for compatibility:
 
-    - **URL routing**: chat completions are published per-deployment at
+    - <b>URL routing</b>: chat completions are published per-deployment at
       <tt>/openai/deployments/{deployment}/chat/completions?api-version=...</tt>
       rather than the OpenAI global <tt>/v1/chat/completions</tt>
-    - **Authentication**: supports three modes — \c api-key header,
+    - <b>Authentication</b>: supports three modes — \c api-key header,
       Entra ID client-credentials bearer, and managed-identity bearer (the
       latter two via @ref azureauthintro "AzureAuth")
 
@@ -90,9 +90,9 @@ module AzureOpenAiRestClient {
       user-assigned identities); legacy \c azure_client_id remains supported
 
     Foundry Conversations use a project URL such as
-    `https://my-resource.services.ai.azure.com/api/projects/my-project`, with Microsoft Entra authentication.
-    The default token scope follows the endpoint: `https://ai.azure.com/.default` for projects and
-    `https://cognitiveservices.azure.com/.default` for resources. `azure_entra_scope` can override it.
+    <tt>https://my-resource.services.ai.azure.com/api/projects/my-project</tt>, with Microsoft Entra authentication.
+    The default token scope follows the endpoint: <tt>https://ai.azure.com/.default</tt> for projects and
+    <tt>https://cognitiveservices.azure.com/.default</tt> for resources. <tt>azure_entra_scope</tt> can override it.
     The project path is preserved when clients
     are copied; the default ping lists one conversation from that project.
 

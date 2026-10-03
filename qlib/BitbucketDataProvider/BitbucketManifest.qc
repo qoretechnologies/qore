@@ -27,7 +27,7 @@ public namespace BitbucketDataProvider {
 #! The operations the Bitbucket application exports, and how they are presented
 /** @section bitbucketmanifest_ids Action IDs
 
-    The action IDs are those of the TypeScript application this module replaces, and they are **not**
+    The action IDs are those of the TypeScript application this module replaces, and they are <b>not</b>
     tidy.  That application derived each ID from the \c operationId of a vendored Swagger 2.0 document,
     falling back to a mangling of the path and method when the document declared none - which, for
     Bitbucket, is most of them.  So five actions are named \c "getReportsForCommit",
@@ -43,18 +43,18 @@ public namespace BitbucketDataProvider {
     One read-only listing is exported that the TypeScript application did not:
     \c "repositories_workspace_repo_slug_refs_branches_get".  That application offered branch dropdowns on
     the pull request actions, filled by an endpoint it never exported; a dropdown here is produced by
-    executing an action **in this manifest**, so exporting the listing is what makes those dropdowns work.
+    executing an action <b>in this manifest</b>, so exporting the listing is what makes those dropdowns work.
 
     @section bitbucketmanifest_withdrawn What Bitbucket Withdrew
 
     Bitbucket removed every cross-workspace listing - \c "GET /2.0/workspaces",
-    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
+    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer <b>410 Gone</b>,
     \c "CHANGE-2770".  Verified against the live API, along with the fact that
     \c "GET /2.0/user/workspaces" is the one replacement.
 
     |!Action|!What happened
     |\c workspaces_get|repointed from \c "GET /workspaces" to \c "GET /user/workspaces"; the ID is unchanged and so is what it means
-    |\c repositories_get|**withdrawn**: it listed public repositories across all of Bitbucket, and nothing replaces that
+    |\c repositories_get|<b>withdrawn</b>: it listed public repositories across all of Bitbucket, and nothing replaces that
 
     Repointing rather than renaming is the whole point of an action ID being a product commitment: the
     operation behind \c workspaces_get changed, and the name workflows call did not.  The withdrawn one is
@@ -71,7 +71,7 @@ public namespace BitbucketDataProvider {
     usable form, so those values are presented as a plain branch name and a plain list of member IDs, and
     converted on the way to the wire by @ref BitbucketCodecs "codecs this application registers".
 
-    A codec was used rather than a request transform because it is **declarative and reversible**: the
+    A codec was used rather than a request transform because it is <b>declarative and reversible</b>: the
     manifest names it, the field is published with the codec's own type, and the value converts in both
     directions, so a response reads back as the same flat value the request took.
 
@@ -307,7 +307,7 @@ public class BitbucketManifest {
 
         #! Fields every entity carries that a request must not set
         /** Bitbucket composes every entity on a shared base carrying a \c type discriminator, and its
-            create and update bodies are declared as the **entity itself** rather than as a separate
+            create and update bodies are declared as the <b>entity itself</b> rather than as a separate
             request shape.  So an action generated straight from the schema would offer the reader's view
             of the object - who created it, when, how many comments it has - as things to fill in.
 
@@ -319,7 +319,7 @@ public class BitbucketManifest {
         };
 
         #! Overlay for an entity's \c type discriminator
-        /** Bitbucket composes every entity on a base that declares \c type, and declares it **required**,
+        /** Bitbucket composes every entity on a base that declares \c type, and declares it <b>required</b>,
             so it cannot be dropped from a request the way the other server-owned fields are: the schema
             would reject the request before it was sent.  It is given the entity's own discriminator as a
             default instead, so it is always correct and nobody has to fill it in.

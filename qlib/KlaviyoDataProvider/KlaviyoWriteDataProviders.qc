@@ -49,7 +49,7 @@ public const KlaviyoSmsTransactional = "transactional";
 public const KlaviyoSmsBoth = "both";
 
 #! Records that something happened, against a metric and a profile
-/** This action is **hand-written rather than generated**.  Klaviyo declares an event body as
+/** This action is <b>hand-written rather than generated</b>.  Klaviyo declares an event body as
 
     @code{.py}
 {"data": {"type": "event", "attributes": {
@@ -61,14 +61,14 @@ public const KlaviyoSmsBoth = "both";
 
     - two whole JSON:API envelopes nested inside the event's own attributes, three levels below the body
     root.  @ref RestSchemaActions::RestSchemaActionInfo::request_unwrap "request_unwrap" lifts the options
-    out of **one** envelope; it cannot flatten two more that sit beside each other inside it.
+    out of <b>one</b> envelope; it cannot flatten two more that sit beside each other inside it.
 
     The application being replaced published a metric name, a profile ID and an e-mail address, and built
     the envelopes itself, and so does this.
 
     @section klaviyoevent_metric The Metric Is Named, Not Selected
 
-    \c metric is the metric's **name**, not its ID, because Klaviyo defines a metric the first time an event
+    \c metric is the metric's <b>name</b>, not its ID, because Klaviyo defines a metric the first time an event
     names one: recording a \c "Placed Order" event against an account that has never had one creates the
     metric.  The dropdown therefore offers the names already in use and still accepts a value typed in,
     which is what defines a new metric.
@@ -351,8 +351,8 @@ public class KlaviyoWriteUtil {
 }
 
 #! Records marketing consent for a profile
-/** This action is **hand-written rather than generated**.  Klaviyo has no "subscribe this profile"
-    endpoint: consent is recorded by creating a **bulk subscription job**, whose body carries a list of
+/** This action is <b>hand-written rather than generated</b>.  Klaviyo has no "subscribe this profile"
+    endpoint: consent is recorded by creating a <b>bulk subscription job</b>, whose body carries a list of
     profiles, each with its own per-channel consent envelope, inside the job's attributes - four levels
     below the body root, with an array in the middle.
 
@@ -366,7 +366,7 @@ public class KlaviyoWriteUtil {
     terms require that the caller has a record of it.  This action states the consent; it does not collect
     it.
 
-    \c list matters for more than membership: subscribing **through a list** is what makes Klaviyo apply
+    \c list matters for more than membership: subscribing <b>through a list</b> is what makes Klaviyo apply
     that list's double opt-in process, if it has one.  Without a list the consent is recorded against the
     profile directly and no confirmation is sent.
 
@@ -605,14 +605,14 @@ public class KlaviyoSubscribeProfileDataProvider inherits KlaviyoHandWrittenData
 #! Withdraws marketing consent for a profile
 /** The mirror of @ref KlaviyoDataProvider::KlaviyoSubscribeProfileDataProvider
     "KlaviyoSubscribeProfileDataProvider", and hand-written for the same reason: Klaviyo withdraws consent
-    by creating a bulk **delete** job whose body has the same shape.
+    by creating a bulk <b>delete</b> job whose body has the same shape.
 
     Which channels are withdrawn follows from what is supplied, exactly as it did in the application being
     replaced: an \c email withdraws e-mail consent, a \c phoneNumber withdraws SMS consent, and both
     withdraw both.  There is no channel option, because there is nothing to say beyond the identifier.
 
-    @note Withdrawing consent is not the same as removing the profile from a list.  Use **Remove Profile
-    from List** for membership; this records that the person no longer wants to be marketed to, which
+    @note Withdrawing consent is not the same as removing the profile from a list.  Use <b>Remove Profile
+    from List</b> for membership; this records that the person no longer wants to be marketed to, which
     Klaviyo honours across every list.
 */
 public class KlaviyoUnsubscribeProfileDataProvider inherits KlaviyoHandWrittenDataProviderBase {

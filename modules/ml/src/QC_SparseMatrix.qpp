@@ -33,7 +33,7 @@
     text features (TF-IDF), one-hot encoded categoricals, and other sparse data.
 
     Can be converted to/from dense matrices (list of lists) and triplet format
-    (list of `{row, col, value}` hashes).
+    (list of <tt>{row, col, value}</tt> hashes).
 
     @par Example: Create from triplets
     @code{.py}
@@ -58,7 +58,7 @@ qclass SparseMatrix [arg=QoreSparseMatrix* sm; ns=Qore::ML; vparent=AbstractMLMo
 //! Creates a SparseMatrix from triplet entries
 /** @param rows number of rows
     @param cols number of columns
-    @param triplets a list of `{row, col, value}` hashes specifying non-zero entries
+    @param triplets a list of <tt>{row, col, value}</tt> hashes specifying non-zero entries
 
     @throw ML-SPARSE-ERROR if dimensions are invalid or triplet entries are malformed
 
@@ -81,7 +81,7 @@ SparseMatrix::constructor(int rows, int cols, *list<auto> triplets) {
 /** @param dense a list of lists (dense matrix); values with absolute value at or
     below \c threshold are treated as zero
     @param threshold absolute value threshold below which entries are dropped
-    (default: `0.0`, meaning only exact zeros are dropped)
+    (default: <tt>0.0</tt>, meaning only exact zeros are dropped)
 
     @throw ML-DATA-ERROR if the matrix is malformed
 
@@ -142,7 +142,7 @@ list<list<float>> SparseMatrix::toDense() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the triplet (COO) representation
-/** @return a list of `{row, col, value}` hashes for each non-zero entry
+/** @return a list of <tt>{row, col, value}</tt> hashes for each non-zero entry
 
     @par Example:
     @code{.py}
@@ -157,7 +157,7 @@ list<auto> SparseMatrix::toTriplets() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the density (fraction of non-zero entries)
-/** @return nnz / (rows * cols); `0.0` for empty matrices
+/** @return nnz / (rows * cols); <tt>0.0</tt> for empty matrices
 */
 float SparseMatrix::density() [flags=CONSTANT] {
     int total = sm->getRows() * sm->getCols();

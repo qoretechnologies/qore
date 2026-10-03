@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `setOrderReturnRefund` action data provider
+#! BaseLinker <tt>setOrderReturnRefund</tt> action data provider
 public class BaseLinkerSetOrderReturnRefundDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

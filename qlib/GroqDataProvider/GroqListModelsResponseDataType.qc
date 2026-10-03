@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the GroqDataProvider module
 public namespace GroqDataProvider {
-#! Data type for a single model entry returned by the Groq `/v1/models` endpoint
+#! Data type for a single model entry returned by the Groq <tt>/v1/models</tt> endpoint
 public class GroqModelDataType inherits HashDataType {
     private {
         #! Field definitions
@@ -80,7 +80,7 @@ public class GroqModelDataType inherits HashDataType {
     }
 }
 
-#! Data type for the Groq `/v1/models` list response
+#! Data type for the Groq <tt>/v1/models</tt> list response
 public class GroqListModelsResponseDataType inherits HashDataType {
     private {
         #! Field definitions

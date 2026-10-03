@@ -63,7 +63,7 @@ qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; vparent=
 
 //! Creates a LogisticRegression with the given options
 /** @param options a hash with the following optional keys:
-    - \c learning_rate (float, default 0.01): step size for online SGD updates via `update()`
+    - \c learning_rate (float, default 0.01): step size for online SGD updates via <tt>update()</tt>
     - \c max_iterations (int, default 100): maximum number of L-BFGS iterations
     - \c tolerance (float, default 1e-4): convergence tolerance for L-BFGS gradient norm
     - \c regularization (float, default 1.0): regularization strength (only used when penalty is "l2")

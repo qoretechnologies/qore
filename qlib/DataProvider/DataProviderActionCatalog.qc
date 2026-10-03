@@ -168,7 +168,7 @@ public hashdecl DataProviderAppInfo {
     *bool auto_url;
 
     #! Disables the framework-injected generic "Make an API call" action for this app
-    /** When @ref False (or unset, the default), the framework automatically registers a `make-api-call`
+    /** When @ref False (or unset, the default), the framework automatically registers a <tt>make-api-call</tt>
         DPAT_API action for every app whose connection scheme is REST-derived (the scheme's
         @c cls inherits @c RestClient::RestConnection). The action accepts arbitrary
         method/path/query/headers/body input and dispatches the request through the connection's
@@ -987,7 +987,7 @@ public class DataProviderActionCatalog {
     }
 
     private {
-        #! Static builder callback that constructs the framework-injected `make-api-call` action info hash
+        #! Static builder callback that constructs the framework-injected <tt>make-api-call</tt> action info hash
         /** Signature: <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt>. The builder is
             normally registered once by the @c RestClientDataProvider module's init block via
             @ref setGenericApiCallActionBuilder().
@@ -1031,7 +1031,7 @@ public class DataProviderActionCatalog {
         */
         static *code<*hash<auto>(string)> cb_lookup_scheme;
 
-        #! Apps awaiting retroactive `make-api-call` registration once the builder is set
+        #! Apps awaiting retroactive <tt>make-api-call</tt> registration once the builder is set
         /** Keys are app names. Populated by @ref registerApp() when a REST-capable app is registered before
             the generic API call action builder has been set; drained by @ref setGenericApiCallActionBuilder()
             and @ref clearGenericApiCallActionBuilder() when the builder becomes available.
@@ -2179,7 +2179,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         the framework's @c make-api-call action.  The predicate walks the connection class hierarchy by
         name, so this module does not need to import @c RestClient.
 
-        The [ConnectionSchemeCache](../../ConnectionProvider/html/index.html) lookup is late-bound via @c call_static_method_args() to avoid
+        The @ref ConnectionProvider::ConnectionSchemeCache "ConnectionSchemeCache" lookup is late-bound via @c call_static_method_args() to avoid
         a hard dependency on @c ConnectionProvider — which already declares
         @c "%requires(reexport) DataProvider", so a hard import here would form a cycle.
 
@@ -2223,7 +2223,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         return False;
     }
 
-    #! Registers the framework-injected `make-api-call` action for the given REST-capable app
+    #! Registers the framework-injected <tt>make-api-call</tt> action for the given REST-capable app
     /** Internal helper; called from @ref registerApp() and from @ref setGenericApiCallActionBuilder() to
         drain the pending app backlog. Swallows any error to avoid breaking the surrounding app
         registration when the builder produces invalid action info.
@@ -2303,7 +2303,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
     }
 
-    #! Sets the static builder used to construct the framework-injected `make-api-call` action info hash
+    #! Sets the static builder used to construct the framework-injected <tt>make-api-call</tt> action info hash
     /** This setter is normally called once at module initialization time by the @c RestClientDataProvider
         module. Subsequent calls with the same builder return @ref True; calls with a different builder when
         a builder is already registered return @ref False without changing the registered builder.
@@ -2313,7 +2313,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @param builder a closure with signature
         <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt> that constructs the
-        action info hash for the framework-injected `make-api-call` action
+        action info hash for the framework-injected <tt>make-api-call</tt> action
 
         @return @ref True if the builder was successfully set (first call) or if the same builder is being
         re-registered; @ref False if a different builder is already registered

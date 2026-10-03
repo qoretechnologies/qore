@@ -51,7 +51,7 @@ module GoogleDocumentAiRestClient {
     @section googledocumentairestclientintro GoogleDocumentAiRestClient Introduction
 
     The %GoogleDocumentAiRestClient module provides a REST client for
-    [Google Document AI](https://cloud.google.com/document-ai) —
+    <a href="https://cloud.google.com/document-ai">Google Document AI</a> —
     Google's managed document-extraction service with prebuilt processors
     for invoices, receipts, forms, IDs, contracts, and custom-trained
     processors for domain-specific schemas.

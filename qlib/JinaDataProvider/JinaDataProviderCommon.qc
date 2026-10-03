@@ -140,7 +140,7 @@ public class JinaDataProviderCommon inherits DataProvider::AbstractDataProvider 
 }
 
 #! Schema action provider with model IDs suitable for Jina inference endpoints
-/** The model catalog returns IDs prefixed with `jina-ai/`, while inference requests use short IDs.
+/** The model catalog returns IDs prefixed with <tt>jina-ai/</tt>, while inference requests use short IDs.
     Dropdowns also intersect the live catalog with the models declared by the selected operation.
 */
 public class JinaSchemaActionDataProvider inherits RestSchemaActionDataProvider {

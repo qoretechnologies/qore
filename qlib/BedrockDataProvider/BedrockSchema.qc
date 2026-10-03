@@ -57,14 +57,14 @@ public hashdecl BedrockSchemaProvenanceInfo {
 
 #! Lazily loads the pinned Bedrock control-plane and runtime API descriptions
 /** The upstream botocore models are AWS's machine-readable service contracts.  They are converted at
-    development time by `tools/botocore-rest-json-to-openapi.py`; runtime code reads only the committed
+    development time by <tt>tools/botocore-rest-json-to-openapi.py</tt>; runtime code reads only the committed
     OpenAPI 3 artifacts.  This keeps action identity and types stable until a reviewed import updates the
     named botocore commit.
 
     The completed-response surface exports every control-plane operation and every non-streaming runtime
-    operation. `ConverseStream`, `InvokeModelWithBidirectionalStream`, and
-    `InvokeModelWithResponseStream` are excluded because a completed-value data-provider action cannot
-    represent their event-stream lifetime. Use `BedrockRestClientIo` for these native streaming operations.
+    operation. <tt>ConverseStream</tt>, <tt>InvokeModelWithBidirectionalStream</tt>, and
+    <tt>InvokeModelWithResponseStream</tt> are excluded because a completed-value data-provider action cannot
+    represent their event-stream lifetime. Use <tt>BedrockRestClientIo</tt> for these native streaming operations.
 */
 public class BedrockSchema {
     public {

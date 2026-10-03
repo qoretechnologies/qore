@@ -73,7 +73,7 @@ public hashdecl KlaviyoSchemaProvenanceInfo {
 
     @section klaviyoschema_combined One Document, Not Per-Category Slices
 
-    Klaviyo publishes per-category slices - profiles, lists, campaigns and so on - **and** a combined
+    Klaviyo publishes per-category slices - profiles, lists, campaigns and so on - <b>and</b> a combined
     \c openapi/stable.json carrying every path in one file.  The combined document is what is imported,
     because every path this application exports is in it, so there is one schema to load, one revision to
     check, and no cross-category reference to resolve by hand.

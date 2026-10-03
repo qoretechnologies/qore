@@ -333,7 +333,7 @@ public class SalesforceRestClientBase {
         );
 
         #! The \c Accept header value to use when the serialization is not XML
-        /** Salesforce content-negotiates the response format and **prefers XML** whenever the
+        /** Salesforce content-negotiates the response format and <b>prefers XML</b> whenever the
             \c Accept header allows it.  The generic REST client \c Accept header lists
             \c text/xml and \c application/xml ahead of \c application/json, so a client that does
             not narrow it receives XML for every call -- with a \c 200 status code and a body that

@@ -53,7 +53,7 @@ module SearchIndexDataProvider {
     names, connection schemes, logos, and API dialects.
 
     Shared behavior includes:
-    - REST client construction from a `restclient`, `url`, or `restclient_options` constructor option
+    - REST client construction from a <tt>restclient</tt>, <tt>url</tt>, or <tt>restclient_options</tt> constructor option
     - common logger propagation for REST-backed data providers
     - query-string option handling for request hashes
     - boolean string coercion for REST query parameters

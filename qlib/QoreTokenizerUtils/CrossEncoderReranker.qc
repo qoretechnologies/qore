@@ -248,10 +248,10 @@ public class CrossEncoderReranker {
         @param passages list of candidate passages
         @param top_k number of top results to return
         @return list of @ref RerankerScoredHit in descending score order, truncated to
-        \a top_k entries.  For HTTP backends using the `{"scores": [...]}` response
+        \a top_k entries.  For HTTP backends using the <tt>{"scores": [...]}</tt> response
         format and for ONNX backends, the \c score is the model's raw output (subject
         to the configured activation function); for HTTP backends using the
-        `{"results": [{"relevance_score": ...}]}` format it is the provider's
+        <tt>{"results": [{"relevance_score": ...}]}</tt> format it is the provider's
         \c relevance_score; for SGLang backends it is the server's per-document
         \c score.
     */

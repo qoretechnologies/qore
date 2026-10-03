@@ -186,7 +186,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
         @param extra_qs optional URL-encoded query arguments appended to each page request
         @return a list of all result records
 
-        Apollo GET search endpoints use `page` and `per_page` query parameters
+        Apollo GET search endpoints use <tt>page</tt> and <tt>per_page</tt> query parameters
         for pagination.
     */
     list<hash<auto>> fetchAllPages(string path, string result_key, *hash<auto> params,
@@ -226,7 +226,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
         @param limit optional maximum number of results to return
         @return a list of all result records
 
-        Apollo search endpoints use POST requests with `page` and `per_page` parameters
+        Apollo search endpoints use POST requests with <tt>page</tt> and <tt>per_page</tt> parameters
         in the request body for pagination.
     */
     list<hash<auto>> fetchAllPagesPost(string path, string result_key, *hash<auto> body,
@@ -371,7 +371,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns available contacts for reference data
-    /** Apollo contacts are fetched via POST to `contacts/search` */
+    /** Apollo contacts are fetched via POST to <tt>contacts/search</tt> */
     private *list<hash<AllowedValueInfo>> getReferenceContacts() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
@@ -399,7 +399,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns available accounts for reference data
-    /** Apollo accounts are fetched via POST to `accounts/search` */
+    /** Apollo accounts are fetched via POST to <tt>accounts/search</tt> */
     private *list<hash<AllowedValueInfo>> getReferenceAccounts() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
@@ -423,7 +423,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns available deals for reference data
-    /** Apollo deals/opportunities are fetched via GET from `opportunities/search` */
+    /** Apollo deals/opportunities are fetched via GET from <tt>opportunities/search</tt> */
     private *list<hash<AllowedValueInfo>> getReferenceDeals() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
@@ -447,7 +447,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns available users for reference data
-    /** Apollo users are fetched via GET from `users/search` */
+    /** Apollo users are fetched via GET from <tt>users/search</tt> */
     private *list<hash<AllowedValueInfo>> getReferenceUsers() {
         list<hash<AllowedValueInfo>> rv = ();
         try {

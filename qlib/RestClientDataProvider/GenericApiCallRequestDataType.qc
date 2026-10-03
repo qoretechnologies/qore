@@ -30,7 +30,7 @@ public const GenericApiCallRequestDataType = new GenericApiCallRequestDataType()
 #! Request type used by @ref GenericApiCallProvider, the framework-injected generic API call provider
 /** This type is purposely separate from @ref RestClientCallWithMethodRequestDataType so the framework
     auto-injection can expose a richer schema (body-type selector, path-variable templating,
-    response-status assertions) without altering the standalone `RestClientDataProvider/call` action.
+    response-status assertions) without altering the standalone <tt>RestClientDataProvider/call</tt> action.
 
     The @c body field's effective type is data-dependent - see
     @ref GenericApiCallProvider::getRequestTypeWithDataImpl() and
@@ -218,8 +218,8 @@ public class GenericApiCallRequestDataType inherits HashDataType {
         currently-selected @c body_type. The other fields are preserved verbatim.
 
         @param body_type one of the @ref BodyTypeAllowedValues values
-        @return a copy of this type with the `body` field re-typed for the given body_type, or the
-        original type for `body_type = "auto"` or unknown values
+        @return a copy of this type with the <tt>body</tt> field re-typed for the given body_type, or the
+        original type for <tt>body_type = "auto"</tt> or unknown values
     */
     GenericApiCallRequestDataType withBodyType(*string body_type) {
         *AbstractDataProviderType new_body_type;

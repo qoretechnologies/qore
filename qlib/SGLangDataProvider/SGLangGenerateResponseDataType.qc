@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
-#! Data type for SGLang native `/generate` responses
+#! Data type for SGLang native <tt>/generate</tt> responses
 public class SGLangGenerateResponseDataType inherits HashDataType {
     private {
         #! Field definitions

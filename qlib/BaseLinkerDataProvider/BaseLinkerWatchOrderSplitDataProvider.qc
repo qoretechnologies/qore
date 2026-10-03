@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Split
-/** Fires whenever An order is split into multiple orders (BaseLinker journal `log_type` 6).
+/** Fires whenever An order is split into multiple orders (BaseLinker journal <tt>log_type</tt> 6).
 */
 public class BaseLinkerWatchOrderSplitDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

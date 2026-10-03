@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Invoice Issued
-/** Fires whenever A sales invoice is issued for an order (BaseLinker journal `log_type` 7).
+/** Fires whenever A sales invoice is issued for an order (BaseLinker journal <tt>log_type</tt> 7).
 */
 public class BaseLinkerWatchInvoiceIssuedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

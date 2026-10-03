@@ -148,7 +148,7 @@ public const BucketAclValues = (
 );
 
 #! HTTP methods a presigned URL can be signed for
-/** A presigned URL grants exactly one operation: a URL signed for a `GET` cannot be used to upload
+/** A presigned URL grants exactly one operation: a URL signed for a <tt>GET</tt> cannot be used to upload
 */
 public const PresignedMethodValues = (
     <AllowedValueInfo>{

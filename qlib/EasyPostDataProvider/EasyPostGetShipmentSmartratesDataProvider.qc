@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! SmartRate `time_in_transit` percentile breakdown (response-only)
+#! SmartRate <tt>time_in_transit</tt> percentile breakdown (response-only)
 public class EasyPostTimeInTransitType inherits HashDataType {
     public {
         const Fields = {
@@ -26,7 +26,7 @@ public class EasyPostTimeInTransitType inherits HashDataType {
     }
 }
 
-#! SmartRate object: a Rate enriched with `time_in_transit` percentile data
+#! SmartRate object: a Rate enriched with <tt>time_in_transit</tt> percentile data
 public class EasyPostSmartRateType inherits HashDataType {
     public {
         const Fields = {
@@ -80,7 +80,7 @@ public class EasyPostGetShipmentSmartratesRequestDataType inherits HashDataType 
     }
 }
 
-#! Data provider for retrieving SmartRates (rates with `time_in_transit` percentiles) for a shipment
+#! Data provider for retrieving SmartRates (rates with <tt>time_in_transit</tt> percentiles) for a shipment
 public class EasyPostGetShipmentSmartratesDataProvider inherits EasyPostDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

@@ -267,11 +267,11 @@ module StripeDataProvider {
     @section stripedataproviderintro StripeDataProvider Introduction
 
     The %StripeDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [Stripe](https://stripe.com), the payments platform.
+    <a href="https://stripe.com">Stripe</a>, the payments platform.
 
     @section stripedataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from Stripe's own OpenAPI 3 schema** by the
+    The actions this application exports are <b>generated from Stripe's own OpenAPI 3 schema</b> by the
     @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  A schema
     describes the transport contract precisely and is maintained by Stripe; duplicating several hundred
     request and response fields in %Qore would mean finding and reproducing every upstream change by
@@ -300,8 +300,8 @@ module StripeDataProvider {
 
     The @ref StripeRestClient::StripeRestClientBase::DefaultApiVersion "Stripe-Version" header sent by
     the @ref striperestclientintro "StripeRestClient" module is pinned to the same release, so what the
-    actions declare and what Stripe returns describe the same API.  **The schema and that header must
-    be updated together.**
+    actions declare and what Stripe returns describe the same API.  <b>The schema and that header must
+    be updated together.</b>
 
     @section stripedataprovider_actions Actions
 
@@ -324,9 +324,9 @@ module StripeDataProvider {
 
     Two conventions are worth knowing before using these actions:
 
-    - **Amounts are integers in the currency's smallest unit.** \c 2000 is $20.00 in USD, but ¥2000 in
+    - <b>Amounts are integers in the currency's smallest unit.</b> \c 2000 is $20.00 in USD, but ¥2000 in
       JPY, which has no minor unit.
-    - **Stripe's timestamps are counts of seconds since the epoch.** Every one of them is presented as
+    - <b>Stripe's timestamps are counts of seconds since the epoch.</b> Every one of them is presented as
       a %Qore @ref date "date" and converted on the way out, so the unit is decided once rather than by
       each caller.
 
@@ -339,9 +339,9 @@ module StripeDataProvider {
 
     Each table takes the standard search expressions.  What the listing's own arguments can express is sent
     to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
-    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+    the caller's \c limit is met <b>by matching records</b>, so a search never silently under-returns.
 
-    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    The tables declare \c supports_search_expressions and <b>not</b> \c supports_native_search: this API has no
     filter expression language, so a search does not happen entirely on the server, and each operator says
     for itself whether the service can evaluate it.
 
@@ -358,7 +358,7 @@ module StripeDataProvider {
     to the same API version as the actions, so event payloads are formatted to the release this module
     documents rather than to the account's default.
 
-    **Every delivery is verified.**  A webhook endpoint is a URL anyone on the internet can post to;
+    <b>Every delivery is verified.</b>  A webhook endpoint is a URL anyone on the internet can post to;
     without verification it would accept a fabricated \c charge.succeeded, which is enough to make an
     integration ship goods that were never paid for, or a fabricated \c invoice.payment_failed, enough to
     suspend a paying customer's account.  A delivery whose \c Stripe-Signature does not verify against the
@@ -367,9 +367,9 @@ module StripeDataProvider {
 
     Two things are worth knowing when handling these events:
 
-    - **Stripe can deliver the same event more than once.**  Record the event \c id and ignore one already
+    - <b>Stripe can deliver the same event more than once.</b>  Record the event \c id and ignore one already
       processed, so that handling is idempotent.
-    - **For an update, \c data.previous_attributes holds only the fields that changed**, which is the
+    - <b>For an update, \c data.previous_attributes holds only the fields that changed</b>, which is the
       reliable way to tell what actually happened - a \c customer.subscription.updated event fires for an
       upgrade, a quantity change, a trial ending and a failed payment alike.
 

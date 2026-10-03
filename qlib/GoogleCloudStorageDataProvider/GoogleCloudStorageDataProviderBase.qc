@@ -51,7 +51,7 @@ public hashdecl GcsAuthContext {
     #! An externally-minted bearer token to use instead of obtaining one from the credential
     /** For callers that mint tokens themselves — workload identity federation, service-account
         impersonation, or a platform that already holds a token for the caller.  It is used verbatim
-        and is **not** refreshed, so it stops working when it expires; leave it unset to let
+        and is <b>not</b> refreshed, so it stops working when it expires; leave it unset to let
         @ref gcpauthintro "GcpAuth" obtain and refresh tokens from the credential instead.
 
         The token must carry the scopes for everything it is used for, which includes
@@ -353,7 +353,7 @@ public class GoogleCloudStorageDataProviderBase inherits DataProvider::AbstractD
         success, so the corruption is only visible in a byte comparison of the downloaded object.
 
         This method uses the client's raw request path instead, where the caller owns both the body
-        and the \c Content-Type and no codec runs.  Note that it does **not** work to call
+        and the \c Content-Type and no codec runs.  Note that it does <b>not</b> work to call
         \c setSerialization("bin") around the request: that mutates client-wide state, and the client
         is shared between provider objects and threads, so a concurrent JSON call would be silently
         serialized as binary.

@@ -5,8 +5,8 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker courier fields data provider (`getCourierFields`)
-/** Returns the list of field definitions that `createPackage` accepts for a
+#! BaseLinker courier fields data provider (<tt>getCourierFields</tt>)
+/** Returns the list of field definitions that <tt>createPackage</tt> accepts for a
     given courier; use this to populate courier-specific inputs.
 */
 public class BaseLinkerCourierFieldsDataProvider inherits BaseLinkerDataProviderBase {

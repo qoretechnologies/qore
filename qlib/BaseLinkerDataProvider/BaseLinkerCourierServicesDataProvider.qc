@@ -5,9 +5,9 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker courier services data provider (`getCourierServices`)
-/** The API returns services as a flat hash `{service_id: service_name, ...}`;
-    this provider flattens each entry into a `{service_id, service_name}` record.
+#! BaseLinker courier services data provider (<tt>getCourierServices</tt>)
+/** The API returns services as a flat hash <tt>{service_id: service_name, ...}</tt>;
+    this provider flattens each entry into a <tt>{service_id, service_name}</tt> record.
 */
 public class BaseLinkerCourierServicesDataProvider inherits BaseLinkerDataProviderBase {
     public {

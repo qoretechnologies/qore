@@ -48,13 +48,13 @@ public const NewPostWatchConstructorOptions = LinkedInOrganizationsDataProviderB
 /** @par Why this is not a pure cursor resume
 
     The DMA feed finder does hand back a \c paginationCursor, and it is used here — but it is
-    **not** a resume token in the sense a delta feed's is.  \c postsByAuthor is sorted by creation
-    time **descending**, so its cursor walks from the newest post backwards through history:
+    <b>not</b> a resume token in the sense a delta feed's is.  \c postsByAuthor is sorted by creation
+    time <b>descending</b>, so its cursor walks from the newest post backwards through history:
     following a cursor saved on a previous poll returns *older* posts, never newer ones, and a
     trigger built that way would silently stop firing after the first tick.
 
     What this provider does instead is use the cursor for what it is good at — walking back through
-    the feed **within one poll** — and remember the newest post it has already delivered.  Each poll
+    the feed <b>within one poll</b> — and remember the newest post it has already delivered.  Each poll
     reads the head of the feed and follows the cursor until it reaches that post, so a burst of
     posts between two polls is still delivered in full without re-reading the whole history, and a
     quiet period costs exactly one request.

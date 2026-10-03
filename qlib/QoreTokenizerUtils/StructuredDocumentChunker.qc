@@ -96,11 +96,11 @@ public class StructuredDocumentChunker inherits DocumentChunker {
     }
 
     #! Creates a StructuredDocumentChunker with the given tokenizer configuration
-    /** @param tokenizer_config a parsed `tokenizer.json` hash (from `parse_json()`)
+    /** @param tokenizer_config a parsed <tt>tokenizer.json</tt> hash (from <tt>parse_json()</tt>)
         @param options optional hash with the same options as @ref DocumentChunker plus:
-        - \c chunk_size (int): maximum tokens per chunk (default: `512`)
-        - \c chunk_overlap (int): overlapping tokens between chunks (default: `50`)
-        - \c add_special_tokens (bool): whether to include special tokens (default: `True`)
+        - \c chunk_size (int): maximum tokens per chunk (default: <tt>512</tt>)
+        - \c chunk_overlap (int): overlapping tokens between chunks (default: <tt>50</tt>)
+        - \c add_special_tokens (bool): whether to include special tokens (default: <tt>True</tt>)
 
         @throw DOCUMENT-CHUNKER-ERROR if chunk_size <= 0 or chunk_overlap >= chunk_size
     */

@@ -60,13 +60,13 @@ public hashdecl PruneResultInfo {
     @par What is preserved
 
     The pruned document is a valid schema in its own right:
-    - the selected method/path operations, plus each kept path's **path-level** \c parameters, which
+    - the selected method/path operations, plus each kept path's <b>path-level</b> \c parameters, which
       apply to every operation under it and would otherwise be lost;
-    - the **complete transitive closure** of local \c "$ref" pointers reachable from those
+    - the <b>complete transitive closure</b> of local \c "$ref" pointers reachable from those
       operations, computed as a worklist so that a reference chain of any depth is followed and a
       recursive schema terminates;
     - document metadata (\c openapi, \c info, \c servers, \c security, \c tags, …) wholesale;
-    - security schemes wholesale, because they are referenced **by name** from \c security rather
+    - security schemes wholesale, because they are referenced <b>by name</b> from \c security rather
       than by \c "$ref", so reachability analysis would wrongly discard them.
 
     Everything else - every unreferenced component, definition and vendor extension blob - is
@@ -74,10 +74,10 @@ public hashdecl PruneResultInfo {
 
     @par What is guaranteed
 
-    - the input document is **never modified**: pruning builds a new document;
-    - the output is **deterministic**: members are emitted in the source document's own order, so
+    - the input document is <b>never modified</b>: pruning builds a new document;
+    - the output is <b>deterministic</b>: members are emitted in the source document's own order, so
       the same input and selection always produce byte-identical output;
-    - the output is **self-validated**: a pruning that produced a dangling local reference is a bug
+    - the output is <b>self-validated</b>: a pruning that produced a dangling local reference is a bug
       in this code or a defect in the source document, and either way it throws rather than
       returning a schema that fails later, somewhere less obvious.
 
@@ -90,7 +90,7 @@ public class RestSchemaPruner {
     public {
         #! Document members kept wholesale rather than pruned to the reachable set
         /** These are metadata rather than reference containers.  \c securityDefinitions (Swagger 2)
-            is included because a security scheme is referenced **by name** from \c security, not by
+            is included because a security scheme is referenced <b>by name</b> from \c security, not by
             \c "$ref"; \c components.securitySchemes is handled separately for the same reason.
         */
         const MetadataMembers = {

@@ -2198,9 +2198,9 @@ string doxygen_output = proc.process();
         }
 
         #! Formats a type name for doxygen
-        /** Converts nullable `*type` prefix to `__7_ type` placeholder for doxygen compatibility.
-            The `qdx --post` step converts `__7_ ` back to `*` in the final HTML output.
-            Without this, doxygen misparses `*name` as a pointer declarator.
+        /** Converts nullable <tt>*type</tt> prefix to <tt>__7_ type</tt> placeholder for doxygen compatibility.
+            The <tt>qdx --post</tt> step converts <tt>__7_ </tt> back to <tt>*</tt> in the final HTML output.
+            Without this, doxygen misparses <tt>*name</tt> as a pointer declarator.
         */
         private string formatType(string typeName) {
             # Remove $ from type names

@@ -139,6 +139,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param client_cert optional client certificate for mutual TLS (mTLS)
         @param client_pk optional client private key for mutual TLS (mTLS)
         @param connection owning HTTP client connection
+        @param ssl_ca_file optional file containing trusted CA certificates
+        @param ssl_ca_path optional directory containing trusted CA certificates
+        @param address_family optional socket address family for DNS resolution
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,

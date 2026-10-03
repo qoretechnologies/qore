@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Invoice Edited
-/** Fires whenever A previously-issued invoice is edited (BaseLinker journal `log_type` 21).
+/** Fires whenever A previously-issued invoice is edited (BaseLinker journal <tt>log_type</tt> 21).
 */
 public class BaseLinkerWatchInvoiceEditedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

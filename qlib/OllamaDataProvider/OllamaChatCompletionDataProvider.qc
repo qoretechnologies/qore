@@ -23,7 +23,7 @@
 */
 
 public namespace OllamaDataProvider {
-#! Data provider for the Ollama `/v1/chat/completions` (OpenAI-compatible) endpoint
+#! Data provider for the Ollama <tt>/v1/chat/completions</tt> (OpenAI-compatible) endpoint
 public class OllamaChatCompletionDataProvider inherits OllamaDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

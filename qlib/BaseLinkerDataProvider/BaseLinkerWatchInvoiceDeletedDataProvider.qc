@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Invoice Deleted
-/** Fires whenever A previously-issued invoice is deleted (BaseLinker journal `log_type` 19).
+/** Fires whenever A previously-issued invoice is deleted (BaseLinker journal <tt>log_type</tt> 19).
 */
 public class BaseLinkerWatchInvoiceDeletedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

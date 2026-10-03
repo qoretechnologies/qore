@@ -5,7 +5,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! Definition of a courier-specific field (from getCourierFields)
-/** Describes a field that `createPackage` accepts for a given courier. Use
+/** Describes a field that <tt>createPackage</tt> accepts for a given courier. Use
     this together with @ref BaseLinkerCourierFieldDataType to supply values.
 */
 public class BaseLinkerCourierFieldDefinitionDataType inherits HashDataType {

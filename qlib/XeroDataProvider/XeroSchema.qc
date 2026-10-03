@@ -75,7 +75,7 @@ public hashdecl XeroSchemaProvenanceInfo {
     the schema its action was generated from, so an accounting action reaches \c /api.xro/2.0 and a projects
     action \c /projects.xro/2.0.
 
-    What does **not** split cleanly is the dropdowns.  A project names a **contact**, and contacts are
+    What does <b>not</b> split cleanly is the dropdowns.  A project names a <b>contact</b>, and contacts are
     declared in the accounting document - so the projects set is built with the accounting set as a peer,
     and a projects action can offer a dropdown the accounting set produces.  The listing then runs against
     the accounting schema, which is the only way its URI prefix can be right.
@@ -85,13 +85,13 @@ public hashdecl XeroSchemaProvenanceInfo {
 
     @section xeroschema_payroll Payroll Is Not One of Them
 
-    Xero's payroll API is three documents, one per region, and Australia's is a different **API version**
+    Xero's payroll API is three documents, one per region, and Australia's is a different <b>API version</b>
     (\c payroll.xro/1.0) from New Zealand's and the United Kingdom's (\c payroll.xro/2.0).  They do not
     describe the same operations: creating an employee takes an array in Australia and a single object in
     the other two, and listing them returns a different envelope.
 
     An action registered in the application catalog has exactly one option shape, so no generated action can
-    stand for all three.  The two employee actions are therefore **hand-written**, take the region from the
+    stand for all three.  The two employee actions are therefore <b>hand-written</b>, take the region from the
     connection, and normalise what comes back; see
     @ref XeroDataProvider::XeroEmployeesDataProvider "XeroEmployeesDataProvider".
 

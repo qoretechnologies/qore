@@ -727,14 +727,14 @@ stream.doRequest({
 
     @subsection openaidataprovider_stream_events Stream Event Payloads
 
-    The stream provider emits SSE events with a `type` field matching the Responses API event types. A few common
+    The stream provider emits SSE events with a <tt>type</tt> field matching the Responses API event types. A few common
     examples:
-    - `response.output_text.delta`
-    - `response.tool_call.delta`
-    - `response.completed`
+    - <tt>response.output_text.delta</tt>
+    - <tt>response.tool_call.delta</tt>
+    - <tt>response.completed</tt>
 
-    The emitted event hash also includes `event` and `id` when provided by the server. The `responses/stream`
-    provider will persist conversation context on `response.completed` when a `conversation_key` is used.
+    The emitted event hash also includes <tt>event</tt> and <tt>id</tt> when provided by the server. The <tt>responses/stream</tt>
+    provider will persist conversation context on <tt>response.completed</tt> when a <tt>conversation_key</tt> is used.
 
     @subsection openaidataprovider_conversations Server-Side Conversations
 
@@ -842,12 +842,12 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     - initial release
     @section openaidataprovider_migration Migration Notes
 
-    - Response output items are now typed; downstream code should prefer `output_text`, `tool_calls`, and
-      `tool_results` instead of parsing raw hashes.
-    - Response streaming is exposed as the `responses/stream` data provider and emits SSE events with a `type`
+    - Response output items are now typed; downstream code should prefer <tt>output_text</tt>, <tt>tool_calls</tt>, and
+      <tt>tool_results</tt> instead of parsing raw hashes.
+    - Response streaming is exposed as the <tt>responses/stream</tt> data provider and emits SSE events with a <tt>type</tt>
       field matching the Responses API event types.
-    - Conversation persistence can be configured by supplying a `conversation_context_store` and using
-      `conversation_key` in requests.
+    - Conversation persistence can be configured by supplying a <tt>conversation_context_store</tt> and using
+      <tt>conversation_key</tt> in requests.
 */
 
 #! contains all public definitions in the OpenAiDataProvider module

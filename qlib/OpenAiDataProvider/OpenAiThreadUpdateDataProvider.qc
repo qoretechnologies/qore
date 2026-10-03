@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiThreadUpdateDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiThreadUpdateDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
 /** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `conversations/update` data provider instead
+    use the <tt>conversations/update</tt> data provider instead
 */
 public class OpenAiThreadUpdateDataProvider inherits OpenAiDataProviderCommon {
     public {

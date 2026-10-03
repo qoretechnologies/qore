@@ -109,7 +109,7 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
     #! Handles the AsyncIoController's onComplete callback and dispatches to
     #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
     #! can remove closed/errored connections from the pool.
-    /** This override is **required** even though \c HttpClientPollOperation
+    /** This override is <b>required</b> even though \c HttpClientPollOperation
         already defines \c onComplete.  \c Http1ClientPollOperation inherits
         from both \c Http1ClientPollOperationBase (a QPP C++ class whose
         ancestor \c AbstractPollOperation defines \c onComplete as a C++

@@ -53,7 +53,7 @@ public hashdecl FireworksSchemaProvenanceInfo {
 #! Loads pinned schemas and shares their immutable action sets
 /** Control-plane, upload, text, responses, and messages schemas are separate because their base paths
     differ. Inference sets refer to the control set for account/model dropdowns. No schema is downloaded
-    at runtime. Re-import with `tools/rest-schema-import.qr --spec fireworks-import.yaml`.
+    at runtime. Re-import with <tt>tools/rest-schema-import.qr --spec fireworks-import.yaml</tt>.
 */
 public class FireworksSchema {
     public {

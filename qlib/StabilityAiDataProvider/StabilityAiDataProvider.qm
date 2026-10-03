@@ -137,9 +137,9 @@ module StabilityAiDataProvider {
     @section stabilityaidataproviderintro StabilityAiDataProvider Introduction
 
     The %StabilityAiDataProvider module provides a data provider API for
-    [Stability AI](https://stability.ai) images, audio, 3D assets, and account reads.
+    <a href="https://stability.ai">Stability AI</a> images, audio, 3D assets, and account reads.
     The offline catalog contains 34 typed service operations, the compatible
-    `generate-image` action, three bounded wait helpers, and generic API access.
+    <tt>generate-image</tt> action, three bounded wait helpers, and generic API access.
 
     |!Action family|!Capabilities
     |Images|Core, Ultra, SD3.5; masks, erasing, inpainting, outpainting, replacement and recoloring
@@ -149,12 +149,12 @@ module StabilityAiDataProvider {
     |3D|Stable Fast 3D and Stable Point Aware 3D GLB assets
     |Legacy and account|Supported legacy image operations, engine inventory, account and credit balance
 
-    The compatible `model` option selects `ultra` (the default), `sd3`, or `core`.
-    `sd3_model` selects Large, Large Turbo, Medium, or Flash within SD3.5.
+    The compatible <tt>model</tt> option selects <tt>ultra</tt> (the default), <tt>sd3</tt>, or <tt>core</tt>.
+    <tt>sd3_model</tt> selects Large, Large Turbo, Medium, or Flash within SD3.5.
     Finite choices preserve wire values when labels are translated. Legacy engine
     choices come from the authenticated engine list and are separate from v2 models.
-    The API no longer supports the previously advertised `4:3` and `3:4` ratios;
-    use supported `5:4` and `4:5` ratios or another published choice.
+    The API no longer supports the previously advertised <tt>4:3</tt> and <tt>3:4</tt> ratios;
+    use supported <tt>5:4</tt> and <tt>4:5</tt> ratios or another published choice.
 
     Uploads accept binary media or named file objects and use actual multipart encoding.
     Successful media includes verified MIME type, bytes, seeds, and completion status.
@@ -165,9 +165,9 @@ module StabilityAiDataProvider {
 
     For programmatic use via @ref qoremediautilsintro "QoreMediaUtils",
     see @ref stabilityairestclientintro "StabilityAiRestClient" —
-    `StabilityAiImageGenerator` implements
+    <tt>StabilityAiImageGenerator</tt> implements
     @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator"
-    and is registered with `MediaProviderRegistry` automatically.
+    and is registered with <tt>MediaProviderRegistry</tt> automatically.
 
     @section StabilityAiDataProviderRelnotes Release Notes
 

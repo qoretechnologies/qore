@@ -56,12 +56,12 @@ module MistralRestClient {
     @section mistralrestclientintro MistralRestClient Introduction
 
     The %MistralRestClient module provides an API for calling
-    [Mistral AI](https://mistral.ai) REST services — chat, embeddings,
+    <a href="https://mistral.ai">Mistral AI</a> REST services — chat, embeddings,
     and document OCR.
 
     Mistral exposes an OpenAI-compatible chat-completions API at
-    `/v1/chat/completions`, an embeddings endpoint at `/v1/embeddings`,
-    and a dedicated document-OCR endpoint at `/v1/ocr` that converts
+    <tt>/v1/chat/completions</tt>, an embeddings endpoint at <tt>/v1/embeddings</tt>,
+    and a dedicated document-OCR endpoint at <tt>/v1/ocr</tt> that converts
     PDFs and images into structured markdown.
 
     @par Example:
@@ -79,7 +79,7 @@ printf("%Y\n", ans.body);
     @endcode
 
     @note The OCR endpoint is exposed via the
-    [MistralDataProvider](../../MistralDataProvider/html/index.html) `ocr` action.
+    @ref mistraldataproviderintro "MistralDataProvider" <tt>ocr</tt> action.
 
     @section MistralRestClientRelnotes Release Notes
 
@@ -425,7 +425,7 @@ public class MistralLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
 }
 
 public namespace QoreRagUtils {
-#! Mistral AI-backed embedder — calls the Mistral `/embeddings` endpoint
+#! Mistral AI-backed embedder — calls the Mistral <tt>/embeddings</tt> endpoint
 public class MistralEmbedder inherits AbstractEmbedder {
     public {
         const DefaultModel = "mistral-embed";

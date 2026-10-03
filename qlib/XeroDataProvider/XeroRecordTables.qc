@@ -46,10 +46,10 @@ public namespace XeroDataProvider {
 
     @section xerorecord_write A Write Takes a List of Documents
 
-    Xero's accounting writes are \c POST operations taking a **list** of documents even when there is one of
+    Xero's accounting writes are \c POST operations taking a <b>list</b> of documents even when there is one of
     them, and the same operation creates and updates: a document carrying its identity is an update, one
     without is a create.  That is why these tables name the same action for both, and why the identity
-    travels **inside** the document rather than in a path variable - there is no path to put it in.
+    travels <b>inside</b> the document rather than in a path variable - there is no path to put it in.
 
     A response comes back the same way, as a list of the documents written, and the table unwraps the one
     element of it.
@@ -322,7 +322,7 @@ public class XeroRecordTables {
 
         #! The tax rates table
         /** Xero's tax rate listing takes no paging arguments either, and a tax rate has no identifier of
-            its own: it **is** its \c TaxType, which is what every Xero document names to apply one.
+            its own: it <b>is</b> its \c TaxType, which is what every Xero document names to apply one.
 
             @see @ref xerorecord_readonly
         */
@@ -355,7 +355,7 @@ public class XeroRecordTables {
             \c DateFrom and \c DateTo as query arguments instead, so this table declares \c filters and no
             filter expression language, and does not claim native search.
 
-            \c Status is declared **inexact**: it narrows what has to be read and the predicate is applied
+            \c Status is declared <b>inexact</b>: it narrows what has to be read and the predicate is applied
             again to what comes back, which is correct whether or not Xero matches a status exactly.
 
             The records are under \c PurchaseOrders.  Xero declares a \c Warnings array on the same

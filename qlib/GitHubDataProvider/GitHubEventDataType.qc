@@ -31,7 +31,7 @@ public namespace GitHubDataProvider {
     \c webhooks section, so preserving them would be a vendor-specific pruner feature.
 
     The objects those payloads carry are a different matter.  An \c issues delivery carries an \c issue, a
-    \c repository and a \c sender, and all three **are** component schemas in the pinned document, reachable
+    \c repository and a \c sender, and all three <b>are</b> component schemas in the pinned document, reachable
     because the exported operations reference them.  So each event type is composed here from the pinned
     schema's own components, and only the few shapes GitHub does not publish as reusable components - a push
     commit, a review, a commit comment - are left as open hashes.

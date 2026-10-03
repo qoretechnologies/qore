@@ -142,15 +142,15 @@ module BgeM3FastApiDataProvider {
     @section bgem3fastapidataproviderintro BgeM3FastApiDataProvider Introduction
 
     The %BgeM3FastApiDataProvider module provides a data provider API for
-    [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI sidecar services —
+    <a href="https://huggingface.co/BAAI/bge-m3">BGE-M3</a> FastAPI sidecar services —
     multilingual text embeddings (dense + sparse) suitable for hybrid
     retrieval pipelines.
 
     The following data providers are exposed:
     - @ref BgeM3FastApiDataProvider::BgeM3FastApiDataProvider "BgeM3FastApiDataProvider" — the root provider
-    - @ref BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsDataProvider "BgeM3FastApiEmbeddingsDataProvider" — `/embed` (dense + sparse vectors)
-    - @ref BgeM3FastApiDataProvider::BgeM3FastApiHealthDataProvider "BgeM3FastApiHealthDataProvider" — `/health` liveness probe
-    - @ref BgeM3FastApiDataProvider::BgeM3FastApiMetricsDataProvider "BgeM3FastApiMetricsDataProvider" — `/metrics` Prometheus exposition
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsDataProvider "BgeM3FastApiEmbeddingsDataProvider" — <tt>/embed</tt> (dense + sparse vectors)
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiHealthDataProvider "BgeM3FastApiHealthDataProvider" — <tt>/health</tt> liveness probe
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiMetricsDataProvider "BgeM3FastApiMetricsDataProvider" — <tt>/metrics</tt> Prometheus exposition
 
     The sidecar serves a single embedding model (\c bge-m3); the \c model
     option defaults to \c "bge-m3" and is reported back via \c getModel() so

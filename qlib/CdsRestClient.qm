@@ -94,7 +94,7 @@ printf("%Y\n", ans.body);
     @section cdsrestclient_discovery Creating a Dynamics Connection Without a URL
 
     A Dataverse environment's URL is not something a user should have to look up, and it is not knowable
-    before the credential exists: **which environments a credential reaches is what Microsoft answers**,
+    before the credential exists: <b>which environments a credential reaches is what Microsoft answers</b>,
     through the Global Discovery Service.  So a Dynamics connection is created against the discovery
     service and moves to its environment once it has been authorized.
 
@@ -108,7 +108,7 @@ printf("%Y\n", ans.body);
     The scheme declares \c auto_url, so nothing asks
     the user for a URL.
 
-    @note **An environment is always chosen, and the choice is always visible.**  A credential that
+    @note <b>An environment is always chosen, and the choice is always visible.</b>  A credential that
     reaches several environments and names none gets the first of them in a stable order - the Global
     Discovery Service does not order its answer, so an order of its own keeps the choice from moving
     between authorizations - and the alternatives are logged as a warning.  The chosen environment is
@@ -560,7 +560,7 @@ public class CdsRestClientBase {
         @param url the client's current URL
         @param org the environment to select, where the credential reaches more than one
         @param logger any logger
-        @param set_url called with the environment's URL, so that **this** client reaches it at once and
+        @param set_url called with the environment's URL, so that <b>this</b> client reaches it at once and
         not only the next one built from the options returned here; @ref nothing for the asynchronous
         client, whose URL is immutable by design because its connection manager pools by URL
 
@@ -598,13 +598,13 @@ public class CdsRestClientBase {
         <tt>{url}user_impersonation</tt> - and the placeholder is replaced with the connection URL, so the
         authorization request names the organisation being connected to.
 
-        The resolved value is then **stored** with the connection, which is what makes a later URL change go
+        The resolved value is then <b>stored</b> with the connection, which is what makes a later URL change go
         wrong: the stored scope has the old URL baked into it and no placeholder left to substitute, so
         replacing \c "{url}" does nothing and the authorization request keeps naming the old organisation.
         Microsoft answers that with \c AADSTS500011, saying the resource principal was not found in the
         tenant - which is true, and says nothing about the URL being the reason.
 
-        So a scope that has the **shape** of one of the profile's templates is resolved again against the
+        So a scope that has the <b>shape</b> of one of the profile's templates is resolved again against the
         current URL, rather than only an unresolved one.  A scope the caller added itself does not have that
         shape and is left exactly as it is.
 

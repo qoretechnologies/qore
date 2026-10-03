@@ -50,7 +50,7 @@ module GitHubRestClient {
 
     @section githubrestclientintro GitHubRestClient Introduction
 
-    The %GitHubRestClient module provides an API for calling [GitHub](https://github.com)'s REST API
+    The %GitHubRestClient module provides an API for calling <a href="https://github.com">GitHub</a>'s REST API
     services.
 
     To use this module, use \c "%requires GitHubRestClient" in your code.
@@ -78,9 +78,9 @@ module GitHubRestClient {
 
     GitHub accepts either of two credentials, and this module supports both:
 
-    - a **personal access token**, fine-grained or classic, sent as a bearer token.  This is what a script
+    - a <b>personal access token</b>, fine-grained or classic, sent as a bearer token.  This is what a script
       normally uses; a fine-grained token can be scoped to a single repository.
-    - the **OAuth2 authorization code flow**, which is what an interactive integration uses, with
+    - the <b>OAuth2 authorization code flow</b>, which is what an interactive integration uses, with
       \c oauth2_client_id and \c oauth2_client_secret from an OAuth app registered on GitHub.
 
     @par Example:
@@ -97,7 +97,7 @@ printf("User: %Y\n", result.body);
     @section githubrestclient_pagination Pagination
 
     GitHub pages with \c page and \c per_page (maximum 100) and reports the next and last pages in the
-    \c Link **response header** rather than in the body; the body is the bare array.  Search endpoints are
+    \c Link <b>response header</b> rather than in the body; the body is the bare array.  Search endpoints are
     different: they return \c {total_count, items} and are capped at 1000 results however far they are
     paged.
 
@@ -140,7 +140,7 @@ public class GitHubRestClientBase {
         const DefaultGrantType = "authorization_code";
 
         #! Default OAuth2 scopes
-        /** \c delete_repo is requested because the application exports a **Delete Repository** action, and
+        /** \c delete_repo is requested because the application exports a <b>Delete Repository</b> action, and
             GitHub keeps that permission out of \c repo deliberately.  A connection without it offers an
             action that always fails with 403 - which is what the superseded application did, and it is not
             a useful thing to offer.

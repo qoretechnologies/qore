@@ -53,7 +53,7 @@ module PineconeRestClient {
     @section pineconerestclientintro PineconeRestClient Introduction
 
     The %PineconeRestClient module provides a REST client and a connection for
-    [Pinecone](https://www.pinecone.io) — a managed vector database — and registers \c pinecone as a
+    <a href="https://www.pinecone.io">Pinecone</a> — a managed vector database — and registers \c pinecone as a
     vector-store backend in @ref qoreragutilsintro "QoreRagUtils".
 
     For the data-provider application generated from Pinecone's own API descriptions, see
@@ -61,9 +61,9 @@ module PineconeRestClient {
 
     @section pineconerestclientplanes Two Planes, Two Hosts
 
-    Pinecone has a **control plane** that manages indexes and a **data plane** that reads and writes
+    Pinecone has a <b>control plane</b> that manages indexes and a <b>data plane</b> that reads and writes
     their contents, and the two do not share a host: the control plane is at
-    \c https://api.pinecone.io, while each index's data is served from **its own host**, which only
+    \c https://api.pinecone.io, while each index's data is served from <b>its own host</b>, which only
     the control plane knows.
 
     Which side resolves that host depends on which side you are using:
@@ -75,7 +75,7 @@ module PineconeRestClient {
     Both follow the same rule about where the credentials may go:
     @ref QoreRagUtils::PineconeVectorStore::checkIndexHost() "checkIndexHost()" refuses a resolved host
     that is not \c pinecone.io or a subdomain of it, matched label by label, and refuses one that
-    names a scheme other than \c https or carries credentials.  A host that comes out of a **response**
+    names a scheme other than \c https or carries credentials.  A host that comes out of a <b>response</b>
     is outside the bound the configured URL would otherwise set, so it is checked rather than trusted.
 
     @section pineconerestclientauth Authentication and API Version
@@ -85,7 +85,7 @@ module PineconeRestClient {
     are set by @ref PineconeRestClient::PineconeRestClientBase::getOptions() "getOptions()" as default
     headers on the client, so every call carries them.
 
-    The version is **pinned** by this module — see
+    The version is <b>pinned</b> by this module — see
     @ref PineconeRestClient::PineconeRestClientBase::ApiVersion "ApiVersion".  The header is declared
     required on every operation Pinecone publishes, but the server accepts a request without one and
     answers it under whatever version it currently defaults to, which would let the same integration
@@ -136,7 +136,7 @@ public class PineconeRestClientBase {
 
         #! The API version this module's vendored descriptions describe
         /** Pinecone versions its API by date and selects the version with a header.  The header is
-            declared **required** on every operation in all three of its published descriptions, but the
+            declared <b>required</b> on every operation in all three of its published descriptions, but the
             server accepts a request without one and answers it under whatever version it currently
             defaults to - which is the dangerous case rather than the safe one, because the same
             integration then changes behaviour when Pinecone moves that default, with nothing in the
@@ -204,7 +204,7 @@ public class PineconeRestConnection inherits RestClient::RestConnection {
 
             This connection declared no ping at all until the application covered more than one action,
             so every ping returned \c "OK" in a few milliseconds without contacting the server - measured
-            at 5356 microseconds for a **deliberately invalid** key, against 962 for a valid one, both
+            at 5356 microseconds for a <b>deliberately invalid</b> key, against 962 for a valid one, both
             reported as \c ok.  A ping that cannot fail reports a broken credential as a working
             connection.
         */
@@ -731,13 +731,13 @@ public class PineconeVectorStore inherits AbstractVectorStore {
     }
 
     #! Returns the bare host of a resolved data-plane host, refusing one outside Pinecone
-    /** The data-plane host is followed out of a control-plane **response**, which means sending the
+    /** The data-plane host is followed out of a control-plane <b>response</b>, which means sending the
         API key somewhere the configuration never named - so it is checked rather than trusted.  The
         equivalent check in the schema-driven application is
         @ref RestSchemaActions::RestSchemaHostSourceInfo::allowed_host_suffixes "allowed_host_suffixes",
         and this is the same rule applied to the hand-written path.
 
-        The suffix is matched **label by label**, so \c "evil-pinecone.io" is refused where
+        The suffix is matched <b>label by label</b>, so \c "evil-pinecone.io" is refused where
         \c "idx-1234.svc.aped-1234-a56b.pinecone.io" is accepted; a plain string-suffix test accepts
         both.  A value carrying credentials, naming no host, or naming a scheme other than \c https is
         refused as well: the scheme is fixed here and never taken from the response, so a
@@ -753,7 +753,7 @@ public class PineconeVectorStore inherits AbstractVectorStore {
         @ref RestSchemaActions::RestSchemaHostRouter "RestSchemaHostRouter": the router lives in
         \c RestSchemaActions, and %PineconeDataProvider requires this module rather than the reverse, so
         using it here would invert the dependency and make a program that only wants a vector store load
-        the whole action framework.  What is shared is the **rule**, which is why it is spelled out
+        the whole action framework.  What is shared is the <b>rule</b>, which is why it is spelled out
         above.
     */
     static string checkIndexHost(string host) {

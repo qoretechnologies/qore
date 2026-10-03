@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `deleteOrderProduct` method
+#! Request type for the BaseLinker <tt>deleteOrderProduct</tt> method
 public class BaseLinkerDeleteOrderProductRequestDataType inherits HashDataType {
     public {
         const Fields = {

@@ -25,10 +25,10 @@
 public namespace QoreRagUtils {
 #! pgvector-backed vector store — uses PostgreSQL with the pgvector extension
 /** Wraps any @ref Qore::SQL::AbstractDatasource pointing at a PostgreSQL
-    database with the [pgvector](https://github.com/pgvector/pgvector)
+    database with the <a href="https://github.com/pgvector/pgvector">pgvector</a>
     extension installed.  Operates on a single table with at least three
-    columns: `id` (text PK), `embedding` (`vector(N)`), and `payload`
-    (`jsonb`).
+    columns: <tt>id</tt> (text PK), <tt>embedding</tt> (<tt>vector(N)</tt>), and <tt>payload</tt>
+    (<tt>jsonb</tt>).
 
     @par Configuration
 
@@ -39,10 +39,10 @@ public namespace QoreRagUtils {
       @ref Qore::SQL::AbstractDatasource bound to a PostgreSQL database
       with pgvector installed
     - \c options.dimension (optional) — vector dimension; auto-probed from
-      the table's `vector_dims(embedding)` on first call if omitted
+      the table's <tt>vector_dims(embedding)</tt> on first call if omitted
     - \c options.distance (optional) — distance operator: \c "cosine"
-      (default, uses `<=>`), \c "l2" (uses `<->`), or \c "inner_product"
-      (uses `<#>`)
+      (default, uses <tt>&lt;=&gt;</tt>), \c "l2" (uses <tt>&lt;-&gt;</tt>), or \c "inner_product"
+      (uses <tt>&lt;#&gt;</tt>)
 
     @par Filter syntax
 
@@ -91,7 +91,7 @@ CREATE INDEX ON embeddings USING hnsw (embedding vector_cosine_ops);
     @endverbatim
 
     The @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module's
-    `vector`, `halfvec`, `sparsevec` column types and the `PgsqlIndex`
+    <tt>vector</tt>, <tt>halfvec</tt>, <tt>sparsevec</tt> column types and the <tt>PgsqlIndex</tt>
     HNSW/IVFFlat method support are available for programmatic schema
     management.
 */

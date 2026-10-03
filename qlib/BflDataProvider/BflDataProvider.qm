@@ -137,7 +137,7 @@ module BflDataProvider {
     @section bfldataproviderintro BflDataProvider Introduction
 
     The %BflDataProvider module provides a data provider API for
-    [Black Forest Labs](https://bfl.ai) — the company behind FLUX image
+    <a href="https://bfl.ai">Black Forest Labs</a> — the company behind FLUX image
     and video models.
 
     The offline catalog contains 37 typed service operations, five generation/job helpers,
@@ -150,9 +150,9 @@ module BflDataProvider {
     |Jobs|Nonblocking submissions, regional result retrieval, bounded waits, and verified downloads
     |Account|Credits, fine-tune inventory/details/deletion, and licensed usage reporting
 
-    The compatible `generate-image` retains job/result metadata and adds downloaded media.
-    The historical `flux-1.1-pro-video` alias is retired; select `flux-3-video` explicitly.
-    Unsupported `negative_prompt` is rejected. Regional connection URLs are preserved.
+    The compatible <tt>generate-image</tt> retains job/result metadata and adds downloaded media.
+    The historical <tt>flux-1.1-pro-video</tt> alias is retired; select <tt>flux-3-video</tt> explicitly.
+    Unsupported <tt>negative_prompt</tt> is rejected. Regional connection URLs are preserved.
     Public beta and legacy fine-tune availability are described per action. Uploads, training,
     and sharing are not invented API operations; use the documented Dashboard/local workflows.
 

@@ -28,13 +28,13 @@ public namespace RestClientDataProvider {
 public const GenericApiCallResponseDataType = new GenericApiCallResponseDataType();
 
 #! Response type used by @ref GenericApiCallProvider — the framework-injected generic call provider
-/** Lean by design: only the three fields any caller actually needs (`status`, `headers`, `body`),
-    plus an optional `debug` sub-hash that's populated when the caller sets `include_debug` on the
+/** Lean by design: only the three fields any caller actually needs (<tt>status</tt>, <tt>headers</tt>, <tt>body</tt>),
+    plus an optional <tt>debug</tt> sub-hash that's populated when the caller sets <tt>include_debug</tt> on the
     request.
 
     Older REST-call providers in this codebase use
-    @ref RestClientCallResponseDataType which echoes the full request back (`request-headers`,
-    `request-uri`, …), duplicates `response-headers` as `response-headers-raw`, and includes
+    @ref RestClientCallResponseDataType which echoes the full request back (<tt>request-headers</tt>,
+    <tt>request-uri</tt>, …), duplicates <tt>response-headers</tt> as <tt>response-headers-raw</tt>, and includes
     several @ref NOTHING placeholder fields. That response shape is heavy, leaks bearer tokens via
     the un-redacted request-headers echo, and forces every consumer to dig past the duplication.
     This type keeps only what's useful.

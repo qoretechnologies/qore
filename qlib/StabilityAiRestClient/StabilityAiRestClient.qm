@@ -54,16 +54,16 @@ module StabilityAiRestClient {
     @section stabilityairestclientintro StabilityAiRestClient Introduction
 
     The %StabilityAiRestClient module provides a REST client for
-    [Stability AI](https://stability.ai) — the company behind Stable
+    <a href="https://stability.ai">Stability AI</a> — the company behind Stable
     Diffusion. Pinned official contracts cover image generation and editing, audio,
     3D assets, asynchronous results, and supported legacy account/image operations.
     Shared RestSchemaActions transport owns JSON and multipart encoding. The same
     validation and response decoding serve app actions and the media backend.
 
-    Connections require a sensitive `apikey` or `token`; explicit `apikey` wins.
-    Optional `organization` scopes every authenticated request. Ping reads
-    `/v1/user/balance` and validates its shape; a zero balance still authenticates.
-    The saved `stability-ai` scheme is preserved. Explicit HTTPS origins are trusted
+    Connections require a sensitive <tt>apikey</tt> or <tt>token</tt>; explicit <tt>apikey</tt> wins.
+    Optional <tt>organization</tt> scopes every authenticated request. Ping reads
+    <tt>/v1/user/balance</tt> and validates its shape; a zero balance still authenticates.
+    The saved <tt>stability-ai</tt> scheme is preserved. Explicit HTTPS origins are trusted
     configuration; HTTP is restricted to loopback tests. Redirects and copies to
     other origins are rejected. Credentials are removed from diagnostic errors.
 
@@ -153,7 +153,7 @@ public class StabilityAiRestClientBase {
     }
 
     #! Normalizes credentials and transport policy for both client implementations
-    /** @param opts client options; an explicitly supplied `apikey` takes precedence over `token`
+    /** @param opts client options; an explicitly supplied <tt>apikey</tt> takes precedence over <tt>token</tt>
         @return normalized options with Bearer authentication
         @throw STABILITYAI-CONFIG-ERROR missing credentials or an unsafe endpoint
     */
@@ -449,7 +449,7 @@ public class StabilityAiRestConnection inherits RestClient::RestConnection {
 }
 
 #! @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator" backed by
-#! Stability AI's v2beta `/stable-image/generate/*` endpoints
+#! Stability AI's v2beta <tt>/stable-image/generate/*</tt> endpoints
 public class StabilityAiImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
     private {
         StabilityAiRestClientIo rest;

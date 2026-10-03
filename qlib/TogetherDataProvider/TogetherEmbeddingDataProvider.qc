@@ -23,7 +23,7 @@
 */
 
 public namespace TogetherDataProvider {
-#! Data provider for the Together AI `/v1/embeddings` endpoint
+#! Data provider for the Together AI <tt>/v1/embeddings</tt> endpoint
 public class TogetherEmbeddingDataProvider inherits TogetherDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

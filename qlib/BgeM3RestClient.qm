@@ -55,11 +55,11 @@ module BgeM3RestClient {
     @section bgem3restclientintro BgeM3RestClient Introduction
 
     The %BgeM3RestClient module provides an API for calling
-    [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI sidecar services.
+    <a href="https://huggingface.co/BAAI/bge-m3">BGE-M3</a> FastAPI sidecar services.
     The sidecar exposes a small native API:
-    - `POST /embed` — dense + sparse embedding generation for one or more texts
-    - `GET /health` — liveness probe with host memory pressure info
-    - `GET /metrics` — Prometheus text-format metrics
+    - <tt>POST /embed</tt> — dense + sparse embedding generation for one or more texts
+    - <tt>GET /health</tt> — liveness probe with host memory pressure info
+    - <tt>GET /metrics</tt> — Prometheus text-format metrics
 
     To use this module, use \c "%requires BgeM3RestClient" in your code.
 
@@ -83,7 +83,7 @@ module BgeM3RestClient {
     @section bgem3restclientping Pings Do Not Verify Authentication
 
     A \c bge-m3 connection pings with \c "GET /health".  That verifies that the sidecar is
-    reachable and that the model is loaded - it does **not** verify the \c apikey option, and no
+    reachable and that the model is loaded - it does <b>not</b> verify the \c apikey option, and no
     change of ping target could make it do so.
 
     Every route the sidecar serves - \c "/embed", \c "/health" and \c "/metrics" - is served
@@ -146,8 +146,8 @@ public class BgeM3RestClientBase {
         const DefaultPingMethod = "GET";
 
         #! Default ping path — sidecar liveness endpoint
-        /** @note This ping verifies **reachability and liveness only; it does not verify the
-            credential**.  Unlike the qdrant, voyage, openai and gemini schemes - whose pings
+        /** @note This ping verifies <b>reachability and liveness only; it does not verify the
+            credential</b>.  Unlike the qdrant, voyage, openai and gemini schemes - whose pings
             target an endpoint that answers 401 when the credential is missing or wrong - there is
             no endpoint on a BGE-M3 sidecar that can exercise authentication:
 
@@ -156,12 +156,12 @@ public class BgeM3RestClientBase {
               none of them can return 401;
             - \c "/embed" - the only endpoint that does real work - is therefore no better as a
               ping target: it would run the embedding model on every ping and still verify nothing;
-            - \c "/health" is the Kubernetes liveness **and** readiness probe path, so it has to
+            - \c "/health" is the Kubernetes liveness <b>and</b> readiness probe path, so it has to
               remain unauthenticated even in a deployment that fronts the sidecar with an
               auth-enforcing gateway, because kubelet cannot present a bearer token.
 
             The consequence for operators: a green ping on a \c bge-m3 connection means the sidecar
-            is reachable and the model is loaded.  It does **not** mean the \c apikey option is
+            is reachable and the model is loaded.  It does <b>not</b> mean the \c apikey option is
             correct.  Where the sidecar is fronted by a gateway that enforces authentication, a
             missing or wrong \c apikey surfaces on the first real \c "/embed" call, not on the ping.
 

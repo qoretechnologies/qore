@@ -33,8 +33,8 @@ public namespace GitHubDataProvider {
 
     GitHub writes an \c operationId with a slash - \c "pulls/list" - and the action catalog accepts only
     \c A-Za-z0-9_- in an action name, so the superseded application registered them with the slash replaced
-    by a hyphen: \c "pulls-list", \c "actions-create-or-update-repo-secret".  **That hyphenated form is the
-    action ID**, because it is what existing workflows call; the \c operationId is recorded separately in
+    by a hyphen: \c "pulls-list", \c "actions-create-or-update-repo-secret".  <b>That hyphenated form is the
+    action ID</b>, because it is what existing workflows call; the \c operationId is recorded separately in
     \c operation_id, so an upstream rename surfaces as drift rather than silently renaming an action.
 
     @section githubmanifest_added What This Application Adds
@@ -63,14 +63,14 @@ public namespace GitHubDataProvider {
     @section githubmanifest_assignees Assignees Come From Collaborators
 
     The superseded application filled its assignee dropdowns from \c "/contributors" - everyone who has ever
-    committed.  GitHub only accepts an assignee with **push access** and silently drops the rest, so that
+    committed.  GitHub only accepts an assignee with <b>push access</b> and silently drops the rest, so that
     dropdown offered values the API would ignore.  This application lists collaborators instead, which is
     exactly the set GitHub will accept.
 
     @section githubmanifest_paging Pagination
 
     Every collection GitHub returns is paged with \c page and \c per_page, and \c per_page is capped at 100.
-    The next and last pages are reported in the \c Link **response header** rather than in the body, and the
+    The next and last pages are reported in the \c Link <b>response header</b> rather than in the body, and the
     body is the bare array.
 
     The two search actions are different: they return \c {total_count, items} and are capped at 1000 results

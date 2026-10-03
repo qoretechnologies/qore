@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `insurance.cancelled` webhook events
+#! Watches for <tt>insurance.cancelled</tt> webhook events
 /** EasyPost also fires this event when a standalone Insurance fails purchasing. */
 public class EasyPostWatchInsuranceCancelledEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {

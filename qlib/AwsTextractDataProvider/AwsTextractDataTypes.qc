@@ -26,9 +26,9 @@ public namespace AwsTextractDataProvider {
 #! Typed sub-hash for a single Textract Block element
 /** Textract returns text + structure as a flat list of typed Block
     objects.  This hashdecl captures the common Block fields documented
-    in the [AWS Textract API reference](https://docs.aws.amazon.com/textract/latest/dg/API_Block.html).
+    in the <a href="https://docs.aws.amazon.com/textract/latest/dg/API_Block.html">AWS Textract API reference</a>.
     Block-type-specific fields (Query / Page / etc.) flow through via
-    `auto`-typed sub-fields so downstream consumers can access them
+    <tt>auto</tt>-typed sub-fields so downstream consumers can access them
     without losing the documented common shape.
 */
 public class AwsTextractBlockDataType inherits HashDataType {

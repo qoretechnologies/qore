@@ -25,7 +25,7 @@
 #! Contains all public definitions in the QdrantDataProvider module
 public namespace QdrantDataProvider {
 #! Bulk insert/upsert operation for a Qdrant collection
-/** Buffers point records and flushes them as batch upserts via `PUT /collections/{name}/points`.
+/** Buffers point records and flushes them as batch upserts via <tt>PUT /collections/{name}/points</tt>.
 
     This class uses a row-oriented buffer (list of point hashes) rather than the column-oriented buffer
     from the base class, because Qdrant point records contain list-valued fields (vectors) that would be
@@ -64,7 +64,7 @@ public class QdrantCollectionBulkOperation inherits DataProvider::AbstractDataPr
     }
 
     #! Queues a single record for bulk upsert
-    /** @param rec the record to queue; must contain `id` and `vector`, optionally `payload`
+    /** @param rec the record to queue; must contain <tt>id</tt> and <tt>vector</tt>, optionally <tt>payload</tt>
     */
     queueData(hash<auto> rec) {
         push row_buf, rec;

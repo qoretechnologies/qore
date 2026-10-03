@@ -110,7 +110,7 @@ public class EasyPostAddressInputType inherits HashDataType {
     }
 }
 
-#! Single verification error entry (element of `verifications.delivery.errors` / `verifications.zip4.errors`)
+#! Single verification error entry (element of <tt>verifications.delivery.errors</tt> / <tt>verifications.zip4.errors</tt>)
 public class EasyPostAddressVerificationErrorType inherits HashDataType {
     public {
         const Fields = {
@@ -129,7 +129,7 @@ public class EasyPostAddressVerificationErrorType inherits HashDataType {
     }
 }
 
-#! Verification details object (e.g. `verifications.delivery.details`)
+#! Verification details object (e.g. <tt>verifications.delivery.details</tt>)
 public class EasyPostAddressVerificationDetailsType inherits HashDataType {
     public {
         const Fields = {
@@ -147,7 +147,7 @@ public class EasyPostAddressVerificationDetailsType inherits HashDataType {
     }
 }
 
-#! Single address verification result (delivery or zip4 sub-object of `verifications`)
+#! Single address verification result (delivery or zip4 sub-object of <tt>verifications</tt>)
 public class EasyPostAddressVerificationResultType inherits HashDataType {
     public {
         const Fields = {
@@ -173,7 +173,7 @@ public class EasyPostAddressVerificationResultType inherits HashDataType {
     }
 }
 
-#! EasyPost address verifications object (`delivery` and `zip4` results)
+#! EasyPost address verifications object (<tt>delivery</tt> and <tt>zip4</tt> results)
 public class EasyPostAddressVerificationsType inherits HashDataType {
     public {
         const Fields = {

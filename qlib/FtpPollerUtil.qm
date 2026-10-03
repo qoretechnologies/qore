@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FtpPollerUtil.qm Qore user module providing definitions for the FtpPoller module
 
-/*  FtpPollerUtil.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  FtpPollerUtil.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -185,7 +185,7 @@ public hashdecl FtpPollerFileEventInfo {
     #! The relative date/time value giving the time taken to transfer the file
     date transfer_time;
 
-    #! Only included when `local_dir` is set; the target path for the file
+    #! Only included when <tt>local_dir</tt> is set; the target path for the file
     *string local_path;
 
     #! Remote status; one of @ref ftp_remote_status_constants

@@ -133,7 +133,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         #! stream to cancel. Ensures that a stream registered *after*
         #! @ref cancelActiveStreams() returns is also cancelled, which
         #! closes an unavoidable race on multiplexed transports where
-        #! `disconnect()` can be called before a background reader
+        #! <tt>disconnect()</tt> can be called before a background reader
         #! thread has acquired its stream handle. Cleared once the
         #! client no longer has any in-flight streams.
         bool m_cancel_pending = False;

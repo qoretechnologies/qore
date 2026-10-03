@@ -155,7 +155,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
     }
 
     #! Fetches all pages from a GET endpoint using cursor-based pagination
-    /** Constant Contact uses `_links.next.href` for cursor pagination.
+    /** Constant Contact uses <tt>_links.next.href</tt> for cursor pagination.
         The next link contains the full path with cursor query parameter.
 
         @param path the API path

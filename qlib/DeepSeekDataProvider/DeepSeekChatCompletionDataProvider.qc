@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the DeepSeekDataProvider module
 public namespace DeepSeekDataProvider {
-#! Data provider for the DeepSeek `/v1/chat/completions` endpoint
+#! Data provider for the DeepSeek <tt>/v1/chat/completions</tt> endpoint
 public class DeepSeekChatCompletionDataProvider inherits DeepSeekDataProviderCommon {
     public {
         #! Provider info
@@ -75,8 +75,8 @@ public class DeepSeekChatCompletionDataProvider inherits DeepSeekDataProviderCom
     }
 
     #! Makes a chat-completion request and returns the response
-    /** Converts DeepSeek's Unix-seconds `created` field on the response into
-        a Qore date to match the typed `*date` field in the response schema.
+    /** Converts DeepSeek's Unix-seconds <tt>created</tt> field on the response into
+        a Qore date to match the typed <tt>*date</tt> field in the response schema.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         DeepSeekApiDataProvider::validateGeneration(req);

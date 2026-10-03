@@ -53,17 +53,17 @@ module WeaviateRestClient {
     @section weaviaterestclientintro WeaviateRestClient Introduction
 
     The %WeaviateRestClient module provides a REST client for
-    [Weaviate](https://weaviate.io) — an open-source vector database —
-    and registers `weaviate` as a vector-store backend in
+    <a href="https://weaviate.io">Weaviate</a> — an open-source vector database —
+    and registers <tt>weaviate</tt> as a vector-store backend in
     @ref qoreragutilsintro "QoreRagUtils".
 
     @par REST vs GraphQL
 
     Weaviate has both a REST API and a GraphQL API.  Insert / delete
-    operations use REST (`/v1/objects`, `/v1/batch/objects`); near-vector
-    search uses GraphQL (`/v1/graphql`) since the REST API doesn't
+    operations use REST (<tt>/v1/objects</tt>, <tt>/v1/batch/objects</tt>); near-vector
+    search uses GraphQL (<tt>/v1/graphql</tt>) since the REST API doesn't
     expose vector search directly.  This module embeds a small inline
-    GraphQL string for the `search()` method — no GraphQL transport or
+    GraphQL string for the <tt>search()</tt> method — no GraphQL transport or
     builder library is added.
 
     @section WeaviateRestClientRelnotes Release Notes

@@ -2531,7 +2531,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         }
 
         #! Returns a poll operation for a REST request that the caller drives itself
-        /** Unlike @ref restDoRequestAsync(), the returned operation is **not** submitted to the async I/O
+        /** Unlike @ref restDoRequestAsync(), the returned operation is <b>not</b> submitted to the async I/O
             controller: the caller calls @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()"
             until @ref Qore::AbstractPollOperation::goalReached() "goalReached()", then reads the
             @ref RestClient::RestResponseInfo "RestResponseInfo" from
@@ -4703,8 +4703,8 @@ obs.observersReady();
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" which
         handles connection creation and reuse for all protocols:
 
-        - **HTTP/2 and HTTP/3**: requests are multiplexed over shared connections
-        - **HTTP/1.1**: the connection manager creates separate TCP connections for each
+        - <b>HTTP/2 and HTTP/3</b>: requests are multiplexed over shared connections
+        - <b>HTTP/1.1</b>: the connection manager creates separate TCP connections for each
           concurrent request (\c max_concurrent_streams=1), providing the same thread-safe
           concurrent access pattern without requiring per-thread RestClientIo instances
 

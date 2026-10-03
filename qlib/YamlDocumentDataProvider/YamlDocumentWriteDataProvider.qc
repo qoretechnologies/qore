@@ -170,7 +170,7 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
     #! Creates the provider from typed options
     /** @param options provider options
 
-        @throw YAML-WRITE-OPTION-ERROR if both `path` and `stream` are provided
+        @throw YAML-WRITE-OPTION-ERROR if both <tt>path</tt> and <tt>stream</tt> are provided
     */
     constructor(hash<YamlDocumentWriteDataProviderOptions> options) {
         if (exists options.path && exists options.stream) {

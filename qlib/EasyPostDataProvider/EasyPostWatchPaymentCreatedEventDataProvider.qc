@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `payment.created` webhook events
+#! Watches for <tt>payment.created</tt> webhook events
 /** Fired when a bank account or credit card is successfully charged. */
 public class EasyPostWatchPaymentCreatedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {

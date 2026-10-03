@@ -77,7 +77,7 @@ module TogetherDataProvider {
     @section togetherdataproviderintro TogetherDataProvider Introduction
 
     The %TogetherDataProvider module provides a data provider API for
-    [Together AI](https://www.together.ai) inference, files, training, evaluation, and infrastructure APIs.
+    <a href="https://www.together.ai">Together AI</a> inference, files, training, evaluation, and infrastructure APIs.
 
     The following data providers are exposed:
     - @ref TogetherDataProvider::TogetherDataProvider "TogetherDataProvider" — root

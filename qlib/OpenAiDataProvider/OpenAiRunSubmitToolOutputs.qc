@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiRunSubmitToolOutputsDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiRunSubmitToolOutputsDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
 /** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `responses/create` data provider; tool outputs are submitted as `function_call_output` input items on a follow-up request that sets `previous_response_id` instead
+    use the <tt>responses/create</tt> data provider; tool outputs are submitted as <tt>function_call_output</tt> input items on a follow-up request that sets <tt>previous_response_id</tt> instead
 */
 public class OpenAiRunSubmitToolOutputsDataProvider inherits OpenAiDataProviderCommon {
     public {

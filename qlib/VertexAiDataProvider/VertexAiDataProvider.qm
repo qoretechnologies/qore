@@ -140,12 +140,12 @@ module VertexAiDataProvider {
     The %VertexAiDataProvider module provides a
     @ref dataproviderintro "data provider" API for Google Vertex AI so
     Gemini chat completions and Gecko embeddings are discoverable from
-    `qctl`, the Qorus action catalog, and DPQL expressions.
+    <tt>qctl</tt>, the Qorus action catalog, and DPQL expressions.
 
     @par Provided children
 
-    - `/generate-content` — @ref VertexAiDataProvider::VertexAiGenerateContentDataProvider
-    - `/embed` — @ref VertexAiDataProvider::VertexAiEmbedDataProvider
+    - <tt>/generate-content</tt> — @ref VertexAiDataProvider::VertexAiGenerateContentDataProvider
+    - <tt>/embed</tt> — @ref VertexAiDataProvider::VertexAiEmbedDataProvider
 
     @par Factory
 

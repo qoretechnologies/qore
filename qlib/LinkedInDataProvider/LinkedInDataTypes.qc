@@ -27,7 +27,7 @@ public namespace LinkedInDataProvider {
 #! Static helpers shared by the LinkedIn providers
 public class LinkedInUtil {
     #! Converts a LinkedIn timestamp to a %Qore date
-    /** LinkedIn reports every timestamp as **milliseconds** since the epoch — \c publishedAt,
+    /** LinkedIn reports every timestamp as <b>milliseconds</b> since the epoch — \c publishedAt,
         \c createdAt, \c lastModifiedAt and \c downloadUrlExpiresAt are all 13-digit values.  Passing
         that integer through, as the TypeScript application this module replaces did, leaves every
         consumer to divide by 1000 and hope it guessed the unit right.
@@ -402,7 +402,7 @@ public const LinkedInCreatedPostDataType = new LinkedInCreatedPostDataType();
 #! A LinkedIn media asset (image or video)
 /** @note Deliberately limited to what an upload can actually report.  LinkedIn's asset resources
     also carry a processing status, download URL, duration and aspect ratio, but a token holding
-    only \c w_member_social is **write-only** on \c "/rest/images" and \c "/rest/videos" — reading
+    only \c w_member_social is <b>write-only</b> on \c "/rest/images" and \c "/rest/videos" — reading
     the asset back returns HTTP 403 on exactly the connections these actions are meant for.  Naming
     those fields here would promise output the actions can never produce.
 */

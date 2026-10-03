@@ -48,7 +48,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
 
         #! Common search options for all list/find collection providers
         /** Pagination, brief/count_total, and Search-endpoint filters
-            (`updated_after_utc`, `field_name`, `field_value`).
+            (<tt>updated_after_utc</tt>, <tt>field_name</tt>, <tt>field_value</tt>).
             Resource-specific id options are added per-collection.
         */
         const CommonSearchOptions = {
@@ -348,8 +348,8 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         return False;
     }
 
-    #! Formats a date value as an ISO 8601 UTC string for use with Insightly's `updated_after_utc`
-    /** @param d the date value (treated as UTC; Insightly accepts ISO 8601 with `Z` suffix)
+    #! Formats a date value as an ISO 8601 UTC string for use with Insightly's <tt>updated_after_utc</tt>
+    /** @param d the date value (treated as UTC; Insightly accepts ISO 8601 with <tt>Z</tt> suffix)
         @return a string in the form \c "YYYY-MM-DDTHH:mm:SSZ"
     */
     static string formatUtcIso8601(date d) {
@@ -388,8 +388,8 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         return params;
     }
 
-    #! Returns whether the search options require routing through Insightly's `/Search` endpoint
-    /** The `/Search` endpoint is required for any of \c field_name, \c field_value, or
+    #! Returns whether the search options require routing through Insightly's <tt>/Search</tt> endpoint
+    /** The <tt>/Search</tt> endpoint is required for any of \c field_name, \c field_value, or
         \c updated_after_utc filters; the plain list endpoint only supports pagination and
         \c brief / \c count_total.
     */
@@ -400,7 +400,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Runs a list/search request and returns a record iterator
-    /** Centralises the id-fetch, pagination, and `/Search`-endpoint routing logic so each
+    /** Centralises the id-fetch, pagination, and <tt>/Search</tt>-endpoint routing logic so each
         collection provider's \c searchRecordsImpl() boils down to a single call.
 
         @param resource the API resource path (e.g. \c "Contacts")
@@ -430,7 +430,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
             where_cond, search_options);
     }
 
-    #! Fetches records updated after the given timestamp via the `/Search` endpoint
+    #! Fetches records updated after the given timestamp via the <tt>/Search</tt> endpoint
     /** Used by polling watch providers; returns up to \a max_records records sorted by
         Insightly's default ordering. Falls back to the plain list endpoint if the
         \c /Search endpoint returns an error.
@@ -519,7 +519,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         }
     }
 
-    #! Returns parent records of the kind selected by `PARENT_TYPE` (cascading reference data)
+    #! Returns parent records of the kind selected by <tt>PARENT_TYPE</tt> (cascading reference data)
     /** @param action_opts must contain \c PARENT_TYPE set to one of:
         \c Contact, \c Lead, \c Opportunity, \c Organisation, \c Project
     */

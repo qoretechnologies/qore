@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
-#! Data type for SGLang `/flush_cache` responses
+#! Data type for SGLang <tt>/flush_cache</tt> responses
 public class SGLangFlushCacheResponseDataType inherits HashDataType {
     private {
         #! Field definitions
@@ -44,7 +44,7 @@ public class SGLangFlushCacheResponseDataType inherits HashDataType {
     }
 }
 
-#! Data provider for the SGLang `/flush_cache` administrative endpoint
+#! Data provider for the SGLang <tt>/flush_cache</tt> administrative endpoint
 /** Instructs the server to flush its KV cache.  Useful after switching workloads or
     to free memory.  Safe to call at any time; does not interrupt in-flight requests.
 */

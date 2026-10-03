@@ -531,7 +531,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Returns the URI-encoded value for the given query argument
-    /** Every reserved character in a query argument's **value** has to be escaped, or the value changes the
+    /** Every reserved character in a query argument's <b>value</b> has to be escaped, or the value changes the
         request rather than travelling in it: a space ends the request line, an \c "&" starts another
         argument, an \c "=" or a quote corrupts the one it is in.  A GitHub search for
         \c "qore language:qore" and a Xero filter of \c "Type==\"BANK\"" are both ordinary values that say
@@ -552,7 +552,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Returns the value for the given query argument
-    /** @note The value is returned as it travels, **not** URI-encoded; see @ref getUriArgValue().
+    /** @note The value is returned as it travels, <b>not</b> URI-encoded; see @ref getUriArgValue().
     */
     string getUriValue(auto v) {
         switch (v.typeCode()) {

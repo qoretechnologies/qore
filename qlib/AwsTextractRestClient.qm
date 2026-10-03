@@ -51,11 +51,11 @@ module AwsTextractRestClient {
     @section awstextractrestclientintro AwsTextractRestClient Introduction
 
     The %AwsTextractRestClient module provides an API for calling
-    [AWS Textract](https://aws.amazon.com/textract/) document-extraction
+    <a href="https://aws.amazon.com/textract/">AWS Textract</a> document-extraction
     REST services.
 
     AWS Textract uses an action-style JSON API: POST with body
-    `{"Document": {...}}` and an `X-Amz-Target` header naming the action
+    <tt>{"Document": {...}}</tt> and an <tt>X-Amz-Target</tt> header naming the action
     (\c Textract.DetectDocumentText, \c Textract.AnalyzeDocument, etc.).
     SigV4 signing is inherited from
     @ref awsrestclientintro "AwsRestClient", so the full AWS credential
@@ -65,10 +65,10 @@ module AwsTextractRestClient {
     and session token. AWS CLI profiles and SSO are not read directly: resolve those credentials
     with the CLI and provide them through the environment without logging their values.
 
-    Connection ping performs `ListAdapters` and requires `textract:ListAdapters`. Authentication
+    Connection ping performs <tt>ListAdapters</tt> and requires <tt>textract:ListAdapters</tt>. Authentication
     errors, permission denials, and malformed success responses fail the ping. Success does not
     prove permission for other Textract operations. Explicit endpoints are preserved; private
-    endpoints require the signing region. Otherwise the regional endpoint defaults to `us-east-1`.
+    endpoints require the signing region. Otherwise the regional endpoint defaults to <tt>us-east-1</tt>.
 
     The main classes are:
     - @ref AwsTextractRestClient::AwsTextractRestClient — sync REST client
@@ -177,7 +177,7 @@ public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection
     }
 
     #! Returns the associated application
-    /** @return `AwsTextract` */
+    /** @return <tt>AwsTextract</tt> */
     *string getAppName() { return "AwsTextract"; }
 
     string getType() {

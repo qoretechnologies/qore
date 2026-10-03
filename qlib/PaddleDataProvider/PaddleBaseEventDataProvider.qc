@@ -40,7 +40,7 @@ public namespace PaddleDataProvider {
     A webhook destination is a URL anyone can post to.  Without verification it would accept a fabricated
     \c transaction.completed - enough to make an integration provision a paid plan nobody paid for - or a
     fabricated \c subscription.canceled, enough to cut off a paying customer.  So a delivery whose signature
-    cannot be verified is **dropped**, and one that arrives before the destination has been created is
+    cannot be verified is <b>dropped</b>, and one that arrives before the destination has been created is
     dropped too; there is no configuration that turns this off.
 
     Paddle sends a \c Paddle-Signature header holding the time it signed at and an HMAC-SHA256 signature
@@ -48,7 +48,7 @@ public namespace PaddleDataProvider {
     a comma, and joined with a colon where Stripe uses a full stop.  The timestamp is checked against
     @ref ReplayTolerance so that a captured delivery cannot be replayed indefinitely.
 
-    @note The signature covers the **exact bytes** Paddle sent.  A body that has been parsed into a hash and
+    @note The signature covers the <b>exact bytes</b> Paddle sent.  A body that has been parsed into a hash and
     re-serialized is a different sequence of bytes, so a delivery that arrives already parsed cannot be
     verified and is dropped with an error saying so, rather than being accepted unchecked.
 

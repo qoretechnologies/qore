@@ -37,7 +37,7 @@ public namespace PaddleDataProvider {
 
     @section paddlerecord_nodelete Paddle Archives Rather Than Deletes
 
-    None of these entities can be deleted: a customer, a product or a price is **archived** by setting its
+    None of these entities can be deleted: a customer, a product or a price is <b>archived</b> by setting its
     \c status, which is an update.  So the tables support read, create and update, and no delete action is
     registered.  \c transactions and \c reports cannot be updated either - a transaction's lifecycle is
     Paddle's, and a report is produced once and then downloaded.
@@ -243,7 +243,7 @@ public class PaddleRecordTables {
         };
 
         #! The reports table's columns
-        /** Paddle describes a report as **one of seven models**, one per report type, so its listing has no
+        /** Paddle describes a report as <b>one of seven models</b>, one per report type, so its listing has no
             single element type to derive a record type from.  All seven declare the same eight properties
             and differ only in the values \c type takes and the shape of \c filters, so the columns are
             named here rather than left underived - a table with no columns would be worse than useless.

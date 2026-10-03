@@ -80,10 +80,10 @@ module RestSchemaDataProvider {
 
     @subsection restschemamdataprovider_v2_4 RestSchemaDataProvider v2.4
     - serialize OpenAPI parameter \c content before URI escaping, including JSON objects and arrays
-    - OpenAPI multipart binary request fields accept named `FileDataType` values without losing
+    - OpenAPI multipart binary request fields accept named <tt>FileDataType</tt> values without losing
       filename or media type metadata; existing raw binary inputs remain supported
     - preserve empty hashes, empty lists, zero, and false response bodies
-    - migrated from [RestClient](../../RestClient/html/index.html) (synchronous HTTP/1.x) to
+    - migrated from @ref restclientintro "RestClient" (synchronous HTTP/1.x) to
       @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as the
       default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent request
       multiplexing against REST servers, and uses

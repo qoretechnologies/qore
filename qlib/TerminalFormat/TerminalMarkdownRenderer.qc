@@ -27,16 +27,16 @@ public namespace TerminalFormat {
 
 #! Renders markdown text to ANSI-escaped terminal output
 /** Supports a practical subset of CommonMark:
-    - Headings (\c # through \c ###)
-    - Bold (\c **text**), italic (\c *text*), bold-italic (\c ***text***)
-    - Inline code (\c `code`)
-    - Fenced code blocks (\c ```)
-    - Unordered lists (\c - and \c *)
-    - Ordered lists (\c 1.)
-    - Blockquotes (\c >)
-    - Horizontal rules (\c ---)
-    - Pipe tables (\c | col1 | col2 |)
-    - Links (\c [text](url)) — rendered as \c text (url)
+    - Headings (<tt>#</tt> through <tt>###</tt>)
+    - Bold (<tt>**text**</tt>), italic (<tt>*text*</tt>), bold-italic (<tt>***text***</tt>)
+    - Inline code (<tt>`code`</tt>)
+    - Fenced code blocks (<tt>```</tt>)
+    - Unordered lists (<tt>-</tt> and <tt>*</tt>)
+    - Ordered lists (<tt>1.</tt>)
+    - Blockquotes (<tt>&gt;</tt>)
+    - Horizontal rules (<tt>---</tt>)
+    - Pipe tables (<tt>| col1 | col2 |</tt>)
+    - Links (<tt>[text](url)</tt>) — rendered as <tt>text (url)</tt>
 
     @par Example
     @code{.py}

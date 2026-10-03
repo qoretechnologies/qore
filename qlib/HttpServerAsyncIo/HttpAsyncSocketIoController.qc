@@ -1039,9 +1039,9 @@ public class HttpAsyncSocketIoController {
         on the client side.
 
         The udp_sock that runs QUIC's TLS 1.3 handshake holds its mutex
-        (`priv->m`) for long stretches during the packet-processing loop, so a
-        live `setCertificate()` on it would serialize behind the QUIC server
-        poll operation and block the caller for the entire `quic_drain_timeout`
+        (<tt>priv-&gt;m</tt>) for long stretches during the packet-processing loop, so a
+        live <tt>setCertificate()</tt> on it would serialize behind the QUIC server
+        poll operation and block the caller for the entire <tt>quic_drain_timeout</tt>
         window.  Instead, this method:
           1. Cancels the in-flight Http3ServerPollOperation (which releases the
              udp_sock mutex)

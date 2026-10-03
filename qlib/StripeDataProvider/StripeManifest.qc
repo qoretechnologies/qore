@@ -37,7 +37,7 @@ public namespace StripeDataProvider {
     The overlay was re-derived against the current schema rather than carried over from the TypeScript
     application it replaces, which had two defects worth recording so they are not reintroduced:
 
-    - Stripe's timestamps are marked \c "format": \c "unix-time" and are counts of **seconds**; the previous
+    - Stripe's timestamps are marked \c "format": \c "unix-time" and are counts of <b>seconds</b>; the previous
       overlay presented several of them as milliseconds, which is wrong by a factor of 1000.  Every one of
       them is listed here with @ref RestSchemaActions::RestSchemaActionCodecs::UnixSeconds "UnixSeconds", so
       a user supplies a date and the conversion happens once, in one place.

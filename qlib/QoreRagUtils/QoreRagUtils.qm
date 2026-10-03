@@ -442,7 +442,7 @@ RagPipeline pipe(
         4. When a reranker is configured, the vector-search K is
            @ref RagPipelineOptions::pre_rerank_top_k "pre_rerank_top_k"
            (when set) or \c initial_retrieval_k (the default); the reranker
-           is always fed the **original** \a query, not the transformer
+           is always fed the <b>original</b> \a query, not the transformer
            output, to keep score semantics stable.
     */
     list<hash<RetrievalHit>> retrieve(string query, *int k, *hash<auto> filter) {

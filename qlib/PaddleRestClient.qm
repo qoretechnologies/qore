@@ -51,7 +51,7 @@ module PaddleRestClient {
     @section paddlerestclientintro PaddleRestClient Introduction
 
     The %PaddleRestClient module provides an API for calling
-    [Paddle](https://www.paddle.com)'s REST API services.  Paddle is a merchant of record for
+    <a href="https://www.paddle.com">Paddle</a>'s REST API services.  Paddle is a merchant of record for
     software businesses: it sells on your behalf and therefore handles payment processing, sales
     tax and invoicing itself.
 
@@ -86,7 +86,7 @@ module PaddleRestClient {
     |\c "sandbox-api"|Sandbox (the default)|\c https://sandbox-api.paddle.com
 
     The URL is derived from \c instance_type rather than taken from the API description.  Paddle's
-    OpenAPI description lists **sandbox first** in its \c servers array, so a client that adopted
+    OpenAPI description lists <b>sandbox first</b> in its \c servers array, so a client that adopted
     the schema's first server would quietly talk to sandbox in production.
 
     @par Example:
@@ -151,7 +151,7 @@ public class PaddleRestClientBase {
         const DefaultPingMethod = "GET";
 
         #! Default ping path
-        /** Listing event types is the only authenticated read Paddle offers that requires **no**
+        /** Listing event types is the only authenticated read Paddle offers that requires <b>no</b>
             permissions at all (\c "x-permissions": \c []), so a ping succeeds for any valid key,
             however narrowly it is scoped, and fails only when the key itself is not accepted.
         */
@@ -387,7 +387,7 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
 
     #! Returns the config hash with the URL derived from the instance type
     /** The environment is the connection's defining property, so the URL follows from it rather
-        than being configured separately: Paddle's API description lists **sandbox first** in its
+        than being configured separately: Paddle's API description lists <b>sandbox first</b> in its
         \c servers array, and a URL configured independently of \c instance_type can disagree with
         it, which would send production traffic to sandbox or the reverse without any error.
     */

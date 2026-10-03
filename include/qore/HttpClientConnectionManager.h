@@ -416,7 +416,7 @@ public:
     DLLEXPORT bool hasProtocolInPool(HttpClientProtocol proto) const;
 
     //! Returns true if a connection of @a proto was ever added to the pool.
-    /** Sticky across pool eviction.  `hasProtocolInPool()` reports only
+    /** Sticky across pool eviction.  <tt>hasProtocolInPool()</tt> reports only
         live pool contents, so a short-lived H2 response where the server
         closes the connection after sending the body (e.g. the
         @c Http2.qtest poll test's server does @c client.close() right

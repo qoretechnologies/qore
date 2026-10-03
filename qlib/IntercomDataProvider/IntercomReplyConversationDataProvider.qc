@@ -133,12 +133,12 @@ public class IntercomReplyConversationRequestDataType inherits HashDataType {
 }
 
 #! Replies to a conversation as a teammate
-/** This action is **hand-written rather than generated**, and it is the only one in this application that
+/** This action is <b>hand-written rather than generated</b>, and it is the only one in this application that
     is.  Intercom declares the reply body as
     \c "oneOf: [contact_reply_conversation_request, admin_reply_conversation_request]", and the first of
     those is itself a \c oneOf of three more.  An action has exactly one option shape, so a union of five
     request contracts cannot be published as one: the generated action came out with the conversation ID
-    and **no way to supply the reply at all**.
+    and <b>no way to supply the reply at all</b>.
 
     The rule that decides this is that the schema must be able to describe the action the application
     means.  Here it can - \c admin_reply_conversation_request describes a teammate's reply exactly - and
@@ -147,7 +147,7 @@ public class IntercomReplyConversationRequestDataType inherits HashDataType {
 
     @section intercomreply_scope What This Action Covers
 
-    A reply **from a teammate**, which is what the application this module replaces sent and the only
+    A reply <b>from a teammate</b>, which is what the application this module replaces sent and the only
     branch Intercom's description declares in full.  The contact-reply branches declare an identity and an
     attachment list and nothing else - no \c body, no \c message_type - so publishing them would mean
     guessing at a request contract rather than reproducing a documented one.  A contact reply is reachable
@@ -162,7 +162,7 @@ public class IntercomReplyConversationRequestDataType inherits HashDataType {
     |\c note|an internal remark on the conversation; the contact never sees it
     |\c quick_reply|a reply offering the contact a set of \c reply_options to choose from
 
-    A \c note here and a **Create Note** on the contact are different things: this one is attached to the
+    A \c note here and a <b>Create Note</b> on the contact are different things: this one is attached to the
     conversation, that one to the contact's record.
 */
 public class IntercomReplyConversationDataProvider inherits DataProvider::AbstractDataProvider {

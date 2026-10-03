@@ -122,7 +122,7 @@ module FireworksDataProvider {
     @section fireworksdataproviderintro FireworksDataProvider Introduction
 
     The %FireworksDataProvider module provides a data provider API for
-    [Fireworks AI](https://fireworks.ai) hosted model inference.
+    <a href="https://fireworks.ai">Fireworks AI</a> hosted model inference.
 
     The following data providers are exposed:
     - @ref FireworksDataProvider::FireworksDataProvider "FireworksDataProvider" — root

@@ -45,8 +45,8 @@ public namespace GitLabDataProvider {
 
     @section gitlabrecord_iid The Identity Is Usually the Internal ID
 
-    An issue and a merge request each carry GitLab's global \c id and the \c iid that identifies it **within
-    its project**, and every endpoint that reads or changes one takes the \c iid.  So that is what a record is
+    An issue and a merge request each carry GitLab's global \c id and the \c iid that identifies it <b>within
+    its project</b>, and every endpoint that reads or changes one takes the \c iid.  So that is what a record is
     addressed by here, and \c iids is the listing argument a search on it is sent to.
 
     A CI variable is addressed by its \c key, a branch by its name, a wiki page by its \c slug and a member by
@@ -54,7 +54,7 @@ public namespace GitLabDataProvider {
 
     @section gitlabrecord_type GitLab Declares a Collection as One Entity
 
-    GitLab's published description declares the 200 response of every listing it exports as a **single**
+    GitLab's published description declares the 200 response of every listing it exports as a <b>single</b>
     entity - \c APIEntitiesIssue rather than an array of it - though the body it returns is an array.  That
     is an upstream defect, and it is why these tables derive their record type from the response's own fields
     rather than from an element type there is none of.  Nothing else depends on it: the body really is an

@@ -30,15 +30,15 @@ public namespace GoogleDriveDataProvider {
     the application's request/response actions.
 
     Two things this gains over the declarative application file API:
-    - **writing does not buffer the file.**
+    - <b>writing does not buffer the file.</b>
       @ref getOutputStreamImpl() "getOutputStreamForLocation()" drives a Drive resumable upload from the
       stream itself, sending each chunk as it is written, so a file larger than memory can be written
-    - **reading does not inflate the file.**  The bytes arrive as the response body rather than base64-encoded
+    - <b>reading does not inflate the file.</b>  The bytes arrive as the response body rather than base64-encoded
       into a JSON field, so nothing is encoded, buffered, and decoded again
 
     @par Addressing a file
     Drive addresses a file by an immutable ID rather than by path, so a read location is a file ID.  A write
-    location is a **name**, since the file being written does not exist yet; the folder to create it in comes
+    location is a <b>name</b>, since the file being written does not exist yet; the folder to create it in comes
     from the \c container option, and without one the user's \c "My Drive" root is used.
 */
 public class GoogleDriveFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
@@ -121,7 +121,7 @@ public class GoogleDriveFileLocationHandler inherits FileLocationHandler::Abstra
     }
 
     #! Writes data to a file at the given location
-    /** @note the location is the **name** for the new file rather than a file ID: a write creates a file, and
+    /** @note the location is the <b>name</b> for the new file rather than a file ID: a write creates a file, and
         the ID only exists afterwards
     */
     private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {

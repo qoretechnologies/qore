@@ -49,13 +49,13 @@ class QoreObject;
 /** This class implements the connection state machine (CONNECTING, READY,
     DRAINING, CLOSED) entirely in C++, enabling:
 
-    1. **I/O thread safety**: onConnectionReady() is pure C++ — no Qore
+    1. <b>I/O thread safety</b>: onConnectionReady() is pure C++ — no Qore
        interpreter involvement on the I/O thread (no Mutex, no evalMethod).
 
-    2. **Lock-free state reads**: isReady(), isClosed(), isDraining() use
+    2. <b>Lock-free state reads</b>: isReady(), isClosed(), isDraining() use
        atomic loads — no lock contention from app threads.
 
-    3. **DGC-visible ownership**: Poll ops store the connection in a Qore
+    3. <b>DGC-visible ownership</b>: Poll ops store the connection in a Qore
        internal_members slot (DGC can follow the ref) and keep only a raw
        C++ pointer to this priv data for I/O-thread calls.
 
@@ -174,7 +174,7 @@ public:
 
     //! True if the connection was ever ready (i.e., the connect handshake completed)
     /** Latched on the CONNECTING → READY transition by @ref onConnectionReady; never
-        cleared.  Lets a `startPollConnect` caller distinguish "connect succeeded but
+        cleared.  Lets a <tt>startPollConnect</tt> caller distinguish "connect succeeded but
         peer closed quickly" (success) from "connect failed before ever readying"
         (failure) when racing with @ref setClosed.
 

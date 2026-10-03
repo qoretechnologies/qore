@@ -64,7 +64,7 @@ module QoreSpeechUtils {
     @ref QoreSpeechUtils::TranscriberConfig::backend and
     @ref QoreSpeechUtils::SynthesizerConfig::backend.  The registry lazy-loads the
     providing module on first lookup, so callers do not need to
-    `%requires` every provider module up front.
+    <tt>&#37;requires</tt> every provider module up front.
 
     @par Example: transcribe via Deepgram, synthesize via Deepgram
 

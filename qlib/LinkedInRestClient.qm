@@ -52,7 +52,7 @@ module LinkedInRestClient {
     @section linkedinrestclientintro LinkedInRestClient Introduction
 
     The %LinkedInRestClient module provides an API for calling
-    [LinkedIn REST API](https://learn.microsoft.com/en-us/linkedin/) services.
+    <a href="https://learn.microsoft.com/en-us/linkedin/">LinkedIn REST API</a> services.
 
     To use this module, use \c "%requires LinkedInRestClient" in your code.
 
@@ -71,8 +71,8 @@ module LinkedInRestClient {
 
     @section linkedinrestclient_profiles One Client, Two API Profiles
 
-    LinkedIn serves its member APIs and its Pages Data Portability (DMA) APIs from **one host**
-    (\c https://api.linkedin.com) through **one OAuth2 flow**
+    LinkedIn serves its member APIs and its Pages Data Portability (DMA) APIs from <b>one host</b>
+    (\c https://api.linkedin.com) through <b>one OAuth2 flow</b>
     (\c https://www.linkedin.com/oauth/v2/authorization and \c /accessToken).  The two differ in
     exactly three things: the scopes they request, what a meaningful ping is, and which version
     series their \c LinkedIn-Version header belongs to.
@@ -82,9 +82,9 @@ module LinkedInRestClient {
     \c api_profile option, so there is one client and one OAuth2 implementation.  Duplicating the
     LinkedIn OAuth2 layer across two client modules would mean fixing every LinkedIn auth bug twice.
 
-    The two connection classes are **siblings**: they share
+    The two connection classes are <b>siblings</b>: they share
     @ref LinkedInRestClient::LinkedInRestConnectionBase "LinkedInRestConnectionBase", which
-    deliberately declares **no** \c DefaultUrl constant.  A %Qore constant reference resolves
+    deliberately declares <b>no</b> \c DefaultUrl constant.  A %Qore constant reference resolves
     lexically, at parse time, to the constant of the class whose body contains it — it does not
     dispatch on the subclass — so a hierarchy in which a subclass shadows \c DefaultUrl silently
     feeds the base class's URL to every inherited reader, including the one that persists corrected
@@ -93,7 +93,7 @@ module LinkedInRestClient {
     @section linkedinrestclient_versions API Versions
 
     LinkedIn versions its APIs with a \c LinkedIn-Version request header in \c YYYYMM form, and
-    **does not** default to the latest: a missing or sunset version header is an error.  There are
+    <b>does not</b> default to the latest: a missing or sunset version header is an error.  There are
     two independent version series, and a value from one is not valid in the other:
 
     |!Series|!Used by|!Constant|!Cadence
@@ -171,7 +171,7 @@ public hash<auto> sub linkedin_api_headers(string path, string version, *hash<au
 }
 
 #! Converts a LinkedIn timestamp to a %Qore date
-/** LinkedIn reports every timestamp as **milliseconds** since the epoch — \c publishedAt,
+/** LinkedIn reports every timestamp as <b>milliseconds</b> since the epoch — \c publishedAt,
     \c createdAt, \c lastModifiedAt, \c downloadUrlExpiresAt and the \c time of an audit stamp are
     all 13-digit values.  Passing that integer through leaves every consumer to divide by 1000 and
     hope it guessed the unit right.
@@ -216,7 +216,7 @@ public string sub linkedin_encode_urn(string urn) {
 
 #! Builds a Rest.li \c "List(...)" value from a list of URNs
 /** Rest.li 2.0 batch requests take their IDs as \c "List(a,b,c)" where each element is
-    percent-encoded but the parentheses and the separating commas are **not** — encoding them
+    percent-encoded but the parentheses and the separating commas are <b>not</b> — encoding them
     addresses a different resource, and LinkedIn rejects the request.
 
     @param urns the URNs, used verbatim
@@ -315,7 +315,7 @@ public class LinkedInRestClientBase {
             to.  A profile carries that difference, which is why there is one client class rather
             than two.
 
-            Profile values are **defaults, not overrides**: an option the caller set explicitly
+            Profile values are <b>defaults, not overrides</b>: an option the caller set explicitly
             always wins.
         */
         const ApiProfiles = {
@@ -540,11 +540,11 @@ public class LinkedInRestClientIo inherits RestClientIo::RestClientIo, LinkedInR
 }
 
 #! Common base class for the LinkedIn connection classes
-/** @note This class deliberately declares **no** \c DefaultUrl constant.  A %Qore constant
-    reference is resolved **lexically**, at parse time, to the constant of the class whose body
+/** @note This class deliberately declares <b>no</b> \c DefaultUrl constant.  A %Qore constant
+    reference is resolved <b>lexically</b>, at parse time, to the constant of the class whose body
     contains it; it does not dispatch on the subclass.  A hierarchy in which a subclass shadows
     \c DefaultUrl therefore feeds the base class's value to every inherited reader — including
-    @ref setUpdateOptionsCode(), which writes corrected options **back to the configuration store**,
+    @ref setUpdateOptionsCode(), which writes corrected options <b>back to the configuration store</b>,
     so the wrong URL is persisted and survives restarts.
 
     With the constant declared only by the leaf classes, and read here through the virtual

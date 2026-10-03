@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
-#! Data type for SGLang `/get_server_info` responses
+#! Data type for SGLang <tt>/get_server_info</tt> responses
 /** The SGLang server exposes a grab-bag of configuration and runtime metadata via
     this endpoint.  The specific fields returned vary by SGLang version and launch
     configuration, so every field here is optional.
@@ -99,7 +99,7 @@ public class SGLangServerInfoResponseDataType inherits HashDataType {
     }
 }
 
-#! Data provider for the SGLang `/get_server_info` administrative endpoint
+#! Data provider for the SGLang <tt>/get_server_info</tt> administrative endpoint
 /** This action takes no input; the response is the server's current runtime and
     configuration snapshot.  Useful for health checks, configuration validation,
     and debugging deployment drift.

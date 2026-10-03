@@ -214,7 +214,7 @@ public hashdecl DataProviderTypeOptionInfo {
     #! the description of the option
     string desc;
 
-    #! Flag to publish the option as a `type_option`
+    #! Flag to publish the option as a <tt>type_option</tt>
     bool publish;
 }
 

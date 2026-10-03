@@ -48,7 +48,7 @@
         QoreProgram* pgm = qore_create_program(
             PO_NEW_STYLE | PO_STRICT_ARGS);
 
-        // 3. Register every `.qoa` linked into the host.
+        // 3. Register every <tt>.qoa</tt> linked into the host.
         qore_qoa_register_all(pgm);
 
         // 4. Drive Qore functions by name (optional).
@@ -61,7 +61,7 @@
     The C ABI is deliberately narrow and intentionally the only
     supported way to drive Qore from inside another binary: it keeps
     the contract stable across Qore minor versions that may otherwise
-    rearrange the C++ `QoreProgram` class internals.
+    rearrange the C++ <tt>QoreProgram</tt> class internals.
 
     AOT artifact registration.
 */
@@ -83,36 +83,36 @@ extern "C" {
 #endif
 
 //! Create a fresh QoreProgram with the given parse options.
-/** Thin C wrapper around `new QoreProgram(parse_options)`.  The
-    returned handle is opaque — hosts should treat it as a `void*`
-    passed back to `qore_destroy_program` / `qore_run_callable` /
-    `qore_qoa_register_all`.
+/** Thin C wrapper around <tt>new QoreProgram(parse_options)</tt>.  The
+    returned handle is opaque — hosts should treat it as a <tt>void*</tt>
+    passed back to <tt>qore_destroy_program</tt> / <tt>qore_run_callable</tt> /
+    <tt>qore_qoa_register_all</tt>.
 
-    @param parse_options bit-OR of `PO_*` parse option flags (low
-            64 bits).  Typical: `PO_NEW_STYLE | PO_STRICT_ARGS` for a
+    @param parse_options bit-OR of <tt>PO_*</tt> parse option flags (low
+            64 bits).  Typical: <tt>PO_NEW_STYLE | PO_STRICT_ARGS</tt> for a
             modern-Qore program.  Use 0 for the defaults.
     @return a new QoreProgram, or NULL if libqore has not been
-            initialized (i.e. `qore_init` was never called).  The
+            initialized (i.e. <tt>qore_init</tt> was never called).  The
             caller owns the returned pointer and must call
-            `qore_destroy_program` exactly once.
+            <tt>qore_destroy_program</tt> exactly once.
  */
 DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options);
 
 //! Create a fresh QoreProgram with the full 128-bit parse options
 /** Like @ref qore_create_program(), but also takes the high 64 bits, which hold the extended parse options that
-    `qore_create_program()` cannot express.  `qcc` link mode uses it to create the Program with the parse options its
-    `.qo` inputs were compiled with.
+    <tt>qore_create_program()</tt> cannot express.  <tt>qcc</tt> link mode uses it to create the Program with the parse options its
+    <tt>.qo</tt> inputs were compiled with.
 
-    @param parse_options_lo the low 64 bits of the parse options (the `PO_*` flags)
+    @param parse_options_lo the low 64 bits of the parse options (the <tt>PO_*</tt> flags)
     @param parse_options_hi the high 64 bits of the parse options (the extended options)
     @return a new QoreProgram, or NULL if libqore has not been initialized; the caller owns the returned pointer and
-            must call `qore_destroy_program` exactly once
+            must call <tt>qore_destroy_program</tt> exactly once
 
     @since %Qore 3.0
  */
 DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t parse_options_hi);
 
-//! Destroy a QoreProgram created by `qore_create_program`.
+//! Destroy a QoreProgram created by <tt>qore_create_program</tt>.
 /** Blocks until all threads running in the program have terminated
     and then frees the program.  Safe to pass NULL (no-op).  Any
     exception raised during teardown is reported to stderr; there is
@@ -124,27 +124,27 @@ DLLEXPORT QoreProgram* qore_create_program_ext(int64_t parse_options_lo, int64_t
 DLLEXPORT void qore_destroy_program(QoreProgram* pgm);
 
 //! Forward declaration for the AOT function descriptor carried by a
-//! `.qo`-produced glue object.  Full layout lives in
-//! `qore/intern/QoreAOT.h`; public hosts only need it as an opaque
-//! pointer type passed straight through to `qore_aot_script_register`.
+//! <tt>.qo</tt>-produced glue object.  Full layout lives in
+//! <tt>qore/intern/QoreAOT.h</tt>; public hosts only need it as an opaque
+//! pointer type passed straight through to <tt>qore_aot_script_register</tt>.
 struct QoreAOTFunc;
 
-//! Register a script-context `.qo`'s contents into a QoreProgram.
-/** Called by the glue object that `qcc -o OUTPUT` emits for a
+//! Register a script-context <tt>.qo</tt>'s contents into a QoreProgram.
+/** Called by the glue object that <tt>qcc -o OUTPUT</tt> emits for a
     script-style application.  Deserializes the
     given metadata blob into the target program's namespace tree
     (classes, typedefs, hashdecls, enums, constants, globals,
     functions, methods — public AND non-public), then wires
     pre-compiled function pointers via the supplied descriptor array.
 
-    Unlike `qore_qoa_register_all` (module archive), this is
+    Unlike <tt>qore_qoa_register_all</tt> (module archive), this is
     NOT a module registration: no entry is added to the module map,
-    no shadow program is created, no `%requires` bookkeeping runs.
+    no shadow program is created, no <tt>&#37;requires</tt> bookkeeping runs.
     The contents land directly on @p tpgm as if they had been parsed
     from source.
 
-    Hosts calling this from a custom `main()` typically:
-    ```c
+    Hosts calling this from a custom <tt>main()</tt> typically:
+    @code{.cpp}
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
     extern const QoreAOTFunc my_script_funcs[];
     extern const int my_script_num_funcs;
@@ -153,10 +153,10 @@ struct QoreAOTFunc;
     qore_aot_script_register(pgm, my_script_metadata,
         my_script_metadata_len, "my_script", my_script_funcs,
         my_script_num_funcs);
-    ```
+    @endcode
 
     @param tpgm the target program (created e.g. via qore_create_program)
-    @param metadata serialized `QoreAOTBinary` blob; blobs embedded in the same binary image as @p functions
+    @param metadata serialized <tt>QoreAOTBinary</tt> blob; blobs embedded in the same binary image as @p functions
         must remain immutable and that image must stay mapped while the registered code is in use. Other
         buffers are copied as needed and may be released after registration (after end_batch in batch mode).
     @param metadata_len byte length of @p metadata
@@ -174,26 +174,26 @@ DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 //! Begin a batch of deferred script registrations on @p tpgm for
 //! order-independent artifact registration.
 /**
-    Between `qore_aot_script_begin_batch(pgm)` and
-    `qore_aot_script_end_batch(pgm)`, every call to
-    `qore_aot_script_register(pgm, …)` only stashes the blob and its
+    Between <tt>qore_aot_script_begin_batch(pgm)</tt> and
+    <tt>qore_aot_script_end_batch(pgm)</tt>, every call to
+    <tt>qore_aot_script_register(pgm, …)</tt> only stashes the blob and its
     function table. No metadata is deserialized yet, and no
     function-pointer registration or init-expression execution runs.
 
-    `qore_aot_script_end_batch(pgm)` flushes the batch: replays all
-    serialized `%module-cmd` directives first, deserializes every
+    <tt>qore_aot_script_end_batch(pgm)</tt> flushes the batch: replays all
+    serialized <tt>&#37;module-cmd</tt> directives first, deserializes every
     blob's declaration shells, runs one cross-blob resolution pass
     (so inheritance between classes from different blobs resolves
     regardless of register call order), then registers pre-compiled
     function pointers and runs init expressions for every accumulated
     blob.
 
-    Use when the host wants **order-independent registration** of
-    a set of `.qo`s — e.g. when several `.qo`s may inherit from or
+    Use when the host wants <b>order-independent registration</b> of
+    a set of <tt>.qo</tt>s — e.g. when several <tt>.qo</tt>s may inherit from or
     reference types in their siblings, and the host would rather
     not maintain a topological call order.
 
-    Without begin/end_batch, each `qore_aot_script_register` call
+    Without begin/end_batch, each <tt>qore_aot_script_register</tt> call
     is self-contained: phase 1 + phase 2 + registration + init run
     immediately.  That mode works but requires the host to call
     register fns in dependency order (matching Qore's module load
@@ -209,7 +209,7 @@ DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm);
 
 //! Flush a batch of deferred script registrations.
-//! See `qore_aot_script_begin_batch` for the semantics.
+//! See <tt>qore_aot_script_begin_batch</tt> for the semantics.
 //!
 //! @return 0 on success (including the no-batch-active case),
 //!         non-zero if resolution or registration fails.  Errors
@@ -224,16 +224,16 @@ DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm);
     @ref ExceptionSink::handleExceptions "ExceptionSink::handleExceptions()" path.
 
     This is the minimum useful callable to drive a loaded
-    `.qoa`-backed program — sufficient for the typical host pattern
+    <tt>.qoa</tt>-backed program — sufficient for the typical host pattern
     of "register modules, call one entry function, let Qore take
     over."  Hosts that need richer interop (return values, structured
     errors, multiple calls from the same thread) should use the C++
-    `QoreProgram` API directly.
+    <tt>QoreProgram</tt> API directly.
 
-    @param pgm a non-NULL QoreProgram created by `qore_create_program`.
+    @param pgm a non-NULL QoreProgram created by <tt>qore_create_program</tt>.
     @param fn_name the fully-qualified function name as it appears in
-            the Qore source (e.g., `"start_main_loop"` or
-            `"My::Namespace::init"`).
+            the Qore source (e.g., <tt>"start_main_loop"</tt> or
+            <tt>"My::Namespace::init"</tt>).
     @param args zero-arg invocation if NULL, else a QoreListNode
             whose elements become positional arguments.  Ownership
             is not transferred.
@@ -247,15 +247,15 @@ DLLEXPORT int qore_run_callable(QoreProgram* pgm, const char* fn_name,
 //! Parse a Qore source file into a program.
 /** Thin C wrapper around @ref QoreProgram::parse "QoreProgram::parse(FILE*, label, xsink)".
     The file is read and parsed but not committed — call
-    `qore_parse_commit` when the final source has been staged.
-    Multiple `qore_parse_source_*` calls may be chained before a
-    single `qore_parse_commit`.
+    <tt>qore_parse_commit</tt> when the final source has been staged.
+    Multiple <tt>qore_parse_source_*</tt> calls may be chained before a
+    single <tt>qore_parse_commit</tt>.
     @param pgm a non-NULL QoreProgram.
     @param path filesystem path to a Qore source file.
     @param label diagnostic label for error messages; if NULL the
             path is used.
     @return 0 on success; non-zero on parse error (consult
-            `qore_last_error` for details).
+            <tt>qore_last_error</tt> for details).
  */
 DLLEXPORT int qore_parse_source_file(QoreProgram* pgm, const char* path,
         const char* label);
@@ -264,8 +264,8 @@ DLLEXPORT int qore_parse_source_file(QoreProgram* pgm, const char* path,
 /** Thin C wrapper around @ref QoreProgram::parse "QoreProgram::parse(source, label, xsink)".
     Use when the host already has source in memory (embedded scripts,
     REPL input, etc.).  Same staging semantics as
-    `qore_parse_source_file`: multiple parses can be chained before
-    `qore_parse_commit`.
+    <tt>qore_parse_source_file</tt>: multiple parses can be chained before
+    <tt>qore_parse_commit</tt>.
     @param pgm a non-NULL QoreProgram.
     @param source pointer to a NUL-terminated Qore source string.
     @param label diagnostic label for error messages; if NULL a
@@ -277,8 +277,8 @@ DLLEXPORT int qore_parse_source_string(QoreProgram* pgm,
 
 //! Commit all staged parses into the program.
 /** Resolves and validates every namespace, class, and function
-    staged by prior `qore_parse_source_*` calls, making them
-    runnable.  Must be called before `qore_run_callable` can
+    staged by prior <tt>qore_parse_source_*</tt> calls, making them
+    runnable.  Must be called before <tt>qore_run_callable</tt> can
     dispatch to newly-parsed functions.
     @param pgm a non-NULL QoreProgram.
     @return 0 on success; non-zero on parse-commit error.
@@ -287,7 +287,7 @@ DLLEXPORT int qore_parse_commit(QoreProgram* pgm);
 
 //! Retrieve the last parse / runtime error message for a program.
 /** Captures the exception text produced by the most recent
-    `qore_parse_source_*` / `qore_parse_commit` / `qore_run_callable`
+    <tt>qore_parse_source_*</tt> / <tt>qore_parse_commit</tt> / <tt>qore_run_callable</tt>
     call on @p pgm from the caller's thread.  Valid until the next
     call that produces an error, the program is destroyed, or the
     thread exits.  Returns NULL if no error has been recorded.

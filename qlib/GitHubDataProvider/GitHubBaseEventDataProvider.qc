@@ -34,17 +34,17 @@ public namespace GitHubDataProvider {
     it is sent - a fabricated \c "pull request merged" or \c "release published" is enough to make an
     automation deploy code that was never written.
 
-    So this provider creates every hook with a **shared secret**, generated per subscription from
+    So this provider creates every hook with a <b>shared secret</b>, generated per subscription from
     @ref Qore::get_random_bytes() "get_random_bytes()", and drops any delivery whose
     \c X-Hub-Signature-256 header does not verify against it.  A delivery arriving before the hook has been
     created is dropped too, because there is nothing to verify it against, and there is no option that turns
     the check off.
 
-    **This is the part of the port that is not parity.** The application this module replaces registered its
+    <b>This is the part of the port that is not parity.</b> The application this module replaces registered its
     hooks with no \c config.secret at all, so GitHub sent no signature and none could be checked: every one
     of its triggers would fire on anything posted to its endpoint by anyone who learned the URL.
 
-    @note The signature covers the **exact bytes** GitHub sent.  A body that has been parsed into a hash and
+    @note The signature covers the <b>exact bytes</b> GitHub sent.  A body that has been parsed into a hash and
     re-serialized is a different sequence of bytes - key order, whitespace and number formatting all
     differ - so a delivery that arrives already parsed cannot be verified and is dropped with an error
     saying so, rather than being accepted unchecked.
@@ -54,7 +54,7 @@ public namespace GitHubDataProvider {
     A GitHub webhook is registered on one repository, so \c owner and \c repo are required options rather
     than connection settings.  They are checked in
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()" rather than in the
-    constructor, because the provider is constructed as a **template** when the application's children are
+    constructor, because the provider is constructed as a <b>template</b> when the application's children are
     enumerated - before anyone has chosen a repository - and a constructor that threw then would make the
     event unlistable.
 

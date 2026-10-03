@@ -78,14 +78,14 @@ class AsyncRace {
 #! Unified connection pool manager with protocol auto-selection
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
-    - **Protocol auto-selection**: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
+    - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
       preferring HTTP/3 when available
-    - **Connection pooling**: Reuse connections across requests
-    - **Load balancing**: Distribute streams across connections
-    - **Automatic connection creation**: Create new connections as needed
-    - **Idle timeout handling**: Close idle connections
-    - **GOAWAY handling**: Graceful connection shutdown
-    - **Connection migration**: QUIC connection migration for HTTP/3
+    - <b>Connection pooling</b>: Reuse connections across requests
+    - <b>Load balancing</b>: Distribute streams across connections
+    - <b>Automatic connection creation</b>: Create new connections as needed
+    - <b>Idle timeout handling</b>: Close idle connections
+    - <b>GOAWAY handling</b>: Graceful connection shutdown
+    - <b>Connection migration</b>: QUIC connection migration for HTTP/3
 
     @par Basic Usage (auto protocol selection)
     @code{.py}

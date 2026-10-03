@@ -890,7 +890,7 @@ const list<string> Suffixes = ("th", "st", "nd", "rd", "th", "th", "th", "th", "
     normalized to UTF-8 once at entry; bracket/quote/placeholder tokens
     are all ASCII so byte-wise compares are correct.  Multi-byte UTF-8
     inside quoted/bracket bodies is preserved byte-for-byte through the
-    `str += chr(b)` accumulator (matches the original char-at-a-time
+    <tt>str += chr(b)</tt> accumulator (matches the original char-at-a-time
     concat semantics for any UTF-8 source). */
 list<hash> sub scan_exp(string arg) {
     if (arg.encoding() != "UTF-8") {
@@ -2929,7 +2929,7 @@ public class TerminalColor {
     }
 
     #! Strips ANSI escape codes from text
-    /** Byte-indexed scan: ANSI escape sequences (ESC `[` … `m`) are pure
+    /** Byte-indexed scan: ANSI escape sequences (ESC <tt>[</tt> … <tt>m</tt>) are pure
         ASCII, so we walk byte-by-byte using
         @ref Qore::zzz8stringzzz9::getByte() (O(1) per call) instead of
         @c text[i] (O(N) UTF-8 walk per call → O(N^2) overall).  Non-ASCII

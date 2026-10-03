@@ -4,8 +4,8 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `getLabel` method
-/** Exactly one of `package_id` or `package_number` must be supplied.
+#! Request type for the BaseLinker <tt>getLabel</tt> method
+/** Exactly one of <tt>package_id</tt> or <tt>package_number</tt> must be supplied.
 */
 public class BaseLinkerGetLabelRequestDataType inherits HashDataType {
     public {

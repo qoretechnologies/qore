@@ -4,9 +4,9 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `addOrder` method
+#! Request type for the BaseLinker <tt>addOrder</tt> method
 /** All delivery / invoice / pickup-point fields are flattened to top-level keys
-    because BaseLinker's `addOrder` payload takes them flat — it does not accept
+    because BaseLinker's <tt>addOrder</tt> payload takes them flat — it does not accept
     nested objects.
 */
 public class BaseLinkerAddOrderRequestDataType inherits HashDataType {

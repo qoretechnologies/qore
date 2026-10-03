@@ -147,7 +147,7 @@ public const CdsEntityEvents = {
     send that cursor upstream as an OData @c $filter, so a cycle reads only what has changed since
     the last one and the window moves.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method
     to the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the
@@ -463,7 +463,7 @@ public class CdsEntityWatchDataProvider inherits CdsEntityWatchDataProviderBase 
 
     @section cdscustomevent_names Logical Names Are Not Entity Set Names
 
-    The option is the entity's **logical** name, which is what the Dataverse user interface shows and
+    The option is the entity's <b>logical</b> name, which is what the Dataverse user interface shows and
     what the application this module replaces asked for — but that application then used it directly
     as the OData path segment and appended @c "id" to it for the primary key. Neither is right:
     @c account is addressed as @c accounts and keyed by @c accountid, and a custom table's set name
@@ -660,7 +660,7 @@ public class CdsEventsDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and
         the values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

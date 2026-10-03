@@ -27,19 +27,19 @@ public namespace XeroDataProvider {
 #! The hand-written employee actions
 /** @section xeroemployees_defect The Defect This Fixes
 
-    The application this module replaces exported \c "/Employees" and read it through the **accounting**
+    The application this module replaces exported \c "/Employees" and read it through the <b>accounting</b>
     API - \c https://api.xero.com/api.xro/2.0/Employees.  That path no longer exists: Xero's published
     accounting description declares 138 paths and \c /Employees is not among them.  So its employee
     dropdown was always empty and its "new employee" trigger never fired, while the application requested
     the \c payroll.employees scope, which is where the intent shows: only the routing was wrong.
 
-    Employees live in the **payroll** API, and there is no single payroll API to move them to.  Xero
+    Employees live in the <b>payroll</b> API, and there is no single payroll API to move them to.  Xero
     publishes one description per region, and they are not the same API:
 
     |!Region|!Base path|!Listing envelope|!Create takes
-    |Australia|\c /payroll.xro/1.0|\c {Employees: [...]}|an **array** of employees
-    |New Zealand|\c /payroll.xro/2.0|\c {employees: [...], pagination}|**one** employee
-    |United Kingdom|\c /payroll.xro/2.0|\c {employees: [...], pagination}|**one** employee
+    |Australia|\c /payroll.xro/1.0|\c {Employees: [...]}|an <b>array</b> of employees
+    |New Zealand|\c /payroll.xro/2.0|\c {employees: [...], pagination}|<b>one</b> employee
+    |United Kingdom|\c /payroll.xro/2.0|\c {employees: [...], pagination}|<b>one</b> employee
 
     @section xeroemployees_handwritten Why These Are Not Generated
 
@@ -197,7 +197,7 @@ public class XeroEmployeesDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Reports a payroll call that answered with something other than JSON
     /** The regional payroll APIs do not answer errors the way the accounting API does.  Australia's 1.0 API
-        answers \c "403 Forbidden" with an **XML** body - \c "<Message>Payroll has not been purchased</Message>" -
+        answers \c "403 Forbidden" with an <b>XML</b> body - \c "<Message>Payroll has not been purchased</Message>" -
         whatever the request's \c Accept header says, and the client cannot deserialize it: the caller is
         left with \c "JSON-PARSE-ERROR: invalid input at line 1" and neither the status nor the message.
 

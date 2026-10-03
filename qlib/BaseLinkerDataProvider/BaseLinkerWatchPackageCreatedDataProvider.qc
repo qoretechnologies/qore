@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Package Created
-/** Fires whenever A courier package is created for an order (BaseLinker journal `log_type` 9).
+/** Fires whenever A courier package is created for an order (BaseLinker journal <tt>log_type</tt> 9).
 */
 public class BaseLinkerWatchPackageCreatedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

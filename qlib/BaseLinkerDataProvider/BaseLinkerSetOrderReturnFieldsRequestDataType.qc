@@ -4,16 +4,16 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `setOrderReturnFields` method
-/** `setOrderReturnFields` updates mutable header fields only. The API does not
+#! Request type for the BaseLinker <tt>setOrderReturnFields</tt> method
+/** <tt>setOrderReturnFields</tt> updates mutable header fields only. The API does not
     accept:
 
-    - `status_id` (use `set-order-return-status`)
-    - `refunded` / refund account details (use `set-order-return-refund`)
-    - `order_id`, `date_add`, `currency`, `custom_source_id`, `reference_number`,
-      `products`
+    - <tt>status_id</tt> (use <tt>set-order-return-status</tt>)
+    - <tt>refunded</tt> / refund account details (use <tt>set-order-return-refund</tt>)
+    - <tt>order_id</tt>, <tt>date_add</tt>, <tt>currency</tt>, <tt>custom_source_id</tt>, <tt>reference_number</tt>,
+      <tt>products</tt>
 
-    Uses `return_id` (not `order_return_id`) per the API.
+    Uses <tt>return_id</tt> (not <tt>order_return_id</tt>) per the API.
 */
 public class BaseLinkerSetOrderReturnFieldsRequestDataType inherits HashDataType {
     public {

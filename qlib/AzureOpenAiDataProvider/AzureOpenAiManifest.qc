@@ -25,8 +25,8 @@
 
 public namespace AzureOpenAiDataProvider {
 #! Reviewed action identities and presentation for Microsoft's pinned Azure OpenAI v1 schema
-/** Action IDs are stable. The two original inference actions retain their `deployment` input,
-    mapped to the v1 wire field `model`. Streaming transport switches are omitted because actions
+/** Action IDs are stable. The two original inference actions retain their <tt>deployment</tt> input,
+    mapped to the v1 wire field <tt>model</tt>. Streaming transport switches are omitted because actions
     return a completed value. Realtime actions manage sessions and calls, not audio transport.
 */
 public class AzureOpenAiManifest {

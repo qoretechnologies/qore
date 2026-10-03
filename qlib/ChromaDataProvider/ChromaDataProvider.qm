@@ -94,7 +94,7 @@ module ChromaDataProvider {
     @section chromadataproviderintro ChromaDataProvider Introduction
 
     The %ChromaDataProvider module provides a data provider API for
-    [Chroma](https://www.trychroma.com) vector databases.
+    <a href="https://www.trychroma.com">Chroma</a> vector databases.
 
     The following data providers are exposed:
     - @ref ChromaDataProvider::ChromaDataProvider "ChromaDataProvider" — root

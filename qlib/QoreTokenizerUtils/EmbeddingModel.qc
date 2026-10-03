@@ -65,9 +65,9 @@ public hashdecl EmbeddingConfig {
 #! Dense embedding model client supporting HTTP and ONNX backends
 /** Provides a unified interface for generating dense vector embeddings from text.
     Supports two backends:
-    - \b HTTP: Calls an OpenAI-compatible `/v1/embeddings` endpoint (e.g., SGLang,
-      vLLM, OpenAI) with automatic fallback to a `/embed` endpoint (bge-m3 native).
-    - \b ONNX: Runs a local ONNX embedding model via the `ml` module.
+    - \b HTTP: Calls an OpenAI-compatible <tt>/v1/embeddings</tt> endpoint (e.g., SGLang,
+      vLLM, OpenAI) with automatic fallback to a <tt>/embed</tt> endpoint (bge-m3 native).
+    - \b ONNX: Runs a local ONNX embedding model via the <tt>ml</tt> module.
 
     @par Example: HTTP mode (SGLang/OpenAI compatible)
     @code{.py}

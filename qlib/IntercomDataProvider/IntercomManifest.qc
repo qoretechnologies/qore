@@ -31,8 +31,8 @@ public namespace IntercomDataProvider {
     catalog rather than derived from a filename or an \c operationId - an action ID is a product commitment,
     and existing workflows call these names.
 
-    Intercom is the unusually comfortable case here: **all 15 IDs are the \c operationId the vendor's own
-    description declares**, verbatim, including two that look like mistakes and are not ours to fix:
+    Intercom is the unusually comfortable case here: <b>all 15 IDs are the \c operationId the vendor's own
+    description declares</b>, verbatim, including two that look like mistakes and are not ours to fix:
 
     |!ID|!Note
     |\c lisDataEvents|the typo is Intercom's, in its own description; it ships as \c lisDataEvents
@@ -50,14 +50,14 @@ public namespace IntercomDataProvider {
     |!Action|!Fills
     |\c listAdmins|the teammate dropdowns - an article's author, a note's or a reply's admin, a message's sender
     |\c ListContacts|the contact dropdowns, and the contact e-mail and external-ID dropdowns with them
-    |\c listAllCollections|the parent-collection dropdown on **Create Article**
-    |\c listTagsForAContact|the tag dropdown on **Remove Tag from Contact**, which is scoped to the contact
+    |\c listAllCollections|the parent-collection dropdown on <b>Create Article</b>
+    |\c listTagsForAContact|the tag dropdown on <b>Remove Tag from Contact</b>, which is scoped to the contact
 
     @section intercommanifest_conversations The Conversation Dropdown Uses the Search
 
-    \c "GET /conversations" is **not** exported, and the conversation dropdown is filled by
+    \c "GET /conversations" is <b>not</b> exported, and the conversation dropdown is filled by
     \c searchConversations instead.  Intercom does not grant an app permission to that listing by default
-    and answers **403** without it, while the search returns the same conversations to the same credential -
+    and answers <b>403</b> without it, while the search returns the same conversations to the same credential -
     measured against a live workspace, where the listing failed and the search returned 28.
 
     A listing exported only to fill a dropdown, which then cannot be read by a normally configured app, is
@@ -65,8 +65,8 @@ public namespace IntercomDataProvider {
 
     @section intercommanifest_sections The Section Dropdown Is Withdrawn
 
-    The superseded application offered a **Section** dropdown for an article's parent, backed by
-    \c "GET /help_center/sections".  **Intercom removed that endpoint at API version 2.10**: its 2.9
+    The superseded application offered a <b>Section</b> dropdown for an article's parent, backed by
+    \c "GET /help_center/sections".  <b>Intercom removed that endpoint at API version 2.10</b>: its 2.9
     description declares \c /help_center/sections and \c /help_center/sections/{id}, and no description
     from 2.10 onward declares either.  Sections became nested collections, and Intercom returns what used
     to be a section as a collection.
@@ -163,7 +163,7 @@ public class IntercomManifest {
 
         #! The largest page \c "POST /companies/list" accepts
         /** The one listing Intercom pages by number rather than by cursor is also the one with a smaller
-            cap: it answers **"Per Page is too big"** above 60, where the cursor-paged listings take 150.
+            cap: it answers <b>"Per Page is too big"</b> above 60, where the cursor-paged listings take 150.
             The description declares no maximum on either, so this was measured against the API - asking
             for 150 here made the company dropdown fail outright with a 400.
         */
@@ -368,7 +368,7 @@ public class IntercomManifest {
         };
 
         #! The filter that matches every record, which is how Intercom is asked for a whole collection
-        /** Both search endpoints declare \c query **required**, so there is no way to ask them for an
+        /** Both search endpoints declare \c query <b>required</b>, so there is no way to ask them for an
             unfiltered collection: a record search with no predicate, and the conversation dropdown, would
             both fail with a schema error rather than reading anything.
 
@@ -386,10 +386,10 @@ public class IntercomManifest {
         };
 
         #! Overlay publishing a search's paging object as the two options it holds
-        /** The two searches are \c POST operations carrying their paging **inside the request body**, as a
+        /** The two searches are \c POST operations carrying their paging <b>inside the request body</b>, as a
             \c pagination object, where every other listing here takes the same two values as query
             arguments.  Publishing the object's properties in its place makes the two spellings one, and it
-            is what lets a record table page a search at all: a table names **one option** carrying the
+            is what lets a record table page a search at all: a table names <b>one option</b> carrying the
             cursor, and there is no such option while the cursor is a property of a value.
         */
         const SearchPagingOverlay = {

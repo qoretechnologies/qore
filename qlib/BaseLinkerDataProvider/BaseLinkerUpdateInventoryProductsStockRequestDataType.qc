@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `updateInventoryProductsStock` method
+#! Request type for the BaseLinker <tt>updateInventoryProductsStock</tt> method
 /** BaseLinker accepts up to 1000 products per call.
 */
 public class BaseLinkerUpdateInventoryProductsStockRequestDataType inherits HashDataType {

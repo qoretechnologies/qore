@@ -26,7 +26,7 @@
 public namespace IntercomDataProvider {
 #! The Intercom record-based tables
 /** Intercom publishes two real search endpoints - one for contacts and one for conversations - and both
-    take a **filter tree in the request body** rather than a query string.  Those two tables therefore
+    take a <b>filter tree in the request body</b> rather than a query string.  Those two tables therefore
     declare @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search"; the other
     five list a collection and are searched here, as the records arrive.
 
@@ -37,32 +37,32 @@ public namespace IntercomDataProvider {
     string, so @ref IntercomRecordTables::Search "Search" renders the whole expression itself with
     @ref RestSchemaActions::RestSchemaQuerySyntaxInfo::render_query "render_query" and returns a hash.
 
-    The operator table is still declared beside the hook and still decides **what is pushed down**, so
+    The operator table is still declared beside the hook and still decides <b>what is pushed down</b>, so
     \c supports_native_search, \c supports_pushdown and the residual predicate stay declarative and are not
     hidden inside the renderer.
 
     @section intercomrecord_ops There Is No >=, No <= and No NOT
 
     Intercom's own description enumerates the operators it accepts - \c =, \c !=, \c IN, \c NIN, \c <,
-    \c >, \c ~, \c !~, \c ^ and \c $ - and there is **no** \c >= and **no** \c <= among them, nor any
+    \c >, \c ~, \c !~, \c ^ and \c $ - and there is <b>no</b> \c >= and <b>no</b> \c <= among them, nor any
     negation of a whole sub-expression.  Mapping \c >= onto \c > would silently drop the boundary records,
     which is the one way a search can be wrong rather than merely slow, so those operators are left out and
     are evaluated here instead.
 
     \c ~ (contains), \c ^ (starts with) and \c $ (ends with) are declared
     @ref RestSchemaActions::RestSchemaRecordQueryInfo::inexact_ops "inexact_ops": Intercom documents neither
-    their case sensitivity nor their collation, so each narrows what has to be read **and** is applied again
+    their case sensitivity nor their collation, so each narrows what has to be read <b>and</b> is applied again
     to what comes back.
 
     @section intercomrecord_matrix Which Field Takes Which Operator Was Measured
 
     Intercom's description says only "the accepted field that you want to search on" and enumerates none of
-    them, so every entry in the two \c field_ops tables below was **measured against a live workspace**, one
+    them, so every entry in the two \c field_ops tables below was <b>measured against a live workspace</b>, one
     request per field and operator.  What that found is not guessable from the description:
 
     |!Field kind|!Operators
     |a contact's identity and text - \c id, \c name, \c email, \c phone, \c role, \c external_id|<tt>= != ~ ^ $ IN</tt>
-    |a contact's timestamps - \c created_at, \c last_seen_at and the rest|<tt>= < ></tt> and **not** \c !=
+    |a contact's timestamps - \c created_at, \c last_seen_at and the rest|<tt>= < ></tt> and <b>not</b> \c !=
     |a contact's booleans - \c has_hard_bounced and the rest|<tt>= !=</tt>
     |a conversation's timestamps|<tt>= != < ></tt> - unlike a contact's, which refuse \c !=
     |a conversation's \c id, \c admin_assignee_id, \c team_assignee_id|<tt>= != < > IN</tt>, because Intercom compares them as numbers
@@ -72,7 +72,7 @@ public namespace IntercomDataProvider {
     \c contacts.  A predicate on one of those is answered here.
 
     Intercom will also search a nested value - \c location.country on a contact, \c source.author.email on a
-    conversation - but a table searches its **columns**, and neither is one: the record carries \c location
+    conversation - but a table searches its <b>columns</b>, and neither is one: the record carries \c location
     and \c source as whole objects.  Such a predicate is evaluated here as well.
 
     @section intercomrecord_time Timestamps Are Counts of Seconds
@@ -82,7 +82,7 @@ public namespace IntercomDataProvider {
 
     @section intercomrecord_post The Two Searches Are POST Operations
 
-    Both carry their query **and their paging** in the request body, where every other listing here takes
+    Both carry their query <b>and their paging</b> in the request body, where every other listing here takes
     its paging as query arguments.  The manifest publishes that paging object's two properties in its place
     with @ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift", so \c per_page and
     \c starting_after are ordinary options and mean the same thing everywhere in this application - and a
@@ -91,13 +91,13 @@ public namespace IntercomDataProvider {
 
     @section intercomrecord_company Two Things Are Called a Company ID
 
-    Intercom addresses a company by **its own** identifier in \c "/companies/{company_id}", and
-    \c "POST /companies" matches on the \c company_id **the caller** gave it, creating a company when
+    Intercom addresses a company by <b>its own</b> identifier in \c "/companies/{company_id}", and
+    \c "POST /companies" matches on the \c company_id <b>the caller</b> gave it, creating a company when
     nothing matches.  The two are different values under one name.
 
     So this table updates through \c UpdateCompany, which takes Intercom's identifier in the path.  Using
     \c createOrUpdateCompany for an update would put Intercom's identifier where the caller's belongs and
-    **create a second company** rather than change the one matched - a write to the wrong record, which is
+    <b>create a second company</b> rather than change the one matched - a write to the wrong record, which is
     the worst thing a record table can do.
 
     @section intercomrecord_eventual A Company Write Is Not Visible At Once
@@ -105,11 +105,11 @@ public namespace IntercomDataProvider {
     Two behaviours of Intercom's company endpoints surprise a caller who reads back what it just wrote, and
     both were measured against a live workspace rather than inferred:
 
-    - a company created through \c "POST /companies" is **not** in \c "POST /companies/list" immediately;
+    - a company created through \c "POST /companies" is <b>not</b> in \c "POST /companies/list" immediately;
       that listing is backed by an index that lags the write.  Reading the new company by the identity the
       create returned works at once.
     - \c "DELETE /companies/{company_id}" answers <tt>{"deleted": true}</tt> and
-      \c "GET /companies/{company_id}" **still returns the company** afterwards.  The delete is accepted and
+      \c "GET /companies/{company_id}" <b>still returns the company</b> afterwards.  The delete is accepted and
       applied; the read-by-identity endpoint continues to answer with it.
 
     Neither is something this layer can paper over - a table reports what the API did - so a caller that
@@ -118,7 +118,7 @@ public namespace IntercomDataProvider {
     @section intercomrecord_readonly What Cannot Be Written
 
     A conversation is created and read and is not updated or deleted here: Intercom changes one by replying
-    to it or by managing its parts, which is what **Reply To Conversation** does, and neither is an update
+    to it or by managing its parts, which is what <b>Reply To Conversation</b> does, and neither is an update
     of a record's columns.  A tag is created only by attaching it to something.  A collection, an article's
     author list and the teammate list are read only.
 */
@@ -216,7 +216,7 @@ public class IntercomRecordTables {
         /** \c "POST /companies/list" takes a page number rather than a cursor, and reports
             \c pages.total_pages.
 
-            It also caps its page **lower** than every other listing here and **rejects** a larger value
+            It also caps its page <b>lower</b> than every other listing here and <b>rejects</b> a larger value
             rather than clamping it - \c "Per Page is too big" - so the size is declared per table rather
             than taken from the client's maximum.  60 is the largest value the live API accepted.
         */
@@ -431,7 +431,7 @@ public class IntercomRecordTables {
 
         #! The tags table
         /** A tag is created by attaching it to something rather than on its own, so this table reads and
-            deletes.  Intercom **refuses** to delete a tag still applied anywhere.
+            deletes.  Intercom <b>refuses</b> to delete a tag still applied anywhere.
         */
         const TagsTable = <RestSchemaRecordTableInfo>{
             "name": "tags",

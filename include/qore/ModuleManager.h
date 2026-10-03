@@ -241,7 +241,7 @@ public:
         qore_binary_module_desc_t mod_desc_func = nullptr);
 
     //! Register a statically-linked AOT-compiled module into a target program without dlopen
-    /** Intended for AOT `.qo` object files that have been linked directly into the host
+    /** Intended for AOT <tt>.qo</tt> object files that have been linked directly into the host
         image. The caller provides a pointer to the module's descriptor function (emitted
         by qcc as <tt>&lt;name&gt;_qore_module_desc</tt>); the descriptor is invoked, validated and
         routed through the standard module registration path, skipping the filesystem

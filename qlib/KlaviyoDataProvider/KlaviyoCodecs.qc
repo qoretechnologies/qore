@@ -52,7 +52,7 @@ public namespace KlaviyoDataProvider {
 
     @section klaviyocodecs_campaign The Campaign Listing Is the Reason \c lift Exists
 
-    \c "GET /api/campaigns" declares \c filter **required**, because Klaviyo will not list campaigns across
+    \c "GET /api/campaigns" declares \c filter <b>required</b>, because Klaviyo will not list campaigns across
     channels: a request has to say \c "equals(messages.channel,\"email\")" or the SMS equivalent.  The
     superseded application therefore published \c channel and \c name rather than a filter, and folded them
     into the predicate itself.

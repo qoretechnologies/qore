@@ -2005,23 +2005,23 @@ module InstantlyDataProvider {
     @section instantlydataprovider_actions Supported Actions
 
     This data provider supports the following action groups:
-    - **Accounts** - manage email accounts, warmup, and tracking domains
-    - **Campaigns** - create, manage, and analyze email campaigns
-    - **Campaign Subsequences** - manage subsequences within campaigns
-    - **Leads** - manage leads including CRUD, merging, moving, and bulk operations
-    - **Lead Lists** - organize leads into lists
-    - **Lead Labels** - categorize leads with labels
-    - **Emails** - manage emails, replies, and threads
-    - **Block List** - manage blocked email addresses and domains
-    - **Custom Tags** - organize resources with custom tags
-    - **Inbox Placement Tests** - test email deliverability
-    - **Inbox Placement Analytics** - analyze deliverability metrics
-    - **Email Verification** - verify email addresses
-    - **Background Jobs** - monitor background processing jobs
-    - **Workspace** - manage workspace settings
-    - **Workspace Members** - manage workspace team members
-    - **Workspace Group Members** - manage workspace group memberships
-    - **Audit Log** - track workspace activity
+    - <b>Accounts</b> - manage email accounts, warmup, and tracking domains
+    - <b>Campaigns</b> - create, manage, and analyze email campaigns
+    - <b>Campaign Subsequences</b> - manage subsequences within campaigns
+    - <b>Leads</b> - manage leads including CRUD, merging, moving, and bulk operations
+    - <b>Lead Lists</b> - organize leads into lists
+    - <b>Lead Labels</b> - categorize leads with labels
+    - <b>Emails</b> - manage emails, replies, and threads
+    - <b>Block List</b> - manage blocked email addresses and domains
+    - <b>Custom Tags</b> - organize resources with custom tags
+    - <b>Inbox Placement Tests</b> - test email deliverability
+    - <b>Inbox Placement Analytics</b> - analyze deliverability metrics
+    - <b>Email Verification</b> - verify email addresses
+    - <b>Background Jobs</b> - monitor background processing jobs
+    - <b>Workspace</b> - manage workspace settings
+    - <b>Workspace Members</b> - manage workspace team members
+    - <b>Workspace Group Members</b> - manage workspace group memberships
+    - <b>Audit Log</b> - track workspace activity
 
     @section instantlydataprovider_auth Authentication
 

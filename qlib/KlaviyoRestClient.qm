@@ -50,7 +50,7 @@ module KlaviyoRestClient {
 
     @section klaviyorestclientintro KlaviyoRestClient Introduction
 
-    The %KlaviyoRestClient module provides an API for calling [Klaviyo](https://www.klaviyo.com)'s REST API
+    The %KlaviyoRestClient module provides an API for calling <a href="https://www.klaviyo.com">Klaviyo</a>'s REST API
     services.
 
     To use this module, use \c "%requires KlaviyoRestClient" in your code.
@@ -66,12 +66,12 @@ module KlaviyoRestClient {
 
     @section klaviyorestclient_revision The Revision Belongs to the Connection
 
-    Klaviyo versions its API by a dated **revision** sent as a \c revision header, and its own description
+    Klaviyo versions its API by a dated <b>revision</b> sent as a \c revision header, and its own description
     declares that header \c required on 344 of its 345 operations.  A revision is stable for a year and
     deprecated for a second, then removed; the behaviour of an endpoint - and sometimes whether it exists -
     depends on which one is sent.
 
-    So this client **always** sends it, and sends the revision the
+    So this client <b>always</b> sends it, and sends the revision the
     @ref klaviyodataproviderintro "KlaviyoDataProvider" module's pinned description describes.  The two move
     together: adopting a newer revision is a re-import of that description, not an edit here.
 

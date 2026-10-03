@@ -30,7 +30,7 @@ public hashdecl RestSchemaRecordFilterSplit {
     hash<auto> options;
 
     #! The predicate left for the client side, if any
-    /** Evaluated against each record as it arrives, **after** the API's own filtering and **before** the
+    /** Evaluated against each record as it arrives, <b>after</b> the API's own filtering and <b>before</b> the
         caller's limit is counted.
     */
     *hash<DataProviderExpression> client;
@@ -50,7 +50,7 @@ public hashdecl RestSchemaRecordFilterSplit {
     |!|!
     |Send what the API can evaluate|so that a collection of ten thousand records behind a page of 100 can be searched at all
     |Evaluate the rest as records arrive|so that the answer is the one the caller asked for and not the API's approximation of it
-    |Keep reading pages until the caller's limit is met **by matching records**|so that a search does not silently under-return
+    |Keep reading pages until the caller's limit is met <b>by matching records</b>|so that a search does not silently under-return
 
     The third is the one that is easy to get wrong, and it is not this class's job: it falls out of applying
     the residual predicate in @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator", which counts
@@ -245,10 +245,10 @@ public class RestSchemaRecordFilter {
 
     #! Returns the options addressing one record, when the predicate pins every part of its identity
     /** An identity is one value for most tables and more than one for a few - GitHub names a repository by
-        its owner **and** its name - so this looks for an equality on **every** part.  Pinning some of them
+        its owner <b>and</b> its name - so this looks for an equality on <b>every</b> part.  Pinning some of them
         is not naming a record, and the search walks the collection as it would for any other predicate.
 
-        The predicate has to be the identity and **nothing else**.  A search for
+        The predicate has to be the identity and <b>nothing else</b>.  A search for
         <tt>id == 5 AND state == "open"</tt> names a record and also asks a question about it, and reading
         that record without asking the question would answer a search with a record it excluded - which for
         @ref DataProvider::AbstractDataProvider::updateRecords() "updateRecords()" means writing to a record

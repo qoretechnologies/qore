@@ -13,8 +13,8 @@
 
     %Qore offers two complementary approaches to sandboxing:
 
-    1. **Parse Options** - Binary on/off restrictions that completely disable categories of functionality
-    2. **SandboxManager** - Fine-grained, configurable restrictions with allow/deny lists and resource limits
+    1. <b>Parse Options</b> - Binary on/off restrictions that completely disable categories of functionality
+    2. <b>SandboxManager</b> - Fine-grained, configurable restrictions with allow/deny lists and resource limits
 
     @section sandbox_parse_options Parse Option Restrictions
 
@@ -113,10 +113,10 @@ Program p(opts);
 
     While parse options are effective for completely disabling functionality, they have limitations:
 
-    - **Binary**: Cannot allow partial access (e.g., allow some files but not others)
-    - **No resource limits**: Cannot limit memory, CPU time, or thread count
-    - **No interruption**: Cannot stop runaway code (infinite loops)
-    - **No SSRF prevention**: Cannot block specific IP ranges
+    - <b>Binary</b>: Cannot allow partial access (e.g., allow some files but not others)
+    - <b>No resource limits</b>: Cannot limit memory, CPU time, or thread count
+    - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
+    - <b>No SSRF prevention</b>: Cannot block specific IP ranges
 
     For these advanced use cases, use the @ref Qore::SandboxManager "SandboxManager" class.
 
@@ -158,9 +158,9 @@ auto result = p.callFunction("main");
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:
 
-    - **Sandbox root**: Restrict all access to within a specific directory (chroot-like)
-    - **Allow/deny lists**: Fine-grained path-based access control
-    - **Access modes**: Control read, write, execute, delete, and create permissions separately
+    - <b>Sandbox root</b>: Restrict all access to within a specific directory (chroot-like)
+    - <b>Allow/deny lists</b>: Fine-grained path-based access control
+    - <b>Access modes</b>: Control read, write, execute, delete, and create permissions separately
 
     @subsection sandbox_fs_comparison Parse Options vs SandboxManager
 
@@ -462,16 +462,16 @@ sm.clearInterrupt();
     @subsection sandbox_interrupt_check_points Interrupt Check Points
 
     The interrupt mechanism is checked at:
-    - **Loop boundaries**: while, for, foreach, do-while (checked before each iteration)
-    - **Sleep functions**: sleep(), usleep() (polled every 100ms)
-    - **Lock acquisition**: Mutex::lock(), RWLock::readLock(), RWLock::writeLock() (polled every 500ms)
-    - **Auto-lock constructors**: AutoLock, AutoReadLock, AutoWriteLock (polled every 500ms)
-    - **Queue operations**: Queue::get(), Queue::pop() (polled every 500ms)
-    - **Thread synchronization**: Counter::waitForZero(), Condition::wait(), Gate::enter() (polled every 500ms)
-    - **File I/O**: File read, write, and lock operations (polled at I/O poll interval)
-    - **Stream I/O**: PipeInputStream::read(), PipeOutputStream::write() (polled at I/O poll interval)
-    - **Standard I/O**: StdoutOutputStream::write(), StderrOutputStream::write() (polled at I/O poll interval)
-    - **Database operations**: Datasource transaction lock acquisition (polled at I/O poll interval)
+    - <b>Loop boundaries</b>: while, for, foreach, do-while (checked before each iteration)
+    - <b>Sleep functions</b>: sleep(), usleep() (polled every 100ms)
+    - <b>Lock acquisition</b>: Mutex::lock(), RWLock::readLock(), RWLock::writeLock() (polled every 500ms)
+    - <b>Auto-lock constructors</b>: AutoLock, AutoReadLock, AutoWriteLock (polled every 500ms)
+    - <b>Queue operations</b>: Queue::get(), Queue::pop() (polled every 500ms)
+    - <b>Thread synchronization</b>: Counter::waitForZero(), Condition::wait(), Gate::enter() (polled every 500ms)
+    - <b>File I/O</b>: File read, write, and lock operations (polled at I/O poll interval)
+    - <b>Stream I/O</b>: PipeInputStream::read(), PipeOutputStream::write() (polled at I/O poll interval)
+    - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write() (polled at I/O poll interval)
+    - <b>Database operations</b>: Datasource transaction lock acquisition (polled at I/O poll interval)
 
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
@@ -583,34 +583,34 @@ hash<auto> net_config = sm.getNetworkConfiguration();
 
     @section sandbox_best_practices Best Practices
 
-    1. **Defense in depth**: Combine parse options with SandboxManager
+    1. <b>Defense in depth</b>: Combine parse options with SandboxManager
        - Use parse options to completely disable unneeded features
        - Use SandboxManager for fine-grained control of allowed features
 
-    2. **Always use blockPrivateNetworks()** for web-facing applications
+    2. <b>Always use blockPrivateNetworks()</b> for web-facing applications
        - Essential for SSRF prevention
        - Blocks access to cloud metadata endpoints (169.254.169.254)
        - Blocks access to internal services
 
-    3. **Set reasonable resource limits**
+    3. <b>Set reasonable resource limits</b>
        - Memory limits prevent memory exhaustion
        - Time limits prevent infinite loops
        - Thread limits prevent fork bombs
 
-    4. **Use deny-by-default policies**
+    4. <b>Use deny-by-default policies</b>
        - Only explicitly allow what is needed
        - Denied paths/IPs take precedence over allowed
 
-    5. **Implement interrupt handling** for long-running operations
+    5. <b>Implement interrupt handling</b> for long-running operations
        - Use background threads with timeout monitoring
        - Call requestInterrupt() if execution exceeds expected time
 
-    6. **Validate paths before adding to allow lists**
+    6. <b>Validate paths before adding to allow lists</b>
        - Use absolute canonical paths
        - Be aware of symlink escapes
        - Test with edge cases
 
-    7. **Use lockdown mode for pure computation**
+    7. <b>Use lockdown mode for pure computation</b>
        - When code doesn't need external access, use createLockdown()
        - Provides maximum security with minimal configuration
 

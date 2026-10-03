@@ -31,9 +31,9 @@ public namespace OpenSearchDataProvider {
     processing large numbers of results. It should not be used for real-time user requests.
 
     Usage:
-    1. Make an initial request with `scroll` parameter (e.g., "1m" for 1 minute)
-    2. Use the returned `_scroll_id` for subsequent requests
-    3. When done, optionally clear the scroll context with `clear: true`
+    1. Make an initial request with <tt>scroll</tt> parameter (e.g., "1m" for 1 minute)
+    2. Use the returned <tt>_scroll_id</tt> for subsequent requests
+    3. When done, optionally clear the scroll context with <tt>clear: true</tt>
 
     @see https://www.elastic.co/guide/en/opensearch/reference/current/scroll-api.html
 */

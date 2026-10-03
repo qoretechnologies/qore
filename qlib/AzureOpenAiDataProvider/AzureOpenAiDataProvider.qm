@@ -102,19 +102,19 @@ module AzureOpenAiDataProvider {
     Chat Completions, Responses, embeddings, audio, images, videos, files, batches, conversations,
     containers, evaluations, fine-tuning, realtime calls, and vector stores. Retired Assistants threads
     and DALL-E 2 image variations are excluded. Speech, image, and video generation select the v1 preview API.
-    Transcription and translation use deployment-based audio paths and default to `2025-04-01-preview`.
+    Transcription and translation use deployment-based audio paths and default to <tt>2025-04-01-preview</tt>.
     Whisper supports JSON, verbose JSON, plain text, SRT, and VTT; GPT transcription deployments support
-    JSON output. Word and segment timestamps require Whisper and `verbose_json`. Audio actions accept a
+    JSON output. Word and segment timestamps require Whisper and <tt>verbose_json</tt>. Audio actions accept a
     named file with its extension, binary content, and optional MIME type.
     Conversations require a Foundry project endpoint such as
-    `https://my-resource.services.ai.azure.com/api/projects/my-project` with Microsoft Entra authentication.
+    <tt>https://my-resource.services.ai.azure.com/api/projects/my-project</tt> with Microsoft Entra authentication.
     Resource-only Azure OpenAI endpoints do not provide the project Conversations API. Other operation availability
     depends on the resource and regional rollout. Resource updates can become visible to reads asynchronously.
 
     @par Compatibility
-    The original `chat-completion` and `embedding` action IDs and their `deployment` option remain
-    unchanged. They now send the deployment as `model` to v1 endpoints. The public legacy provider
-    classes and LLM client retain dated deployment routes and `azure_api_version`.
+    The original <tt>chat-completion</tt> and <tt>embedding</tt> action IDs and their <tt>deployment</tt> option remain
+    unchanged. They now send the deployment as <tt>model</tt> to v1 endpoints. The public legacy provider
+    classes and LLM client retain dated deployment routes and <tt>azure_api_version</tt>.
 
     @par Example
     @code{.py}
@@ -138,16 +138,16 @@ auto transcript = app.getChildProvider("create-transcription").doRequest({
     @endcode
 
     @par Live media tests
-    `examples/test/qlib/AzureOpenAiDataProvider/AzureOpenAiMedia.qtest` uses the explicitly configured
-    `AZURE_MEDIA_ENDPOINT`, `AZURE_MEDIA_API_KEY`, and deployment variables described in the test.
+    <tt>examples/test/qlib/AzureOpenAiDataProvider/AzureOpenAiMedia.qtest</tt> uses the explicitly configured
+    <tt>AZURE_MEDIA_ENDPOINT</tt>, <tt>AZURE_MEDIA_API_KEY</tt>, and deployment variables described in the test.
     It makes short billable inference requests. Normal CI uses the offline request and response fixtures.
 
     @par Live conversation tests
-    `AzureOpenAiConversations.qtest` uses `AZURE_FOUNDRY_ENDPOINT` and `AZURE_FOUNDRY_ACCESS_TOKEN`.
-    Obtain a short-lived development token with `az account get-access-token --resource https://ai.azure.com`;
+    <tt>AzureOpenAiConversations.qtest</tt> uses <tt>AZURE_FOUNDRY_ENDPOINT</tt> and <tt>AZURE_FOUNDRY_ACCESS_TOKEN</tt>.
+    Obtain a short-lived development token with <tt>az account get-access-token --resource https://ai.azure.com</tt>;
     the signed-in user needs the Foundry User role on the project. Production connections use the existing
-    Entra client-credentials or managed-identity modes; the token scope defaults to `https://ai.azure.com/.default`
-    for project endpoints. Conversation actions omit `api-version`, which the Foundry v1 path rejects.
+    Entra client-credentials or managed-identity modes; the token scope defaults to <tt>https://ai.azure.com/.default</tt>
+    for project endpoints. Conversation actions omit <tt>api-version</tt>, which the Foundry v1 path rejects.
     The test deletes the temporary conversation and its items.
 
     @par Factory

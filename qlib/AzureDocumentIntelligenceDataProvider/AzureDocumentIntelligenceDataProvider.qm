@@ -118,9 +118,9 @@ module AzureDocumentIntelligenceDataProvider {
     @section azuredocumentintelligencedataproviderintro AzureDocumentIntelligenceDataProvider Introduction
 
     The %AzureDocumentIntelligenceDataProvider module provides a data
-    provider API for [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence).
+    provider API for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a>.
     The application publishes 31 actions: 29 raw service contracts, the existing
-    `analyze-document` wait helper, and the shared `make-api-call` action.
+    <tt>analyze-document</tt> wait helper, and the shared <tt>make-api-call</tt> action.
 
     - Submit URLs, bytes, or batches for extraction and classification; fetch or delete results.
     - List, inspect, build, compose, copy, and delete models and classifiers.
@@ -133,11 +133,11 @@ module AzureDocumentIntelligenceDataProvider {
     are installed beside the module. Synthetic overload selectors never appear in HTTP requests.
 
     @par Choosing an analysis model
-    Use `prebuilt-layout` with the `keyValuePairs` feature for general extraction, or `prebuilt-read`
-    with `output: ("pdf",)` for searchable PDF generation. Figure output requires `prebuilt-layout`.
-    The `queryFields` option requires the corresponding feature. Custom identifiers can be entered
-    directly or selected from paginated resource references. Legacy `prebuilt-document` and
-    `prebuilt-businessCard` presentation identities remain for saved forms, but v4 rejects these
+    Use <tt>prebuilt-layout</tt> with the <tt>keyValuePairs</tt> feature for general extraction, or <tt>prebuilt-read</tt>
+    with <tt>output: ("pdf",)</tt> for searchable PDF generation. Figure output requires <tt>prebuilt-layout</tt>.
+    The <tt>queryFields</tt> option requires the corresponding feature. Custom identifiers can be entered
+    directly or selected from paginated resource references. Legacy <tt>prebuilt-document</tt> and
+    <tt>prebuilt-businessCard</tt> presentation identities remain for saved forms, but v4 rejects these
     retired models before uploading. Choose a supported model when migrating a saved workflow.
 
     @par Example
@@ -151,15 +151,15 @@ hash<auto> invoice = provider.getChildProvider("analyze-document").doRequest({
 
     @par Async lifecycle
 
-    Document Intelligence's `analyze` API is asynchronous: POST returns
-    an `Operation-Location` header pointing to a polling URL.  This
+    Document Intelligence's <tt>analyze</tt> API is asynchronous: POST returns
+    an <tt>Operation-Location</tt> header pointing to a polling URL.  This
     module's high-level action drives the loop internally via
     @ref qoreasyncjobutilsintro "QoreAsyncJobUtils".
-    Raw submissions return a typed envelope containing `status_code`, `headers`, and `body`;
-    save the `operation-location` header before leaving the submitting workflow step. Download actions
+    Raw submissions return a typed envelope containing <tt>status_code</tt>, <tt>headers</tt>, and <tt>body</tt>;
+    save the <tt>operation-location</tt> header before leaving the submitting workflow step. Download actions
     use the same envelope with a binary body. The helper's timeout includes submission and polling;
     exceptions retain the polling URL and last status in their argument without logging document content.
-    Lists return one page with `nextLink`; reference dropdowns follow safe same-resource links with a
+    Lists return one page with <tt>nextLink</tt>; reference dropdowns follow safe same-resource links with a
     100-page limit and repeated-link detection. Custom training, copies, and batch actions can incur
     service charges and use the resource's permissions.
 

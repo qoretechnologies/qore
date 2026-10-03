@@ -264,7 +264,7 @@ public class AwsRestClientBase {
     #! Returns a presigned URL carrying its own AWS Signature V4 authorization in the query string
     /** A presigned URL grants whoever holds it the one operation it was signed for, until it expires, with no
         AWS credentials of their own.  That is what makes it useful -- an object can be handed to a system that
-        cannot authenticate to AWS at all -- and also what makes it sensitive: **the URL is the credential**,
+        cannot authenticate to AWS at all -- and also what makes it sensitive: <b>the URL is the credential</b>,
         so it should be given the shortest lifetime that serves the purpose and never logged.
 
         This is query-string signing, which differs from the header signing every other request here uses:
@@ -287,7 +287,7 @@ public class AwsRestClientBase {
         @note The URL is only valid while the credentials that signed it are; one signed with temporary
         session credentials stops working when they expire, whatever lifetime was asked for here.
 
-        @note **Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.**  By
+        @note <b>Fetching the URL with @ref Qore::HTTPClient requires the \c pre_encoded_urls option.</b>  By
         default the HTTP client percent-encodes the URI path of a request, and the credential scope in a
         presigned URL contains \c %%2F separators that AWS re-encodes when it verifies the signature; encoding
         them a second time produces \c %%252F on the wire, which AWS rejects as a malformed credential rather
@@ -1089,9 +1089,9 @@ AwsRestClient rest({
 
     #! Sends a request, assuming an XML response body when the server sends one with no content type
     /** Amazon S3 answers several operations -- \c CreateMultipartUpload and \c CompleteMultipartUpload among
-        them -- with an XML document and **no \c Content-Type header at all**.  The REST client will not
+        them -- with an XML document and <b>no \c Content-Type header at all</b>.  The REST client will not
         deserialize a body whose type it has not been told, so such a response fails with
-        \c DESERIALIZATION-ERROR even though it is a perfectly good `200`.
+        \c DESERIALIZATION-ERROR even though it is a perfectly good <tt>200</tt>.
 
         S3 only ever returns XML in that position, so it is assumed here.  A response that does carry a
         content type is unaffected: the assumption is applied only when the header is absent, so an object
@@ -1729,7 +1729,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         SigV4 sets \c host, \c x-amz-date, \c x-amz-content-sha256 and \c authorization together, each of
         which is part of what the others sign.
 
-        @note The signature covers the **effective** path, which is why this signs after the base class has
+        @note The signature covers the <b>effective</b> path, which is why this signs after the base class has
         prepared the request: \a path is updated by reference there to include any connection path, and
         signing the pre-prepared path would produce a signature for a URI the request does not use.
     */
@@ -2038,7 +2038,7 @@ public class AwsSignedEventStream {
     }
 
     #! Returns the negotiated transport protocol
-    /** @return the protocol identifier, for example `h2` */
+    /** @return the protocol identifier, for example <tt>h2</tt> */
     string getProtocol() {
         return stream.getConnection().getProtocol();
     }
@@ -2125,7 +2125,7 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
 
         @return an AwsS3DataProvider object for this connection
     */
-    /** @note The provider is given the **async** client.  The S3 provider drives every request through
+    /** @note The provider is given the <b>async</b> client.  The S3 provider drives every request through
         @ref RestClientIo::RestClientIo "RestClientIo" so that its pollers are genuinely non-blocking; handing
         it the synchronous client would compile and then block an I/O thread at runtime
     */
@@ -2195,7 +2195,7 @@ public class AwsS3RestConnectionBase inherits AwsRestConnection {
 
 #! Class for Amazon S3 connections; returns @ref AwsRestClient objects configured for S3
 /** Creating one of these needs an access key ID, a secret access key, and the region the buckets live in;
-    everything else is supplied by this class.  In particular **no URL is required**: Amazon serves every region
+    everything else is supplied by this class.  In particular <b>no URL is required</b>: Amazon serves every region
     at a well-known endpoint, so the URL is derived from the region rather than asked for.  The region is offered
     as a list of the AWS regions, and a region not in the list is still accepted, since AWS adds regions over
     time.

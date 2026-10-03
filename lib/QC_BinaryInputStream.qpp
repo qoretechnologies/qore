@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -74,7 +74,7 @@ BinaryInputStream::constructor(data source) [flags=NAMED_ARGS] {
 /**
 
     @param limit the maximum number of bytes to read
-    @return the read bytes (the length is between 1 and `limit` inclusive) or \ref NOTHING if no more bytes are available
+    @return the read bytes (the length is between 1 and <tt>limit</tt> inclusive) or \ref NOTHING if no more bytes are available
 
     @par Example:
     @code{.py}

@@ -211,7 +211,7 @@ module UnstructuredDataProvider {
 
     @section unstructureddataproviderintro UnstructuredDataProvider Introduction
 
-    Data-provider integration for [Unstructured.io](https://unstructured.io), which turns
+    Data-provider integration for <a href="https://unstructured.io">Unstructured.io</a>, which turns
     documents into typed element trees and runs the ingestion pipelines that deliver them to a
     vector store.
 
@@ -223,7 +223,7 @@ module UnstructuredDataProvider {
 
     @section unstructureddataproviderpartition Partitioning Documents
 
-    Two `DPAT_API` actions post to the Partition API's
+    Two <tt>DPAT_API</tt> actions post to the Partition API's
     @c /general/v0/general endpoint:
 
     - @c partition-file — for PDFs, Office documents, images, emails and every other format
@@ -243,10 +243,10 @@ module UnstructuredDataProvider {
     @section unstructureddataproviderplatform The Platform API
 
     Where the Partition API processes one document per call, the Platform API is where continuous
-    ingestion is configured: a **source connector** says where documents are read from, a
-    **destination connector** where the processed output is written (typically a vector store),
-    and a **workflow** ties the two together through a chain of processing nodes.  Running a
-    workflow creates a **job**.
+    ingestion is configured: a <b>source connector</b> says where documents are read from, a
+    <b>destination connector</b> where the processed output is written (typically a vector store),
+    and a <b>workflow</b> ties the two together through a chain of processing nodes.  Running a
+    workflow creates a <b>job</b>.
 
     Everything Platform lives under the @c "platform" child of the connection's data provider:
 

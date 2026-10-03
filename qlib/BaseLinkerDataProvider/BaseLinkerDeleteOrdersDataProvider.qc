@@ -6,7 +6,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker delete-order action data provider
-/** Exposes the BaseLinker `deleteOrders` method; takes an array of `order_ids`
+/** Exposes the BaseLinker <tt>deleteOrders</tt> method; takes an array of <tt>order_ids</tt>
     (up to 1000 per call).
 */
 public class BaseLinkerDeleteOrdersDataProvider inherits BaseLinkerDataProviderBase {

@@ -46,7 +46,7 @@ public const RSAL_HEADER = "header";
 public const RSAL_BODY = "body";
 
 #! Transport location: nowhere - the option names the host the request is sent to
-/** An option in this location is **not** sent: it names the object whose host the request goes to, and is
+/** An option in this location is <b>not</b> sent: it names the object whose host the request goes to, and is
     consumed when that host is resolved.
 
     An API whose data plane is sharded per object usually does not describe the object in the operation at
@@ -131,14 +131,14 @@ public hashdecl RestSchemaFlatFieldInfo {
 
 #! Wraps an option value that is already in wire form, so that its option's codec is not applied to it
 /** A wire codec presents an option in a shape that is convenient to fill in on a form and converts that
-    shape to what the API takes.  That is a **narrowing**: Klaviyo's \c filter argument accepts a whole
+    shape to what the API takes.  That is a <b>narrowing</b>: Klaviyo's \c filter argument accepts a whole
     filter expression, and the codec on it publishes four named fields, because those are the four the
     application it replaces offered.
 
     A record table needs the full argument.  It renders a search expression into the API's own query syntax,
     which means the value it produces is already exactly what the wire takes - and passing it through the
     codec a second time either mangles it or, in Klaviyo's case, converts it to @ref nothing and drops the
-    filter, answering the search with the **unfiltered** collection and no error at all.
+    filter, answering the search with the <b>unfiltered</b> collection and no error at all.
 
     Wrapping the value says so, and is the only thing that lets a table reuse the listing action the manifest
     already exports rather than declaring a second copy of the same path with the codec left off.
@@ -271,7 +271,7 @@ public hashdecl RestSchemaConnectionHeaderInfo {
     are generated, so that every override is visible to
     @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()".
 
-    An overlay expresses **presentation**: what a field is called, whether it is shown first, whether it
+    An overlay expresses <b>presentation</b>: what a field is called, whether it is shown first, whether it
     offers a dropdown.  It must never be used to repair a schema - a missing or malformed reference belongs
     in a normalization step, and a valid construct %Qore cannot parse belongs in
     @ref openapi3intro "OpenApi3".
@@ -300,7 +300,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
     *string name;
 
     #! Send this value, but take it from another option rather than asking for it
-    /** Some APIs require the identity of the object being changed in **both** the URL and the request
+    /** Some APIs require the identity of the object being changed in <b>both</b> the URL and the request
         body: Confluence's page, blog post and task updates all declare a required \c id property beside
         the \c {id} path variable, and the two must always be equal.
 
@@ -334,7 +334,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
     #! Whether values outside @ref allowed_values may also be supplied
     *bool allowed_values_creatable;
 
-    #! Static allowed values for the **elements** of a list-valued field
+    #! Static allowed values for the <b>elements</b> of a list-valued field
     /** A list field enumerates what each of its elements may be, not what the whole list may be, so a set of
         values restored onto one belongs here: @ref allowed_values on a list field describes whole values,
         which turns each entry into a one-element list and any real selection into a list of lists.
@@ -422,7 +422,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
         assembled back from them when the request is built.  A property that collides with an option the
         action already has is reported, as any other collision is.
 
-        Applied **after** @ref codec and @ref type, so a field whose wire form is not an object at all -
+        Applied <b>after</b> @ref codec and @ref type, so a field whose wire form is not an object at all -
         a compound value the API spells as a single string, say - can be presented as a structured type by
         a codec and then lifted into individual options by this.
 
@@ -455,7 +455,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
     #! Overrides for fields nested inside this field's type
     /** Overriding a nested field rewrites only that field; the rest of the derived type is preserved.
 
-        A **union** - a body a vendor describes as one object per kind, discriminated on a property - is
+        A <b>union</b> - a body a vendor describes as one object per kind, discriminated on a property - is
         overlaid one alternative at a time: an entry belongs to every alternative that declares that field
         and to no others, so marking a webhook subscription's signing secret sensitive leaves an email
         subscription untouched.  An entry no alternative declares is an error, exactly as it is for an
@@ -468,7 +468,7 @@ public hashdecl RestSchemaFieldOverlayInfo {
 
 #! Describes one operation exported from a REST schema as an application action
 /** The manifest is the application's own list of what it exports.  It exists so that action identity is
-    **stable**: an OpenAPI \c operationId may be used to locate an operation and is checked for drift, but it
+    <b>stable</b>: an OpenAPI \c operationId may be used to locate an operation and is checked for drift, but it
     is never the source of persistent identity, because an upstream rename must be reported rather than
     silently rename an action that existing workflows call.
 
@@ -572,11 +572,11 @@ public hashdecl RestSchemaActionInfo {
         it.  Naming \c ("data", "attributes") here lifts the *attributes* instead, so the action offers
         \c email and \c first_name, and the envelope is rebuilt when the request is sent.
 
-        A property the schema declares **required** with exactly one permitted value - JSON:API's \c type
+        A property the schema declares <b>required</b> with exactly one permitted value - JSON:API's \c type
         discriminator is always this - is filled in automatically wherever it appears in the envelope,
         because there is nothing for a caller to choose.
 
-        Every other property of the envelope **is published as an option**, at the level it belongs to,
+        Every other property of the envelope <b>is published as an option</b>, at the level it belongs to,
         so that nothing the API accepts is lost by lifting: JSON:API spells the identity of the object
         being changed as \c data.id beside the attributes, and an update that could not send it would be
         unusable.  Such an option is addressed in the overlay by its path within the body

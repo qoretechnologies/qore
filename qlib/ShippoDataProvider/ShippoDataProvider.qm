@@ -371,8 +371,8 @@ module ShippoDataProvider {
 
     @par Authentication:
     Shippo supports two authentication methods:
-    - **API Token**: Use a Shippo API token obtained from your Shippo account settings
-    - **OAuth2**: Use OAuth2 for user-authorized access
+    - <b>API Token</b>: Use a Shippo API token obtained from your Shippo account settings
+    - <b>OAuth2</b>: Use OAuth2 for user-authorized access
 
     @par Example:
     @code{.py}

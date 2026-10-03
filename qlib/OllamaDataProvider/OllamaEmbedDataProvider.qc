@@ -23,7 +23,7 @@
 */
 
 public namespace OllamaDataProvider {
-#! Data provider for Ollama's native `/api/embed` endpoint
+#! Data provider for Ollama's native <tt>/api/embed</tt> endpoint
 /** Uses Ollama's native (not OpenAI-compat) embedding endpoint for the
     richer response shape with timing details and a Ollama-flavoured
     request (truncate, options, keep_alive).

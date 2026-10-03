@@ -143,11 +143,11 @@ module GitLabDataProvider {
     @section gitlabdataproviderintro GitLabDataProvider Introduction
 
     The %GitLabDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [GitLab](https://gitlab.com), on GitLab.com and on self-managed installations alike.
+    <a href="https://gitlab.com">GitLab</a>, on GitLab.com and on self-managed installations alike.
 
     @section gitlabdataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from GitLab's own OpenAPI 3 description** by the
+    The actions this application exports are <b>generated from GitLab's own OpenAPI 3 description</b> by the
     @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  GitLab
     generates that description from its API source and publishes it in the same repository as the code, so
     it cannot silently lag the API; reproducing several hundred request and response fields in %Qore would
@@ -157,7 +157,7 @@ module GitLabDataProvider {
     identifiers should be selectable rather than typed.  Those come from an application-owned manifest and
     UX overlay in @ref GitLabDataProvider::GitLabManifest "GitLabManifest".
 
-    **Two actions are hand-written**, for two different reasons:
+    <b>Two actions are hand-written</b>, for two different reasons:
 
     |!Action|!Why a schema cannot generate it
     |\c postApiV4ProjectsIdRepositoryCommits|GitLab's description declares that one operation with a placeholder request body.  See @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider"
@@ -196,21 +196,21 @@ module GitLabDataProvider {
     |Wikis|project wiki pages
 
     Identifier options are dropdowns wherever the application exports an operation that can list the
-    values, and every dropdown that names something living inside a project or group is **scoped by the
-    container the user chose** - the branches of that project, the members of that group.  Every dropdown
+    values, and every dropdown that names something living inside a project or group is <b>scoped by the
+    container the user chose</b> - the branches of that project, the members of that group.  Every dropdown
     also accepts a value typed or chained in from a previous step, because an identifier usually comes from
     earlier in a workflow and a narrowly scoped token may not be able to list the values at all.
 
     @section gitlabdataprovider_iids IDs and IIDs
 
-    GitLab addresses an issue or a merge request inside a project by its **IID** - the number shown in the
+    GitLab addresses an issue or a merge request inside a project by its <b>IID</b> - the number shown in the
     web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
     different numbers for the same object.  Each action takes whichever its endpoint takes, and each
     dropdown says which it supplies.
 
     @section gitlabdataprovider_pagination Paging Through a Listing
 
-    A GitLab listing returns the records as a **bare array** and reports the paging in response headers
+    A GitLab listing returns the records as a <b>bare array</b> and reports the paging in response headers
     (\c X-Total, \c X-Page, \c X-Next-Page) rather than in the body.  An action therefore returns the
     records themselves, and paging means asking for the next \c page until a page comes back with fewer
     than \c per_page records.  \c per_page is capped at 100.
@@ -218,8 +218,8 @@ module GitLabDataProvider {
     @section gitlabdataprovider_events Events
 
     Four polling events are offered: a new commit, a new comment on a commit, a new issue and a new merge
-    request.  GitLab's REST API has no event stream, so these poll - but they poll with a **timestamp
-    cursor** rather than a bounded in-memory set of delivered identities, which is what the application
+    request.  GitLab's REST API has no event stream, so these poll - but they poll with a <b>timestamp
+    cursor</b> rather than a bounded in-memory set of delivered identities, which is what the application
     this module replaces used.  That means:
 
     - a restart resumes where it left off instead of re-delivering the first page;
@@ -238,13 +238,13 @@ module GitLabDataProvider {
 
     Each table takes the standard search expressions.  What the listing's own arguments can express is sent
     to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
-    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+    the caller's \c limit is met <b>by matching records</b>, so a search never silently under-returns.
 
-    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    The tables declare \c supports_search_expressions and <b>not</b> \c supports_native_search: this API has no
     filter expression language, so a search does not happen entirely on the server, and each operator says
     for itself whether the service can evaluate it.
 
-    An issue and a merge request are addressed by the \c iid that identifies them **within their project**,
+    An issue and a merge request are addressed by the \c iid that identifies them <b>within their project</b>,
     because that is what every GitLab endpoint reading or changing one takes; a CI variable is addressed by
     its \c key, a branch by its name and a wiki page by its \c slug, for the same reason.
 

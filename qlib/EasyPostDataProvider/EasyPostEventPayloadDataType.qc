@@ -31,7 +31,7 @@ public class EasyPostEventPayloadType inherits HashDataType {
     }
 }
 
-#! Response type for `GET /events/:id/payloads` (list wrapper)
+#! Response type for <tt>GET /events/:id/payloads</tt> (list wrapper)
 public class EasyPostEventPayloadsResponseType inherits HashDataType {
     public {
         const Fields = {

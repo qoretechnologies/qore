@@ -56,7 +56,7 @@ public const BitbucketMaxPollPages = 5;
     relies on the cursor to discard what it has already delivered.  @ref BitbucketMaxPollPages bounds how
     far back a single cycle reads.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to
     the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation
@@ -114,7 +114,7 @@ public class BitbucketWatchDataProviderBase inherits DataProvider::AbstractTimes
         *BitbucketRestClient::BitbucketRestClientIo rest;
 
         #! The workspace being watched
-        /** Optional here rather than required, because the provider is also constructed as a **template**
+        /** Optional here rather than required, because the provider is also constructed as a <b>template</b>
             when the application's children are enumerated, before anybody has chosen one.  It is required
             to subscribe, which is checked in @ref observersReady().
         */
@@ -585,7 +585,7 @@ public class BitbucketEventsDataProvider inherits DataProvider::AbstractDataProv
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

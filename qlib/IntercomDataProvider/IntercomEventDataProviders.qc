@@ -56,7 +56,7 @@ public const IntercomCreatedField = "created_at";
     that cursor upstream as a search filter, so a cycle reads only what is genuinely new and a restart
     resumes from the durable checkpoint.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to
     the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation as
@@ -68,7 +68,7 @@ public const IntercomCreatedField = "created_at";
     converted in both directions rather than compared as a date.
 
     Its search operators are \c "=", \c "!=", \c "IN", \c "NIN", \c "<", \c ">", \c "~", \c "!~", \c "^"
-    and \c "$" - there is **no** \c ">=".  The cursor needs "at or after", because a record sharing the
+    and \c "$" - there is <b>no</b> \c ">=".  The cursor needs "at or after", because a record sharing the
     cursor's timestamp that has not been delivered yet still has to be, so the filter asks for
     \c "> (cursor - 1 second)".  That is exact rather than approximate: the values are whole seconds, so
     one less than the cursor excludes exactly the instants before it.
@@ -446,7 +446,7 @@ public class IntercomNewContactDataProvider inherits IntercomWatchDataProviderBa
     }
 
     #! Returns the configuration that defines which scan this provider follows
-    /** \c role selects **which** contacts the feed returns, so it defines the scan: resuming a cursor
+    /** \c role selects <b>which</b> contacts the feed returns, so it defines the scan: resuming a cursor
         taken with one role against another would silently skip every contact created before the change.
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
@@ -596,7 +596,7 @@ public class IntercomEventsDataProvider inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

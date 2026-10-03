@@ -26,7 +26,7 @@
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
 /** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `conversations/items/list` data provider instead
+    use the <tt>conversations/items/list</tt> data provider instead
 */
 public class OpenAiThreadMessagesGetDataProvider inherits OpenAiDataProviderCommon {
     public {

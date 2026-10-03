@@ -89,8 +89,8 @@ public class LinkedInOrgActionProviderBase inherits LinkedInOrganizationsDataPro
     }
 
     #! Returns the organizational-page URN for an organization
-    /** The analytics and follows APIs address an **organizational page**, while the feed API
-        addresses an **organization**; the two are different URN types.  The page URN is read from
+    /** The analytics and follows APIs address an <b>organizational page</b>, while the feed API
+        addresses an <b>organization</b>; the two are different URN types.  The page URN is read from
         the organization's own profile rather than assembled from its ID, because nothing in
         LinkedIn's contract promises the two share a number.
 

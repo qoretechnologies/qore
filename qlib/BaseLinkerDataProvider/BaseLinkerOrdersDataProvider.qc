@@ -5,10 +5,10 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker orders collection data provider (`getOrders`)
+#! BaseLinker orders collection data provider (<tt>getOrders</tt>)
 /** Uses BaseLinker's cursor-based pagination: walks forward by bumping
-    `id_from` to one past the last `order_id` seen; stops when a page returns
-    fewer than @ref OrdersPageSize rows or when the caller-supplied `limit`
+    <tt>id_from</tt> to one past the last <tt>order_id</tt> seen; stops when a page returns
+    fewer than @ref OrdersPageSize rows or when the caller-supplied <tt>limit</tt>
     is exhausted.
 */
 public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
@@ -51,7 +51,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
                 Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteOrderProductDataProvider"),
         };
 
-        #! Search options exposed for `list-orders` and `get-order`
+        #! Search options exposed for <tt>list-orders</tt> and <tt>get-order</tt>
         const SearchOptions = {
             "order_id": <DataProviderOptionInfo>{
                 "display_name": "Order ID",

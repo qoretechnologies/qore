@@ -669,7 +669,7 @@ public class ParameterGroup inherits Qore::Serializable {
             does not declare is folded into it, which is how an API that accepts arbitrary
             \c "name[key]=value" arguments is described.
 
-            That only works when there is **exactly one** such parameter, because otherwise there is
+            That only works when there is <b>exactly one</b> such parameter, because otherwise there is
             no unambiguous destination — so this is set only in that case, and cleared as soon as a
             second object-valued query parameter is declared.
 
@@ -3007,7 +3007,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         @return the request body field, or @ref NOTHING when no body is declared
 
         Multipart binary properties accept a @ref DataProvider::FileDataType "FileDataType" value
-        containing `name`, `content`, and optional `mime_type`, as well as existing raw binary inputs.
+        containing <tt>name</tt>, <tt>content</tt>, and optional <tt>mime_type</tt>, as well as existing raw binary inputs.
         The schema's response types remain unchanged.
     */
     *AbstractDataField getRequestBodyField(PathItemObject pio, *object rest) {
@@ -5173,7 +5173,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         scalar type.  Coercion is right when a type stands alone and wrong when it is one alternative among
         several, because it is what tells the alternatives apart.
 
-        An \c array alternative that soft-accepts a scalar matches **everything**, so a \c oneOf mixing a
+        An \c array alternative that soft-accepts a scalar matches <b>everything</b>, so a \c oneOf mixing a
         scalar alternative with an array one can never be satisfied by a scalar: two alternatives match and
         the keyword requires exactly one.  Intercom's search filter is exactly that shape - a value is
         \c "oneOf: [string, integer, boolean, array]" - and every search was rejected before the request was
@@ -5861,7 +5861,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         adds no option and is a constraint, as is a \c not, which only excludes values, and as is a
         nested \c anyOf of the same.  Pinecone writes all three of its document selectors that way, each
         branch naming a property of the parent, and reading the branches as alternative shapes published
-        a delete and an update action with **no options at all** - not a poor option shape, an absent
+        a delete and an update action with <b>no options at all</b> - not a poor option shape, an absent
         one.
     */
     bool isConstraintOnlyComposition() {
@@ -6260,7 +6260,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         \c format, \c enum or array \c items would validate values the schema rejects.
     */
     #! Returns the composition of two schemas an \c allOf declares under the same property name
-    /** \c allOf is an **intersection**: a value has to satisfy every member, so when two members declare
+    /** \c allOf is an <b>intersection</b>: a value has to satisfy every member, so when two members declare
         the same property as an object, that property's contract is the union of what both declare.  Taking
         whichever was seen first drops the rest of it.
 
@@ -6567,7 +6567,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         branch, while \c "type: object" is declared once, on the parent.  Reading the branch in isolation and
         demanding a type there rejects a valid document.
 
-        A **declared** non-object type is still refused, which is where the check earns its place: \c "minProperties"
+        A <b>declared</b> non-object type is still refused, which is where the check earns its place: \c "minProperties"
         on a \c "type: string" is a mistake in any document.
     */
     private checkObjectProperty(string name, string prop) {

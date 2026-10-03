@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Allowed values for `contents_type`
+#! Allowed values for <tt>contents_type</tt>
 const ContentsTypeAllowedValues = (
     <AllowedValueInfo>{"value": "documents", "desc": "Documents"},
     <AllowedValueInfo>{"value": "gift", "desc": "Gift"},
@@ -16,13 +16,13 @@ const ContentsTypeAllowedValues = (
     <AllowedValueInfo>{"value": "other", "desc": "Other (requires `contents_explanation`)"},
 );
 
-#! Allowed values for `non_delivery_option`
+#! Allowed values for <tt>non_delivery_option</tt>
 const NonDeliveryOptionAllowedValues = (
     <AllowedValueInfo>{"value": "return", "desc": "Return to sender"},
     <AllowedValueInfo>{"value": "abandon", "desc": "Abandon"},
 );
 
-#! Allowed values for `restriction_type`
+#! Allowed values for <tt>restriction_type</tt>
 const RestrictionTypeAllowedValues = (
     <AllowedValueInfo>{"value": "none", "desc": "None"},
     <AllowedValueInfo>{"value": "other", "desc": "Other"},

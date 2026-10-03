@@ -176,11 +176,11 @@ module GitHubDataProvider {
     @section githubdataproviderintro GitHubDataProvider Introduction
 
     The %GitHubDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [GitHub](https://github.com)'s REST API.
+    <a href="https://github.com">GitHub</a>'s REST API.
 
     @section githubdataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from GitHub's own OpenAPI 3 description** by the
+    The actions this application exports are <b>generated from GitHub's own OpenAPI 3 description</b> by the
     @ref restschemaactionsintro "RestSchemaActions" module; the presentation comes from an
     application-owned manifest and UX overlay in
     @ref GitHubDataProvider::GitHubManifest "GitHubManifest".
@@ -222,8 +222,8 @@ module GitHubDataProvider {
 
     @section githubdataprovider_pagination Paging Through a Listing
 
-    GitHub pages with \c page and \c per_page, and \c per_page is capped at **100**.  The body is the bare
-    array; the next and last pages are reported in the \c Link **response header**, and a page shorter than
+    GitHub pages with \c page and \c per_page, and \c per_page is capped at <b>100</b>.  The body is the bare
+    array; the next and last pages are reported in the \c Link <b>response header</b>, and a page shorter than
     the size asked for is the last one.
 
     The two search actions are different: they return \c {total_count, items} and are capped at 1000
@@ -231,23 +231,23 @@ module GitHubDataProvider {
 
     @section githubdataprovider_events Events
 
-    Seven webhook events are offered.  Each registers a hook on **one repository** - so \c owner and
-    \c repo are required options - with a generated shared secret, and **drops any delivery whose
-    \c X-Hub-Signature-256 does not verify**.  The application this module replaces registered its hooks
+    Seven webhook events are offered.  Each registers a hook on <b>one repository</b> - so \c owner and
+    \c repo are required options - with a generated shared secret, and <b>drops any delivery whose
+    \c X-Hub-Signature-256 does not verify</b>.  The application this module replaces registered its hooks
     with no secret at all, so nothing it received could be checked.
 
-    Each event raises only the change its name describes: **New Issue** raises \c opened and not \c edited
-    or \c closed, **New Branch** raises a branch and not a tag.  Set \c all_actions to receive every
+    Each event raises only the change its name describes: <b>New Issue</b> raises \c opened and not \c edited
+    or \c closed, <b>New Branch</b> raises a branch and not a tag.  Set \c all_actions to receive every
     delivery of the underlying GitHub event and read the payload's \c action to tell them apart.
 
     @section githubdataprovider_records Record-Based Tables
 
     Seven tables are exposed under \c tables.  \c issues, \c pulls, \c releases and \c repositories are
-    read and written, and are **flattened, writable projections** rather than GitHub's response shapes: an
+    read and written, and are <b>flattened, writable projections</b> rather than GitHub's response shapes: an
     issue's labels are names, its assignee a login, a pull request's base and head branch names.  \c owner
     and \c repo are required search and create options, because a table is scoped to one repository.
 
-    \c labels, \c collaborators and \c contributors are **read only**: this application exports no create,
+    \c labels, \c collaborators and \c contributors are <b>read only</b>: this application exports no create,
     update or delete for any of them, so those tables declare none rather than offering an action that could
     only fail.  They publish GitHub's own record shape, having no predecessor whose column names have to be
     preserved, and each is named by what GitHub's paths take - a label by its \c name, a collaborator and a
@@ -268,7 +268,7 @@ module GitHubDataProvider {
 
     \c delete applies to \c repositories alone: GitHub's REST API cannot delete an issue, a pull request or a
     release - an issue is closed rather than removed, which is an update - and every other table reports that
-    it cannot rather than pretending.  **Deleting a repository cannot be undone.**
+    it cannot rather than pretending.  <b>Deleting a repository cannot be undone.</b>
 
     \c repositories is also the one table with no repository scope, because its records are the repositories.
     GitHub names one by its \c {owner} and its \c {repo}, so a record there is addressed by two values: the
@@ -279,10 +279,10 @@ module GitHubDataProvider {
     A table takes the standard search expressions, and answers one in two parts.  What GitHub can evaluate is
     sent with the listing: an issue's \c state, a pull request's \c base branch, and \c since for issues
     updated after a point in time.  Everything else is evaluated against each record as it arrives, and the
-    listing is paged until the caller's \c limit is met **by matching records** - so a search for ten closed
+    listing is paged until the caller's \c limit is met <b>by matching records</b> - so a search for ten closed
     issues returns ten of them however far into the repository they are.
 
-    The tables therefore declare \c supports_search_expressions and **not** \c supports_native_search: GitHub
+    The tables therefore declare \c supports_search_expressions and <b>not</b> \c supports_native_search: GitHub
     has no filter expression language, so the search does not happen entirely on the server, and each
     operator says for itself whether GitHub can evaluate it.
 

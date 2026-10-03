@@ -22,7 +22,7 @@ public class EasyPostPaymentResultType inherits HashDataType {
     }
 }
 
-#! Payment event payload (`payment.completed` / `payment.failed`)
+#! Payment event payload (<tt>payment.completed</tt> / <tt>payment.failed</tt>)
 public class EasyPostPaymentEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

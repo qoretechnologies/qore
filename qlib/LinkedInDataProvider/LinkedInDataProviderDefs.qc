@@ -48,7 +48,7 @@ public const VideosPath = LinkedInRestClient::LinkedInRestPrefix + "/videos";
 public const UserInfoPath = LinkedInRestClient::LinkedInV2Prefix + "/userinfo";
 
 #! The header carrying the ID of an entity a versioned write created
-/** A LinkedIn write returns \c 201 with an **empty body**; the created entity's URN is in this
+/** A LinkedIn write returns \c 201 with an <b>empty body</b>; the created entity's URN is in this
     response header and nowhere else.
 */
 public const RestliIdHeader = "x-restli-id";

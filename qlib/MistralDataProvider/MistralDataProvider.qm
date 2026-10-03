@@ -70,7 +70,7 @@ module MistralDataProvider {
     @section mistraldataproviderintro MistralDataProvider Introduction
 
     The %MistralDataProvider module exposes 161 completed-response actions from the pinned official
-    [Mistral AI](https://mistral.ai) OpenAPI description. Request options, validation, and response types
+    <a href="https://mistral.ai">Mistral AI</a> OpenAPI description. Request options, validation, and response types
     come from that description; the reviewed manifest adds presentation, finite choices and resource
     dropdowns. The schema is installed with the module and is never downloaded during an action call.
 

@@ -206,7 +206,7 @@ public const AllWebhookTopics = (
     "coupon.restored",
 );
 
-#! Allowed values for built-in webhook topics; use `allowed_values_creatable` to allow custom `action.*` topics
+#! Allowed values for built-in webhook topics; use <tt>allowed_values_creatable</tt> to allow custom <tt>action.*</tt> topics
 public const WebhookTopicAllowedValues = map <AllowedValueInfo>{
     "display_name": $1,
     "short_desc": sprintf("Webhook topic: %s", $1),

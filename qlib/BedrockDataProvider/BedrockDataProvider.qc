@@ -48,14 +48,14 @@ public class BedrockDataProvider inherits BedrockDataProviderCommon {
     #! Creates the object from constructor options
     /** @param options provider and AWS authentication options
 
-        @throw CONSTRUCTOR-ERROR if the options are invalid or omit both `aws_region` and `restclient`
+        @throw CONSTRUCTOR-ERROR if the options are invalid or omit both <tt>aws_region</tt> and <tt>restclient</tt>
         @throw AWSRESTCLIENT-ERROR if the AWS client options are invalid
     */
     constructor(*hash<auto> options) : BedrockDataProviderCommon(options) {
     }
 
     #! Returns the data provider name
-    /** @return `bedrock` */
+    /** @return <tt>bedrock</tt> */
     string getName() {
         return ProviderInfo.name;
     }

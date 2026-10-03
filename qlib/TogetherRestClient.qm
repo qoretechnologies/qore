@@ -56,7 +56,7 @@ module TogetherRestClient {
     @section togetherrestclientintro TogetherRestClient Introduction
 
     The %TogetherRestClient module provides an API for calling
-    [Together AI](https://www.together.ai) REST API services.
+    <a href="https://www.together.ai">Together AI</a> REST API services.
 
     Together AI serves an OpenAI-compatible API surface (chat completions,
     embeddings, image generation) over a wide selection of open-weight

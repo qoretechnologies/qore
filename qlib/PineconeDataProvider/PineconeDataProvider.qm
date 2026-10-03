@@ -110,11 +110,11 @@ module PineconeDataProvider {
 
     @section pineconedataproviderintro PineconeDataProvider Introduction
 
-    Data-provider integration for [Pinecone](https://www.pinecone.io), a managed vector database for
+    Data-provider integration for <a href="https://www.pinecone.io">Pinecone</a>, a managed vector database for
     semantic search, hybrid search and retrieval-augmented generation.
 
-    The **Pinecone** application covers the database and inference APIs, with 52 API actions and
-    ten record tables. The separate **Pinecone Admin** application exposes 32 organization-management
+    The <b>Pinecone</b> application covers the database and inference APIs, with 52 API actions and
+    ten record tables. The separate <b>Pinecone Admin</b> application exposes 32 organization-management
     actions using a service-account connection.
 
     |!Group|!What it does
@@ -132,13 +132,13 @@ module PineconeDataProvider {
 
     @section pineconedataproviderhost The Index Decides Where the Request Goes
 
-    Pinecone has a **control plane** at \c api.pinecone.io that manages indexes, and a **data plane**
-    that is served from a **different host for every index** — a host only the control plane knows.
+    Pinecone has a <b>control plane</b> at \c api.pinecone.io that manages indexes, and a <b>data plane</b>
+    that is served from a <b>different host for every index</b> — a host only the control plane knows.
     Its own description says so, declaring the data-plane server as the template
-    \c "https://{index_host}", and **none of the 24 data-plane operations names an index anywhere**:
+    \c "https://{index_host}", and <b>none of the 24 data-plane operations names an index anywhere</b>:
     not in a path variable, not in a query argument, not in a body property.  The index *is* the host.
 
-    Every data-plane action therefore gains an \c index option that is **not sent**: it selects where
+    Every data-plane action therefore gains an \c index option that is <b>not sent</b>: it selects where
     the request goes.  The host is resolved through \c describe-index once per index and cached for as
     long as the data provider lives, so all 24 actions on one index share a single client, and the
     option is an ordinary dropdown of the project's indexes.
@@ -150,17 +150,17 @@ module PineconeDataProvider {
 
     @section pineconedataproviderpicking Which Actions to Use
 
-    Pinecone has three ways to put data in and get it out, and they are **not** interchangeable — each
+    Pinecone has three ways to put data in and get it out, and they are <b>not</b> interchangeable — each
     needs the matching kind of index:
 
     |!Family|!You supply|!Index it needs
     |Vectors|vectors you embedded yourself|a classic vector index (the reserved \c _values / \c _sparse_values schema)
-    |Records|text, embedded by Pinecone|an index created with **Create Index with Integrated Embedding**
+    |Records|text, embedded by Pinecone|an index created with <b>Create Index with Integrated Embedding</b>
     |Documents|typed fields declared in the index schema|an index created with a field schema
 
     Sending text to an index without integrated embedding is rejected with \c 400, which is the usual
-    first surprise.  **Create Index with Integrated Embedding** is what makes **Upsert Text** and
-    **Search with Text** available.
+    first surprise.  <b>Create Index with Integrated Embedding</b> is what makes <b>Upsert Text</b> and
+    <b>Search with Text</b> available.
 
     @section pineconedataproviderusage Searching an Index
 
@@ -193,9 +193,9 @@ hash<auto> found = pinecone.getChildProviderEx("search-records").doRequest({
     @section pineconedataprovidercollections Collections Are Legacy
 
     The four collection actions are exported, and Pinecone's own description says of each that
-    collections are supported only for pod-based indexes and that pod-based indexes **cannot be
-    created** at API version \c 2026-07.  They are kept because a project that still has an index from
-    an earlier version still has collections to manage; for anything current, use **backups**.
+    collections are supported only for pod-based indexes and that pod-based indexes <b>cannot be
+    created</b> at API version \c 2026-07.  They are kept because a project that still has an index from
+    an earlier version still has collections to manage; for anything current, use <b>backups</b>.
 
     @section pineconedataproviderschema How the Actions Are Generated
 
@@ -205,7 +205,7 @@ hash<auto> found = pinecone.getChildProviderEx("search-records").doRequest({
     @ref PineconeDataProvider::PineconeManifest "PineconeManifest" for what is exported and why, and
     @ref PineconeDataProvider::PineconeSchema "PineconeSchema" for the pinned documents' provenance.
 
-    Two things about Pinecone's descriptions are worth knowing here.  They declare **no** \c "enum" for
+    Two things about Pinecone's descriptions are worth knowing here.  They declare <b>no</b> \c "enum" for
     any finite value set, writing them as an \c "x-enum" vendor extension the parser cannot see, so the
     metric, cloud, deletion protection, backup frequency, import error mode and model type would all
     generate as free text; the manifest restores them, with the vendor's own values.  All 84 API

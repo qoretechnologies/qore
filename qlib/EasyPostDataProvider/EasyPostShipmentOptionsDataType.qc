@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Allowed values for `delivery_confirmation`
+#! Allowed values for <tt>delivery_confirmation</tt>
 const DeliveryConfirmationAllowedValues = (
     <AllowedValueInfo>{"value": "ADULT_SIGNATURE", "desc": "Adult signature required (USPS, UPS, FedEx)"},
     <AllowedValueInfo>{"value": "ADULT_SIGNATURE_RESTRICTED", "desc": "Adult signature, restricted delivery"},
@@ -18,7 +18,7 @@ const DeliveryConfirmationAllowedValues = (
     <AllowedValueInfo>{"value": "DO_NOT_SAFE_DROP", "desc": "Do not safe-drop"},
 );
 
-#! Allowed values for `dropoff_type`
+#! Allowed values for <tt>dropoff_type</tt>
 const DropoffTypeAllowedValues = (
     <AllowedValueInfo>{"value": "REGULAR_PICKUP", "desc": "Regular daily pickup"},
     <AllowedValueInfo>{"value": "SCHEDULED_PICKUP", "desc": "Scheduled pickup"},
@@ -27,7 +27,7 @@ const DropoffTypeAllowedValues = (
     <AllowedValueInfo>{"value": "DROP_BOX", "desc": "Drop in drop-box"},
 );
 
-#! Allowed values for `label_format`
+#! Allowed values for <tt>label_format</tt>
 const LabelFormatAllowedValues = (
     <AllowedValueInfo>{"value": "PNG", "desc": "PNG image"},
     <AllowedValueInfo>{"value": "PDF", "desc": "PDF document"},
@@ -35,14 +35,14 @@ const LabelFormatAllowedValues = (
     <AllowedValueInfo>{"value": "EPL2", "desc": "Eltron EPL2"},
 );
 
-#! Allowed values for `label_size`
+#! Allowed values for <tt>label_size</tt>
 const LabelSizeAllowedValues = (
     <AllowedValueInfo>{"value": "4x6", "desc": "4 by 6 inches"},
     <AllowedValueInfo>{"value": "8.5x11", "desc": "8.5 by 11 inches"},
     <AllowedValueInfo>{"value": "4x5", "desc": "4 by 5 inches"},
 );
 
-#! Allowed values for `incoterm`
+#! Allowed values for <tt>incoterm</tt>
 const IncotermAllowedValues = (
     <AllowedValueInfo>{"value": "CFR", "desc": "Cost and Freight"},
     <AllowedValueInfo>{"value": "CIF", "desc": "Cost, Insurance, and Freight"},
@@ -57,14 +57,14 @@ const IncotermAllowedValues = (
     <AllowedValueInfo>{"value": "FOB", "desc": "Free on Board"},
 );
 
-#! Allowed values for `cod_method`
+#! Allowed values for <tt>cod_method</tt>
 const CodMethodAllowedValues = (
     <AllowedValueInfo>{"value": "CASH", "desc": "Cash"},
     <AllowedValueInfo>{"value": "CHECK", "desc": "Check"},
     <AllowedValueInfo>{"value": "MONEY_ORDER", "desc": "Money order"},
 );
 
-#! Allowed values for `endorsement`
+#! Allowed values for <tt>endorsement</tt>
 const EndorsementAllowedValues = (
     <AllowedValueInfo>{"value": "ADDRESS_SERVICE_REQUESTED", "desc": "Address service requested"},
     <AllowedValueInfo>{"value": "FORWARDING_SERVICE_REQUESTED", "desc": "Forwarding service requested"},
@@ -73,7 +73,7 @@ const EndorsementAllowedValues = (
     <AllowedValueInfo>{"value": "LEAVE_IF_NO_RESPONSE", "desc": "Leave if no response"},
 );
 
-#! Allowed values for `hazmat`
+#! Allowed values for <tt>hazmat</tt>
 const HazmatAllowedValues = (
     <AllowedValueInfo>{"value": "PRIMARY_CONTAINED", "desc": "Primary, contained"},
     <AllowedValueInfo>{"value": "PRIMARY_PACKED", "desc": "Primary, packed"},
@@ -105,7 +105,7 @@ const HazmatAllowedValues = (
     <AllowedValueInfo>{"value": "LIGHTERS", "desc": "Lighters"},
 );
 
-#! Allowed values for `payment.type` and `duty_payment.type`
+#! Allowed values for <tt>payment.type</tt> and <tt>duty_payment.type</tt>
 const PaymentTypeAllowedValues = (
     <AllowedValueInfo>{"value": "SENDER", "desc": "Sender pays"},
     <AllowedValueInfo>{"value": "THIRD_PARTY", "desc": "Third party pays (requires `account`, `country`, `postal_code`)"},
@@ -113,7 +113,7 @@ const PaymentTypeAllowedValues = (
     <AllowedValueInfo>{"value": "COLLECT", "desc": "Collect on delivery (FedEx only)"},
 );
 
-#! Payment object used by `payment` and `duty_payment` shipment options
+#! Payment object used by <tt>payment</tt> and <tt>duty_payment</tt> shipment options
 public class EasyPostPaymentType inherits HashDataType {
     public {
         const Fields = {

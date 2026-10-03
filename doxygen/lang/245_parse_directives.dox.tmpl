@@ -324,12 +324,12 @@
     Appends a directory to the module search path.  Two forms are supported; the scanner
     dispatches on the first non-whitespace character of the argument:
 
-    - **Legacy form** (unquoted, colon-separated): appends the given directories to
+    - <b>Legacy form</b> (unquoted, colon-separated): appends the given directories to
       qore's <em>process-global</em> module path; performs \c $VAR-style environment
       variable substitution. Only directories that exist and are readable are added
       to the path. Shared across every @ref Qore::Program "Program" in the process.
       \n\n
-    - **New-style form** (quoted, single path): appends the given path to the
+    - <b>New-style form</b> (quoted, single path): appends the given path to the
       <em>current Program's</em>
       @ref prepend-module-path "per-Program appended module path list". Supports \c ${NAME} expansion against a table of predefined macros
       (\c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION,

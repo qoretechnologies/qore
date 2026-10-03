@@ -620,10 +620,10 @@ public class AwsS3DataProviderBase inherits DataProvider::AbstractDataProvider {
 /** Wraps the REST client's caller-driven poll operation so that a polled S3 request behaves like a blocking
     one in the two ways that matter to a caller:
 
-    - **a transient I/O error is retried.**  @ref AwsS3DataProviderBase::doS3Request() retries up to
+    - <b>a transient I/O error is retried.</b>  @ref AwsS3DataProviderBase::doS3Request() retries up to
       @ref AwsS3DataProviderBase::MaxIoRetries times, and a poller that gave up on the first dropped
       connection would be less reliable than the blocking path it replaces rather than more
-    - **a failure is reported as an S3 error.**  S3 describes what went wrong in an XML document in the
+    - <b>a failure is reported as an S3 error.</b>  S3 describes what went wrong in an XML document in the
       response body; without unpacking it the caller sees only an HTTP status, which does not distinguish
       "no such bucket" from "access denied"
 

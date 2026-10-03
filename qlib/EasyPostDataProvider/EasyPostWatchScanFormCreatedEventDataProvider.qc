@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `scan_form.created` webhook events
+#! Watches for <tt>scan_form.created</tt> webhook events
 public class EasyPostWatchScanFormCreatedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

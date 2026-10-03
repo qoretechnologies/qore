@@ -5,7 +5,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! A single courier service (from getCourierServices)
-/** BaseLinker returns services as a flat hash `{"<service_id>": "<service_name>"}`;
+/** BaseLinker returns services as a flat hash <tt>{"&lt;service_id&gt;": "&lt;service_name&gt;"}</tt>;
     the collection provider flattens each entry into this record shape.
 */
 public class BaseLinkerCourierServiceDataType inherits HashDataType {

@@ -60,7 +60,7 @@ public const RestSchemaRecordPagingModes = {
 
 #! Describes how a record table's listing action walks from one page to the next
 /** A record search may have to read arbitrarily far into a collection: the limit given by the caller counts
-    **matching** records, and a predicate the API cannot evaluate is applied to each page as it arrives.  A
+    <b>matching</b> records, and a predicate the API cannot evaluate is applied to each page as it arrives.  A
     table that could only read the page the listing returns by default would silently under-return, which is
     the defect this declaration exists to prevent.
 
@@ -111,13 +111,13 @@ public hashdecl RestSchemaRecordPagingInfo {
 
 #! Declares one predicate a record table's listing action can evaluate itself
 /** Filtering is what makes a record search on a REST API usable at all: a table with ten thousand records
-    behind a page size of 100 cannot be searched by reading all of it.  This declares, for one **field** and
-    one **operator**, the listing action option that expresses it.
+    behind a page size of 100 cannot be searched by reading all of it.  This declares, for one <b>field</b> and
+    one <b>operator</b>, the listing action option that expresses it.
 
     @section restschemarecordfilter_exact Exactness Is the Load-Bearing Property
 
     @ref exact says whether the API's filter means exactly what the operator means.  It defaults to
-    @ref False, which is the answer that cannot produce a wrong result: the filter is sent **and** the
+    @ref False, which is the answer that cannot produce a wrong result: the filter is sent <b>and</b> the
     predicate is evaluated again on the records that come back, so an API that returns more than it was asked
     for costs a little client-side work and nothing else.
 
@@ -167,7 +167,7 @@ public hashdecl RestSchemaRecordFilterInfo {
     one that only narrows what it fetches.
 
     The syntax is declared rather than coded because most of it is small and entirely regular: a token per
-    operator in one of three rendering forms, and one function that renders a value.  What is **not**
+    operator in one of three rendering forms, and one function that renders a value.  What is <b>not</b>
     regular - which fields the API will accept in a filter - belongs to the table, not the syntax.
 
     @section restschemaquerysyntax_forms The Three Rendering Forms
@@ -183,14 +183,14 @@ public hashdecl RestSchemaRecordFilterInfo {
     @section restschemaquerysyntax_connectives A Language Need Not Have Every Connective
 
     @ref and_op is mandatory because a language with no conjunction cannot express a search at all, but
-    @ref or_op and @ref not_op are optional, and a language that does not declare one **cannot render it**:
+    @ref or_op and @ref not_op are optional, and a language that does not declare one <b>cannot render it</b>:
     the whole expression becomes residual and is evaluated client-side.  Klaviyo's \c filter argument supports
     neither, so declaring them there would either drop half a search or send Klaviyo a query it rejects.
 
     @section restschemaquerysyntax_hook Rendering the Whole Expression
 
     @ref render_query takes the rendering over entirely, for a language whose query is not a string at all:
-    Intercom's search takes a **tree of hashes** in the request body.  The operator tables are still declared
+    Intercom's search takes a <b>tree of hashes</b> in the request body.  The operator tables are still declared
     alongside it and still decide what is pushed down, so
     @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" and the residual
     predicate stay declarative; only the spelling moves into the hook.
@@ -271,7 +271,7 @@ public hashdecl RestSchemaQuerySyntaxInfo {
         @ref RestSchemaActions::RestSchemaRecordFilter::canRender() "canRender()", so every operator in it is
         one this syntax declares and every connective is one it has
 
-        Returns the value to place on the query option, which need **not** be a string: Intercom's search
+        Returns the value to place on the query option, which need <b>not</b> be a string: Intercom's search
         takes a hash
 
         @see @ref restschemaquerysyntax_hook
@@ -293,13 +293,13 @@ public hashdecl RestSchemaRecordQueryInfo {
     /** A predicate naming a field absent from this set is evaluated client-side.  Both Xero and Bitbucket
         reject a filter naming a field they do not index, so offering one would turn a search into an error.
 
-        Declare this **or** @ref field_ops, not both.
+        Declare this <b>or</b> @ref field_ops, not both.
     */
     *hash<string, bool> fields;
 
     #! The operators the API will accept, per field, where they differ from one field to the next
-    /** Some APIs index a field for some comparisons and not others, and differ on that **within one
-        collection**.  Klaviyo accepts \c equals on a profile's \c id and only \c greater-than and
+    /** Some APIs index a field for some comparisons and not others, and differ on that <b>within one
+        collection</b>.  Klaviyo accepts \c equals on a profile's \c id and only \c greater-than and
         \c less-than on its \c created - it has no \c greater-or-equal there at all, though it has one on a
         campaign's \c created_at - and it answers a filter using an operator it does not allow on that field
         with an error rather than with records.
@@ -315,12 +315,12 @@ public hashdecl RestSchemaRecordQueryInfo {
 },
         @endcode
 
-        When this is declared it is the **whole** statement of what the API will filter on: a field absent
+        When this is declared it is the <b>whole</b> statement of what the API will filter on: a field absent
         from it is not filterable at all, and a predicate using an operator absent from a field's set is
         evaluated client-side.  An \c "in" is still rendered on a field that allows only equality, because
         the language expands it into a disjunction of equalities - where the language has a disjunction.
 
-        Declare this **or** @ref fields, not both.
+        Declare this <b>or</b> @ref fields, not both.
     */
     *hash<string, hash<string, bool>> field_ops;
 
@@ -333,7 +333,7 @@ public hashdecl RestSchemaRecordQueryInfo {
     #! Operators the language can render but whose meaning is not exactly the operator's
     /** A rendered query is normally taken as exact, because the service evaluates it.  An operator listed
         here is the exception: it is still rendered and sent, because it narrows what has to be read, but the
-        predicate is **also** evaluated on what comes back.
+        predicate is <b>also</b> evaluated on what comes back.
 
         This is for an operator whose spelling matches and whose semantics do not quite: a "contains" the
         vendor documents without saying whether it is case-sensitive, a comparison that coerces its operands.
@@ -382,7 +382,7 @@ public hashdecl RestSchemaRecordListingInfo {
     @section restschemarecordtable_type The Record Type
 
     By default the record type is derived from the schema's own description of the record, so it cannot drift
-    from the contract the table's actions use.  It is taken from **both** reading actions: a listing returns a
+    from the contract the table's actions use.  It is taken from <b>both</b> reading actions: a listing returns a
     projection and a single read returns the record, the two rarely agree - GitLab describes a project with 24
     fields in its listing and 161 in its single read - and the richer of them is published, with any column
     only the other declares added to it.
@@ -465,22 +465,22 @@ public hashdecl RestSchemaRecordTableInfo inherits RestSchemaRecordListingInfo {
         field supplying it - a \c "." separated path where the value is nested in the record.
 
         An API does not always address a record with one value.  GitHub names a repository by its
-        \c {owner} **and** its \c {repo}, both path variables, and a repository record carries the second as
+        \c {owner} <b>and</b> its \c {repo}, both path variables, and a repository record carries the second as
         \c name and the first as \c "owner.login", because its \c owner is an object rather than a string:
 
         @code{.py}
 "id_parts": {"owner": "owner.login", "repo": "name"},
         @endcode
 
-        This is **not** the same thing as
+        This is <b>not</b> the same thing as
         @ref RestSchemaRecordTableInfo::scope_options "scope_options", and the difference decides which one
-        to use.  A scope option identifies the **collection** and is the same for every record in a search -
+        to use.  A scope option identifies the <b>collection</b> and is the same for every record in a search -
         the repository an issue belongs to, the customer a subscription belongs to - so the caller supplies
-        it and the listing requires it.  An identity part identifies **one record** and varies from row to
+        it and the listing requires it.  An identity part identifies <b>one record</b> and varies from row to
         row within a single listing, so it is read back off each record.  GitHub's repository listing spans
         owners, which is precisely why \c owner cannot be a scope there.
 
-        Set this **or** @ref id_field and @ref id_option, not both kinds; a single-valued identity is the
+        Set this <b>or</b> @ref id_field and @ref id_option, not both kinds; a single-valued identity is the
         common case and is written the short way.
     */
     *hash<string, string> id_parts;
@@ -513,7 +513,7 @@ public hashdecl RestSchemaRecordTableInfo inherits RestSchemaRecordListingInfo {
     #! Overrides merged into the search options taken from the listing action
     /** A table's options are the listing's, so each is described once and in one place.  A table may still
         need to present one differently from the action, and a default value is the case that matters: the
-        state a listing defaults to need not be the state a **table** defaults to, and a table that changed
+        state a listing defaults to need not be the state a <b>table</b> defaults to, and a table that changed
         it by accident would return a different set of records from the one the application it replaces
         returned.
 
@@ -546,14 +546,14 @@ public hashdecl RestSchemaRecordTableInfo inherits RestSchemaRecordListingInfo {
     *softlist<string> read_only_fields;
 
     #! Record field to the write action's option name for it, where the two differ
-    /** A write sends the columns the write action **declares** and nothing else, which silently drops a
+    /** A write sends the columns the write action <b>declares</b> and nothing else, which silently drops a
         column whose option is spelled differently from the record field.  That happens wherever a manifest
         renames an option, and a manifest renames options for a reason: Klaviyo returns a list's
         \c opt_in_process and its update action publishes \c optInProcess, because that is the name the
         application it replaces used and preserving it was a commitment of the port.
 
         Without this a table would read \c opt_in_process, hand it straight back to \c updateRecords(), and
-        send **nothing** - reporting a successful update that changed no value at all.  Declaring the pairs
+        send <b>nothing</b> - reporting a successful update that changed no value at all.  Declaring the pairs
         is what keeps a record readable and writable in the same shape.
 
         Keyed by record field, with the value naming the option on the create and update actions.  A field

@@ -79,7 +79,7 @@ module DropboxRestClient {
     |Arguments|JSON request body|JSON in the \c Dropbox-API-Arg request header
     |Body|JSON|the raw file content
 
-    Passing an absolute URL as the path argument of a REST request does **not** retarget the request:
+    Passing an absolute URL as the path argument of a REST request does <b>not</b> retarget the request:
     the client sends to its configured host and the absolute URI travels as a literal path.  The two
     hosts therefore need two client objects, which is handled here rather than by the caller:
     @ref DropboxRestClient::DropboxRestClient::getContentClient() "getContentClient()" returns a
@@ -463,7 +463,7 @@ public class DropboxRestClientIo inherits RestClientIo::RestClientIo, DropboxRes
 
         @return a caller-driven poll operation whose output is the deserialized response
 
-        @note The returned operation belongs to the **content** client, which is created on first use and
+        @note The returned operation belongs to the <b>content</b> client, which is created on first use and
         shares this client's OAuth2 token and connection manager
 
         @see @ref RestClientIo::RestClientIo::startPollRawRequest() for how the operation is driven

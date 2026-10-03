@@ -57,16 +57,16 @@ module OllamaRestClient {
     @section ollamarestclientintro OllamaRestClient Introduction
 
     The %OllamaRestClient module provides an API for calling
-    [Ollama](https://ollama.com) — a local-first LLM runtime that serves
+    <a href="https://ollama.com">Ollama</a> — a local-first LLM runtime that serves
     open-weight models from your own machine via HTTP.
 
     Ollama exposes two HTTP surfaces side by side:
 
-    - **OpenAI-compatible** endpoints at `/v1/chat/completions` and
-      `/v1/embeddings` — used by @ref OllamaRestClient::OllamaLlmProvider
+    - <b>OpenAI-compatible</b> endpoints at <tt>/v1/chat/completions</tt> and
+      <tt>/v1/embeddings</tt> — used by @ref OllamaRestClient::OllamaLlmProvider
       "OllamaLlmProvider" (a thin @ref OpenAiRestClient::OpenAiLlmProvider
       subclass) so existing OpenAI-shape consumers work unchanged
-    - **Native** endpoints at `/api/embed`, `/api/tags`, `/api/pull` —
+    - <b>Native</b> endpoints at <tt>/api/embed</tt>, <tt>/api/tags</tt>, <tt>/api/pull</tt> —
       surfaced by the @ref ollamadataproviderintro "OllamaDataProvider" for embeddings (with
       Ollama's richer native body shape) and model management
 
@@ -323,10 +323,10 @@ public class OllamaLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
 }
 
 public namespace QoreRagUtils {
-#! Ollama-backed embedder — calls Ollama's native `/api/embed` endpoint
+#! Ollama-backed embedder — calls Ollama's native <tt>/api/embed</tt> endpoint
 /** Uses the native (not OpenAI-compatible) endpoint to get richer
     response detail.  The native shape returns embeddings as
-    `{embeddings: [[float, ...], ...]}` rather than the OpenAI shape.
+    <tt>{embeddings: [[float, ...], ...]}</tt> rather than the OpenAI shape.
 */
 public class OllamaEmbedder inherits AbstractEmbedder {
     public {

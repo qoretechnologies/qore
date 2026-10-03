@@ -517,12 +517,12 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Sends one chunk of a resumable upload
-    /** Drive answers a chunk that is not the last with **HTTP 308 Resume Incomplete**, which means "this chunk
+    /** Drive answers a chunk that is not the last with <b>HTTP 308 Resume Incomplete</b>, which means "this chunk
         was stored, send the next one".  That is a success, but it is \>= 300, so the REST client raises it as
         an error -- correctly, in the general case, since only this endpoint knows that a 308 here is not a
         redirect.  Only the final chunk is answered with a 2xx.
 
-        Without this, **no upload larger than one chunk could ever complete**: the first chunk was stored and
+        Without this, <b>no upload larger than one chunk could ever complete</b>: the first chunk was stored and
         then reported as a failure.
 
         @param session_path the resumable session URI
