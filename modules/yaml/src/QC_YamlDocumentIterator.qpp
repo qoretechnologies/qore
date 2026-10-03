@@ -41,7 +41,7 @@ YamlDocumentIterator iter(yaml_string, opts);
 
     @since yaml 1.1
 */
-hashdecl YamlDocumentIteratorOptions {
+hashdecl Qore::YAML::YamlDocumentIteratorOptions {
     //! Skip empty documents during iteration
     /** When @ref True (default), documents that parse to @ref nothing are skipped.
         Set to @ref False to include empty documents in iteration.
