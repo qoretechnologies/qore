@@ -550,8 +550,17 @@ public:
     }
 
     // try to remove noise from the binary -> decimal conversion process in insignificant digits
+    /** @param str the string holding the number
+        @param dp the offset of the decimal point
+        @param last the offset after the last digit to check
+        @param round_threshold_1 a run of more 0 or 9 digits than this ends the significant digits
+        @param round_threshold_2 a run of more 0 or 9 digits than this stops the scan
+        @param num_start the offset where the number starts in \a str; the leading zeros of a fraction whose
+        integer part is zero are not noise, so the scan starts at its first significant digit
+    */
     DLLLOCAL static void applyRoundingHeuristic(QoreString& str, size_t dp, size_t last,
-        int round_threshold_1 = QORE_MPFR_ROUND_THRESHOLD, int round_threshold_2 = QORE_MPFR_ROUND_THRESHOLD_2);
+        int round_threshold_1 = QORE_MPFR_ROUND_THRESHOLD, int round_threshold_2 = QORE_MPFR_ROUND_THRESHOLD_2,
+        size_t num_start = 0);
 
     // try to remove noise from the binary -> decimal conversion process in insignificant digits
     /** finds the decimal point and attempts to remove noise and round the number if found

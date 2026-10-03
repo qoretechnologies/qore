@@ -281,8 +281,10 @@ void qore_number_private::getAsString(QoreString& str, bool round, int base) con
             }
         }
         // try to do some rounding (noise reduction with binary->decimal conversions)
-        if (dp && round)
-            applyRoundingHeuristic(str, dp, str.size());
+        if (dp && round) {
+            applyRoundingHeuristic(str, dp, str.size(), QORE_MPFR_ROUND_THRESHOLD, QORE_MPFR_ROUND_THRESHOLD_2,
+                len - (sgn < 0 ? 1 : 0));
+        }
     } else
         str.concat(buf);
 
@@ -290,10 +292,22 @@ void qore_number_private::getAsString(QoreString& str, bool round, int base) con
 }
 
 void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, size_t last, int round_threshold_1,
-        int round_threshold_2) {
+        int round_threshold_2, size_t num_start) {
     // the position of the last significant digit
     qore_offset_t pos = (qore_offset_t)dp;
     size_t i = dp;
+    // when the integer part is zero, the zeros that follow the decimal point place the first significant digit
+    // and are not conversion noise; start the scan at that digit, with the zero before it as the last digit kept
+    if (dp && str[dp - 1] == '0' && (dp - 1 == num_start || (dp - 2 == num_start && str[num_start] == '-'))) {
+        size_t first = dp + 1;
+        while (first < last && str[first] == '0') {
+            ++first;
+        }
+        if (first > dp + 1) {
+            i = first;
+            pos = (qore_offset_t)first - 1;
+        }
+    }
     // the last digit found in the sequence
     char lc = 0;
     // 0 or 9 count

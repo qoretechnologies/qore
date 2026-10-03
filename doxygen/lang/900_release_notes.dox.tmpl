@@ -32,6 +32,10 @@
     the full value to the requested fraction digits, and at most 100 are shown by default; such a value
     used to raise <tt>I18N-NUMBER-ERROR</tt>. Decimal strings keep the 100-digit maximum.
 
+    A \c number smaller than <tt>1e-17</tt> in magnitude converts to a string with its value, such as
+    <tt>0.000000000000000000000000000001</tt> for <tt>1e-30n</tt>; the zeros that place its first
+    significant digit used to be taken for conversion noise and the value converted to \c "0".
+
     The URL function reference exports <tt>encode_url()</tt> and <tt>RESOLVE_URL_ENCODE</tt>
     correctly with modern Doxygen, including links from external module documentation.
 

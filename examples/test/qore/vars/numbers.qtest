@@ -50,7 +50,15 @@ public class NumbersTest inherits QUnit::Test {
         testAssertion("conversion no. " + string(i++), \helperToString(), (-1.0001999999999n,), new TestResultValue("-1.0001999999999"));
         testAssertion("conversion no. " + string(i++), \helperToString(), (0.99999999999999991234n,), new TestResultValue("0.99999999999999991234"));
         testAssertion("conversion no. " + string(i++), \helperToString(), (0.999999999999999991234n,), new TestResultValue("1"));
-        testAssertion("conversion no. " + string(i++), \helperToString(), (0.0000000000000000012345n,), new TestResultValue("0"));
+        # the zeros that place the first significant digit of a small value are not conversion noise
+        testAssertion("conversion no. " + string(i++), \helperToString(), (0.0000000000000000012345n,), new TestResultValue("0.0000000000000000012345"));
+        testAssertion("conversion no. " + string(i++), \helperToString(), (-0.0000000000000000012345n,), new TestResultValue("-0.0000000000000000012345"));
+        testAssertion("conversion no. " + string(i++), \helperToString(), (1e-30n,), new TestResultValue("0.000000000000000000000000000001"));
+        testAssertion("conversion no. " + string(i++), \helperToString(), (number("1e-200"),), new TestResultValue("0." + strmul("0", 199) + "1"));
+        # noise after the significant digits of a small value is still removed
+        testAssertion("conversion no. " + string(i++), \helperToString(), (0.00000000000000000012999999999999999999991n,), new TestResultValue("0.00000000000000000013"));
+        testAssertion("conversion no. " + string(i++), \helperToString(), (0.00000000000000000012000000000000000000001n,), new TestResultValue("0.00000000000000000012"));
+        testAssertion("conversion no. " + string(i++), \helperToString(), (0.0000000000000000009999999999999999999991n,), new TestResultValue("0.000000000000000001"));
         testAssertion("conversion no. " + string(i++), \helperToString(), (0.00000000000000001234n,), new TestResultValue("0.00000000000000001234"));
         testAssertion("conversion no. " + string(i++), \helperToString(), (0.899999999999999991234n,), new TestResultValue("0.899999999999999991234"));
         testAssertion("conversion no. " + string(i++), \helperToString(), (0.8999999999999999991234n,), new TestResultValue("0.9"));
