@@ -2559,7 +2559,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns whether executing an action can change provider or external state
-    /** An explicit @ref DataProviderActionInfo::mutates_state "mutates_state" value is authoritative.  When
+    /** An explicit @ref DataProviderActionBaseInfo::mutates_state "mutates_state" value is authoritative.  When
         it is unset, event and record-read actions are read-only and every other action type is treated as
         mutating.  The conservative default is intentional: an unknown or generic API action must not become
         executable in a read-only context merely because its identifier or translated description resembles a
