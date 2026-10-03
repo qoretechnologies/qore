@@ -31,7 +31,7 @@ The project configuration uses:
     BinaryType: deb
     Repotype: debian
     PublishFlags: archsync noearlypublish nofailedpackages
-    Keep: libuv1t64 node-acorn nodejs libnode115 libnode127
+    Keep: libuv1t64 node-acorn nodejs libnode115 libnode127 libllhttp9.3
     Prefer: libjpeg-dev
 
 Keep preserves the build tools' installed runtime inputs while building their
@@ -41,6 +41,9 @@ Node executable to bundle its JavaScript inputs before compiling its replacement
 Retain nodejs and its shared library too: Debian 13 provides libnode115 and
 the qualified Node 22 backport provides libnode127. Both must be eligible so
 later rebuilds can use the already-built backport as their bootstrap runtime.
+The Node 22 backport also links libllhttp9.3. Retain that library while
+rebuilding llhttp and its bootstrap source package; otherwise Node cannot
+start, and dh-nodejs reports installed JavaScript modules as missing.
 Without these entries, OBS
 removes the package's own output from the build environment and the tool
 fails before compilation. Node reports "Cannot load externalized builtin"

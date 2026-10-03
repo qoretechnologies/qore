@@ -6,6 +6,8 @@
 import importlib.util
 import io
 from pathlib import Path
+import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -66,6 +68,47 @@ class OrigComponentTest(unittest.TestCase):
                     backports.extract_component(self.archive, self.destination)
                 self.assertFalse(self.destination.exists())
                 self.assertEqual([], list(self.root.glob("unpack-*")))
+
+
+@unittest.skipUnless(shutil.which("esbuild") and shutil.which("node") and shutil.which("make"),
+                     "Node bundle regression requires esbuild, node and make")
+class NodeBundleTest(unittest.TestCase):
+    def test_bundle_is_independent_of_source_directory(self):
+        # Exercise the generated recipe with the real system minimatch and esbuild.
+        # Different path depths reproduce the native-versus-OBS embedded-name bug.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outputs = []
+            for relative in ("native", "obs/different/path/depth"):
+                source = root / relative
+                (source / "debian").mkdir(parents=True)
+                (source / "debian/control").write_text("Source: nodejs\nBuild-Depends:\n esbuild\n")
+                (source / "debian/rules").write_text(
+                    "export DEB_BUILD_MAINT_OPTIONS = hardening=+all\n"
+                    "bundle:\n"
+                    "\tmkdir -p deps/minimatch\n"
+                    "\tesbuild --platform=node --bundle /usr/share/nodejs/minimatch/index.cjs"
+                    " > deps/minimatch/index.js\n"
+                    "install:\n\tdh_install\n\noverride_dh_dwz:\n")
+                backports.nodejs_packaging(source)
+                subprocess.run(["make", "--no-print-directory", "-f", "debian/rules", "bundle"],
+                               cwd=source, check=True, capture_output=True, text=True)
+                bundle = source / "deps/minimatch/index.js"
+                outputs.append(bundle.read_bytes())
+                subprocess.run(["node", "-e", """
+                    const assert = require('node:assert/strict');
+                    const bundled = require(process.argv[1]);
+                    const expected = require('minimatch');
+                    for (const [path, pattern] of [
+                        ['a/b.txt', '**/*.txt'], ['a/b.txt', '*.txt'],
+                        ['report.csv', '*.{csv,json}'], ['data.json', '!*.csv']
+                    ]) {
+                        assert.equal(bundled.minimatch(path, pattern), expected.minimatch(path, pattern));
+                    }
+                """, str(bundle)], cwd="/usr/share/nodejs", check=True,
+                               capture_output=True, text=True)
+            self.assertEqual(outputs[0], outputs[1])
+            self.assertNotIn(str(root).encode(), outputs[0])
 
 
 if __name__ == "__main__":

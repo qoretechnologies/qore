@@ -186,6 +186,11 @@ Node can therefore use Debian 13's existing Undici package. Once the native
 dependencies are available, build Node and then the V8 module with TypeScript.
 Node resolves minimatch's installed CommonJS entry point when bundling it,
 supporting Debian 13's index.js layout as well as newer index.cjs layouts.
+The bundler runs from /usr/share/nodejs so its embedded module names do not
+depend on the source build directory. The regression in
+debian/tests/test_backport_sources.py exercises the generated recipe at two
+different path depths with real esbuild, Node and the system minimatch package;
+install esbuild, nodejs, node-minimatch and make to run that check.
 Its rules import dpkg build flags before adding and exporting custom options,
 preserving hardening and reproducible source/debug path mappings. The installed
 Node executable has its build-tree RUNPATH removed with chrpath before debug

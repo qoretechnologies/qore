@@ -86,6 +86,45 @@ def verify_signature(source, signature, archive):
                         str(signature), str(archive)], check=True)
 
 
+def nodejs_packaging(source):
+    """Adapt the pinned Debian Node recipe without embedding build-directory paths."""
+    rules = source / "debian/rules"
+    updated = rules.read_text()
+    old = "esbuild --platform=node --bundle /usr/share/nodejs/minimatch/index.cjs"
+    if updated.count(old) != 1:
+        raise RuntimeError("expected one minimatch bundle entry point")
+    # Debian 13's minimatch exports index.js; newer packaging uses index.cjs.
+    # Resolve the installed CommonJS entry point through Node's package API.
+    # esbuild embeds module names relative to its working directory. Keep that
+    # directory fixed; the caller's redirection still writes into the source tree.
+    updated = updated.replace(old,
+        "(cd /usr/share/nodejs && esbuild --platform=node --bundle "
+        "\"$$(node -p 'require.resolve(\"minimatch\")')\")")
+    old = "export DEB_BUILD_MAINT_OPTIONS = hardening=+all\n"
+    if updated.count(old) != 1 or "include /usr/share/dpkg/buildflags.mk" in updated:
+        raise RuntimeError("unexpected Node build-flags setup")
+    # Its exported CFLAGS/CXXFLAGS otherwise suppress debhelper's defaults,
+    # losing both hardening and reproducible debug/source prefix maps.
+    updated = updated.replace(old, old +
+        "DPKG_EXPORT_BUILDFLAGS = 1\ninclude /usr/share/dpkg/buildflags.mk\n")
+    old = "\tdh_install\n\noverride_dh_dwz:"
+    if updated.count(old) != 1:
+        raise RuntimeError("unexpected Node installation rules")
+    # Keep build-tree RUNPATH for upstream tests, but use the normal
+    # multiarch loader path in the installed executable. Do this before
+    # debhelper separates debug symbols so both artifacts stay consistent.
+    rules.write_text(updated.replace(old,
+        "\tdh_install\n"
+        "\t# libnode is installed in the standard multiarch library directory.\n"
+        "\tchrpath --delete debian/nodejs/usr/bin/node\n\noverride_dh_dwz:"))
+    control = source / "debian/control"
+    updated = control.read_text()
+    old = "Build-Depends:\n"
+    if updated.count(old) != 1:
+        raise RuntimeError("unexpected Node build dependencies")
+    control.write_text(updated.replace(old, old + " chrpath,\n"))
+
+
 def cares_patch(source):
     """Generate a quilt patch from the same patcher used by FetchContent."""
     relative = Path("src/lib/ares_process.c")
@@ -219,38 +258,7 @@ def prepare(name, package, manifest, destination, cache, offline):
         control.write_text(original.replace(dependency,
             " , node-typescript (>= 4.9)\n , node-typescript (<< 6~)\n"))
     elif name == "nodejs":
-        rules = source / "debian/rules"
-        updated = rules.read_text()
-        old = "esbuild --platform=node --bundle /usr/share/nodejs/minimatch/index.cjs"
-        if updated.count(old) != 1:
-            raise RuntimeError("expected one minimatch bundle entry point")
-        # Debian 13's minimatch exports index.js; newer packaging uses index.cjs.
-        # Resolve the installed CommonJS entry point through Node's package API.
-        updated = updated.replace(old,
-            "esbuild --platform=node --bundle \"$$(node -p 'require.resolve(\"minimatch\")')\"")
-        old = "export DEB_BUILD_MAINT_OPTIONS = hardening=+all\n"
-        if updated.count(old) != 1 or "include /usr/share/dpkg/buildflags.mk" in updated:
-            raise RuntimeError("unexpected Node build-flags setup")
-        # Its exported CFLAGS/CXXFLAGS otherwise suppress debhelper's defaults,
-        # losing both hardening and reproducible debug/source prefix maps.
-        updated = updated.replace(old, old +
-            "DPKG_EXPORT_BUILDFLAGS = 1\ninclude /usr/share/dpkg/buildflags.mk\n")
-        old = "\tdh_install\n\noverride_dh_dwz:"
-        if updated.count(old) != 1:
-            raise RuntimeError("unexpected Node installation rules")
-        # Keep build-tree RUNPATH for upstream tests, but use the normal
-        # multiarch loader path in the installed executable. Do this before
-        # debhelper separates debug symbols so both artifacts stay consistent.
-        rules.write_text(updated.replace(old,
-            "\tdh_install\n"
-            "\t# libnode is installed in the standard multiarch library directory.\n"
-            "\tchrpath --delete debian/nodejs/usr/bin/node\n\noverride_dh_dwz:"))
-        control = source / "debian/control"
-        updated = control.read_text()
-        old = "Build-Depends:\n"
-        if updated.count(old) != 1:
-            raise RuntimeError("unexpected Node build dependencies")
-        control.write_text(updated.replace(old, old + " chrpath,\n"))
+        nodejs_packaging(source)
     elif name == "llhttp":
         rules = source / "debian/rules"
         updated = rules.read_text()
