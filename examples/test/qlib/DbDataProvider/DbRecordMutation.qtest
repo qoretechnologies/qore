@@ -79,6 +79,8 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
         addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
         addTestCase("bound record iterators", \testBoundRecordIterators());
+        addTestCase("single record search transaction release", \testSingleRecordSearchReleasesTransaction());
+        addTestCase("exhausted iterator stays exhausted", \testExhaustedIteratorStaysExhausted());
         addTestCase("row to bulk iterator adapter", \testRowToBulkIteratorAdapter());
         addTestCase("raw SQL provider metadata", \testRawSqlProviderMetadata());
         addTestCase("raw SQL record typing", \testRawSqlRecordTyping());
@@ -208,6 +210,50 @@ class DbRecordMutationTest inherits QUnit::Test {
         assertFalse(ds.currentThreadInTransaction());
         ds.rollback();
         assertEq((1, 2, 3, 6), map $1.id, getRows());
+    }
+
+    #! A single-record search releases the transaction it opened, whether or not it finds a record
+    private testSingleRecordSearchReleasesTransaction() {
+        requireSqlite();
+        resetRows();
+
+        # no record found
+        assertNothing(provider.searchSingleRecord({"id": 99}));
+        assertFalse(ds.currentThreadInTransaction(), "no record found");
+
+        # one record found
+        assertEq(20, provider.searchSingleRecord({"id": 2}).value);
+        assertFalse(ds.currentThreadInTransaction(), "one record found");
+
+        # more than one record found: an error, and the transaction is still released
+        assertThrows("MULTIPLE-RECORDS-ERROR", \provider.searchSingleRecord(), ({"group_name": "a"},));
+        assertFalse(ds.currentThreadInTransaction(), "multiple records found");
+
+        # a transaction the caller already holds is kept, also when no record is found
+        ds.beginTransaction();
+        on_exit ds.rollback();
+        assertNothing(provider.searchSingleRecord({"id": 99}));
+        assertTrue(ds.currentThreadInTransaction(), "caller transaction, no record found");
+        assertEq(10, provider.searchSingleRecord({"id": 1}).value);
+        assertTrue(ds.currentThreadInTransaction(), "caller transaction, one record found");
+    }
+
+    #! An exhausted record iterator stays exhausted instead of executing its query again
+    private testExhaustedIteratorStaysExhausted() {
+        requireSqlite();
+        resetRows();
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({"id": 99});
+        assertFalse(iter.next());
+        assertFalse(ds.currentThreadInTransaction(), "after the end of an empty result");
+        assertFalse(iter.next());
+        assertFalse(ds.currentThreadInTransaction(), "after a further call to next() on an empty result");
+
+        iter = provider.searchRecords({"group_name": "a"}, {"orderby": "id"});
+        assertEq((1, 2), getIteratorIds(iter));
+        assertFalse(ds.currentThreadInTransaction(), "after the end of a result");
+        assertFalse(iter.next());
+        assertFalse(ds.currentThreadInTransaction(), "after a further call to next() on a result");
     }
 
     private testBoundRecordIterators() {

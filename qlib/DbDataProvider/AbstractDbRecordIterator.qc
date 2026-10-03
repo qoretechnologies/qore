@@ -32,6 +32,13 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
 
         #! release the transaction with a rollback in the destructor?
         bool release_transaction;
+
+        #! True once the statement has returned its last row
+        /** the iterator then stays at the end: calling next() on an exhausted SQL statement would execute the
+            query again, which acquires a new transaction lock after the one acquired for this iterator has
+            already been released
+        */
+        bool done;
     }
 
     #! creates the iterator
@@ -104,7 +111,8 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
 
     #! Increments the row pointer when retrieving rows from a select statement
     /**
-        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved)
+        @return @ref True if there is a row to retrieve, @ref False if not (no more rows to be retrieved); once
+        @ref False has been returned, every further call also returns @ref False without executing the query again
 
         @note Exceptions could be thrown by the DBI driver when the statement is executed; see the relevant DBI driver
         docs for more information
@@ -113,10 +121,16 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
         if (!stmt) {
             throw "INVALID-ITERATOR", "This object was invalidated when a bulk iterator was created from it";
         }
+        if (done) {
+            return False;
+        }
         bool result = stmt.next();
-        if (!result && release_transaction) {
-            stmt.rollback();
-            release_transaction = False;
+        if (!result) {
+            done = True;
+            if (release_transaction) {
+                stmt.rollback();
+                release_transaction = False;
+            }
         }
         return result;
     }
