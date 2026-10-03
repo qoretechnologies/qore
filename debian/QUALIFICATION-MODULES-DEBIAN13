@@ -204,6 +204,45 @@ correct, and all 117 native/AOT names load together in both orders and modes.
 See module-v8 commit e093a183 and the recorded signal-fix audit.
 Its normal CI pipeline 58525 passes both Ubuntu and Alpine jobs.
 
+OBS output qualification checkpoint: October 3
+----------------------------------------------
+
+Evidence bundle: qore-obs-debian13-20261002/followup-20261003.
+MODULE-OUTPUT-QUALIFICATION.json accepts 34 independent module sources and
+105 binary packages per CPU against the actual corrected OBS Qore/SDK
+3.0.0~git20261001.1-0qore2~deb13. This checkpoint excludes V8, whose OBS
+Node dependency is still building, and Oracle, whose hosting approval is
+pending. It does not replace the earlier local qualification of those modules.
+
+The 32-module installed batch passes 66 autopkgtests per CPU, minimum runtime
+installation without the SDK, imports, file verification, purge/autoremove
+and reinstallation. SSH and UUID have separate accepted installed results.
+For 18 module sources, prior reproduced payloads and metadata are unchanged;
+only explicitly checked Qore dependency/Built-Using controls may differ.
+Thirteen other sources reproduce the OBS binaries independently against the
+actual OBS SDK. JNI required the correction described below. These are
+distinct forms of evidence; unchanged payload comparisons do not claim a
+new byte-for-byte rebuild of the changed control archive.
+
+JNI's make-inc embedded Java classes in filesystem traversal order. Sorting
+directory/class inputs retains inner-class precedence and preserves all 3,048
+decompressed Byte Buddy class payloads. The regression fails before the fix
+and passes afterward on both CPUs. Module commit 3186bd5e2833 implements the
+fix and adds it to Ubuntu/Alpine CI; both jobs pass with refreshed base images.
+The backport retains the frozen module source and original vendor archives.
+Corrected version 2.7.0~git20261001.1+ds-0qore2~deb13 passes two identical
+native builds per CPU, all eight CTests, strict artifact/Lintian checks and
+runtime/compiler/Kotlin package tests. All five OBS outputs per CPU match
+those qualified binaries exactly. APT upgrades from the .1 candidate to .2
+also pass all three installed suites and file verification on both CPUs.
+
+SSH's upstream fixture fix 4a45cf2fc87d is backported into its .2 candidate;
+the test now creates its own inside/outside files instead of assuming that
+/etc/hostname exists in the build environment. Both OBS builds match the
+independently qualified native packages exactly. All 60 OBS source inventories
+match local imports, and publication remains disabled. The previous combined
+34-module test predates JNI .2; refresh it with JNI .2 and V8 before publication.
+
 Remaining release gates
 -----------------------
 

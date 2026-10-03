@@ -110,9 +110,36 @@ source package. Oracle's proprietary dependency hosting approval and the
 optional V8 app catalogue's schema licensing remain separate publication
 gates; local qualification does not remove either requirement.
 
-Before enabling APT publication, verify the repository signature, architecture
-indexes, install/upgrade behavior and exact package hashes. Retain source
+Complete artifact and native installed-package acceptance before enabling APT
+publication. Once OBS generates the repository, verify its signature,
+architecture indexes, install/upgrade behavior and exact package hashes before
+advertising it as ready to use. A local unsigned qualification repository does
+not establish that the published signature or indexes are correct. Retain source
 archives, logs, manifests and qualification reports in an independent durable
 backup. Completed local build containers/images can then be removed; keep
 the qualified artifacts and evidence. Never archive authentication tokens,
 private signing keys or desktop keyring contents with package evidence.
+
+Published versions and rebuilds
+-------------------------------
+
+Retain an acceptance manifest with every published binary's package name,
+version, architecture and SHA-256, together with the matching source revision.
+Never replace a published package/version/architecture tuple with different
+bytes. A dependency-triggered rebuild can change the binary even when its
+source is unchanged; increment the Debian revision, rebuild and qualify that
+update before publication. Byte-identical rebuilds can reuse their existing
+acceptance evidence after verifying the complete hashes.
+
+The current .dsc recipes preserve their explicit Debian changelog versions.
+OBS does not automatically increase Debian revisions without its optional
+DEBTRANSFORM-RELEASE mechanism; see the Debian section of the OBS User Guide:
+https://openbuildservice.org/help/manuals/obs-user-guide/cha-obs-package-formats
+Use a separate unpublished build project for subsequent qualification, or
+freeze builds in the publication project. Account for package-level build
+enable rules as well as the project default. Do not leave unrestricted
+dependency rebuilds feeding a public repository under unchanged versions.
+
+Record the exact Architecture: all artifact selected for publication.
+Documented semantic equivalence between two architecture-independent outputs
+does not permit silently changing the hash of an already published package.
