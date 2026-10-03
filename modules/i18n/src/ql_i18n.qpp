@@ -167,14 +167,21 @@ static bool i18n_check_locale_length(const std::string& locale, ExceptionSink* x
     return true;
 }
 
+// the maximum number of visible fraction digits in a formatted or plural-selected value
+static constexpr size_t I18N_MAX_VISIBLE_FRACTION_DIGITS = 100;
+
 struct I18nDecimalInfo {
     std::string formatted;
     std::string canonical;
     int32_t fraction_digits = 0;
 };
 
+// Parses a base-10 decimal string.  When cap_visible_fraction is set (numeric Qore values, whose fraction
+// length comes from their precision rather than from caller-chosen text), a fraction longer than the visible
+// maximum is kept intact for ICU to round, and only the visible fraction digits used for default precision and
+// plural operands are capped; an exact decimal string with too many fraction digits is an error.
 static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo& info, ExceptionSink* xsink,
-        const char* arg_name) {
+        const char* arg_name, bool cap_visible_fraction = false) {
     std::string s;
     if (!i18n_trim_ascii(input, s, xsink)) {
         return false;
@@ -244,9 +251,10 @@ static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo&
         ++trim_pos;
     }
 
-    if (fraction.size() > 100) {
+    if (fraction.size() > I18N_MAX_VISIBLE_FRACTION_DIGITS && !cap_visible_fraction) {
         xsink->raiseException("I18N-NUMBER-ERROR",
-            "%s has too many visible fraction digits; maximum supported is 100", arg_name);
+            "%s has too many visible fraction digits; maximum supported is %d", arg_name,
+            static_cast<int>(I18N_MAX_VISIBLE_FRACTION_DIGITS));
         return false;
     }
 
@@ -271,7 +279,7 @@ static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo&
         info.canonical.push_back('.');
         info.canonical += canonical_fraction;
     }
-    info.fraction_digits = static_cast<int32_t>(fraction.size());
+    info.fraction_digits = static_cast<int32_t>(std::min<size_t>(fraction.size(), I18N_MAX_VISIBLE_FRACTION_DIGITS));
 
     return true;
 }
@@ -292,7 +300,7 @@ static bool i18n_value_to_decimal_info(QoreValue value, I18nDecimalInfo& info, E
             if (*xsink) {
                 return false;
             }
-            return i18n_parse_decimal_string(str->c_str(), info, xsink, "value");
+            return i18n_parse_decimal_string(str->c_str(), info, xsink, "value", value.getType() != NT_STRING);
         }
     }
 
@@ -3279,7 +3287,8 @@ list<string> discover_catalog_locales(string domain, *hash<auto> opts) [flags=RE
     @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
     @return locale-formatted decimal number
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
@@ -3299,7 +3308,8 @@ string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
     @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
     @return locale-formatted decimal number
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if \a opts is invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
@@ -3313,7 +3323,8 @@ string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VAL
     @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
     @return locale-formatted percentage
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
@@ -3336,7 +3347,8 @@ string format_percent(auto value, string locale) [flags=RET_VALUE_ONLY] {
     @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
     @return locale-formatted percentage
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if \a opts is invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
@@ -3395,7 +3407,8 @@ auto parse_number(string text, string locale, *hash<auto> opts) [flags=RET_VALUE
     @param locale BCP 47 locale tag
     @return locale-formatted currency value
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-CURRENCY-ERROR if \a currency is invalid
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if formatting options are invalid
@@ -3412,7 +3425,8 @@ string format_currency(auto value, string currency, string locale) [flags=RET_VA
     @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
     @return locale-formatted currency value
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-CURRENCY-ERROR if \a currency is invalid
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-FORMAT-ERROR if \a opts is invalid
@@ -3639,7 +3653,8 @@ string get_collation_version(string locale) [flags=RET_VALUE_ONLY] {
     @param locale BCP 47 locale tag, for example \c "en", \c "ru", or \c "ar"
     @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
@@ -3666,7 +3681,8 @@ string plural_category(auto value, string locale) [flags=RET_VALUE_ONLY] {
     @param opts optional hash; \c "type" may be \c "cardinal" or \c "ordinal"
     @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
 
-    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
+        fraction digits
     @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
@@ -3692,7 +3708,8 @@ string plural_category(auto value, string locale, *hash<auto> opts) [flags=RET_V
     @return the selected form string; missing category keys fall back to \c "other"
 
     @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
-    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed, or is a decimal string with more
+        than 100 fraction digits
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
@@ -3717,7 +3734,8 @@ string plural_form(auto value, string locale, hash<auto> forms) [flags=RET_VALUE
     @return the selected form string; missing category keys fall back to \c "other"
 
     @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
-    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed, or is a decimal string with more
+        than 100 fraction digits
     @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
     @throw I18N-LOCALE-ERROR if \a locale is invalid
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules

@@ -28,6 +28,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("thread locale control", \threadLocaleControlTest());
         addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
         addTestCase("locale percentage formatting", \localePercentageFormattingTest());
+        addTestCase("computed numbers with long fractions", \longComputedFractionTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
@@ -488,6 +489,51 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-FORMAT-ERROR", \I18n::format_percent(), ("0.5", "en-US", {
             "grouping": "no",
         }));
+    }
+
+    longComputedFractionTest() {
+        # arithmetic on numbers gives them more fraction digits than a value can show; they are rounded once from
+        # their full value, while a decimal string with as many fraction digits is still rejected
+        number third = 1n / 3n;
+        number ratio = (third * 100n) / 100n;
+        string ratio_text = ratio.toString();
+        int fraction_size = ratio_text.size() - ratio_text.find(".") - 1;
+        assertGt(100, fraction_size, "the computed ratio has more than 100 fraction digits");
+
+        hash<auto> two_fraction = {
+            "min_fraction_digits": 2,
+            "max_fraction_digits": 2,
+        };
+        assertEq("33.33%", I18n::format_percent(ratio, "en-US", two_fraction));
+        assertEq("33,33\u00a0%", I18n::format_percent(ratio, "de-DE", two_fraction));
+        assertEq("66.67%", I18n::format_percent(ratio * 2n, "en-US", two_fraction));
+        assertEq("-33.33%", I18n::format_percent(-ratio, "en-US", two_fraction));
+        assertEq("0.33", I18n::format_number(ratio, "en-US", two_fraction));
+        assertEq("0,333", I18n::format_number(ratio, "de-DE", {"max_fraction_digits": 3}));
+        assertEq("$0.33", I18n::format_currency(ratio, "USD", "en-US"));
+
+        # with no requested precision, at most 100 fraction digits are shown
+        assertRegex("^0\\.3{70}[0-9]{30}$", I18n::format_number(ratio, "en-US"));
+        assertRegex("^33\\.3{68}[0-9]{30}%$", I18n::format_percent(ratio, "en-US"));
+
+        # a value whose long fraction is only trailing zeros keeps its exact identity
+        number half = (number(1) / 2n * 3n) / 3n;
+        assertEq("other", I18n::plural_category(ratio, "en"));
+        assertEq("other", I18n::plural_category(ratio, "ru"));
+        assertEq("half", I18n::plural_form(half, "en", {"=0.5": "half", "other": "other"}));
+        assertEq("other", I18n::plural_form(ratio, "en", {"=0.3": "third", "other": "other"}));
+
+        # caller-chosen decimal text keeps the documented maximum
+        string long_text = "0." + strmul("3", 101);
+        assertThrows("I18N-NUMBER-ERROR", "too many visible fraction digits", \I18n::format_number(),
+            (long_text, "en-US"));
+        assertThrows("I18N-NUMBER-ERROR", "too many visible fraction digits", \I18n::format_percent(),
+            (long_text, "en-US", two_fraction));
+        assertThrows("I18N-NUMBER-ERROR", "too many visible fraction digits", \I18n::plural_category(),
+            (long_text, "en"));
+        assertThrows("I18N-NUMBER-ERROR", "too many visible fraction digits", \I18n::plural_form(),
+            (ratio, "en", {"=" + long_text: "exact", "other": "other"}));
+        assertEq("0." + strmul("3", 100), I18n::format_number("0." + strmul("3", 100), "en-US"));
     }
 
     pluralFormTest() {

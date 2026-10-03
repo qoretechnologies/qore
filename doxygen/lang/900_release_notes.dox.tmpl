@@ -23,6 +23,11 @@
     HTTP completion actions keep their notification descriptor alive when callers
     release a poll operation before the response or cancellation is delivered.
 
+    The @ref i18nintro "i18n" formatting and plural functions accept a \c number or \c float with more
+    than 100 fraction digits, as arithmetic such as <tt>(1n / 3n) * 100n / 100n</tt> produces. ICU rounds
+    the full value to the requested fraction digits, and at most 100 are shown by default; such a value
+    used to raise <tt>I18N-NUMBER-ERROR</tt>. Decimal strings keep the 100-digit maximum.
+
     The URL function reference exports <tt>encode_url()</tt> and <tt>RESOLVE_URL_ENCODE</tt>
     correctly with modern Doxygen, including links from external module documentation.
 

@@ -87,6 +87,23 @@ assertLt(0, I18n::compare_strings("a", "b", "en-US"));
 binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
     @endcode
 
+    Values are formatted from their exact decimal form, and a value shows at most 100 fraction digits.  A
+    decimal string is caller-chosen text, so one with more than 100 fraction digits raises
+    \c I18N-NUMBER-ERROR.  A \c number or \c float is formatted whatever its precision: ICU rounds its full value
+    once to the requested fraction digits, and when no fraction digits are requested it is shown with at most 100.
+    This lets computed values such as <tt>1n / 3n</tt>, whose precision gives them more than 100 fraction digits
+    after further arithmetic, be formatted directly.
+
+    @code{.py}
+%requires i18n
+
+number ratio = ((1n / 3n) * 100n) / 100n;
+assertEq("33,33 %", I18n::format_percent(ratio, "de-DE", {
+    "min_fraction_digits": 2,
+    "max_fraction_digits": 2,
+}));
+    @endcode
+
     @section i18nstringpredicates Locale-Sensitive String Predicates
 
     \c I18n::string_predicate() evaluates substring and equality checks with ICU collation instead of ASCII or
