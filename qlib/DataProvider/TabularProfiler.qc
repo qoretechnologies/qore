@@ -319,6 +319,39 @@ public class TabularProfiler {
         return rv;
     }
 
+    #! Converts an untyped grid, such as one returned by a Java reader, to a @ref TabularWorkbookGrid
+    /** @param grid a hash with the keys of @ref TabularWorkbookGrid; sheets, merged ranges, and the text format are
+        plain hashes, and rows are plain lists
+
+        @return the typed grid
+    */
+    static hash<TabularWorkbookGrid> gridFromHash(hash<auto> grid) {
+        hash<TabularWorkbookGrid> rv({
+            "format": grid.format,
+        });
+        foreach hash<auto> sheet in (grid.sheets) {
+            hash<TabularSheetGrid> s({
+                "name": sheet.name,
+                "hidden": sheet.hidden ?? False,
+                "row_count": sheet.row_count,
+            });
+            foreach auto row in (sheet.rows) {
+                list<auto> values = row ?? ();
+                push s.rows, values;
+            }
+            foreach hash<auto> range in (sheet.merged) {
+                s.merged += cast<hash<TabularCellRange>>(range{"first_row", "last_row", "first_col", "last_col"});
+            }
+            map s.formulas{$1.key} = $1.value.toString(), sheet.formulas.pairIterator();
+            rv.sheets += s;
+        }
+        map rv.named_ranges{$1.key} = $1.value.toString(), grid.named_ranges.pairIterator();
+        if (grid.text_format) {
+            rv.text_format = cast<hash<TabularTextFormat>>(grid.text_format);
+        }
+        return rv;
+    }
+
     #! Classifies one cell value
     /** @param value the cell value
 
@@ -376,7 +409,10 @@ public class TabularProfiler {
             case NT_DATE:
                 return "9999-99-99";
         }
-        string str = value.toString();
+        # a spreadsheet stores whole numbers as floats; they are classified and redacted as integers
+        string str = (inlist(value.typeCode(), (NT_FLOAT, NT_NUMBER)) && value == value.toInt())
+            ? value.toInt().toString()
+            : value.toString();
         string rv;
         int len = str.length();
         for (int i = 0; i < len; ++i) {

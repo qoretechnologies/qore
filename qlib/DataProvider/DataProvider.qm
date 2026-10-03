@@ -1386,7 +1386,9 @@ fetch
       and reports dates and numbers stored as text in a local format, leading-zero identifiers, duplicate headers,
       merged cells, hidden sheets, formulas, and wide period columns; the profile is described by
       @ref DataProvider::TabularWorkbookProfileDataType "TabularWorkbookProfileDataType" for \c profile application
-      actions
+      actions, and @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider" and
+      @ref DataProvider::TabularProfileRequestDataType "TabularProfileRequestDataType" implement such an action for
+      a spreadsheet format given a reader for its raw cells
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns

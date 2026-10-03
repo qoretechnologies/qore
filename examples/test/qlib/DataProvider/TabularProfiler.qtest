@@ -10,6 +10,36 @@
 
 %exec-class TabularProfilerTest
 
+#! A profile provider whose format is "one row per line, cells separated by |"
+class PipeProfileDataProvider inherits AbstractTabularProfileDataProvider {
+    public {
+        hash<string, binary> files = {};
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"name": "profile", "type": "PipeProfileDataProvider", "supports_request": True};
+    }
+
+    private hash<TabularWorkbookGrid> readGrid(binary content, int max_rows) {
+        list<string> lines = content.toString().split("\n");
+        return TabularProfiler::gridFromHash({
+            "format": "pipe",
+            "sheets": ({
+                "name": "only",
+                "rows": (map $1.split("|"), lines[0..max_rows - 1]),
+                "row_count": lines.size() > max_rows ? lines.size() : NOTHING,
+            },),
+        });
+    }
+
+    private binary readLocation(string location) {
+        if (!files{location}) {
+            throw "LOCATION-ERROR", location;
+        }
+        return files{location};
+    }
+}
+
 #! Tests DataProvider::TabularProfiler with the layouts of hand-maintained supply chain spreadsheets
 public class TabularProfilerTest inherits QUnit::Test {
     constructor() : Test("TabularProfilerTest", "1.0") {
@@ -28,6 +58,8 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("redaction", \redaction());
         addTestCase("column letters", \columnLetters());
         addTestCase("profiles match their data type", \dataType());
+        addTestCase("untyped grids from format readers", \gridFromHash());
+        addTestCase("profile action base class", \profileProvider());
         set_return_value(main());
     }
 
@@ -301,6 +333,8 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq("XXX-999 xx", TabularProfiler::redact("ACM-123 kg"));
         assertEq("Xxxxx", TabularProfiler::redact("Žluťá"));
         assertEq("9999.9", TabularProfiler::redact(1234.5));
+        assertEq("9", TabularProfiler::redact(5.0), "a whole number stored as a float is redacted as an integer");
+        assertEq("-999", TabularProfiler::redact(-120n));
         assertEq("9999-99-99", TabularProfiler::redact(2026-10-10));
         assertEq(True, TabularProfiler::redact(True));
         assertNothing(TabularProfiler::redact(NOTHING));
@@ -346,6 +380,61 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", sub () {
             TabularWorkbookProfileDataType.acceptsValue({"format": "csv", "sheets": ({"name": 1},)});
         });
+    }
+
+    gridFromHash() {
+        hash<TabularWorkbookGrid> grid = TabularProfiler::gridFromHash({
+            "format": "xlsx",
+            "sheets": (
+                {
+                    "name": "Data",
+                    "hidden": False,
+                    "rows": (("PO", "Qty"), (), NOTHING, ("PO-1", 5.0)),
+                    "merged": ({"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},),
+                    "formulas": {"B4": "SUM(B2:B3)"},
+                },
+                {"name": "Hidden", "hidden": True, "rows": (), "row_count": 70000},
+            ),
+            "named_ranges": {"Rates": "Data!$A$1:$B$4"},
+        });
+        assertEq("xlsx", grid.format);
+        assertEq(4, grid.sheets[0].rows.size(), "missing rows become empty rows");
+        assertEq((), grid.sheets[0].rows[2]);
+        assertEq(<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 1},
+            grid.sheets[0].merged[0]);
+        assertEq({"B4": "SUM(B2:B3)"}, grid.sheets[0].formulas);
+        assertTrue(grid.sheets[1].hidden);
+        assertEq(70000, grid.sheets[1].row_count);
+        assertEq({"Rates": "Data!$A$1:$B$4"}, grid.named_ranges);
+        assertNothing(grid.text_format);
+        assertEq(4, TabularProfiler::profile(grid).sheets[0].data_region.last_row);
+    }
+
+    profileProvider() {
+        PipeProfileDataProvider prov();
+        prov.files."file:///stock.pipe" = binary("SKU|Qty\nA|5\nB|x");
+        hash<auto> profile = prov.doRequest({"path": "file:///stock.pipe", "redact": False});
+        assertEq("pipe", profile.format);
+        assertEq(("string", "int"), (map $1.type, profile.sheets[0].columns));
+        assertEq(({"row": 3, "value": "x"},), profile.sheets[0].columns[1].counter_examples);
+        TabularWorkbookProfileDataType.acceptsValue(profile);
+
+        profile = prov.doRequest({"data": binary("SKU|Qty\nA|5\nB|6\nC|7"), "max_rows": 2, "sample_rows": 1});
+        assertEq(4, profile.sheets[0].row_count);
+        assertEq(<TabularProfileFinding>{"code": "partial_profile", "detail": 2}, profile.sheets[0].findings[0]);
+        assertEq((("X", "9"),), profile.sheets[0].samples, "samples are redacted by default");
+
+        # Base64 data is accepted, as JSON callers send it
+        profile = prov.doRequest({"data": make_base64_string("SKU|Qty\nA|5")});
+        assertEq(1, profile.sheets[0].header_row);
+
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(),
+            {"path": "file:///stock.pipe", "data": binary("a")});
+        assertThrows("TABULAR-PROFILE-ERROR", "max_rows", \prov.doRequest(), {"data": binary("a"), "max_rows": 0});
+        assertThrows("LOCATION-ERROR", \prov.doRequest(), {"path": "file:///missing"});
+        assertEq("TabularProfileRequest", prov.getRequestType().getName());
+        assertEq("TabularWorkbookProfile", prov.getResponseType().getName());
     }
 
     private hash<TabularSheetProfile> profileOne(list<list<auto>> rows) {
