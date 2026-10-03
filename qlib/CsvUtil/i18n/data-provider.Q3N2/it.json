@@ -447,6 +447,102 @@
           "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
           "message": "se `true` (predefinito `false`), se una riga viene analizzata con un numero di colonne o campi diverso dalle altre righe, viene generata un'eccezione `CSVFILEITERATOR-DATA-ERROR`\n\nTenere presente che l'abilitazione di questa opzione comporterà un calo delle prestazioni"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile CSV Data",
+          "message": "Profila dati CSV"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
+          "source": "Detect the format of CSV data and describe its layout and columns",
+          "message": "Rileva il formato dei dati CSV e descrivi la loro struttura e le colonne"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.desc": {
+          "source": "Detects the format of CSV data and describes how it is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- the separator, character encoding, byte order mark, and line ending\n- the header row, title rows above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "Rileva il formato dei dati CSV e ne descrive la struttura, in modo che possano essere letti correttamente prima di costruirvi intorno un'integrazione.\n\n**Rileva:**\n- il separatore, la codifica dei caratteri, il byte order mark (BOM) e il fine riga\n- la riga di intestazione, le righe di titolo sopra di essa e l'area dei dati\n- le righe di totali e subtotali e gli intervalli di righe vuote\n- il tipo di ogni colonna con un livello di confidenza e controesempi\n- date e numeri memorizzati come testo in un formato locale e identificatori con zeri iniziali\n\nI valori di esempio vengono oscurati secondo la loro forma per impostazione predefinita (`redact`), così un profilo può essere condiviso senza i dati stessi."
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "CSV Data",
+          "message": "Dati CSV"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The CSV content to profile",
+          "message": "Il contenuto CSV da profilare"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The CSV content to profile, as text or bytes; conflicts with `path`",
+          "message": "Il contenuto CSV da profilare, come testo o byte; incompatibile con `path`"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "Posizione dell'input CSV"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the CSV file to profile",
+          "message": "La posizione del file CSV da profilare"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the CSV file to profile, for example `file:///data/orders.csv` or an `sftp://` location; conflicts with `data`",
+          "message": "La posizione del file CSV da profilare, ad esempio `file:///data/orders.csv` o una posizione `sftp://`; incompatibile con `data`"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.display_name": {
+          "source": "Separator",
+          "message": "Separatore"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator, instead of detecting it",
+          "message": "Il separatore di campo, invece di rilevarlo"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.desc": {
+          "source": "The field separator; if not given, it is detected from the data",
+          "message": "Il separatore di campo; se non indicato, viene rilevato dai dati"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Codifica"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The character encoding, instead of detecting it",
+          "message": "La codifica dei caratteri, invece di rilevarla"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
+          "message": "La codifica dei caratteri; se non indicata, viene rilevato un byte order mark o UTF-8 valido, e gli altri dati vengono letti come `ISO-8859-1`"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "Numero massimo di righe"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read",
+          "message": "Il numero massimo di righe lette"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled; the total row count is still reported, and a `partial_profile` finding notes that the file has more rows",
+          "message": "Il numero massimo di righe lette e profilate; il numero totale di righe viene comunque riportato, e un risultato `partial_profile` segnala che il file ha più righe"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "Righe di esempio"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned",
+          "message": "Il numero di righe di esempio restituite"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned",
+          "message": "Il numero di righe di dati di esempio restituite"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "Oscura esempi"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "Restituisci i valori di esempio oscurati secondo la loro forma"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "Se `True` (predefinito), i valori di esempio e i controesempi vengono oscurati secondo la loro forma: le lettere diventano `x` o `X` e le cifre `9`, così un profilo può essere condiviso senza i dati"
+        },
         "app.Q3N2.action.d3JpdGU.display_name": {
           "source": "Write CSV Data",
           "message": "Scrivi dati CSV"

@@ -1379,6 +1379,14 @@ fetch
     - errors caught while determining action options or request types are now logged with the global data provider
       logger when the data provider has no logger of its own, and no longer log option or request values, which can
       hold credentials
+    - added @ref DataProvider::TabularProfiler "TabularProfiler", which deterministically profiles the raw cells of a
+      spreadsheet or delimited text file supplied by a format reader as a
+      @ref DataProvider::TabularWorkbookGrid "TabularWorkbookGrid": it finds the header row, title rows, data region,
+      totals rows, and blank-row gaps, infers each column's type with a confidence and redacted counter-examples,
+      and reports dates and numbers stored as text in a local format, leading-zero identifiers, duplicate headers,
+      merged cells, hidden sheets, formulas, and wide period columns; the profile is described by
+      @ref DataProvider::TabularWorkbookProfileDataType "TabularWorkbookProfileDataType" for \c profile application
+      actions
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns

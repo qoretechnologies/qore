@@ -447,6 +447,102 @@
           "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
           "message": "`true`(기본값 `false`)인 경우, 다른 행과 다른 열 또는 필드 개수로 행이 파싱되면 `CSVFILEITERATOR-DATA-ERROR` 예외가 발생합니다.\n\n이 옵션을 활성화하면 성능 저하가 발생할 수 있습니다."
         },
+        "app.Q3N2.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile CSV Data",
+          "message": "CSV 데이터 프로파일링"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
+          "source": "Detect the format of CSV data and describe its layout and columns",
+          "message": "CSV 데이터의 형식을 감지하고 레이아웃과 열을 설명합니다"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.desc": {
+          "source": "Detects the format of CSV data and describes how it is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- the separator, character encoding, byte order mark, and line ending\n- the header row, title rows above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "CSV 데이터의 형식을 감지하고 레이아웃을 설명하여, 통합을 구축하기 전에 데이터를 올바르게 읽을 수 있도록 합니다.\n\n**감지 항목:**\n- 구분 기호, 문자 인코딩, 바이트 순서 표시(BOM), 줄 끝\n- 헤더 행, 그 위의 제목 행, 데이터 영역\n- 합계 행과 소계 행, 빈 행 간격\n- 각 열의 유형과 신뢰도 및 반례\n- 로컬 형식의 텍스트로 저장된 날짜와 숫자, 앞에 0이 붙은 식별자\n\n샘플 값은 기본적으로 형태만 남기고 가려지므로(`redact`), 데이터 자체 없이 프로필을 공유할 수 있습니다."
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "CSV Data",
+          "message": "CSV 데이터"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The CSV content to profile",
+          "message": "프로파일링할 CSV 내용"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The CSV content to profile, as text or bytes; conflicts with `path`",
+          "message": "프로파일링할 CSV 내용(텍스트 또는 바이트), `path`와 함께 사용할 수 없음"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "CSV 입력 위치"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the CSV file to profile",
+          "message": "프로파일링할 CSV 파일의 위치"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the CSV file to profile, for example `file:///data/orders.csv` or an `sftp://` location; conflicts with `data`",
+          "message": "프로파일링할 CSV 파일의 위치(예: `file:///data/orders.csv` 또는 `sftp://` 위치), `data`와 함께 사용할 수 없음"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.display_name": {
+          "source": "Separator",
+          "message": "구분 기호"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator, instead of detecting it",
+          "message": "감지하는 대신 사용할 필드 구분 기호"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.desc": {
+          "source": "The field separator; if not given, it is detected from the data",
+          "message": "필드 구분 기호, 지정하지 않으면 데이터에서 감지됨"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "인코딩"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The character encoding, instead of detecting it",
+          "message": "감지하는 대신 사용할 문자 인코딩"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
+          "message": "문자 인코딩, 지정하지 않으면 바이트 순서 표시 또는 유효한 UTF-8이 감지되며 그 밖의 데이터는 `ISO-8859-1`로 읽음"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "최대 행 수"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read",
+          "message": "읽을 최대 행 수"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled; the total row count is still reported, and a `partial_profile` finding notes that the file has more rows",
+          "message": "읽고 프로파일링할 최대 행 수, 전체 행 수는 그래도 보고되며 `partial_profile` 결과로 파일에 행이 더 있음을 알림"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "샘플 행"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned",
+          "message": "반환할 샘플 행 수"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned",
+          "message": "반환할 샘플 데이터 행 수"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "샘플 가리기"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "샘플 값을 형태만 남기고 가려서 반환"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "`True`(기본값)이면 샘플 값과 반례를 형태만 남기고 가림: 문자는 `x` 또는 `X`, 숫자는 `9`가 되므로 데이터 없이 프로필을 공유할 수 있음"
+        },
         "app.Q3N2.action.d3JpdGU.display_name": {
           "source": "Write CSV Data",
           "message": "CSV 데이터 쓰기"

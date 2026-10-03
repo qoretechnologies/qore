@@ -447,6 +447,102 @@
           "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
           "message": "若為 `true`（預設為 `false`），當解析某行時其欄位數量與其他行不同，則會引發 `CSVFILEITERATOR-DATA-ERROR` 例外狀況\n\n請注意，啟用此選項會影響效能"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile CSV Data",
+          "message": "分析 CSV 資料"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
+          "source": "Detect the format of CSV data and describe its layout and columns",
+          "message": "偵測 CSV 資料的格式並描述其版面配置與欄位"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.desc": {
+          "source": "Detects the format of CSV data and describes how it is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- the separator, character encoding, byte order mark, and line ending\n- the header row, title rows above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "偵測 CSV 資料的格式並描述其版面配置，以便在圍繞這些資料建立整合之前能正確讀取。\n\n**偵測內容：**\n- 分隔符號、字元編碼、位元組順序標記 (BOM) 與行尾\n- 標題列、其上方的標題文字列，以及資料區域\n- 合計列與小計列，以及空白列的間隔\n- 每個欄位的類型，附信賴度與反例\n- 以本地格式儲存為文字的日期與數字，以及帶有前導零的識別碼\n\n範例值預設會遮蔽為其形狀 (`redact`)，因此可以在不包含資料本身的情況下分享分析結果。"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "CSV Data",
+          "message": "CSV 資料"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The CSV content to profile",
+          "message": "要分析的 CSV 內容"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The CSV content to profile, as text or bytes; conflicts with `path`",
+          "message": "要分析的 CSV 內容，可為文字或位元組；不可與 `path` 同時使用"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "CSV 輸入位置"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the CSV file to profile",
+          "message": "要分析的 CSV 檔案位置"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the CSV file to profile, for example `file:///data/orders.csv` or an `sftp://` location; conflicts with `data`",
+          "message": "要分析的 CSV 檔案位置，例如 `file:///data/orders.csv` 或 `sftp://` 位置；不可與 `data` 同時使用"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.display_name": {
+          "source": "Separator",
+          "message": "分隔符號"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator, instead of detecting it",
+          "message": "直接指定欄位分隔符號，而不偵測"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2VwYXJhdG9y.desc": {
+          "source": "The field separator; if not given, it is detected from the data",
+          "message": "欄位分隔符號；若未指定，則從資料中偵測"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "編碼"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The character encoding, instead of detecting it",
+          "message": "直接指定字元編碼，而不偵測"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
+          "message": "字元編碼；若未指定，會偵測位元組順序標記或有效的 UTF-8，其他資料則以 `ISO-8859-1` 讀取"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "最大列數"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read",
+          "message": "讀取的最大列數"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled; the total row count is still reported, and a `partial_profile` finding notes that the file has more rows",
+          "message": "讀取並分析的最大列數；仍會回報總列數，且 `partial_profile` 發現會指出檔案還有更多列"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "範例列"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned",
+          "message": "傳回的範例列數"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned",
+          "message": "傳回的範例資料列數"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "遮蔽範例"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "傳回遮蔽為其形狀的範例值"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "若為 `True`（預設），範例值與反例會遮蔽為其形狀：字母變為 `x` 或 `X`，數字變為 `9`，因此可以在不包含資料的情況下分享分析結果"
+        },
         "app.Q3N2.action.d3JpdGU.display_name": {
           "source": "Write CSV Data",
           "message": "寫入 CSV 資料"

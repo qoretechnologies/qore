@@ -1,0 +1,365 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class TabularProfilerTest
+
+#! Tests DataProvider::TabularProfiler with the layouts of hand-maintained supply chain spreadsheets
+public class TabularProfilerTest inherits QUnit::Test {
+    constructor() : Test("TabularProfilerTest", "1.0") {
+        addTestCase("clean header in row 1", \cleanHeader());
+        addTestCase("title rows and a merged banner above the header", \titleRows());
+        addTestCase("totals rows and blank-row gaps", \totalsAndGaps());
+        addTestCase("dates stored as text", \datesAsText());
+        addTestCase("numbers stored as text in a local format", \localNumbers());
+        addTestCase("identifiers with leading zeros", \leadingZeros());
+        addTestCase("mixed types report counter-examples", \mixedTypes());
+        addTestCase("duplicate and empty headers", \headers());
+        addTestCase("wide period columns", \widePeriods());
+        addTestCase("sheets without a header, empty sheets, and partial reads", \noHeader());
+        addTestCase("hidden sheets, formulas, named ranges, and text formats", \workbook());
+        addTestCase("text-only and single-column sheets", \textOnly());
+        addTestCase("redaction", \redaction());
+        addTestCase("column letters", \columnLetters());
+        addTestCase("profiles match their data type", \dataType());
+        set_return_value(main());
+    }
+
+    cleanHeader() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("PO Number", "Line", "SKU", "Confirmed Qty", "Unit Price", "Ship Date", "Backorder"),
+            ("PO-1001", 1, "A-100", 5, 12.5, 2026-10-10, False),
+            ("PO-1001", 2, "B-200", 7.0, 3.25, 2026-10-12, True),
+            ("PO-1002", 1, "C-300", 12, 1.0, 2026-10-15, False),
+        ));
+        assertEq(1, sheet.header_row);
+        assertEq((), sheet.title_rows);
+        assertEq(<TabularCellRange>{"first_row": 2, "last_row": 4, "first_col": 1, "last_col": 7}, sheet.data_region);
+        assertEq(("string", "int", "string", "int", "number", "date", "bool"), (map $1.type, sheet.columns),
+            "an integral float is an int and a column of ints and floats is a number");
+        assertEq(("PO Number", "Line", "SKU", "Confirmed Qty", "Unit Price", "Ship Date", "Backorder"),
+            (map $1.header, sheet.columns));
+        assertEq((), (select sheet.columns, $1.confidence != 1.0), "every column matches its type");
+        assertEq((), sheet.findings);
+        assertEq(3, sheet.samples.size());
+        assertEq(4, sheet.row_count);
+    }
+
+    titleRows() {
+        hash<TabularSheetGrid> grid({
+            "name": "Confirmations",
+            "rows": (
+                ("Supplier PO confirmations - week 41",),
+                (),
+                ("Supplier:", "ACME Components"),
+                ("PO", "SKU", "Qty"),
+                ("PO-1", "A", 5),
+                ("PO-2", "B", 6),
+            ),
+            "merged": (<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 2},),
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq(4, sheet.header_row, "the label row above the data is the header, not the title or banner");
+        assertEq((1, 3), sheet.title_rows);
+        assertEq(5, sheet.data_region.first_row);
+        assertEq(("string", "string", "int"), (map $1.type, sheet.columns));
+        assertEq((1, 3), finding(sheet, "title_rows").detail);
+        assertNothing(finding(sheet, "merged_cells_in_data"), "a merged banner above the header is not data");
+
+        # a merged cell inside the data region is reported
+        grid.merged += <TabularCellRange>{"first_row": 4, "last_row": 5, "first_col": 0, "last_col": 0};
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        hash<TabularProfileFinding> merged = finding(sheet, "merged_cells_in_data");
+        assertEq("A5:A6", merged.detail);
+        assertEq(5, merged.row);
+    }
+
+    totalsAndGaps() {
+        hash<TabularSheetGrid> grid({
+            "name": "Stock",
+            "rows": (
+                ("Warehouse", "SKU", "On hand"),
+                ("PRG", "A", 10),
+                ("PRG", "B", 20),
+                ("Subtotal PRG", NOTHING, 30),
+                (),
+                (),
+                ("VIE", "A", 5),
+                ("VIE", "C", "7"),
+                (NOTHING, NOTHING, 12),
+                ("Grand total", "", 42),
+            ),
+            "formulas": {"C9": "SUM(C7:C8)", "C10": "C4+C9", "C4": "SUM(C2:C3)"},
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq((4, 9, 10), sheet.totals_rows, "labelled totals rows and a SUM formula row");
+        assertEq(({"first_row": 5, "last_row": 6},), sheet.blank_row_gaps);
+        assertEq("int", sheet.columns[2].type, "totals rows are excluded from type inference");
+        assertEq(1.0, sheet.columns[2].confidence);
+        assertEq(4, sheet.columns[2].non_empty);
+        assertEq(<TabularProfileFinding>{"code": "blank_row_gap", "row": 5, "detail": 2},
+            finding(sheet, "blank_row_gap"));
+        assertEq(("SUM",), finding(sheet, "formulas").detail);
+        assertEq(3, sheet.formula_count);
+        assertEq(10, sheet.data_region.last_row);
+    }
+
+    datesAsText() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Order", "Ship date", "ETA", "Booked", "Due"),
+            ("1", "10.10.2026", "10/24/2026", "2026-10-01", "01/02/2026"),
+            ("2", "24.10.2026", "11/03/2026", "2026-10-02 08:30", "03/04/2026"),
+        ));
+        assertEq("DD.MM.YYYY", sheet.columns[1].date_format);
+        assertEq("MM/DD/YYYY", sheet.columns[2].date_format);
+        assertEq("YYYY-MM-DD", sheet.columns[3].date_format);
+        assertNothing(sheet.columns[4].date_format, "01/02 and 03/04 could be either order");
+        assertTrue(sheet.columns[1].dates_as_text);
+        assertEq(("date", "date", "date", "date"), (map $1.type, sheet.columns[1..4]));
+        assertEq((2, 3, 4, 5), (map $1.col, sheet.findings, $1.code == "dates_as_text"));
+        assertEq(5, finding(sheet, "ambiguous_date_order").col);
+
+        # real dates are not reported
+        sheet = profileOne((("Date",), (2026-10-10,), (2026-10-11,)));
+        assertFalse(sheet.columns[0].dates_as_text);
+        assertEq((), sheet.findings);
+    }
+
+    localNumbers() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Item", "Price EUR", "Price USD", "Weight kg"),
+            ("A", "1.234,50", "1,234.50", "12,5"),
+            ("B", "12,00", "12.00", "3 400,25"),
+        ));
+        assertEq(("number", "number", "number"), (map $1.type, sheet.columns[1..3]));
+        assertEq("decimal_comma", sheet.columns[1].number_format);
+        assertEq("decimal_point", sheet.columns[2].number_format);
+        assertEq("decimal_comma", sheet.columns[3].number_format);
+        assertEq((2, 4), (map $1.col, sheet.findings, $1.code == "decimal_comma_numbers"));
+    }
+
+    leadingZeros() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Material", "Plant", "Qty"),
+            ("000123", "0010", "5"),
+            ("004567", "0020", "6"),
+        ));
+        assertEq(("string", "string", "int"), (map $1.type, sheet.columns));
+        assertTrue(sheet.columns[0].leading_zeros);
+        assertFalse(sheet.columns[2].leading_zeros);
+        assertEq((1, 2), (map $1.col, sheet.findings, $1.code == "leading_zero_identifiers"));
+    }
+
+    mixedTypes() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("SKU", "Qty"),
+            ("A", 5),
+            ("B", "TBD"),
+            ("C", 7),
+            ("D", "n/a"),
+            ("E", 9),
+        ));
+        hash<TabularColumnProfile> qty = sheet.columns[1];
+        assertEq("int", qty.type);
+        assertEq(0.6, qty.confidence);
+        assertEq(({"row": 3, "value": "XXX"}, {"row": 5, "value": "x/x"}), qty.counter_examples);
+        assertEq(<TabularProfileFinding>{"code": "mixed_types", "col": 2, "detail": "int"},
+            finding(sheet, "mixed_types"));
+
+        # counter-examples are capped and returned unredacted on request
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "csv",
+            "sheets": (<TabularSheetGrid>{
+                "name": "s",
+                "rows": (("SKU", "Qty"), ("A", 5), ("B", "TBD"), ("C", "x"), ("D", "y"), ("E", 1), ("F", 2),
+                    ("G", 3)),
+            },),
+        }, <TabularProfileOptions>{"redact": False, "max_counter_examples": 2}).sheets[0];
+        assertEq(({"row": 3, "value": "TBD"}, {"row": 4, "value": "x"}), sheet.columns[1].counter_examples);
+    }
+
+    headers() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("SKU", "Qty", "qty", NOTHING, "Note"),
+            ("A", 1, 2, "x", "n"),
+            ("B", 3, 4, "y", "m"),
+        ));
+        assertEq(<TabularProfileFinding>{"code": "duplicate_header", "col": 3, "detail": "qty"},
+            finding(sheet, "duplicate_header"));
+        assertEq(<TabularProfileFinding>{"code": "empty_header", "col": 4}, finding(sheet, "empty_header"));
+        assertNothing(sheet.columns[3].header);
+    }
+
+    widePeriods() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("SKU", "W01", "W02", "W03", "W04", "W05"),
+            ("A", 1, 2, 3, 4, 5),
+        ));
+        assertEq(<TabularProfileFinding>{"code": "wide_period_columns", "row": 1, "detail": 5},
+            finding(sheet, "wide_period_columns"));
+
+        sheet = profileOne((
+            ("SKU", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026"),
+            ("A", 1, 2, 3, 4),
+        ));
+        assertEq(4, finding(sheet, "wide_period_columns").detail);
+
+        # three periods are not a wide layout
+        sheet = profileOne((("SKU", "Q1", "Q2", "Q3"), ("A", 1, 2, 3)));
+        assertNothing(finding(sheet, "wide_period_columns"));
+    }
+
+    noHeader() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            (),
+            ("PO-1", 5, 2026-10-10),
+            ("PO-2", 6, 2026-10-11),
+        ));
+        assertNothing(sheet.header_row);
+        assertEq("no_header_row", sheet.findings[0].code);
+        assertEq(2, sheet.data_region.first_row, "the data region starts at the first row with content");
+        assertEq(("string", "int", "date"), (map $1.type, sheet.columns));
+        assertEq((NOTHING, NOTHING, NOTHING), (map $1.header, sheet.columns));
+
+        # an empty sheet has no region or columns
+        sheet = profileOne(((), (NOTHING, "  ")));
+        assertNothing(sheet.data_region);
+        assertEq((), sheet.columns);
+        assertEq(2, sheet.row_count);
+
+        # a sheet read partly is reported
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (<TabularSheetGrid>{
+                "name": "big",
+                "rows": (("A", "B"), (1, 2)),
+                "row_count": 100000,
+            },),
+        }).sheets[0];
+        assertEq(100000, sheet.row_count);
+        assertEq(<TabularProfileFinding>{"code": "partial_profile", "detail": 2}, finding(sheet, "partial_profile"));
+    }
+
+    workbook() {
+        hash<TabularTextFormat> text_format({"separator": ";", "encoding": "UTF-8", "bom": True, "eol": "\r\n"});
+        hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (
+                <TabularSheetGrid>{"name": "Data", "rows": (("A", "B"), (1, 2))},
+                <TabularSheetGrid>{
+                    "name": "Lookup",
+                    "hidden": True,
+                    "rows": (("Code", "Rate"), ("X", 1.5)),
+                    "formulas": {"B2": "VLOOKUP(A2,Rates!A:B,2,FALSE)*IF(C2>0,1,0)"},
+                },
+            ),
+            "named_ranges": {"Rates": "Lookup!$A$1:$B$20"},
+            "text_format": text_format,
+        });
+        assertEq("xlsx", profile.format);
+        assertEq(("Data", "Lookup"), (map $1.name, profile.sheets));
+        assertFalse(profile.sheets[0].hidden);
+        assertTrue(profile.sheets[1].hidden);
+        assertEq("hidden_sheet", profile.sheets[1].findings[0].code);
+        assertEq(("IF", "VLOOKUP"), finding(profile.sheets[1], "formulas").detail);
+        assertEq({"Rates": "Lookup!$A$1:$B$20"}, profile.named_ranges);
+        assertEq(text_format, profile.text_format);
+        assertEq((), TabularProfiler::profile(<TabularWorkbookGrid>{"format": "ods"}).sheets);
+    }
+
+    textOnly() {
+        # every row is labels: the first row as wide as the widest is the header
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Supplier", "Contact", "Country"),
+            ("ACME", "Jane", "CZ"),
+            ("Globex", "Hank", "AT"),
+        ));
+        assertEq(1, sheet.header_row);
+        assertEq(("string", "string", "string"), (map $1.type, sheet.columns));
+        assertNothing(finding(sheet, "no_header_row"));
+
+        # a single-column sheet has a one-cell header
+        sheet = profileOne((("Ship date",), (2026-10-10,), (2026-10-11,)));
+        assertEq(1, sheet.header_row);
+        assertEq("date", sheet.columns[0].type);
+        assertEq("Ship date", sheet.columns[0].header);
+    }
+
+    redaction() {
+        assertEq("XXX-999 xx", TabularProfiler::redact("ACM-123 kg"));
+        assertEq("Xxxxx", TabularProfiler::redact("Žluťá"));
+        assertEq("9999.9", TabularProfiler::redact(1234.5));
+        assertEq("9999-99-99", TabularProfiler::redact(2026-10-10));
+        assertEq(True, TabularProfiler::redact(True));
+        assertNothing(TabularProfiler::redact(NOTHING));
+        assertEq(strmul("x", 24) + "…", TabularProfiler::redact(strmul("a", 40)));
+
+        hash<TabularSheetProfile> sheet = profileOne((("Name", "Qty"), ("Jane Doe", 5)));
+        assertEq((("Xxxx Xxx", "9"),), sheet.samples);
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "csv",
+            "sheets": (<TabularSheetGrid>{"name": "s", "rows": (("Name", "Qty"), (" Jane Doe ", 5))},),
+        }, <TabularProfileOptions>{"redact": False, "sample_rows": 1}).sheets[0];
+        assertEq((("Jane Doe", 5),), sheet.samples, "unredacted samples are trimmed");
+    }
+
+    columnLetters() {
+        assertEq("A", TabularProfiler::columnLetter(0));
+        assertEq("Z", TabularProfiler::columnLetter(25));
+        assertEq("AA", TabularProfiler::columnLetter(26));
+        assertEq("AZ", TabularProfiler::columnLetter(51));
+        assertEq("BA", TabularProfiler::columnLetter(52));
+        assertEq("XFD", TabularProfiler::columnLetter(16383));
+    }
+
+    dataType() {
+        hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "csv",
+            "sheets": (<TabularSheetGrid>{
+                "name": "s",
+                "rows": (("Title",), ("PO", "Qty", "Qty"), ("1", 5, "x"), ("Total", 5, NOTHING)),
+                "merged": (<TabularCellRange>{"first_row": 2, "last_row": 2, "first_col": 0, "last_col": 1},),
+            },),
+            "text_format": <TabularTextFormat>{"separator": ",", "encoding": "UTF-8", "eol": "\n"},
+        });
+        hash<auto> value = TabularWorkbookProfileDataType.acceptsValue(profile);
+        assertEq(profile.sheets[0].columns[0].letter, value.sheets[0].columns[0].letter);
+        assertEq(("bool", "date", "empty", "int", "number", "string"),
+            sort(map $1.value, TabularColumnTypeValues), "every inferred column type is an allowed value");
+        # every finding code the profiler can report is an allowed value
+        hash<string, bool> codes = map {$1.value: True}, TabularFindingCodeValues;
+        foreach hash<TabularProfileFinding> finding in (profile.sheets[0].findings) {
+            assertTrue(codes{finding.code}, finding.code);
+        }
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            TabularWorkbookProfileDataType.acceptsValue({"format": "csv", "sheets": ({"name": 1},)});
+        });
+    }
+
+    private hash<TabularSheetProfile> profileOne(list<list<auto>> rows) {
+        return TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "csv",
+            "sheets": (<TabularSheetGrid>{"name": "sheet", "rows": rows},),
+        }).sheets[0];
+    }
+
+    private *hash<TabularProfileFinding> finding(hash<TabularSheetProfile> sheet, string code) {
+        foreach hash<TabularProfileFinding> f in (sheet.findings) {
+            if (f.code == code) {
+                return f;
+            }
+        }
+    }
+}

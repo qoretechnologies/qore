@@ -1,0 +1,886 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TabularProfiler class definition
+
+/** TabularProfiler.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! contains all public definitions in the DataProvider module
+public namespace DataProvider {
+#! A rectangular range of cells
+/** Rows and columns are 0-based and inclusive in a @ref TabularSheetGrid and 1-based and inclusive in a profile
+
+    @since %DataProvider 3.9
+*/
+public hashdecl TabularCellRange {
+    #! The first row
+    int first_row;
+    #! The last row
+    int last_row;
+    #! The first column
+    int first_col;
+    #! The last column
+    int last_col;
+}
+
+#! The raw cells of one sheet of a spreadsheet or of a text file such as a CSV file
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularSheetGrid {
+    #! The sheet name
+    string name;
+
+    #! True if the sheet is hidden
+    bool hidden = False;
+
+    #! The cell values read, row by row from the first row of the sheet; a row can omit trailing empty cells
+    list<list<auto>> rows = ();
+
+    #! The number of rows in the sheet, when more rows exist than were read
+    *int row_count;
+
+    #! Merged cell ranges, 0-based
+    list<hash<TabularCellRange>> merged = ();
+
+    #! Formula text by A1 cell reference (for example \c "B7"), without the leading \c "="
+    hash<string, string> formulas = {};
+}
+
+#! The text format of a delimited text file
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularTextFormat {
+    #! The field separator
+    string separator;
+
+    #! The character encoding
+    string encoding;
+
+    #! True if the file starts with a byte order mark
+    bool bom = False;
+
+    #! The line ending: \c "\n", \c "\r\n", or \c "\r"
+    string eol;
+}
+
+#! The raw cells of a workbook or text file, the input to @ref TabularProfiler
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularWorkbookGrid {
+    #! The source format, for example \c "xlsx", \c "ods", or \c "csv"
+    string format;
+
+    #! The sheets; a text file has one sheet
+    list<hash<TabularSheetGrid>> sheets = ();
+
+    #! Named ranges by name, as references such as \c "Sheet1!$A$1:$D$20"
+    hash<string, string> named_ranges = {};
+
+    #! The text format of a delimited text file
+    *hash<TabularTextFormat> text_format;
+}
+
+#! Options for @ref TabularProfiler::profile()
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularProfileOptions {
+    #! The number of sample data rows returned per sheet
+    int sample_rows = 5;
+
+    #! If True, sample values and counter-examples are redacted to their shape
+    bool redact = True;
+
+    #! The maximum number of counter-examples returned per column
+    int max_counter_examples = 3;
+
+    #! The number of leading rows searched for the header row
+    int header_search_rows = 20;
+}
+
+#! A finding about a sheet: a structural feature or a problem that affects how the data is read
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularProfileFinding {
+    #! The finding code; see @ref TabularProfiler for the codes
+    string code;
+
+    #! The 1-based row the finding refers to, if any
+    *int row;
+
+    #! The 1-based column the finding refers to, if any
+    *int col;
+
+    #! A detail value, such as the duplicated header or a list of formula functions
+    auto detail;
+}
+
+#! The profile of one column of a sheet's data region
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularColumnProfile {
+    #! The 1-based column index
+    int index;
+
+    #! The column letter, for example \c "A"
+    string letter;
+
+    #! The header label, if the sheet has a header row and the cell is not empty
+    *string header;
+
+    #! The inferred type: \c "string", \c "int", \c "number", \c "date", \c "bool", or \c "empty"
+    string type;
+
+    #! The share of non-empty cells matching the inferred type, from 0 to 1
+    float confidence = 1.0;
+
+    #! The number of non-empty data cells
+    int non_empty = 0;
+
+    #! The number of empty data cells
+    int empty = 0;
+
+    #! True if some dates are stored as text
+    bool dates_as_text = False;
+
+    #! The pattern of dates stored as text, for example \c "DD.MM.YYYY"
+    *string date_format;
+
+    #! The format of numbers stored as text: \c "decimal_comma" or \c "decimal_point"
+    *string number_format;
+
+    #! True if the column holds digit strings with leading zeros, such as identifiers
+    bool leading_zeros = False;
+
+    #! Cells that do not match the inferred type: \c row (1-based) and \c value
+    list<hash<auto>> counter_examples = ();
+}
+
+#! The profile of one sheet
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularSheetProfile {
+    #! The sheet name
+    string name;
+
+    #! True if the sheet is hidden
+    bool hidden = False;
+
+    #! The number of rows in the sheet
+    int row_count = 0;
+
+    #! The 1-based header row, if one was found
+    *int header_row;
+
+    #! The 1-based rows above the header that hold titles or banners
+    list<int> title_rows = ();
+
+    #! The 1-based data region below the header
+    *hash<TabularCellRange> data_region;
+
+    #! The 1-based totals and subtotal rows in the data region
+    list<int> totals_rows = ();
+
+    #! Runs of empty rows inside the data region: \c first_row and \c last_row (1-based)
+    list<hash<auto>> blank_row_gaps = ();
+
+    #! The columns of the data region
+    list<hash<TabularColumnProfile>> columns = ();
+
+    #! Sample data rows, one value per column, redacted unless redaction is disabled
+    list<list<auto>> samples = ();
+
+    #! The number of formulas in the sheet
+    int formula_count = 0;
+
+    #! Findings about the sheet
+    list<hash<TabularProfileFinding>> findings = ();
+}
+
+#! The profile of a workbook or text file
+/** @since %DataProvider 3.9
+*/
+public hashdecl TabularWorkbookProfile {
+    #! The source format
+    string format;
+
+    #! The sheet profiles, in workbook order
+    list<hash<TabularSheetProfile>> sheets = ();
+
+    #! Named ranges by name
+    hash<string, string> named_ranges = {};
+
+    #! The text format of a delimited text file
+    *hash<TabularTextFormat> text_format;
+}
+
+#! Deterministically profiles spreadsheets and delimited text files
+/** Spreadsheets that people maintain by hand rarely start with a clean header in row 1: they have title rows and
+    merged banners, totals rows, blank-row gaps, dates and numbers stored as text in a local format, and identifiers
+    with leading zeros.  This class reads the raw cells of a workbook, supplied by a format reader as a
+    @ref TabularWorkbookGrid, and describes how the data is laid out so that a reader can be configured correctly and
+    the remaining questions can be asked precisely.
+
+    The profile is computed from the cells alone, without any model, so the same file always produces the same
+    profile.
+
+    For each sheet the profile identifies:
+    - the header row, the title rows above it, and the data region below it
+    - totals and subtotal rows and blank-row gaps, which are excluded from type inference
+    - each column's inferred type with a confidence and redacted counter-examples
+    - dates stored as text with their pattern, numbers stored as text in a local format, and leading-zero identifiers
+
+    Finding codes:
+    - \c ambiguous_date_order: dates stored as text could be day-first or month-first
+    - \c blank_row_gap: empty rows inside the data region
+    - \c dates_as_text: a column holds dates stored as text
+    - \c decimal_comma_numbers: a column holds numbers stored as text with a decimal comma
+    - \c duplicate_header: two columns have the same header
+    - \c empty_header: a column has data but no header
+    - \c formulas: the sheet has formulas; the detail lists the functions used
+    - \c hidden_sheet: the sheet is hidden
+    - \c leading_zero_identifiers: a column holds digit strings with leading zeros
+    - \c merged_cells_in_data: merged cells overlap the data region
+    - \c mixed_types: a column's values do not all match its inferred type
+    - \c no_header_row: no header row was found
+    - \c partial_profile: the sheet has more rows than were read
+    - \c title_rows: rows above the header hold titles or banners
+    - \c totals_row: a row holds totals or subtotals
+    - \c wide_period_columns: several columns are periods such as weeks, months, or dates, a layout that is usually
+      unpivoted into rows
+
+    @par Example
+    @code{.py}
+hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbookGrid>{
+    "format": "csv",
+    "sheets": (<TabularSheetGrid>{
+        "name": "orders",
+        "rows": (("PO", "Qty", "Ship date"), ("PO-1", "5", "10.10.2026"), ("PO-2", "7", "24.10.2026")),
+    },),
+});
+# profile.sheets[0].columns[2].type == "date", .date_format == "DD.MM.YYYY"
+    @endcode
+
+    @since %DataProvider 3.9
+*/
+public class TabularProfiler {
+    private {
+        #! Labels of totals rows in common languages
+        const TotalsRegex = "^\\s*(grand\\s+total|sub\\s*-?\\s*total|total|totals|sum|summe|gesamt|zwischensumme"
+            "|celkem|mezisou[cč]et|spolu|razem|suma|totale|totaal|итого|всього|합계|소계|合計|小計|总计|小计)\\b";
+
+        #! Formula functions that mark a totals row
+        const TotalsFormulaRegex = "^\\s*(SUM|SUBTOTAL|AGGREGATE)\\s*\\(";
+
+        #! Header labels that name periods
+        const PeriodHeaderRegex = "^\\s*(W(K|eek)?\\s*\\d{1,2}|KW\\s*\\d{1,2}|Q[1-4]|\\d{4}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{4}"
+            "|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(tember)?|oct(ober)?"
+            "|nov(ember)?|dec(ember)?)(\\s+\\d{2,4})?\\s*$";
+
+        #! The minimum number of period headers reported as wide period columns
+        const MinPeriodColumns = 4;
+
+        #! Values longer than this are truncated when redacted
+        const MaxRedactedLength = 24;
+    }
+
+    #! Profiles a workbook or text file
+    /** @param grid the raw cells, from a format reader
+        @param opts profile options
+
+        @return the profile
+    */
+    static hash<TabularWorkbookProfile> profile(hash<TabularWorkbookGrid> grid, *hash<TabularProfileOptions> opts) {
+        hash<TabularProfileOptions> options = opts ?? <TabularProfileOptions>{};
+        hash<TabularWorkbookProfile> rv({
+            "format": grid.format,
+            "named_ranges": grid.named_ranges,
+            "text_format": grid.text_format,
+        });
+        foreach hash<TabularSheetGrid> sheet in (grid.sheets) {
+            rv.sheets += profileSheet(sheet, options);
+        }
+        return rv;
+    }
+
+    #! Classifies one cell value
+    /** @param value the cell value
+
+        @return \c type (\c "empty", \c "string", \c "int", \c "number", \c "date", or \c "bool"), \c text (True if
+        the value is a string), and for strings \c date_format, \c number_format, \c leading_zero, and the day and
+        month components \c d1 and \c d2 of a day/month date
+    */
+    static hash<auto> classify(auto value) {
+        switch (value.typeCode()) {
+            case NT_NOTHING:
+            case NT_NULL:
+                return {"type": "empty"};
+            case NT_BOOLEAN:
+                return {"type": "bool"};
+            case NT_INT:
+                return {"type": "int"};
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return {"type": value == value.toInt() ? "int" : "number"};
+            case NT_DATE:
+                return {"type": "date"};
+            case NT_STRING:
+                return classifyString(value);
+        }
+        return {"type": "string"};
+    }
+
+    #! Returns the column letter of a 0-based column index
+    /** @param col the 0-based column index
+
+        @return the column letter, for example \c "A" for 0 and \c "AA" for 26
+    */
+    static string columnLetter(int col) {
+        string rv;
+        ++col;
+        while (col > 0) {
+            int rem = (col - 1) % 26;
+            rv = chr(65 + rem) + rv;
+            col = (col - 1) / 26;
+        }
+        return rv;
+    }
+
+    #! Redacts a value to its shape: letters become \c x or \c X and digits \c 9
+    /** @param value the value
+
+        @return the redacted value; @ref NOTHING and booleans are returned unchanged
+    */
+    static auto redact(auto value) {
+        switch (value.typeCode()) {
+            case NT_NOTHING:
+            case NT_NULL:
+            case NT_BOOLEAN:
+                return value;
+            case NT_DATE:
+                return "9999-99-99";
+        }
+        string str = value.toString();
+        string rv;
+        int len = str.length();
+        for (int i = 0; i < len; ++i) {
+            if (i == MaxRedactedLength) {
+                rv += "…";
+                break;
+            }
+            string c = str[i];
+            if (c =~ /^[0-9]$/) {
+                rv += "9";
+            } else if (c =~ /^\p{Lu}$/u) {
+                rv += "X";
+            } else if (c =~ /^\p{L}$/u) {
+                rv += "x";
+            } else {
+                rv += c;
+            }
+        }
+        return rv;
+    }
+
+    #! Classifies a string cell value
+    private static hash<auto> classifyString(string value) {
+        string s = trim(value);
+        if (!s.val()) {
+            return {"type": "empty"};
+        }
+        # every number and date starts with a digit or a sign
+        if (s !~ /^[0-9+-]/) {
+            return s =~ /^(true|false)$/i ? {"type": "bool", "text": True} : {"type": "string", "text": True};
+        }
+        if (s =~ /^[+-]?[0-9]+$/) {
+            if (s =~ /^[+-]?0[0-9]/) {
+                return {"type": "string", "text": True, "leading_zero": True};
+            }
+            return {"type": "int", "text": True};
+        }
+        if (s =~ /^[+-]?[0-9]+\.[0-9]+$/ || s =~ /^[+-]?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?$/) {
+            return {"type": "number", "text": True, "number_format": "decimal_point"};
+        }
+        if (s =~ /^[+-]?[0-9]+,[0-9]+$/ || s =~ /^[+-]?[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?$/
+            || s =~ /^[+-]?[0-9]{1,3}( [0-9]{3})+(,[0-9]+)?$/) {
+            return {"type": "number", "text": True, "number_format": "decimal_comma"};
+        }
+        if (s =~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}([ T][0-9]{2}:[0-9]{2}(:[0-9]{2})?)?$/) {
+            return {"type": "date", "text": True, "date_format": "YYYY-MM-DD"};
+        }
+        *list<*string> parts = (s =~ x/^([0-9]{1,2})([.\/-])([0-9]{1,2})[.\/-]([0-9]{4})$/);
+        if (parts) {
+            return {
+                "type": "date",
+                "text": True,
+                "separator": parts[1],
+                "d1": parts[0].toInt(),
+                "d2": parts[2].toInt(),
+            };
+        }
+        return {"type": "string", "text": True};
+    }
+
+    #! Profiles one sheet
+    private static hash<TabularSheetProfile> profileSheet(hash<TabularSheetGrid> sheet,
+            hash<TabularProfileOptions> options) {
+        list<list<auto>> rows = sheet.rows;
+        int read_rows = rows.size();
+        # each cell is classified once; the passes below read the cell types
+        list<list<string>> types = ();
+        foreach list<auto> row in (rows) {
+            list<string> row_types = (map classify($1).type, row) ?? ();
+            push types, row_types;
+        }
+        hash<TabularSheetProfile> rv({
+            "name": sheet.name,
+            "hidden": sheet.hidden,
+            "row_count": sheet.row_count ?? read_rows,
+            "formula_count": sheet.formulas.size(),
+        });
+        if (sheet.hidden) {
+            rv.findings += <TabularProfileFinding>{"code": "hidden_sheet"};
+        }
+        if (sheet.row_count > read_rows) {
+            rv.findings += <TabularProfileFinding>{
+                "code": "partial_profile",
+                "detail": read_rows,
+            };
+        }
+        if (sheet.formulas) {
+            rv.findings += <TabularProfileFinding>{
+                "code": "formulas",
+                "detail": formulaFunctions(sheet.formulas),
+            };
+        }
+
+        # the index of the last row with content
+        int last_row = -1;
+        for (int r = read_rows - 1; r >= 0; --r) {
+            if (nonEmptyCount(types[r])) {
+                last_row = r;
+                break;
+            }
+        }
+        if (last_row < 0) {
+            return rv;
+        }
+
+        *int header = findHeaderRow(types, last_row, options.header_search_rows);
+        int first_data;
+        if (exists header) {
+            rv.header_row = header + 1;
+            first_data = header + 1;
+            for (int r = 0; r < header; ++r) {
+                if (nonEmptyCount(types[r])) {
+                    rv.title_rows += r + 1;
+                }
+            }
+            if (rv.title_rows) {
+                rv.findings += <TabularProfileFinding>{
+                    "code": "title_rows",
+                    "detail": rv.title_rows,
+                };
+            }
+        } else {
+            rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            first_data = 0;
+            while (!nonEmptyCount(types[first_data])) {
+                ++first_data;
+            }
+        }
+
+        # the columns: every column with a header or data
+        int last_col = -1;
+        for (int r = header ?? first_data; r <= last_row; ++r) {
+            int width = lastNonEmptyIndex(types[r]);
+            if (width > last_col) {
+                last_col = width;
+            }
+        }
+        int first_col = last_col;
+        for (int r = header ?? first_data; r <= last_row; ++r) {
+            *int first = firstNonEmptyIndex(types[r]);
+            if (exists first && first < first_col) {
+                first_col = first;
+            }
+        }
+        if (first_data <= last_row) {
+            rv.data_region = <TabularCellRange>{
+                "first_row": first_data + 1,
+                "last_row": last_row + 1,
+                "first_col": first_col + 1,
+                "last_col": last_col + 1,
+            };
+        }
+
+        # data rows, totals rows, and blank-row gaps
+        list<int> data_rows = ();
+        *int gap_start;
+        for (int r = first_data; r <= last_row; ++r) {
+            if (!nonEmptyCount(types[r])) {
+                if (!exists gap_start) {
+                    gap_start = r;
+                }
+                continue;
+            }
+            if (exists gap_start) {
+                rv.blank_row_gaps += {"first_row": gap_start + 1, "last_row": r};
+                rv.findings += <TabularProfileFinding>{
+                    "code": "blank_row_gap",
+                    "row": gap_start + 1,
+                    "detail": r - gap_start,
+                };
+                remove gap_start;
+            }
+            if (isTotalsRow(rows[r], types[r], r, sheet.formulas)) {
+                rv.totals_rows += r + 1;
+                rv.findings += <TabularProfileFinding>{"code": "totals_row", "row": r + 1};
+                continue;
+            }
+            data_rows += r;
+        }
+
+        # merged cells overlapping the data region
+        foreach hash<TabularCellRange> range in (sheet.merged) {
+            if (range.last_row >= first_data && range.first_row <= last_row) {
+                rv.findings += <TabularProfileFinding>{
+                    "code": "merged_cells_in_data",
+                    "row": range.first_row + 1,
+                    "col": range.first_col + 1,
+                    "detail": sprintf("%s%d:%s%d", columnLetter(range.first_col), range.first_row + 1,
+                        columnLetter(range.last_col), range.last_row + 1),
+                };
+            }
+        }
+
+        # columns
+        hash<string, int> header_seen = {};
+        int period_headers = 0;
+        for (int c = first_col; c <= last_col; ++c) {
+            *string label;
+            if (exists header) {
+                auto cell = rows[header][c];
+                string cell_type = types[header][c] ?? "empty";
+                if (cell_type != "empty") {
+                    label = trim(cell.toString());
+                    if (cell_type == "date" || regex(label, PeriodHeaderRegex, RE_Caseless)) {
+                        ++period_headers;
+                    }
+                }
+            }
+            hash<TabularColumnProfile> column = profileColumn(rows, types, data_rows, c, label, options);
+            if (exists header) {
+                if (!exists label) {
+                    if (column.non_empty) {
+                        rv.findings += <TabularProfileFinding>{"code": "empty_header", "col": c + 1};
+                    }
+                } else if (header_seen{label.lwr()}) {
+                    rv.findings += <TabularProfileFinding>{
+                        "code": "duplicate_header",
+                        "col": c + 1,
+                        "detail": label,
+                    };
+                } else {
+                    header_seen{label.lwr()} = c + 1;
+                }
+            }
+            rv.findings += columnFindings(column);
+            rv.columns += column;
+        }
+        if (period_headers >= MinPeriodColumns) {
+            rv.findings += <TabularProfileFinding>{
+                "code": "wide_period_columns",
+                "row": header + 1,
+                "detail": period_headers,
+            };
+        }
+
+        # samples
+        foreach int r in (data_rows) {
+            if (rv.samples.size() >= options.sample_rows) {
+                break;
+            }
+            list<auto> sample = ();
+            for (int c = first_col; c <= last_col; ++c) {
+                auto value = rows[r][c];
+                if (value.typeCode() == NT_STRING) {
+                    value = trim(value);
+                }
+                sample += options.redact ? redact(value) : value;
+            }
+            rv.samples += (sample,);
+        }
+        return rv;
+    }
+
+    #! Returns the 0-based header row, if one is found
+    /** The header is the first row, among the leading rows, whose cells are all labels (text that is not a
+        number, date, or boolean), that is at least half as wide as the widest of the leading rows, and whose next
+        row with content is data rather than more labels; a key/value line such as \c "Supplier: ACME" above the
+        real header is therefore not taken as the header.  When every leading row is labels, as in a sheet of text
+        columns, the first label row as wide as the widest row is the header.
+    */
+    private static *int findHeaderRow(list<list<string>> types, int last_row, int search_rows) {
+        int limit = search_rows < last_row ? search_rows : last_row;
+        int widest = 0;
+        for (int r = 0; r <= limit; ++r) {
+            int width = nonEmptyCount(types[r]);
+            if (width > widest) {
+                widest = width;
+            }
+        }
+        int min_width = widest < 2 ? widest : 2;
+        *int fallback;
+        for (int r = 0; r < limit; ++r) {
+            int width = nonEmptyCount(types[r]);
+            if (width < min_width || width * 2 < widest || !isLabelRow(types[r])) {
+                continue;
+            }
+            if (!exists fallback && width == widest) {
+                fallback = r;
+            }
+            for (int n = r + 1; n <= last_row; ++n) {
+                if (nonEmptyCount(types[n])) {
+                    if (!isLabelRow(types[n])) {
+                        return r;
+                    }
+                    break;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    #! Returns True if every non-empty cell in the row is a label
+    private static bool isLabelRow(*list<string> row) {
+        foreach string type in (row) {
+            if (type != "empty" && type != "string") {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Profiles one column of the data rows
+    private static hash<TabularColumnProfile> profileColumn(list<list<auto>> rows, list<list<string>> types,
+            list<int> data_rows, int col,
+            *string label, hash<TabularProfileOptions> options) {
+        hash<TabularColumnProfile> rv({
+            "index": col + 1,
+            "letter": columnLetter(col),
+            "header": label,
+            "type": "empty",
+        });
+        hash<string, int> counts = {};
+        # day/month components of day/month dates stored as text
+        bool first_over_12;
+        bool second_over_12;
+        *string date_separator;
+        bool iso_dates;
+        bool decimal_comma;
+        bool decimal_point;
+        foreach int r in (data_rows) {
+            if ((types[r][col] ?? "empty") == "empty") {
+                ++rv.empty;
+                continue;
+            }
+            hash<auto> cls = classify(rows[r][col]);
+            ++rv.non_empty;
+            ++counts{cls.type};
+            if (cls.leading_zero) {
+                rv.leading_zeros = True;
+            }
+            if (cls.type == "date" && cls.text) {
+                rv.dates_as_text = True;
+                if (cls.date_format) {
+                    iso_dates = True;
+                } else {
+                    date_separator = cls.separator;
+                    if (cls.d1 > 12) {
+                        first_over_12 = True;
+                    }
+                    if (cls.d2 > 12) {
+                        second_over_12 = True;
+                    }
+                }
+            }
+            if (cls.number_format == "decimal_comma") {
+                decimal_comma = True;
+            } else if (cls.number_format == "decimal_point") {
+                decimal_point = True;
+            }
+        }
+        if (!rv.non_empty) {
+            return rv;
+        }
+
+        # numbers include integers; leading-zero identifiers keep a column of digit strings a string column
+        int numeric = (counts.int ?? 0) + (counts.number ?? 0);
+        string type;
+        int matching;
+        if (counts.number && numeric * 2 > rv.non_empty) {
+            type = "number";
+            matching = numeric;
+        } else {
+            foreach hash<auto> i in (counts.pairIterator()) {
+                if (i.value > matching) {
+                    type = i.key;
+                    matching = i.value;
+                }
+            }
+        }
+        rv.type = type;
+        rv.confidence = matching.toFloat() / rv.non_empty;
+
+        if (rv.dates_as_text && type == "date") {
+            if (iso_dates && !date_separator) {
+                rv.date_format = "YYYY-MM-DD";
+            } else if (date_separator) {
+                if (first_over_12 && !second_over_12) {
+                    rv.date_format = sprintf("DD%sMM%sYYYY", date_separator, date_separator);
+                } else if (second_over_12 && !first_over_12) {
+                    rv.date_format = sprintf("MM%sDD%sYYYY", date_separator, date_separator);
+                }
+            }
+        }
+        if (decimal_comma) {
+            rv.number_format = "decimal_comma";
+        } else if (decimal_point) {
+            rv.number_format = "decimal_point";
+        }
+
+        # counter-examples
+        foreach int r in (data_rows) {
+            if (rv.counter_examples.size() >= options.max_counter_examples) {
+                break;
+            }
+            auto value = rows[r][col];
+            string cell_type = types[r][col] ?? "empty";
+            if (cell_type == "empty" || cell_type == type || (type == "number" && cell_type == "int")) {
+                continue;
+            }
+            if (value.typeCode() == NT_STRING) {
+                value = trim(value);
+            }
+            rv.counter_examples += {
+                "row": r + 1,
+                "value": options.redact ? redact(value) : value,
+            };
+        }
+        return rv;
+    }
+
+    #! Returns the findings for one column
+    private static list<hash<TabularProfileFinding>> columnFindings(hash<TabularColumnProfile> column) {
+        list<hash<TabularProfileFinding>> rv = ();
+        if (column.confidence < 1.0 && column.type != "empty") {
+            rv += <TabularProfileFinding>{
+                "code": "mixed_types",
+                "col": column.index,
+                "detail": column.type,
+            };
+        }
+        if (column.dates_as_text && column.type == "date") {
+            rv += <TabularProfileFinding>{
+                "code": "dates_as_text",
+                "col": column.index,
+                "detail": column.date_format,
+            };
+            if (!column.date_format) {
+                rv += <TabularProfileFinding>{"code": "ambiguous_date_order", "col": column.index};
+            }
+        }
+        if (column.number_format == "decimal_comma") {
+            rv += <TabularProfileFinding>{"code": "decimal_comma_numbers", "col": column.index};
+        }
+        if (column.leading_zeros) {
+            rv += <TabularProfileFinding>{"code": "leading_zero_identifiers", "col": column.index};
+        }
+        return rv;
+    }
+
+    #! Returns True if the row holds totals or subtotals
+    private static bool isTotalsRow(list<auto> row, list<string> row_types, int r, hash<string, string> formulas) {
+        foreach auto cell in (row) {
+            string type = row_types[$#];
+            if (type == "empty") {
+                continue;
+            }
+            # the first cell with content labels the row
+            if (type == "string" && regex(cell, TotalsRegex, RE_Caseless | RE_Unicode)) {
+                return True;
+            }
+            break;
+        }
+        int c = 0;
+        foreach auto cell in (row) {
+            *string formula = formulas{columnLetter(c) + (r + 1)};
+            if (formula && regex(formula, TotalsFormulaRegex, RE_Caseless)) {
+                return True;
+            }
+            ++c;
+        }
+        return False;
+    }
+
+    #! Returns the sorted, unique function names used in formulas
+    private static list<string> formulaFunctions(hash<string, string> formulas) {
+        hash<string, bool> names = {};
+        foreach string formula in (formulas.iterator()) {
+            foreach string name in (formula =~ x/([A-Za-z][A-Za-z0-9.]*)\s*\(/g) {
+                names{name.upr()} = True;
+            }
+        }
+        return sort(keys names);
+    }
+
+    #! Returns the number of non-empty cells in a row
+    private static int nonEmptyCount(*list<string> row) {
+        int rv = 0;
+        foreach string type in (row) {
+            if (type != "empty") {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the 0-based index of the last non-empty cell in a row, or -1
+    private static int lastNonEmptyIndex(*list<string> row) {
+        for (int c = row.size() - 1; c >= 0; --c) {
+            if (row[c] != "empty") {
+                return c;
+            }
+        }
+        return -1;
+    }
+
+    #! Returns the 0-based index of the first non-empty cell in a row
+    private static *int firstNonEmptyIndex(*list<string> row) {
+        int c = 0;
+        foreach string type in (row) {
+            if (type != "empty") {
+                return c;
+            }
+            ++c;
+        }
+    }
+}
+}

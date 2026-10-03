@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvProfilerTest
+
+#! Tests CsvUtil::CsvProfiler and the CSV profile action with files as suppliers and ERP systems export them
+public class CsvProfilerTest inherits QUnit::Test {
+    constructor() : Test("CsvProfilerTest", "1.0") {
+        addTestCase("separators", \separators());
+        addTestCase("encodings and byte order marks", \encodings());
+        addTestCase("line endings", \lineEndings());
+        addTestCase("grid", \grid());
+        addTestCase("profile of a European ERP export", \europeanExport());
+        addTestCase("explicit format options", \explicitOptions());
+        addTestCase("profile action", \action());
+        addTestCase("invalid requests", \invalidRequests());
+        set_return_value(main());
+    }
+
+    separators() {
+        assertEq(",", sniff("PO,SKU,Qty\nPO-1,A,5\nPO-2,B,6\n").separator);
+        assertEq(";", sniff("PO;SKU;Qty\nPO-1;A;5\nPO-2;B;6\n").separator);
+        assertEq("\t", sniff("PO\tSKU\tQty\nPO-1\tA\t5\n").separator);
+        assertEq("|", sniff("PO|SKU|Qty\nPO-1|A|5\n").separator);
+        # decimal commas do not outvote the semicolon separator
+        assertEq(";", sniff("Item;Price;Weight\nA;1,50;2,5\nB;12,00;3,25\n").separator);
+        # separators inside quoted fields are not counted
+        assertEq(";", sniff("\"Name, full\";Qty\n\"Doe, Jane\";5\n\"Roe, Rick\";6\n").separator);
+        # a single column has no separator: the default comma is returned
+        assertEq(",", sniff("SKU\nA\nB\n").separator);
+        assertEq(",", sniff("").separator);
+    }
+
+    encodings() {
+        hash<TabularTextFormat> format = CsvProfiler::sniffTextFormat(binary("\xef\xbb\xbf") + binary("a;b\n1;2\n"));
+        assertEq("UTF-8", format.encoding);
+        assertTrue(format.bom);
+
+        format = CsvProfiler::sniffTextFormat(binary("Město;Množství\nPraha;5\n"));
+        assertEq("UTF-8", format.encoding);
+        assertFalse(format.bom);
+
+        # Windows-1252 / ISO-8859-1 bytes are not valid UTF-8
+        binary latin1 = binary(convert_encoding("Straße;Menge\nKöln;5\n", "ISO-8859-1"));
+        format = CsvProfiler::sniffTextFormat(latin1);
+        assertEq("ISO-8859-1", format.encoding);
+        hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(latin1);
+        assertEq(("Straße", "Menge"), grid.sheets[0].rows[0], "8-bit content is decoded");
+
+        binary utf16 = binary("\xff\xfe") + binary(convert_encoding("a,b\n1,2\n", "UTF-16LE"));
+        format = CsvProfiler::sniffTextFormat(utf16);
+        assertEq("UTF-16LE", format.encoding);
+        assertTrue(format.bom);
+        assertEq(("1", "2"), CsvProfiler::readGrid(utf16).sheets[0].rows[1]);
+    }
+
+    lineEndings() {
+        assertEq("\r\n", sniff("a,b\r\n1,2\r\n").eol);
+        assertEq("\n", sniff("a,b\n1,2\n").eol);
+        assertEq("\r", sniff("a,b\r1,2\r").eol);
+        assertEq("\n", sniff("a,b").eol);
+    }
+
+    grid() {
+        hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(binary("Report\r\n\r\nPO;Qty\r\nPO-1;5\r\n"));
+        assertEq("csv", grid.format);
+        assertEq(1, grid.sheets.size());
+        hash<TabularSheetGrid> sheet = grid.sheets[0];
+        assertEq("csv", sheet.name);
+        assertEq(4, sheet.rows.size(), "empty lines are kept as empty rows");
+        assertEq(("PO", "Qty"), sheet.rows[2]);
+        assertNothing(sheet.row_count, "every row was read");
+        assertEq(";", grid.text_format.separator);
+        assertEq("\r\n", grid.text_format.eol);
+
+        # a row limit reports the total row count
+        list<string> lines = map sprintf("S%d,%d\n", $1, $1), xrange(0, 25);
+        string data = "SKU,Qty\n" + (foldl $1 + $2, lines);
+        grid = CsvProfiler::readGrid(binary(data), {"max_rows": 10});
+        assertEq(10, grid.sheets[0].rows.size());
+        assertEq(lines.size() + 1, grid.sheets[0].row_count, "the header and every data row are counted");
+
+        assertEq((), CsvProfiler::readGrid(binary()).sheets[0].rows, "empty data is an empty sheet");
+    }
+
+    europeanExport() {
+        string data = "\xef\xbb\xbf"
+            "Lieferbestätigungen KW41\r\n"
+            "\r\n"
+            "Bestellung;Position;Material;Menge;Preis;Lieferdatum\r\n"
+            "4500001001;10;000123;5;1.234,50;10.10.2026\r\n"
+            "4500001001;20;000456;7;12,00;24.10.2026\r\n"
+            "4500001002;10;000789;TBD;3,25;03.11.2026\r\n"
+            "Summe;;;12;1.249,75;\r\n";
+        hash<TabularWorkbookProfile> profile = CsvProfiler::profile(binary(data));
+        assertEq("csv", profile.format);
+        assertEq(<TabularTextFormat>{"separator": ";", "encoding": "UTF-8", "bom": True, "eol": "\r\n"},
+            profile.text_format);
+        hash<TabularSheetProfile> sheet = profile.sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq((7,), sheet.totals_rows);
+        assertEq(("Bestellung", "Position", "Material", "Menge", "Preis", "Lieferdatum"),
+            (map $1.header, sheet.columns));
+        assertEq(("int", "int", "string", "int", "number", "date"), (map $1.type, sheet.columns));
+        assertTrue(sheet.columns[2].leading_zeros);
+        assertEq("decimal_comma", sheet.columns[4].number_format);
+        assertEq("DD.MM.YYYY", sheet.columns[5].date_format);
+        assertEq(({"row": 6, "value": "XXX"},), sheet.columns[3].counter_examples);
+        hash<string, bool> codes = map {$1.code: True}, sheet.findings;
+        foreach string code in (("title_rows", "totals_row", "leading_zero_identifiers", "decimal_comma_numbers",
+                "dates_as_text", "mixed_types")) {
+            assertTrue(codes{code}, code);
+        }
+        # redacted samples
+        assertEq(("9999999999", "99", "999999", "9", "9.999,99", "99.99.9999"), sheet.samples[0]);
+    }
+
+    explicitOptions() {
+        # a file with commas in its values read with an explicit separator
+        hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(binary("a,b;c\n1,2;3\n"), {"separator": ";"});
+        assertEq(("a,b", "c"), grid.sheets[0].rows[0]);
+        assertEq(";", grid.text_format.separator);
+
+        # an explicit encoding
+        binary cp = binary(convert_encoding("Město;Kus\nPraha;5\n", "WINDOWS-1250"));
+        grid = CsvProfiler::readGrid(cp, {"encoding": "WINDOWS-1250"});
+        assertEq("WINDOWS-1250", grid.text_format.encoding);
+        assertEq(("Město", "Kus"), grid.sheets[0].rows[0]);
+    }
+
+    action() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Csv", "profile");
+        assertEq(DPAT_API, action.action_code);
+        assertEq(TabularWorkbookProfileDataType.getName(), action.output_type.getName());
+        assertTrue(action.options.data.preselected);
+
+        hash<auto> opts = {"data": "PO;Qty\nPO-1;5\nPO-2;x\n", "redact": False};
+        AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);
+        hash<auto> profile = prov.doRequest(opts);
+        assertEq(";", profile.text_format.separator);
+        assertEq(1, profile.sheets[0].header_row);
+        assertEq(({"row": 3, "value": "x"},), profile.sheets[0].columns[1].counter_examples,
+            "values are not redacted when redaction is disabled");
+        TabularWorkbookProfileDataType.acceptsValue(profile);
+
+        # from a file location
+        string path = tmp_location() + DirSep + get_random_string() + ".csv";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("SKU,Qty\nA,1\n");
+        f.close();
+        on_exit unlink(path);
+        profile = prov.doRequest({"path": path});
+        assertEq(",", profile.text_format.separator);
+        assertEq(("string", "int"), (map $1.type, profile.sheets[0].columns));
+    }
+
+    invalidRequests() {
+        CsvProfileDataProvider prov();
+        assertThrows("CSV-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
+        assertThrows("CSV-PROFILE-ERROR", "exactly one", \prov.doRequest(), {"data": "a", "path": "x.csv"});
+        assertThrows("CSV-PROFILE-ERROR", "max_rows", \CsvProfiler::readGrid(), (binary("a\n"), {"max_rows": 0}));
+    }
+
+    private hash<TabularTextFormat> sniff(string data) {
+        return CsvProfiler::sniffTextFormat(binary(data));
+    }
+}

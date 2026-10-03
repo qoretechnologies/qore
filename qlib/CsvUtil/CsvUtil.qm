@@ -27,7 +27,7 @@
 
 %requires Util
 
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires(reexport) FileLocationHandler
 
 %requires yaml
@@ -107,6 +107,33 @@ module CsvUtil {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CsvUtil::AppName,
             "path": "/",
+            "action": "profile",
+            "display_name": "Profile CSV Data",
+            "short_desc": "Detect the format of CSV data and describe its layout and columns",
+            "desc": "Detects the format of CSV data and describes how it is laid out, so it can be read correctly "
+                "before an integration is built around it.\n\n"
+                "**Detects:**\n"
+                "- the separator, character encoding, byte order mark, and line ending\n"
+                "- the header row, title rows above it, and the data region\n"
+                "- totals and subtotal rows and blank-row gaps\n"
+                "- each column's type with a confidence and counter-examples\n"
+                "- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\n"
+                "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
+                "without the data itself.",
+            "action_code": DPAT_API,
+            "cls": "CsvUtil::CsvProfileDataProvider",
+            "output_type": TabularWorkbookProfileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CsvProfileRequestDataType::Fields{"data",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                CsvProfileRequestDataType::Fields - ("data",)
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CsvUtil::AppName,
+            "path": "/",
             "action": "write",
             "subtype": "csvwrite",
             "display_name": "Write CSV Data",
@@ -149,6 +176,7 @@ module CsvUtil {
     - @ref CsvUtil::AbstractCsvWriter "AbstractCsvWriter": a base class for new CSV writer implementations
     - @ref CsvUtil::CsvIterator "CsvIterator": iterator class allowing for generic CSV input data to be processed line by line on a record basis
     - @ref CsvUtil::CsvReadDataProvider "CsvReadDataProvider": a data provider for reading and searching CSV files
+    - @ref CsvUtil::CsvProfiler "CsvProfiler": detects the format of delimited text data and profiles its layout and column types
     - @ref CsvUtil::CsvReadDataProviderFactory "CsvReadDataProviderFactory": a data provider factory for reading and searching CSV files
     - @ref CsvUtil::CsvWriter "CsvWriter": generic stream-based CSV writer
 
@@ -325,6 +353,9 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - added @ref CsvUtil::CsvProfiler "CsvProfiler", which detects the separator, encoding, byte order mark, and
+      line ending of delimited text data and profiles its layout and column types with
+      @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action
     - the read data provider's \c path option is now tagged
       @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
       value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
