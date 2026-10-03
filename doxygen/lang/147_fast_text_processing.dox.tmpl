@@ -131,7 +131,7 @@ sc.advance();                          # consume ';'
     - @ref <string>::substr() "<string>::substr()" and the @ref string_slicing "[] slice operator"
       no longer copy the slice buffer when the result is consumed read-only — the result aliases
       the source until the first write.
-    - The internal @ref Util::stripAnsi() "Util::stripAnsi()" helper, the
+    - The internal \c Util::stripAnsi() helper, the
       @ref Qdx::QoreTokenizer "Qdx::QoreTokenizer" lexical analyser, and the
       @ref dataproviderintro "DataProvider" DPQL tokenizer were all ported to byte-indexed
       cursor patterns and observed end-user speedups in the 4x–100x range depending on

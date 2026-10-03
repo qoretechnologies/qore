@@ -62,12 +62,12 @@ list<hash<auto>> docs = users.aggregate((
     @section mongodbconnection Connection Strings
 
     MongoDB connections use the standard MongoDB connection string format:
-    @code
+    @code{.py}
     mongodb://[username:password@]host[:port][/database][?options]
     @endcode
 
     Examples:
-    @code
+    @code{.py}
     # Connect to local MongoDB
     MongoClient client("mongodb://localhost:27017");
 
@@ -81,4 +81,9 @@ list<hash<auto>> docs = users.aggregate((
     @section mongodbreleasenotes mongodb Module Release Notes
 
     @subpage mongodbreleasehistory
+
+    @section mongodbqlibmodules Qore User Modules
+
+    - <img src="mongodb-logo.svg" width="28" height="28" alt="MongoDbDataProvider app icon"/> @ref mongodbdataproviderintro "MongoDbDataProvider" — a data provider API for MongoDB servers
+
 */

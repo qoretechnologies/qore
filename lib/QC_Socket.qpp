@@ -6459,7 +6459,7 @@ hash<auto> h = sock.getPeerInfo();
     @throw SOCKET-GETPEERINFO-ERROR error in getpeername()
 
     @note On a stream socket, an IPv4 node is reported with its IPv4 address and @ref Qore::AF_INET "AF_INET", also
-    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address \c ::ffff:a.b.c.d
+    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address <tt>&#58;&#58;ffff:a.b.c.d</tt>
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
     @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
@@ -6484,7 +6484,7 @@ hash<auto> h = sock.getSocketInfo();
     @throw SOCKET-GETSOCKETINFO-ERROR error in getsockname()
 
     @note On a stream socket, an IPv4 node is reported with its IPv4 address and @ref Qore::AF_INET "AF_INET", also
-    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address \c ::ffff:a.b.c.d
+    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address <tt>&#58;&#58;ffff:a.b.c.d</tt>
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
     @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
@@ -7302,7 +7302,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
     @note Unlike @ref sendHttp2StreamData() and @ref cancelHttp2Stream(), this method
     genuinely blocks, so it stays illegal on the async I/O controller's I/O thread and in
     a controller-owned \c continuePoll() worker and raises
-    \c SOCKET-SYNC-ON-IO-THREAD-ERROR there.  A worker that gets @ref HTTP2-FLOW-CONTROL
+    \c SOCKET-SYNC-ON-IO-THREAD-ERROR there.  A worker that gets @c HTTP2-FLOW-CONTROL
     must surface the error to its caller instead of draining here.
 
     @param stream_id the HTTP/2 stream ID
@@ -7365,7 +7365,7 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     underlying enqueue performs no socket I/O.  Off the I/O thread the call only
     queues the frame and wakes the controller, which flushes on its next cycle;
     ordinary threads additionally get a synchronous flush.\n
-    A \c continuePoll() worker that gets @ref HTTP2-FLOW-CONTROL cannot recover with
+    A \c continuePoll() worker that gets @c HTTP2-FLOW-CONTROL cannot recover with
     @ref waitForHttp2StreamDrain() — that method genuinely blocks and stays illegal
     there — so it must surface the error to its caller.
 
@@ -7462,8 +7462,8 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
 //! Returns a poll operation that flushes pending HTTP/2 outgoing data
 /** Drives the HTTP/2 session's @c sendPendingData() until no more data
     remains in the outbound buffer.  Useful from test or manual scenarios
-    that enqueue frames via @ref sendHttp2StreamDataAsync() /
-    @ref sendHttp2TrailersAsync() / @ref submitHttp2StreamingResponseHeadersAsync()
+    that enqueue frames via @ref sendHttp2StreamData() /
+    @ref sendHttp2Trailers() / @ref submitHttp2StreamingResponseHeaders()
     and then need to push them to the wire without an async I/O controller.
 
     Under the @ref HttpServerAsyncIo "HttpServerAsyncIo" controller this is

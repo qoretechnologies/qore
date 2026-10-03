@@ -26,23 +26,6 @@
       - @ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
       - @ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
       - @ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
-    - user modules:
-      - <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a>
-      - <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a>
-      - <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
-      - <a href="../../McpClient/html/index.html">McpClient</a>
-      - <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a>
-      - <a href="../../A2aClient/html/index.html">A2aClient</a>
-      - <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a>
-      - <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a>
-      - <a href="../../FhirRestClient/html/index.html">FhirRestClient</a>
-      - <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a>
-      - <a href="../../NdjsonDataProvider/html/index.html">NdjsonDataProvider</a>
-      - <a href="../../JsonFileDataProvider/html/index.html">JsonFileDataProvider</a>
-      - <a href="../../JsonLd/html/index.html">JsonLd</a>
-      - <a href="../../OneRecordClient/html/index.html">OneRecordClient</a>
-      - <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a>
-      - <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a>
 
     This module is released under a choice of two licenses:
     - <a href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPL 2.1</a>
@@ -56,216 +39,28 @@
 %requires json
     @endcode
 
-    Also included with the binary json module:
-    - <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> user module
-    - <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> user module
-    - <a href="../../McpServerHandler/html/index.html">McpServerHandler</a> user module
-    - <a href="../../McpClient/html/index.html">McpClient</a> user module
-    - <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a> user module
-    - <a href="../../A2aClient/html/index.html">A2aClient</a> user module
-    - <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a> user module
-    - <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a> user module
-    - <a href="../../FhirRestClient/html/index.html">FhirRestClient</a> user module
-    - <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a> user module
-    - <a href="../../NdjsonDataProvider/html/index.html">NdjsonDataProvider</a> user module
-    - <a href="../../JsonFileDataProvider/html/index.html">JsonFileDataProvider</a> user module
-    - <a href="../../JsonLd/html/index.html">JsonLd</a> user module
-    - <a href="../../OneRecordClient/html/index.html">OneRecordClient</a> user module
-    - <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a> user module
-    - <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> user module
-
     @note JSON functionality was included in the main %Qore shared library until version 0.8.1, at which time the code
     was removed to make this module.
 
     @section jsonserialization Automatic JSON Serialization and Deserialization
 
-    <b>JSON Serialization</b>
-    |!%Qore Type|!JSON-RPC Type|!Description
-    |\c string|\c string|direct conversion to UTF-8 string
-    |\c int|\c number|direct conversion
-    |\c float|\c number|direct conversion
-    |\c bool|\c boolean|direct conversion
-    |\c date|\c string|date/time values are serialized to strings like: \
-        \c "2010-12-22 16:35:36.372996 Wed +01:00 (CET)"; intervals are serialized to ISO-8601 duration strings \
-        (ex: \c "PT2M1S")
-    |\c binary|\c string|binary values are serialized as base64 encoded strings
-    |\c list|\c array|direct conversion
-    |\c hash|\c struct|direct conversion
-    |\c NOTHING or \c NULL|\c null|direct conversion
-    |all others|n/a|All other types will cause an \c JSON-RPC-SERIALIZATION-ERROR to be raised.
+    @subpage jsonserializationguide
 
-    <b>JSON Deserialization</b>
-    |!JSON-RPC Type|!%Qore Type|!Description
-    |\c string|\c string|direct conversion
-    |\c number|\c int or \c float|if the JSON number is an integer, it is converted as an \c int, otherwise as a \
-        \c float
-    |\c boolean|\c bool|direct conversion
-    |\c array|\c list|direct conversion
-    |\c struct|\c hash|direct conversion
-    |\c null|\c NOTHING|direct conversion
-
-    This following functions provide automatic JSON serialization and deserialization:
-
-    <b>Functions For JSON Serialization and Deserialization</b>
-    |!Function Name|!Description
-    |@ref Qore::Json::make_json() "make_json()"|Serializes qore data into a JSON string with optional verbose whitespace formatting for easier \
-        human readability
-    |@ref Qore::Json::parse_json() "parse_json()"|Parses a JSON string and returns the corresponding %Qore data structure
-
-    <b>Deprecated JSON Functions</b>
-    |!Deprecated Function Name|!New Function Name
-    |\c makeFormattedJSONString()|@ref Qore::Json::make_json() "make_json()"
-    |\c makeJSONString()|@ref Qore::Json::make_json() "make_json()"
-    |\c parseJSON()|@ref Qore::Json::parse_json() "parse_json()"
 
     @section toonserialization TOON Serialization and Deserialization
 
-    <a href="https://github.com/toon-format/spec">TOON</a> (Token-Oriented Object Notation) is a line-oriented,
-    indentation-based text encoding of the JSON data model.  It is deterministic and minimally quoted, and is
-    particularly compact for arrays of uniform objects, which it encodes in a tabular form (the field names are
-    declared once in a header rather than repeated on every row).  TOON is commonly used to encode structured data
-    for LLM prompt context.
+    @subpage jsontoonserializationguide
 
-    TOON is a regular, fully supported feature of the json module (this implementation targets the TOON Core Profile
-    of TOON specification version 3.0).  Key folding and path expansion are not enabled; dotted keys (ex:
-    \c user.name) are treated as single literal keys, which is the specification default.
-
-    <b>TOON Serialization (@ref Qore::Json::make_toon() "make_toon()")</b>
-
-    Values outside the strict JSON data model are normalized exactly as @ref Qore::Json::make_json() "make_json()"
-    does, so that \c parse_toon(make_toon(x)) matches \c parse_json(make_json(x)):
-
-    |!%Qore Type|!TOON Representation|!Description
-    |\c string|string|quoted only when required by the TOON specification (§7.2)
-    |\c int|number|canonical decimal
-    |\c float|number|canonical decimal (no exponent, no trailing zeros); \c \@nan\@ / \c \@inf\@ are serialized as \
-        \c null
-    |\c number|number|canonical decimal; non-ordinary values (\c \@nan\@, \c \@inf\@) are serialized as \c null
-    |\c bool|boolean|direct conversion
-    |\c date|string|absolute dates as ISO-8601 datetime strings; relative dates (durations) as ISO-8601 duration \
-        strings
-    |\c binary|string|base64-encoded string
-    |\c list|array|inline primitive arrays, tabular arrays of uniform objects, or expanded list form
-    |\c hash|object|indentation-based key nesting
-    |\c NOTHING or \c NULL|null|direct conversion
-    |all others|n/a|All other types cause a \c TOON-SERIALIZATION-ERROR to be raised (as with \
-        @ref Qore::Json::make_json() "make_json()"); a string containing a control character that standard TOON \
-        cannot represent is likewise rejected
-
-    @ref Qore::Json::make_toon() "make_toon()" accepts an optional \c options hash:
-    - \c indent: (int, default \c 2) number of spaces per indentation level
-    - \c tabular_arrays: (bool, default \c True) when \c True, lists of uniform objects (same key set, all
-      primitive values) are serialized in TOON tabular form
-    - \c sort_keys: (bool, default \c False) when \c True, object keys and tabular field names are sorted
-      lexically for deterministic output; otherwise insertion order is preserved
-
-    <b>TOON Deserialization (@ref Qore::Json::parse_toon() "parse_toon()")</b>
-
-    |!TOON Type|!%Qore Type|!Description
-    |string|\c string|direct conversion
-    |number|\c int or \c float|integer tokens become \c int, tokens with a fractional or exponent part become \
-        \c float (consistent with @ref Qore::Json::parse_json() "parse_json()")
-    |boolean|\c bool|direct conversion
-    |array|\c list|inline, tabular, and expanded forms are all supported
-    |object|\c hash|duplicate keys follow last-value-wins semantics (consistent with \
-        @ref Qore::Json::parse_json() "parse_json()")
-    |null|\c NOTHING|direct conversion
-
-    @ref Qore::Json::parse_toon() "parse_toon()" accepts an optional \c options hash:
-    - \c strict: (bool, default \c True) when \c True, enforce TOON strict-mode validation: declared array/row
-      counts must match, tabular row widths must match the field count, indentation must be an exact multiple of
-      the indent width, and blank lines are not allowed inside arrays/tabular blocks
-    - \c indent: (int, default \c 2) number of spaces per indentation level used to compute nesting depth
-
-    Tabs are never permitted in indentation.  Syntax errors raise \c TOON-PARSE-ERROR with the line (and column
-    where available).
-
-    TOON is always UTF-8 (TOON specification §1.2, §18.2): @ref Qore::Json::make_toon() "make_toon()" always
-    produces a UTF-8 string, and @ref Qore::Json::parse_toon() "parse_toon()" transcodes non-UTF-8 input to UTF-8
-    before parsing and returns UTF-8-encoded strings.
-
-    <b>Functions For TOON Serialization and Deserialization</b>
-    |!Function Name|!Description
-    |@ref Qore::Json::make_toon() "make_toon()"|Serializes %Qore data into a TOON string
-    |@ref Qore::Json::parse_toon() "parse_toon()"|Parses a TOON string and returns the corresponding %Qore data \
-        structure
-
-    @par Example
-    @code{.py}
-hash<auto> data = {
-    "users": ({
-        "id": 1,
-        "name": "Alice",
-        "role": "admin",
-    }, {
-        "id": 2,
-        "name": "Bob",
-        "role": "user",
-    }),
-};
-
-string toon = make_toon(data);
-# toon =
-#   users[2]{id,name,role}:
-#     1,Alice,admin
-#     2,Bob,user
-
-hash<auto> parsed = parse_toon(toon);
-    @endcode
 
     @section JSONRPC JSON-RPC
 
-    JSON-RPC is a lightweight but powerful JSON over HTTP web service protocol.
-    The json module includes builtin support for several versions of the JSON-RPC protocol; the default protocol
-    version used is \c "2.0" unless explicitly changed in the client constructor.
+    @subpage JSONRPCguide
 
-    For new code, use the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module, which
-    provides async I/O via \c HttpClientIo::HttpClientConnectionManager with automatic HTTP protocol negotiation
-    (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.
-
-    The native @ref Qore::Json::JsonRpcClient "JsonRpcClient" class is still available for backwards compatibility
-    but uses synchronous blocking I/O limited to HTTP/1.x.
-
-    <b>Classes Providing JSON-RPC Functionality</b>
-    |!Class|!Description
-    |<a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a>|Preferred: async I/O JSON-RPC client with HTTP/3, HTTP/2, HTTP/1.1 support
-    |@ref Qore::Json::JsonRpcClient "JsonRpcClient"|Legacy: synchronous JSON-RPC client (HTTP/1.x only)
-
-    <b>Functions Providing JSON-RPC Functionality</b>
-    |!Function Name|!Description
-    |@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"|a generic JSON-RPC error response string from the parameters passed with optional \
-        verbose whitespace formatting for easier human readability
-    |@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"|Creates a JSON-RPC request string from the parameters passed with optional verbose \
-        whitespace formatting for easier human readability
-    |@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"|Creates a JSON-RPC response string from the parameters passed with optional \
-        verbose whitespace formatting for easier human readability
-
-    <b>Deprecated JSON-RPC Functions</b>
-    |!Deprecated Function Name|!New Function Name
-    |\c makeFormattedJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in \
-        json 1.7
-    |\c makeFormattedJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
-    |\c makeFormattedJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
-    |\c makeFormattedJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
-    |\c makeJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
-    |\c makeJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
-    |\c makeJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
-    |\c makeJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
-    |\c make_jsonrpc11_error()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
 
     @section jsoncppapisec C++ API for Other Binary Modules
 
-    The JSON parser and serializer are also published to other binary %Qore modules as a versioned
-    C++ API, so a module whose own data format is JSON can parse and generate it from C++ without
-    %Qore-language code.  The builtin \c avro module is the first consumer: an Avro schema is a
-    JSON document, so its schema parser resolves this API the first time a schema is parsed.
+    @subpage jsoncppapisecguide
 
-    The consumer includes only the installed <tt>&lt;qore/QoreJsonApi.h&gt;</tt> header, does not
-    link against this module, and resolves the API at run time, which loads the \c json module on
-    demand.
-
-    See the \c "JSON C++ API" section of the %Qore library documentation for the API reference, and
-    \c "Developing Qore Modules" for the mechanism it is published through.
 
     @section codetags Function and Method Tags
 
@@ -275,4 +70,26 @@ hash<auto> parsed = parse_toon(toon);
     @section jsonreleasenotes Release Notes
 
     @subpage jsonreleasehistory
+
+    @section jsonqlibmodules Qore User Modules
+
+    - @ref a2aclientintro "A2aClient" — %A2aClient module for connecting to A2A agents
+    - <img src="a2a-logo.svg" width="28" height="28" alt="A2aClientDataProvider app icon"/> @ref a2aclientdataproviderintro "A2aClientDataProvider" — a data provider API for A2A agents
+    - @ref a2aserverhandlerintro "A2aServerHandler" — %A2aServerHandler module for use with the Qore HttpServer module
+    - @ref aguiintro "AgUi" — the AG-UI (Agent User Interaction) protocol
+    - @ref fhirrestclientintro "FhirRestClient" — FHIR REST client module for JSON-based FHIR servers
+    - <img src="fhir-logo.svg" width="28" height="28" alt="FhirRestDataProvider app icon"/> @ref fhirrestdataproviderintro "FhirRestDataProvider" — FHIR REST data provider module for JSON-based FHIR servers
+    - <img src="json-file-logo.svg" width="28" height="28" alt="JsonFileDataProvider app icon"/> @ref jsonfiledataproviderintro "JsonFileDataProvider" — standard JSON file read/write support and data provider integration
+    - @ref jsonldintro "JsonLd" — JSON-LD 1.1 processing module implementing W3C JSON-LD 1.1 algorithms
+    - @ref jsonpatchintro "JsonPatch" — JSON Pointer (RFC 6901) and JSON Patch (RFC 6902) support
+    - @ref jsonrpcclientiointro "JsonRpcClientIo" — Pure-Qore JSON-RPC client module with async I/O via HttpClientIo
+    - @ref jsonrpcconnectionintro "JsonRpcConnection" — providing JSON-RPC client connections
+    - @ref jsonrpchandlerintro "JsonRpcHandler" — %JsonRpcHandler module for use with the HttpServer module
+    - @ref mcpclientintro "McpClient" — %McpClient module for connecting to MCP servers as a client
+    - @ref mcpclientdataproviderintro "McpClientDataProvider" — a data provider API for MCP servers
+    - @ref mcpserverhandlerintro "McpServerHandler" — %McpServerHandler module for use with the Qore HttpServer module
+    - @ref ndjsondataproviderintro "NdjsonDataProvider" — NDJSON (Newline Delimited JSON) support and data provider integration
+    - @ref onerecordclientintro "OneRecordClient" — IATA ONE Record client module for air cargo data sharing via REST/JSON-LD
+    - @ref onerecordserverhandlerintro "OneRecordServerHandler" — %OneRecordServerHandler module for use with the Qore HttpServer module
+
 */

@@ -1,0 +1,41 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page reflection_examplesguide Examples
+
+    @tableofcontents
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires reflection
+
+Class c = Class::forName("Condition");
+AbstractMethodVariant v = c.getVariant("wait", Class::forName("AbstractSmartLock").getType(), TimeoutType);
+printf("%s\n", v.toString());
+# produces the following output:
+# public int Condition::wait(object<AbstractSmartLock> lock, timeout timeout_ms = 0)
+    @endcode
+
+    @par Plugin Type Registry Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string mod_name in (registry.getProcessModules()) {
+    printf("%s: %N\n", mod_name, registry.getTypes(mod_name));
+}
+    @endcode
+*/

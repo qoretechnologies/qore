@@ -21,31 +21,17 @@
 
     User modules implementing the following HTTP-based protocols using YAML for data serialization are included:
     - YAML-RPC: similar to JSON-RPC but using YAML-serialized data
-      (<a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>,
-      <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a> (async I/O),
-      <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a>)
+      (@ref yamlrpcclientintro "YamlRpcClient",
+      @ref yamlrpcclientiointro "YamlRpcClientIo" (async I/O),
+      @ref yamlrpchandlerintro "YamlRpcHandler")
     - DataStream: allows for data streaming with HTTP 1.1 chunked data transfers where each chunk is a unique data
-      entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>,
-      <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>,
-      <a href="../../DataStreamClientIo/html/index.html">DataStreamClientIo</a>,
-      <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>)
+      entity (@ref datastreamutilintro "DataStreamUtil",
+      @ref datastreamclientintro "DataStreamClient",
+      @ref datastreamclientiointro "DataStreamClientIo",
+      @ref datastreamrequesthandlerintro "DataStreamRequestHandler")
     - Connect (DataStream 2.0): HTTP-native streaming RPC protocol with 5-byte framed messages,
       all 4 RPC patterns, and gRPC wire format compatibility
-      (<a href="../../Connect/html/index.html">Connect</a>)
-
-    Also included with the binary yaml module:
-    - <a href="../../Connect/html/index.html">Connect user module</a>
-    - <a href="../../ConnectDataProvider/html/index.html">ConnectDataProvider user module</a>
-    - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
-    - <a href="../../DataStreamClientIo/html/index.html">DataStreamClientIo user module</a>
-    - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
-    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
-    - <a href="../../YamlDocumentDataProvider/html/index.html">YamlDocumentDataProvider user module</a>
-    - <a href="../../YamlRpcClient/html/index.html">YamlRpcClient user module</a>
-    - <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo user module</a>
-    - <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler user module</a>
-    - <a href="../../YamlSchema/html/index.html">YamlSchema user module</a>
-    - <a href="../../YamlTagHandler/html/index.html">YamlTagHandler user module</a>
+      (@ref connectintro "Connect")
 
     @section Examples
 
@@ -160,4 +146,20 @@ hash<auto> api = parse_yaml("example:\n  created_at: 2025-03-05T14:59:25Z\n  cou
     @section yamlreleasenotes Release Notes
 
     @subpage yamlreleasehistory
+
+    @section yamlqlibmodules Qore User Modules
+
+    - @ref connectintro "Connect" — streaming RPC over HTTP with YAML serialization and gRPC compatibility
+    - <img src="connect-logo.svg" width="28" height="28" alt="ConnectDataProvider app icon"/> @ref connectdataproviderintro "ConnectDataProvider" — data provider and connection support for %Connect services, including datagrams
+    - @ref datastreamclientintro "DataStreamClient" — client support for YAML-encoded HTTP streaming
+    - @ref datastreamclientiointro "DataStreamClientIo" — asynchronous DataStream clients over HTTP/1.1, HTTP/2, and HTTP/3
+    - @ref datastreamrequesthandlerintro "DataStreamRequestHandler" — server support for YAML-encoded HTTP streaming
+    - @ref datastreamutilintro "DataStreamUtil" — supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+    - <img src="yaml-document-logo.svg" width="28" height="28" alt="YamlDocumentDataProvider app icon"/> @ref yamldocumentdataproviderintro "YamlDocumentDataProvider" — YAML document stream data providers
+    - @ref yamlrpcclientintro "YamlRpcClient" — %YamlRpcClient module
+    - @ref yamlrpcclientiointro "YamlRpcClientIo" — Pure-Qore YAML-RPC client module with async I/O via HttpClientIo
+    - @ref yamlrpchandlerintro "YamlRpcHandler" — %YamlRpcHandler module for use with the HttpServer module
+    - @ref yamlschemaintro "YamlSchema" — JSON Schema validation of YAML data
+    - @ref yamltaghandlerintro "YamlTagHandler" — custom YAML tag handlers
+
 */

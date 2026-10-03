@@ -116,6 +116,18 @@ set(TOK_CPP_SRC
 set(QORE_DOX_TOK_TMPL_SRC
     docs/mainpage.dox.tmpl
     docs/release-notes.dox.tmpl
+    docs/guide-tokenizer_advanced.dox.tmpl
+    docs/guide-tokenizer_api_summary.dox.tmpl
+    docs/guide-tokenizer_basic.dox.tmpl
+    docs/guide-tokenizer_batch.dox.tmpl
+    docs/guide-tokenizer_decode.dox.tmpl
+    docs/guide-tokenizer_encoding_result.dox.tmpl
+    docs/guide-tokenizer_model_input_result.dox.tmpl
+    docs/guide-tokenizer_model_inputs.dox.tmpl
+    docs/guide-tokenizer_models.dox.tmpl
+    docs/guide-tokenizer_offsets.dox.tmpl
+    docs/guide-tokenizer_sentence_pairs.dox.tmpl
+    docs/guide-tokenizer_vocab.dox.tmpl
 )
 
 # Process QPP files
@@ -138,6 +150,23 @@ add_dependencies(${tok_module_name} libqore TOK_QPP_GENERATED_FILES)
 
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/tokenizer/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/tokenizer/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_advanced.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_api_summary.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_basic.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_batch.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_decode.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_encoding_result.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_model_input_result.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_model_inputs.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_models.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_offsets.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_sentence_pairs.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-tokenizer_vocab.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/DataProviderML/ml-logo.svg"
+)
 qore_binary_module_qore(${tok_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

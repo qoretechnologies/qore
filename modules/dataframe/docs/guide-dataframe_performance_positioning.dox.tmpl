@@ -1,0 +1,53 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframe_performance_positioningguide Performance Positioning
+
+    @tableofcontents
+
+    The dataframe, DBI columnar result, dense \c buffer<T>, and DataProvider
+    pipeline APIs are designed to handle production ETL and analytics workloads
+    without unnecessary row-hash materialization. The fastest paths keep
+    primitive numeric, boolean, and string values in typed columns, use dense boolean
+    masks for filtering, and let shape-aware DataProvider processors preserve
+    \c DataFrameBlock or \c BufferColumns representation until row-oriented
+    behavior is required.
+
+    This is not a claim that every DataFrame operation is faster than every
+    alternative implementation. It is the intended performance profile for the
+    covered workload class: typed column construction, filtering, groupby,
+    joins, value counting, missing-data cleanup, reshaping, Arrow/Parquet I/O,
+    SQL read/write, DataProvider pipelines, and ML-oriented analytical flows
+    that can keep data columnar. Drivers with
+    @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT "DBI_CAP_HAS_COLUMNAR_SELECT"
+    provide the fastest SQL-read path; drivers without it still work through
+    compatibility conversion.
+
+    In local benchmarks on the Qore 3.0 development branch with locally built
+    modules, including a PostgreSQL DBI driver with native columnar support,
+    Qore was faster than pandas for the paired cases in the benchmark suite.
+    The following table is a representative run from 2026-05-24:
+
+    |!Case|!Qore median|!pandas median|!pandas / Qore
+    |construct columns|9.700 ms|42.059 ms|4.34x
+    |construct records|20.035 ms|40.411 ms|2.02x
+    |filter mask|1.591 ms|1.923 ms|1.21x
+    |groupby aggregate|3.089 ms|4.763 ms|1.54x
+    |filter + group|1.441 ms|3.072 ms|2.13x
+    |left join|2.222 ms|2.901 ms|1.31x
+    |DataProvider filter + group|1.985 ms|3.072 ms|1.55x
+    |DataProvider pipeline filter + group|2.000 ms|3.072 ms|1.54x
+    |SQL read|15.525 ms|18.081 ms|1.16x
+    |SQL write|16.839 ms|64.177 ms|3.81x
+    |Arrow IPC roundtrip|5.829 ms|10.034 ms|1.72x
+    |Parquet roundtrip|18.198 ms|24.167 ms|1.33x
+    |value counts|0.968 ms|1.557 ms|1.61x
+    |fill/drop missing values|3.541 ms|8.075 ms|2.28x
+    |melt + pivot reshape|15.837 ms|41.078 ms|2.59x
+    |solution ETL pipeline|5.448 ms|7.804 ms|1.43x
+    |solution AI analytics|37.218 ms|97.824 ms|2.63x
+
+    The benchmark suite is in the source tree under \c bench/ and can be rerun
+    against a local build. Absolute timings depend on hardware, database driver,
+    database server, and Python/pandas versions; the useful signal is whether
+    data stays in the typed columnar paths for the operation being measured.
+*/

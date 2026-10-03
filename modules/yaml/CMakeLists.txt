@@ -37,6 +37,10 @@ add_dependencies(yaml libqore YAML_QPP_GENERATED_FILES)
 
 set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox
     ${CMAKE_CURRENT_BINARY_DIR}/release-notes.dox ${_dox_src})
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/ConnectDataProvider/connect-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/YamlDocumentDataProvider/yaml-document-logo.svg"
+)
 qore_binary_module_qore(yaml "${VERSION}" "/${VERSION}")
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_YAML_SRC docs/mainpage.dox.tmpl docs/release-notes.dox.tmpl)

@@ -1,0 +1,206 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page mlexamplesguide Usage Examples
+
+    @tableofcontents
+
+    @section mlexample_iforest Fraud Detection with IsolationForest
+
+    @code{.py}
+%requires ml
+
+# Train on 30 days of legitimate transactions
+Qore::ML::IsolationForest fraud_detector({"n_trees": 100, "sample_size": 256, "threshold": 0.6});
+fraud_detector.fit(legitimate_transactions);
+
+# Score an incoming transaction: {amount: 49500.0, hour: 3, merchant_category: 12}
+hash<Qore::ML::IsolationForestResult> result = fraud_detector.score(transaction);
+if (result.is_anomaly) {
+    printf("Suspicious transaction! Score: %f\n", result.anomaly_score);
+    # score near 1.0 = highly unusual; flag for review
+}
+    @endcode
+
+    @section mlexample_linreg Property Price Prediction with Linear Regression
+
+    @code{.py}
+%requires ml
+
+# Train on historical sales: square_footage, bedrooms, distance_to_center -> sale_price
+Qore::ML::LinearRegression price_model({"fit_intercept": True});
+price_model.fit(historical_sales, "sale_price");
+
+# Predict price for a new listing
+hash<Qore::ML::LinearRegressionResult> result = price_model.predict(
+    {"square_footage": 1850, "bedrooms": 3, "distance_to_center": 4.2}
+);
+printf("Estimated price: $%.0f (model accuracy R²: %f)\n", result.prediction, result.r_squared);
+    @endcode
+
+    @section mlexample_gmm Customer Segmentation with GMM
+
+    @code{.py}
+%requires ml
+
+# Segment customers by monthly_spend, visit_frequency, avg_order_value
+Qore::ML::GMM segmenter({"n_components": 3, "seed": 42});
+segmenter.fit(customer_profiles);
+
+hash<Qore::ML::GMMResult> result = segmenter.predict(
+    {"monthly_spend": 150.0, "visit_frequency": 8, "avg_order_value": 18.75}
+);
+printf("Segment: %d (confidence: %.0f%%)\n", result.cluster, result.max_probability * 100);
+printf("Segment probabilities: %y\n", result.probabilities);
+# e.g., {0: 0.72, 1: 0.21, 2: 0.07} — mostly "regular", some "premium" overlap
+    @endcode
+
+    @section mlexample_lof Contextual Anomaly Detection with LOF
+
+    @code{.py}
+%requires ml
+
+# Train on normal sensor readings grouped by equipment type
+Qore::ML::LOF sensor_monitor({"k": 20, "threshold": 1.5});
+sensor_monitor.fit(normal_sensor_readings);
+
+# A reading of 90°F is normal outdoors but anomalous for a server room
+hash<Qore::ML::LOFResult> result = sensor_monitor.score(
+    {"temperature": 90.0, "humidity": 45.0, "equipment_type": 3}
+);
+if (result.is_anomaly) {
+    printf("Anomaly for this equipment context! LOF score: %f\n", result.lof_score);
+}
+    @endcode
+
+    @section mlexample_scaler Preparing Data with StandardScaler
+
+    @code{.py}
+%requires ml
+
+# Employee data: salary (20K-200K) and years_experience (0-40)
+# Without scaling, salary would dominate any clustering or anomaly detection
+list<hash<auto>> employees = (
+    {"salary": 45000, "years_experience": 2},
+    {"salary": 85000, "years_experience": 12},
+    {"salary": 150000, "years_experience": 25},
+);
+
+# Put both fields on the same scale
+Qore::ML::StandardScaler scaler();
+scaler.fit(employees);
+
+# Now transform new data using the same learned scale
+hash<auto> scaled = scaler.transform({"salary": 95000, "years_experience": 15});
+printf("Scaled: %y\n", scaled);
+# Both values now center around 0 — ready for clustering or anomaly detection
+    @endcode
+
+    @section mlexample_imputer Filling Missing Sensor Data with Imputer
+
+    @code{.py}
+%requires ml
+
+# IoT sensor readings — some are missing due to connectivity issues
+list<auto> readings = (
+    (22.5, 65.0, 1013.0),  # temp, humidity, pressure
+    (23.1, NOTHING, 1012.5),  # humidity reading missing
+    (NOTHING, 63.0, 1014.0),  # temperature reading missing
+    (22.8, 64.0, 1013.5),
+);
+
+# Fill gaps with the average of available readings
+Qore::ML::Imputer imp({"strategy": "mean"});
+imp.fitMatrix(readings);
+list<list<float>> complete = imp.transformMatrix(readings);
+# Missing values are now filled with column averages
+    @endcode
+
+    @section mlexample_pipeline End-to-End Pipeline: Scale + Cluster
+
+    @code{.py}
+%requires ml
+
+# Build a pipeline that scales data then clusters customers
+Qore::ML::MLPipeline pipeline();
+pipeline.addStandardScaler("scale", new Qore::ML::StandardScaler());
+pipeline.addKMeans("cluster", new Qore::ML::KMeans({"k": 3, "seed": 42}));
+
+# Fit on customer data (features have different scales)
+list<list<float>> customer_data = (
+    (25000, 2, 580),   # income, purchases_per_month, credit_score
+    (75000, 8, 720),
+    (150000, 15, 800),
+    # ... more customers
+);
+pipeline.fitMatrix(customer_data);
+
+# Predict segments for new customers — scaling is applied automatically
+list<hash<auto>> results = pipeline.predictMatrix(((55000, 5, 650),));
+printf("Customer segment: %d\n", results[0].cluster);
+    @endcode
+
+    @section mlexample_minmax Normalizing for a Dashboard with MinMaxScaler
+
+    @code{.py}
+%requires ml
+
+# Normalize KPIs to 0-100 for a performance dashboard
+Qore::ML::MinMaxScaler scaler({"feature_min": 0.0, "feature_max": 100.0});
+scaler.fit(historical_kpi_data);
+
+# Convert today's raw KPIs to dashboard percentages
+hash<auto> dashboard = scaler.transform(
+    {"response_time_ms": 45, "throughput_rps": 1200, "error_rate": 0.02}
+);
+printf("Response time score: %.0f/100\n", dashboard.response_time_ms);
+printf("Throughput score: %.0f/100\n", dashboard.throughput_rps);
+    @endcode
+
+    @section mlexample_evaluate Evaluating a Model with Cross-Validation
+
+    @code{.py}
+%requires ml
+
+# Split 200 samples into 5 folds for cross-validation
+Qore::ML::CrossValidator cv({"n_folds": 5, "shuffle": True, "seed": 42});
+list<hash<Qore::ML::CrossValidationFold>> folds = cv.split(200);
+
+foreach hash<Qore::ML::CrossValidationFold> fold in (folds) {
+    # Train on fold's training indices, predict on test indices
+    # ... (build X_train, y_train, X_test, y_test from indices) ...
+
+    # Measure regression quality
+    float r2 = Qore::ML::ml_r2_score(y_test, predictions);
+    float rmse = Qore::ML::ml_rmse(y_test, predictions);
+    printf("Fold %d: R²=%.3f, RMSE=%.2f\n", fold.fold, r2, rmse);
+}
+
+# For classification, use the full report
+hash<Qore::ML::ClassificationReport> report =
+    Qore::ML::ml_classification_report(all_true_labels, all_predictions);
+printf("Overall: accuracy=%.2f, macro F1=%.2f\n", report.accuracy, report.macro_f1);
+    @endcode
+
+    @section mlexample_onnx Credit Scoring with an ONNX Model
+
+    @code{.py}
+%requires ml
+
+hash<Qore::ML::MLCapabilities> caps = Qore::ML::ml_get_capabilities();
+if (!caps.has_onnx) {
+    printf("ONNX Runtime not available\n");
+} else {
+    # Load a gradient-boosted model trained in Python/scikit-learn
+    Qore::ML::OnnxModel credit_model("/models/credit_score_v2.onnx");
+
+    hash<Qore::ML::OnnxModelInfo> info = credit_model.getModelInfo();
+    printf("Model: %s (version %d)\n", info.producer_name, info.version);
+
+    # Score a loan application: income, debt_ratio, credit_history_months, ...
+    hash<auto> result = credit_model.run({"X": ((75000.0, 0.28, 120.0),)});
+    hash<auto> probabilities = credit_model.run(
+        {"X": ((75000.0, 0.28, 120.0),)}, ("probabilities",));
+    printf("Credit score: %y\n", result);
+}
+    @endcode
+*/

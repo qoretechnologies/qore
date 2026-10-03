@@ -45,237 +45,71 @@
 
     @section tokenizer_basic Basic Usage
 
-    @par Loading a tokenizer from a tokenizer.json file:
-    @code{.py}
-%requires json
-%requires tokenizer
+    @subpage tokenizer_basicguide
 
-# Load tokenizer configuration from file
-hash<auto> config = parse_json(ReadOnlyFile::readTextFile("tokenizer.json"));
-Tokenizer::HFTokenizer tok(config);
-
-# Basic encoding — returns token IDs with special tokens
-hash<auto> enc = tok.encode("Hello, world!");
-printf("IDs: %y\n", enc.input_ids);
-# BERT output: (101, 7592, 1010, 2088, 999, 102)  = [CLS] hello , world ! [SEP]
-# GPT-2 output: (15496, 11, 995, 0)                = Hello , world !
-
-# Decode back to text
-string text = tok.decode(enc.input_ids);
-printf("Text: %s\n", text);
-    @endcode
 
     @section tokenizer_sentence_pairs Sentence Pair Encoding
 
-    For tasks like question answering and natural language inference that require
-    two input sequences:
+    @subpage tokenizer_sentence_pairsguide
 
-    @code{.py}
-# BERT sentence pair: automatically adds [CLS], [SEP], and assigns type IDs
-hash<auto> enc = tok.encodeWithOptions("What is AI?", "AI is intelligence.");
-printf("IDs:      %y\n", enc.input_ids);
-# (101, 2054, 2003, 9932, 1029, 102, 9932, 2003, 4454, 1012, 102)
-printf("Type IDs: %y\n", enc.token_type_ids);
-# (0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1)
-    @endcode
 
     @section tokenizer_advanced Advanced Encoding with Truncation and Padding
 
-    For model inference, sequences must be fixed-length. Use \c encodeAdvanced()
-    with truncation and padding options:
+    @subpage tokenizer_advancedguide
 
-    @par Truncation — limit sequence length:
-    @code{.py}
-hash<auto> enc = tok.encodeAdvanced("A very long sentence that needs truncation...", {
-    "max_length": 8,              # maximum total length including special tokens
-    "truncation": "longest_first", # strategy: "longest_first", "only_first", "only_second"
-});
-printf("IDs (len=%d): %y\n", enc.input_ids.size(), enc.input_ids);
-# Exactly 8 tokens: [CLS] a very long sentence that [SEP]
-    @endcode
-
-    @par Padding — pad to fixed length:
-    @code{.py}
-hash<auto> enc = tok.encodeAdvanced("hi", {
-    "max_length": 10,
-    "truncation": "longest_first",
-    "padding": "max_length",       # pad to max_length with [PAD] tokens
-});
-printf("IDs:  %y\n", enc.input_ids);
-# (101, 7632, 102, 0, 0, 0, 0, 0, 0, 0)
-printf("Mask: %y\n", enc.attention_mask);
-# (1, 1, 1, 0, 0, 0, 0, 0, 0, 0)  — 0 for padding positions
-    @endcode
-
-    @par Sentence pair with truncation:
-    @code{.py}
-hash<auto> enc = tok.encodeAdvanced("premise text", {
-    "text_pair": "hypothesis text",
-    "max_length": 12,
-    "truncation": "longest_first",  # trims the longer sequence first
-    "padding": "max_length",
-});
-    @endcode
 
     @section tokenizer_batch Batch Encoding
 
-    Encode multiple texts at once with uniform output length:
+    @subpage tokenizer_batchguide
 
-    @code{.py}
-list<hash<auto>> batch = tok.encodeBatch(
-    ("short text", "a much longer sentence that will be truncated"), {
-        "max_length": 10,
-        "truncation": "longest_first",
-        "padding": "true",          # pad all to the longest in the batch
-    });
-
-# Both outputs have the same length (suitable for ONNX batch inference)
-printf("Text 1 length: %d\n", batch[0].input_ids.size());
-printf("Text 2 length: %d\n", batch[1].input_ids.size());
-# Both: 10
-    @endcode
 
     @section tokenizer_model_inputs Dense Model Input Buffers
 
-    For ONNX inference, use the model-input APIs to avoid materializing
-    per-token Qore lists. These methods return row-major \c buffer<int64>
-    values and shape metadata that can be converted directly to
-    <a href="../../ml/html/classQore_1_1ML_1_1Tensor.html">ML::Tensor</a> values.
+    @subpage tokenizer_model_inputsguide
 
-    @code{.py}
-%requires ml
-
-hash<Tokenizer::TokenizerModelInputBatch> batch = tok.encodeBatchForModel(
-    ("short text", "a much longer sentence"), {
-        "max_length": 128,
-        "truncation": "longest_first",
-        "padding": "batch_longest",
-    });
-
-hash<auto> inputs = {
-    "input_ids": ML::Tensor::fromBuffer(batch.input_ids, batch.shape),
-    "attention_mask": ML::Tensor::fromBuffer(batch.attention_mask, batch.shape),
-    "token_type_ids": ML::Tensor::fromBuffer(batch.token_type_ids, batch.shape),
-};
-hash<auto> outputs = model.runTensors(inputs);
-    @endcode
-
-    Sentence-pair models such as cross-encoder rerankers can use
-    \c encodeBatchPairsForModel():
-
-    @code{.py}
-hash<Tokenizer::TokenizerModelInputBatch> pairs = tok.encodeBatchPairsForModel(
-    ("What is Qore?", "What is ONNX?"),
-    ("Qore is an integration language.", "ONNX is a model format."), {
-        "max_length": 256,
-        "truncation": "longest_first",
-        "padding": "batch_longest",
-    });
-    @endcode
 
     @section tokenizer_offsets Offset Mapping and Special Tokens Mask
 
-    Every encoding result includes byte-level offset mapping and a special tokens mask:
+    @subpage tokenizer_offsetsguide
 
-    @code{.py}
-hash<auto> enc = tok.encode("Hello, world!");
-
-# offset_mapping: list of (start_byte, end_byte) pairs in the original text
-printf("Offsets: %y\n", enc.offset_mapping);
-# BERT: ((0, 0), (0, 5), (5, 6), (7, 12), (12, 13), (0, 0))
-#        [CLS]    hello    ,      world     !        [SEP]
-# Special tokens get offset (0, 0)
-
-# special_tokens_mask: 1 for special tokens, 0 for content tokens
-printf("Special: %y\n", enc.special_tokens_mask);
-# BERT: (1, 0, 0, 0, 0, 1)
-    @endcode
 
     @section tokenizer_vocab Vocabulary Access
 
-    @code{.py}
-# Get vocabulary size
-printf("Vocab size: %d\n", tok.getVocabSize());
+    @subpage tokenizer_vocabguide
 
-# Look up individual tokens
-printf("hello -> %d\n", tok.tokenToId("hello"));
-printf("7592 -> %s\n", tok.idToToken(7592));
-
-# Get the full vocabulary as a hash
-hash<string, int> vocab = tok.getVocab();
-printf("Total entries: %d\n", vocab.size());
-
-# Get the pad token ID (auto-detected from [PAD] or <pad>)
-printf("Pad token ID: %d\n", tok.getPadTokenId());
-    @endcode
 
     @section tokenizer_decode Decoding
 
-    @code{.py}
-# Decode with special tokens visible
-string with_special = tok.decode(enc.input_ids);
-# "[CLS] hello , world ! [SEP]"
+    @subpage tokenizer_decodeguide
 
-# Decode without special tokens
-string clean = tok.decode(enc.input_ids, True);
-# "hello , world !"
-    @endcode
 
     @section tokenizer_models Verified Model Families
 
-    The following model families have been verified to produce token IDs matching
-    the Python \c tokenizers library exactly:
+    @subpage tokenizer_modelsguide
 
-    |!Model|!Type|!Example tokenizer.json|!Verified
-    |BERT|WordPiece|bert-base-uncased|Yes — exact match
-    |GPT-2|BPE + ByteLevel|openai-community/gpt2|Yes — exact match
-    |T5|Unigram + Precompiled|google-t5/t5-small|Yes — exact match
-    |Llama/TinyLlama|BPE + byte_fallback|TinyLlama/TinyLlama-1.1B-Chat-v1.0|Yes — exact match
 
     @section tokenizer_api_summary API Summary
 
-    |!Method|!Description
-    |@ref Qore::Tokenizer::HFTokenizer::encode "encode(text)"|Basic encoding with special tokens
-    |@ref Qore::Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
-    |@ref Qore::Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
-    |@ref Qore::Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
-    |@ref Qore::Tokenizer::HFTokenizer::encodeForModel "encodeForModel(text, options)"|Single-row dense model input buffers
-    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchForModel "encodeBatchForModel(texts, options)"|Batch dense model input buffers
-    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchPairsForModel "encodeBatchPairsForModel(texts, text_pairs, options)"|Sentence-pair dense model input buffers
-    |@ref Qore::Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
-    |@ref Qore::Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
-    |@ref Qore::Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
-    |@ref Qore::Tokenizer::HFTokenizer::tokenToId "tokenToId(token)"|Convert token string to ID
-    |@ref Qore::Tokenizer::HFTokenizer::getVocab "getVocab()"|Return full vocabulary as hash
-    |@ref Qore::Tokenizer::HFTokenizer::getPadTokenId "getPadTokenId()"|Return the pad token ID
+    @subpage tokenizer_api_summaryguide
+
 
     @section tokenizer_encoding_result Encoding Result Fields
 
-    All encoding methods return a hash with the following fields:
+    @subpage tokenizer_encoding_resultguide
 
-    |!Field|!Type|!Description
-    |\c input_ids|list\<int\>|Token IDs
-    |\c token_type_ids|list\<int\>|Segment IDs (0 for first text, 1 for second)
-    |\c attention_mask|list\<int\>|1 for real tokens, 0 for padding
-    |\c tokens|list\<string\>|String representation of each token
-    |\c offset_mapping|list\<list\<int\>\>|Byte-level (start, end) offsets in original text
-    |\c special_tokens_mask|list\<int\>|1 for special tokens, 0 for content tokens
 
     @section tokenizer_model_input_result Model Input Result Fields
 
-    The dense model-input methods return @ref Qore::Tokenizer::TokenizerModelInputBatch "TokenizerModelInputBatch":
+    @subpage tokenizer_model_input_resultguide
 
-    |!Field|!Type|!Description
-    |\c input_ids|buffer\<int64\>|Row-major token ID buffer
-    |\c attention_mask|buffer\<int64\>|Row-major attention mask buffer
-    |\c token_type_ids|buffer\<int64\>|Row-major segment ID buffer
-    |\c sequence_lengths|buffer\<int64\>|Unpadded sequence length for each row
-    |\c shape|list\<int\>|Tensor shape, always \c (rows, columns)
-    |\c rows|int|Number of batch rows
-    |\c columns|int|Padded token width
-    |\c dtype|string|Dense dtype, currently \c "int64"
 
     @section tokenizer_relnotes tokenizer Module Release Notes
 
     @subpage tokenizerreleasehistory
+
+    @section tokenizerqlibmodules Qore User Modules
+
+    - <img src="ml-logo.svg" width="28" height="28" alt="DataProviderML app icon"/> @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module
+    - @ref qoretokenizerutilsintro "QoreTokenizerUtils" — document chunking, token counting, embeddings, and re-ranking for RAG pipelines
+
 */

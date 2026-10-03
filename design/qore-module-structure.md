@@ -287,6 +287,16 @@ more than one "type" of content — split it into topical subpages.
   rendered URLs stay stable.
 - The mainpage links subpages via `@subpage` (not `@ref`) so they appear in the
   doxygen tree navigation; subpages link peers via `@ref`.
+- A binary module's mainpage lists its companion qlib modules. Module links use
+  `@ref <lowercasemodulename>intro "ModuleName"`, including links in guides and
+  release notes; do not hardcode `index.html` URLs or substitute a helper-page
+  section for the module's introduction. References to particular API classes
+  and methods still use their qualified symbol names.
+- Reuse companion `*DataProvider` SVG application icons in the mainpage's user
+  module list. Set `QORE_DOXYGEN_IMAGES` to their source paths before registering
+  the binary documentation target. The shared configuration adds image search
+  paths and exports the SVGs through `HTML_EXTRA_FILES`, so inline `<img>` links
+  work without duplicating the source assets.
 - Release notes always live on their own page — they only grow, and nobody visiting
   the mainpage for orientation wants a changelog.
 - Describe changes from the last released branch (`2.x` for the Qore 3.0 release).
@@ -318,14 +328,20 @@ docs must be built in two passes so that the binary module's mainpage can `@ref`
 into user module symbols:
 
 1. **Initial pass** (`docs-module`): generates the binary module's tag file (e.g.,
-   `krb5.tag`) with empty `TAGFILES` and `WARN_IF_DOC_ERROR = NO` to suppress
-   unresolved cross-reference warnings.
+   `krb5.tag`) with `WARN_IF_DOC_ERROR = NO` while reverse references are unavailable.
 2. **User module builds** (`docs-<UserModuleName>`): each generates its own tag
    file, referencing the binary module's tag file for cross-references back to
    binary module symbols.
-3. **Final pass** (`docs-module-final`): rebuilds the binary module docs with the
-   user module tag files in `TAGFILES`, enabling `@ref` cross-references from the
-   mainpage into user module symbols.
+3. **Final passes** (`docs-module-final` and `docs-<UserModuleName>-final`): rebuild
+   both the binary and user module pages with all sibling tag files, enabling
+   links in either direction, including between user modules. Every final target
+   depends on every initial target. Final passes disable `GENERATE_TAGFILE` so
+   concurrent readers see complete, immutable indexes.
+
+Bundled Qore binary modules use `qore_bundled_module_two_phase_docs()` after all
+native and qlib documentation targets are registered. Their final passes import
+every available bundled native and qlib index. The language final pass also keeps
+its initial tag file unchanged.
 
 #### Preferred: `qore_binary_module_two_phase_docs()` macro
 

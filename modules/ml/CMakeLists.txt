@@ -226,6 +226,12 @@ endif()
 set(QORE_DOX_ML_TMPL_SRC
     docs/mainpage.dox.tmpl
     docs/release-notes.dox.tmpl
+    docs/guide-mlalgorithms.dox.tmpl
+    docs/guide-mlchoosing.dox.tmpl
+    docs/guide-mldata.dox.tmpl
+    docs/guide-mlexamples.dox.tmpl
+    docs/guide-mlpersistence.dox.tmpl
+    docs/guide-mlthread.dox.tmpl
 )
 
 # Process QPP files
@@ -260,6 +266,17 @@ add_dependencies(${ml_module_name} libqore ML_QPP_GENERATED_FILES)
 
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ml/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/ml/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mlalgorithms.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mlchoosing.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mldata.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mlexamples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mlpersistence.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-mlthread.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/DataProviderML/ml-logo.svg"
+)
 qore_binary_module_qore(${ml_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

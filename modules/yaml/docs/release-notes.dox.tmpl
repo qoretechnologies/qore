@@ -26,12 +26,12 @@
     - added @ref Qore::YAML::YamlSaxEvent "YamlSaxEvent" hashdecl for SAX event data
 
     <b>New User Modules</b>
-    - added <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a>:
+    - added @ref yamlrpcclientiointro "YamlRpcClientIo":
       pure-Qore YAML-RPC client with async I/O via \c HttpClientIo; this is the async I/O
       replacement for the \c YamlRpcClient module, providing the same YAML-RPC call API
       with automatic HTTP/3, HTTP/2, and HTTP/1.1 protocol negotiation and connection pooling
       - \c yamlrpcio:// and \c yamlrpcios:// URL schemes for ConnectionProvider
-    - added <a href="../../Connect/html/index.html">Connect</a>: Connect RPC protocol
+    - added @ref connectintro "Connect": Connect RPC protocol
       module implementing DataStream 2.0 with YAML as the primary codec; supports unary,
       server-streaming, client-streaming, and bidirectional-streaming RPC patterns over
       HTTP/1.1, HTTP/2, and HTTP/3
@@ -48,32 +48,32 @@
       - \c GrpcDetection utility class for gRPC/gRPC-Web content-type detection and
         \c grpc-timeout header parsing (always available, no \c grpc module dependency)
       - HTTP/3 (QUIC) transport with 0-RTT and connection migration support
-    - added <a href="../../ConnectDataProvider/html/index.html">ConnectDataProvider</a>:
+    - added @ref connectdataproviderintro "ConnectDataProvider":
       DataProvider and ConnectionProvider integration for the Connect RPC protocol
       - factory registered as \c "connect" in the DataProvider framework
       - \c connect:// (plaintext) and \c connects:// (TLS) URL schemes for ConnectionProvider
       - hierarchical provider: root → service → method with dynamic child creation
       - unary RPC via \c doRequest() on method-level providers
-    - added <a href="../../YamlDocumentDataProvider/html/index.html">YamlDocumentDataProvider</a>:
+    - added @ref yamldocumentdataproviderintro "YamlDocumentDataProvider":
       data provider for reading multi-document YAML streams
-    - added <a href="../../YamlSchema/html/index.html">YamlSchema</a>: YAML schema validation
-    - added <a href="../../YamlTagHandler/html/index.html">YamlTagHandler</a>: custom YAML tag handling
+    - added @ref yamlschemaintro "YamlSchema": YAML schema validation
+    - added @ref yamltaghandlerintro "YamlTagHandler": custom YAML tag handling
 
     <b>Improvements</b>
-    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>: added Connect protocol
+    - @ref datastreamutilintro "DataStreamUtil": added Connect protocol
       (DataStream 2.0) framing utility functions: \c connect_frame_message(),
       \c connect_unframe_message(), \c connect_next_frame_size(),
       \c connect_detect_protocol(), \c connect_get_send(), \c connect_get_recv(),
       \c connect_set_chunked_headers(), \c connect_set_non_chunked_headers();
       added \c CONNECT_DEFAULT_MAX_MESSAGE_SIZE constant (4 MB default, matching gRPC)
-    - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>: added Connect
+    - @ref datastreamclientintro "DataStreamClient": added Connect
       protocol (DataStream 2.0) support with auto-negotiation; the client tries Connect mode
       first (over HTTP/2 or HTTP/3) and falls back to DataStream v1 if the server doesn't
       support Connect; new constructor options:
       \c protocol (\c "auto", \c "connect", \c "datastream") and \c http3_protocol
       (\c "auto", \c "h2", \c "h3"); new methods: \c setProtocol(), \c getProtocol(),
       \c getDetectedProtocol(), \c resetProtocolCache()
-    - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>:
+    - @ref datastreamrequesthandlerintro "DataStreamRequestHandler":
       added automatic Connect protocol (DataStream 2.0) detection; the handler now accepts
       both Connect-framed and DataStream v1 chunked requests without any changes to subclasses;
       added \c isConnectProtocol() method to query the detected protocol
@@ -125,7 +125,7 @@
 
     @section yaml071 yaml Module Version 0.7.1
     - fixed a bug where REST schema validation was not applied in the
-      <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module with non-DataStream messages
+      @ref datastreamclientintro "DataStreamClient" module with non-DataStream messages
       (<a href="https://github.com/qorelanguage/qore/issues/4518">issue 4518</a>)
 
     @section yaml07 yaml Module Version 0.7
@@ -142,11 +142,11 @@
       (<a href="https://github.com/qorelanguage/qore/issues/3432">issue 3432</a>)
     - fixed output of excess noise in floating-point values
       (<a href="https://github.com/qorelanguage/qore/issues/3375">issue 3375</a>)
-    - fixed a bug in the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module where the
+    - fixed a bug in the @ref datastreamclientintro "DataStreamClient" module where the
       \c "response-code" key of the info output hash could be missing in some cases
       (<a href="https://github.com/qorelanguage/qore/issues/3237">issue 3237</a>)
     - added optional support for serializing SQL NULL values with @ref Qore::YAML::EmitSqlNull "EmitSqlNull"
-    - updated the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a> module to support the updated
+    - updated the @ref yamlrpcclientintro "YamlRpcClient" module to support the updated
       abstract connection API (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
 
     @section yaml06 yaml Module Version 0.6
@@ -155,23 +155,23 @@
       (<a href="https://github.com/qorelanguage/qore/issues/3394">issue 3394</a>)
     - improved the description for the \c DESERIALIZATION-ERROR exception for non-deserializable message bodies from
       HTTP servers with error responses (<a href="https://github.com/qorelanguage/qore/issues/1033">issue 1033</a>)
-    - added the \c YamlRpcConnection class to the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>
+    - added the \c YamlRpcConnection class to the @ref yamlrpcclientintro "YamlRpcClient"
       module
-    - updated the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module for complex types and
+    - updated the @ref datastreamclientintro "DataStreamClient" module for complex types and
       new internal RestClient API changes (<a href="https://github.com/qorelanguage/qore/issues/2073">issue 2073</a>)
-    - updated the <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a> module for complex types
+    - updated the @ref datastreamutilintro "DataStreamUtil" module for complex types
     - fixed a bug deserializing single-quoted strings; also serialized \c "!number" values will always include the tag
       to avoid potential future ambiguity (<a href="https://github.com/qorelanguage/qore/issues/2343">issue 2343</a>)
     - improved argument error messages with RPC calls in the
-      <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a> module
+      @ref yamlrpchandlerintro "YamlRpcHandler" module
       (<a href="https://github.com/qorelanguage/qore/issues/2573">issue 2573</a>)
 
     @section yaml051 yaml Module Version 0.5.1
 
-    - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> update:
+    - @ref datastreamclientintro "DataStreamClient" update:
       - fixed bugs handling chunked non-DataStream messages
         (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
-    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a> update:
+    - @ref datastreamutilintro "DataStreamUtil" update:
       - fixed bugs handling chunked non-DataStream messages
         (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
@@ -180,9 +180,9 @@
     <b>New Features and Bug Fixes</b>
     - new user modules for DataStream protocol support: YAML-encoded HTTP chunked transfers where each chunk is a
       unique data entity
-      - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
-      - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
-      - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
+      - @ref datastreamclientintro "DataStreamClient user module"
+      - @ref datastreamrequesthandlerintro "DataStreamRequestHandler user module"
+      - @ref datastreamutilintro "DataStreamUtil user module"
     - user modules moved to top-level qore module directory from version-specific module directory since they are
       valid for multiple versions of qore
     - date/time values (yaml \c !!timestamp type) are now always returned in the current time zone locale so that

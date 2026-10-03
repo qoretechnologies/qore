@@ -2030,6 +2030,15 @@ function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
             string(APPEND QORE_MODULE_DOXYGEN_IMAGE_PATH " \"${_image_dir}\"")
         endif()
     endforeach()
+    set(_qore_image_dirs "")
+    foreach(_image IN LISTS QORE_DOXYGEN_IMAGES)
+        get_filename_component(_image_dir "${_image}" DIRECTORY)
+        list(APPEND _qore_image_dirs "${_image_dir}")
+    endforeach()
+    list(REMOVE_DUPLICATES _qore_image_dirs)
+    foreach(_image_dir IN LISTS _qore_image_dirs)
+        string(APPEND QORE_MODULE_DOXYGEN_IMAGE_PATH " \"${_image_dir}\"")
+    endforeach()
     set(QORE_CORE_DOC_TAGFILES "")
     if(EXISTS "${QORE_DOXYGEN_TAGFILE}")
         set(QORE_CORE_DOC_TAGFILES "\"${QORE_DOXYGEN_TAGFILE}=${QORE_DOXYGEN_TAG_URL}\"")
@@ -2045,6 +2054,9 @@ function(QORE_CONFIGURE_MODULE_DOXYGEN _template _output)
         endif()
     endforeach()
     configure_file("${_template}" "${_output}" @ONLY)
+    foreach(_image IN LISTS QORE_DOXYGEN_IMAGES)
+        file(APPEND "${_output}" "\nHTML_EXTRA_FILES += \"${_image}\"\n")
+    endforeach()
 endfunction()
 
 MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suffix)
@@ -3766,42 +3778,100 @@ ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 #     qore_external_binary_module(krb5 ${PROJECT_VERSION})
 #     qore_external_user_module("qlib/Krb5Util" "")
 #     qore_binary_module_two_phase_docs(krb5 "Krb5Util")
+# Keep tag files owned by the initial pass. Parallel final passes read the same
+# complete indexes and must never truncate or rewrite them while another reads.
+function(_QORE_ADD_MODULE_DOC_FINAL_PASS _target _doxyfile _html _tags _dependencies)
+    file(READ "${_doxyfile}" _existing_config)
+    separate_arguments(_candidate_tags UNIX_COMMAND "${_tags}")
+    set(_additional_tags "")
+    foreach(_tag IN LISTS _candidate_tags)
+        string(REGEX REPLACE "=.*$" "=" _tag_path "${_tag}")
+        string(FIND "${_existing_config}" "${_tag_path}" _existing_tag)
+        if (_existing_tag EQUAL -1)
+            string(APPEND _additional_tags " \"${_tag}\"")
+        endif()
+    endforeach()
+    configure_file("${_doxyfile}" "${_doxyfile}.final" COPYONLY)
+    file(APPEND "${_doxyfile}.final"
+        "\n# Final pass: resolve cross-references without rewriting shared indexes\n"
+        "TAGFILES += ${_additional_tags}\nWARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+    file(APPEND "${_doxyfile}"
+        "\n# Initial pass: generate the index before resolving reverse references\n"
+        "WARN_IF_DOC_ERROR = NO\n")
+    add_custom_target(${_target}-final
+        COMMAND ${DOXYGEN_EXECUTABLE} "${_doxyfile}.final"
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
+            --post "${_html}" "${_html}/search"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+        COMMENT "Generating ${_target} with complete module cross-references"
+        VERBATIM)
+    add_dependencies(${_target}-final ${_dependencies})
+    add_dependencies(docs ${_target}-final)
+endfunction()
+
 MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
     if (DOXYGEN_FOUND)
-        # Suppress unresolved cross-reference warnings on the initial pass,
-        # which runs before any user module tag files exist.
-        file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile
-            "\n# Suppress warnings for initial pass (no user module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
-
-        # Build the TAGFILES line that pulls in every user module's tag file.
-        # Binary HTML is at docs/${binary}/html/; user HTML is at docs/${usermod}/html/;
-        # from the former, the correct relative path is ../../${usermod}/html.
-        set(_qb2pd_tagfiles "")
+        set(_qb2pd_dependencies docs-module)
         foreach(_qb2pd_um ${_user_modules})
-            string(APPEND _qb2pd_tagfiles
-                " \"${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html\"")
+            list(APPEND _qb2pd_dependencies docs-${_qb2pd_um})
         endforeach()
-
-        # Create the final-pass Doxyfile by copying the initial one and appending
-        # the correct TAGFILES line plus re-enabling doc error warnings.
-        # COPYONLY preserves literal Doxygen substitutions and supports CMake < 3.21.
-        configure_file("${CMAKE_BINARY_DIR}/Doxyfile" "${CMAKE_BINARY_DIR}/Doxyfile.final" COPYONLY)
-        file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile.final
-            "\n# Final pass: retain existing indexes and add user module cross-references\nTAGFILES +=${_qb2pd_tagfiles}\nWARN_IF_DOC_ERROR = YES\n")
-
-        add_custom_target(docs-module-final
-            COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
-            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${_binary_module}/html ${CMAKE_BINARY_DIR}/docs/${_binary_module}/html/search
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            COMMENT "Generating API documentation with Doxygen (final pass with user module cross-references)"
-            VERBATIM
-        )
-        foreach(_qb2pd_um ${_user_modules})
-            add_dependencies(docs-module-final docs-${_qb2pd_um})
+        foreach(_qb2pd_module ${_binary_module} ${_user_modules})
+            set(_qb2pd_tags "")
+            foreach(_qb2pd_peer ${_binary_module} ${_user_modules})
+                if (NOT "${_qb2pd_peer}" STREQUAL "${_qb2pd_module}")
+                    string(APPEND _qb2pd_tags
+                        " \"${CMAKE_BINARY_DIR}/${_qb2pd_peer}.tag=../../${_qb2pd_peer}/html\"")
+                endif()
+            endforeach()
+            if ("${_qb2pd_module}" STREQUAL "${_binary_module}")
+                set(_qb2pd_target docs-module)
+                set(_qb2pd_file "${CMAKE_BINARY_DIR}/Doxyfile")
+            else()
+                set(_qb2pd_target docs-${_qb2pd_module})
+                set(_qb2pd_file "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${_qb2pd_module}")
+            endif()
+            _qore_add_module_doc_final_pass(${_qb2pd_target} "${_qb2pd_file}"
+                "${CMAKE_BINARY_DIR}/docs/${_qb2pd_module}/html"
+                "${_qb2pd_tags}" "${_qb2pd_dependencies}")
         endforeach()
-        add_dependencies(docs docs-module-final)
     endif()
 ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
+
+# Called after all bundled native and user documentation targets are registered.
+# User modules already import the initial native indexes; native final passes
+# import every user/native index, including documentation-only reverse links.
+function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
+    if (NOT DOXYGEN_FOUND)
+        return()
+    endif()
+    set(_dependencies docs-lang docs-lib)
+    set(_binaries "")
+    foreach(_module IN LISTS _binary_modules)
+        if (TARGET docs-${_module})
+            list(APPEND _binaries "${_module}")
+            list(APPEND _dependencies docs-${_module})
+        endif()
+    endforeach()
+    foreach(_module IN LISTS _user_modules)
+        list(APPEND _dependencies docs-${_module})
+    endforeach()
+    foreach(_module IN LISTS _binaries)
+        set(_tags "")
+        foreach(_peer IN LISTS _binaries)
+            if (NOT "${_peer}" STREQUAL "${_module}")
+                string(APPEND _tags
+                    " \"${CMAKE_BINARY_DIR}/modules/${_peer}/${_peer}.tag=../../${_peer}/html\"")
+            endif()
+        endforeach()
+        foreach(_peer IN LISTS _user_modules)
+            string(APPEND _tags " \"${CMAKE_BINARY_DIR}/${_peer}.tag=../../${_peer}/html\"")
+        endforeach()
+        _qore_add_module_doc_final_pass(docs-${_module}
+            "${CMAKE_BINARY_DIR}/modules/${_module}/Doxyfile"
+            "${CMAKE_BINARY_DIR}/docs/modules/${_module}/html" "${_tags}" "${_dependencies}")
+    endforeach()
+endfunction()
+
 
 # Install qore native/user modules (qm files) into the proper location.
 # Example:

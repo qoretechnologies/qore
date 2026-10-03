@@ -14,6 +14,10 @@
     directories, install-prefix overrides, and package staging.
     Documentation template generation publishes output only after successful conversion
     and reruns when qpp changes, preventing partial files from surviving failed builds.
+    Native module landing pages list companion user modules with links to their introductions
+    and reuse available data-provider app icons. Two-phase documentation builds generate
+    indexes first, then render cross-references in both directions without rewriting indexes
+    while other documentation targets read them.
 
     Split user modules now parse their <tt>.qc</tt> and <tt>.ql</tt> files in filename order
     after the main <tt>.qm</tt> file. Filesystem enumeration and file creation order no longer
@@ -744,7 +748,7 @@ val = "string";      # OK
       the automatic @ref new-style "%new-style" bits selectively
 
     <b>Note:</b> This change only affects scripts loaded via the command-line binary and
-    @ref Qore::Program::parseFile "Program::parseFile()". Module loading via @ref Qore::load_module
+    the C++ \c QoreProgram::parseFile() API. Module loading via @ref Qore::load_module
     "load_module()" or @ref requires "%requires" is unaffected — modules continue to control their own parse options
     through directives inside the <tt>.qm</tt> file.
     @endparblock
@@ -1498,9 +1502,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
       @ref Qore::SocketPollOperationBase "SocketPollOperationBase<T>"
     - generic result hashdecls such as
-      @ref Qore::Thread::QueueTryResult "QueueTryResult<T>",
-      @ref Qore::Thread::ChannelTryResult "ChannelTryResult<T>", and
-      @ref Qore::KeyValueInfo "KeyValueInfo<T>"
+      @ref Qore::Thread::QueueTryResult<T> "QueueTryResult<T>",
+      @ref Qore::Thread::ChannelTryResult<T> "ChannelTryResult<T>", and
+      @ref Qore::KeyValueInfo<V> "KeyValueInfo<T>"
 
     @code{.py}
 Queue<int> q();
@@ -1569,7 +1573,7 @@ int echoed = child.echo(value);
 
     The following also apply to source-defined generics; see @ref generic_classes "Generic Classes" and
     @ref hashdecl_generic "Generic Hashdecls" for the complete rules:
-    - parameterized static receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
+    - parameterized static receivers such as <tt>Factory&lt;int&gt;&#58;&#58;make(...)</tt>, and
       @ref hashdecl_generic "hashdecls" with type parameters for typed result records such as
       <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
     - wildcard type arguments with <tt>?</tt>, <tt>? extends Type</tt>, and <tt>? super Type</tt>
@@ -3564,7 +3568,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref openapi3intro "OpenApi3" module
       - preserves combined and alternative document security requirements, including anonymous alternatives;
-        @ref OpenApi3Schema::security is now a list of requirement hashes rather than a flattened hash
+        \c OpenApi3Schema::security is now a list of requirement hashes rather than a flattened hash
       - preserve positional arrays, boolean item constraints, response direction, and native serialization
       - retains enumeration labels and descriptions through schema adaptation and serialization,
         while preserving typed wire values and keeping code-generation symbols out of forms
@@ -6395,7 +6399,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     @subsection qore_1_0_10_bug_fixes Bug Fixes in Qore
     - fixed a bug in calculating abstract overrides in child classes that could cause spurious errors
       (<a href="https://github.com/qoretechnologies/qore/issues/4338">issue 4338</a>)
-    - implemented the @ref Qore::parse_url(string, *int) variant to allow for percent decoding in URL strings
+    - implemented the @ref Qore::parse_url() "parse_url(string, *int)" variant to allow for percent decoding in URL strings
       (<a href="https://github.com/qoretechnologies/qore/issues/4332">issue 4332</a>)
     - fixed C++ foreign thread registration APIs to support TID reuse to provide thread affinity for language
       modules such as Python and Java with successive rapid transitions into %Qore in callbacks
@@ -7586,7 +7590,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       (<a href="https://github.com/qoretechnologies/qore/issues/3509">issue 3509</a>)
     - fixed bugs importing user modules with an injected API in an existing @ref Qore::Program "Program" container
       (<a href="https://github.com/qoretechnologies/qore/issues/3504">issue 3504</a>)
-    - fixed a memory leak in @ref Qore::Serializable::deserialize(string, *int) "Serializable::deserialize(string)"
+    - fixed a memory leak in @ref Qore::Serializable::deserialize() "Serializable::deserialize(string)"
     - fixed a memory leak (crash in debug mode) related to @ref garbage_collection "deterministic garbage collection"
       (<a href="https://github.com/qoretechnologies/qore/issues/3481">issue 3481</a>)
     - fixed a bug where HTTP redirect messages with a simple path and not a full URL were not processed correctly
@@ -10489,7 +10493,7 @@ class MyAbstractInterface {
     @par Other Minor Improvements and Changes
     - qpp updated to support abstract methods and multiple inheritance (+ other minor qpp enhancements)
     - improved the \c QOREADDRINFO-GETINFO-ERROR exception description by adding information about the arguments passed
-    - added a string argument to @ref Qore::chr(softint, *string) "char(softint, *string)" to accept an output encoding
+    - added a string argument to @ref Qore::chr() "chr(softint, *string)" to accept an output encoding
     - added a @ref Qore::int(string, int) "int(string, int)" variant to parse a string as a number and give the base
     - added a new parameter to parse_url() and parseURL() to allow for any [] in the hostname to be included in the \c "host" output key for indicating that the <a href="http://wikipedia.org/wiki/IPv6">ipv6</a> protocol be used
     - added the following pseudo-methods:

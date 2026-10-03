@@ -1,0 +1,38 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page mlpersistenceguide Model Persistence
+
+    @tableofcontents
+
+    Save trained models so they survive restarts and can be shared between systems.
+
+    @section mlpersist_inmemory In-Memory Serialization
+
+    Serialize a fitted model to binary and deserialize it back — useful for caching,
+    sending over the network, or storing in a database:
+
+    @code{.py}
+# Serialize a trained model to binary
+binary data = Qore::ML::ml_serialize(trained_model);
+
+# Later, reconstruct it (ready for prediction immediately)
+auto restored = Qore::ML::ml_deserialize(data);
+hash<auto> result = restored.predict(new_record);
+    @endcode
+
+    @section mlpersist_file File-Based Persistence
+
+    Save models to disk and load them back:
+
+    @code{.py}
+# Save a trained KMeans model
+Qore::ML::ml_save_model(km, "/models/customer_segments.qml");
+
+# Load it in another process or after restart
+auto km2 = Qore::ML::ml_load_model("/models/customer_segments.qml");
+hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
+    @endcode
+
+    The native \c .qml format is a compact binary format with CRC-32 integrity checking.
+    All algorithm types are supported.
+*/

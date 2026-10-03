@@ -1,0 +1,15 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_modelsguide Verified Model Families
+
+    @tableofcontents
+
+    The following model families have been verified to produce token IDs matching
+    the Python \c tokenizers library exactly:
+
+    |!Model|!Type|!Example tokenizer.json|!Verified
+    |BERT|WordPiece|bert-base-uncased|Yes — exact match
+    |GPT-2|BPE + ByteLevel|openai-community/gpt2|Yes — exact match
+    |T5|Unigram + Precompiled|google-t5/t5-small|Yes — exact match
+    |Llama/TinyLlama|BPE + byte_fallback|TinyLlama/TinyLlama-1.1B-Chat-v1.0|Yes — exact match
+*/

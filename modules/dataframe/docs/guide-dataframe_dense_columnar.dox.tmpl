@@ -1,0 +1,92 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframe_dense_columnarguide Dense Buffers And Columnar Results
+
+    @tableofcontents
+
+    DataFrames can be constructed from dense \c buffer<T> values for primitive
+    numeric, boolean, and string columns. Buffer-backed columns keep a reference to the
+    original dense storage, so \c getColumnBuffer(), \c toColumnarResult(), and
+    \c fromColumnarResult() can move primitive columns between DataFrame,
+    @ref buffer "buffer<T>", and
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
+    cell into a list. Fixed-scale decimal columns use \c buffer<decimal128>.
+    Date, timestamp, and duration columns use \c buffer<int64> with
+    ColumnarResult schema metadata when they come from dense columnar sources,
+    storing microseconds and materializing Qore \c date values when read as
+    rows or lists. Nested arrays, fixed-size lists, structs, maps, and
+    dictionary-compatible values keep recursive ColumnarResult schema metadata
+    and list/hash values; \c buffer<T> remains a primitive dense-vector type.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame scores({
+    "id": new buffer<int64>((1001, 1002, 1003, 1004)),
+    "score": new buffer<float64>((95.5, 88.0, 92.0, 81.5)),
+    "active": new buffer<bool>((True, False, True, True)),
+    "name": new buffer<*string>(("Alice", "Bob", "Carol", NOTHING)),
+});
+
+buffer<int64> ids = scores.getColumnBuffer("id");
+buffer<*string> names = scores.getColumnBuffer("name");
+ColumnarResult columns = scores.toColumnarResult();
+buffer<float64> dense_scores = columns.getColumn("score");
+buffer<*string> dense_names = columns.getColumn("name");
+
+ColumnarResult timestamps = ColumnarResult::fromColumnHash({
+    "created_at": (2026-01-01T00:00:00Z, 2026-01-02T00:00:00Z),
+}, {
+    "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+});
+buffer<int64> created_at_us = timestamps.getColumn("created_at");
+DataFrame::DataFrame timestamp_df = DataFrame::DataFrame::fromColumnarResult(timestamps);
+
+buffer<bool> high_score = dense_scores >= 90.0;
+buffer<*bool> named = dense_names == "Alice";
+ColumnarResult selected_columns = columns.filter(high_score);
+DataFrame::DataFrame selected = DataFrame::DataFrame::fromColumnarResult(selected_columns);
+    @endcode
+
+    ColumnarResult masks can be composed in native code with
+    @ref Qore::SQL::ColumnarResult::combineMasks() "combineMasks()" and
+    @ref Qore::SQL::ColumnarResult::invertMask() "invertMask()". Nullable columns can use
+    @ref Qore::SQL::ColumnarResult::nullMask() "nullMask()" to build dense masks without row
+    materialization. This is useful
+    when code receives typed columns dynamically and cannot rely on parse-time
+    vectorized operator resolution for a column variable:
+
+    @code{.py}
+buffer<bool> high = columns.getColumn("score") >= 90.0;
+buffer<bool> active = columns.getColumn("active") == True;
+buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
+ColumnarResult high_active = columns.filter(selected_mask);
+ColumnarResult missing_scores = columns.filter(columns.nullMask("score"));
+ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
+ColumnarResult ranked_rows = columns.take((3, 0, 2));
+DataFrame::DataFrame ranked_df = scores.takeRows((3, 0, 2));
+    @endcode
+
+    Use @ref Qore::SQL::ColumnarResult::take() "ColumnarResult::take()" and
+    @ref Qore::DataFrame::DataFrame::takeRows() "DataFrame::takeRows()" when row order
+    matters, for example after ranking model scores. These APIs gather explicit
+    row indices and keep primitive columns in dense buffer form.
+
+    Use @ref Qore::DataFrame::DataFrame::concat() "DataFrame::concat()" with
+    \c axis:1 for horizontal concat. This shares existing column data when
+    possible and rejects mismatched row counts or duplicate output column names:
+
+    @code{.py}
+DataFrame::DataFrame left({"id": new buffer<int64>((1, 2, 3))});
+DataFrame::DataFrame right({"score": new buffer<float64>((90.0, 80.0, 70.0))});
+DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis: 1);
+    @endcode
+
+    DataFrame kernels still maintain the module's existing internal vectors for
+    compatibility with groupby, joins, window functions, and ML conversion.
+    Therefore source buffers are preserved for columnar export and dense column
+    access. Row filtering preserves primitive buffer-backed columns by creating
+    filtered dense buffers, and contiguous row slicing preserves them with
+    zero-copy buffer views. Operations that reorder, aggregate, or reshape rows
+    may allocate new column storage.
+*/

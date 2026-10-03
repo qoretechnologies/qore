@@ -92,7 +92,7 @@ QoreValue JsonRpcClient::call(QoreStringNode* msg, QoreHashNode* info, Exception
 }
 
 //! The JsonRpcClient class provides easy access to JSON-RPC web services
-/** @deprecated Use the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module instead.
+/** @deprecated Use the @ref jsonrpcclientiointro "JsonRpcClientIo" module instead.
     JsonRpcClientIo provides the same JSON-RPC call API with async I/O via
     \c HttpClientIo::HttpClientConnectionManager, offering automatic HTTP protocol negotiation
     (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.

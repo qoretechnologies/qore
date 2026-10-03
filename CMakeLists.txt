@@ -4123,6 +4123,13 @@ endif()
         add_dependencies(docs-lang-final docs-mongodb)
     endif()
 
+    # Native module landing pages link back into qlib. Keep their final rendering
+    # behind all initial indexes, and keep the shared language index immutable.
+    qore_bundled_module_two_phase_docs(
+        "astparser;reflection;logger_bin;linenoise;krb5;ml;sshutil;avro;dataframe;i18n;json;ocr;protobuf;tokenizer;yaml;mongodb"
+        "${QORE_USER_MODULE_NAMES}")
+    file(APPEND "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final" "\nGENERATE_TAGFILE =\n")
+
     # docs depends on docs-lang-final (the final lang docs with module cross-refs)
     add_dependencies(docs docs-lang-final)
 endif()

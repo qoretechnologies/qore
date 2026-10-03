@@ -126,6 +126,9 @@ target_link_libraries(${mongodb_module_name} ${MONGODB_LIBRARIES})
 add_dependencies(${mongodb_module_name} libqore MONGODB_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/mongodb/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/mongodb/release-notes.dox ${_dox_src})
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/MongoDbDataProvider/mongodb-logo.svg"
+)
 qore_binary_module_qore(${mongodb_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

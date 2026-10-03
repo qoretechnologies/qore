@@ -1,0 +1,13 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page mlthreadguide Thread Safety
+
+    @tableofcontents
+
+    All classes in this module are designed for thread-safe usage:
+    - Each class instance has independent state (no shared mutable globals)
+    - After fitting, scoring/prediction methods can be called concurrently from
+      multiple threads
+    - Each instance uses its own random number generator
+    - ONNX Runtime sessions are inherently thread-safe for inference
+*/

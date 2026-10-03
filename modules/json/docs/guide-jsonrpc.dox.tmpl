@@ -1,0 +1,44 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page JSONRPCguide JSON-RPC
+
+    @tableofcontents
+
+    JSON-RPC is a lightweight but powerful JSON over HTTP web service protocol.
+    The json module includes builtin support for several versions of the JSON-RPC protocol; the default protocol
+    version used is \c "2.0" unless explicitly changed in the client constructor.
+
+    For new code, use the @ref jsonrpcclientiointro "JsonRpcClientIo" module, which
+    provides async I/O via \c HttpClientIo::HttpClientConnectionManager with automatic HTTP protocol negotiation
+    (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.
+
+    The native @ref Qore::Json::JsonRpcClient "JsonRpcClient" class is still available for backwards compatibility
+    but uses synchronous blocking I/O limited to HTTP/1.x.
+
+    <b>Classes Providing JSON-RPC Functionality</b>
+    |!Class|!Description
+    |@ref jsonrpcclientiointro "JsonRpcClientIo"|Preferred: async I/O JSON-RPC client with HTTP/3, HTTP/2, HTTP/1.1 support
+    |@ref Qore::Json::JsonRpcClient "JsonRpcClient"|Legacy: synchronous JSON-RPC client (HTTP/1.x only)
+
+    <b>Functions Providing JSON-RPC Functionality</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"|a generic JSON-RPC error response string from the parameters passed with optional \
+        verbose whitespace formatting for easier human readability
+    |@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"|Creates a JSON-RPC request string from the parameters passed with optional verbose \
+        whitespace formatting for easier human readability
+    |@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"|Creates a JSON-RPC response string from the parameters passed with optional \
+        verbose whitespace formatting for easier human readability
+
+    <b>Deprecated JSON-RPC Functions</b>
+    |!Deprecated Function Name|!New Function Name
+    |\c makeFormattedJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in \
+        json 1.7
+    |\c makeFormattedJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
+    |\c makeFormattedJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
+    |\c makeFormattedJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
+    |\c makeJSONRPC11ErrorString()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
+    |\c makeJSONRPCErrorString()|@ref Qore::Json::make_jsonrpc_error() "make_jsonrpc_error()"
+    |\c makeJSONRPCRequestString()|@ref Qore::Json::make_jsonrpc_request() "make_jsonrpc_request()"
+    |\c makeJSONRPCResponseString()|@ref Qore::Json::make_jsonrpc_response() "make_jsonrpc_response()"
+    |\c make_jsonrpc11_error()|support for the non-published JSON-RPC 1.1 protocol was deprecated in json 1.7
+*/

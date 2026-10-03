@@ -93,9 +93,15 @@ file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
             self.assertIn(str(sdk / "header_template.html"), result.stderr)
             self.assertIn("does not exist", result.stderr)
 
-    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False):
+    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False,
+                  provider_icon=False):
         source = root / "module source"
         source.mkdir(exist_ok=True)
+        icon = source / "qlib/ExampleDataProvider/app.svg"
+        if provider_icon:
+            icon.parent.mkdir(parents=True)
+            icon.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">'
+                            '<rect width="16" height="16" fill="red"/></svg>')
         for name in image_dirs:
             (source / name).mkdir(exist_ok=True)
         language = self.make_tag(root, "language") if language_tag else root / "absent.tag"
@@ -109,7 +115,9 @@ file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
                               + ("See @ref language and " if language_tag else "See ")
                               + "@ref native.\n"
                               + ("See @ref child.\n" if two_phase else "")
-                              + ("See @ref SdkDependency.\n" if module_indexes else "") + "*/\n")
+                              + ("See @ref SdkDependency.\n" if module_indexes else "")
+                              + ('<img src="app.svg" width="32" alt="Example app"/>\n'
+                                 if provider_icon else "") + "*/\n")
         template = root / "Doxyfile.in"
         template.write_text('''QUIET = YES
 INPUT = "@_dox_input@"
@@ -130,6 +138,7 @@ set(QORE_DOXYGEN_MODULE_URL "https://example.invalid/modules")
 set(QORE_DOXYGEN_MODULES "{'SdkDependency;Unavailable' if module_indexes else ''}")
 set(TAGFILES "\\\"{native}=https://example.invalid/native\\\"")
 set(_dox_input "{input_file}")
+set(QORE_DOXYGEN_IMAGES "{icon if provider_icon else ''}")
 qore_configure_module_doxygen("{template}" "{root}/Doxyfile")
 file(WRITE "{root}/tagfiles-after" "${{TAGFILES}}")
 ''')
@@ -141,7 +150,10 @@ include("{script}")
 set(DOXYGEN_FOUND TRUE)
 set(DOXYGEN_EXECUTABLE doxygen)
 add_custom_target(docs)
+add_custom_target(docs-module)
 add_custom_target(docs-child)
+file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/doxygen")
+file(WRITE "${{CMAKE_BINARY_DIR}}/doxygen/Doxyfile.child" "# child\n")
 qore_binary_module_two_phase_docs(module "child")
 ''')
             self.run_command([CMAKE, "-S", str(source), "-B", str(root)], root)
@@ -154,6 +166,15 @@ qore_binary_module_two_phase_docs(module "child")
         html = (root / "output/html/module.html").read_text()
         self.assertIn("https://example.invalid/native/native.html", html)
         return html, config.read_text(), source
+
+    def test_provider_icon_is_copied_from_qlib(self):
+        with tempfile.TemporaryDirectory(prefix="qore provider icon ") as directory:
+            root = Path(directory)
+            html, config, source = self.configure(root, provider_icon=True)
+            self.assertRegex(html, r'(?:src|data)="app\.svg"')
+            self.assertIn(f'"{source}/qlib/ExampleDataProvider"', config)
+            self.assertEqual((source / "qlib/ExampleDataProvider/app.svg").read_bytes(),
+                             (root / "output/html/app.svg").read_bytes())
 
     def test_two_phase_docs_retain_language_and_caller_indexes(self):
         with tempfile.TemporaryDirectory(prefix="qore doc two phase ") as directory:

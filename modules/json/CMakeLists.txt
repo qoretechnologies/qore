@@ -73,6 +73,10 @@ set(JSON_CPP_SRC
 set(QORE_DOX_JSON_TMPL_SRC
     docs/mainpage.dox.tmpl
     docs/release-notes.dox.tmpl
+    docs/guide-jsoncppapisec.dox.tmpl
+    docs/guide-jsonrpc.dox.tmpl
+    docs/guide-jsonserialization.dox.tmpl
+    docs/guide-toonserialization.dox.tmpl
 )
 
 # Process QPP files
@@ -88,6 +92,17 @@ add_dependencies(${json_module_name} libqore JSON_QPP_GENERATED_FILES)
 
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/json/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/json/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jsoncppapisec.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jsonrpc.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jsonserialization.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-toonserialization.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/A2aClientDataProvider/a2a-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/FhirRestDataProvider/fhir-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JsonFileDataProvider/json-file-logo.svg"
+)
 qore_binary_module_qore(${json_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

@@ -353,7 +353,7 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
-    -# an IPv4-mapped IPv6 address (\c ::ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
+    -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
        unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a

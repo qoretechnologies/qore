@@ -210,6 +210,12 @@ set(DF_CPP_SRC
 set(QORE_DOX_DF_TMPL_SRC
     docs/mainpage.dox.tmpl
     docs/release-notes.dox.tmpl
+    docs/guide-dataframe_arrow_copy_behavior.dox.tmpl
+    docs/guide-dataframe_dataprovider_pipelines.dox.tmpl
+    docs/guide-dataframe_dense_columnar.dox.tmpl
+    docs/guide-dataframe_performance_positioning.dox.tmpl
+    docs/guide-dataframe_typed_examples.dox.tmpl
+    docs/guide-dataframeapi.dox.tmpl
 )
 
 # Process QPP files
@@ -229,6 +235,14 @@ add_dependencies(${df_module_name} libqore DF_QPP_GENERATED_FILES)
 # the doxygen input the module's tag file has no intro anchor and every cross-reference to it is lost
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/dataframe/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/dataframe/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframe_arrow_copy_behavior.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframe_dataprovider_pipelines.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframe_dense_columnar.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframe_performance_positioning.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframe_typed_examples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-dataframeapi.dox
+)
 qore_binary_module_qore(${df_module_name} "${VERSION}" "/${VERSION}")
 qore_install_qpp_metadata(${df_module_name} ${DF_QPP_META_SRC})
 

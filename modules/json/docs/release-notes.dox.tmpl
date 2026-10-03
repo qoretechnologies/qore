@@ -27,7 +27,7 @@
     - added TOON (Token-Oriented Object Notation) serialization support
       (@ref Qore::Json::make_toon() "make_toon()" / @ref Qore::Json::parse_toon() "parse_toon()"); see
       @ref toonserialization
-    - added the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module: pure-Qore JSON-RPC
+    - added the @ref jsonrpcclientiointro "JsonRpcClientIo" module: pure-Qore JSON-RPC
       client with async I/O via HttpClientIo:
       - full JSON-RPC 1.0, 1.1, and 2.0 protocol support
       - async I/O with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1) and connection pooling
@@ -35,14 +35,14 @@
       - JSON-RPC 2.0 notification support
       - debug info variants for all call methods
       - ConnectionProvider integration with \c jsonrpcio:// and \c jsonrpcios:// URL schemes
-    - added the <a href="../../FhirRestClient/html/index.html">FhirRestClient</a> module for HL7 FHIR JSON REST
+    - added the @ref fhirrestclientintro "FhirRestClient" module for HL7 FHIR JSON REST
       servers:
       - FHIR R4-compatible JSON request/response handling with \c application/fhir+json
       - \c fhir:// and \c fhirs:// ConnectionProvider schemes
       - CapabilityStatement and SMART discovery helpers
       - resource read/search/create/update/delete helpers with conditional create and ETag support
       - \c OperationOutcome exception mapping and validation/terminology delegation helpers
-    - added the <a href="../../FhirRestDataProvider/html/index.html">FhirRestDataProvider</a> module:
+    - added the @ref fhirrestdataproviderintro "FhirRestDataProvider" module:
       - \c fhirrest DataProvider factory for FHIR REST server connections
       - metadata, resource CRUD/search, validation, and terminology actions
       - typed generic request/response metadata for action catalogs
@@ -50,13 +50,13 @@
       - generated FHIR R4 \c HashDataType metadata for \c Patient, \c Observation, and \c Bundle
       - generated FHIR R4 resource-specific action metadata for typed \c Patient, \c Observation, and \c Bundle
         actions
-    - added the <a href="../../JsonLd/html/index.html">JsonLd</a> module with full W3C JSON-LD 1.1 compliance:
+    - added the @ref jsonldintro "JsonLd" module with full W3C JSON-LD 1.1 compliance:
       - expansion, compaction, flattening, framing algorithms
       - toRdf/fromRdf with N-Quads serialization
       - thread-safe context caching with TTL
       - pluggable document loaders (HTTP, file, caching)
       - passes 1167/1167 non-skipped W3C conformance tests
-    - added the <a href="../../OneRecordClient/html/index.html">OneRecordClient</a> module for IATA ONE Record
+    - added the @ref onerecordclientintro "OneRecordClient" module for IATA ONE Record
       (API v2.2.0, Cargo Ontology v3.2.0):
       - REST client for air cargo data sharing via JSON-LD
       - logistics object CRUD with revision tracking
@@ -64,7 +64,7 @@
       - logistics events, audit trail, subscriptions
       - OAuth 2.0 / OpenID Connect authentication
       - ConnectionProvider integration with \c 1r:// and \c 1rs:// URL schemes
-    - added the <a href="../../OneRecordServerHandler/html/index.html">OneRecordServerHandler</a> module for
+    - added the @ref onerecordserverhandlerintro "OneRecordServerHandler" module for
       ONE Record server support:
       - REST handler with full URL routing for all ONE Record API v2.2.0 endpoints
       - pluggable storage backend (abstract interface + in-memory implementation)
@@ -76,7 +76,7 @@
       - JSON-LD integration via the JsonLd module
 
     - added CBOR serialization support (make_cbor/parse_cbor)
-    - added the <a href="../../A2aClient/html/index.html">A2aClient</a> module for connecting to A2A agents:
+    - added the @ref a2aclientintro "A2aClient" module for connecting to A2A agents:
       - Agent Card discovery via \c /.well-known/agent-card.json
       - Authenticated extended Agent Card retrieval
       - Message sending with task lifecycle management
@@ -84,14 +84,14 @@
       - Push notification configuration CRUD
       - Task management (get, cancel, resubscribe)
       - ConnectionProvider integration with \c a2a:// and \c a2as:// URL schemes
-    - added the <a href="../../A2aServerHandler/html/index.html">A2aServerHandler</a> module for A2A server support:
+    - added the @ref a2aserverhandlerintro "A2aServerHandler" module for A2A server support:
       - Agent Card serving via GET \c /.well-known/agent-card.json
       - JSON-RPC dispatch for \c message/send, \c message/stream
       - Task lifecycle management with state machine validation
       - SSE streaming for real-time task updates
       - Push notification config CRUD
       - Session management
-    - added the <a href="../../A2aClientDataProvider/html/index.html">A2aClientDataProvider</a> module for DataProvider API:
+    - added the @ref a2aclientdataproviderintro "A2aClientDataProvider" module for DataProvider API:
       - factory registration for automatic data provider discovery
       - agent card providers: get and get-extended
       - message providers: send messages to agents
@@ -104,7 +104,7 @@
     - added @ref Qore::Json::JsonSaxParser "JsonSaxParser" for event-based parsing and
       @ref Qore::Json::JsonStreamWriter "JsonStreamWriter" for streaming JSON output
 
-    - added the <a href="../../McpClientDataProvider/html/index.html">McpClientDataProvider</a> module providing a
+    - added the @ref mcpclientdataproviderintro "McpClientDataProvider" module providing a
       DataProvider API for MCP servers:
       - factory registration for automatic data provider discovery
       - tools provider: list and call MCP tools
@@ -116,7 +116,7 @@
       - comprehensive type definitions, enums, and allowed values for MCP request/response fields
       - notification event provider with observer pattern support
       - constructor option metadata for MCP client name and version
-    - added the <a href="../../McpClient/html/index.html">McpClient</a> module for connecting to MCP servers as a
+    - added the @ref mcpclientintro "McpClient" module for connecting to MCP servers as a
       client:
       - full MCP protocol support with automatic version negotiation (2024-11-05 through 2025-11-25)
       - HTTP + Server-Sent Events (SSE) transport
@@ -129,7 +129,7 @@
       - session management with \c Mcp-Session-Id header
       - ConnectionProvider integration with \c mcp:// and \c mcps:// URL schemes
     - added MCP 2025-11-25 protocol version support (latest MCP spec) to
-      <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
+      @ref mcpserverhandlerintro "McpServerHandler"
     - added \c completion/complete method for autocompletion of prompts and resources
     - added logging capability and \c logging/setLevel method
     - added \c resources/read handler with callback support for custom readers
@@ -145,7 +145,7 @@
       - @ref Qore::Json::json_pointer_escape() "json_pointer_escape()" - escape special characters in JSON Pointer
         tokens
     - added \c removeMethod(), \c hasMethod(), \c getMethodNames() to
-      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a>
+      @ref jsonrpchandlerintro "JsonRpcHandler"
     - fixed crashes when parsing or generating deeply nested JSON;
       @ref Qore::Json::parse_json() "parse_json()" and @ref Qore::Json::make_json() "make_json()"
       now raise a \c STACK-LIMIT-EXCEEDED exception when data is nested too deeply for the thread's stack
@@ -171,7 +171,7 @@
       (<a href="https://github.com/qorelanguage/qore/issues/4943">issue 4943</a>)
 
     @section json_v1_9 json Module Version 1.9
-    - added support for an MCP server with the <a href="../../McpServerHandler/html/index.html">McpServerHandler</a>
+    - added support for an MCP server with the @ref mcpserverhandlerintro "McpServerHandler"
       module
 
     @section json_v1_8_2 json Module Version 1.8.2
@@ -191,7 +191,7 @@
       (<a href="https://github.com/qorelanguage/qore/issues/3432">issue 3432</a>)
     - fixed output of excess noise in floating-point values
       (<a href="https://github.com/qorelanguage/qore/issues/3375">issue 3375</a>)
-    - updated the <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> module to support the
+    - updated the @ref jsonrpcconnectionintro "JsonRpcConnection" module to support the
       updated abstract connection API
       (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
     - added support for serializing intervals to strings that can be manually converted to the original value
@@ -200,9 +200,9 @@
     @section json_v0_1_7 json Module Version 1.7
     - deprecated support for the non-published JSON-RPC 1.1 protocol
     - added support for JSON-RPC 2.0
-    - added the <a href="../../JsonRpcConnection/html/index.html">JsonRpcConnection</a> user module
+    - added the @ref jsonrpcconnectionintro "JsonRpcConnection" user module
     - improved argument error messages with RPC calls in the
-      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+      @ref jsonrpchandlerintro "JsonRpcHandler" module
       (<a href="https://github.com/qorelanguage/qore/issues/2573">issue 2573</a>)
     - fixed date serialization to use ISO-8601 format (instead of near-ISO-8601 format
       <a href="https://github.com/qorelanguage/qore/issues/2655">issue 2655</a>)
@@ -210,7 +210,7 @@
     @section json_v0_1_6 json Module Version 1.6
     - @ref Qore::Json::parse_json() "parse_json()" now ignores UTF-8 and Unicode BOMs at the start of passed JSON string
       (<a href="https://github.com/qorelanguage/qore/issues/1398">issue 1398</a>)
-    - fixed a bug in request logging in the <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+    - fixed a bug in request logging in the @ref jsonrpchandlerintro "JsonRpcHandler" module
       (<a href="https://github.com/qorelanguage/qore/issues/1487">issue 1487</a>)
     - fixed a bug serializing hash keys with embedded quotes
       (<a href="https://github.com/qorelanguage/qore/issues/2242">issue 2242</a>)
@@ -221,7 +221,7 @@
       valid for multiple versions of qore
     - serialize nan, +/-inf as \c null according to the JSON spec
     - added detection for invalid JSON-RPC calls and added a more user-friendly error message in the
-      <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module
+      @ref jsonrpchandlerintro "JsonRpcHandler" module
     - new functions added conforming to %Qore's function naming convention, old camel-case functions deprecated
     - JSON tests ported to QUnit
     - %Qore 0.8.12 required as a minimum to build
@@ -231,7 +231,7 @@
 
     - date/time values are always serialized with microseconds and in the local time zone for consistency's sake
     - fixed a crashing bug in the JSON control-character encoding algorithm
-    - updated the <a href="../../JsonRpcHandler/html/index.html">JsonRpcHandler</a> module for enhanced logging
+    - updated the @ref jsonrpchandlerintro "JsonRpcHandler" module for enhanced logging
     - source released under the MIT license as well as LGPL 2.1
 
     @section json_v0_1_3 json Module Version 1.3

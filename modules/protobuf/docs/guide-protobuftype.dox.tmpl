@@ -1,0 +1,23 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page protobuftypeguide Type Mapping
+
+    @tableofcontents
+
+    Protobuf types are automatically converted to and from Qore types:
+
+    |!Protobuf Type|!Qore Type|!Notes
+    |\c double|\c float|64-bit floating point
+    |\c float|\c float|32-bit; precision may be reduced
+    |\c int32, \c sint32, \c sfixed32|\c int|Signed 32-bit integer
+    |\c int64, \c sint64, \c sfixed64|\c int|Signed 64-bit integer
+    |\c uint32, \c fixed32|\c int|Unsigned 32-bit (stored as Qore int)
+    |\c uint64, \c fixed64|\c int|Unsigned 64-bit (stored as Qore int)
+    |\c bool|\c bool|Boolean value
+    |\c string|\c string|UTF-8 encoded
+    |\c bytes|\c binary|Raw binary data
+    |\c enum|\c int|Enum values are integers
+    |\c message|\c hash|Nested message as a Qore hash
+    |\c repeated T|\c list|List of the element type
+    |\c map<K,V>|\c hash|Hash with string keys (numeric keys converted to strings)
+*/

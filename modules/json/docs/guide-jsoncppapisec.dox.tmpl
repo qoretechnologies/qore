@@ -1,0 +1,18 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jsoncppapisecguide C++ API for Other Binary Modules
+
+    @tableofcontents
+
+    The JSON parser and serializer are also published to other binary %Qore modules as a versioned
+    C++ API, so a module whose own data format is JSON can parse and generate it from C++ without
+    %Qore-language code.  The builtin \c avro module is the first consumer: an Avro schema is a
+    JSON document, so its schema parser resolves this API the first time a schema is parsed.
+
+    The consumer includes only the installed <tt>&lt;qore/QoreJsonApi.h&gt;</tt> header, does not
+    link against this module, and resolves the API at run time, which loads the \c json module on
+    demand.
+
+    See the \c "JSON C++ API" section of the %Qore library documentation for the API reference, and
+    \c "Developing Qore Modules" for the mechanism it is published through.
+*/

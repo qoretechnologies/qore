@@ -1,0 +1,18 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_sentence_pairsguide Sentence Pair Encoding
+
+    @tableofcontents
+
+    For tasks like question answering and natural language inference that require
+    two input sequences:
+
+    @code{.py}
+# BERT sentence pair: automatically adds [CLS], [SEP], and assigns type IDs
+hash<auto> enc = tok.encodeWithOptions("What is AI?", "AI is intelligence.");
+printf("IDs:      %y\n", enc.input_ids);
+# (101, 2054, 2003, 9932, 1029, 102, 9932, 2003, 4454, 1012, 102)
+printf("Type IDs: %y\n", enc.token_type_ids);
+# (0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1)
+    @endcode
+*/

@@ -1,0 +1,22 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_offsetsguide Offset Mapping and Special Tokens Mask
+
+    @tableofcontents
+
+    Every encoding result includes byte-level offset mapping and a special tokens mask:
+
+    @code{.py}
+hash<auto> enc = tok.encode("Hello, world!");
+
+# offset_mapping: list of (start_byte, end_byte) pairs in the original text
+printf("Offsets: %y\n", enc.offset_mapping);
+# BERT: ((0, 0), (0, 5), (5, 6), (7, 12), (12, 13), (0, 0))
+#        [CLS]    hello    ,      world     !        [SEP]
+# Special tokens get offset (0, 0)
+
+# special_tokens_mask: 1 for special tokens, 0 for content tokens
+printf("Special: %y\n", enc.special_tokens_mask);
+# BERT: (1, 0, 0, 0, 0, 1)
+    @endcode
+*/
