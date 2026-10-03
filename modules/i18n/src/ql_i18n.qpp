@@ -169,6 +169,8 @@ static bool i18n_check_locale_length(const std::string& locale, ExceptionSink* x
 
 // the maximum number of visible fraction digits in a formatted or plural-selected value
 static constexpr size_t I18N_MAX_VISIBLE_FRACTION_DIGITS = 100;
+// the maximum decimal exponent of a converted number or float; a float's is at most 324 in magnitude
+static constexpr int64 I18N_MAX_DECIMAL_EXPONENT = 10000;
 
 struct I18nDecimalInfo {
     std::string formatted;
@@ -176,12 +178,13 @@ struct I18nDecimalInfo {
     int32_t fraction_digits = 0;
 };
 
-// Parses a base-10 decimal string.  When cap_visible_fraction is set (numeric Qore values, whose fraction
-// length comes from their precision rather than from caller-chosen text), a fraction longer than the visible
-// maximum is kept intact for ICU to round, and only the visible fraction digits used for default precision and
-// plural operands are capped; an exact decimal string with too many fraction digits is an error.
+// Parses a base-10 decimal string.  When numeric_value is set, the string is the conversion of a Qore number or
+// float rather than caller-chosen text: a float converts with an exponent (ex: "1.5e-07"), which is expanded to its
+// exact decimal form, and a fraction longer than the visible maximum (its length comes from the value's precision)
+// is kept intact for ICU to round, with only the visible fraction digits used for default precision and plural
+// operands capped.  A decimal string with an exponent or too many fraction digits is an error.
 static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo& info, ExceptionSink* xsink,
-        const char* arg_name, bool cap_visible_fraction = false) {
+        const char* arg_name, bool numeric_value = false) {
     std::string s;
     if (!i18n_trim_ascii(input, s, xsink)) {
         return false;
@@ -222,6 +225,44 @@ static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo&
         return false;
     }
 
+    if (numeric_value && pos < s.size() && (s[pos] == 'e' || s[pos] == 'E')) {
+        ++pos;
+        bool negative_exponent = false;
+        if (pos < s.size() && (s[pos] == '+' || s[pos] == '-')) {
+            negative_exponent = s[pos] == '-';
+            ++pos;
+        }
+        size_t exponent_start = pos;
+        int64 exponent = 0;
+        while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+            exponent = exponent * 10 + (s[pos++] - '0');
+            if (exponent > I18N_MAX_DECIMAL_EXPONENT) {
+                xsink->raiseException("I18N-NUMBER-ERROR", "%s has an exponent outside the supported range of "
+                    "+/-%d; got '%s'", arg_name, static_cast<int>(I18N_MAX_DECIMAL_EXPONENT), input.c_str());
+                return false;
+            }
+        }
+        if (pos == exponent_start || pos != s.size()) {
+            xsink->raiseException("I18N-NUMBER-ERROR", "%s has a malformed exponent; got '%s'", arg_name,
+                input.c_str());
+            return false;
+        }
+
+        // move the decimal point by the exponent
+        std::string digits = integer + fraction;
+        int64 point = static_cast<int64>(integer.size()) + (negative_exponent ? -exponent : exponent);
+        if (point <= 0) {
+            integer.clear();
+            fraction = std::string(static_cast<size_t>(-point), '0') + digits;
+        } else if (static_cast<size_t>(point) >= digits.size()) {
+            integer = digits + std::string(static_cast<size_t>(point) - digits.size(), '0');
+            fraction.clear();
+        } else {
+            integer = digits.substr(0, static_cast<size_t>(point));
+            fraction = digits.substr(static_cast<size_t>(point));
+        }
+    }
+
     if (pos != s.size()) {
         xsink->raiseException("I18N-NUMBER-ERROR",
             "%s must be a base-10 integer or decimal string; got '%s'", arg_name, input.c_str());
@@ -251,7 +292,7 @@ static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo&
         ++trim_pos;
     }
 
-    if (fraction.size() > I18N_MAX_VISIBLE_FRACTION_DIGITS && !cap_visible_fraction) {
+    if (fraction.size() > I18N_MAX_VISIBLE_FRACTION_DIGITS && !numeric_value) {
         xsink->raiseException("I18N-NUMBER-ERROR",
             "%s has too many visible fraction digits; maximum supported is %d", arg_name,
             static_cast<int>(I18N_MAX_VISIBLE_FRACTION_DIGITS));

@@ -30,7 +30,9 @@
     The @ref i18nintro "i18n" formatting and plural functions accept a \c number or \c float with more
     than 100 fraction digits, as arithmetic such as <tt>(1n / 3n) * 100n / 100n</tt> produces. ICU rounds
     the full value to the requested fraction digits, and at most 100 are shown by default; such a value
-    used to raise <tt>I18N-NUMBER-ERROR</tt>. Decimal strings keep the 100-digit maximum.
+    used to raise <tt>I18N-NUMBER-ERROR</tt>. Decimal strings keep the 100-digit maximum. A \c float whose
+    string form uses an exponent, such as <tt>1.5e-07</tt> or <tt>1e+300</tt>, is also formatted from its exact
+    decimal value instead of raising <tt>I18N-NUMBER-ERROR</tt>.
 
     A \c number smaller than <tt>1e-17</tt> in magnitude converts to a string with its value, such as
     <tt>0.000000000000000000000000000001</tt> for <tt>1e-30n</tt>; the zeros that place its first

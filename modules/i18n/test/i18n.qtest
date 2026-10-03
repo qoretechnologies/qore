@@ -29,6 +29,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
         addTestCase("locale percentage formatting", \localePercentageFormattingTest());
         addTestCase("computed numbers with long fractions", \longComputedFractionTest());
+        addTestCase("floats in exponent notation", \floatExponentTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
@@ -534,6 +535,33 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-NUMBER-ERROR", "too many visible fraction digits", \I18n::plural_form(),
             (ratio, "en", {"=" + long_text: "exact", "other": "other"}));
         assertEq("0." + strmul("3", 100), I18n::format_number("0." + strmul("3", 100), "en-US"));
+    }
+
+    floatExponentTest() {
+        # floats convert to text with an exponent outside a fixed range; their exact decimal value is formatted
+        assertEq("1.5e-07", string(1.5e-7), "the float converts with an exponent");
+        assertEq("0.00000015", I18n::format_number(1.5e-7, "en-US"));
+        assertEq("0,00000015", I18n::format_number(1.5e-7, "de-DE"));
+        assertEq("-0.00000015", I18n::format_number(-1.5e-7, "en-US"));
+        assertEq("0.000015%", I18n::format_percent(1.5e-7, "en-US"));
+        assertEq("0.00%", I18n::format_percent(1.5e-7, "en-US", {"min_fraction_digits": 2, "max_fraction_digits": 2}));
+        assertEq("1.235e+20".lwr(), string(1.235e20).lwr(), "a large float converts with an exponent");
+        assertEq("123,500,000,000,000,000,000", I18n::format_number(1.235e20, "en-US"));
+        assertEq("1" + strmul(",000", 100), I18n::format_number(1e300, "en-US"));
+        assertEq("$0.00", I18n::format_currency(1.5e-7, "USD", "en-US"));
+
+        # the smallest subnormal double has more fraction digits than can be shown
+        assertRegex("^0\\.0{100}$", I18n::format_number(5e-324, "en-US"));
+        assertEq("0", I18n::format_number(5e-324, "en-US", {"max_fraction_digits": 3}));
+
+        assertEq("other", I18n::plural_category(1.5e-7, "en"));
+        assertEq("tiny", I18n::plural_form(1.5e-7, "en", {"=0.00000015": "tiny", "other": "other"}));
+
+        # decimal strings are caller-chosen text and do not take an exponent
+        assertThrows("I18N-NUMBER-ERROR", "must be a base-10 integer or decimal string", \I18n::format_number(),
+            ("1.5e-07", "en-US"));
+        assertThrows("I18N-NUMBER-ERROR", "must be a base-10 integer or decimal string", \I18n::plural_category(),
+            ("1e3", "en"));
     }
 
     pluralFormTest() {
