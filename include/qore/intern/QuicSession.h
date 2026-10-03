@@ -1247,6 +1247,13 @@ private:
     //! Get timer expiry without locking (caller must hold mtx_)
     DLLLOCAL ngtcp2_tstamp getExpiryLocked() const;
 
+    //! The timestamp to pass to the next ngtcp2_conn call (caller must hold mtx_)
+    /** timestamp(), but never earlier than the latest timestamp the connection has seen, since
+        ngtcp2 aborts on a timestamp that goes backwards; every timestamp given to conn_ must
+        come from here and be read under mtx_.
+    */
+    DLLLOCAL ngtcp2_tstamp nowLocked() const;
+
     //! Handle timer expiry without locking (caller must hold mtx_)
     DLLLOCAL int handleExpiryLocked(ExceptionSink* xsink);
 

@@ -324,10 +324,46 @@ std::string QuicSession::getCipherVersion() const {
 
 ngtcp2_tstamp QuicSession::timestamp() {
     struct timespec tp;
+#if defined(DARWIN) && defined(CLOCK_MONOTONIC_RAW)
+    // Darwin's CLOCK_MONOTONIC is not a hardware clock: libc computes it as
+    // gettimeofday() - kern.boottime with microsecond resolution, so it follows the wall clock
+    // and can step backwards when the calendar clock is set (e.g. a VM guest being resynced).
+    // CLOCK_MONOTONIC_RAW is mach_continuous_time(): truly monotonic, nanosecond resolution,
+    // and like CLOCK_MONOTONIC it keeps counting while the system sleeps (it is also what
+    // libc++ uses for std::chrono::steady_clock on Apple platforms).
+    clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+#else
     clock_gettime(CLOCK_MONOTONIC, &tp);
+#endif
     return static_cast<ngtcp2_tstamp>(tp.tv_sec) * NGTCP2_SECONDS
          + static_cast<ngtcp2_tstamp>(tp.tv_nsec);
 }
+
+ngtcp2_tstamp QuicSession::nowLocked() const {
+    ngtcp2_tstamp ts = timestamp();
+    // ngtcp2 requires the timestamps passed to one connection to never decrease (it asserts
+    // conn->log.last_ts <= ts on every call).  timestamp() is monotonic, but a backwards step
+    // of the underlying clock must not abort the process, so never hand the connection a time
+    // earlier than the latest one it has seen; the connection's clock then stands still until
+    // the real clock catches up.  Callers hold mtx_, so no other thread can advance the
+    // connection between this read and the ngtcp2 call that uses it.
+    if (conn_) {
+        ngtcp2_tstamp last = ngtcp2_conn_get_timestamp(conn_);
+        if (ts < last) {
+            ts = last;
+        }
+    }
+    return ts;
+}
+
+#ifdef DEBUG
+// test hook: start new connections this many nanoseconds ahead of timestamp(), which is the
+// state a connection is in after the clock has stepped back by that amount
+static ngtcp2_tstamp quic_test_clock_step_back_ns() {
+    const char* ms = getenv("QORE_QUIC_TEST_CLOCK_STEP_BACK_MS");
+    return ms ? static_cast<ngtcp2_tstamp>(strtoull(ms, nullptr, 10)) * 1000 * 1000 : 0;
+}
+#endif
 
 // ===== Constructor / Destructor =====
 
@@ -891,6 +927,9 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
     settings.initial_ts = timestamp();
+#ifdef DEBUG
+    settings.initial_ts += quic_test_clock_step_back_ns();
+#endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
     }
@@ -1041,6 +1080,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
     settings.initial_ts = timestamp();
+#ifdef DEBUG
+    settings.initial_ts += quic_test_clock_step_back_ns();
+#endif
 
     // Transport parameters
     ngtcp2_transport_params params;
@@ -1329,7 +1371,7 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     if (len > 0 && sock_) {
         sock_->markDataReceived();
     }
-    int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, timestamp());
+    int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, nowLocked());
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
@@ -1383,7 +1425,7 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
         ngtcp2_pkt_info pi{};
 
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
-                                       packets[i].data, packets[i].len, timestamp());
+                                       packets[i].data, packets[i].len, nowLocked());
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 break;  // connection shutting down — no more packets can be processed
@@ -1412,7 +1454,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         return -1;
     }
 
-    ngtcp2_tstamp ts = timestamp();
+    ngtcp2_tstamp ts = nowLocked();
     ngtcp2_path_storage ps;
     ngtcp2_path_storage_zero(&ps);
     ngtcp2_pkt_info pi{};
@@ -1680,7 +1722,7 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
         return -1;
     }
 
-    int rv = ngtcp2_conn_handle_expiry(conn_, timestamp());
+    int rv = ngtcp2_conn_handle_expiry(conn_, nowLocked());
     if (rv != 0) {
         if (rv == NGTCP2_ERR_IDLE_CLOSE) {
             // Idle timeout is a normal condition — the connection should be
@@ -1776,7 +1818,7 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
     // then re-check after writePacketsLocked flushes the result).
     ngtcp2_tstamp expiry = getExpiryLocked();
     if (expiry != UINT64_MAX) {
-        ngtcp2_tstamp now = timestamp();
+        ngtcp2_tstamp now = nowLocked();
         if (expiry <= now) {
             if (handleExpiryLocked(xsink) < 0) {
                 result.error = true;
@@ -3423,7 +3465,7 @@ ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
     }
 
     ngtcp2_ssize nwrite = ngtcp2_conn_write_connection_close(
-        conn_, &ps.path, &pi, buf, buflen, ccerr, timestamp());
+        conn_, &ps.path, &pi, buf, buflen, ccerr, nowLocked());
     return nwrite > 0 ? static_cast<ssize_t>(nwrite) : 0;
 }
 
@@ -4304,7 +4346,7 @@ int QuicSession::initiateMigration(
     path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&remote_storage);
     path.remote.addrlen = new_remote_len;
 
-    int rv = ngtcp2_conn_initiate_immediate_migration(conn_, &path, timestamp());
+    int rv = ngtcp2_conn_initiate_immediate_migration(conn_, &path, nowLocked());
     if (rv != 0) {
         const char* detail;
         switch (rv) {

@@ -42,6 +42,10 @@
     <tt>0.000000000000000000000000000001</tt> for <tt>1e-30n</tt>; the zeros that place its first
     significant digit used to be taken for conversion noise and the value converted to \c "0".
 
+    HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
+    such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
+    go backwards, and a connection never receives a time earlier than one it has already used.
+
     The URL function reference exports <tt>encode_url()</tt> and <tt>RESOLVE_URL_ENCODE</tt>
     correctly with modern Doxygen, including links from external module documentation.
 

@@ -173,6 +173,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HTTPClient CA options", \httpClientTest());
         addTestCase("HTTPClient CA with HTTP/3", \http3Test());
         addTestCase("HTTP/3 session tickets", \http3TicketTest());
+        addTestCase("HTTP/3 clock step back", \http3ClockStepBackTest());
         addTestCase("HttpClientIo CA options", \httpClientIoTest());
         addTestCase("RestClientIo CA options", \restClientIoTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
@@ -326,6 +327,33 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             "timeout": 10s});
         hc.acceptAllCertificates();
         assertEq("verified", hc.get("/"));
+    }
+
+    #! A QUIC connection survives the clock going back while it is open
+    /** ngtcp2 aborts the process when a connection is given a timestamp earlier than one it has
+        already seen.  On macOS this happened when the clock used for QUIC timestamps stepped
+        back along with the wall clock.  The DEBUG-only \c QORE_QUIC_TEST_CLOCK_STEP_BACK_MS hook
+        starts each new connection (client and server side) that far ahead of the clock, which is
+        the state a connection is in right after such a step, so every ngtcp2 call that follows
+        sees an earlier time than the connection's last one.
+    */
+    http3ClockStepBackTest() {
+        if (!inlist("debug", get_feature_list())) {
+            testSkip("the QUIC clock step-back hook requires a debug library build");
+        }
+        setenv("QORE_QUIC_TEST_CLOCK_STEP_BACK_MS", "200");
+        on_exit unsetenv("QORE_QUIC_TEST_CLOCK_STEP_BACK_MS");
+
+        HTTPClient hc({"url": "https://localhost:" + quic_good_port, "http_version": "3.0",
+            "ssl_verify_cert": True, "ssl_ca_file": ca_file, "timeout": 10s});
+        on_exit hc.disconnect();
+        assertEq("verified", hc.get("/"));
+        # a second request on the same connection, after the handshake, also goes through
+        assertEq("verified", hc.get("/"));
+        # a rejected certificate closes the connection from the same skewed state
+        hc = new HTTPClient({"url": "https://localhost:" + quic_wrong_port, "http_version": "3.0",
+            "ssl_verify_cert": True, "ssl_ca_file": ca_file, "timeout": 10s});
+        assertRejected(\hc.get(), "/", "HTTP/3 wrong host after a clock step back");
     }
 
     #! A session resumed with a ticket is not verified again, so a ticket must not be used with another trust configuration
