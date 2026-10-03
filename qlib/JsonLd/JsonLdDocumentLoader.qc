@@ -43,7 +43,7 @@ public class AbstractJsonLdDocumentLoader {
 
 #! HTTP-based JSON-LD document loader
 /** Loads documents via HTTP(S) with proper content negotiation for JSON-LD; the requests are sent with an
-    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> connection manager owned by the loader, so
+    @ref httpclientiointro "HttpClientIo" connection manager owned by the loader, so
     connections are reused across documents.
 
     Up to @ref MaxRedirects redirects are followed; the \c documentUrl of the loaded document is the URL of the
@@ -68,7 +68,7 @@ public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
 
     #! Creates a new HTTP document loader
     /** @param opts optional options for the
-        <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> connection manager (ex: TLS and proxy options);
+        @ref httpclientiointro "HttpClientIo" connection manager (ex: TLS and proxy options);
         the timeout and redirect options are set by this class
         @param connect_timeout connection timeout in ms (default 30000)
         @param read_timeout read timeout in ms (default 30000)

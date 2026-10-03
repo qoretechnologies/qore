@@ -302,7 +302,7 @@ public class OpenSearchVectorStore inherits QoreRagUtils::AbstractVectorStore {
 
 #! Factory that builds @ref OpenSearchVectorStore instances for the RAG provider registry
 /** Registered under backend identifier \c "opensearch" by the
-    @ref OpenSearchDataProvider module's init block.
+    @ref opensearchdataproviderintro "OpenSearchDataProvider" module's init block.
 */
 public class OpenSearchVectorStoreFactory inherits QoreRagUtils::AbstractVectorStoreFactory {
     #! Returns the backend identifier

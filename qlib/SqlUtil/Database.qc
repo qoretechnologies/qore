@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Database class definition
 
-/** Database.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** Database.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,9 +37,9 @@ public namespace SqlUtil {
     The driver-specific module's name is generated based on the db-driver's name with the first letter capitalized then with \c "SqlUtil" appended.
 
     For example:
-    - \c "oracle": <a href="../../OracleSqlUtil/html/index.html">OracleSqlUtil</a>
-    - \c "pgsql": <a href="../../PgsqlSqlUtil/html/index.html">PgsqlSqlUtil</a>
-    - \c "mysql": <a href="../../MysqlSqlUtil/html/index.html">MysqlSqlUtil</a>
+    - \c "oracle": @ref oraclesqlutilintro "OracleSqlUtil"
+    - \c "pgsql": @ref pgsqlsqlutilintro "PgsqlSqlUtil"
+    - \c "mysql": @ref mysqlsqlutilintro "MysqlSqlUtil"
 
     etc.
 */

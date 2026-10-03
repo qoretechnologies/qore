@@ -26,7 +26,7 @@
 public namespace HttpClientDataProvider {
 #! The HTTP data provider class, provides API classes as children
 /** Requests are made with a
-    <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a>; see
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientIo::HttpClientConnectionManager"; see
     @ref httpclientdataprovider_client
 */
 public class HttpClientDataProvider inherits HttpClientDataProviderBase {

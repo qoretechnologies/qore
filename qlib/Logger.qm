@@ -50,7 +50,7 @@ module Logger {
     The %Logger module (aka <b>Log4q</b>) adopts its primary design from the well known
     <a href="https://logging.apache.org/log4j/2.x">log4j</a> library
 
-    Other classes can be found in the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance
+    Other classes can be found in the @ref logger_binintro "logger_bin" module for performance
     reasons, such as:
     - @ref Qore::Logger::Logger "Logger"
     - @ref Qore::Logger::LoggerAppender "LoggerAppender" (abstract)
@@ -288,7 +288,7 @@ if (laq.isFull()) {
       constructor
 
     @subsection logger_v1_0 v1.0
-    - Split classes into the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance reasons
+    - Split classes into the @ref logger_binintro "logger_bin" module for performance reasons
       (<a href="https://github.com/qoretechnologies/qore/issues/4884">issue 4884</a>)
     - Added a reopen event for rotatable appenders
 

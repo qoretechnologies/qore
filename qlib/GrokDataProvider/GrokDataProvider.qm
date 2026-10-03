@@ -277,7 +277,7 @@ module GrokDataProvider {
 
     The %GrokDataProvider module provides a @ref dataproviderintro "data provider" API for xAI Grok services.
 
-    This module uses the async-capable @ref RestClientIo for HTTP communication; it supports HTTP/1.x, HTTP/2,
+    This module uses the async-capable @ref restclientiointro "RestClientIo" for HTTP communication; it supports HTTP/1.x, HTTP/2,
     and HTTP/3, with connection multiplexing on HTTP/2 and HTTP/3.
 
     @section grokdataprovider_examples Examples

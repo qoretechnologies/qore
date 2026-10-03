@@ -109,7 +109,7 @@ module ServerSentEventClient {
     - @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient": uses the legacy
       @ref Qore::HTTPClient "HTTPClient" for HTTP/1.1 SSE connections
     - @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo": uses
-      <a href="../../RestClientIo/html/index.html">RestClientIo</a> for async I/O across HTTP/1.x, HTTP/2, and
+      @ref restclientiointro "RestClientIo" for async I/O across HTTP/1.x, HTTP/2, and
       HTTP/3
 
     The @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" data
@@ -144,7 +144,7 @@ sse.observersReady();
       provider stops the event stream when events are stopped
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" opens the event stream with
-      <a href="../../RestClientIo/html/index.html">RestClientIo</a>: \c connect() raises error responses and
+      @ref restclientiointro "RestClientIo": \c connect() raises error responses and
       responses that are not event streams, the \c connected event is raised when the stream is open, the stream
       is canceled at once by \c disconnect(), the retry limit is applied to consecutive failed reconnects, and the
       \c reconnect(), \c isReconnecting(), \c getConnectionInfo(), \c getSafeUrl(), \c getSerialization(),
@@ -154,7 +154,7 @@ sse.observersReady();
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - \c SseConnectPollOperation (used by \c ServerSentEventConnection::startPollConnect()) and the
       \c ServerSentEventConnection ping make the SSE request with non-blocking
-      <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> I/O instead of \c HTTPClient, supporting HTTP/2
+      @ref httpclientiointro "HttpClientIo" I/O instead of \c HTTPClient, supporting HTTP/2
       and HTTP/3; the operation completes once the response headers have been validated, raises \c SOCKET-TIMEOUT
       when the connection's \c timeout expires, and now has a constructor taking the URL and options
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)

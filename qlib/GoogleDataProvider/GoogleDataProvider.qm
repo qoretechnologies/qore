@@ -52,7 +52,7 @@ module GoogleDataProvider {
 
     This module provides common services for Google REST API communications, including support for the Discovery API;
     see the following modules for data provider providing specific API support:
-    - <a href="../../modules/GoogleCalendarDataProvider/html/index.html">GoogleCalendarDataProvider</a>: Google Calendars
+    - @ref googlecalendardataproviderintro "GoogleCalendarDataProvider": Google Calendars
 
     @section googledataprovider_relnotes Release Notes
 

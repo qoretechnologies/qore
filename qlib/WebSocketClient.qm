@@ -133,7 +133,7 @@ module WebSocketClient {
 
     To use this module, use \c "%requires WebSocketClient" in your code.
 
-    This module automatically uses the <a href="../../WebSocketUtil/html/index.html">WebSocketUtil</a> module for
+    This module automatically uses the @ref websocketutilintro "WebSocketUtil" module for
     encoding and decoding web socket messages.
 
     The module supports WebSocket connections over all HTTP protocol versions:
@@ -267,7 +267,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       fails for any reason; the fallback is skipped only when a specific HTTP version was requested or when
       HTTP/3 was explicitly required, and if the HTTP/1.1 attempt also fails its error is reported
     - \c WebSocketPingPollOperation (used by \c WebSocketConnectionObject::startPollConnect()) makes the
-      WebSocket handshake with non-blocking <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> I/O instead
+      WebSocket handshake with non-blocking @ref httpclientiointro "HttpClientIo" I/O instead
       of \c HTTPClient: an HTTP/1.1 \c Upgrade handshake by default, or an extended \c CONNECT handshake
       (RFC 8441 / RFC 9220) when the \c http_version option is \c "2.0" or \c "3.0"; the WebSocket is closed
       once the handshake has been validated, \c SOCKET-TIMEOUT is raised when the connection's \c timeout
@@ -415,7 +415,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
     @subsection wsc_v1_6 v1.6
     - added the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
-      <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
+      @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
     - fixed a bug where the event loop thread would immediately terminate after a reconnection
       (<a href="https://github.com/qoretechnologies/qore/issues/2061">issue 2061</a>)

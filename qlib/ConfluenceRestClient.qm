@@ -452,7 +452,7 @@ public class ConfluenceRestClientIo inherits RestClientIo::RestClientIo, Conflue
         pay for the call again.
 
         @note this client is not retargeted at the site it discovers, because a
-        <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> URL is immutable
+        @ref restclientiointro "RestClientIo" URL is immutable
         by design - its connection manager pools by URL.  The site is persisted on the connection, so
         the next client made from it reaches the site.
     */

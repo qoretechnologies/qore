@@ -242,7 +242,7 @@ module SalesforceRestDataProvider {
     application.  When it is not installed, nothing changes here.
 
     Note that the event providers appear only under a
-    <a href="../../SalesforceRestClient/html/index.html#salesforcerestclientintro">SalesforceRestConnection</a>,
+    @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection",
     because dynamic children are exposed only when this provider was constructed from a connection.
 
     @section salesforcerestdataprovider_relnotes Release Notes

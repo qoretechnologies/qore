@@ -42,7 +42,7 @@ module HttpUtil {
     @section httputilintro HttpUtil Module Introduction
 
     The %HttpUtil module provides shared HTTP utility functions used by both
-    the HTTP server (<a href="../../HttpServerUtil/html/index.html">HttpServerUtil</a>) and HTTP client (<a href="../../HttpClientIo/html/index.html">HttpClientIo</a>)
+    the HTTP server (@ref httpserverutilintro "HttpServerUtil") and HTTP client (@ref httpclientiointro "HttpClientIo")
     modules.
 
     Currently provides RFC 6265 cookie handling:

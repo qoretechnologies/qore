@@ -58,7 +58,7 @@ module RestClientIo {
 
     @section restclientiointro Introduction
 
-    The %RestClientIo module provides a REST client API built on top of the @ref HttpClientIo module,
+    The %RestClientIo module provides a REST client API built on top of the @ref httpclientiointro "HttpClientIo" module,
     enabling HTTP/1.1, HTTP/2, and HTTP/3 connections for REST API calls.
 
     Unlike @ref RestClient::RestClient "RestClient" which uses a single HTTP/1.1 connection,
@@ -1349,7 +1349,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             a generic client.  This used to construct @ref RestClientIo unconditionally, which
             silently downgraded every subclass: a client that customizes authentication or
             headers lost that behaviour on the copy, and
-            <a href="../../SalesforceRestClient/html/index.html#salesforcerestclientintro">SalesforceRestClientIo</a>
+            @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo"
             in particular lost the OAuth2 hook that captures the Salesforce org identity, so the
             copy would drop the instance URL on its next token refresh.
 

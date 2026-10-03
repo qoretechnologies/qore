@@ -65,7 +65,7 @@ module Swagger {
     - @ref Swagger::SwaggerLoader "SwaggerLoader": provides static methods for loading %Swagger schemas
     - @ref Swagger::SwaggerSchema "SwaggerSchema": the %Swagger schema object for client/server REST API validation and example code and message generation
 
-    This class is most often used in the <a href="../../RestClientIo/html/index.html">RestClientIo</a> and <a href="../../RestHandler/html/index.html">RestHandler</a> modules to register a
+    This class is most often used in the @ref restclientiointro "RestClientIo" and @ref resthandlerintro "RestHandler" modules to register a
     <a href="https://swagger.io/">Swagger 2.0</a> schema for
     automatic REST API validation.
 

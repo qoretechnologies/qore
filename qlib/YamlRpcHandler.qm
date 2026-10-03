@@ -57,7 +57,7 @@ module YamlRpcHandler {
 
     This module provides the @ref YamlRpcHandler::YamlRpcHandler "YamlRpcHandler" class which can be used to provide an RPC handler for the HttpServer class provided by the HttpServer module.
 
-    See the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient module</a> for a description of the YAML-RPC protocol implemented here.
+    See the @ref yamlrpcclientintro "YamlRpcClient module" for a description of the YAML-RPC protocol implemented here.
 
     @section example Example Usage
     @code{.py}

@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
 CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
@@ -93,6 +94,95 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                                     capture_output=True, text=True, timeout=60)
             self.assertNotEqual(0, result.returncode)
             self.assertIn("nonexistentintro", result.stdout + result.stderr)
+
+    def test_same_named_class_files_are_isolated_across_final_passes(self):
+        doxygen = shutil.which("doxygen")
+        if not doxygen:
+            self.skipTest("Doxygen is required for rendered-link verification")
+        with tempfile.TemporaryDirectory(prefix="qore-qlib-doc-collision-") as directory:
+            root = Path(directory)
+            source, build = root / "source with spaces", root / "build with spaces"
+            for name, peer in (("App", "Reference"), ("Reference", "App")):
+                module = source / "qlib" / name
+                module.mkdir(parents=True)
+                (module / f"{name}.qm").write_text(
+                    f'/** @mainpage {name}\n@section {name.lower()}intro Introduction\n'
+                    f'@ref {name}::Shared "Local class" and @ref {peer.lower()}intro "Peer"\n*/\n')
+                (module / "Shared.qc").write_text(
+                    f'namespace {name} {{ /** The {name} class. */ class Shared {{}}; }}\n')
+            # Model qdx's documented output contract: separated .qc files are
+            # emitted beside the requested .qm output, retaining their basenames.
+            (source / "qdx.py").write_text(r'''import sys
+from pathlib import Path
+if "--post" in sys.argv:
+    sys.exit(0)
+if any(arg.endswith("Doxyfile.cmake.tmpl") for arg in sys.argv):
+    index = next(i for i, arg in enumerate(sys.argv) if arg.endswith("Doxyfile.cmake.tmpl"))
+    config = Path(sys.argv[index + 1])
+    name = config.name.removeprefix("Doxyfile.")
+    output = Path(next(arg for arg in sys.argv if arg.startswith("-M=")).split(":", 1)[1])
+    build = config.parent.parent
+    config.write_text(f"""PROJECT_NAME = {name}
+INPUT = "{output}" "{output.parent / 'Shared.qc.dox.h'}"
+OUTPUT_DIRECTORY = "{build / 'docs/modules' / name}"
+GENERATE_TAGFILE = "{build / (name + '.tag')}"
+GENERATE_LATEX = NO
+QUIET = YES
+WARN_IF_DOC_ERROR = YES
+WARN_AS_ERROR = YES
+""")
+else:
+    source, output = map(Path, sys.argv[-2:])
+    if source.is_dir():
+        source = source / (source.name + ".qm")
+    output.write_text(source.read_text())
+    (output.parent / "Shared.qc.dox.h").write_text((source.parent / "Shared.qc").read_text())
+''')
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(ModuleDocCollision NONE)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(QORE_BUILD_AOT_MODULES OFF)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+set(QORE_USER_MODULES_DIR share/qore-modules)
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "{doxygen}")
+set(QORE_QDX_COMMAND "{sys.executable}" "${{CMAKE_SOURCE_DIR}}/qdx.py")
+foreach(target qore docs docs-lang docs-lib)
+    add_custom_target(${{target}})
+endforeach()
+set(QORE_DOC_EXTRA_MODULES_App Reference)
+set(QORE_DOC_EXTRA_MODULES_Reference App)
+qore_user_module("qlib/App")
+qore_user_module("qlib/Reference")
+QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
+''')
+            result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            # Serial initial passes reproduce the overwrite deterministically;
+            # this must work without relying on a lucky parallel schedule.
+            for name in ("App", "Reference"):
+                result = subprocess.run([CMAKE, "--build", str(build), "--target", f"docs-{name}"],
+                                        capture_output=True, text=True, timeout=60)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            for name in ("App", "Reference"):
+                result = subprocess.run([doxygen, str(build / f"doxygen/Doxyfile.{name}.final")],
+                                        cwd=build, capture_output=True, text=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertEqual("", result.stderr)
+                html = (build / f"docs/modules/{name}/html/index.html").read_text()
+                tag = ET.parse(build / f"{name}.tag").getroot()
+                filename = next(compound.findtext("filename") for compound in tag.findall("compound")
+                                if compound.findtext("name") == f"{name}::Shared")
+                self.assertIn(f'href="{filename}"', html)
+                self.assertTrue((build / f"docs/modules/{name}/html" / filename).is_file())
+                generated = build / f"doxygen/qlib/{name}/Shared.qc.dox.h"
+                self.assertEqual((source / f"qlib/{name}/Shared.qc").read_text(), generated.read_text())
+            self.assertFalse((build / "doxygen/qlib/Shared.qc.dox.h").exists())
+            result = subprocess.run([CMAKE, "--build", str(build), "--target", "docs", "-j2"],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertNotIn("warning:", (result.stdout + result.stderr).lower())
 
     def test_documentation_only_dependencies(self):
         for docs_enabled in (False, True):

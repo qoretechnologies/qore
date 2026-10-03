@@ -106,7 +106,7 @@ module Util {
 
     @subsection util_3_0 Util 3.0
     - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
-      send HTTP requests with the <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which is
+      send HTTP requests with the @ref httpclientiointro "HttpClientIo" module, which is
       loaded at runtime; the timeouts, redirect handling, and the errors raised for error responses and redirects are
       unchanged; without a \c path argument, @ref Util::get_file_from_http() "get_file_from_http()" now requests the
       path of the URL as documented instead of \c "/", a relative \c path is appended to the path of the URL, and a
@@ -2519,7 +2519,7 @@ const HttpRetrievalTimeout = 5m;
 const HttpRetrievalMaxRedirects = 5;
 
 #! Retrieves file data from an HTTP URL
-/** The request is sent with the <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which is
+/** The request is sent with the @ref httpclientiointro "HttpClientIo" module, which is
     loaded when the function is first called; up to 5 redirects are followed.  User information in the URL is sent
     as HTTP basic authentication, unless an \c Authorization header is given in
     @ref Util::UrlRetrievalOptions::http_headers "http_headers".
@@ -2540,7 +2540,7 @@ const HttpRetrievalMaxRedirects = 5;
     a location with no or an invalid host or with an unsupported scheme)
 
     @note connection and transport errors are raised by
-    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> (ex: \c HTTPCLIENT-CONNECT-ERROR,
+    @ref httpclientiointro "HttpClientIo" (ex: \c HTTPCLIENT-CONNECT-ERROR,
     \c HTTPCLIENT-TIMEOUT)
 
     @since Util 1.5

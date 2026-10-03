@@ -43,9 +43,9 @@ module AvroUtil {
     @section avroutilintro AvroUtil Module Introduction
 
     The %AvroUtil module maps an \c AvroSchema from the
-    <a href="../../avro/html/index.html#avrointro">avro</a> binary module to an
+    @ref avrointro "avro" binary module to an
     \c AbstractDataProviderType, so that Avro-described data can be exposed through the
-    <a href="../../DataProvider/html/index.html#dataproviderintro">DataProvider</a> API — request
+    @ref dataproviderintro "DataProvider" API — request
     and response types for a message stream, record types for a container file, and so on.
 
     It is the Avro counterpart of \c GrpcTypeHelper in the \c GrpcDataProvider module, which does

@@ -682,7 +682,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         with \c done set.  Tool calls, reasoning blocks, usage, and the stop
         reason are read from the events by @ref updateOpenAiStreamStateFromRaw()
         and @ref getOpenAiToolCallDeltas(), for example by
-        <a href="../../QoreLlmUtils/html/index.html">LlmBackend::chatStreamCollect()</a>.
+        @ref QoreLlmUtils::LlmBackend::chatStreamCollect "LlmBackend::chatStreamCollect()".
 
         @param messages conversation history
         @param callback receives each event as it arrives

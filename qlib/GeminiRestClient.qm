@@ -527,7 +527,7 @@ public class GeminiRestConnection inherits RestClient::RestConnection {
     @ref GeminiRestClientIo for transport.  The provider handles
     Gemini-native body construction, response parsing, schema sanitization
     (Gemini's JSON Schema subset is stricter than OpenAI's — see
-    <a href="../../GeminiBodyShape/html/index.html">GeminiBodyShape::sanitizeSchema()</a>), tool-call extraction, finish-reason mapping,
+    @ref GeminiBodyShape::sanitizeSchema "GeminiBodyShape::sanitizeSchema()"), tool-call extraction, finish-reason mapping,
     and OpenAI-compatible facade adapter hooks (\c toolConfig in place of
     \c tool_choice, \c responseSchema in place of \c response_format,
     \c usageMetadata + \c candidates[].finishReason on stream events).

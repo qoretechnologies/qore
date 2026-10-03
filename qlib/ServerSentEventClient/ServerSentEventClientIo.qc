@@ -28,7 +28,7 @@ public namespace ServerSentEventClient {
 
 #! SSE client using asynchronous I/O across HTTP/1.x, HTTP/2, and HTTP/3
 /** This class provides the same Observable-based API as @ref ServerSentEventClient; the event stream is opened with
-    <a href="../../RestClientIo/html/index.html">RestClientIo</a>, which validates the response and decodes any
+    @ref restclientiointro "RestClientIo", which validates the response and decodes any
     content encoding.
 
     @par Example:

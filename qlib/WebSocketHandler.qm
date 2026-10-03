@@ -49,7 +49,7 @@ module WebSocketHandler {
     @section websockethandlerintro Introduction to the WebSocketHandler Module
 
     The %WebSocketHandler module provides a handler to be used with the
-    <a href="../../HttpServer/html/index.html">HttpServer module</a> to provide server-side
+    @ref httpserverintro "HttpServer module" to provide server-side
     <a href="http://tools.ietf.org/html/rfc6455">RFC-6455 based WebSocket services</a> to clients.
 
     To use this module, use \c "%requires WebSocketHandler" and \c "%requires HttpServer" in your code.

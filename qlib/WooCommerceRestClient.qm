@@ -68,7 +68,7 @@ module WooCommerceRestClient {
       it handles authentication via HTTP Basic Auth using consumer key and secret
     - @ref WooCommerceRestClient::WooCommerceRestClientIo "WooCommerceRestClientIo":
       the asynchronous REST client for the WooCommerce API, based on
-      <a href="../../RestClientIo/html/index.html">RestClientIo</a>, with the same options and authentication
+      @ref restclientiointro "RestClientIo", with the same options and authentication
     - @ref WooCommerceRestClient::WooCommerceRestConnection "WooCommerceRestConnection":
       provides a connection object to WooCommerce services (based on the
       @ref connectionproviderintro "ConnectionProvider" module)
@@ -479,7 +479,7 @@ WooCommerceRestClientIo wc({
 hash<RestResponseInfo> resp = wc.restGet("products?per_page=10");
     @endcode
 
-    @note like all <a href="../../RestClientIo/html/index.html">RestClientIo</a> clients, this class sends request
+    @note like all @ref restclientiointro "RestClientIo" clients, this class sends request
     paths verbatim; query arguments must already be percent-encoded
 */
 public class WooCommerceRestClientIo inherits RestClientIo::RestClientIo {

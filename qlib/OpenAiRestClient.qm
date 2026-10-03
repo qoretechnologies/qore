@@ -980,7 +980,7 @@ class OpenAiStrictOutputSchema {
 #! LLM provider that dispatches to OpenAI-compatible \c /v1/chat/completions endpoints
 /** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract for any
     backend that speaks the OpenAI chat-completions wire format (OpenAI,
-    Azure OpenAI, vLLM, SGLang via <a href="../../SGLangRestClient/html/index.html">SGLangLlmProvider</a>, any compatible
+    Azure OpenAI, vLLM, SGLang via @ref SGLangRestClient::SGLangLlmProvider "SGLangLlmProvider", any compatible
     gateway).  Owns its own @ref RestClientIo::RestClientIo and uses the
     standard \c Authorization: \c Bearer header for authentication.
 
@@ -1021,9 +1021,9 @@ class OpenAiStrictOutputSchema {
     vendor-specific URL.
 
     Existing in-repo subclasses:
-    - <a href="../../SGLangRestClient/html/index.html">SGLangLlmProvider</a> — mode \c "sglang"
-    - <a href="../../GrokRestClient/html/index.html">GrokLlmProvider</a> — mode \c "grok"
-    - <a href="../../PerplexityRestClient/html/index.html">PerplexityLlmProvider</a> — mode \c "perplexity"
+    - @ref SGLangRestClient::SGLangLlmProvider "SGLangLlmProvider" — mode \c "sglang"
+    - @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — mode \c "grok"
+    - @ref PerplexityRestClient::PerplexityLlmProvider "PerplexityLlmProvider" — mode \c "perplexity"
       (overrides @ref getChatCompletionsPath() since Perplexity's path is
       \c /chat/completions, not \c /v1/chat/completions)
 */

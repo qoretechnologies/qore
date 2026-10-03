@@ -51,8 +51,8 @@ module WebSocketUtil {
     The %WebSocketUtil module provides common client and server support for <a href="http://tools.ietf.org/html/rfc6455">RFC-6455 based WebSocket protocol</a> implementations in %Qore.
 
     This module is used by the following modules:
-    - <a href="../../WebSocketClient/html/index.html">WebSocketClient</a>: provides an event-driven client API for connecting to WebSocket servers
-    - <a href="../../WebSocketHandler/html/index.html">WebSocketHandler</a>: provides an interface to the %Qore <a href="../../HttpServer/html/index.html">HttpServer</a> module for implementing server-side WebSocket services
+    - @ref websocketclientintro "WebSocketClient": provides an event-driven client API for connecting to WebSocket servers
+    - @ref websockethandlerintro "WebSocketHandler": provides an interface to the %Qore @ref httpserverintro "HttpServer" module for implementing server-side WebSocket services
 
     To use this module directly, use \c "%requires WebSocketUtil" in your code, otherwise it's recommended to use one of the
     higher-level modules listed above.

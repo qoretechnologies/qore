@@ -68,7 +68,7 @@ module FhirRestClient {
       paginated search, terminology operations, common FHIR resource builders, validation,
       and OperationOutcome error mapping
     - @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo": the same FHIR
-      helpers with a non-blocking <a href="../../RestClientIo/html/index.html">RestClientIo</a> client
+      helpers with a non-blocking @ref restclientiointro "RestClientIo" client
       supporting HTTP/1.1, HTTP/2, and HTTP/3
     - @ref FhirRestClient::FhirRestClientBase "FhirRestClientBase": the FHIR
       helper methods, constants, and path and Bundle builders shared by both clients

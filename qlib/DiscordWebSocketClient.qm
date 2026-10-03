@@ -77,7 +77,7 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
-    - the gateway URL is discovered with <a href="../../HttpClientIo/html/index.html">HttpClientIo</a>;
+    - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
       accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
@@ -1246,7 +1246,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
         \c body keys
         @throw DISCORD-ERROR the response does not give a gateway URL
 
-        @note the request is sent with <a href="../../HttpClientIo/html/index.html">HttpClientIo</a>, which raises
+        @note the request is sent with @ref httpclientiointro "HttpClientIo", which raises
         connection and transport errors (ex: \c HTTPCLIENT-CONNECT-ERROR, \c HTTPCLIENT-TIMEOUT)
 
         @since DiscordWebSocketClient 1.2 the \a discovery_url argument

@@ -53,7 +53,7 @@ module DebugHandler {
 
     @section debughandlerintro Introduction to the DebugHandler Module
 
-    The %DebugHandler module provides a handler to be used with @ref HttpServer to support server-side
+    The %DebugHandler module provides a handler to be used with @ref httpserverintro "HttpServer" to support server-side
     %Qore-language debugging.  Multiple websocket clients may connect to the websocket server and debug
     simultaneously.
 

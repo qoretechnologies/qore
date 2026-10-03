@@ -3150,8 +3150,10 @@ MACRO (QORE_USER_MODULE _module_file)
         # get module name
         #message(STATUS "Preparing generation of documentation for module: ${f}")
 
-        # prepare directories for the documentation
-        file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/doxygen/qlib/)
+        # qdx emits separated class files beside the main module output. Keep
+        # each module isolated so identical .qc basenames cannot overwrite
+        # another module's inputs before its final Doxygen pass.
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/doxygen/qlib/${f}")
 
         # prepare needed vars
         set(MOD_DOXYFILE "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
@@ -3182,10 +3184,10 @@ MACRO (QORE_USER_MODULE _module_file)
             foreach(i ${EXTRA_FILES})
                 list(APPEND _qdx_extra_file_args --extra-files ${i})
             endforeach()
-            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE} --extra-prefix ${_module_src_dir}/ ${_qdx_extra_file_args})
+            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE} --extra-prefix ${_module_src_dir}/ ${_qdx_extra_file_args})
             unset(_qdx_extra_file_args)
         else (EXTRA_FILES)
-            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE})
+            set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_SOURCE_DIR}/doxygen/qlib/Doxyfile.cmake.tmpl ${MOD_DOXYFILE})
         endif (EXTRA_FILES)
         # malformed documentation tables (see design/doc-tables.md) are only warnings by default so
         # that out-of-tree modules keep building; QORE_DOX_TABLE_STRICT promotes them to errors
@@ -3193,7 +3195,7 @@ MACRO (QORE_USER_MODULE _module_file)
         if (QORE_DOX_TABLE_STRICT)
             set(_qdx_table_arg --strict-tables)
         endif ()
-        set(QDX_QMDOXH_ARGS ${_qdx_table_arg} ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h)
+        set(QDX_QMDOXH_ARGS ${_qdx_table_arg} ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h)
 
         set(_qore_user_java_step)
         if (QORE_GENERATE_JAVA_BINDINGS)
@@ -3618,7 +3620,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
         string (REPLACE ";" " " TAGFILES "${TAGFILES}")
 
         set(_dox_output ${CMAKE_BINARY_DIR}/docs/${f})
-        #set(_dox_input ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h)
+        #set(_dox_input ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h)
         set(_dox_input "")
         foreach(fn0 ${_mod_targets})
             get_filename_component(fn1 ${fn0} NAME)

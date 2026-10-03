@@ -66,8 +66,8 @@ module OpenApi3 {
     - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema": the %OpenApi3 schema object for client/server REST API
       validation and example code and message generation
 
-    This class is most often used in the <a href="../../RestClientIo/html/index.html">RestClientIo</a> and
-    <a href="../../RestHandler/html/index.html">RestHandler</a> modules to register a
+    This class is most often used in the @ref restclientiointro "RestClientIo" and
+    @ref resthandlerintro "RestHandler" modules to register a
     <a href="https://swagger.io/">OpenApi 3</a> schema for automatic REST API validation.
 
     JSON and YAML serialization and deserialization are supported; XML is currently not supported.

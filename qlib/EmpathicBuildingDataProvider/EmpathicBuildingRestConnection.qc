@@ -198,7 +198,7 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
 }
 
 #! The asynchronous REST client for the Haltian Empathic Building API
-/** This class accepts the options of <a href="../../RestClientIo/html/index.html">RestClientIo</a> and authenticates
+/** This class accepts the options of @ref restclientiointro "RestClientIo" and authenticates
     like @ref EmpathicBuildingRestClient "EmpathicBuildingRestClient":
     - \c token: a bearer token to send in requests
     - \c username and \c password: credentials for the Haltian login API (\c v1/login); they are not sent with
@@ -235,7 +235,7 @@ public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
     }
 
     #! Creates the object with the given options
-    /** @param opts the options of <a href="../../RestClientIo/html/index.html">RestClientIo</a> plus
+    /** @param opts the options of @ref restclientiointro "RestClientIo" plus
         \c refresh_token; see the class description for the authentication options
         @param shared_mgr an optional shared connection manager
 

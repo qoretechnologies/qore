@@ -51,7 +51,7 @@ module GeminiBodyShape {
     translate between the generic @ref QoreLlmUtils::ChatMessage /
     @ref QoreLlmUtils::ChatResponse types and the Google Gemini
     \c generateContent wire format.  The native provider in
-    <a href="../../GeminiRestClient/html/index.html">GeminiRestClient</a>
+    @ref geminirestclientintro "GeminiRestClient"
     uses these helpers; the Vertex AI Gemini-on-Vertex pathway also depends
     on them so the two providers stay in lock-step as Gemini evolves.
 

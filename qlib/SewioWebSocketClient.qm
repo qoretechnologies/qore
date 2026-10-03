@@ -59,7 +59,7 @@ module SewioWebSocketClient {
 
     To use this module, use \c "%requires SewioWebSocketClient" in your code.
 
-    This module automatically uses the <a href="../../WebSocketClient/html/index.html">WebSocketClient</a> module for encoding and decoding web socket messages.
+    This module automatically uses the @ref websocketclientintro "WebSocketClient" module for encoding and decoding web socket messages.
 
     All the public symbols in the module are defined in the SewioWebSocketClient namespace.
 

@@ -297,9 +297,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     @section filelocationhandler_http HTTP and REST Locations
 
     \c "http://" and \c "https://" locations are retrieved with the
-    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which supports HTTP/1.1, HTTP/2, and
+    @ref httpclientiointro "HttpClientIo" module, which supports HTTP/1.1, HTTP/2, and
     HTTP/3; \c "rest://" and \c "rests://" locations are retrieved with
-    <a href="../../RestClientIo/html/index.html">RestClientIo</a> clients.  Both modules depend on this module, so they
+    @ref restclientiointro "RestClientIo" clients.  Both modules depend on this module, so they
     are loaded when an HTTP or REST location is first used rather than declared as dependencies.
 
     |!Operation|!Implementation

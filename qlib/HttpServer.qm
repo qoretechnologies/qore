@@ -61,7 +61,7 @@ module HttpServer {
 
     The HttpServer module uses async I/O for all connection handling and supports HTTP/1.x, HTTP/2, and HTTP/3.
     Async I/O uses a non-blocking I/O controller to accept connections and read headers efficiently, then dispatches
-    request processing to the thread pool. See the \c httpserverasynciointro "HttpServerAsyncIo" module for
+    request processing to the thread pool. See the @ref httpserverasynciointro "HttpServerAsyncIo" module for
     additional details.
 
     To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.qr for an example program
@@ -76,20 +76,20 @@ module HttpServer {
       by this module
 
     See also:
-    - <a href="../../RestHandler/html/index.html">RestHandler</a>: a module providing a handler framework for this
+    - @ref resthandlerintro "RestHandler": a module providing a handler framework for this
       module for implementing server-side REST services
-    - <a href="../../WebSocketHandler/html/index.html">WebSocketHandler</a>: a module providing a handler framework
+    - @ref websockethandlerintro "WebSocketHandler": a module providing a handler framework
       for this module for implementing server-side WebSocket services
-    - <a href="../../WebUtil/html/index.html">WebUtil</a>: a module providing higher-level HTTP services using this
+    - @ref webutilintro "WebUtil": a module providing higher-level HTTP services using this
       module as a base as well as providing support for dynamic template-based HTML rendering (ie rendering qhtml
       files which are a mix of HTML and Qore code)
-    - <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>:
+    - @ref jsonrpchandlerintro "JsonRpcHandler":
       provides infrastructure for implementing JSON-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/yaml/current/YamlRpcHandler/html/index.html">YamlRpcHandler</a>:
+    - @ref yamlrpchandlerintro "YamlRpcHandler":
       provides infrastructure for implementing YAML-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/xml/current/XmlRpcHandler/html/index.html">XmlRpcHandler</a>:
+    - <a href="https://docs.qore.org/modules/xml/current/XmlRpcHandler/html/index.html#xmlrpchandlerintro">XmlRpcHandler</a>:
       provides infrastructure for implementing XML-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/xml/current/SoapHandler/html/index.html">SoapHandler</a>: provides
+    - <a href="https://docs.qore.org/modules/xml/current/SoapHandler/html/index.html#soaphandlerintro">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
     @section httpserver_after_send Running Code After the Response Has Been Sent
@@ -535,7 +535,7 @@ log("started listener on %s", lh.desc);
     @subsection http033 HttpServer 0.3.3
     - updated to a user module
     - added support for custom redirects from user handlers
-    - use the <a href="../../Mime/html/index.html">Mime</a> module for mime definitions
+    - use the @ref mimeintro "Mime" module for mime definitions
 
     @subsection http032 HttpServer 0.3.2
     - added support for listeners with specific handler lists

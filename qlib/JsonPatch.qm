@@ -53,7 +53,7 @@ module JsonPatch {
 
     A JSON Patch is a list of operations that transform one document into another.  Protocols
     that stream state to a client use it to send only what changed instead of the whole
-    document; @ref AgUi "the AG-UI module" is one such user, and the format is common in REST
+    document; @ref aguiintro "the AG-UI module" is one such user, and the format is common in REST
     APIs (\c application/json-patch+json) as well.
 
     Provided here:

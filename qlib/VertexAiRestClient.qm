@@ -60,8 +60,8 @@ module VertexAiRestClient {
     @section vertexairestclientintro Introduction to the VertexAiRestClient Module
 
     The %VertexAiRestClient module wraps Google Vertex AI for use with the
-    <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> agent stack and the
-    <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> RAG pipeline.  The provider
+    @ref qorellmutilsintro "QoreLlmUtils" agent stack and the
+    @ref qoreragutilsintro "QoreRagUtils" RAG pipeline.  The provider
     reuses the @ref geminibodyshapeintro "GeminiBodyShape" pure-static
     shapers so the Gemini-on-Vertex wire body is bit-for-bit identical to
     the native Gemini REST API; only the URL and authentication differ.

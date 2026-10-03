@@ -155,7 +155,7 @@ public namespace Schema {
             }
         }
 
-        #! returns a callback option hash usable with <a href="../../SqlUtil/html/index.html">SqlUtil</a> schema operations
+        #! returns a callback option hash usable with @ref sqlutilintro "SqlUtil" schema operations
         hash<auto> getCallbacks(bool force = False) {
             return (
                 "info_callback": \infoCallback(),

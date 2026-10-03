@@ -43,7 +43,7 @@ module QoreRagTypes {
     @section qoreragtypesintro QoreRagTypes Module Introduction
 
     The %QoreRagTypes module provides the provider-neutral type and abstract
-    class layer that <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> and individual
+    class layer that @ref qoreragutilsintro "QoreRagUtils" and individual
     RAG REST client modules (OpenAiRestClient, GeminiRestClient,
     VoyageRestClient, SGLangRestClient, BgeM3RestClient) share.  It exists
     as a separate module so that REST client modules can depend on the
@@ -222,7 +222,7 @@ public hashdecl EmbedderConfig {
     *timeout timeout;
     #! Default connection timeout for HTTP-based embedders (per-call \c opts override takes precedence)
     /** Forwarded to the underlying REST client at construction; ignored by
-        non-HTTP backends.  Note: <a href="../../RestClientIo/html/index.html">RestClientIo</a> only applies a connection
+        non-HTTP backends.  Note: @ref restclientiointro "RestClientIo" only applies a connection
         timeout to NEW connections, so a per-call \c connect_timeout in
         @ref AbstractEmbedder::encodeBatch() "encodeBatch()" causes the
         embedder to use a transient REST client for that call.
@@ -269,7 +269,7 @@ public class AbstractTokenizerResolver {
     /** Implementations map the requirement to a tokenizer they have access to
         (typically a pre-installed/bundled \c tokenizer.json) and return a ready
         token counter — an object with an <tt>int countTokens(string)</tt> method
-        (e.g. <a href="../../QoreTokenizerUtils/html/index.html">TokenCounter</a>).  The return type is \c *object
+        (e.g. @ref QoreTokenizerUtils::TokenCounter "TokenCounter").  The return type is \c *object
         so this provider-neutral module does not depend on the tokenizer module;
         the result is suitable for @ref AbstractEmbedder::setTokenCounter().
 
@@ -593,7 +593,7 @@ public class AbstractEmbedder {
     }
 
     #! Returns the token counter for chunk sizing, or @ref NOTHING if none is set
-    /** When set (typically a <a href="../../QoreTokenizerUtils/html/index.html">TokenCounter</a>, but any object
+    /** When set (typically a @ref QoreTokenizerUtils::TokenCounter "TokenCounter", but any object
         with an <tt>int countTokens(string)</tt> method works), a chunker can size
         chunks in this embedding model's own tokens — see
         @ref AbstractChunker::setTokenCounter().  Typed as \c *object so this
@@ -857,7 +857,7 @@ public class AbstractChunker {
     #! Sets the token counter used to size chunks
     /** When set, @ref approximateTokens() counts tokens with this counter (the
         embedding model's own tokenizer) instead of the character heuristic, so
-        chunks are sized in the right model's tokens.  A <a href="../../QoreRagUtils/html/index.html">RagPipeline</a>
+        chunks are sized in the right model's tokens.  A @ref QoreRagUtils::RagPipeline "RagPipeline"
         auto-injects its embedder's counter (@ref AbstractEmbedder::getTokenCounter())
         here at construction.
 
@@ -1051,8 +1051,8 @@ public class AbstractChunkerFactory {
 
 #! Central registry of RAG provider factories (embedders, rerankers, vector stores)
 /** Mirrors the FactoryMap pattern from
-    <a href="../../DataProvider/html/index.html">DataProvider::DataProvider::registerFactory</a> and the LLM-side
-    <a href="../../QoreLlmTypes/html/index.html">LlmProviderRegistry</a>.  Each of the three role-specific
+    @ref DataProvider::DataProvider::registerFactory "DataProvider::DataProvider::registerFactory" and the LLM-side
+    @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry".  Each of the three role-specific
     factory maps points a backend / type string at the Qore module that
     supplies the matching factory; the module is lazy-loaded on first lookup.
 

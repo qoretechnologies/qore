@@ -47,9 +47,9 @@ module HttpServerUtil {
 
     @section httpserverutilintro HttpServerUtil Introduction
 
-    The %HttpServerUtil module provides a base code for the <a href="../../HttpServer/html/index.html">HttpServer</a>
+    The %HttpServerUtil module provides a base code for the @ref httpserverintro "HttpServer"
     module and code requiring HttpServer definitions but not the entire
-    <a href="../../HttpServer/html/index.html">HttpServer</a> module itself.
+    @ref httpserverintro "HttpServer" module itself.
 
     To use this module, use \c "%requires HttpServerUtil" in your code.
 
@@ -62,7 +62,7 @@ module HttpServerUtil {
       provide the real work of the HttpServer handling connections
     - @ref HttpServer::AbstractHttpSocketHandler "AbstractHttpSocketHandler": this class must be subclassed to
       implement a dedicated socket handler for protcol changes (for an example, see the
-      <a href="../../WebSocketHandler/html/index.html">WebSocketHandler</a> module)
+      @ref websockethandlerintro "WebSocketHandler" module)
     - @ref HttpServer::AbstractLogger "AbstractLogger": this abstract class provides an interface for classes
       providing basic logging methods
     - @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest": this class is used to directly handle HTTP
@@ -70,26 +70,26 @@ module HttpServerUtil {
     - @ref HttpServer::AbstractUrlHandler "AbstractUrlHandler": this class serves as a base class for handler classes
       that serve requests anchored at a particular URL
     - @ref HttpServer::HttpListenerInterface "HttpListenerInterface": this abstract class provides the interface for
-      the private HttpListener class implemented in the <a href="../../HttpServer/html/index.html">HttpServer</a>
+      the private HttpListener class implemented in the @ref httpserverintro "HttpServer"
       module
     - @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator": this class implements a dummy authenticator
       that accepts all requests
 
     See also:
-    - <a href="../../RestHandler/html/index.html">RestHandler</a>: a module providing a handler framework for this
+    - @ref resthandlerintro "RestHandler": a module providing a handler framework for this
       module for implementing server-side REST services
-    - <a href="../../WebSocketHandler/html/index.html">WebSocketHandler</a>: a module providing a handler framework
+    - @ref websockethandlerintro "WebSocketHandler": a module providing a handler framework
       for this module for implementing server-side WebSocket services
-    - <a href="../../WebUtil/html/index.html">WebUtil</a>: a module providing higher-level HTTP services using this
+    - @ref webutilintro "WebUtil": a module providing higher-level HTTP services using this
       module as a base as well as providing support for dynamic template-based HTML rendering (ie rendering qhtml
       files which are a mix of HTML and Qore code)
-    - <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>:
+    - @ref jsonrpchandlerintro "JsonRpcHandler":
       provides infrastructure for implementing JSON-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/yaml/current/YamlRpcHandler/html/index.html">YamlRpcHandler</a>:
+    - @ref yamlrpchandlerintro "YamlRpcHandler":
       provides infrastructure for implementing YAML-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/xml/current/XmlRpcHandler/html/index.html">XmlRpcHandler</a>:
+    - <a href="https://docs.qore.org/modules/xml/current/XmlRpcHandler/html/index.html#xmlrpchandlerintro">XmlRpcHandler</a>:
       provides infrastructure for implementing XML-RPC server-side services using the HttpServer module
-    - <a href="http://www.qore.org/manual/modules/xml/current/SoapHandler/html/index.html">SoapHandler</a>: provides
+    - <a href="https://docs.qore.org/modules/xml/current/SoapHandler/html/index.html#soaphandlerintro">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
     @section httpserverutil_definitions HttpServerUtil Definitions
@@ -2169,7 +2169,7 @@ public class AbstractStreamRequest {
         sends.
 
         The default implementation is a no-op.  Subclasses that wrap a user-overridable stream
-        handler (e.g. <a href="../../RestHandler/html/index.html">RestStreamRequest</a>) should override to
+        handler (e.g. @ref RestHandler::RestStreamRequest "RestStreamRequest") should override to
         forward the callback to the stream handler so application code can register it (e.g. with
         a service-stop hook).
 

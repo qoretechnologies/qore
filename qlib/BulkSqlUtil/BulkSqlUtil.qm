@@ -49,7 +49,7 @@ module BulkSqlUtil {
 
     @section bulksqlutilintro Introduction to the BulkSqlUtil Module
 
-    The %BulkSqlUtil module provides APIs for bulk DML operations using <a href="../../SqlUtil/html/index.html">SqlUtil</a> in %Qore.
+    The %BulkSqlUtil module provides APIs for bulk DML operations using @ref sqlutilintro "SqlUtil" in %Qore.
     Bulk DML is the process of sending multiple rows to the dataserver in a single operation which allows for
     the most efficient processing of large amounts of data.
 

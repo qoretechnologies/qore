@@ -26,7 +26,7 @@
 public namespace HttpClientDataProvider {
 #! Base class for the HTTP client data providers; requests are made with HttpClientIo
 /** Requests are made with a
-    <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a>; the data provider
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientIo::HttpClientConnectionManager"; the data provider
     keeps the target URL and the request options that the connection manager does not handle itself (default
     headers, basic authentication, error handling, and response body handling).
 
@@ -145,7 +145,7 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
 
     #! Creates the object from a synchronous HTTP client
     /** Requests are made with a new
-        <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a> created from
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientIo::HttpClientConnectionManager" created from
         the configuration of \a http; see @ref httpclientdataprovider_client for the settings that are carried over.
         The client itself is not used for requests, and it is not changed.
 

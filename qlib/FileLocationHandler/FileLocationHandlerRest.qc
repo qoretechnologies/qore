@@ -72,7 +72,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
 
     public {
         #! Valid REST location options
-        /** @see <a href="../../RestClient/html/index.html">RestClient::constructor()</a> for supported options
+        /** @see @ref RestClient::RestClient::constructor "RestClient::constructor()" for supported options
         */
         const RestClientLocationOpts = {
             "connect_timeout": <FileHandlerOptionInfo>{

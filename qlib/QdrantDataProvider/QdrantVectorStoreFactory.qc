@@ -26,7 +26,7 @@
 public namespace QdrantDataProvider {
 #! Factory that builds @ref QdrantVectorStore instances for the RAG provider registry
 /** Registered under the backend identifier \c "qdrant" by the
-    @ref QdrantDataProvider module's init block; lazy-loadable via
+    @ref qdrantdataproviderintro "QdrantDataProvider" module's init block; lazy-loadable via
     @ref QoreRagUtils::RagProviderRegistry::VectorStoreModuleMap.
 */
 public class QdrantVectorStoreFactory inherits QoreRagUtils::AbstractVectorStoreFactory {

@@ -53,7 +53,7 @@ module JsonRpcConnection {
     for the ConnectionProvider module in %Qore.
 
     @note For new code, use the
-    <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module and its
+    @ref jsonrpcclientiointro "JsonRpcClientIo" module and its
     \c JsonRpcIoConnection class instead. The %JsonRpcClientIo module provides async I/O with
     automatic HTTP protocol negotiation (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection
     pooling, and JSON-RPC 2.0 notification support. This module uses the native
@@ -62,7 +62,7 @@ module JsonRpcConnection {
 
     To use this module, use \c "%requires JsonRpcConnection" in your code.
 
-    This module automatically uses the <a href="../../json/html/index.html">json</a> binary module.
+    This module automatically uses the @ref jsonintro "json" binary module.
 
     All the public symbols in the module are defined in the JsonRpcConnection namespace.
 
@@ -73,7 +73,7 @@ module JsonRpcConnection {
 
     @subsection jsonrpcconnection_v1_5 JsonRpcConnection v1.5
     - added \c getAsyncImpl() returning a
-      <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> object for async I/O;
+      @ref jsonrpcclientiointro "JsonRpcClientIo" object for async I/O;
       call \c getAsync() on the connection to get the async variant
 
     @subsection jsonrpcconnection_v1_4 JsonRpcConnection v1.4

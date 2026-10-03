@@ -244,7 +244,7 @@ smtp.sendMessage(msg);@endcode
 
     @subsection smtpclient_v1_6 SmtpClient 1.6
     - added the @ref SmtpClient::SmtpConnection "SmtpConnection" class to support the
-      <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
+      @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
 
     @subsection smtpclient_v1_5 SmtpClient 1.5

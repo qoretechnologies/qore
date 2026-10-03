@@ -157,11 +157,11 @@ printf("%Y\n", ans.body);
       without a charset; added @ref RestClient::RestClient::getPollResponseBodyText()
       "RestClient::getPollResponseBodyText()"
     - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
-      providers with a <a href="../../RestClientIo/html/index.html">RestClientIo</a> client and no longer connects
+      providers with a @ref restclientiointro "RestClientIo" client and no longer connects
       to the server to create them
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
       returns the options a client was created with, as \c getConstructorOptions() of
-      <a href="../../RestClientIo/html/index.html">RestClientIo</a> does
+      @ref restclientiointro "RestClientIo" does
     - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
       @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
       version
@@ -210,11 +210,11 @@ printf("%Y\n", ans.body);
     - fixed pings with a \c ping_path given as an absolute URL; the client is now retargeted at
       that URL with @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" instead of
       the URL being sent to the connection's own host as a request path, which made every
-      <a href="../../SalesforceRestClient/html/index.html">SalesforceRestConnection</a>
+      @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection"
       synchronous ping fail deserializing the resulting HTML error page
     - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a
       generic @ref RestClient::RestClient "RestClient" when called on a subclass; a client that
-      customizes authentication or headers &mdash; <a href="../../AwsRestClient/html/index.html">AwsRestClient</a>, whose \c signRequest() applies AWS SigV4 signing &mdash; lost that
+      customizes authentication or headers &mdash; @ref awsrestclientintro "AwsRestClient", whose \c signRequest() applies AWS SigV4 signing &mdash; lost that
       behaviour on the copy, and its requests went out unsigned.  The copy is now constructed from
       the object's own class through the new
       @ref RestClient::RestClient::copySelf() "copySelf()" hook
@@ -365,7 +365,7 @@ printf("%Y\n", ans.body);
     @subsection restclientv1_4 RestClient v1.4
     - added support for the \c text/plain Content-Type
     - added the @ref RestClient::RestConnection "RestConnection" class to support the
-      <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
+      @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
     - added support for REST API validation with a REST schema through the
       @ref restschemavalidatorintro "RestSchemaValidator" module and the @ref swaggerintro "Swagger" module
@@ -697,13 +697,13 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
 
     #! Preprocesses the request body before serialization
     /** The default implementation returns the body unchanged. Subclasses (e.g.,
-        <a href="../../MewsRestClient/html/index.html">MewsRestClient</a>,
-        <a href="../../MewsRestClient/html/index.html">MewsRestClientIo</a>) override this
+        @ref mewsrestclientintro "MewsRestClient",
+        @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo") override this
         to inject API-specific fields (auth tokens, metadata) into every outgoing
         request body.
 
         Transport implementations (@ref RestClient::RestClient "RestClient" and
-        <a href="../../RestClientIo/html/index.html">RestClientIo</a>) call this hook before
+        @ref restclientiointro "RestClientIo") call this hook before
         running the schema validator's request processing step.
 
         Called with no argument by @ref RestSchemaValidator::AbstractRestSchemaObject
@@ -2181,7 +2181,7 @@ hash<auto> ans = rest.del("/orders/1");
     /** Used by @ref copyWithUrl() so that copying a subclass yields that subclass rather than a
         generic client.  This used to construct @ref RestClient unconditionally, which silently
         downgraded every subclass: a client that customizes authentication or headers &mdash;
-        <a href="../../AwsRestClient/html/index.html">AwsRestClient</a>, whose \c signRequest() applies AWS
+        @ref awsrestclientintro "AwsRestClient", whose \c signRequest() applies AWS
         SigV4 signing &mdash; lost that behaviour on the copy, and its requests went out unsigned.
 
         The default implementation constructs this object's own class through the conventional
@@ -5510,7 +5510,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         the first request via the HttpClientConnectionManager
         @param rtopts runtime options for connection acquisition
 
-        @return a <a href="../../RestClientIo/html/index.html">RestClientIo</a> object — the async evolution of
+        @return a @ref restclientiointro "RestClientIo" object — the async evolution of
         @ref RestClient::RestClient "RestClient" supporting HTTP/1.x, HTTP/2, and HTTP/3, with
         connection multiplexing on HTTP/2 and HTTP/3. Whereas @ref RestClient::RestClient "RestClient"
         is synchronous and speaks HTTP/1.x only, \c RestClientIo is async and additionally supports

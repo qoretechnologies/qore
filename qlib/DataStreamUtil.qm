@@ -57,7 +57,7 @@ module DataStreamUtil {
 
     In %Qore, DataStream support is implemented on top of and is designed to extend the REST infrastructure provided by the %Qore library.
 
-    This module is used automatically by the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> and <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a> user modules; to use this module directly for low-level DataStream protocol support, use \c "%requires DataStreamUtil" in your code.
+    This module is used automatically by the @ref datastreamclientintro "DataStreamClient" and @ref datastreamrequesthandlerintro "DataStreamRequestHandler" user modules; to use this module directly for low-level DataStream protocol support, use \c "%requires DataStreamUtil" in your code.
 
     All the public symbols in the module are defined in the DataStreamUtil namespace
 
@@ -207,7 +207,7 @@ Server: Qorus-HTTP-Server/0.3.7
     Length-Prefixed-Message envelope), enabling interoperability with gRPC tooling.
 
     For the higher-level client and server API, see the
-    <a href="../../Connect/html/index.html">Connect module</a>.  The functions in this module
+    @ref connectintro "Connect module".  The functions in this module
     provide low-level framing utilities that can be used directly when integrating Connect
     framing with existing DataStream infrastructure.
 
@@ -296,7 +296,7 @@ message: "Hello, Hello, World!!"
 
     This allows a single server handler to serve both Connect and DataStream v1 clients
     transparently.  See the
-    <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>
+    @ref datastreamrequesthandlerintro "DataStreamRequestHandler"
     module for automatic dual-protocol handling.
 
     @section datastreamutilrelnotes Release Notes

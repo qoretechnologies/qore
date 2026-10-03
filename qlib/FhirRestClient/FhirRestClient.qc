@@ -1261,7 +1261,7 @@ public class FhirRestClient inherits RestClient::RestClient, FhirRestClientBase 
 
 #! FHIR JSON REST client for non-blocking I/O
 /** This class provides the FHIR helper methods of @ref FhirRestClient with a
-    <a href="../../RestClientIo/html/index.html">RestClientIo</a> client, which supports HTTP/1.1, HTTP/2 and HTTP/3
+    @ref restclientiointro "RestClientIo" client, which supports HTTP/1.1, HTTP/2 and HTTP/3
     and can share its connection manager with other clients.
 
     Request paths are percent-encoded with @ref FhirRestClientBase::encodeRequestPath() before they are sent, as

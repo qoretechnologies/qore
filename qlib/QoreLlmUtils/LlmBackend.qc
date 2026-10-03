@@ -577,57 +577,57 @@ public class LlmStructuredRepair {
         (@ref CallbackLlmProvider)|requires \c api_callback
     |\c http|any OpenAI-compatible \c /v1/chat/completions endpoint, for \
         example OpenAI, vLLM, or an API gateway|\
-        <a href="../../OpenAiRestClient/html/index.html">OpenAiRestClient</a>|\
+        @ref openairestclientintro "OpenAiRestClient"|\
         requires \c url
     |\c sglang|SGLang's OpenAI-compatible endpoint|\
-        <a href="../../SGLangRestClient/html/index.html">SGLangRestClient</a>|\
+        @ref sglangrestclientintro "SGLangRestClient"|\
         requires \c url
     |\c anthropic|the Anthropic Messages API (\c /v1/messages)|\
-        <a href="../../AnthropicRestClient/html/index.html">AnthropicRestClient</a>|\
+        @ref anthropicrestclientintro "AnthropicRestClient"|\
         requires \c url
     |\c gemini|the Google Gemini \c generateContent API|\
-        <a href="../../GeminiRestClient/html/index.html">GeminiRestClient</a>|\
+        @ref geminirestclientintro "GeminiRestClient"|\
         requires \c api_key
     |\c vertex-ai|Gemini models on Google Vertex AI|\
-        <a href="../../VertexAiRestClient/html/index.html">VertexAiRestClient</a>|\
+        @ref vertexairestclientintro "VertexAiRestClient"|\
         requires \c provider_options.gcp_project_id
     |\c azure-openai|Azure OpenAI deployments|\
-        <a href="../../AzureOpenAiRestClient/html/index.html">AzureOpenAiRestClient</a>|\
+        @ref azureopenairestclientintro "AzureOpenAiRestClient"|\
         requires \c url (the resource endpoint); authenticates with an API \
         key or Microsoft Entra ID
     |\c bedrock|the AWS Bedrock Converse API|\
-        <a href="../../BedrockRestClient/html/index.html">BedrockRestClient</a>|\
+        @ref bedrockrestclientintro "BedrockRestClient"|\
         requires an AWS region (\c provider_options.aws_region, a \
         region-qualified \c url, or \c AWS_REGION / \c AWS_DEFAULT_REGION in \
         the environment); no structured output; a streamed request delivers \
         the complete response as one event
     |\c cohere|Cohere's v2 chat API|\
-        <a href="../../CohereRestClient/html/index.html">CohereRestClient</a>|\
+        @ref cohererestclientintro "CohereRestClient"|\
         requires \c api_key; no streaming or multimodal input
     |\c deepseek|DeepSeek|\
-        <a href="../../DeepSeekRestClient/html/index.html">DeepSeekRestClient</a>|\
+        @ref deepseekrestclientintro "DeepSeekRestClient"|\
         OpenAI-compatible
     |\c fireworks|Fireworks AI|\
-        <a href="../../FireworksRestClient/html/index.html">FireworksRestClient</a>|\
+        @ref fireworksrestclientintro "FireworksRestClient"|\
         OpenAI-compatible
     |\c grok|xAI Grok|\
-        <a href="../../GrokRestClient/html/index.html">GrokRestClient</a>|\
+        @ref grokrestclientintro "GrokRestClient"|\
         OpenAI-compatible
     |\c groq|Groq|\
-        <a href="../../GroqRestClient/html/index.html">GroqRestClient</a>|\
+        @ref groqrestclientintro "GroqRestClient"|\
         OpenAI-compatible; requires a model, as there is no default model
     |\c mistral|Mistral AI|\
-        <a href="../../MistralRestClient/html/index.html">MistralRestClient</a>|\
+        @ref mistralrestclientintro "MistralRestClient"|\
         OpenAI-compatible
     |\c ollama|Ollama|\
-        <a href="../../OllamaRestClient/html/index.html">OllamaRestClient</a>|\
+        @ref ollamarestclientintro "OllamaRestClient"|\
         OpenAI-compatible; uses \c http://localhost:11434 by default; \
         requires a model, as there is no default model
     |\c perplexity|Perplexity|\
-        <a href="../../PerplexityRestClient/html/index.html">PerplexityRestClient</a>|\
+        @ref perplexityrestclientintro "PerplexityRestClient"|\
         OpenAI-compatible; no multimodal input
     |\c together|Together AI|\
-        <a href="../../TogetherRestClient/html/index.html">TogetherRestClient</a>|\
+        @ref togetherrestclientintro "TogetherRestClient"|\
         OpenAI-compatible
 
     Modes for hosted services use the service's public URL when \c url is not

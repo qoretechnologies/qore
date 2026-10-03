@@ -76,7 +76,7 @@ module GroqRestClient {
     - @ref GroqRestClient::GroqRestConnection "GroqRestConnection": a REST
       connection object to Groq
     - @ref GroqRestClient::GroqLlmProvider "GroqLlmProvider":
-      <a href="../../QoreLlmUtils/html/index.html#qorellmutilsintro">QoreLlmUtils</a> provider for mode \c groq
+      @ref qorellmutilsintro "QoreLlmUtils" provider for mode \c groq
 
     @par Example:
     @code{.py}
@@ -100,7 +100,7 @@ printf("%Y\n", ans.body);
     @endcode
 
     @note The module name \c GroqRestClient is distinct from
-    <a href="../../GrokRestClient/html/index.html#grokrestclientintro">GrokRestClient</a> (xAI's Grok product) —
+    @ref grokrestclientintro "GrokRestClient" (xAI's Grok product) —
     note the spelling: Groq (LPU inference, OSS models) vs. Grok (xAI).
 
     @section GroqRestClientRelnotes Release Notes

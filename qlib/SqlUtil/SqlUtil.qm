@@ -81,13 +81,13 @@ module SqlUtil {
     well.
 
     Currently the following driver-specific modules are available:
-    - <a href="../../FreetdsSqlUtil/html/index.html">FreetdsSqlUtil</a>: for working with MS SQL Server and Sybase
+    - @ref freetdssqlutilintro "FreetdsSqlUtil": for working with MS SQL Server and Sybase
       databases through the <a href="https://github.com/qoretechnologies/module-sybase">freetds driver</a>
-    - <a href="../../MysqlSqlUtil/html/index.html">MysqlSqlUtil</a>: for working with MySQL databases
-    - <a href="../../OracleSqlUtil/html/index.html">OracleSqlUtil</a>: for working with Oracle databases
-    - <a href="../../PgsqlSqlUtil/html/index.html">PgsqlSqlUtil</a>: for working with PostgreSQL databases
-    - <a href="../../Sqlite3SqlUtil/html/index.html">Sqlite3SqlUtil</a>: for working with SQLite3 databases
-    - <a href="../../OdbcFirebirdSqlUtil/html/index.html">OdbcFirebirdSqlUtil</a>: for working with Firebird databases
+    - @ref mysqlsqlutilintro "MysqlSqlUtil": for working with MySQL databases
+    - @ref oraclesqlutilintro "OracleSqlUtil": for working with Oracle databases
+    - @ref pgsqlsqlutilintro "PgsqlSqlUtil": for working with PostgreSQL databases
+    - @ref sqlite3sqlutilintro "Sqlite3SqlUtil": for working with SQLite3 databases
+    - @ref odbcfirebirdsqlutilintro "OdbcFirebirdSqlUtil": for working with Firebird databases
       through the <a href="https://github.com/qoretechnologies/module-odbc">odbc driver</a>
 
     The underlying driver-specific module is automatically loaded and used when required; the classes provided in
@@ -1509,9 +1509,9 @@ if (sh) {
 
     The following is a table describing the alignment support for various objects supported by %SqlUtil; for database-specific objects, see the
     database-specific %SqlUtil module:
-    - <a href="../../MysqlSqlUtil/html/index.html">MysqlSqlUtil</a>
-    - <a href="../../OracleSqlUtil/html/index.html">OracleSqlUtil</a>
-    - <a href="../../PgsqlSqlUtil/html/index.html">PgsqlSqlUtil</a>
+    - @ref mysqlsqlutilintro "MysqlSqlUtil"
+    - @ref oraclesqlutilintro "OracleSqlUtil"
+    - @ref pgsqlsqlutilintro "PgsqlSqlUtil"
 
     |!Database Object|!Alignment Type
     |@ref SqlUtil::AbstractColumn "Columns"|aligned in place

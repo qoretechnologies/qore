@@ -56,7 +56,7 @@ module Schema {
     @section schemaintro Introduction to the Schema Module
 
     The %Schema module provides a high level database-independent API for working with database schemas;
-    it uses the <a href="../../SqlUtil/html/index.html">SqlUtil</a> module to provide the middle and low-level
+    it uses the @ref sqlutilintro "SqlUtil" module to provide the middle and low-level
     schema management logic from a database-independent representation of a database schema.
 
     To use this module, use \c "%requires Schema" in your code.
@@ -670,7 +670,7 @@ module Schema {
 
     The \c connection argument can be:
     - A \b connection \b name registered with \c DatasourceProvider (via \c QORE_DATASOURCE_PROVIDERS env var)
-    - A direct \b connection \b string: \c driver:user/pass@host/db (e.g., \c pgsql:admin/secret@localhost/myapp)
+    - A direct \b connection \b string: <tt>driver:user/pass&#64;host/db</tt> (e.g., <tt>pgsql:admin/secret&#64;localhost/myapp</tt>)
 
     @subsection schema_qschema_commands Commands
 
@@ -800,7 +800,7 @@ module Schema {
     |!Option|!Description
     |\c -s, \c --schema \e name|Output schema name (default: \c ExportedSchema)
     |\c -o, \c --output \e file|Output file (default: stdout)
-    |\c --format \c yaml\|json|Export format (default: \c yaml)
+    |\c --format <tt>yaml\|json</tt>|Export format (default: \c yaml)
     |\c --with-partitions|Include physical table partitions
     |\c -t, \c --table [\e pattern]|Select tables
     |\c -q, \c --seq [\e pattern]|Select sequences

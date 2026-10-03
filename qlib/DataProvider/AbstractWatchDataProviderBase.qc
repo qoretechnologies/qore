@@ -324,7 +324,7 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     /** The polling thread is cancelled after this method is called, which ends blocking operations in it, such as
         HTTP requests, at once; override this method only to release resources that the polling operation uses
         exclusively.  A REST client shared with other data providers must not be closed here: closing a
-        <a href="../../RestClientIo/html/index.html">RestClientIo</a> shuts down its connection manager for good, so every
+        @ref restclientiointro "RestClientIo" shuts down its connection manager for good, so every
         later request of the other data providers would fail.
 
         The default implementation does nothing.

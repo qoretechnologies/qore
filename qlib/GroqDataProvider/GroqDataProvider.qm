@@ -152,7 +152,7 @@ printf("Response: %s\n", result.choices[0].message.content);
     @endcode
 
     @note The module name \c GroqDataProvider is distinct from
-    <a href="../../GrokDataProvider/html/index.html#grokdataproviderintro">GrokDataProvider</a> (xAI's Grok product) —
+    @ref grokdataproviderintro "GrokDataProvider" (xAI's Grok product) —
     note the spelling: Groq (LPU inference) vs. Grok (xAI).
 
     @section GroqDataProviderRelnotes Release Notes

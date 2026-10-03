@@ -163,7 +163,7 @@ rc.bulkJobClose(h.id);
       clients share one implementation
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
     - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" now captures the org identity from
-      the OAuth2 token response; <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> stores only the generic OAuth2 fields,
+      the OAuth2 token response; @ref restclientiointro "RestClientIo" stores only the generic OAuth2 fields,
       so the Salesforce-specific \c instance_url and \c id fields were previously discarded on the async path.  A
       refresh that moves the org to another instance is followed
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
@@ -203,7 +203,7 @@ rc.bulkJobClose(h.id);
 
     @subsection salesforcerestclientv1_1 SalesforceRestClient v1.1
     - added the @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" class to support the
-      <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
+      @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
 
     @subsection salesforcerestclientv1_0 SalesforceRestClient v1.0
@@ -1784,7 +1784,7 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
     }
 
     #! Captures the Salesforce org identity from an OAuth2 token response
-    /** <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> stores only the generic OAuth2 fields, so
+    /** @ref restclientiointro "RestClientIo" stores only the generic OAuth2 fields, so
         the Salesforce-specific \c instance_url and \c id fields would otherwise be discarded and
         the org identity would be unavailable on the async path.  Every token acquisition funnels
         through this method -- the initial login, a refresh, and an externally-supplied token -- so
@@ -1796,7 +1796,7 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
         @return the token response hash
 
         @note this captures the org identity only; it does not retarget this client, because a
-        <a href="../../RestClientIo/html/index.html#restclientiointro">RestClientIo</a> URL is immutable by design -- its connection
+        @ref restclientiointro "RestClientIo" URL is immutable by design -- its connection
         manager pools by URL.  Use @ref getApiClient() for REST calls against the org's versioned
         API base; if the org has moved to another instance, the cached API client is discarded here
         so that the next call resolves against the new instance.

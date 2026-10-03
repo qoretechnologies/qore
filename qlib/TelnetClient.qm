@@ -86,7 +86,7 @@ module TelnetClient {
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
     @subsection telnetclient_v1_3 TelnetClient v1.3
-    - added the @ref TelnetClient::TelnetConnection "TelnetConnection" class to support the <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
+    - added the @ref TelnetClient::TelnetConnection "TelnetConnection" class to support the @ref connectionproviderintro "ConnectionProvider" module
     - added the @ref TelnetClient::TelnetClient::getTarget() "TelnetClient::getTarget()" method
     - added support for URLs in the constructor()
     - updated for complex types

@@ -468,7 +468,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
 
         @param constructor_options request options for the data provider, overriding the connection's options;
         the headers given are merged with the connection's headers; see the
-        <a href="../../HttpClientDataProvider/html/index.html">HttpClientDataProvider</a> module for the supported
+        @ref httpclientdataproviderintro "HttpClientDataProvider" module for the supported
         options
 
         @return an \c HttpClientDataProvider::HttpClientDataProvider object for this connection

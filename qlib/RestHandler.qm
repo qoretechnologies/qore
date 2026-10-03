@@ -63,7 +63,7 @@ module RestHandler {
     - @ref RestHandler::AbstractRestClass "AbstractRestClass": this class provides the functionality of the REST
       object currently being accessed (and access to subobjects or subclasses)
     - @ref RestHandler::RestHandler "RestHandler": this class can be used to plug in to the %Qore
-      <a href="../../HttpServer/html/index.html">HttpServer</a> to expose REST services
+      @ref httpserverintro "HttpServer" to expose REST services
 
     see example file \c "restserver.qr" in the examples directory for an example of using this module to implement REST
     services.
@@ -82,7 +82,7 @@ module RestHandler {
     <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a> with
     \c "Content-Type: application/x-www-form-urlencoded".
 
-    For standard REST web service development, the <a href="../../modules/json/html/index.html#jsonintro">json</a>
+    For standard REST web service development, the @ref jsonintro "json"
     module will be required to support JSON serialization.
 
     The @ref RestHandler::RestHandler "RestHandler" class will automatically deserialize request bodies if the

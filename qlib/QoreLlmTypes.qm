@@ -43,13 +43,13 @@ module QoreLlmTypes {
     @section qorellmtypesintro QoreLlmTypes Module Introduction
 
     The %QoreLlmTypes module provides the provider-neutral type and abstract
-    class layer that <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> and individual
+    class layer that @ref qorellmutilsintro "QoreLlmUtils" and individual
     LLM REST client modules (GeminiRestClient, AnthropicRestClient,
     OpenAiRestClient, SGLangRestClient) share.  It exists as a separate
     module so that REST client modules can depend on the abstract provider
     contract without forming a dependency cycle with %QoreLlmUtils.
 
-    Symbols defined here live in the @ref QoreLlmUtils namespace so callers
+    Symbols defined here live in the @ref qorellmutilsintro "QoreLlmUtils" namespace so callers
     that \c "%requires QoreLlmUtils" see them transparently; the split is
     purely a packaging detail.
 
@@ -174,7 +174,7 @@ public hashdecl LlmBackendConfig {
     #! Callback mode streaming dispatcher (counterpart to @ref api_callback)
     /** Caller-supplied function that performs the API call AND fires
         @a delta_cb once per upstream stream chunk (OpenAI-compatible
-        shape).  Required for <a href="../../QoreLlmUtils/html/index.html">CallbackLlmProvider::chatStream()</a>; when
+        shape).  Required for @ref QoreLlmUtils::CallbackLlmProvider::chatStream "CallbackLlmProvider::chatStream()"; when
         unset, the provider falls back to invoking @ref api_callback once
         (single non-streamed call surfaced as a synthetic single-delta
         event followed by a terminal @c done event) so callers that depend
@@ -377,7 +377,7 @@ public hashdecl ChatResponse {
 #! Provider-neutral token usage counters
 /** Providers expose token accounting under different names.  This hashdecl
     is the stable normalized shape produced by
-    <a href="../../QoreLlmUtils/html/index.html">normalizeUsage</a>.
+    @ref QoreLlmUtils::LlmTelemetry::normalizeUsage "normalizeUsage".
 */
 public hashdecl LlmTokenUsage {
     #! Prompt / input token count
@@ -479,7 +479,7 @@ public hashdecl LlmTelemetryObserver {
     Tool calls, the finish reason, and usage are read from \c raw with
     @ref AbstractLlmProvider::updateOpenAiStreamStateFromRaw() and
     @ref AbstractLlmProvider::getOpenAiToolCallDeltas(), for example by
-    <a href="../../QoreLlmUtils/html/index.html">LlmBackend::chatStreamCollect()</a>.
+    @ref QoreLlmUtils::LlmBackend::chatStreamCollect "LlmBackend::chatStreamCollect()".
 */
 public hashdecl ChatStreamEvent {
     #! Event type from the SSE stream (e.g., "content_block_delta", "message_delta")
@@ -544,7 +544,7 @@ public hashdecl LlmProviderInfo {
 
 #! Abstract factory for an LLM provider
 /** Concrete factories register themselves with
-    <a href="../../QoreLlmUtils/html/index.html">LlmBackend::registerFactory</a> and the backend dispatches calls
+    @ref QoreLlmUtils::LlmProviderRegistry::registerFactory "LlmProviderRegistry::registerFactory" and the backend dispatches calls
     through them.  Factories are looked up by mode string and the heavy
     provider object is constructed lazily on demand via @ref create().
 
@@ -556,7 +556,7 @@ public class AbstractLlmProviderFactory {
     #! Returns the mode string associated with this factory
     /** For example, the Gemini factory returns \c "gemini"; the OpenAI-
         compatible factory returns \c "http".  The mode is matched against
-        @ref LlmBackendConfig::mode at <a href="../../QoreLlmUtils/html/index.html">LlmBackend</a> construction.
+        @ref LlmBackendConfig::mode at @ref QoreLlmUtils::LlmBackend "LlmBackend" construction.
     */
     abstract string getMode();
 
@@ -590,16 +590,16 @@ public class AbstractLlmProviderFactory {
 
 #! Registry of LLM provider factories keyed by mode string
 /** Mirrors the FactoryMap pattern from
-    <a href="../../DataProvider/html/index.html">DataProvider::DataProvider::registerFactory</a>.  Modes whose
+    @ref DataProvider::DataProvider::registerFactory "DataProvider::DataProvider::registerFactory".  Modes whose
     factory ships with a separate REST client module (e.g. \c "gemini" with
-    <a href="../../GeminiRestClient/html/index.html">GeminiRestClient</a>) are listed in @ref ProviderModuleMap so the
+    @ref geminirestclientintro "GeminiRestClient") are listed in @ref ProviderModuleMap so the
     registry can lazy-load the providing module on demand.  Modes whose
-    factory ships with @ref QoreLlmUtils itself (e.g. \c "callback") are
-    registered when @ref QoreLlmUtils' \c init block runs.
+    factory ships with @ref qorellmutilsintro "QoreLlmUtils" itself (e.g. \c "callback") are
+    registered when @ref qorellmutilsintro "QoreLlmUtils"' \c init block runs.
 
     The registry is intentionally a separate class in @ref qorellmtypesintro "QoreLlmTypes" so
     LLM provider modules can register their factories without depending on
-    @ref QoreLlmUtils — which would form a module dependency cycle.
+    @ref qorellmutilsintro "QoreLlmUtils" — which would form a module dependency cycle.
 */
 public class LlmProviderRegistry {
     public {
@@ -635,7 +635,7 @@ public class LlmProviderRegistry {
 
     #! Registers a provider factory under its mode string
     /** Concrete factory classes call this from their owning module's \c init
-        block.  Subsequent <a href="../../QoreLlmUtils/html/index.html">LlmBackend</a> constructions with the matching
+        block.  Subsequent @ref QoreLlmUtils::LlmBackend "LlmBackend" constructions with the matching
         @ref LlmBackendConfig::mode dispatch through the registered factory.
 
         @param factory the new provider factory
@@ -743,7 +743,7 @@ public class LlmProviderRegistry {
 
 #! Abstract base class for LLM providers
 /** Concrete subclasses translate the provider-neutral
-    <a href="../../QoreLlmUtils/html/index.html">LlmBackend</a> interface (\c complete, \c chat, \c chatStream) into a
+    @ref QoreLlmUtils::LlmBackend "LlmBackend" interface (\c complete, \c chat, \c chatStream) into a
     specific wire protocol (OpenAI chat completions, Anthropic Messages,
     Google Gemini generateContent, etc.).
 
@@ -763,8 +763,8 @@ public class LlmProviderRegistry {
     @ref mergeRequestBodyOptions() (provider-specific body-options merge).
 
     @par OpenAI-compatible facade hooks
-    <a href="../../QoreLlmUtils/html/index.html">chatCompletions</a> and
-    <a href="../../QoreLlmUtils/html/index.html">chatCompletionsStream</a> expose an OpenAI-shaped wire
+    @ref QoreLlmUtils::LlmBackend::chatCompletions "chatCompletions" and
+    @ref QoreLlmUtils::LlmBackend::chatCompletionsStream "chatCompletionsStream" expose an OpenAI-shaped wire
     contract regardless of the underlying provider.  Providers that need to
     adapt OpenAI-shaped inputs (tool choice, response format) or interpret
     provider-native stream chunks override the \c applyOpenAi*() and
@@ -997,7 +997,7 @@ public class AbstractLlmProvider {
     }
 
     #! OpenAI-facade hook: adapts an OpenAI tool_choice to provider-native form
-    /** Called by <a href="../../QoreLlmUtils/html/index.html">chatCompletions</a> when translating an
+    /** Called by @ref QoreLlmUtils::LlmBackend::chatCompletions "chatCompletions" when translating an
         OpenAI-shaped request body for dispatch through this provider.
         The default writes the choice unchanged into
         \c body_options.tool_choice; providers with a different native

@@ -61,8 +61,8 @@ module BedrockRestClient {
     @section bedrockrestclientintro Introduction to the BedrockRestClient Module
 
     The %BedrockRestClient module wraps AWS Bedrock for use with the
-    <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> agent stack and the
-    <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> RAG pipeline.  Both the unified
+    @ref qorellmutilsintro "QoreLlmUtils" agent stack and the
+    @ref qoreragutilsintro "QoreRagUtils" RAG pipeline.  Both the unified
     Converse API (chat + tool use, covering the Anthropic /
     Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
     Titan / Cohere embeddings are supported.

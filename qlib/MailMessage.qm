@@ -49,12 +49,12 @@ module MailMessage {
     @section mailmessageintro MailMessage Module Introduction
 
     The %MailMessage module provides the MailMessage class for representing represents an email message.  This module
-    is used by the <a href="../../SmtpClient/html/index.html">SmtpClient</a> and
-    <a href="../../Pop3Client/html/index.html">Pop3Client</a> modules.
+    is used by the @ref smtpclientintro "SmtpClient" and
+    @ref pop3clientintro "Pop3Client" modules.
 
     To use this module, use \c "%requires MailMessage" in your code.  See the
-    <a href="../../SmtpClient/html/index.html">SmtpClient</a> and
-    <a href="../../Pop3Client/html/index.html">Pop3Client</a> modules for examples of Qore code using this module
+    @ref smtpclientintro "SmtpClient" and
+    @ref pop3clientintro "Pop3Client" modules for examples of Qore code using this module
 
     All the public symbols in the module are defined in the MailMessage namespace
 
