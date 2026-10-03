@@ -1925,8 +1925,10 @@ MACRO (QORE_WRAP_DOX _dox_files)
 
         ADD_CUSTOM_COMMAND(OUTPUT ${_doxfile}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS ${_table_arg} --table=${_infile} --output=${_doxfile}
+                           ARGS ${_table_arg} --table=${_infile} --output=${_doxfile}.tmp
+                           COMMAND ${CMAKE_COMMAND} -E rename ${_doxfile}.tmp ${_doxfile}
                            MAIN_DEPENDENCY ${_infile}
+                           DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                            VERBATIM
                         )

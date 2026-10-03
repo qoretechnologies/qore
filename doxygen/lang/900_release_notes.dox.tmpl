@@ -9,6 +9,8 @@
     data directories and paths containing spaces are supported.
     Native module installations also export their generated documentation indexes,
     allowing dependent modules to resolve cross-module references through the SDK.
+    Documentation template generation publishes output only after successful conversion
+    and reruns when qpp changes, preventing partial files from surviving failed builds.
 
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
