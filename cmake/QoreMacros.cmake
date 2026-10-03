@@ -2202,6 +2202,9 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
                 VERBATIM
             )
             add_dependencies(${_docs_targ} ${_module_name})
+            if ("${_mod_suffix}" STREQUAL "2")
+                qore_install_module_doxygen_tag("${_module_name}" "${_working_dir}/${_module_name}.tag")
+            endif()
             if ("${_mod_suffix}" STREQUAL "1")
                 # Bundled binary modules read qore.tag too. Serialize them after its initial
                 # generation, just like user modules, so parallel docs never read stale/partial tags.

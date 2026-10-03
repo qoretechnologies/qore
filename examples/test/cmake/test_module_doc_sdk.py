@@ -198,6 +198,37 @@ qore_configure_module_doxygen("absent.in" "output")
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Invalid QORE_DOXYGEN_MODULES name", result.stderr)
 
+    def test_external_native_module_installs_index_only_when_built(self):
+        with tempfile.TemporaryDirectory(prefix="qore external index ") as directory:
+            root = Path(directory)
+            source = root / "source"
+            build = root / "build"
+            prefix = root / "sdk"
+            (source / "cmake").mkdir(parents=True)
+            (source / "cmake/cmake_uninstall.cmake.in").write_text("# fixture\n")
+            (source / "fixture.c").write_text("void fixture(void) {}\n")
+            (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(ExternalNativeIndex C)
+include("{ROOT}/cmake/QoreMacros.cmake")
+set(CMAKE_INSTALL_FULL_DATADIR "{prefix}/custom data")
+set(QORE_INSTALL_COMPONENT_BOOTSTRAP doc-index)
+set(QORE_USERMODULE_DOXYGEN_TEMPLATE "${{CMAKE_SOURCE_DIR}}/Doxyfile.in")
+set(QORE_MODULES_DIR lib/qore-modules)
+set(QORE_API_VERSION 2.0)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+add_library(fixture MODULE fixture.c)
+qore_binary_module_intern2(fixture 1.0 "" "2")
+''')
+            self.run_command([CMAKE, "-S", str(source), "-B", str(build)], root)
+            install = [CMAKE, "--install", str(build), "--component", "doc-index"]
+            self.run_command(install, root)
+            installed = prefix / "custom data/qore/module-tags/fixture.tag"
+            self.assertFalse(installed.exists())
+            tag = self.make_tag(build, "fixture")
+            self.run_command(install, root)
+            self.assertEqual(tag.read_bytes(), installed.read_bytes())
+
     def test_language_and_module_references_with_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="qore doc sdk ") as directory:
             html, config, source = self.configure(Path(directory), image_dirs=("docs", "doxygen"))

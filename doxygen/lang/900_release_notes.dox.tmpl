@@ -7,6 +7,8 @@
     External module documentation locates shared HTML assets beside the installed
     SDK template, independently of the module's installation prefix. Custom SDK
     data directories and paths containing spaces are supported.
+    Native module installations also export their generated documentation indexes,
+    allowing dependent modules to resolve cross-module references through the SDK.
 
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of

@@ -24,7 +24,8 @@ installed `Doxyfile.in`. They do not use the external module's
 with a Qore SDK installed under `/usr`, including custom data directories and
 paths containing spaces. Keep these assets together when relocating the template.
 
-Bundled module indexes are installed in `share/qore/module-tags`. Select the modules
+Bundled and external native module indexes are installed in `share/qore/module-tags`
+when their documentation has been built before installation. Select the modules
 whose API documentation you reference before configuring your documentation:
 
 ```cmake
