@@ -307,6 +307,9 @@ more than one "type" of content — split it into topical subpages.
   where they help readers choose a page. Do not create a separate large section
   heading followed only by a link repeating that heading. Preserve old section
   targets with `@anchor` on the corresponding navigation entry.
+- Links to extracted guides, including module release notes, use the guide's `@page`
+  identifier. Legacy anchors on mainpage navigation entries preserve bookmarks;
+  they are not the destination for new `@ref` links to the guide content.
 - A binary module's mainpage lists its companion qlib modules. Within the documentation
   build, module links use `@ref <lowercasemodulename>intro "ModuleName"`, including
   guides and release notes; do not hardcode `index.html` URLs or substitute a

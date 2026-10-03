@@ -71,6 +71,7 @@ set(QORE_DOX_I18N_TMPL_SRC
     docs/locale-formatting.dox.tmpl
     docs/mainpage.dox.tmpl
     docs/plural.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 qore_wrap_qpp_value(I18N_QPP_SOURCES DOXLIST _dox_src ${I18N_QPP_SRC})

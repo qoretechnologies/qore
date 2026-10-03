@@ -22,6 +22,15 @@ spec.loader.exec_module(checker)
 
 
 class MainpageLayoutTest(unittest.TestCase):
+    def test_guide_references_must_link_to_the_guide_not_its_legacy_anchor(self):
+        for href in ('index.html#oldnotes', '#oldnotes'):
+            html = f'''<div class="textblock"><p><a href="{href}">Release notes</a></p>
+<ul><li><a id="oldnotes"></a><a href="notes.html">Release notes</a></li></ul></div>'''
+            self.assertEqual(['link targets a legacy guide navigation anchor: oldnotes'],
+                             checker.inspect_mainpage(html))
+            self.assertEqual([], checker.inspect_mainpage(html.replace(href, 'notes.html')))
+            self.assertEqual([], checker.inspect_mainpage(html.replace(href, 'other.html#oldnotes')))
+
     def test_rejects_heading_link_pairs_but_preserves_substantive_sections(self):
         for level in ('h1', 'h2'):
             html = f'<div class="textblock"><{level}>Architecture</{level}><p><a href="guide.html">Architecture</a></p></div>'

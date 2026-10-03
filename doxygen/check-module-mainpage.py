@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 import sys
+from urllib.parse import urlsplit
 
 
 class Element:
@@ -67,6 +68,17 @@ def inspect_mainpage(html, logo=None):
     nodes = blocks[0].elements()
     headings = [i for i, node in enumerate(nodes) if re.fullmatch(r'h[1-6]', node.tag)]
     issues = []
+    guide_anchors = set()
+    for item in blocks[0].find('li'):
+        children = item.elements()
+        for anchor, link in zip(children, children[1:]):
+            if anchor.tag == link.tag == 'a' and anchor.attrs.get('id') and link.attrs.get('href'):
+                guide_anchors.add(anchor.attrs['id'])
+    for link in blocks[0].find('a'):
+        target = urlsplit(link.attrs.get('href', ''))
+        if not target.scheme and not target.netloc and target.path in ('', 'index.html') \
+                and target.fragment in guide_anchors:
+            issues.append(f'link targets a legacy guide navigation anchor: {target.fragment}')
     intro_nodes = []
     for number, start in enumerate(headings):
         end = headings[number + 1] if number + 1 < len(headings) else len(nodes)
