@@ -31,15 +31,21 @@ The project configuration uses:
     BinaryType: deb
     Repotype: debian
     PublishFlags: archsync noearlypublish nofailedpackages
-    Keep: libuv1t64 node-acorn
+    Keep: libuv1t64 node-acorn nodejs libnode115 libnode127
+    Prefer: libjpeg-dev
 
 Keep preserves the build tools' installed runtime inputs while building their
 replacements. CMake needs libuv1t64 when building libuv itself; Debian's Node
-runtime needs node-acorn when building Acorn. Without these entries, OBS
+runtime needs node-acorn when building Acorn. Node itself uses the installed
+Node executable to bundle its JavaScript inputs before compiling its replacement.
+Retain nodejs and its shared library too: Debian 13 provides libnode115 and
+the qualified Node 22 backport provides libnode127. Both must be eligible so
+later rebuilds can use the already-built backport as their bootstrap runtime.
+Without these entries, OBS
 removes the package's own output from the build environment and the tool
 fails before compilation. Node reports "Cannot load externalized builtin"
 for Acorn, which nodepath hides behind misleading missing-dependency errors.
-Confirm both runtime inputs remain in the corresponding OBS _buildinfo.
+Confirm each runtime input remains in the corresponding OBS _buildinfo.
 The source recipes and upstream tests stay intact.
 
 Debian dependency selection
@@ -54,12 +60,23 @@ APT's highest-candidate-version selection: an older security or updates copy
 can hide a newer point-release package. Putting standard first instead can
 hide security updates. Neither ordering alone establishes version parity.
 
+Prefer libjpeg-dev when resolving the JPEG development dependency. Both that
+Debian metapackage and libjpeg62-turbo-dev satisfy the name, which OBS otherwise
+reports as an ambiguous choice for Cairo, ImageMagick and PROJ. The metapackage
+depends on libjpeg62-turbo-dev, matching the qualified native APT environments.
+
 The build-only debian-point-release-base package aggregates selected original
 Debian:13/standard/_repository binaries whose point-release versions supersede
 the earlier copies. Its _aggregate uses resign="false", explicit binary names
 and a standard-to-Debian_13 repository mapping. It is never published. Verify
 each aggregated binary hash against authenticated Debian APT metadata on both
 architectures, and retain the original source-package provenance.
+
+Keep related binaries at compatible versions when extending the aggregate.
+For OpenSSH, select openssh-client, openssh-server and openssh-sftp-server
+together: the servers require an exactly matching client version. Aggregating
+only the client leaves SSH2's loopback test dependencies unresolvable when OBS
+selects an older server from the higher-priority security repository.
 
 Before accepting builds, compare every selected stable-distribution build
 dependency from OBS _buildinfo with an authenticated, current native APT
