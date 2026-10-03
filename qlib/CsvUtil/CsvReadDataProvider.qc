@@ -218,6 +218,9 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
 
         #! stable object name for path-backed providers
         *string object_name;
+
+        #! the record type, kept once read: a search releases the iterator when it is exhausted
+        *hash<string, AbstractDataField> record_type;
     }
 
     #! Creates the CsvReadDataProvider with the input data path and optionally an option hash
@@ -306,10 +309,15 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # the type is read before any search, which deletes the iterator once it has no more records; asking for
+        # the type again afterwards (as the example data fallback does when there are no records) must not use it
+        if (record_type) {
+            return record_type;
+        }
         if (!i.valid()) {
             i.peek();
         }
-        return i.getRecordType();
+        return record_type = i.getRecordType();
     }
 
     #! Returns data provider static info

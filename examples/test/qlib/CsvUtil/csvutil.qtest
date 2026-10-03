@@ -79,6 +79,7 @@ f2:3,00:5:25,34";
         addTestCase("Config stress", \csvConfig());
         addTestCase("CSV file iterator", \csvFileIterator());
         addTestCase("issue 2739 test", \issue2739());
+        addTestCase("example data without data rows", \exampleWithoutRows());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1192,6 +1193,21 @@ UK,1234567893,28052012";
         assertEq(True, i.hasCallableMethod("getEncoding"));
 
         assertEq((("0": "a", "1": "b", "2": "c"), ("0": "1", "1": "2", "2": "3")), (map $1, i));
+    }
+
+    exampleWithoutRows() {
+        # only a header line: the search for an example record finds none and releases the iterator, and the
+        # example is then generated from the record type
+        CsvReadDataProvider dp({"data": "a;b\n", "header_names": False, "headers": ("a", "b"), "header_lines": 1,
+            "separator": ";"});
+        hash<auto> example = dp.getExampleRecordData();
+        assertEq(("a", "b"), keys example);
+        assertEq(("a", "b"), keys dp.getRecordType(), "the record type is still available");
+
+        # with data rows the first row is the example
+        dp = new CsvReadDataProvider({"data": "a;b\n1;2\n", "header_names": False, "headers": ("a", "b"),
+            "header_lines": 1, "separator": ";"});
+        assertEq({"a": "1", "b": "2"}, dp.getExampleRecordData());
     }
 
     issue2739() {

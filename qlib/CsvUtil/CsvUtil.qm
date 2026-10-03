@@ -361,6 +361,8 @@ while (i.next()) {
       value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
       may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
     - the \c read-data application action no longer offers the \c stream option; its input is the \c data option
+    - fixed example data for CSV data without data rows: the read data provider's record type is kept once read,
+      so asking for it after a search no longer uses the iterator the search released
 
     @subsection csvutil_v1_11 Version 1.11
     - added support for data provider application actions
