@@ -382,7 +382,7 @@ public:
         @return true if allowed, false if denied (exception raised)
 
         The rules are applied in this order:
-        - an IPv4-mapped IPv6 address (\c ::ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
+        - an IPv4-mapped IPv6 address (\c ::%ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
           unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
           checked as the loopback address
         - a denied IP range containing the address denies the connection, also for an allowed host name, so a host

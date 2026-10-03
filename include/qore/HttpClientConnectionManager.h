@@ -521,6 +521,17 @@ public:
 
     //! Streaming request with connection reuse information
     /** @overload
+        @param method HTTP method
+        @param scheme URL scheme
+        @param host target hostname
+        @param port target port
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param channel_out receives a referenced channel for reading response data; the caller must dereference it
+        @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request
         @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
             before, so a request that fails because the peer closed the connection before responding can be
             repeated on a new connection
