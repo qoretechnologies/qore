@@ -66,6 +66,8 @@ public const TabularFindingCodeValues = (
         "short_desc": "No header row was found"},
     <AllowedValueInfo>{"value": "partial_profile", "display_name": "Partial Profile",
         "short_desc": "The sheet has more rows than were read"},
+    <AllowedValueInfo>{"value": "two_values", "display_name": "Two Values",
+        "short_desc": "A text column holds only two values: it may be a yes/no column"},
     <AllowedValueInfo>{"value": "title_rows", "display_name": "Title Rows",
         "short_desc": "Rows above the header hold titles or banners"},
     <AllowedValueInfo>{"value": "totals_row", "display_name": "Totals Row",
@@ -169,6 +171,16 @@ public class TabularColumnProfileDataType inherits HashDataType {
                 "desc": "The format of numbers stored as text: `decimal_comma` or `decimal_point`"},
             "leading_zeros": {"display_name": "Leading Zeros", "type": BoolType,
                 "desc": "`True` if the column holds digit strings with leading zeros, such as identifiers"},
+            "bool_true": {"display_name": "Yes Values", "type": SoftAutoListOrNothingType,
+                "desc": "For a yes/no column written as text: the values read as true, as the file writes them"},
+            "bool_false": {"display_name": "No Values", "type": SoftAutoListOrNothingType,
+                "desc": "For a yes/no column written as text: the values read as false, as the file writes them"},
+            "empty_is_false": {"display_name": "Empty Is False", "type": BoolType,
+                "desc": "`True` for a yes/no column marked with one value, such as `x` or `✓`: an empty cell means "
+                    "false"},
+            "two_values": {"display_name": "Two Values", "type": SoftAutoListOrNothingType,
+                "desc": "A text column with only two values that are not a known yes/no pair (redacted unless "
+                    "redaction is disabled): it may be a yes/no column"},
             "counter_examples": {"display_name": "Counter-Examples", "type": AutoListType,
                 "desc": "Cells that do not match the inferred type, each with its 1-based `row` and its `value`"},
         };

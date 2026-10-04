@@ -168,6 +168,22 @@ public hashdecl TabularColumnProfile {
     #! True if the column holds digit strings with leading zeros, such as identifiers
     bool leading_zeros = False;
 
+    #! A text column with only two values that are not a known yes/no pair (redacted unless disabled)
+    /** @since %DataProvider 3.9 */
+    *list<auto> two_values;
+
+    #! For a yes/no column: the values read as true, as the file writes them
+    /** @since %DataProvider 3.9 */
+    *list<string> bool_true;
+
+    #! For a yes/no column: the values read as false, as the file writes them
+    /** @since %DataProvider 3.9 */
+    *list<string> bool_false;
+
+    #! For a yes/no column marked with one value (such as \c x or \c ✓): an empty cell means false
+    /** @since %DataProvider 3.9 */
+    bool empty_is_false = False;
+
     #! Cells that do not match the inferred type: \c row (1-based) and \c value
     list<hash<auto>> counter_examples = ();
 }
@@ -248,6 +264,9 @@ public hashdecl TabularWorkbookProfile {
 
     Finding codes:
     - \c ambiguous_date_order: dates stored as text could be day-first or month-first
+    - \c two_values: a text column holds only two words (letters only, at least four cells) that are not a
+      known yes/no pair, such as good/bad; the detail lists them (redacted unless redaction is disabled) - it
+      may be a yes/no column
     - \c blank_row_gap: empty rows inside the data region
     - \c dates_as_text: a column holds dates stored as text
     - \c decimal_comma_numbers: a column holds numbers stored as text with a decimal comma
@@ -714,6 +733,55 @@ public class TabularProfiler {
         return True;
     }
 
+    #! The yes/no pairs a column of text is recognized by: each true value and its false value, in lower case
+    const BoolPairs = (
+        ("true", "false"), ("yes", "no"), ("y", "n"), ("t", "f"), ("on", "off"), ("ja", "nein"),
+        ("oui", "non"), ("si", "no"), ("sí", "no"), ("ano", "ne"), ("áno", "nie"), ("tak", "nie"),
+        ("wahr", "falsch"), ("✓", "✗"), ("✔", "✘"), ("☑", "☐"),
+    );
+
+    #! The values that mark a yes in a column whose other cells are empty
+    const BoolMarks = ("x", "✓", "✔", "☑");
+
+    #! Recognizes a yes/no column from its distinct values
+    /** @param spellings the distinct non-empty values in lower case, each with its spellings and their counts
+        @param empty the number of empty cells
+
+        @return @c bool_true, @c bool_false and @c empty_is_false, or nothing
+    */
+    private static *hash<auto> boolColumn(hash<string, hash<string, int>> spellings, int empty) {
+        list<string> values = keys spellings;
+        # the most frequent way the file writes a value
+        code written = string sub (string v) {
+            string rv;
+            int n = -1;
+            foreach hash<auto> i in (spellings{v}.pairIterator()) {
+                if (i.value > n) {
+                    rv = i.key;
+                    n = i.value;
+                }
+            }
+            return rv;
+        };
+        if (values.size() == 1 && empty && inlist(values[0], BoolMarks)) {
+            return {"bool_true": (written(values[0]),), "bool_false": (), "empty_is_false": True};
+        }
+        foreach list<string> pair in (BoolPairs) {
+            # both values, or one of them, but nothing else
+            if (values.size() <= 2 && !(select values, !inlist($1, pair))) {
+                if (values.size() == 1 && !empty) {
+                    # one value and no other: not enough to call it yes/no
+                    return;
+                }
+                return {
+                    "bool_true": inlist(pair[0], values) ? (written(pair[0]),) : (),
+                    "bool_false": inlist(pair[1], values) ? (written(pair[1]),) : (),
+                    "empty_is_false": False,
+                };
+            }
+        }
+    }
+
     #! Profiles one column of the data rows
     private static hash<TabularColumnProfile> profileColumn(list<list<auto>> rows, list<list<string>> types,
             list<int> data_rows, int col,
@@ -732,6 +800,9 @@ public class TabularProfiler {
         bool iso_dates;
         bool decimal_comma;
         bool decimal_point;
+        # the distinct text values, for yes/no columns: lower case -> spelling -> count; up to a few only
+        hash<string, hash<string, int>> spellings = {};
+        bool many_values;
         foreach int r in (data_rows) {
             if ((types[r][col] ?? "empty") == "empty") {
                 ++rv.empty;
@@ -739,6 +810,17 @@ public class TabularProfiler {
             }
             hash<auto> cls = classify(rows[r][col]);
             ++rv.non_empty;
+            if (!many_values && (cls.type == "string" || cls.type == "bool")) {
+                string v = trim(rows[r][col].toString());
+                if (v.length() <= 40) {
+                    ++spellings{v.lwr()}{v};
+                }
+                if (spellings.size() > 2) {
+                    many_values = True;
+                }
+            } else if (cls.type != "string" && cls.type != "bool") {
+                many_values = True;
+            }
             ++counts{cls.type};
             if (cls.leading_zero) {
                 rv.leading_zeros = True;
@@ -784,6 +866,22 @@ public class TabularProfiler {
         }
         rv.type = type;
         rv.confidence = matching.toFloat() / rv.non_empty;
+
+        # a yes/no column written as text: a known pair, or a mark with empty cells
+        if (!many_values && spellings && (type == "string" || type == "bool")) {
+            *hash<auto> yes_no = boolColumn(spellings, rv.empty);
+            if (yes_no) {
+                rv.type = "bool";
+                rv.confidence = 1.0;
+                rv += yes_no;
+            } else if (spellings.size() == 2 && type == "string" && rv.non_empty >= 4
+                    && !(select keys spellings, $1 !~ /^\p{L}[\p{L} ]{0,19}$/u)) {
+                # two words, neither a known pair, such as good/bad or pass/fail: maybe yes/no, but which is yes
+                # is the user's to say; identifiers and codes with digits are not candidates
+                rv.two_values = map options.redact ? redact($1) : $1,
+                    (map (keys spellings{$1})[0], keys spellings);
+            }
+        }
 
         if (rv.dates_as_text && type == "date") {
             if (iso_dates && !date_separator) {
@@ -848,6 +946,9 @@ public class TabularProfiler {
         }
         if (column.leading_zeros) {
             rv += <TabularProfileFinding>{"code": "leading_zero_identifiers", "col": column.index};
+        }
+        if (column.two_values) {
+            rv += <TabularProfileFinding>{"code": "two_values", "col": column.index, "detail": column.two_values};
         }
         return rv;
     }

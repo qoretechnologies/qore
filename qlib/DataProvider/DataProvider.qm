@@ -1398,8 +1398,9 @@ fetch
       spreadsheet or delimited text file supplied by a format reader as a
       @ref DataProvider::TabularWorkbookGrid "TabularWorkbookGrid": it finds the header row, title rows, data region,
       totals rows, and blank-row gaps, infers each column's type with a confidence and redacted counter-examples,
-      and reports dates and numbers stored as text in a local format, leading-zero identifiers, duplicate headers,
-      merged cells, hidden sheets, formulas, and wide period columns; the profile is described by
+      and reports dates and numbers stored as text in a local format, leading-zero identifiers, yes/no columns
+      written as text (with the values read as yes and no) and two-valued text columns that may be yes/no,
+      duplicate headers, merged cells, hidden sheets, formulas, and wide period columns; the profile is described by
       @ref DataProvider::TabularWorkbookProfileDataType "TabularWorkbookProfileDataType" for \c profile application
       actions, and @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider" and
       @ref DataProvider::TabularProfileRequestDataType "TabularProfileRequestDataType" implement such an action for
