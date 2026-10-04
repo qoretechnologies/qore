@@ -989,6 +989,25 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - Booleans: \c true, \c false
     - Null: \c null
 
+    @anchor dpql_number_float
+    @par Numbers and Floats
+    A decimal literal such as \c 1.19 is a float, as are float fields; a float holds the nearest binary value
+    (\c 1.19 is \c 1.18999999999999994670929481799248605966567993164062).  When an arithmetic operator
+    (\c +, \c -, \c *, \c /, \c %), a comparison (\c ==, \c !=, \c <, \c <=, \c >, \c >=,
+    \c between, \c inRange, \c in, <tt>not in</tt>, \c nullif) or \c toNumber() combines a float with a
+    number (an arbitrary-precision field, such as a money amount), the float is converted with
+    @ref DataProvider::DataProvider::floatToNumber() "DataProvider::floatToNumber()": to the number that its
+    decimal representation with 15 significant digits gives.  So <tt>\@price * 1.19</tt> for a number field
+    \c price of \c 2125 gives the same number as <tt>2125n * 1.19n</tt> in %Qore (\c 2528.75), and
+    <tt>\@rate == 1.19</tt> is \c true for a number field \c rate of \c 1.19n.  Without this conversion, the
+    float's binary value would show: <tt>2125n * number(1.19)</tt> is \c 2528.7499999999997875.
+    - a float's digits after the 15th significant digit are lost; a double cannot hold them exactly anyway
+    - numbers are binary floating-point values with a larger precision, not decimal values: a number literal such
+      as \c 1.19n is itself the binary value nearest to the decimal value, so <tt>2125n * 1.19n</tt> prints as
+      \c 2528.75 but is not equal to \c 2528.75n
+    - operations on two floats, on two integers, and on an integer and a number are not affected; NaN and infinity
+      are converted as with @ref Qore::number() "number()"
+
     @par Function Calls
     Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
     Built-in DataProvider functions such as <tt>containsAny(\@name, "li", "av")</tt>,
@@ -1192,6 +1211,11 @@ server.start();
 
     @subsection dpql_validation Expression Validation
 
+    @ref DataProvider::AbstractDataProvider::prepareExpression() "AbstractDataProvider::prepareExpression()", which
+    prepares an expression for generic evaluation (as \c filter-records does), verifies every expression in the
+    tree: an expression that is unknown, or called with fewer arguments than it requires or more than it accepts,
+    raises a \c DATA-PROVIDER-EXPRESSION-ERROR before any record is evaluated.
+
     Expressions can be validated against available fields:
     @code{.py}
 # Validate expression against fields
@@ -1346,6 +1370,27 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - in DPQL and generic expression evaluation, a float combined with a number by an arithmetic operator, a
+      comparison, or \c toNumber() is converted to the number that its 15 significant digits give, so
+      <tt>\@price * 1.19</tt> for a number field gives the same number as with the number literal \c 1.19n
+      instead of exposing the float's binary value (\c 2528.7499999999997875); see
+      @ref dpql_number_float "Numbers and Floats" and
+      @ref DataProvider::DataProvider::floatToNumber() "DataProvider::floatToNumber()", which applies the same rule
+    - @ref DataProvider::AbstractDataProvider::prepareExpression() "AbstractDataProvider::prepareExpression()"
+      (used by \c filter-records and other generic evaluation) verifies every expression in the tree: an unknown
+      expression, such as \c nosuch in <tt>nosuch(\@a) > 1</tt>, or too few or too many arguments, such as
+      <tt>substr(\@a)</tt>, raises a \c DATA-PROVIDER-EXPRESSION-ERROR when the expression is prepared instead of
+      when a record is evaluated; added
+      @ref DataProvider::AbstractDataProvider::verifyGenericExpression()
+      "AbstractDataProvider::verifyGenericExpression()" and
+      @ref DataProvider::AbstractDataProvider::getRequiredArgCount() "AbstractDataProvider::getRequiredArgCount()"
+    - @ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()" with an
+      expression map verifies the nested expressions in the arguments as well: with the expression map if it has
+      them, otherwise for generic evaluation, as a provider with client-side filtering evaluates them
+    - a search operator with one argument given without a value, such as \c dp_op_ne() for \c != \c NOTHING, gives an
+      expression with the @ref nothing argument instead of none, so the expression has all its arguments
+    - fixed <tt>not in</tt> with more than one value, such as <tt>\@id not in (2, 4)</tt>, comparing only the first
+      value in generic evaluation
     - fixed DPQL prefix expression operators (\c map, \c hash_map, \c select, \c first, \c any, \c all,
       \c count, \c take, \c drop, \c takewhile, \c takeuntil) with more than one argument inside parentheses,
       such as <tt>(count \@age > 28, \@users) > 1</tt>, being parsed as a list of strings

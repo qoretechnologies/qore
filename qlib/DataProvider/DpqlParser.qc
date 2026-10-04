@@ -1747,7 +1747,7 @@ public class DpqlParser {
             int expected = info.args.size();
             int actual = args.size();
             if (info.varargs) {
-                int min = info.min_args ?? getMinRequiredArgs(info);
+                int min = AbstractDataProvider::getRequiredArgCount(info);
                 if (actual < min) {
                     addWarning(
                         sprintf("Function '%s' expects at least %d argument%s, got %d",
@@ -1756,7 +1756,7 @@ public class DpqlParser {
                 }
             } else if (exists info.args && actual != expected) {
                 # an expression without an argument signature is not checked; an empty one takes no arguments
-                int min_required = getMinRequiredArgs(info);
+                int min_required = AbstractDataProvider::getRequiredArgCount(info);
                 if (actual < min_required) {
                     addWarning(
                         sprintf("Function '%s' expects %s%d argument%s, got %d",
@@ -1780,36 +1780,6 @@ public class DpqlParser {
             "exp": name,
             "args": args,
         };
-    }
-
-    #! Returns the minimum number of arguments a call to the given expression must provide
-    /** Positional arguments can only be omitted from the end of the argument list, so the trailing run of
-        optional arguments is excluded from the count.  An argument is optional when the registry declares it
-        so, either:
-        - with a signature type that is typed and also accepts @ref nothing (ex: \c *string), or
-        - with a \c default_value in its @ref DataProviderArgInfo "argument info"
-
-        A wildcard signature type (\c any / \c auto) also accepts @ref nothing, but it does not declare the
-        argument optional; such an argument is required unless it has a default value.
-
-        @param info the expression info from the expression registry
-
-        @return the minimum number of arguments required
-
-        @since %DataProvider 3.9
-    */
-    private static int getMinRequiredArgs(hash<DataProviderExpressionInfo> info) {
-        int min_required = info.args.size();
-        while (min_required > 0) {
-            hash<DataProviderSignatureTypeInfo> sig = info.args[min_required - 1];
-            bool optional = (sig.type.hasType() && !sig.type.isMandatory())
-                || exists info.arg_info[min_required - 1].default_value;
-            if (!optional) {
-                break;
-            }
-            --min_required;
-        }
-        return min_required;
     }
 
     #! Parses prefix expression operators such as \c map and \c hash_map

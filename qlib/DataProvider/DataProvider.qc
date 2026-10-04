@@ -1142,6 +1142,45 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         return str;
     }
 
+    #! Converts a float to a number through its decimal representation with 15 significant digits
+    /** A float cannot hold most decimal fractions exactly: \c 1.19 is stored as the nearest binary value,
+        \c 1.18999999999999994670929481799248605966567993164062.  Converting it to a number with
+        @ref Qore::number() "number()" keeps 17 significant digits of that value (\c 1.1899999999999999), so
+        arithmetic with numbers shows the difference: <tt>2125n * 1.19</tt> is \c 2528.7499999999997875.
+
+        This conversion uses the value's decimal representation with 15 significant digits instead, the precision
+        of a double (\c DBL_DIG): every decimal value with at most 15 significant digits is converted to a float and
+        back to the same 15 digits.  So the number given for a float written with at most 15 significant digits is
+        the number that the same digits give as a number literal: <tt>floatToNumber(1.19) == 1.19n</tt>, and
+        <tt>2125n * floatToNumber(1.19) == 2125n * 1.19n</tt> (\c 2528.75).
+
+        A float's digits after the 15th significant digit are lost; a double cannot hold them exactly anyway.
+        Numbers are binary floating-point values with a larger precision, not decimal values, so a number
+        literal such as \c 1.19n is itself the binary value nearest to the decimal value.
+
+        @param f the float to convert
+
+        @return the number for the float's 15 significant digits; NaN and infinity are converted as with
+        @ref Qore::number() "number()"
+
+        @par Example:
+        @code{.py}
+number n = DataProvider::floatToNumber(1.19);
+# n == 1.19n
+        @endcode
+
+        @see @ref dpql_number_float "Numbers and floats in DPQL"
+
+        @since DataProvider 3.9
+    */
+    static number floatToNumber(float f) {
+        # NaN is not equal to itself
+        if (f != f || f == @inf@ || f == -@inf@) {
+            return number(f);
+        }
+        return number(sprintf("%.15g", f));
+    }
+
     #! Parses a DPQL expression string into a DataProviderExpression
     /** @param text the DPQL expression to parse
         @param expressions optional map of expression names to their info for validation

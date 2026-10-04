@@ -59,6 +59,79 @@ auto sub dp_eval_arg(hash<auto> rec, hash<DataProviderExpression> exp, int index
 }
 
 #! Evaluates a locale-sensitive string predicate with an on-demand i18n dependency
+#! Returns an operand of a binary operation for arithmetic or comparison with the other operand
+/** A float operand is converted to a number with @ref DataProvider::floatToNumber() when the other operand is a
+    number, so the float is the number that its decimal digits (up to 15 significant digits) give; otherwise the
+    operand is returned unchanged.
+
+    @since DataProvider 3.9
+*/
+auto sub dp_num_operand(auto value, auto other) {
+    return (value.typeCode() == NT_FLOAT && other.typeCode() == NT_NUMBER)
+        ? DataProvider::floatToNumber(value)
+        : value;
+}
+
+#! Adds two values, converting a float to a number when the other value is a number
+auto sub dp_add(auto a, auto b) {
+    return dp_num_operand(a, b) + dp_num_operand(b, a);
+}
+
+#! Subtracts two values, converting a float to a number when the other value is a number
+auto sub dp_sub(auto a, auto b) {
+    return dp_num_operand(a, b) - dp_num_operand(b, a);
+}
+
+#! Multiplies two values, converting a float to a number when the other value is a number
+auto sub dp_mul(auto a, auto b) {
+    return dp_num_operand(a, b) * dp_num_operand(b, a);
+}
+
+#! Divides two values, converting a float to a number when the other value is a number
+auto sub dp_div(auto a, auto b) {
+    return dp_num_operand(a, b) / dp_num_operand(b, a);
+}
+
+#! Returns the remainder of two values, converting a float to a number when the other value is a number
+auto sub dp_mod(auto a, auto b) {
+    return dp_num_operand(a, b) % dp_num_operand(b, a);
+}
+
+#! Compares two values for equality, converting a float to a number when the other value is a number
+bool sub dp_eq(auto a, auto b) {
+    return dp_num_operand(a, b) == dp_num_operand(b, a);
+}
+
+#! Returns True if a < b, converting a float to a number when the other value is a number
+bool sub dp_lt(auto a, auto b) {
+    return dp_num_operand(a, b) < dp_num_operand(b, a);
+}
+
+#! Returns True if a <= b, converting a float to a number when the other value is a number
+bool sub dp_le(auto a, auto b) {
+    return dp_num_operand(a, b) <= dp_num_operand(b, a);
+}
+
+#! Returns True if a > b, converting a float to a number when the other value is a number
+bool sub dp_gt(auto a, auto b) {
+    return dp_num_operand(a, b) > dp_num_operand(b, a);
+}
+
+#! Returns True if a >= b, converting a float to a number when the other value is a number
+bool sub dp_ge(auto a, auto b) {
+    return dp_num_operand(a, b) >= dp_num_operand(b, a);
+}
+
+#! Returns True if the value equals an element of the list, as with inlist(), comparing with dp_eq()
+bool sub dp_inlist(auto value, auto values) {
+    foreach auto v in (values) {
+        if (dp_eq(value, v)) {
+            return True;
+        }
+    }
+    return False;
+}
+
 bool sub dp_eval_locale_string_predicate(softstring value, string op, softstring needle, hash<auto> options) {
     try {
         load_module("i18n");
@@ -264,8 +337,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto arg0 = dp_eval_arg(rec, exp, 0, tc);
-            return arg0 >= dp_eval_arg(rec, exp, 1, tc)
-                && arg0 < dp_eval_arg(rec, exp, 2, tc);
+            return dp_ge(arg0, dp_eval_arg(rec, exp, 1, tc))
+                && dp_lt(arg0, dp_eval_arg(rec, exp, 2, tc));
         },
     },
     DP_OP_HAS_VALUE: {
@@ -318,7 +391,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type_arg_priority": ("list", "string", "date", "number", "float", "int", "hash", "binary"),
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return foldl $1 + $2,
+            return foldl dp_add($1, $2),
                 (map AbstractDataProvider::evalGenericExpressionValue(rec, $1, tc), exp.args);
         },
     },
@@ -349,7 +422,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type_first_arg": True,
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return dp_eval_arg(rec, exp, 0, tc) - dp_eval_arg(rec, exp, 1, tc);
+            return dp_sub(dp_eval_arg(rec, exp, 0, tc), dp_eval_arg(rec, exp, 1, tc));
         },
     },
     DP_OP_MULT: {
@@ -375,7 +448,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type_arg_priority": ("number", "float", "int"),
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return foldl $1 * $2,
+            return foldl dp_mul($1, $2),
                 (map AbstractDataProvider::evalGenericExpressionValue(rec, $1, tc), exp.args);
         },
     },
@@ -407,7 +480,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type_arg_priority": ("number", "float", "int"),
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return dp_eval_arg(rec, exp, 0, tc) / dp_eval_arg(rec, exp, 1, tc);
+            return dp_div(dp_eval_arg(rec, exp, 0, tc), dp_eval_arg(rec, exp, 1, tc));
         },
     },
 
@@ -1919,7 +1992,9 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type": AbstractDataProviderTypeMap."number",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return dp_eval_arg(rec, exp, 0, tc).toNumber();
+            auto val = dp_eval_arg(rec, exp, 0, tc);
+            # a float is the number that its decimal digits give
+            return val.typeCode() == NT_FLOAT ? DataProvider::floatToNumber(val) : val.toNumber();
         },
     },
     DP_OP_TO_BOOL: {
@@ -2435,12 +2510,15 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "type": DET_Operator,
             "name": DP_OP_NOT_IN,
             "display_name": "not in",
-            "short_desc": "Returns True if the first argument is not found in the second argument",
-            "desc": "Returns `True` if the first argument is not found in the second argument (list)",
+            "short_desc": "Returns True if the first argument is not found in the other arguments",
+            "desc": "Returns `True` if the first argument is not found in the other arguments, or in the list given "
+                "as the only other argument",
             "symbol": "notIn",
             "render_template": "$arg[0] not in ($arg[1])",
             "groups": "Comparison",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "varargs": True,
+            "min_args": 2,
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "Value",
@@ -2458,7 +2536,14 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return !inlist(dp_eval_arg(rec, exp, 0, tc), dp_eval_arg(rec, exp, 1, tc));
+            # as with "in", each value is compared, and a single list value is expanded; DPQL gives
+            # "@a not in (1, 2)" as one argument for each value
+            softlist<auto> needles = map AbstractDataProvider::evalGenericExpressionValue(rec, $1, tc),
+                exp.args[1..];
+            if (needles.lsize() == 1 && needles[0].typeCode() == NT_LIST) {
+                needles = needles[0];
+            }
+            return !dp_inlist(dp_eval_arg(rec, exp, 0, tc), needles);
         },
     },
     DP_FUNC_COALESCE: {
@@ -2521,7 +2606,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto val = dp_eval_arg(rec, exp, 0, tc);
-            return val == dp_eval_arg(rec, exp, 1, tc) ? NOTHING : val;
+            return dp_eq(val, dp_eval_arg(rec, exp, 1, tc)) ? NOTHING : val;
         },
     },
 
@@ -2660,7 +2745,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type_arg_priority": ("number", "float", "int"),
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            return dp_eval_arg(rec, exp, 0, tc) % dp_eval_arg(rec, exp, 1, tc);
+            return dp_mod(dp_eval_arg(rec, exp, 0, tc), dp_eval_arg(rec, exp, 1, tc));
         },
     },
 
@@ -2971,6 +3056,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     "desc": "The list or hash source to inspect when a predicate is supplied",
                 },
             ),
+            "min_args": 1,
             "return_type": AbstractDataProviderTypeMap."any",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
@@ -3027,6 +3113,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     "desc": "The list or hash source to inspect when a predicate is supplied",
                 },
             ),
+            "min_args": 1,
             "return_type": AbstractDataProviderTypeMap."bool",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
@@ -3140,6 +3227,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     "desc": "The list or hash source to count when a predicate is supplied",
                 },
             ),
+            "min_args": 1,
             "return_type": AbstractDataProviderTypeMap."int",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {

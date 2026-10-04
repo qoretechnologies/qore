@@ -130,6 +130,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("new expression DPQL tests", \newExpressionDpqlTests());
         addTestCase("parenthesized prefix operator tests", \parenthesizedPrefixOperatorTests());
         addTestCase("optional argument count tests", \optionalArgumentCountTests());
+        addTestCase("float operands with number operands", \floatNumberOperandTests());
+        addTestCase("nested expression verification", \nestedVerificationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -4199,16 +4201,22 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(caught, "verifyExpression should reject unknown top-level key operator");
         }
 
-        # NOTE: verifyExpression does NOT recursively verify nested expression operators.
-        # When accessor operators are nested inside a comparison (e.g., @items[0] == 10),
-        # the top-level == operator has ST_Any args, so nested expressions are not checked.
-        # This means a provider without these operators will accept the expression at
-        # verification time but may fail at native execution time.
+        # verifyExpression verifies nested expressions as well: a nested expression that the provider does not
+        # have, such as an accessor in a comparison (@items[0] == 10), must be known for generic evaluation, as
+        # providers with client-side filtering evaluate it on the client; an unknown one is rejected
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0] == 10');
-            # This does NOT throw despite DP_FUNC_INDEX being nested inside ==
             AbstractDataProvider::verifyExpression(ER_Search, limited_expmap, 0,
                 AbstractDataProviderTypeMap."bool", exp);
+            exp = DataProvider::parseDpqlExpression('nosuch(@items) == 10');
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expression \"nosuch\" is unknown.*in an argument of "
+                "expression \"==\"", \AbstractDataProvider::verifyExpression(), (ER_Search, limited_expmap, 0,
+                AbstractDataProviderTypeMap."bool", exp));
+            # nested expressions are verified at any depth
+            exp = DataProvider::parseDpqlExpression('size(nosuch(@items)) == 10');
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expression \"nosuch\" is unknown",
+                \AbstractDataProvider::verifyExpression(), (ER_Search, limited_expmap, 0,
+                AbstractDataProviderTypeMap."bool", exp));
         }
 
         # Full GenericExpressions map should accept them at any level
@@ -7717,5 +7725,159 @@ public class DpqlTest inherits QUnit::Test {
                 }
             }
         }
+    }
+
+    #! Evaluates DPQL text for a record after preparing it
+    private auto evalDpql(string text, hash<auto> rec = {}) {
+        return AbstractDataProvider::evalGenericExpression(rec,
+            AbstractDataProvider::prepareExpression(DataProvider::parseDpqlExpression(text)));
+    }
+
+    floatNumberOperandTests() {
+        # the conversion rule: a float is the number that its 15 significant digits give
+        assertEq(1.19n, DataProvider::floatToNumber(1.19));
+        assertEq(NT_NUMBER, DataProvider::floatToNumber(1.19).typeCode());
+        assertEq(-1.19n, DataProvider::floatToNumber(-1.19));
+        assertEq(0n, DataProvider::floatToNumber(0.0));
+        assertEq(0.1n, DataProvider::floatToNumber(0.1));
+        assertEq(1.5e-300n, DataProvider::floatToNumber(1.5e-300));
+        assertEq(1.23456789012345e300n, DataProvider::floatToNumber(1.23456789012345e300));
+        assertEq(123456789012345n, DataProvider::floatToNumber(123456789012345.0));
+        # digits after the 15th are lost; a double cannot hold them anyway
+        assertEq(0.123456789012346n, DataProvider::floatToNumber(0.12345678901234567));
+        # NaN and infinity are converted as with number()
+        assertTrue(DataProvider::floatToNumber(@inf@).infp());
+        assertEq(@inf@n, DataProvider::floatToNumber(@inf@));
+        assertEq(-@inf@n, DataProvider::floatToNumber(-@inf@));
+        assertTrue(DataProvider::floatToNumber(@nan@).nanp());
+        # number() keeps 17 significant digits instead, which shows the float's binary value
+        assertNeq(1.19n, number(1.19));
+
+        hash<auto> rec = {
+            "price": 2125n,
+            "tenth": 0.1n,
+            "rate": 1.19n,
+            "float_rate": 1.19,
+            "neg": -2125n,
+            "zero": 0n,
+            "tiny": 1e-20n,
+            "big": 1e20n,
+        };
+        # float literals with number fields: the same result as the number literal would give
+        assertEq(2125n * 1.19n, evalDpql("@price * 1.19", rec));
+        assertEq("2528.75", evalDpql("@price * 1.19", rec).toString());
+        assertEq(NT_NUMBER, evalDpql("@price * 1.19", rec).typeCode());
+        assertEq(2125n * 1.19n, evalDpql("1.19 * @price", rec));
+        assertEq(0.1n + 0.2n, evalDpql("@tenth + 0.2", rec));
+        assertEq("0.3", evalDpql("@tenth + 0.2", rec).toString());
+        assertEq(2125n - 0.01n, evalDpql("@price - 0.01", rec));
+        assertEq(2125n / 1.19n, evalDpql("@price / 1.19", rec));
+        assertEq(-2125n * 1.19n, evalDpql("@neg * 1.19", rec));
+        assertEq(0n, evalDpql("@zero * 1.19", rec));
+        assertEq(1e-20n * 1.19n, evalDpql("@tiny * 1.19", rec));
+        assertEq(1e20n * 1.19n, evalDpql("@big * 1.19", rec));
+        # several operands: each float is converted when it meets a number
+        assertEq(2125n * 1.19n * 2n, evalDpql("@price * 1.19 * 2", rec));
+        assertEq(2125n + 0.1n + 0.2n, evalDpql("@price + 0.1 + 0.2", rec));
+        # a float field with a number field
+        assertEq(2125n * 1.19n, evalDpql("@float_rate * @price", rec));
+        # a float divided by a number
+        assertEq(1.19n / 2125n, evalDpql("@float_rate / @price", rec));
+
+        # comparisons
+        assertTrue(evalDpql("@rate == 1.19", rec));
+        assertTrue(evalDpql("1.19 == @rate", rec));
+        assertFalse(evalDpql("@rate != 1.19", rec));
+        assertTrue(evalDpql("@rate <= 1.19", rec));
+        assertTrue(evalDpql("@rate >= 1.19", rec));
+        assertFalse(evalDpql("@rate < 1.19", rec));
+        assertFalse(evalDpql("@rate > 1.19", rec));
+        assertTrue(evalDpql("@rate < 1.191", rec));
+        assertTrue(evalDpql("@float_rate == @rate", rec));
+        assertTrue(evalDpql("@rate between 1.19 and 1.2", rec));
+        assertTrue(evalDpql("@rate in (1.19, 2.5)", rec));
+        assertFalse(evalDpql("@rate not in (1.19, 2.5)", rec));
+        # numbers are binary values: 2125n * 1.19n is not the number 2528.75n, so the float result is compared
+        # with the same number expression
+        assertTrue(evalDpql("@price * 1.19 == @price * @rate", rec));
+        assertEq(NOTHING, evalDpql("nullif(@rate, 1.19)", rec));
+        # toNumber() converts a float the same way
+        assertEq(1.19n, evalDpql("toNumber(1.19)"));
+        assertEq(1.19n, evalDpql("toNumber(@float_rate)", rec));
+        assertEq(5n, evalDpql("toNumber(\"5\")"));
+
+        # float and float, and int and int, are unchanged
+        assertEq(2125.0 * 1.19, evalDpql("2125.0 * 1.19"));
+        assertEq(NT_FLOAT, evalDpql("2125.0 * 1.19").typeCode());
+        assertEq(0.1 + 0.2, evalDpql("0.1 + 0.2"));
+        assertFalse(evalDpql("0.1 + 0.2 == 0.3"));
+        assertEq(6, evalDpql("2 * 3"));
+        assertEq(NT_INT, evalDpql("2 * 3").typeCode());
+        assertEq(1, evalDpql("7 / 4"));
+        # int and number are unchanged
+        assertEq(4250n, evalDpql("@price * 2", rec));
+        # a number and NaN or infinity are unchanged: the float is converted as with number()
+        assertTrue(AbstractDataProvider::evalGenericExpression({"n": 1n, "f": @inf@},
+            DataProvider::parseDpqlExpression("@n * @f")).infp());
+        assertTrue(AbstractDataProvider::evalGenericExpression({"n": 1n, "f": @nan@},
+            DataProvider::parseDpqlExpression("@n + @f")).nanp());
+        assertFalse(AbstractDataProvider::evalGenericExpression({"n": 1n, "f": @nan@},
+            DataProvider::parseDpqlExpression("@n == @f")));
+
+        # filter-records evaluates the same way
+        QoreFilterRecordsProcessor proc({"dpql_where": "@price * 1.19 == @price * @rate"});
+        assertEq(rec, proc.processRecord(rec));
+    }
+
+    nestedVerificationTests() {
+        # an unknown function or a missing argument at any depth is reported when the expression is prepared, not
+        # when it is evaluated
+        map assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", $1.value,
+            \AbstractDataProvider::prepareExpression(), (DataProvider::parseDpqlExpression($1.key),)),
+            {
+                "nosuch(@a) > 1": "expression \"nosuch\" is unknown",
+                "lwr(nosuch(@a)) == \"x\"": "expression \"nosuch\" is unknown",
+                "@a == 1 && (@b > 2 || nosuch(@c))": "expression \"nosuch\" is unknown",
+                "substr(@a) == \"x\"": "expression \"substr\" requires at least 2 arguments; got 1",
+                "lwr(substr(@a)) == \"x\"": "expression \"substr\" requires at least 2 arguments; got 1",
+            }.pairIterator();
+        # expressions built without DPQL are verified the same way
+        map assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", $1.value,
+            \AbstractDataProvider::prepareExpression(), (cast<hash<DataProviderExpression>>($1.key),)),
+            (
+                {"key": {"exp": "<=", "args": ({"field": "a"},)}, "value": "\"<=\" requires 2 arguments; got 1"},
+                {"key": {"exp": "!", "args": ()}, "value": "\"!\" requires 1 argument; got 0"},
+                {"key": {"exp": "lwr", "args": ("a", "b")}, "value": "\"lwr\" accepts at most 1 argument; got 2"},
+                {"key": {"exp": "&&", "args": (<DataProviderExpression>{"exp": ">", "args":
+                    (<DataProviderFieldReference>{"field": "a"},)},)},
+                    "value": "\">\" requires 2 arguments; got 1"},
+            );
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "\"nosuch\" is unknown.*in an argument of expression \"&&\"",
+            \AbstractDataProvider::verifyGenericExpression(), (DataProvider::parseDpqlExpression(
+                "@a == 1 && nosuch(@b)"),));
+        # filter-records reports the error when it is created
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "\"nosuch\" is unknown",
+            sub () { new QoreFilterRecordsProcessor({"dpql_where": "nosuch(@a) > 1"}); });
+
+        # optional arguments, varargs, and the one-argument forms of the stream operators are accepted
+        foreach string text in ("substr(@a, 1) == \"x\"", "substr(@a, 1, 2) == \"x\"", "regex(@a, \"x\")",
+                "@a in (1, 2, 3)", "@a not in (1, 2, 3)", "coalesce(@a)", "count(@l) > 1", "first(@l) == 1",
+                "any(@l)", "now() > @d", "trim(@a) == \"x\"", "@a + 1 + 2 > 3") {
+            AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression(text));
+            assertTrue(True, text);
+        }
+        assertEq(2, AbstractDataProvider::getRequiredArgCount(
+            AbstractDataProvider::GenericExpressionImplementations.substr.exp));
+        assertEq(1, AbstractDataProvider::getRequiredArgCount(
+            AbstractDataProvider::GenericExpressionImplementations.count.exp));
+        assertEq(2, AbstractDataProvider::getRequiredArgCount(
+            AbstractDataProvider::GenericExpressionImplementations."<=".exp));
+        assertEq(2, AbstractDataProvider::getRequiredArgCount(
+            AbstractDataProvider::GenericExpressionImplementations.map.exp));
+
+        # "not in" with several values compares each one
+        assertFalse(evalDpql("@id not in (2, 4)", {"id": 4}));
+        assertTrue(evalDpql("@id not in (2, 4)", {"id": 3}));
+        assertFalse(evalDpql("@id not in (@ids)", {"id": 4, "ids": (2, 4)}));
     }
 }

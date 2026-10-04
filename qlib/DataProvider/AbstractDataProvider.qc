@@ -865,7 +865,12 @@ public hashdecl DataProviderExpressionBaseInfo {
     #! The last argument can be repeated indefinitely
     bool varargs = False;
 
-    #! Minimum arguments when varargs is set
+    #! The minimum number of arguments
+    /** If not set, the minimum is the number of arguments up to the last one that is not optional; see
+        @ref AbstractDataProvider::getRequiredArgCount()
+
+        @since DataProvider 3.9 also for expressions without \c varargs
+    */
     *int min_args;
 
     #! Return type argument priority list
@@ -1751,7 +1756,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     auto arg1 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                     # for backwards compatibility, if the first argument is a field reference, and the second is a
                     # hash
-                    return arg0 == arg1;
+                    return dp_eq(arg0, arg1);
                 },
             },
             DP_SEARCH_OP_NE: {
@@ -1782,8 +1787,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
-                        != AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    return !dp_eq(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_LT: {
@@ -1815,8 +1820,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
-                        < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    return dp_lt(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_LE: {
@@ -1848,8 +1853,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
-                        <= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    return dp_le(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_GT: {
@@ -1881,8 +1886,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
-                        > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    return dp_gt(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_GE: {
@@ -1914,8 +1919,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
-                        >= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
+                    return dp_ge(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_BETWEEN: {
@@ -1959,8 +1964,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
                     auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
-                    return arg0 >= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context)
-                        && arg0 <= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context);
+                    return dp_ge(arg0,
+                            AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context))
+                        && dp_le(arg0,
+                            AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context));
                 },
             },
             DP_SEARCH_OP_IN: {
@@ -2008,7 +2015,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     if (needles.lsize() == 1 && needles[0].typeCode() == NT_LIST) {
                         needles = needles[0];
                     }
-                    return inlist(
+                    return dp_inlist(
                         AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
                         needles);
                 },
@@ -5906,14 +5913,14 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                     "exp": getExpression(role, value.arg.op, info.expressions).name,
                     "args": args,
                 };
-            } else {
+            } else if (value.op_args && (value.op_args != 1)) {
                 if (exists value.arg) {
-                    if (value.op_args && (value.op_args != 1)) {
-                        args += value.arg;
-                    } else {
-                        push args, value.arg;
-                    }
+                    args += value.arg;
                 }
+            } else {
+                # an operator with one argument has it even if it is NOTHING (ex: dp_op_ne() for != NOTHING), so
+                # the expression has all its required arguments
+                push args, value.arg;
             }
             rv = <DataProviderExpression>{
                 "exp": expinfo.name,
@@ -6187,12 +6194,21 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         Call this once after deserializing an expression (e.g. in a processor constructor) and store the
         result for use in hot loops.
 
+        Each expression in the tree is verified for generic evaluation as with
+        @ref AbstractDataProvider::verifyGenericExpression().
+
         @param exp the expression to prepare
         @return a new expression with pre-computed field paths
 
+        @throw DATA-PROVIDER-EXPRESSION-ERROR an expression in the tree is unknown or has too few or too many
+        arguments
+
         @since DataProvider 3.3
+        @since DataProvider 3.9 the expressions in the tree are verified
     */
     static hash<DataProviderExpression> prepareExpression(hash<DataProviderExpression> exp) {
+        # each nested expression is verified when it is prepared
+        AbstractDataProvider::verifyGenericExpressionNode(exp);
         return <DataProviderExpression>{
             "exp": exp.exp,
             "args": map AbstractDataProvider::prepareExpressionArg($1), exp.args,
@@ -6346,7 +6362,109 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     static verifyExpression(int role, *hash<string, hash<DataProviderExpressionInfo>> expmap, int caps,
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
         hash<DataProviderExpressionInfo> expinfo = AbstractDataProvider::getExpression(role, exp.exp, expmap);
-        return AbstractDataProvider::verifyExpression(role, expinfo, caps, expected_type, exp);
+        AbstractDataProvider::verifyExpression(role, expinfo, caps, expected_type, exp);
+        # verify the nested expressions in the arguments as well; a nested expression that the provider does not
+        # have can be evaluated on the client for providers that support client-side filtering, so it must be known
+        # for generic evaluation instead
+        foreach auto arg in (exp.args) {
+            if (arg instanceof hash<DataProviderExpression>) {
+                on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
+                hash<DataProviderExpression> nested = cast<hash<DataProviderExpression>>(arg);
+                if (expmap{nested.exp} || expmap{OperatorAliasMap{nested.exp}}) {
+                    AbstractDataProvider::verifyExpression(role, expmap, caps, AbstractDataProviderTypeMap."any",
+                        nested);
+                } else {
+                    AbstractDataProvider::verifyGenericExpression(nested);
+                }
+            }
+        }
+    }
+
+    #! Returns the number of arguments that a call to an expression must provide
+    /** This is the expression's \c min_args if set; otherwise positional arguments can only be omitted from the
+        end of the argument list, so it is the number of arguments up to the last one that is not optional.  An
+        argument is optional when its signature type is a typed type that also accepts @ref nothing (ex:
+        \c *string), or when its @ref DataProviderArgInfo "argument info" has a \c default_value.
+
+        @param info the expression definition
+
+        @return the number of arguments that a call to the expression must provide
+
+        @since DataProvider 3.9
+    */
+    static int getRequiredArgCount(hash<DataProviderExpressionInfo> info) {
+        if (exists info.min_args) {
+            return info.min_args;
+        }
+        int min_required = info.args.size();
+        while (min_required > 0) {
+            hash<DataProviderSignatureTypeInfo> sig = info.args[min_required - 1];
+            bool optional = (sig.type.hasType() && !sig.type.isMandatory())
+                || exists info.arg_info[min_required - 1].default_value;
+            if (!optional) {
+                break;
+            }
+            --min_required;
+        }
+        return min_required;
+    }
+
+    #! Verifies an expression for generic (client-side) evaluation, including all nested expressions
+    /** Each expression must be known for generic evaluation (a built-in expression, an expression of a loaded
+        module, or a custom expression), and must be called with no fewer arguments than it requires
+        (@ref AbstractDataProvider::getRequiredArgCount()) and no more than it accepts.
+
+        @ref AbstractDataProvider::prepareExpression() verifies expressions this way.
+
+        @param exp the expression to verify
+
+        @throw DATA-PROVIDER-EXPRESSION-ERROR an expression is unknown or has too few or too many arguments
+
+        @since DataProvider 3.9
+    */
+    static verifyGenericExpression(hash<DataProviderExpression> exp) {
+        AbstractDataProvider::verifyGenericExpressionNode(exp);
+        foreach auto arg in (exp.args) {
+            if (arg instanceof hash<DataProviderExpression>) {
+                on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
+                AbstractDataProvider::verifyGenericExpression(cast<hash<DataProviderExpression>>(arg));
+            }
+        }
+    }
+
+    #! Verifies one expression for generic evaluation, without its nested expressions
+    private static verifyGenericExpressionNode(hash<DataProviderExpression> exp) {
+        *hash<auto> impl;
+        if (*hash<auto> custom_map = get_app_registry("dp-custom-expressions")) {
+            impl = custom_map{exp.exp};
+        }
+        if (!impl) {
+            impl = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
+                ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
+        }
+        if (!impl && ExtraExpressionImplementations) {
+            impl = ExtraExpressionImplementations{exp.exp}
+                ?? ExtraExpressionImplementations{OperatorAliasMap{exp.exp}};
+        }
+        if (!impl) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is unknown", exp.exp);
+        }
+        *hash<DataProviderExpressionInfo> info = impl.exp;
+        # an expression without an argument signature is not checked
+        if (!info || !exists info.args) {
+            return;
+        }
+        int actual = exp.args.lsize();
+        int required = AbstractDataProvider::getRequiredArgCount(info);
+        if (actual < required) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y requires %s%d argument%s; got %d",
+                exp.exp, (info.varargs || required < info.args.size()) ? "at least " : "", required,
+                required == 1 ? "" : "s", actual);
+        }
+        if (!info.varargs && actual > info.args.size()) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y accepts at most %d argument%s; got %d",
+                exp.exp, info.args.size(), info.args.size() == 1 ? "" : "s", actual);
+        }
     }
 
     #! processes an expression in a certain context

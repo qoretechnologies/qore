@@ -49,6 +49,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed numeric function filters", \computedNumericFunctionFilters());
         addTestCase("computed string function filters", \computedStringFunctionFilters());
         addTestCase("computed date function filters", \computedDateFunctionFilters());
+        addTestCase("float columns compared with numbers", \floatNumberComparisonFilters());
 
         set_return_value(main());
     }
@@ -346,5 +347,42 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
             DataProvider::parseDpqlExpression('@created >= 2026-04-01T00:00:00Z - days(60)'),
             (1, 4),
             "scalar date arithmetic is evaluated once for column-wise comparison");
+    }
+
+    private floatNumberComparisonFilters() {
+        # a float value compared with a number is the number that its decimal digits give, in every shape:
+        # 1.19 == 1.19n although number(1.19) is not 1.19n
+        hash<auto> columns = {
+            "id": new buffer<int64>((1, 2, 3)),
+            "rate": new buffer<float64>((1.19, 2.5, 0.1)),
+        };
+        hash<string, list<int>> cases = {
+            "==": (1,),
+            "!=": (2, 3),
+            "<=": (1, 3),
+            ">=": (1, 2),
+            "<": (3,),
+            ">": (2,),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            hash<DataProviderExpression> expr = <DataProviderExpression>{
+                "exp": i.key,
+                "args": (<DataProviderFieldReference>{"field": "rate"}, 1.19n),
+            };
+            QoreFilterRecordsProcessor proc({"where_cond": expr});
+            DataFrame::DataFrame df(columns);
+            assertEq(i.value, dataframeIds(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock)),
+                i.key + " DataFrameBlock");
+            ColumnarResult result = ColumnarResult::fromColumnHash(columns, NOTHING);
+            assertEq(i.value, columnarIds(proc.processRecordsShape(result, DataProviderShape::BufferColumns)),
+                i.key + " BufferColumns");
+            list<hash<auto>> records = (
+                {"id": 1, "rate": 1.19},
+                {"id": 2, "rate": 2.5},
+                {"id": 3, "rate": 0.1},
+            );
+            list<int> rows = map $1.id, records, AbstractDataProvider::evalGenericExpression($1, expr);
+            assertEq(i.value, rows, i.key + " records");
+        }
     }
 }

@@ -203,6 +203,10 @@ public class ColumnarExpressionFilter {
             case DP_SEARCH_OP_GE:
             case DP_SEARCH_OP_LT:
             case DP_SEARCH_OP_LE:
+                # a number is compared with each value as DPQL compares a float with a number, by row
+                if (value.typeCode() == NT_NUMBER) {
+                    return;
+                }
                 return df.column(field).compare(op, value);
         }
         return;
@@ -439,7 +443,7 @@ public class ColumnarExpressionFilter {
                     return NOTHING;
                 case DP_FUNC_NULLIF: {
                     auto value = evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache);
-                    return value == evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache)
+                    return dp_eq(value, evalDataFrameExpressionValue(df, arg.args[1], row, \column_cache))
                         ? NOTHING : value;
                 }
                 case DP_FUNC_CONCAT:
@@ -575,6 +579,10 @@ public class ColumnarExpressionFilter {
             return;
         }
         value = normalizeColumnarComparisonValue(records, field, value);
+        if (value.typeCode() == NT_NUMBER) {
+            # a float element is compared with a number as DPQL compares them, element by element
+            return compareVectorToMask(column, op, value);
+        }
 
         switch (op) {
             case DP_SEARCH_OP_EQ:
@@ -935,7 +943,7 @@ public class ColumnarExpressionFilter {
                     return NOTHING;
                 case DP_FUNC_NULLIF: {
                     auto value = evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache);
-                    return value == evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache)
+                    return dp_eq(value, evalBufferExpressionValueAt(records, arg.args[1], row, \column_cache))
                         ? NOTHING : value;
                 }
                 case DP_FUNC_CONCAT:
@@ -1012,8 +1020,9 @@ public class ColumnarExpressionFilter {
 
     #! Compares a vector against a scalar and returns a dense boolean mask
     private static *auto compareVectorToMask(auto vector, string op, auto value) {
+        # a number is compared with each element as DPQL compares a float with a number, not natively
         if (vector.typeCode() == NT_BUFFER && isNativeBufferComparisonOperator(op)
-                && exists value && value.typeCode() != NT_NULL) {
+                && exists value && value.typeCode() != NT_NULL && value.typeCode() != NT_NUMBER) {
             switch (op) {
                 case DP_SEARCH_OP_EQ:
                     return vector == value;
@@ -1531,21 +1540,21 @@ public class ColumnarExpressionFilter {
 
         switch (op) {
             case DP_SEARCH_OP_EQ:
-                return lhs == rhs;
+                return dp_eq(lhs, rhs);
             case DP_SEARCH_OP_NE:
-                return lhs != rhs;
+                return !dp_eq(lhs, rhs);
             case DP_OP_ABSOLUTE_EQ:
                 return lhs === rhs;
             case DP_OP_ABSOLUTE_NE:
                 return lhs !== rhs;
             case DP_SEARCH_OP_GT:
-                return lhs > rhs;
+                return dp_gt(lhs, rhs);
             case DP_SEARCH_OP_GE:
-                return lhs >= rhs;
+                return dp_ge(lhs, rhs);
             case DP_SEARCH_OP_LT:
-                return lhs < rhs;
+                return dp_lt(lhs, rhs);
             case DP_SEARCH_OP_LE:
-                return lhs <= rhs;
+                return dp_le(lhs, rhs);
         }
         throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used for a scalar comparison", op);
     }
@@ -1554,15 +1563,15 @@ public class ColumnarExpressionFilter {
     private static auto applyArithmetic(string op, auto lhs, auto rhs) {
         switch (op) {
             case DP_OP_PLUS:
-                return lhs + rhs;
+                return dp_add(lhs, rhs);
             case DP_OP_MINUS:
-                return lhs - rhs;
+                return dp_sub(lhs, rhs);
             case DP_OP_MULT:
-                return lhs * rhs;
+                return dp_mul(lhs, rhs);
             case DP_OP_DIV:
-                return lhs / rhs;
+                return dp_div(lhs, rhs);
             case DP_OP_MOD:
-                return lhs % rhs;
+                return dp_mod(lhs, rhs);
         }
         throw "EXPRESSION-FILTER-ERROR", sprintf("operator %y cannot be used for arithmetic", op);
     }
@@ -2377,6 +2386,10 @@ public class ColumnarExpressionFilter {
             case DP_SEARCH_OP_GE:
             case DP_SEARCH_OP_LT:
             case DP_SEARCH_OP_LE:
+                # a number is compared with each value as DPQL compares a float with a number, by row
+                if (value.typeCode() == NT_NUMBER) {
+                    return filterDataFrameViaRows(df, expr);
+                }
                 return df.filter(field, op, value);
             case DP_OP_CONTAINS:
                 return df.filter(field, "contains", value);
