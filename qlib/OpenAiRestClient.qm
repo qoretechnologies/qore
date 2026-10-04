@@ -123,6 +123,9 @@ stream.close();
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
 
+    - an \c allowed_tools tool choice restricts the tools a call may use without changing the tools it
+      declares, also on the Responses API: keeping the declared tools unchanged keeps the provider's prompt
+      cache across calls that allow different tools
     - saved connections keep a custom endpoint URL such as a data-residency host or a gateway; only an
       automatically generated URL is still replaced with the default endpoint
     - Per-call LLM timeouts now govern synchronous requests and stream setup;
@@ -1497,6 +1500,15 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
         if (body.tool_choice.typeCode() == NT_HASH && body.tool_choice.type == "function") {
             body.tool_choice = {"type": "function", "name": body.tool_choice.function.name};
+        } else if (body.tool_choice.typeCode() == NT_HASH && body.tool_choice.type == "allowed_tools") {
+            # Chat Completions nests the allowed set under "allowed_tools", with function names nested as in
+            # its tool definitions; Responses carries the mode and a flat tool list at the top level
+            hash<auto> allowed = body.tool_choice.allowed_tools ?? body.tool_choice;
+            body.tool_choice = {
+                "type": "allowed_tools",
+                "mode": allowed.mode ?? "auto",
+                "tools": map ("type": "function", "name": $1.function.name ?? $1.name), allowed.tools,
+            };
         }
         if (body.response_format) {
             hash<auto> format = remove body.response_format;

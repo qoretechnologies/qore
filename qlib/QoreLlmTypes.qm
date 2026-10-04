@@ -540,6 +540,13 @@ public hashdecl LlmProviderInfo {
         decode locally should expose these free-form payload slots as JSON
         string fields when this flag is @ref True. */
     bool prefers_stringified_tool_payloads = False;
+    #! True when the provider accepts a tool choice of type \c allowed_tools
+    /** Such a choice restricts the tools one call may use while the call declares the same tools as other
+        calls.  A provider caches the prefix of a request, and the declared tools are part of it: a caller
+        whose calls each allow a different subset of one stable tool set keeps that prefix cached by
+        declaring the whole set and allowing the subset, where declaring only the subset re-bills the whole
+        request whenever the subset changes. */
+    bool supports_allowed_tool_choice = False;
 }
 
 #! Abstract factory for an LLM provider

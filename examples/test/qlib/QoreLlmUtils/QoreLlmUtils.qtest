@@ -315,6 +315,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("CallbackLlmProvider chatStream safety-net done for malformed providers",
             \callbackChatStreamSafetyNetDoneTest());
         addTestCase("Responses strict tools and opaque reasoning round trip", \openAiResponsesRoundTripTest());
+        addTestCase("Responses allowed tools keep the declared tools", \openAiResponsesAllowedToolsTest());
         addTestCase("Responses streamed completion, limits and filters retain usage", \openAiResponsesStreamTest());
         addTestCase("Responses structured output and API isolation", \openAiResponsesCompletionTest());
         addTestCase("Responses failure and incomplete transport never replay", \openAiResponsesFailureTest());
@@ -3070,6 +3071,23 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("function_call_output", input[3].type);
         assertEq("call_fixture", input[3].call_id);
         assertEq(2, gemini_handler.requests.size());
+    }
+
+    #! An allowed-tools choice keeps the declared tools and restricts the callable ones on the Responses API
+    openAiResponsesAllowedToolsTest() {
+        installGeminiHandler({"/v1/responses": {"code": 200, "body": responsesFixture()}});
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "responses"}});
+        hash<auto> request = responsesRequest();
+        request.tools += {"type": "function", "function": {"name": "other", "parameters": {"type": "object",
+            "properties": {}}}};
+        request.tool_choice = {"type": "allowed_tools", "allowed_tools": {"mode": "required",
+            "tools": ({"type": "function", "function": {"name": "record"}},)}};
+        backend.chatCompletions(request);
+        hash<auto> wire = gemini_handler.requests[0].body;
+        assertEq(("record", "other"), map $1.name, wire.tools, "every declared tool is still sent");
+        assertEq({"type": "allowed_tools", "mode": "required", "tools": ({"type": "function", "name": "record"},)},
+            wire.tool_choice, "the allowed set travels in the Responses form");
     }
 
     openAiResponsesStreamTest() {
