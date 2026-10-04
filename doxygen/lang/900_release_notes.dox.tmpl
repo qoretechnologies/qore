@@ -2627,7 +2627,8 @@ while (*binary chunk = input.read(65536)) {
     - @ref sqlite3sqlutilintro "Sqlite3SqlUtil" module
       - fixed tables reporting no primary key, so \c upsert() always failed
       - fixed duplicate-row detection never recognizing a duplicate key
-      - fixed describing a table with a composite primary key or a unique constraint failing
+      - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,
+        and quoted column names kept their quotes
 
     - @ref sqlutilintro "SqlUtil" module
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to

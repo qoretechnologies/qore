@@ -39,6 +39,9 @@ class Sqlite3KeysTest inherits QUnit::Test {
         ds.exec("create table composite_pk (a integer, b varchar(10), v varchar(10), primary key (b, a))");
         ds.exec("create table unique_col (id integer primary key, code varchar(10) unique, v varchar(10))");
         ds.exec("create table no_pk (x integer)");
+        ds.exec("create table quoted (\"id\" integer, \"code\" varchar(10), \"name\" varchar(10))");
+        ds.exec("create unique index \"quoted_code\" on \"quoted\" (\"code\")");
+        ds.exec("create index quoted_name on quoted (name collate nocase)");
         ds.commit();
 %endif
     }
@@ -72,6 +75,14 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertEq(1, indexes.size(), "a unique constraint's index is described");
         assertTrue(indexes[0].unique);
         assertEq(("code",), indexes[0].columns.keys());
+
+        # an index's columns are described without their quotes, and a lower-case unique index is unique
+        hash<auto> quoted = map {$1.getName(): $1}, (new Table(ds, "quoted")).getIndexes().iterator();
+        assertEq(("quoted_code", "quoted_name"), sort(keys quoted));
+        assertEq(("code",), quoted.quoted_code.columns.keys());
+        assertTrue(quoted.quoted_code.unique);
+        assertFalse(quoted.quoted_name.unique);
+        assertEq({"name": "nocase"}, quoted.quoted_name.collations, "a column collation is kept as declared");
     }
 
     upsert() {

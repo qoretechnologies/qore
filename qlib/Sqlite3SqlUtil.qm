@@ -90,8 +90,9 @@ module Sqlite3SqlUtil {
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
     - fixed tables reporting no primary key, so \c upsert() always failed with \c UPSERT-ERROR; the primary key is
       now read from the table's description
-    - fixed describing a table with an automatic index (a composite primary key or a unique constraint), which
-      failed; a unique constraint's index is now reported as a unique index
+    - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
+      constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
+      names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
     - fixed duplicate-row detection, which matched another database's error message and so never recognized a
       duplicate key; a primary key or unique constraint violation is now recognized from the result code the
       sqlite3 driver reports, or from SQLite's own message with an older driver
@@ -1144,47 +1145,28 @@ auto v = c.name;
         private Indexes getIndexesImpl() {
             hash<auto> rv;
 
-            # get index descriptions
-            *hash<auto> qh = ds.select("select * from sqlite_master where type = 'index' and tbl_name = %v", name);
-            if (qh.name) {
-                hash<auto> ih;
-                # the indexes SQLite creates itself for primary key and unique constraints have no SQL; their
-                # origin ("pk", "u") is reported by pragma index_list
-                *hash<auto> index_list = ds.select("pragma index_list(%s)", name);
-                hash<string, string> origins;
-                foreach hash<auto> il in (index_list.contextIterator()) {
-                    origins{il.name} = il.origin;
+            # pragma index_list and index_xinfo describe every index - including those SQLite creates itself
+            # for a primary key or unique constraint, which have no SQL - so no index SQL has to be parsed
+            *hash<auto> index_list = ds.select("pragma index_list(%s)", name);
+            foreach hash<auto> il in (index_list.contextIterator()) {
+                # the primary key's own index is described by getPrimaryKeyImpl()
+                if (il.origin == "pk") {
+                    continue;
                 }
-                foreach hash<auto> row in (qh.contextIterator()) {
-                    if (row.sql.typeCode() != NT_STRING) {
-                        # the primary key's own index is described by getPrimaryKeyImpl()
-                        if (origins{row.name} != "u") {
-                            continue;
-                        }
-                        ih{row.name}.unique = True;
-                        *hash<auto> info = ds.select("pragma index_info(%s)", row.name);
-                        foreach hash<auto> ii in (info.contextIterator()) {
-                            ih{row.name}.columns{ii.name} = columns{ii.name};
-                        }
+                hash<auto> index_columns = {};
+                *hash<string, string> collations;
+                *hash<auto> info = ds.select("pragma index_xinfo(%s)", il.name);
+                foreach hash<auto> ii in (info.contextIterator()) {
+                    # only key columns; an expression has no column name
+                    if (!ii.key.toInt() || ii.name.typeCode() != NT_STRING) {
                         continue;
                     }
-                    list<string> cols = map trim($1),
-                        (row.sql =~ x/CREATE (?:UNIQUE )?INDEX.*[^\(]+\((.*)\)$/)[0].split(",");
-                    bool unique = (row.sql =~ /^CREATE UNIQUE INDEX /);
-                    ih{row.name}.unique = unique;
-                    foreach string col in (cols) {
-                        *string collation = (col =~ x/ COLLATE (.*)$/)[0];
-                        if (collation) {
-                            col =~ s/ COLLATE .*//g;
-                            ih{row.name}.collations{col} = collation;
-                        }
-                        ih{row.name}.columns{col} = columns{col};
+                    index_columns{ii.name} = columns{ii.name};
+                    if (ii.coll.typeCode() == NT_STRING && ii.coll.upr() != "BINARY") {
+                        collations{ii.name} = ii.coll;
                     }
                 }
-
-                foreach hash<auto> i in (ih.pairIterator()) {
-                    rv{i.key} = new Sqlite3Index(i.key, i.value.unique, i.value.columns, i.value.collations);
-                }
+                rv{il.name} = new Sqlite3Index(il.name, il.unique.toBool(), index_columns, collations);
             }
 
             return new Indexes(rv);
