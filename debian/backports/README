@@ -43,6 +43,11 @@ Builds run the upstream documentation tests, compare the actual string
 functions against unsigned byte ordering under both char representations,
 and generate a real HTML search index containing mixed ASCII/Unicode titles.
 The installed-package test checks search ordering and section links again.
+BibTeX and its TeX configuration are provided by texlive-base in Build-Depends,
+since the citation test also runs in architecture-only builds without the
+Build-Depends-Indep TeX packages. Installing texlive-binaries alone is insufficient.
+Qualification must cover dpkg-buildpackage -B with only architecture-dependent
+build dependencies installed, as well as the full documentation build.
 The recipe retains distribution reproducibility flags and enables full linker
 hardening, including immediate symbol binding.
 The PDF manual suppresses imported diagrams' optional PTEX.InfoDict metadata:

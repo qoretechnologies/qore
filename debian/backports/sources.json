@@ -331,7 +331,7 @@
         },
         "doxygen": {
           "upstream_version": "1.9.8+ds",
-          "revision": "2.1+qore1",
+          "revision": "2.1+qore2",
           "orig_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds.orig.tar.xz",
           "orig_sha256": "877bc48813ab242f7e8a3b697927d588159a6375731499977667a6df2aae8e92",
           "packaging_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds-2.1.debian.tar.xz",
@@ -389,8 +389,8 @@
     },
     "doxygen": {
       "upstream_version": "1.15.0+ds1",
-      "revision": "1ubuntu3+qore1",
-      "date": "Sun, 04 Oct 2026 12:00:00 +0000",
+      "revision": "1ubuntu3+qore2",
+      "date": "Sun, 04 Oct 2026 14:20:00 +0000",
       "orig_url": "https://archive.ubuntu.com/ubuntu/pool/universe/d/doxygen/doxygen_1.15.0+ds1.orig.tar.xz",
       "orig_sha256": "a40855e233ff0c9d580dde9edc3340b5ea51aefb473e342a7bd114b4119eafd7",
       "packaging_url": "https://archive.ubuntu.com/ubuntu/pool/universe/d/doxygen/doxygen_1.15.0+ds1-1ubuntu3.debian.tar.xz",
@@ -405,7 +405,8 @@
         "Run upstream documentation tests and signed/unsigned-char comparison regressions.",
         "Retain reproducibility flags and enable full linker hardening.",
         "Exclude imported diagram timestamps from the PDF manual's optional metadata.",
-        "Verify generated search-index ordering in build and installed-package tests."
+        "Verify generated search-index ordering in build and installed-package tests.",
+        "Declare BibTeX as a test dependency for architecture-only builds."
       ]
     },
     "ngtcp2": {

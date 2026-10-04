@@ -148,7 +148,11 @@ def doxygen_packaging(source):
     old = "Build-Depends: debhelper-compat (= 13),\n"
     if updated.count(old) != 1:
         raise RuntimeError("unexpected Doxygen build dependencies")
-    control.write_text(updated.replace(old, old + "  libxml2-utils <!nocheck>,\n"))
+    # Citation tests need BibTeX and its TeX configuration even in binary-arch
+    # builds, where Build-Depends-Indep packages are deliberately not installed.
+    control.write_text(updated.replace(old, old +
+        "  libxml2-utils <!nocheck>,\n"
+        "  texlive-base <!nocheck>,\n"))
     shutil.copytree(CONFIG / "doxygen/tests", source / "debian/tests", dirs_exist_ok=True)
     copyright_file = source / "debian/copyright"
     updated = copyright_file.read_text()
