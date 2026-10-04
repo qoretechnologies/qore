@@ -49,6 +49,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("dates stored as text", \datesAsText());
         addTestCase("numbers stored as text in a local format", \localNumbers());
         addTestCase("identifiers with leading zeros", \leadingZeros());
+        addTestCase("yes/no columns written as text", \yesNo());
         addTestCase("mixed types report counter-examples", \mixedTypes());
         addTestCase("duplicate and empty headers", \headers());
         addTestCase("wide period columns", \widePeriods());
@@ -192,6 +193,52 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertTrue(sheet.columns[0].leading_zeros);
         assertFalse(sheet.columns[2].leading_zeros);
         assertEq((1, 2), (map $1.col, sheet.findings, $1.code == "leading_zero_identifiers"));
+    }
+
+    yesNo() {
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Paid", "Shipped", "Urgent", "Rating", "Code", "Note"),
+            ("Yes", "x", "T", "good", "A", "one"),
+            ("no", "", "f", "bad", "B", "two"),
+            ("YES", "x", "t", "good", "A", "three"),
+            ("No", "", "F", "bad", "B", "four"),
+        ));
+        hash<TabularColumnProfile> paid = sheet.columns[0];
+        assertEq("bool", paid.type);
+        assertEq(("Yes",), paid.bool_true, "the most frequent spelling");
+        assertEq(("no",), paid.bool_false);
+        assertFalse(paid.empty_is_false);
+
+        hash<TabularColumnProfile> shipped = sheet.columns[1];
+        assertEq("bool", shipped.type, "a mark with empty cells");
+        assertEq(("x",), shipped.bool_true);
+        assertEq((), shipped.bool_false);
+        assertTrue(shipped.empty_is_false);
+
+        assertEq("bool", sheet.columns[2].type);
+        assertEq(("T",), sheet.columns[2].bool_true);
+
+        # two values that are not a known pair: maybe yes/no, but which is yes is not guessed
+        hash<TabularColumnProfile> rating = sheet.columns[3];
+        assertEq("string", rating.type);
+        assertNothing(rating.bool_true);
+        assertEq(("xxxx", "xxx"), rating.two_values, "redacted");
+        assertEq((4, 5), (map $1.col, sheet.findings, $1.code == "two_values"));
+        assertEq("string", sheet.columns[5].type, "more than two values");
+        assertNothing(sheet.columns[5].two_values);
+        # an identifier with digits is not a candidate, nor are two values seen too few times
+        sheet = TabularProfiler::profile(TabularProfiler::gridFromHash({"format": "test", "sheets": ({"name": "s",
+            "rows": (("PO",), ("PO-1001",), ("PO-1002",), ("PO-1001",), ("PO-1002",))},)})).sheets[0];
+        assertNothing(sheet.columns[0].two_values, "identifiers with digits");
+        sheet = TabularProfiler::profile(TabularProfiler::gridFromHash({"format": "test", "sheets": ({"name": "s",
+            "rows": (("R",), ("good",), ("bad",))},)}), <TabularProfileOptions>{"redact": False}).sheets[0];
+        assertNothing(sheet.columns[0].two_values, "too few cells to tell");
+
+        # without redaction the two values are given as written
+        sheet = TabularProfiler::profile(TabularProfiler::gridFromHash({"format": "test", "sheets": ({"name": "s", "rows": (
+            ("Rating",), ("good",), ("bad",), ("good",), ("bad",),
+        )},)}), <TabularProfileOptions>{"redact": False}).sheets[0];
+        assertEq(("good", "bad"), sheet.columns[0].two_values);
     }
 
     mixedTypes() {
