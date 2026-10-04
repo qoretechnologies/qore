@@ -2265,6 +2265,9 @@ while (*binary chunk = input.read(65536)) {
         ordering, free-text search, and paging) instead of through a hand-written generic API call
 
     - @ref googledataproviderintro "GoogleDataProvider" module
+      - ship complete pinned Calendar v3 and Gmail v1 Discovery schemas and prohibit live Google discovery during
+        provider indexing, so denied egress cannot stall metadata regeneration; missing or mismatched schemas fail
+        explicitly (<a href="https://github.com/qoretechnologies/qore/issues/5474">issue 5474</a>)
       - date values in query arguments are serialized as <a href="https://datatracker.ietf.org/doc/html/rfc3339">RFC 3339</a> timestamps, as Google APIs require
         (ex: \c timeMin / \c timeMax in Calendar \c events.list), instead of an unparseable digit string
 
@@ -2474,6 +2477,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed listing materialized views, which listed the ordinary tables of every schema instead
 
     - @ref providerindexintro "ProviderIndex" module
+      - include loading and callback warm-up in static metadata collection, and record unresolved output schemas as
+        unavailable actions with retry on later builds (<a href="https://github.com/qoretechnologies/qore/issues/5474">issue 5474</a>)
       - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()", which stops the
         worker processes of the index builds in progress; they run in their own process groups, so a process that
         builds an index and is asked to stop must call it, or its workers keep running.  A cancelled build fails

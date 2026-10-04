@@ -1,0 +1,45 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/GoogleCalendarDataProvider
+%requires ../../../../qlib/GmailDataProvider
+
+module OfflineIndexFixture {
+    version = "1.0";
+    desc = "Offline Google schema qualification fixture";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestOfflineSchema", "display_name": "Offline Schema",
+            "short_desc": "Offline schema fixture", "desc": "Tests schema failure and recovery.",
+            "groups": (AppGroup::DataTransformation,), "logo": "fixture",
+            "logo_mime_type": "image/svg+xml", "logo_file_name": "fixture.svg",
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestOfflineSchema", "action": "recover", "path": "/recover",
+            "display_name": "Recover", "short_desc": "Resolve a schema after recovery",
+            "desc": "Tests an unavailable schema becoming available on the next index build.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({}),
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(
+                    OfflineSchemaState::getApi(), "events/get");
+            },
+        });
+    };
+}
+
+#! Test-only state changed by the single-threaded regression driver
+public class OfflineSchemaState {
+    private {
+        static string api = "missing-test-api";
+    }
+    static string getApi() {
+        return api;
+    }
+    static recover() {
+        api = "calendar";
+    }
+}

@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/GoogleDataProvider
+%requires ../../../../qlib/GoogleCalendarDataProvider
+%requires ../../../../qlib/GmailDataProvider
+
+%exec-class OfflineGoogleSchemasTest
+
+#! Exposes the runtime cache to verify it cannot bypass static schema qualification
+class GoogleSchemaCacheProbe inherits GoogleDataProviderBase {
+    static seedRuntimeCache() {
+        info_map{"runtime-test-api"} = GoogleDataProviderBase::getSchemaInfo("calendar");
+    }
+    static clearRuntimeCache() {
+        remove info_map{"runtime-test-api"};
+    }
+}
+
+#! Records runtime requests without performing authentication or I/O
+class RecordingGoogleClient inherits RestClientIo::RestClientIo {
+    public {
+        string method;
+        string path;
+        int requests = 0;
+        bool fail_request;
+    }
+
+    constructor() : RestClientIo({"url": "https://www.googleapis.com"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        self.method = method;
+        self.path = path;
+        ++requests;
+        if (fail_request) {
+            throw "GOOGLE-TEST-AUTH-ERROR", "runtime authentication failed";
+        }
+        return <RestClient::RestResponseInfo>{"body": {"id": "event-123", "summary": "Team meeting"}};
+    }
+}
+
+public class OfflineGoogleSchemasTest inherits QUnit::Test {
+    constructor() : Test("Offline Google schemas", "1.0") {
+        addTestCase("concurrent cold-cache readers share complete pinned types", \concurrentTest());
+        addTestCase("complete pinned documents resolve every method and schema", \completeTest());
+        addTestCase("catalog output callbacks resolve without a connection", \catalogTest());
+        addTestCase("absent schemas fail repeatedly without network discovery", \unavailableTest());
+        addTestCase("runtime execution still uses the supplied client and propagates authentication errors",
+            \runtimeTest());
+        bool old_mode = ProviderIndexUtil::setBuildMode(True);
+        on_exit ProviderIndexUtil::setBuildMode(old_mode);
+        set_return_value(main());
+    }
+
+    concurrentTest() {
+        Queue results();
+        for (int i = 0; i < 8; ++i) {
+            background sub (Queue results, string api, string path) {
+                try {
+                    DataProviderStaticMetadataHelper metadata();
+                    results.push({"api": api, "path": path,
+                        "type": GoogleDataProviderBase::getResponseTypeForSchema(api, path)});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"error": ex.err, "description": ex.desc});
+                }
+            }(results, i % 2 ? "calendar" : "gmail", i % 2 ? "events/get" : "users/messages/get");
+        }
+        for (int i = 0; i < 8; ++i) {
+            hash<auto> result = results.get();
+            assertNothing(result.error, result.description);
+            assertTrue(result.type === GoogleDataProviderBase::getResponseTypeForSchema(result.api, result.path),
+                "all concurrent readers reuse the published type");
+        }
+    }
+
+    private int countMethods(hash<auto> resources) {
+        int count = 0;
+        foreach hash<auto> resource in (resources.iterator()) {
+            count += resource.methods.size();
+            if (resource.resources) {
+                count += countMethods(resource.resources);
+            }
+        }
+        return count;
+    }
+
+    completeTest() {
+        DataProviderStaticMetadataHelper metadata();
+        foreach hash<string, string> expected in (({"api": "calendar", "version": "v3", "revision": "20260925"},
+                {"api": "gmail", "version": "v1", "revision": "20260727"})) {
+            hash<auto> doc = GoogleDataProviderBase::getSchemaInfo(expected.api);
+            assertEq(expected.version, doc.version);
+            assertEq(expected.revision, doc.revision);
+            assertEq(doc.schemas.size(), GoogleDataProviderBase::getApi(expected.api).size());
+            assertEq(doc.schemas.size(), GoogleDataProviderBase::getInputSchemasForApi(expected.api).size());
+            hash<auto> requests = GoogleDataProviderBase::getRequestInfo(expected.api);
+            assertEq(countMethods(doc.resources), requests.size(), "every shipped method is resolved");
+            assertGt(20, requests.size(), "the snapshot is a complete API, not a few catalog response types");
+            foreach hash<auto> request in (requests.iterator()) {
+                assertTrue(request.request_type instanceof AbstractDataProviderType);
+                assertTrue(request.http_method.val());
+                assertTrue(request.path.val());
+            }
+        }
+        AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchema("calendar", "events/get");
+        assertTrue(event.getFields().start.getType().getFields().hasKey("dateTime"));
+        AbstractDataProviderType message = GoogleDataProviderBase::getResponseTypeForSchema("gmail", "users/messages/get");
+        assertTrue(message.getFields().payload.getType().getFields().hasKey("parts"),
+            "nested Gmail message schemas are resolved");
+        assertEq("nothing", GoogleDataProviderBase::getResponseTypeForSchema("calendar", "events/delete").getName(),
+            "a method without a response has the declared nothing type");
+        assertThrows("SCHEMA-ERROR", sub () { GoogleDataProviderBase::getResponseTypeForSchema("calendar", "missing/get"); });
+    }
+
+    catalogTest() {
+        DataProviderStaticMetadataHelper metadata();
+        foreach string app in (("GoogleCalendar", "Gmail")) {
+            list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app);
+            assertGt(5, actions.size());
+            foreach hash<DataProviderActionInfo> action in (actions) {
+                assertNothing(action.get_output_type, sprintf("%s/%s resolved its schema", app, action.action));
+
+            }
+        }
+    }
+
+    unavailableTest() {
+        assertFalse(DataProviderStaticMetadataHelper::get());
+        GoogleSchemaCacheProbe::seedRuntimeCache();
+        on_exit GoogleSchemaCacheProbe::clearRuntimeCache();
+        assertEq("v3", GoogleDataProviderBase::getSchemaInfo("runtime-test-api").version,
+            "runtime discovery can reuse its cache");
+        {
+            DataProviderStaticMetadataHelper metadata();
+            assertThrows("GOOGLE-SCHEMA-UNAVAILABLE", sub () {
+                GoogleDataProviderBase::getSchemaInfo("runtime-test-api");
+            });
+            for (int i = 0; i < 50; ++i) {
+                assertThrows("GOOGLE-SCHEMA-UNAVAILABLE", sub () { GoogleDataProviderBase::getRequestInfo("missing-test-api"); });
+                assertThrows("GOOGLE-SCHEMA-UNAVAILABLE", sub () { GoogleDataProviderBase::getUrlForApi("missing-test-api"); });
+            }
+            assertEq("v3", GoogleDataProviderBase::getSchemaInfo("calendar").version,
+                "an unavailable API does not affect the pinned APIs");
+        }
+        assertFalse(DataProviderStaticMetadataHelper::get(), "metadata context is restored");
+    }
+
+    runtimeTest() {
+        RecordingGoogleClient client();
+        GoogleApiDataProvider provider(client, "calendar", "events/get", {"calendarId": "primary"});
+        assertEq(0, client.requests, "constructing the provider does not contact the service");
+        hash<auto> event = provider.doRequest({"eventId": "event-123"});
+        assertEq("event-123", event.id);
+        assertEq("GET", client.method);
+        assertEq("/calendar/v3/calendars/primary/events/event-123", client.path);
+        assertEq(1, client.requests);
+        client.fail_request = True;
+        assertThrows("GOOGLE-TEST-AUTH-ERROR", sub () { provider.doRequest({"eventId": "event-123"}); });
+        assertEq(2, client.requests, "runtime failures are not replaced by metadata results");
+    }
+}

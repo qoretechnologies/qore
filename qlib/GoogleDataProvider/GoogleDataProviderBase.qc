@@ -357,6 +357,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Returns all request types for the given API
     static hash<auto> getRequestInfo(string api) {
+        # Resolve metadata before taking the type-cache lock: runtime discovery for another API
+        # must never hold this lock while waiting for the network.
+        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         *hash<auto> rv;
         if (rv = request_map{api}) {
             return rv;
@@ -368,7 +371,6 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             return rv;
         }
 
-        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         hash<string, AbstractDataProviderType> input_schema = input_schema_map{api}
             ?? GoogleDataProviderBase::getInputSchemaMap(api, api_info);
         hash<string, AbstractDataProviderType> output_schema = output_schema_map{api}
@@ -425,6 +427,7 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Returns all output schemas for the given API
     static hash<string, AbstractDataProviderType> getApi(string api) {
+        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         *hash<string, AbstractDataProviderType> rv;
         if (rv = output_schema_map{api}) {
             return rv;
@@ -436,12 +439,12 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             return rv;
         }
 
-        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         return GoogleDataProviderBase::getOutputSchemaMap(api, api_info);
     }
 
     #! Returns all input schemas for the given API
     static hash<string, AbstractDataProviderType> getInputSchemasForApi(string api) {
+        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         *hash<string, AbstractDataProviderType> rv;
         if (rv = input_schema_map{api}) {
             return rv;
@@ -453,7 +456,6 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             return rv;
         }
 
-        hash<auto> api_info = GoogleDataProviderBase::getSchemaInfo(api);
         return GoogleDataProviderBase::getInputSchemaMap(api, api_info);
     }
 
@@ -487,9 +489,29 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         return output_schema_map{api} = schema;
     }
 
+    #! Returns the complete Discovery document for an API
+    /** Calendar and Gmail use the versioned documents shipped with this module. Other APIs use live discovery
+        only outside static metadata collection; unversioned runtime cache entries cannot qualify an index.
+
+        @param api Google API name
+        @return the complete Discovery document
+        @throw GOOGLE-SCHEMA-UNAVAILABLE no pinned document exists during static metadata collection
+        @par Example
+        @code{.py}
+hash<auto> calendar = GoogleDataProviderBase::getSchemaInfo("calendar");
+        @endcode
+    */
     static hash<auto> getSchemaInfo(string api) {
+        if (DataProviderStaticMetadataHelper::get() && !Priv::ShippedGoogleSchemas.hasKey(api)) {
+            throw "GOOGLE-SCHEMA-UNAVAILABLE", sprintf("no pinned Discovery document for Google API %y; "
+                "live discovery is disabled during static metadata collection", api);
+        }
         if (*hash<auto> info = info_map{api}) {
             return info;
+        }
+        if (*hash<auto> info = Priv::ShippedGoogleSchemas{api}) {
+            AutoLock al(m);
+            return info_map{api} ?? (info_map{api} = info);
         }
 
         string disc_url = GoogleDataProviderBase::getUrlForApi(api);
@@ -507,7 +529,10 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             api_info = rest.restGet(url_info.path).body;
         }
 
-        return info_map{api} = api_info;
+        # Another caller may have completed discovery while this request was in flight. Keep the first
+        # published document, so its already-resolved types and request paths retain the same revision.
+        AutoLock al(m);
+        return info_map{api} ?? (info_map{api} = api_info);
     }
 
     #! Returns a type from a Google schema description
@@ -663,6 +688,10 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Returns the URL for the given API
     static string getUrlForApi(string api) {
+        if (DataProviderStaticMetadataHelper::get()) {
+            throw "GOOGLE-SCHEMA-UNAVAILABLE", sprintf("live Discovery URL lookup for Google API %y is disabled "
+                "during static metadata collection", api);
+        }
         *string url;
         if (url = api_map{api}) {
             return url;
@@ -674,7 +703,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
             "timeout": InitTimeout,
             "connect_timeout": InitTimeout,
         });
-        return api_map{api} = rest.restGet(url_info.path + sprintf("?name=%s", api)).body.items[0].discoveryRestUrl;
+        string discovered_url = rest.restGet(url_info.path + sprintf("?name=%s", api)).body.items[0].discoveryRestUrl;
+        AutoLock al(m);
+        return api_map{api} ?? (api_map{api} = discovered_url);
     }
 }
 }

@@ -42,7 +42,7 @@
 %requires reflection
 
 module ProviderIndex {
-    version = "1.3";
+    version = "1.4";
     desc = "user module for indexing data providers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -59,6 +59,11 @@ module ProviderIndex {
     on-demand initialization.
 
     @section providerindex_relnotes Release Notes
+
+    @subsection providerindex_v1_4 ProviderIndex v1.4
+    - static metadata context now covers module loading, worker setup, and deferred output-type resolution
+    - unresolved output-schema callbacks are reported as unavailable actions, even though the index does not store
+      output types; later builds retry them so repaired providers can qualify without re-registration
 
     @subsection providerindex_v1_3 ProviderIndex v1.3
     - On Linux, index workers terminate when their launching builder thread exits, including crashes and

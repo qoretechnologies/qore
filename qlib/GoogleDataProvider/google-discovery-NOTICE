@@ -1,0 +1,13 @@
+Google Calendar and Gmail Discovery resources
+
+The calendar.v3.json and gmail.v1.json files are complete, unmodified Google
+Discovery documents from googleapis/discovery-artifact-manager, commit
+3d3979dd6b877c1092080f10a92096b92fbe295e, retrieved on 2026-10-04.
+Upstream: https://github.com/googleapis/discovery-artifact-manager/tree/3d3979dd6b877c1092080f10a92096b92fbe295e/discoveries
+License: Apache License 2.0; see google-discovery-LICENSE.
+Google API use is separately subject to Google service terms.
+
+calendar.v3.json: revision 20260925, SHA-256 7028e89f8dbd0696230cbf8e60646e33ab6afa495a2c59c0f259f9deba4bb85e
+gmail.v1.json: revision 20260727, SHA-256 7591d33ec87e4ef83551f71630213a89ac349becebe9bd9b3e4ce3851dede0fe
+
+Qore integration: Copyright 2026 Qore Technologies, s.r.o., MIT license.

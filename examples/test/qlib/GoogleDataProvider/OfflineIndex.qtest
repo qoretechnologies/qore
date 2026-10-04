@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/ProviderIndex
+%requires ./OfflineIndexFixture.qm
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class OfflineGoogleIndexTest
+
+public class OfflineGoogleIndexTest inherits QUnit::Test {
+    constructor() : Test("Offline Google index", "1.0") {
+        addTestCase("unavailable output schemas are recorded on every build and can recover", \recoveryTest());
+        addTestCase("Google worker and native indexes agree and leave no workers or temporary files", \workerTest());
+        *string previous = getenv("QORE_DATA_PROVIDERS");
+        unsetenv("QORE_DATA_PROVIDERS");
+        on_exit if (exists previous) { setenv("QORE_DATA_PROVIDERS", previous); }
+        addTestCase("timed-out workers exit and remove staging state", \timeoutTest());
+        set_return_value(main());
+    }
+
+    private hash<ProviderIndexCreateOptions> options(int workers, list<string> apps) {
+        return <ProviderIndexCreateOptions>{"load_known_factories": False, "load_typescript_actions": False,
+            "workers": workers, "apps": apps};
+    }
+
+    private hash<string, binary> files(string dir) {
+        Dir d();
+        d.chdir(dir);
+        hash<string, binary> result;
+        foreach string name in (d.listFiles()) {
+            result{name} = ReadOnlyFile::readBinaryFile(dir + DirSep + name);
+        }
+        return result;
+    }
+
+    recoveryTest() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        for (int i = 0; i < 2; ++i) {
+            hash<auto> result = ProviderIndex::createDataProviderIndex(NOTHING, dir,
+                options(0, ("QoreTestOfflineSchema",)));
+            assertFalse(result.summary.qualification.complete);
+            list<hash<auto>> failures = result.summary.qualification.unavailable;
+            assertEq(1, failures.size());
+            assertEq("GOOGLE-SCHEMA-UNAVAILABLE", failures[0].error);
+            assertEq("QoreTestOfflineSchema/recover", failures[0].identity);
+            assertFalse(exists ProviderIndexUtil::readDataProviderIndex().actioninfomap.QoreTestOfflineSchema.recover,
+                "an unresolved schema does not qualify as a generic or partial action");
+            assertFalse(DataProviderStaticMetadataHelper::get(), "build context is restored");
+        }
+        OfflineSchemaState::recover();
+        hash<auto> recovered = ProviderIndex::createDataProviderIndex(NOTHING, dir,
+            options(0, ("QoreTestOfflineSchema",)));
+        assertTrue(recovered.summary.qualification.complete);
+        assertEq(0, recovered.summary.qualification.unavailable.size());
+        assertTrue(exists ProviderIndexUtil::readDataProviderIndex().actioninfomap.QoreTestOfflineSchema.recover);
+    }
+
+    workerTest() {
+%ifdef NoProcess
+        testSkip("process 2.2 or later is unavailable");
+%endif
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("MessagePack is unavailable");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        *string old_modules = getenv("QORE_DATA_PROVIDERS");
+        *string old_fixture = getenv("QORE_PROVIDER_INDEX_FIXTURE_MODULE");
+        on_exit {
+            if (exists old_modules) { setenv("QORE_DATA_PROVIDERS", old_modules); }
+            else { unsetenv("QORE_DATA_PROVIDERS"); }
+            if (exists old_fixture) { setenv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", old_fixture); }
+            else { unsetenv("QORE_PROVIDER_INDEX_FIXTURE_MODULE"); }
+        }
+        setenv("QORE_DATA_PROVIDERS", normalize_dir(get_script_dir() + "/../DataProvider")
+            + "/ProviderIndexEnvironmentMapFixture.qm");
+        setenv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", normalize_dir(get_script_dir()) + "/OfflineIndexFixture.qm");
+        list<string> apps = ("GoogleCalendar", "Gmail");
+        hash<auto> worker = ProviderIndex::createDataProviderIndex(NOTHING, dir + "/workers", options(2, apps));
+        assertTrue(worker.summary.qualification.complete);
+        assertEq(1, worker.summary.workers.size());
+        assertEq(0, worker.summary.workers[0].exit_code);
+        assertEq(0, ProviderIndex::cancelWorkers(), "every worker has exited");
+        assertEq((), (map $1, files(dir + "/workers").keyIterator(), $1 =~ /^\./) ?? (),
+            "no staging files remain");
+        hash<auto> native = ProviderIndex::createDataProviderIndex(NOTHING, dir + "/native", options(0, apps));
+        assertTrue(native.summary.qualification.complete);
+        assertEq(files(dir + "/native"), files(dir + "/workers"), "complete native and worker indexes agree");
+    }
+    timeoutTest() {
+%ifdef NoProcess
+        testSkip("process 2.2 or later is unavailable");
+%else
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("MessagePack is unavailable");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string script = dir + "/blocked.qr";
+        string pidfile = dir + "/pid";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY);
+        f.write(sprintf("File f();\nf.open2(%y, O_CREAT | O_WRONLY);\nf.write(sprintf(\"%%d\", getpid()));\n"
+            "f.close();\nQueue blocked();\nblocked.get();\n", pidfile));
+        f.close();
+        *string old_modules = getenv("QORE_DATA_PROVIDERS");
+        on_exit if (exists old_modules) { setenv("QORE_DATA_PROVIDERS", old_modules); }
+        else { unsetenv("QORE_DATA_PROVIDERS"); }
+        setenv("QORE_DATA_PROVIDERS", normalize_dir(get_script_dir() + "/../DataProvider")
+            + "/ProviderIndexEnvironmentMapFixture.qm");
+        hash<ProviderIndexCreateOptions> opts = options(1, ("GoogleCalendar", "Gmail"));
+        opts.worker_command = (normalize_dir(ENV.QORE_BIN ?? QORE_ARGV[0]), "--enable-debug", script);
+        opts.worker_timeout_ms = 1000;
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", opts);
+            fail("a timed-out worker cannot publish");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            assertRegex("did not finish within 1000 ms", ex.arg.failures[0].description);
+        }
+        assertFalse(DataProviderStaticMetadataHelper::get(), "a failed build restores the metadata context");
+        int pid = int(ReadOnlyFile::readTextFile(pidfile));
+        assertGt(0, pid);
+        assertFalse(Process::checkPid(pid), "the timed-out worker was reaped");
+        assertEq(0, ProviderIndex::cancelWorkers());
+        Dir d();
+        d.chdir(dir + "/index");
+        assertEq((), d.listFiles(), "no index or temporary files were published");
+        assertEq((), d.listDirs(), "no staging directories remain");
+%endif
+    }
+
+}

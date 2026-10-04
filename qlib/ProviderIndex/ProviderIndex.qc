@@ -217,6 +217,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     */
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
             *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) {
+        # Includes module loading and deferred output-type warm-up, not only serialization.
+        DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
 
         if (dir.val()) {
@@ -595,7 +597,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable hash of actions keyed by action name
-    /** Option types are described by plain data, and output types are not indexed, so reading the index never
+    /** Output-schema resolution failures are reported as unavailable actions and retried on later builds.
+        Option types are described by plain data, and output types are not indexed, so reading the index never
         requires the provider modules that define the types; dynamic type and default value callbacks are not run
         (see @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper")
     */
@@ -606,6 +609,16 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         DataProviderStaticMetadataHelper static_metadata();
         foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
             try {
+                if (action.get_output_type) {
+                    # The catalog retains callbacks whose resolution failed. Output types are not stored in
+                    # the index, but an unresolved schema must not silently qualify as complete metadata.
+                    # Retry here on each build so a recovered provider can qualify without re-registration.
+                    *AbstractDataProviderType output_type = action.get_output_type();
+                    if (!output_type) {
+                        throw "DATA-PROVIDER-OUTPUT-TYPE-UNAVAILABLE", sprintf("no output type for %s/%s",
+                            app, action.action);
+                    }
+                }
                 hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
                     "options": getSerializableActionOptions(app, action, \type_info_mismatches),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
@@ -910,6 +923,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @since %ProviderIndex 1.2
     */
     static int runIndexWorker(string batch_path, *code<nothing()> setup) {
+        DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {
             batch = getWorkerBatch(batch_path);

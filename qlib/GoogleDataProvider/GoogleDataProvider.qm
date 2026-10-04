@@ -30,11 +30,12 @@
 # strict argument handling
 # enable all warnings
 
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.8
 %requires(reexport) GoogleRestClient
+%requires json
 
 module GoogleDataProvider {
-    version = "2.1";
+    version = "2.2";
     desc = "user module providing a base data provider API for Google REST cloud services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -54,7 +55,36 @@ module GoogleDataProvider {
     see the following modules for data provider providing specific API support:
     - @ref googlecalendardataproviderintro "GoogleCalendarDataProvider": Google Calendars
 
+    @section googledataprovider_offline Offline Metadata
+
+    Calendar v3 and Gmail v1 use complete, versioned Discovery documents shipped with this module. Their revisions
+    and SHA-256 checksums are verified at module initialization; no Google connection, credentials, DNS lookup, or
+    HTTP request is needed to resolve their schemas. The packaged license and notice identify the upstream sources.
+    A missing, stale, or altered resource raises \c GOOGLE-SCHEMA-UNAVAILABLE. Repair the module package and load it
+    again; unsuccessful loads do not install a negative schema cache. Successful loads retain their pinned revision
+    for the process lifetime, so restart workers after updating the package.
+
+    While @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper" is active,
+    other APIs raise \c GOOGLE-SCHEMA-UNAVAILABLE instead of performing live discovery. Unversioned runtime cache
+    entries are not accepted for index qualification. ProviderIndex records unresolved actions as unavailable and
+    sets \c summary.qualification.complete to \c False; consumers requiring all schemas must check that flag.
+
+    Runtime requests and authentication still use the supplied Google REST connection. Outside static metadata
+    collection, APIs without a shipped document retain live discovery and can retry after a failed request.
+
+    @par Example
+    Inspect the Calendar event schema without authenticating or accessing the network:
+    @code{.py}
+DataProviderStaticMetadataHelper metadata();
+AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchema("calendar", "events/get");
+    @endcode
+
     @section googledataprovider_relnotes Release Notes
+
+    @subsection googledataprovider_v2_2 GoogleDataProvider v2.2
+    - ship complete Calendar v3 and Gmail v1 Discovery documents for deterministic offline metadata resolution
+    - reject unavailable static schemas explicitly instead of repeatedly attempting live discovery during indexing
+    - runtime discovery does not hold the shared type-cache mutex while waiting for HTTP
 
     @subsection googledataprovider_v2_1 GoogleDataProvider v2.1
     - date values in query arguments are serialized as RFC 3339 timestamps (ex: <tt>2026-09-02T10:00:00+02:00</tt>),
