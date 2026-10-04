@@ -125,7 +125,7 @@ def nodejs_packaging(source):
     control.write_text(updated.replace(old, old + " chrpath,\n"))
 
 
-def doxygen_packaging(source):
+def doxygen_packaging(source, *, configure_manpages=False):
     """Exercise the patched comparator and generated documentation during builds."""
     rules = source / "debian/rules"
     updated = rules.read_text()
@@ -140,8 +140,15 @@ def doxygen_packaging(source):
         "ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)))\n"
         "\tctest --test-dir build --output-on-failure --no-tests=error $(NJOBS)\n"
         "\tpython3 debian/tests/compare-strings.py\n"
-        "\tpython3 debian/tests/unicode-search.py --doxygen $(CURDIR)/build/bin/doxygen\n"
+        "\tpython3 debian/tests/unicode-search.py --doxygen $(CURDIR)/build/bin/doxygen\n" +
+        ("\tpython3 debian/tests/manpages.py --man-dir build/man "
+         "--doxygen $(CURDIR)/build/bin/doxygen\n" if configure_manpages else "") +
         "endif\n" + old)
+    if configure_manpages:
+        # The upstream CMake fix replaces Debian's raw-template fallback.
+        start = updated.index("\t: # FIXME: man pages not installed when building without docs\n")
+        end = updated.index("\tdh_movefiles -pdoxygen-gui", start)
+        updated = updated[:start] + updated[end:]
     rules.write_text(updated)
     control = source / "debian/control"
     updated = control.read_text()
@@ -154,6 +161,8 @@ def doxygen_packaging(source):
         "  libxml2-utils <!nocheck>,\n"
         "  texlive-base <!nocheck>,\n"))
     shutil.copytree(CONFIG / "doxygen/tests", source / "debian/tests", dirs_exist_ok=True)
+    if configure_manpages:
+        shutil.copyfile(CONFIG / "doxygen/trixie-tests/manpages.py", source / "debian/tests/manpages.py")
     copyright_file = source / "debian/copyright"
     updated = copyright_file.read_text()
     stanza = "Files: debian/*\nCopyright:\n"
@@ -166,6 +175,12 @@ def doxygen_packaging(source):
             "Depends: doxygen, python3\n"
             "Restrictions: allow-stderr\n"
             "Features: test-name=unicode-search-ordering\n")
+        if configure_manpages:
+            tests.write(
+                "\nTest-Command: python3 debian/tests/manpages.py\n"
+                "Depends: doxygen, doxygen-gui, python3\n"
+                "Restrictions: allow-stderr\n"
+                "Features: test-name=configured-manpages\n")
 
 
 def cares_patch(source):
@@ -465,9 +480,12 @@ def prepare(name, package, manifest, destination, cache, offline):
                 "Features: test-name=stable-onnx-pytorch-coexistence\n")
     added_patches = []
     if name == "doxygen":
-        doxygen_packaging(source)
+        configure_manpages = "doxygen/configure-manpages-without-docs.patch" in package.get("extra_patches", [])
+        doxygen_packaging(source, configure_manpages=configure_manpages)
         added_patches += ["debian/tests/compare-strings.cpp", "debian/tests/compare-strings.py",
                           "debian/tests/unicode-search.py"]
+        if configure_manpages:
+            added_patches.append("debian/tests/manpages.py")
     if name in ("nghttp2", "nghttp3", "ngtcp2"):
         rules = source / "debian/rules"
         original = rules.read_text()

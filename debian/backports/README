@@ -48,6 +48,10 @@ since the citation test also runs in architecture-only builds without the
 Build-Depends-Indep TeX packages. Installing texlive-binaries alone is insufficient.
 Qualification must cover dpkg-buildpackage -B with only architecture-dependent
 build dependencies installed, as well as the full documentation build.
+The Debian 1.9.8 source also backports upstream's unconditional configuration
+and installation of man pages. Architecture-only builds must not package raw
+templates with unresolved version/date placeholders. Regression tests check
+all four tool pages in the build tree and in the installed packages.
 The recipe retains distribution reproducibility flags and enables full linker
 hardening, including immediate symbol binding.
 The PDF manual suppresses imported diagrams' optional PTEX.InfoDict metadata:

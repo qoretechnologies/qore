@@ -331,7 +331,22 @@
         },
         "doxygen": {
           "upstream_version": "1.9.8+ds",
-          "revision": "2.1+qore2",
+          "revision": "2.1+qore3",
+          "date": "Sun, 04 Oct 2026 15:00:00 +0000",
+          "extra_patches": [
+            "doxygen/unsigned-string-comparison.patch",
+            "doxygen/reproducible-manual-pdf.patch",
+            "doxygen/configure-manpages-without-docs.patch"
+          ],
+          "changes": [
+            "Fix architecture-dependent Unicode string ordering in Doxygen on {distribution_name}.",
+            "Run upstream documentation tests and signed/unsigned-char comparison regressions.",
+            "Retain reproducibility flags and enable full linker hardening.",
+            "Exclude imported diagram timestamps from the PDF manual's optional metadata.",
+            "Verify generated search-index ordering in build and installed-package tests.",
+            "Declare BibTeX as a test dependency for architecture-only builds.",
+            "Configure and install man pages in architecture-only builds; test generated and installed versions and dates."
+          ],
           "orig_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds.orig.tar.xz",
           "orig_sha256": "877bc48813ab242f7e8a3b697927d588159a6375731499977667a6df2aae8e92",
           "packaging_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds-2.1.debian.tar.xz",

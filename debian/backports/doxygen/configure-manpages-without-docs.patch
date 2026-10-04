@@ -1,0 +1,92 @@
+Description: Configure and install man pages without building the full manual
+ Backport the upstream CMake layout so binary-arch builds install rendered
+ man pages instead of Debian's fallback copies containing @VERSION@ and
+ @DATE@ placeholders. Keep optional tool pages conditional on their targets.
+Origin: upstream, https://github.com/doxygen/doxygen/blob/Release_1_15_0/doc/CMakeLists.txt
+Author: Dimitri van Heesch and Doxygen contributors
+Forwarded: not-needed
+Last-Update: 2026-10-04
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -219,9 +219,10 @@
+     endif ()
+ endif ()
+ 
++# Always configure and install the man pages.
++add_subdirectory(doc)
+ if (build_doc)
+     add_subdirectory(examples)
+-    add_subdirectory(doc)
+ endif ()
+ 
+ add_subdirectory(doc_internal)
+--- a/doc/CMakeLists.txt
++++ b/doc/CMakeLists.txt
+@@ -15,11 +15,40 @@
+ string(TIMESTAMP DATE "%d-%m-%Y" UTC)
+ string(TIMESTAMP YEAR "%Y")
+ 
++# Always install man pages
++file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/man)
++configure_file(${PROJECT_SOURCE_DIR}/doc/doxygen.1          ${PROJECT_BINARY_DIR}/man/doxygen.1)
++configure_file(${PROJECT_SOURCE_DIR}/doc/doxywizard.1       ${PROJECT_BINARY_DIR}/man/doxywizard.1)
++configure_file(${PROJECT_SOURCE_DIR}/doc/doxysearch.1       ${PROJECT_BINARY_DIR}/man/doxysearch.1)
++configure_file(${PROJECT_SOURCE_DIR}/doc/doxyindexer.1      ${PROJECT_BINARY_DIR}/man/doxyindexer.1)
++
++
++include(GNUInstallDirs)
++install(FILES
++    "${PROJECT_BINARY_DIR}/man/doxygen.1"
++    DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
++
++if (build_search)
++    install(FILES
++        "${PROJECT_BINARY_DIR}/man/doxyindexer.1"
++        "${PROJECT_BINARY_DIR}/man/doxysearch.1"
++        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
++endif()
++if (build_wizard)
++    install(FILES
++        "${PROJECT_BINARY_DIR}/man/doxywizard.1"
++        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
++endif()
++
++# The rest of this file is only for when built documentation is requested.
++if (NOT build_doc)
++    return()
++endif()
++
+ find_package(Python REQUIRED)
+ find_program(EPSTOPDF NAMES epstopdf )
+ find_program(PDFLATEX NAMES pdflatex )
+ find_program(MAKEINDEX NAMES makeindex )
+-include(GNUInstallDirs)
+ 
+ if (doxygen_BINARY_DIR)
+     set(DOXYGEN_EXECUTABLE ${doxygen_BINARY_DIR}/bin/doxygen)
+@@ -159,10 +188,6 @@
+ 
+ configure_file(${PROJECT_SOURCE_DIR}/doc/manual.sty         ${PROJECT_BINARY_DIR}/doc/manual.sty COPYONLY)
+ configure_file(${PROJECT_SOURCE_DIR}/doc/doxygen_manual.tex ${PROJECT_BINARY_DIR}/doc/doxygen_manual.tex COPYONLY)
+-configure_file(${PROJECT_SOURCE_DIR}/doc/doxygen.1          ${PROJECT_BINARY_DIR}/man/doxygen.1)
+-configure_file(${PROJECT_SOURCE_DIR}/doc/doxywizard.1       ${PROJECT_BINARY_DIR}/man/doxywizard.1)
+-configure_file(${PROJECT_SOURCE_DIR}/doc/doxysearch.1       ${PROJECT_BINARY_DIR}/man/doxysearch.1)
+-configure_file(${PROJECT_SOURCE_DIR}/doc/doxyindexer.1      ${PROJECT_BINARY_DIR}/man/doxyindexer.1)
+ 
+ # Call the main page "Introduction" in LaTeX, which is more appropriate for that format.
+ set(MAINPAGE_TITLE Doxygen)
+@@ -249,14 +274,6 @@
+ )
+ endif ()
+ ################################################################################
+-install(FILES
+-        "${PROJECT_BINARY_DIR}/man/doxygen.1"
+-        "${PROJECT_BINARY_DIR}/man/doxywizard.1"
+-        "${PROJECT_BINARY_DIR}/man/doxysearch.1"
+-        "${PROJECT_BINARY_DIR}/man/doxyindexer.1"
+-        DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+-)
+-
+ install(CODE "if(NOT EXISTS \"${PROJECT_BINARY_DIR}/latex/doxygen_manual.pdf\")
+     message(FATAL_ERROR \"\nTerminating:\n    documentation has not been generated, \n    create documentation by using the 'docs' target followed by an 'install'\n\")
+ endif()"
