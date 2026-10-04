@@ -72,8 +72,8 @@
           "message": "Kódovanie znakov pre vstupný súbor"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Kódovanie znakov pre vstupný súbor (a výstupné údaje; výstupné údaje len v prípade, že sa použije možnosť `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Kódovanie znakov vstupného súboru, prúdu alebo binárnych údajov `data`; textové `data` sa čítajú v ich vlastnom kódovaní, ktoré je zároveň kódovaním výstupných údajov"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "Údaje CSV na spracovanie"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "Údaje CSV na spracovanie; v konflikte s `stream` a `path`"
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "Údaje CSV na spracovanie ako text alebo bajty; bajty sa dekódujú podľa voľby `encoding`; je v konflikte so `stream` a `path`"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "Kódovanie znakov pre vstupný súbor"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Kódovanie znakov pre vstupný súbor (a výstupné údaje; výstupné údaje len v prípade, že sa použije možnosť `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Kódovanie znakov vstupného súboru, prúdu alebo binárnych údajov `data`; textové `data` sa čítajú v ich vlastnom kódovaní, ktoré je zároveň kódovaním výstupných údajov"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

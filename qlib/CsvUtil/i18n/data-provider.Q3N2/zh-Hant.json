@@ -72,8 +72,8 @@
           "message": "輸入檔案的字元編碼"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "輸入檔案的字元編碼（以及輸出資料；僅在使用 `data` 選項時套用於輸出資料）"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "要處理的 CSV 資料"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "要處理的 CSV 資料；與 `stream` 及 `path` 衝突"
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "要處理的 CSV 資料，可為文字或位元組；位元組會以 `encoding` 選項解碼；與 `stream` 和 `path` 衝突"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "輸入檔案的字元編碼"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "輸入檔案的字元編碼（以及輸出資料；僅在使用 `data` 選項時套用於輸出資料）"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

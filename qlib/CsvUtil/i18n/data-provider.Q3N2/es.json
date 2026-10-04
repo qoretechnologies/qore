@@ -72,8 +72,8 @@
           "message": "La codificación de caracteres para el archivo de entrada"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Codificación de caracteres para el archivo de entrada (y datos de salida; datos de salida solo si se utiliza la opción `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Codificación de caracteres del archivo de entrada, del flujo o de los `data` binarios; los `data` de texto se leen en su propia codificación, que también es la codificación de los datos de salida"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "Datos CSV a procesar"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "Datos CSV a procesar; entra en conflicto con `stream` y `path`"
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "Datos CSV que se procesarán, como texto o bytes; los bytes se decodifican con la opción `encoding`; entra en conflicto con `stream` y `path`"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "La codificación de caracteres para el archivo de entrada"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Codificación de caracteres para el archivo de entrada (y datos de salida; datos de salida solo si se utiliza la opción `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Codificación de caracteres del archivo de entrada, del flujo o de los `data` binarios; los `data` de texto se leen en su propia codificación, que también es la codificación de los datos de salida"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

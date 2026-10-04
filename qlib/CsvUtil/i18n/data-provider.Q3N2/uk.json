@@ -72,8 +72,8 @@
           "message": "Кодування символів для вхідного файлу"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Кодування символів для вхідного файлу (та вихідних даних; вихідних даних лише у разі використання опції `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Кодування символів вхідного файлу, потоку або двійкових `data`; текстові `data` читаються у власному кодуванні, яке також є кодуванням вихідних даних"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "Дані CSV для обробки"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "Дані CSV для обробки; конфліктує з `stream` та `path`"
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "Дані CSV для обробки як текст або байти; байти декодуються за параметром `encoding`; конфліктує зі `stream` і `path`"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "Кодування символів для вхідного файлу"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Кодування символів для вхідного файлу (та вихідних даних; вихідних даних лише у разі використання опції `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Кодування символів вхідного файлу, потоку або двійкових `data`; текстові `data` читаються у власному кодуванні, яке також є кодуванням вихідних даних"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

@@ -80,9 +80,54 @@ f2:3,00:5:25,34";
         addTestCase("CSV file iterator", \csvFileIterator());
         addTestCase("issue 2739 test", \issue2739());
         addTestCase("example data without data rows", \exampleWithoutRows());
+        addTestCase("binary inline data", \binaryDataTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    binaryDataTest() {
+        # bytes are decoded with the encoding option; UTF-8 is the default
+        string text = "name,city\nMüller,Zürich\nĽuboš,Žilina\n";
+        CsvReadDataProvider dp({"data": binary(text), "header_names": True});
+        assertEq((
+            {"name": "Müller", "city": "Zürich"},
+            {"name": "Ľuboš", "city": "Žilina"},
+        ), (map $1, dp.searchRecords()));
+
+        # ISO-8859-1 bytes
+        binary latin1 = binary(convert_encoding("name,city\nMüller,Zürich\n", "ISO-8859-1"));
+        assertEq(24, latin1.size(), "each umlaut is one byte");
+        dp = new CsvReadDataProvider({"data": latin1, "encoding": "ISO-8859-1", "header_names": True});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"name": "Müller", "city": "Zürich"},), records);
+        assertEq("Müller", convert_encoding(records[0].name, "UTF-8"));
+
+        # Windows-1250 bytes with typed fields
+        binary cp1250 = binary(convert_encoding("id;mesto;amount\n1;Žilina;2.5\n2;Košice;-3\n", "WINDOWS-1250"));
+        dp = new CsvReadDataProvider({"data": cp1250, "encoding": "WINDOWS-1250", "header_names": True,
+            "separator": ";", "fields": {"id": "int", "mesto": "string", "amount": "float"}});
+        records = map $1, dp.searchRecords();
+        assertEq(({"id": 1, "mesto": "Žilina", "amount": 2.5}, {"id": 2, "mesto": "Košice", "amount": -3.0}),
+            records);
+
+        # the record type is available for binary data as for text data
+        dp = new CsvReadDataProvider({"data": binary(text), "header_names": True});
+        assertEq(("name", "city"), keys dp.getRecordType());
+
+        # text data is read in its own encoding; the encoding option does not apply to it
+        dp = new CsvReadDataProvider({"data": text, "encoding": "ISO-8859-1", "header_names": True});
+        assertEq("Müller", (map $1, dp.searchRecords())[0].name);
+
+        # binary data conflicts with an input stream as text data does
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new CsvReadDataProvider({"data": binary(text), "stream": new StringInputStream(text)});
+        });
+
+        # the read-data action accepts binary data
+        hash<DataProviderActionInfo> read_data = DataProviderActionCatalog::getAppActionEx("Csv", "read-data");
+        assertTrue(read_data.options.data.type.isAssignableFrom(BinaryType), "binary data is accepted");
+        assertTrue(read_data.options.data.type.isAssignableFrom(StringType), "text data is accepted");
     }
 
     multiLineFieldTest() {

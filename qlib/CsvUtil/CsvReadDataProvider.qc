@@ -56,8 +56,9 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
             "data": <DataProviderOptionInfo>{
                 "display_name": "Input Data",
                 "short_desc": "CSV data to process",
-                "type": AbstractDataProviderTypeMap."string",
-                "desc": "CSV data to process; conflicts with `stream` and `path`",
+                "type": AbstractDataProviderTypeMap."data",
+                "desc": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; "
+                    "conflicts with `stream` and `path`",
             },
             "stream": <DataProviderOptionInfo>{
                 "display_name": "Input Stream",
@@ -79,8 +80,8 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Input Character Encoding",
                 "short_desc": "The Character encoding for the input file",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Character encoding for the input file (and output data; output data only if the `data` "
-                    "option is used)",
+                "desc": "Character encoding of the input file, stream, or binary `data`; text `data` is read in "
+                    "its own encoding, which is also the encoding of the output data",
                 "default_value": "UTF-8",
             },
             "eol": <DataProviderOptionInfo>{
@@ -268,8 +269,14 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 error("CONSTRUCTOR-ERROR", "cannot provide both \"stream\" and \"data\" options; use either one or "
                     "the other");
             }
-            i = new CsvIterator(new StringInputStream(copts."data"), copts."data".encoding(),
-                copts{CsvIterationOptionList});
+            if (copts."data".typeCode() == NT_BINARY) {
+                # bytes are decoded with the encoding option, as a file or stream is
+                i = new CsvIterator(new BinaryInputStream(copts."data"), copts.encoding,
+                    copts{CsvIterationOptionList} - "encoding");
+            } else {
+                i = new CsvIterator(new StringInputStream(copts."data"), copts."data".encoding(),
+                    copts{CsvIterationOptionList});
+            }
             return;
         }
         if (copts.stream) {

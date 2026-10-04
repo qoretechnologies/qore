@@ -72,8 +72,8 @@
           "message": "입력 파일의 문자 인코딩"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "입력 파일(및 출력 데이터, 출력 데이터는 `data` 옵션을 사용하는 경우에만 해당)의 문자 인코딩"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽으며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "처리할 CSV 데이터"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "처리할 CSV 데이터입니다. `stream` 및 `path`과(와) 충돌합니다."
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "처리할 CSV 데이터(텍스트 또는 바이트)입니다. 바이트는 `encoding` 옵션으로 디코딩됩니다. `stream` 및 `path`와 충돌합니다"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "입력 파일의 문자 인코딩"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "입력 파일(및 출력 데이터, 출력 데이터는 `data` 옵션을 사용하는 경우에만 해당)의 문자 인코딩"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽으며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

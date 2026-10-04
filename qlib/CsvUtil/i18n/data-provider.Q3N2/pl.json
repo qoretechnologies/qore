@@ -72,8 +72,8 @@
           "message": "Kodowanie znaków dla pliku wejściowego"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Kodowanie znaków dla pliku wejściowego (oraz danych wyjściowych; dane wyjściowe tylko wtedy, gdy użyto opcji `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Kodowanie znaków pliku wejściowego, strumienia lub binarnych `data`; tekstowe `data` są odczytywane we własnym kodowaniu, które jest też kodowaniem danych wyjściowych"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -252,8 +252,8 @@
           "message": "Dane CSV do przetworzenia"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "CSV data to process; conflicts with `stream` and `path`",
-          "message": "Dane CSV do przetworzenia; powoduje konflikt z `stream` i `path`"
+          "source": "CSV data to process, as text or bytes; bytes are decoded with the `encoding` option; conflicts with `stream` and `path`",
+          "message": "Dane CSV do przetworzenia jako tekst lub bajty; bajty są dekodowane zgodnie z opcją `encoding`; koliduje z `stream` i `path`"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
           "source": "Automatically Detect Headers",
@@ -288,8 +288,8 @@
           "message": "Kodowanie znaków dla pliku wejściowego"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
-          "message": "Kodowanie znaków dla pliku wejściowego (oraz danych wyjściowych; dane wyjściowe tylko wtedy, gdy użyto opcji `data`)"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
+          "message": "Kodowanie znaków pliku wejściowego, strumienia lub binarnych `data`; tekstowe `data` są odczytywane we własnym kodowaniu, które jest też kodowaniem danych wyjściowych"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
