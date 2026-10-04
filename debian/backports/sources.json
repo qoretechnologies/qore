@@ -329,6 +329,14 @@
           "extra_patches": ["onnx/installed-targets.patch", "onnx/explicit-test-registration.patch"],
           "changes": ["Build a private static ONNX 1.20.0 dependency for Qore on {distribution_name}.", "Use a private include/library prefix and C++ namespace to preserve Debian's ONNX and PyTorch ABI.", "Build and run the upstream C++ tests without network access."]
         },
+        "doxygen": {
+          "upstream_version": "1.9.8+ds",
+          "revision": "2.1+qore1",
+          "orig_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds.orig.tar.xz",
+          "orig_sha256": "877bc48813ab242f7e8a3b697927d588159a6375731499977667a6df2aae8e92",
+          "packaging_url": "https://deb.debian.org/debian/pool/main/d/doxygen/doxygen_1.9.8+ds-2.1.debian.tar.xz",
+          "packaging_sha256": "754dd4019bfa82610b432cbde2adf385eec5e0529d63bb82480476575f77754f"
+        },
         "onnxruntime": {
           "upstream_version": "1.23.2+dfsg",
           "revision": "6.1~qore2",
@@ -378,6 +386,27 @@
       "packaging_url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nghttp3/1.17.0-1/nghttp3_1.17.0-1.debian.tar.xz",
       "packaging_sha256": "436f5a40de284d76e8dbfe22e7cbd3fd9dafdfe1a6a404c9f37f7d197b64b3b0",
       "changes": ["Package upstream 1.18.0 for Qore on {distribution_name}.", "Retain Debian's library packaging and symbol history.", "Enable full linker hardening in the recipe, including immediate symbol binding."]
+    },
+    "doxygen": {
+      "upstream_version": "1.15.0+ds1",
+      "revision": "1ubuntu3+qore1",
+      "date": "Sun, 04 Oct 2026 12:00:00 +0000",
+      "orig_url": "https://archive.ubuntu.com/ubuntu/pool/universe/d/doxygen/doxygen_1.15.0+ds1.orig.tar.xz",
+      "orig_sha256": "a40855e233ff0c9d580dde9edc3340b5ea51aefb473e342a7bd114b4119eafd7",
+      "packaging_url": "https://archive.ubuntu.com/ubuntu/pool/universe/d/doxygen/doxygen_1.15.0+ds1-1ubuntu3.debian.tar.xz",
+      "packaging_sha256": "0eddb84c70af2513cd2e8a12f450273a29e2998228852e2ced690338037ea02e",
+      "metadata_license": "GPL-2",
+      "extra_patches": [
+        "doxygen/unsigned-string-comparison.patch",
+        "doxygen/reproducible-manual-pdf.patch"
+      ],
+      "changes": [
+        "Fix architecture-dependent Unicode string ordering in Doxygen on {distribution_name}.",
+        "Run upstream documentation tests and signed/unsigned-char comparison regressions.",
+        "Retain reproducibility flags and enable full linker hardening.",
+        "Exclude imported diagram timestamps from the PDF manual's optional metadata.",
+        "Verify generated search-index ordering in build and installed-package tests."
+      ]
     },
     "ngtcp2": {
       "upstream_version": "1.25.0",

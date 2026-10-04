@@ -125,6 +125,45 @@ def nodejs_packaging(source):
     control.write_text(updated.replace(old, old + " chrpath,\n"))
 
 
+def doxygen_packaging(source):
+    """Exercise the patched comparator and generated documentation during builds."""
+    rules = source / "debian/rules"
+    updated = rules.read_text()
+    flags = "export DEB_BUILD_MAINT_OPTIONS=reproducible=+fixfilepath\n"
+    if updated.count(flags) != 1:
+        raise RuntimeError("unexpected Doxygen build-flags setup")
+    updated = updated.replace(flags, flags.rstrip() + " hardening=+all\n")
+    old = "\ttouch $@\n\nclean:\n"
+    if updated.count(old) != 1:
+        raise RuntimeError("expected one Doxygen build-stamp completion")
+    updated = updated.replace(old,
+        "ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)))\n"
+        "\tctest --test-dir build --output-on-failure --no-tests=error $(NJOBS)\n"
+        "\tpython3 debian/tests/compare-strings.py\n"
+        "\tpython3 debian/tests/unicode-search.py --doxygen $(CURDIR)/build/bin/doxygen\n"
+        "endif\n" + old)
+    rules.write_text(updated)
+    control = source / "debian/control"
+    updated = control.read_text()
+    old = "Build-Depends: debhelper-compat (= 13),\n"
+    if updated.count(old) != 1:
+        raise RuntimeError("unexpected Doxygen build dependencies")
+    control.write_text(updated.replace(old, old + "  libxml2-utils <!nocheck>,\n"))
+    shutil.copytree(CONFIG / "doxygen/tests", source / "debian/tests", dirs_exist_ok=True)
+    copyright_file = source / "debian/copyright"
+    updated = copyright_file.read_text()
+    stanza = "Files: debian/*\nCopyright:\n"
+    if updated.count(stanza) != 1:
+        raise RuntimeError("unexpected Doxygen packaging copyright stanza")
+    copyright_file.write_text(updated.replace(stanza, stanza + " 2026, Qore Technologies, s.r.o.\n"))
+    with (source / "debian/tests/control").open("a") as tests:
+        tests.write(
+            "\nTest-Command: python3 debian/tests/unicode-search.py\n"
+            "Depends: doxygen, python3\n"
+            "Restrictions: allow-stderr\n"
+            "Features: test-name=unicode-search-ordering\n")
+
+
 def cares_patch(source):
     """Generate a quilt patch from the same patcher used by FetchContent."""
     relative = Path("src/lib/ares_process.c")
@@ -421,6 +460,10 @@ def prepare(name, package, manifest, destination, cache, offline):
                 "Architecture: amd64 arm64\n"
                 "Features: test-name=stable-onnx-pytorch-coexistence\n")
     added_patches = []
+    if name == "doxygen":
+        doxygen_packaging(source)
+        added_patches += ["debian/tests/compare-strings.cpp", "debian/tests/compare-strings.py",
+                          "debian/tests/unicode-search.py"]
     if name in ("nghttp2", "nghttp3", "ngtcp2"):
         rules = source / "debian/rules"
         original = rules.read_text()

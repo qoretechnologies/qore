@@ -31,6 +31,25 @@ SHA-256; it does not have a release archive signature in this recipe.
     and GnuTLS crypto backends.
   qore-tree-sitter 0.26.13: C runtime and development packages only, retaining
     Debian's SONAME-qualified library package and symbol history.
+  doxygen 1.9.8 (Debian) / 1.15.0 (Ubuntu): distribution packaging with a fix
+    for architecture-dependent ordering of Unicode search-index entries.
+
+Doxygen's case-insensitive string comparators subtract plain char values,
+so bytes in UTF-8 titles sort differently on amd64 and arm64. The patch
+compares folded bytes as unsigned, preserving ASCII case folding and making
+the ordering independent of the compiler's plain-char representation. This
+fixes the Qore krb5 documentation search-index discrepancy at its source.
+Builds run the upstream documentation tests, compare the actual string
+functions against unsigned byte ordering under both char representations,
+and generate a real HTML search index containing mixed ASCII/Unicode titles.
+The installed-package test checks search ordering and section links again.
+The recipe retains distribution reproducibility flags and enables full linker
+hardening, including immediate symbol binding.
+The PDF manual suppresses imported diagrams' optional PTEX.InfoDict metadata:
+Graphviz/Cairo can put wall-clock timestamps there despite SOURCE_DATE_EPOCH.
+The diagrams, links and the manual's own document metadata are preserved.
+Qualify Qore documentation with these packages on both architectures before
+promoting a new snapshot; the already accepted testing snapshot is unchanged.
 
 The nghttp2, nghttp3 and ngtcp2 recipes explicitly export full hardening,
 including immediate symbol binding (BIND_NOW). Debian's default linker flags

@@ -1,0 +1,26 @@
+Description: Compare folded string bytes independently of plain char signedness
+ qstricmp and qstrnicmp subtract char values after ASCII case folding. UTF-8
+ bytes therefore sort before ASCII on signed-char targets and after ASCII on
+ unsigned-char targets. This changes generated HTML search indexes between
+ amd64 and arm64. Compare both folded bytes as unsigned, as strcmp does.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-04
+--- a/src/qcstring.cpp
++++ b/src/qcstring.cpp
+@@ -453,4 +453,5 @@
+-  for ( ; !(res = ((c=toLowerChar(*s1)) - toLowerChar(*s2))); s1++, s2++ )
++  for ( ; !(res = (static_cast<unsigned char>(c=toLowerChar(*s1)) -
++                  static_cast<unsigned char>(toLowerChar(*s2)))); s1++, s2++ )
+   {
+     if ( !c ) // strings are equal
+       break;
+@@ -466,7 +467,7 @@
+   for ( ; len--; s1++, s2++ )
+   {
+     char c = toLowerChar(*s1);
+-    int res = c-toLowerChar(*s2);
++    int res = static_cast<unsigned char>(c)-static_cast<unsigned char>(toLowerChar(*s2));
+     if ( res!=0 ) // strings are not equal
+       return res;
+     if ( c==0 ) // strings are equal

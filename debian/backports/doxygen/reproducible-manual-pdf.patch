@@ -1,0 +1,14 @@
+Description: Omit imported diagram metadata from the PDF manual
+ Graphviz/Cairo PDF diagrams can contain wall-clock creation timestamps even
+ when SOURCE_DATE_EPOCH is set. pdfTeX copies these into PTEX.InfoDict objects
+ in the manual. Suppress that optional metadata when importing diagrams;
+ retain the rendered content, links and the manual's own document metadata.
+Author: Qore Technologies, s.r.o.
+Forwarded: no
+Last-Update: 2026-10-04
+--- a/doc/doxygen_manual.tex
++++ b/doc/doxygen_manual.tex
+@@ -17,2 +17,3 @@
+ \pdfsuppresswarningpagegroup=1
++\pdfsuppressptexinfo=8
+ \documentclass{book}
