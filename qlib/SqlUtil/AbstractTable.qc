@@ -1314,7 +1314,18 @@ bool b = table.empty();
     }
 
     #! creates the object from a table description hash
-    /** @param desc a @ref table_desc_hash "table description hash" describing the table
+    /** Primary-key metadata is validated without generating SQL to add the key to an existing table. This also
+        permits descriptions of keys on databases that do not support adding primary keys with \c ALTER \c TABLE.
+
+        @par Example:
+        @code{.py}
+hash<auto> description = source_table.getDescriptionHash();
+AbstractTable target = AbstractTable::getTable(source_table.getDatasource(), source_table.getName());
+target.setupTable(description);
+list<auto> changes = source_table.getAlignSql(target);
+        @endcode
+
+        @param desc a @ref table_desc_hash "table description hash" describing the table
         @param opt an optional hash of options for the table creation string; see
         @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
         driver-specific options
@@ -1458,7 +1469,10 @@ bool b = table.empty();
 
             hash<auto> pk_opt = opt.(getConstraintOptions().keys())
                 + (desc.primary_key - ("name", "columns"));
-            addPrimaryKeyUnlocked(desc.primary_key.name, desc.primary_key.columns, pk_opt);
+            # A description constructs metadata only. Drivers such as SQLite can describe primary keys but
+            # cannot add them to an existing table, so do not request ALTER TABLE SQL here.
+            setPrimaryKeyUnlocked(addPrimaryKeyUnlockedIntern(desc.primary_key.name, desc.primary_key.columns,
+                pk_opt, NOTHING, False));
         }
 
         # add unique constraints to table
@@ -1963,7 +1977,8 @@ printf("%s;\n", sql);
         return pk;
     }
 
-    private AbstractPrimaryKey addPrimaryKeyUnlockedIntern(string pkname, softlist cols, *hash<auto> opt, *reference<string> sql) {
+    private AbstractPrimaryKey addPrimaryKeyUnlockedIntern(string pkname, softlist cols, *hash<auto> opt,
+            *reference<string> sql, bool generate_sql = True) {
         getColumnsUnlocked();
         if (!manual)
             getIndexesUnlocked();
@@ -1995,11 +2010,12 @@ printf("%s;\n", sql);
         # find matching index for unique constraint
         pk.findMatchingIndex(indexes);
 
-        # add pk to table if the table already exists in the DB
-        if (opt.partition_aligned) {
-            prepareCreateSqlOptionsImpl(\opt);
+        if (generate_sql) {
+            if (opt.partition_aligned) {
+                prepareCreateSqlOptionsImpl(\opt);
+            }
+            sql = pk.getCreateSql(getSqlName(), opt);
         }
-        sql = pk.getCreateSql(getSqlName(), opt);
 
         return pk;
     }
@@ -11909,8 +11925,15 @@ on_exit printf("SQL> %s\n", sql);
     }
 
     private getPrimaryKeyUnlocked() {
-        if (primaryKey || manual)
+        if (primaryKey) {
             return;
+        }
+        if (manual) {
+            # A manually defined table may have no key and may not exist in the database. Return the driver's
+            # empty key object as promised by getPrimaryKey(), without introspecting the database.
+            primaryKey @= addPrimaryKeyImpl("", {}, NOTHING);
+            return;
+        }
         getColumnsUnlocked();
         primaryKey @= getPrimaryKeyImpl();
 

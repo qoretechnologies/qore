@@ -2639,6 +2639,8 @@ while (*binary chunk = input.read(65536)) {
         and quoted column names kept their quotes
 
     - @ref sqlutilintro "SqlUtil" module
+      - fixed reconstructing SQLite table descriptions with primary keys, which prevented unrelated field
+        changes such as renaming a data-provider field
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
         @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by @ref bulksqlutilintro "BulkSqlUtil"
       - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" (and the all-drivers variant)

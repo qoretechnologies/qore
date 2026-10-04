@@ -26,6 +26,9 @@ class Sqlite3KeysTest inherits QUnit::Test {
 
     constructor() : Test("Sqlite3KeysTest", "1.0", \ARGV) {
         addTestCase("primary keys are described", \primaryKeys());
+        addTestCase("primary key descriptions round trip", \primaryKeyDescriptions());
+        addTestCase("invalid primary key descriptions are rejected", \invalidPrimaryKeyDescriptions());
+        addTestCase("unsupported primary key DDL remains explicit", \unsupportedPrimaryKeyDdl());
         addTestCase("automatic indexes are described", \automaticIndexes());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("duplicate rows are recognized", \duplicateRows());
@@ -83,6 +86,52 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertTrue(quoted.quoted_code.unique);
         assertFalse(quoted.quoted_name.unique);
         assertEq({"name": "nocase"}, quoted.quoted_name.collations, "a column collation is kept as declared");
+    }
+
+    primaryKeyDescriptions() {
+        Datasource ds = getDatasource();
+        foreach string name in (("single_pk", "composite_pk", "no_pk")) {
+            Sqlite3Table current(ds, name);
+            hash<auto> desc = current.getDescriptionHash();
+            Sqlite3Table described(ds, name);
+            described.setupTable(desc);
+            assertEq(current.getPrimaryKey().keys(), described.getPrimaryKey().keys(),
+                "constructing metadata preserves the ordered primary key");
+            assertEq(desc.primary_key, described.getDescriptionHash().primary_key,
+                "the primary key description round trips without executing DDL");
+            assertEq((), current.getAlignSql(described), "an unchanged primary key requires no ALTER TABLE SQL");
+        }
+        Sqlite3Table absent(ds, "not_created");
+        absent.setupTable({"columns": {"id": {"native_type": "integer"}}});
+        assertTrue(absent.getPrimaryKey().empty(), "a new table with no key returns an empty key object");
+        assertFalse(absent.inDb(), "reading manually defined key metadata does not introspect the database");
+    }
+
+    invalidPrimaryKeyDescriptions() {
+        Datasource ds = getDatasource();
+        hash<auto> desc = (new Table(ds, "single_pk")).getDescriptionHash();
+        desc.primary_key.columns = ("missing",);
+        Sqlite3Table missing(ds, "single_pk");
+        assertThrows("PRIMARY-KEY-ERROR", \missing.setupTable(), (desc,),
+            "metadata construction still validates primary key columns");
+        desc.primary_key.columns = ();
+        Sqlite3Table empty(ds, "single_pk");
+        assertThrows("PRIMARY-KEY-ERROR", \empty.setupTable(), (desc,),
+            "an empty primary key description is invalid");
+        desc.primary_key.columns = (42,);
+        Sqlite3Table invalid(ds, "single_pk");
+        assertThrows("PRIMARY-KEY-ERROR", \invalid.setupTable(), (desc,),
+            "primary key column names must be strings");
+    }
+
+    unsupportedPrimaryKeyDdl() {
+        Datasource ds = getDatasource();
+        Sqlite3Table no_pk(ds, "no_pk");
+        assertThrows("UNSUPPORTED", \no_pk.getAddPrimaryKeySql(), ("PRIMARY", ("x",)),
+            "requesting unsupported SQLite ALTER TABLE SQL still fails");
+        assertThrows("UNSUPPORTED", \no_pk.addPrimaryKey(), ("PRIMARY", ("x",)),
+            "adding a key to an existing SQLite table still fails");
+        assertEq((), no_pk.getPrimaryKey().keys(), "failed DDL must not publish a primary key");
     }
 
     upsert() {
