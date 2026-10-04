@@ -359,13 +359,15 @@ public class OllamaEmbedder inherits AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, Backend);
 
         hash<auto> body = {
             "model": model_name,
             "input": texts,
         };
 
-        hash<auto> resp = pickRestClient(opts).restPost("/api/embed", body);
+        hash<auto> resp = pickRestClient(opts).restPostWithRetry("/api/embed", body,
+            NOTHING, opts._embedder_retry_policy);
 
         # Ollama native response shape: {embeddings: [[float, ...], ...]}
         *list<auto> vectors = resp.body.embeddings;

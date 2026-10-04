@@ -7,9 +7,9 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QoreRagUtils
-%requires Util
-%requires QUnit
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
 
 %exec-class RagPipelineTest
 
@@ -19,6 +19,7 @@ class TestEmbedder inherits AbstractEmbedder {
     public {
         int encode_calls = 0;
         list<string> encoded_inputs = ();
+        *hash<auto> last_opts;
         Mutex m();
     }
 
@@ -26,6 +27,7 @@ class TestEmbedder inherits AbstractEmbedder {
         m.lock();
         on_exit m.unlock();
         ++encode_calls;
+        last_opts = opts;
         push encoded_inputs, text;
         return vectorFor(text);
     }
@@ -216,11 +218,36 @@ public class RagPipelineTest inherits QUnit::Test {
         addTestCase("RagPipeline - pre_rerank_top_k ignored without reranker",
             \preRerankNoRerankerTest());
 
+        addTestCase("pipeline forwards embedder telemetry", \embedderTelemetryTest());
+
         # Combination test
         addTestCase("RagPipeline - all hooks combined",
             \allHooksCombinedTest());
 
         set_return_value(main());
+    }
+
+    embedderTelemetryTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 1));
+        hash<RagTelemetryObserver> observer = <RagTelemetryObserver>{
+            "event_callback": sub (hash<RagTelemetryEvent> event) {},
+        };
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50, <RagPipelineOptions>{
+            "telemetry_observer": observer,
+            "telemetry_context": {"trace": "fixture"},
+            "embedding_cache": new LruEmbeddingCache(2),
+        });
+        pipe.retrieve("query");
+        assertEq(observer, e.last_opts.telemetry_observer);
+        assertEq("fixture", e.last_opts.telemetry_context.trace);
+        assertEq("query", e.last_opts.input_type);
+        pipe.retrieve("query");
+        assertEq(1, e.encode_calls, "cache hit still skips the embedder");
+        pipe.ingest("doc", "content");
+        assertEq(observer, e.last_opts.telemetry_observer);
+        assertEq("fixture", e.last_opts.telemetry_context.trace);
+        assertEq("document", e.last_opts.input_type);
     }
 
     # ===================== helpers =====================

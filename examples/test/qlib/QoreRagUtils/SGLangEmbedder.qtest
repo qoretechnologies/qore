@@ -7,16 +7,16 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Logger
-%requires Mime
-%requires HttpServerUtil
-%requires HttpServerAsyncIo
-%requires HttpServer
-%requires RestClient
-%requires RestClientIo
-%requires SGLangRestClient
-%requires QoreRagUtils
-%requires QUnit
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/SGLangRestClient.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires ../../../../qlib/QUnit.qm
 
 %requires json
 
@@ -352,15 +352,19 @@ class SGLangEmbedderTest inherits QUnit::Test {
         });
         SGLangEmbedder emb = makeEmbedder();
         try {
-            emb.encodeBatch(("hello",));
+            emb.encodeBatch(("hello",), {"retry_max_delay": 0});
             fail("expected REST-RESPONSE-ERROR");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("REST-RESPONSE-ERROR", ex.err);
             assertEq(503, ex.arg.status_code);
+            assertEq(4, ex.arg.attempts);
             assertEq("service overloaded", ex.arg.body.message);
         }
         # No fallback on 5xx.
-        assertEq(1, handler.requests.size());
+        assertEq(4, handler.requests.size());
+        foreach hash<auto> request in (handler.requests) {
+            assertEq("/v1/embeddings", request.path);
+        }
     }
 
     testNativeShapeMismatch() {

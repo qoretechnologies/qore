@@ -2542,6 +2542,9 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref restclientiointro "RestClientIo" module
+      - added reusable opt-in transient HTTP retries for all subclasses, with bounded exponential backoff,
+        full jitter, Retry-After support, cancellation, and attempt metadata
+        (<a href="https://github.com/qoretechnologies/qore/issues/5475">issue 5475</a>)
       - fixed @ref RestClientIo::RestClientIo::restSseReader() "restSseReader()" not decoding an event stream with a
         \c Content-Encoding; the returned reader now decodes it
       - fixed @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" children becoming
@@ -3707,6 +3710,8 @@ while (*binary chunk = input.read(65536)) {
       - new module providing ONNX deployment tooling helpers for quantization workflows
 
     - @ref qoreragtypesintro "QoreRagTypes" module
+      - HTTP embedders now use the shared REST retry policy; configuration and per-call options control
+        retries and total time, and RAG observers receive safe retry metadata
       - new module providing the provider-neutral hashdecls and abstract embedder /
         reranker / vector-store classes shared by @ref qoreragutilsintro "QoreRagUtils" and individual RAG
         REST client modules

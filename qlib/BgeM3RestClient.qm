@@ -481,6 +481,7 @@ public class BgeM3FastApiEmbedder inherits AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, Backend);
 
         hash<auto> body = {
             "texts": texts,
@@ -493,7 +494,7 @@ public class BgeM3FastApiEmbedder inherits AbstractEmbedder {
 
         hash<auto> resp;
         try {
-            resp = pickRestClient(opts).restPost("/embed", body);
+            resp = pickRestClient(opts).restPostWithRetry("/embed", body, NOTHING, opts._embedder_retry_policy);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
                 throwEmbedderModelConfigError(ex, Backend, model_name);

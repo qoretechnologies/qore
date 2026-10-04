@@ -26,6 +26,7 @@
 %modern
 
 %requires reflection
+%requires RestClientIo
 
 module QoreRagTypes {
     version = "1.0.0";
@@ -91,6 +92,8 @@ module QoreRagTypes {
 
     @subsection qoreragtypes_1_0 QoreRagTypes 1.0
     - initial release
+    - HTTP embedders share RestClientIo's bounded transient-failure retries, configurable per embedder
+      and per call, with RAG retry telemetry (issue 5475)
 */
 
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)
@@ -228,6 +231,15 @@ public hashdecl EmbedderConfig {
         embedder to use a transient REST client for that call.
     */
     *timeout connect_timeout;
+    #! Maximum retries per HTTP request after the initial attempt; zero disables retries
+    int max_retries = 3;
+    #! Maximum exponential-backoff delay (default 8s); Retry-After is a minimum and is not capped
+    timeout retry_max_delay = 8s;
+    #! Total HTTP embedding budget, including requests and backoff (default 30s)
+    /** A positive configured or per-call \c timeout further limits this budget.
+        Per-call options can override all three retry settings.
+    */
+    timeout retry_timeout = 30s;
     #! Free-form backend-specific options
     *hash<auto> options;
     #! Optional observer for direct embedder usage
@@ -512,6 +524,23 @@ public hashdecl RagProviderInfo {
 
     - \c timeout (\c *timeout) — request timeout for this call only
     - \c connect_timeout (\c *timeout) — connection timeout for this call only
+    - \c max_retries (\c int) — retries per HTTP request after the initial attempt (default three)
+    - \c retry_max_delay (\c timeout) — exponential-backoff cap (default 8s)
+    - \c retry_timeout (\c timeout) — total budget for HTTP requests and backoff (default 30s)
+    - \c telemetry_observer and \c telemetry_context — overrides for direct-call retry telemetry
+
+    The effective total budget is the smaller of retry_timeout and a positive timeout. Batch slices
+    and endpoint fallback share that budget, and successful slices are not replayed. Retry-After is
+    honored as a minimum delay; when it cannot fit the remaining budget, the last error is propagated.
+    The underlying RestRetryPolicy documents synchronous credential-acquisition timeout limitations.
+
+    @par Example
+    Disable retries for an interactive lookup or limit an ingestion batch to two retries:
+    @code{.py}
+    list<float> query = embedder.encodeQuery("invoice lookup", {"max_retries": 0, "timeout": 2s});
+    list<list<float>> vectors = embedder.encodeDocuments(documents,
+        {"max_retries": 2, "retry_max_delay": 1s, "timeout": 10s});
+    @endcode
 
     Precedence: per-call \c opts > @ref EmbedderConfig defaults > REST client
     / connection default.
@@ -535,7 +564,8 @@ public class AbstractEmbedder {
     #! Encodes a single piece of text into a vector
     /** @param text the input text
         @param opts optional per-call options; recognized HTTP keys are
-        \c timeout and \c connect_timeout (both \c *timeout).  Non-HTTP
+        \c timeout and \c connect_timeout (both \c *timeout), plus the retry and telemetry
+        options documented on @ref AbstractEmbedder. Non-HTTP
         backends ignore \c opts.
 
         @return a dense vector of floats with length equal to @ref getDimension()
@@ -545,12 +575,63 @@ public class AbstractEmbedder {
     #! Encodes a batch of texts into vectors
     /** @param texts the input texts
         @param opts optional per-call options; recognized HTTP keys are
-        \c timeout and \c connect_timeout (both \c *timeout).  Non-HTTP
+        \c timeout and \c connect_timeout (both \c *timeout), plus the retry and telemetry
+        options documented on @ref AbstractEmbedder. Non-HTTP
         backends ignore \c opts.
 
         @return a list of vectors in the same order as the input
     */
     abstract list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts);
+
+    #! Creates a shared REST retry budget for all HTTP requests in one encodeBatch() call
+    private hash<auto> embedderRequestOptions(hash<EmbedderConfig> config, *hash<auto> opts, string backend) {
+        hash<auto!> rv = opts ?? {};
+        hash<RestClientIo::RestRetryOptions> policy = <RestClientIo::RestRetryOptions>{
+            "max_retries": opts.max_retries ?? config.max_retries,
+            "retry_max_delay": opts.retry_max_delay ?? config.retry_max_delay,
+            "retry_timeout": opts.retry_timeout ?? config.retry_timeout,
+            "timeout": opts.timeout ?? config.timeout,
+            "retry_callback": sub (hash<RestClientIo::RestRetryEvent> event) {
+                notifyEmbedderRetry(config, opts ?? {}, backend, event);
+            },
+        };
+        rv._embedder_retry_policy = new RestClientIo::RestRetryPolicy(policy);
+        return rv;
+    }
+
+    #! Reports safe retry metadata through the existing observer contract
+    private notifyEmbedderRetry(hash<EmbedderConfig> config, hash<auto> opts, string backend,
+            hash<RestClientIo::RestRetryEvent> retry) {
+        *hash<RagTelemetryObserver> observer = opts.telemetry_observer ?? config.telemetry_observer;
+        if (!observer) {
+            return;
+        }
+        hash<RagTelemetryEvent> event = <RagTelemetryEvent>{
+            "type": "error",
+            "operation": "embed",
+            "timestamp": now_us(),
+            "backend": backend,
+            "model": config.model ?? getModel(),
+            "telemetry_context": opts.telemetry_context ?? config.telemetry_context,
+            "status": "error",
+            "error": {"err": retry.err, "retryable": True, "attempt": retry.attempt,
+                "status_code": retry.status_code},
+            "attributes": {"attempt": retry.attempt, "next_attempt": retry.attempt + 1,
+                "retry_delay_ms": retry.delay_ms},
+        };
+        foreach *code<nothing(hash<RagTelemetryEvent>)> cb in
+                ((observer.event_callback, observer.error_callback)) {
+            if (cb) {
+                try {
+                    cb(event);
+                } catch (hash<ExceptionInfo> observer_error) {
+                    if (inlist(observer_error.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                        rethrow;
+                    }
+                }
+            }
+        }
+    }
 
     #! Returns the preferred number of texts per bulk embedding request
     /** This is an advisory provider-request size for callers that own a large
@@ -729,6 +810,7 @@ public class AbstractEmbedder {
                 "body": body,
                 "original_err": orig.err,
                 "original_desc": orig.desc,
+                "attempts": orig.arg.attempts ?? 1,
             };
     }
 }

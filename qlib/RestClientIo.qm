@@ -89,6 +89,32 @@ hash<RestResponseInfo> resp1 = f1.get(30s);
 hash<RestResponseInfo> resp2 = f2.get(30s);
     @endcode
 
+    @section restclientio_retries Opt-in Transient Failure Retries
+
+    All subclasses inherit @ref RestClientIo::restDoRequestWithRetry() and
+    @ref RestClientIo::restPostWithRetry(). Existing request methods do not enable retries.
+    @ref RestRetryPolicy provides the same policy to custom request implementations via a typed callback.
+
+    The defaults allow four attempts per request, with full-jitter exponential backoff starting at 500ms
+    and capped at 8s. A policy has a 30s total budget; a positive caller timeout further limits it.
+    Retry-After seconds and HTTP dates are honored even when longer than the backoff cap, provided the
+    remaining budget permits another request. Setting max_retries to zero disables retries.
+
+    Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
+    and pending response waits; final request exceptions retain their original error and add an
+    attempts count to their argument. Observers receive metadata only, without request content.
+
+    @code{.py}
+    RestRetryPolicy policy(<RestRetryOptions>{"max_retries": 2, "timeout": 5s});
+    hash<RestResponseInfo> inventory = rest.restDoRequestWithRetry(
+        "GET", "/inventory", NOTHING, NOTHING, policy);
+    @endcode
+
+    @note Opt in only when an operation is safe to replay. A shared policy gives consecutive requests
+        one total budget; create a fresh policy for a new operation. Request preparation (including
+        credential acquisition) is synchronous; its elapsed time is deducted before waiting for the
+        response, but credential providers must enforce their own I/O timeouts.
+
     @section restclientio_oauth2 OAuth2 Support
 
     %RestClientIo supports OAuth2 token acquisition and automatic refresh:
@@ -140,6 +166,9 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
+    - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
+      jittered backoff, cancellation, and safe retry observers (issue 5475)
+    - call-local timeout requests now cancel unfinished I/O when their deadline expires
     - initial release
 */
 
@@ -169,6 +198,208 @@ public namespace RestClientIo {
                 mgr.closeAll();
             } catch () {
                 # Destructors must not propagate cleanup exceptions.
+            }
+        }
+    }
+
+    #! Options for an explicitly retriable REST request
+    public hashdecl RestRetryOptions {
+        #! Retries after the initial request (default three); zero disables retries
+        int max_retries = 3;
+        #! Cap on exponential backoff starting at 500ms, with full jitter; zero allows immediate retries
+        timeout retry_max_delay = 8s;
+        #! Total budget shared by all requests using this policy, including backoff
+        timeout retry_timeout = 30s;
+        #! An optional positive caller timeout further limits the total budget
+        *timeout timeout;
+        #! Best-effort observer called before each retry, without request/response content
+        *code<nothing(hash<RestRetryEvent>)> retry_callback;
+    }
+
+    #! Safe metadata for one scheduled REST retry
+    public hashdecl RestRetryEvent {
+        #! Number of the failed attempt (one-based)
+        int attempt;
+        #! HTTP status when present
+        *int status_code;
+        #! Exception code, without its possibly sensitive description or arguments
+        string err;
+        #! Always True for retry notifications
+        bool retryable = True;
+        #! Scheduled delay in milliseconds
+        int delay_ms;
+    }
+
+    #! Bounded retry policy reusable by REST subclasses and custom request implementations
+    /** Retries HTTP 408, 425, 429, 500, 502, 503, and 504, and explicit connection/timeout errors.
+        Other errors propagate immediately. Retry-After (seconds or HTTP date) takes precedence over
+        full-jitter exponential backoff. A server delay exceeding the remaining budget stops retries;
+        it is never shortened to send a request earlier than the server permits.
+
+        A policy holds an immutable monotonic deadline and can be shared by the sequential requests
+        of one logical operation. Attempts are counted per execute() call. Create a new policy for each
+        new operation. Retry state is local, so concurrent calls do not change each other's options.
+
+        @note Only opt in for operations that are safe to replay; the client cannot infer POST idempotency.
+        Final request errors preserve their code/description and arguments, adding \c arg.attempts.
+        Non-hash arguments are preserved in \c arg.original_arg. Cancellation is never retried.
+
+        @par Example
+        Retry an embedding lookup while bounding all attempts to five seconds:
+        @code{.py}
+        RestRetryPolicy policy(<RestRetryOptions>{"timeout": 5s});
+        hash<auto> result = client.restPostWithRetry("/embeddings", request, NOTHING, policy);
+        @endcode
+    */
+    public class RestRetryPolicy {
+        private {
+            #! Immutable after construction
+            hash<RestRetryOptions> options;
+            #! Immutable monotonic deadline shared across requests
+            int deadline_us;
+        }
+
+        #! Creates a retry policy and starts its total time budget
+        /** @param options retry limits and optional observer
+            @throw REST-RETRY-OPTION-ERROR a retry limit is negative or the budget is not positive
+        */
+        constructor(*hash<RestRetryOptions> options) {
+            self.options = options ?? <RestRetryOptions>{};
+            if (self.options.max_retries < 0 || self.options.retry_max_delay < 0
+                    || self.options.retry_timeout <= 0) {
+                throw "REST-RETRY-OPTION-ERROR",
+                    "max_retries and retry_max_delay must be nonnegative and retry_timeout must be positive";
+            }
+            int budget = self.options.retry_timeout;
+            if (self.options.timeout > 0) {
+                budget = min(budget, self.options.timeout);
+            }
+            int started = retryNow();
+            if (budget > (9223372036854775807 - started) / 1000
+                    || self.options.retry_max_delay > 9223372036854775) {
+                throw "REST-RETRY-OPTION-ERROR", "retry timeouts are too large";
+            }
+            deadline_us = started + budget * 1000;
+        }
+
+        #! Executes a request with the remaining budget and bounded retries
+        /** @param request callback accepting a positive remaining timeout in milliseconds; it must bound
+                the entire request and cancel unfinished I/O before throwing
+            @return the successful response
+            @throw HTTPCLIENT-TIMEOUT the shared deadline expired before a request could start
+            @throw THREAD-CANCELLED the thread was cancelled
+            @throw any the last request error, with \c arg.attempts
+        */
+        hash<auto> execute(code<hash<auto>(int)> request) {
+            int attempts = 0;
+            int backoff = min(500, options.retry_max_delay);
+            while (True) {
+                if (thread_cancelled()) {
+                    throw "THREAD-CANCELLED", "REST retry cancelled", {"attempts": attempts};
+                }
+                int remaining = (deadline_us - retryNow()) / 1000;
+                if (remaining <= 0) {
+                    throw "HTTPCLIENT-TIMEOUT", "REST retry budget exhausted", {"attempts": attempts};
+                }
+                ++attempts;
+                try {
+                    return request(remaining);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                        rethrow;
+                    }
+                    # Copy to an untyped hash: REST exception arguments can be closed hashdecls.
+                    hash<auto!> arg = ex.arg.typeCode() == NT_HASH ? {} + ex.arg
+                        : (exists ex.arg ? {"original_arg": ex.arg} : {});
+                    arg.attempts = attempts;
+                    bool retryable = isRetryableError(ex);
+                    remaining = (deadline_us - retryNow()) / 1000;
+                    *int advised = retryAfter(ex);
+                    int delay = advised ?? retryJitter(backoff);
+                    if (!retryable || attempts > options.max_retries || remaining <= delay) {
+                        rethrow ex.err, ex.desc, arg;
+                    }
+                    notifyRetry(ex, attempts, delay);
+                    # An observer can take time; never begin a wait that would consume the remaining budget.
+                    remaining = (deadline_us - retryNow()) / 1000;
+                    if (remaining <= delay) {
+                        rethrow ex.err, ex.desc, arg;
+                    }
+                    retryWait(delay);
+                    backoff = min(options.retry_max_delay, backoff * 2);
+                }
+            }
+        }
+
+        #! Only explicitly transient HTTP/transport failures are retryable
+        private bool isRetryableError(hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR") {
+                return inlist(ex.arg.status_code, (408, 425, 429, 500, 502, 503, 504));
+            }
+            return inlist(ex.err, ("HTTPCLIENT-TIMEOUT", "HTTP-CLIENT-TIMEOUT", "SOCKET-TIMEOUT",
+                "SOCKET-CONNECT-ERROR", "HTTPCLIENT-CONNECT-ERROR", "HTTP-CLIENT-CONNECT-ERROR",
+                "SOCKET-CLOSED", "SOCKET-SEND-ERROR", "SOCKET-RECV-ERROR"));
+        }
+
+        #! Reads Retry-After without letting malformed or overflowing guidance replace the original error
+        private *int retryAfter(hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() != NT_HASH || ex.arg.headers.typeCode() != NT_HASH) {
+                return NOTHING;
+            }
+            foreach string key in (keys ex.arg.headers) {
+                if (tolower(key) != "retry-after") {
+                    continue;
+                }
+                auto value = ex.arg.headers{key};
+                if (value.typeCode() != NT_STRING) {
+                    return NOTHING;
+                }
+                string header = trim(value);
+                if (header =~ /^[0-9]+$/) {
+                    # Saturate before multiplying an untrusted Retry-After value.
+                    number seconds = number(header);
+                    return int(min(seconds, 9223372036854775n)) * 1000;
+                }
+                try {
+                    return max(0, (date(header) - now_us()).durationMilliseconds());
+                } catch () {
+                    return NOTHING;
+                }
+            }
+            return NOTHING;
+        }
+
+        #! Monotonic clock and interruptible delay are overridable for deterministic policy tests
+        private int retryNow() {
+            return clock_get_monotonic_us();
+        }
+
+        private int retryJitter(int limit_ms) {
+            return limit_ms ? rand() % (limit_ms + 1) : 0;
+        }
+
+        private retryWait(int delay_ms) {
+            if (delay_ms > 0) {
+                usleep(delay_ms * 1000);
+            }
+        }
+
+        #! Sends metadata to the optional observer without letting instrumentation failures change requests
+        private notifyRetry(hash<ExceptionInfo> ex, int attempt, int delay) {
+            if (!options.retry_callback) {
+                return;
+            }
+            try {
+                options.retry_callback(<RestRetryEvent>{
+                    "attempt": attempt,
+                    "status_code": ex.arg.typeCode() == NT_HASH ? ex.arg.status_code : NOTHING,
+                    "err": ex.err,
+                    "delay_ms": delay,
+                });
+            } catch (hash<ExceptionInfo> observer_error) {
+                if (inlist(observer_error.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                    rethrow;
+                }
             }
         }
     }
@@ -1716,6 +1947,43 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
                 timeout_ms);
         }
 
+        #! Sends an explicitly retriable POST with bounded backoff
+        /** @param path request path
+            @param body request body
+            @param hdr optional headers
+            @param policy shared retry budget, or NOTHING for a new default policy
+            @return the REST response
+            @throw any request error with \c arg.attempts, or cancellation
+            @note Use only when replaying the POST is safe; see @ref RestRetryPolicy.
+        */
+        hash<RestClient::RestResponseInfo> restPostWithRetry(string path, auto body,
+                *hash<auto> hdr, *RestRetryPolicy policy) {
+            return restDoRequestWithRetry("POST", path, body, hdr, policy);
+        }
+
+        #! Sends an explicitly retriable REST request
+        /** @param method HTTP method
+            @param path request path
+            @param body request body
+            @param hdr optional headers
+            @param policy shared retry budget, or NOTHING for a new default policy
+            @return the REST response
+            @throw any request error with \c arg.attempts, or cancellation
+            @note Existing restDoRequest() calls do not opt in to this policy. All subclasses inherit it.
+            @par Example
+            @code{.py}
+            hash<auto> response = client.restDoRequestWithRetry("GET", "/inventory", NOTHING, NOTHING,
+                new RestRetryPolicy(<RestRetryOptions>{"max_retries": 2, "timeout": 5s}));
+            @endcode
+        */
+        hash<RestClient::RestResponseInfo> restDoRequestWithRetry(string method, string path,
+                auto body, *hash<auto> hdr, *RestRetryPolicy policy) {
+            policy = policy ?? new RestRetryPolicy();
+            return cast<hash<RestClient::RestResponseInfo>>(policy.execute(hash<auto> sub (int timeout_ms) {
+                return restDoRequestWithTimeout(method, path, body, hdr, timeout_ms);
+            }));
+        }
+
         #! Sends an HTTP \c PUT request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
             return restDoRequest("PUT", path, body, hdr);
@@ -1972,10 +2240,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Sends a generic REST request with a call-local timeout
         /** This is the method-neutral counterpart to
-            @ref restPostWithTimeout().  The timeout is converted from
-            milliseconds and passed directly to the multiplexed connection
-            manager without modifying the client-wide timeout used by other
-            threads.
+            @ref restPostWithTimeout(). The response wait bounds internal transport retries and redirects
+            without modifying client-wide settings; unfinished I/O is cancelled on timeout or cancellation.
+            Synchronous request preparation is deducted from the response budget; credential providers
+            must enforce their own acquisition timeouts.
 
             @param method HTTP method
             @param path request path
@@ -2001,12 +2269,26 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(
                 string method, string path, auto body, *hash<auto> hdr,
                 int timeout_ms) {
-            if (timeout_ms <= 0) {
+            int started = clock_get_monotonic_us();
+            if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
                 throw "RESTCLIENTIO-OPTION-ERROR",
-                    "timeout_ms must be greater than zero";
+                    "timeout_ms must be positive and fit a monotonic deadline";
             }
-            return restDoRequestIntern(method, path, body, hdr, False,
-                milliseconds(timeout_ms));
+            int deadline = started + timeout_ms * 1000;
+            RestFuture future = restDoRequestAsync(method, path, body, hdr);
+            try {
+                int remaining = (deadline - clock_get_monotonic_us()) / 1000;
+                if (remaining <= 0) {
+                    throw "HTTPCLIENT-TIMEOUT", "REST request deadline exhausted";
+                }
+                return future.get(remaining);
+            } catch (hash<ExceptionInfo> ex) {
+                defer_thread_cancel(sub () { future.cancel(); });
+                if (ex.err == "FUTURE-TIMEOUT") {
+                    throw "HTTPCLIENT-TIMEOUT", "REST request deadline exhausted";
+                }
+                rethrow;
+            }
         }
 
         #! Sends a generic REST request whose response body is limited to the given size

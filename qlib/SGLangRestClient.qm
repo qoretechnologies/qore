@@ -542,8 +542,9 @@ public class SGLangEmbedder inherits AbstractEmbedder {
             }
         }
 
+        opts = embedderRequestOptions(config, opts, Backend);
         SGLangRestClient::SGLangRestClientIo client = pickRestClient(opts);
-        list<list<float>> raw = encodeRaw(client, in_texts);
+        list<list<float>> raw = encodeRaw(client, in_texts, opts);
 
         # client-side Matryoshka (MRL) reduction to the configured output dimension
         # when the model emits a larger native vector (SGLang has no server-side
@@ -560,16 +561,16 @@ public class SGLangEmbedder inherits AbstractEmbedder {
 
     #! Issues the SGLang embedding request (OpenAI-compat or native endpoint, auto-detected)
     private list<list<float>> encodeRaw(
-            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts, hash<auto> opts) {
         switch (endpoint_style) {
             case StyleOpenAi:
-                return encodeBatchOpenAi(client, texts);
+                return encodeBatchOpenAi(client, texts, opts);
             case StyleNative:
-                return encodeBatchNative(client, texts);
+                return encodeBatchNative(client, texts, opts);
         }
 
         try {
-            list<list<float>> rv = encodeBatchOpenAi(client, texts);
+            list<list<float>> rv = encodeBatchOpenAi(client, texts, opts);
             pinEndpointStyle(StyleOpenAi);
             return rv;
         } catch (hash<ExceptionInfo> ex) {
@@ -582,7 +583,7 @@ public class SGLangEmbedder inherits AbstractEmbedder {
                 rethrow;
             }
         }
-        list<list<float>> rv = encodeBatchNative(client, texts);
+        list<list<float>> rv = encodeBatchNative(client, texts, opts);
         pinEndpointStyle(StyleNative);
         return rv;
     }
@@ -592,12 +593,12 @@ public class SGLangEmbedder inherits AbstractEmbedder {
     }
 
     private list<list<float>> encodeBatchOpenAi(
-            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts, hash<auto> opts) {
         hash<auto> body = {
             "model": model_name,
             "input": texts,
         };
-        hash<auto> resp = client.restPost("/v1/embeddings", body);
+        hash<auto> resp = client.restPostWithRetry("/v1/embeddings", body, NOTHING, opts._embedder_retry_policy);
 
         *list<auto> data = resp.body.data;
         if (!exists data) {
@@ -628,9 +629,9 @@ public class SGLangEmbedder inherits AbstractEmbedder {
     }
 
     private list<list<float>> encodeBatchNative(
-            SGLangRestClient::SGLangRestClientIo client, list<string> texts) {
+            SGLangRestClient::SGLangRestClientIo client, list<string> texts, hash<auto> opts) {
         hash<auto> body = {"texts": texts};
-        hash<auto> resp = client.restPost("/embed", body);
+        hash<auto> resp = client.restPostWithRetry("/embed", body, NOTHING, opts._embedder_retry_policy);
 
         *list<auto> vectors = resp.body.dense ?? resp.body.embeddings;
         if (!exists vectors) {

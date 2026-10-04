@@ -697,6 +697,7 @@ public class GeminiEmbedder inherits AbstractEmbedder {
             return ();
         }
 
+        opts = embedderRequestOptions(config, opts, Backend);
         GeminiRestClient::GeminiRestClientIo client = pickRestClient(opts);
         list<list<float>> result = ();
         int offset;
@@ -705,7 +706,7 @@ public class GeminiEmbedder inherits AbstractEmbedder {
             if (end > texts.size()) {
                 end = texts.size();
             }
-            result += encodeBatchSlice(client, texts[offset .. end - 1]);
+            result += encodeBatchSlice(client, texts[offset .. end - 1], opts);
             offset = end;
         }
         return result;
@@ -726,7 +727,7 @@ public class GeminiEmbedder inherits AbstractEmbedder {
     }
 
     private list<list<float>> encodeBatchSlice(
-            GeminiRestClient::GeminiRestClientIo client, list<string> texts) {
+            GeminiRestClient::GeminiRestClientIo client, list<string> texts, hash<auto> opts) {
         string resource = getModelResourceName();
         list<hash<auto>> requests = ();
         foreach string text in (texts) {
@@ -748,8 +749,8 @@ public class GeminiEmbedder inherits AbstractEmbedder {
 
         hash<auto> resp;
         try {
-            resp = client.restPost(resource + ":batchEmbedContents",
-                {"requests": requests});
+            resp = client.restPostWithRetry(resource + ":batchEmbedContents",
+                    {"requests": requests}, NOTHING, opts._embedder_retry_policy);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
                 throwEmbedderModelConfigError(ex, Backend, model_name);

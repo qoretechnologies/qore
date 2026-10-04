@@ -1,23 +1,25 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires Logger
-%requires Mime
-%requires HttpServerUtil
-%requires HttpServer
-%requires HttpServerAsyncIo
-%requires QoreLlmTypes
-%requires QoreRagTypes
-%requires QoreLlmUtils
-%requires GcpAuth
-%requires GeminiBodyShape
-%requires GeminiRestClient
-%requires VertexAiRestClient
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/GcpAuth.qm
+%requires ../../../../qlib/GeminiBodyShape.qm
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/VertexAiRestClient.qm
 
 %requires json
 
@@ -29,6 +31,20 @@
 # - Vertex AI :streamGenerateContent (SSE)
 # - Vertex AI :predict (for embedder)
 class FakeVertexHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex retry_mutex();
+        int failures = 0;
+        int predict_attempts = 0;
+    }
+    failNextPrediction() {
+        AutoLock al(retry_mutex);
+        failures = 1;
+        predict_attempts = 0;
+    }
+    int getPredictAttempts() {
+        AutoLock al(retry_mutex);
+        return predict_attempts;
+    }
     public {
         string last_path = "";
         *hash<auto> last_body;
@@ -98,6 +114,12 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
                 make_json(generate_response));
         }
         if (last_path =~ /:predict$/) {
+            AutoLock al(retry_mutex);
+            ++predict_attempts;
+            if (failures) {
+                --failures;
+                return makeResponse({"Content-Type": MimeTypeJson}, 503, make_json({"message": "busy"}));
+            }
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(predict_response));
         }
@@ -587,7 +609,9 @@ public class VertexAiTest inherits QUnit::Test {
                 "gcp_sa_json_path": sa_path,
             },
         });
-        list<float> v = emb.encode("hello");
+        handler.failNextPrediction();
+        list<float> v = emb.encode("hello", {"retry_max_delay": 0});
+        assertEq(2, handler.getPredictAttempts(), "Vertex prediction retries a transient response");
         assertEq((0.5, 0.4, 0.3, 0.2, 0.1), v);
         assertEq(5, emb.getDimension());
         # request body shape: instances[].content

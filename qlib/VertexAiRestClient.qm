@@ -480,6 +480,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, "vertex-ai");
         ensureRestClient();
         list<hash<auto>> instances = ();
         foreach string t in (texts) {
@@ -494,12 +495,16 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
             encode_url(config.model, True));
         hash<auto> resp;
         try {
-            resp = rest_client.restPost(path, body,
-                vertexAuthHeaders(token, quota_project_id));
+            resp = rest_client.restPostWithRetry(path, body,
+                vertexAuthHeaders(token, quota_project_id), opts._embedder_retry_policy);
         } catch (hash<ExceptionInfo> ex) {
+            if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                rethrow;
+            }
+            hash<auto> error = {} + ex + {"attempts": ex.arg.attempts ?? 1};
             throw "EMBEDDER-ERROR",
                 sprintf("Vertex AI :predict request for %y failed: %s",
-                    config.model, GeminiBodyShape::requestErrorDetail(ex)), ex;
+                    config.model, GeminiBodyShape::requestErrorDetail(ex)), error;
         }
         list<list<float>> rv = ();
         foreach hash<auto> pred in (resp.body.predictions ?? ()) {

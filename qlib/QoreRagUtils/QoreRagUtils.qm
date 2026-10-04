@@ -334,6 +334,18 @@ RagPipeline pipe(
         self.telemetry_context = opts.telemetry_context;
     }
 
+    #! Forwards pipeline observers without overriding embedder defaults when no pipeline observer is set
+    private *hash<auto> embedderTelemetryOptions() {
+        hash<auto!> opts;
+        if (telemetry_observer) {
+            opts.telemetry_observer = telemetry_observer;
+        }
+        if (telemetry_context) {
+            opts.telemetry_context = telemetry_context;
+        }
+        return opts;
+    }
+
     #! Ingests a document — chunks, embeds, and stores it
     /** @param doc_id stable identifier for the source document
         @param content the document text
@@ -361,7 +373,7 @@ RagPipeline pipe(
                 return ();
             }
             list<string> texts = map $1.content, chunks;
-            list<list<float>> vectors = embedder.encodeDocuments(texts);
+            list<list<float>> vectors = embedder.encodeDocuments(texts, embedderTelemetryOptions());
             list<hash<VectorRecord>> records = ();
             list<string> ids = ();
             for (int i = 0; i < chunks.size(); ++i) {
@@ -479,11 +491,11 @@ RagPipeline pipe(
                     query_vec = cached;
                 } else {
                     ++cache_misses;
-                    query_vec = embedder.encodeQuery(embed_query);
+                    query_vec = embedder.encodeQuery(embed_query, embedderTelemetryOptions());
                     embedding_cache.put(embed_query, query_vec);
                 }
             } else {
-                query_vec = embedder.encodeQuery(embed_query);
+                query_vec = embedder.encodeQuery(embed_query, embedderTelemetryOptions());
             }
 
             # Step 3: fallback vector-store chain

@@ -1164,18 +1164,29 @@ public class BedrockEmbedder inherits QoreRagUtils::AbstractEmbedder {
     }
 
     list<float> encode(string text, *hash<auto> opts) {
+        return encodeBatch((text,), opts)[0];
+    }
+
+    private list<float> encodeOne(string text, hash<auto> opts) {
         ensureRestClient();
         hash<auto> body = BedrockEmbedder::buildEmbedBody(config.model, text);
         string path = sprintf("/model/%s/invoke",
             encode_url(config.model, True));
         hash<auto> resp;
         try {
-            resp = rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
-                {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
+            RestClientIo::RestRetryPolicy policy = opts._embedder_retry_policy;
+            resp = policy.execute(hash<auto> sub (int timeout_ms) {
+                return rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
+                    {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, timeout_ms);
+            });
         } catch (hash<ExceptionInfo> ex) {
+            if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                rethrow;
+            }
+            hash<auto> error = {} + ex + {"attempts": ex.arg.attempts ?? 1};
             throw "EMBEDDER-ERROR",
                 sprintf("Bedrock InvokeModel embed request for %y failed: %s",
-                    config.model, ex.desc), ex;
+                    config.model, ex.desc), error;
         }
         list<float> v = BedrockEmbedder::extractEmbedding(config.model, resp.body);
         if (!cached_dimension && v) {
@@ -1188,12 +1199,13 @@ public class BedrockEmbedder inherits QoreRagUtils::AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, "bedrock");
         # Titan invoke is single-text; Cohere supports batch.  For simplicity
         # we sequentialize here; future work can switch Cohere to its native
         # batch call.
         list<list<float>> rv = ();
         foreach string t in (texts) {
-            push rv, encode(t, opts);
+            push rv, encodeOne(t, opts);
         }
         return rv;
     }

@@ -461,12 +461,14 @@ public class MistralEmbedder inherits AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, Backend);
         hash<auto> body = {
             "model": model_name,
             "input": texts,
         };
 
-        hash<auto> resp = pickRestClient(opts).restPost("/embeddings", body);
+        hash<auto> resp = pickRestClient(opts).restPostWithRetry("/embeddings", body,
+            NOTHING, opts._embedder_retry_policy);
 
         *list<auto> data = resp.body.data;
         if (!exists data) {

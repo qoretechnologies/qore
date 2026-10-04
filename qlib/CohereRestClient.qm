@@ -662,6 +662,7 @@ public class CohereEmbedder inherits AbstractEmbedder {
         if (!texts) {
             return ();
         }
+        opts = embedderRequestOptions(config, opts, Backend);
 
         hash<auto!> body = {
             "model": model_name,
@@ -673,7 +674,8 @@ public class CohereEmbedder inherits AbstractEmbedder {
             body.truncate = opts.truncate;
         }
 
-        hash<auto> resp = pickRestClient(opts).restPost("/embed", body);
+        hash<auto> resp = pickRestClient(opts).restPostWithRetry("/embed", body,
+            NOTHING, opts._embedder_retry_policy);
 
         # Cohere v2 returns embeddings.float = [[...], ...]
         *list<auto> vectors = resp.body.embeddings."float";

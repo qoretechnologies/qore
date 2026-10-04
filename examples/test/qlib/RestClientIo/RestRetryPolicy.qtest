@@ -1,0 +1,282 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RestRetryPolicy.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/QUnit.qm
+%exec-class RestRetryPolicyTest
+
+class ControlledRetryPolicy inherits RestRetryPolicy {
+    public {
+        int ticks = 0;
+        list<int> delays = ();
+        list<int> limits = ();
+    }
+    constructor(*hash<RestRetryOptions> opts) : RestRetryPolicy(opts) {
+    }
+    private int retryNow() {
+        return ticks;
+    }
+    private retryWait(int delay_ms) {
+        push delays, delay_ms;
+        ticks += delay_ms * 1000;
+    }
+    private int retryJitter(int limit_ms) {
+        push limits, limit_ms;
+        return limit_ms;
+    }
+}
+
+class SignallingRetryPolicy inherits RestRetryPolicy {
+    public {
+        Channel entered(1);
+    }
+    constructor() : RestRetryPolicy(<RestRetryOptions>{"retry_timeout": 30s}) {
+    }
+    private retryWait(int delay_ms) {
+        entered.send(gettid());
+        RestRetryPolicy::retryWait(delay_ms);
+    }
+}
+
+class RestRetryPolicyTest inherits QUnit::Test {
+    constructor() : Test("RestRetryPolicy", "1.0", \ARGV) {
+        addTestCase("retry statuses recover", \testStatuses());
+        addTestCase("permanent errors fail once", \testPermanent());
+        addTestCase("transport errors recover", \testTransport());
+        addTestCase("bounded exponential backoff", \testBackoff());
+        addTestCase("full jitter remains within bounds", \testJitter());
+        addTestCase("Retry-After seconds and date", \testRetryAfter());
+        addTestCase("malformed Retry-After falls back", \testMalformed());
+        addTestCase("attempt limit preserves error", \testAttemptLimit());
+        addTestCase("zero retries disables retries", \testDisabled());
+        addTestCase("deadline bounds requests and backoff", \testDeadline());
+        addTestCase("policy shares deadline across requests", \testSharedDeadline());
+        addTestCase("observers are isolated", \testObserver());
+        addTestCase("invalid options rejected", \testInvalid());
+        addTestCase("cancellation interrupts backoff", \testCancel());
+        set_return_value(main());
+    }
+
+    private hash<ExceptionInfo> failure(RestRetryPolicy policy, code<hash<auto>(int)> request) {
+        try {
+            policy.execute(request);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        fail("expected an exception");
+        return <ExceptionInfo>{};
+    }
+
+    testStatuses() {
+        foreach int status in ((408, 425, 429, 500, 502, 503, 504)) {
+            ControlledRetryPolicy policy();
+            int calls = 0;
+            hash<auto> response = policy.execute(hash<auto> sub (int timeout_ms) {
+                assertGt(0, timeout_ms);
+                if (++calls == 1) {
+                    throw "REST-RESPONSE-ERROR", "temporary", {"status_code": status};
+                }
+                return {"ok": True};
+            });
+            assertTrue(response.ok);
+            assertEq(2, calls);
+            assertEq((500,), policy.delays);
+        }
+    }
+
+    testPermanent() {
+        foreach int status in ((400, 401, 403, 404, 409, 422, 501, 505)) {
+            ControlledRetryPolicy policy();
+            hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+                throw "REST-RESPONSE-ERROR", "permanent", {"status_code": status};
+            });
+            assertEq(1, ex.arg.attempts);
+            assertEq(status, ex.arg.status_code);
+            assertEq((), policy.delays);
+        }
+        foreach string err in (("EMBEDDER-MODEL-CONFIG-ERROR", "EMBEDDER-RESPONSE-ERROR",
+                "SOCKET-SSL-ERROR", "DESERIALIZATION-ERROR", "ARBITRARY-ERROR",
+                "THREAD-CANCELLED", "PROGRAM-INTERRUPTED")) {
+            ControlledRetryPolicy policy();
+            hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+                throw err, "unchanged", "original argument";
+            });
+            assertEq(err, ex.err);
+            assertEq("unchanged", ex.desc);
+            assertEq((), policy.delays);
+            if (inlist(err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                assertEq("original argument", ex.arg);
+            } else {
+                assertEq(1, ex.arg.attempts);
+                assertEq("original argument", ex.arg.original_arg);
+            }
+        }
+    }
+
+    testTransport() {
+        foreach string err in (("HTTPCLIENT-TIMEOUT", "HTTP-CLIENT-TIMEOUT", "SOCKET-TIMEOUT",
+                "SOCKET-CONNECT-ERROR", "HTTPCLIENT-CONNECT-ERROR", "HTTP-CLIENT-CONNECT-ERROR",
+                "SOCKET-CLOSED", "SOCKET-SEND-ERROR", "SOCKET-RECV-ERROR")) {
+            ControlledRetryPolicy policy();
+            int calls = 0;
+            policy.execute(hash<auto> sub (int timeout_ms) {
+                if (++calls == 1) {
+                    throw err, "temporary";
+                }
+                return {};
+            });
+            assertEq(2, calls);
+        }
+    }
+
+    testBackoff() {
+        ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 6, "retry_max_delay": 2s});
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503};
+        });
+        assertEq(7, ex.arg.attempts);
+        assertEq((500, 1000, 2000, 2000, 2000, 2000), policy.delays);
+    }
+
+    testJitter() {
+        list<int> delays = ();
+        RestRetryPolicy policy(<RestRetryOptions>{"max_retries": 10, "retry_max_delay": 1ms,
+            "retry_callback": sub (hash<RestRetryEvent> event) { push delays, event.delay_ms; }});
+        failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503};
+        });
+        assertEq(10, delays.size());
+        foreach int delay in (delays) {
+            assertTrue(delay >= 0 && delay <= 1);
+        }
+    }
+
+    testRetryAfter() {
+        foreach string header in (("2", " 2 ", (gmtime() + 2s).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT")) {
+            ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 1, "retry_max_delay": 1ms});
+            failure(policy, hash<auto> sub (int timeout_ms) {
+                throw "REST-RESPONSE-ERROR", "busy", {"status_code": 429, "headers": {"Retry-After": header}};
+            });
+            assertEq(1, policy.delays.size());
+            assertTrue(policy.delays[0] > 1000 && policy.delays[0] <= 2000);
+        }
+        ControlledRetryPolicy policy();
+        failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503,
+                "headers": {"retry-after": "999999999999999999999999999999999"}};
+        });
+        assertEq((), policy.delays, "oversized server advice must stop, not be shortened");
+    }
+
+    testMalformed() {
+        foreach auto header in (("invalid", "-1", (), 2, {"invalid": True})) {
+            ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 1});
+            failure(policy, hash<auto> sub (int timeout_ms) {
+                throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503, "headers": {"retry-after": header}};
+            });
+            assertEq((500,), policy.delays);
+        }
+    }
+
+    testAttemptLimit() {
+        ControlledRetryPolicy policy();
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "REST-RESPONSE-ERROR", "original description", <RestClient::RestResponseInfo>{
+                "status_code": 503, "headers": {}, "body": "overloaded"};
+        });
+        assertEq(4, ex.arg.attempts);
+        assertEq("REST-RESPONSE-ERROR", ex.err);
+        assertEq("original description", ex.desc);
+        assertEq("overloaded", ex.arg.body);
+    }
+
+    testDisabled() {
+        ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 0});
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "SOCKET-CLOSED", "closed";
+        });
+        assertEq(1, ex.arg.attempts);
+        assertEq((), policy.delays);
+    }
+
+    testDeadline() {
+        ControlledRetryPolicy policy(<RestRetryOptions>{"timeout": 1200ms});
+        list<int> timeouts = ();
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            push timeouts, timeout_ms;
+            policy.ticks += 100000;
+            throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503};
+        });
+        assertEq((1200, 600), timeouts);
+        assertEq(2, ex.arg.attempts);
+        assertEq((500,), policy.delays);
+    }
+
+    testSharedDeadline() {
+        ControlledRetryPolicy policy(<RestRetryOptions>{"retry_timeout": 1s});
+        policy.execute(hash<auto> sub (int timeout_ms) {
+            assertEq(1000, timeout_ms);
+            policy.ticks += 800000;
+            return {};
+        });
+        policy.execute(hash<auto> sub (int timeout_ms) { assertEq(200, timeout_ms); return {}; });
+        policy.ticks += 200000;
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            fail("expired policy must not issue a request");
+            return {};
+        });
+        assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+        assertEq(0, ex.arg.attempts);
+    }
+
+    testObserver() {
+        list<hash<RestRetryEvent>> events = ();
+        ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 1,
+            "retry_callback": sub (hash<RestRetryEvent> event) {
+                push events, event;
+                throw "OBSERVER-ERROR", "ignored";
+            }});
+        hash<ExceptionInfo> ex = failure(policy, hash<auto> sub (int timeout_ms) {
+            throw "REST-RESPONSE-ERROR", "secret", {"status_code": 503, "body": "secret"};
+        });
+        assertEq(2, ex.arg.attempts);
+        assertEq(1, events.size());
+        assertEq(1, events[0].attempt);
+        assertEq(503, events[0].status_code);
+        assertTrue(events[0].retryable);
+        assertFalse(inlist("desc", keys events[0]));
+        assertFalse(inlist("body", keys events[0]));
+    }
+
+    testInvalid() {
+        foreach hash<RestRetryOptions> opts in ((<RestRetryOptions>{"max_retries": -1},
+                <RestRetryOptions>{"retry_max_delay": -1}, <RestRetryOptions>{"retry_timeout": 0},
+                <RestRetryOptions>{"retry_timeout": 9223372036854775807})) {
+            assertThrows("REST-RETRY-OPTION-ERROR", sub () { new RestRetryPolicy(opts); });
+        }
+    }
+
+    testCancel() {
+        SignallingRetryPolicy policy();
+        Channel done(1);
+        background sub () {
+            try {
+                policy.execute(hash<auto> sub (int timeout_ms) {
+                    throw "REST-RESPONSE-ERROR", "busy", {"status_code": 503, "headers": {"retry-after": "20"}};
+                });
+                done.send("unexpected success");
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+                done.send(ex.err);
+            }
+        }();
+        int tid = policy.entered.recv(5s);
+        int started = clock_get_monotonic_us();
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", done.recv(2s));
+        assertLt(1000000, clock_get_monotonic_us() - started);
+    }
+}

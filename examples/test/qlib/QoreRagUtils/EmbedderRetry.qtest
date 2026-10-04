@@ -1,0 +1,307 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# EmbedderRetry.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/VoyageRestClient.qm
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/CohereRestClient.qm
+%requires ../../../../qlib/BgeM3RestClient.qm
+%requires ../../../../qlib/SGLangRestClient.qm
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/JinaRestClient.qm
+%requires ../../../../qlib/FireworksRestClient.qm
+%requires ../../../../qlib/TogetherRestClient.qm
+%requires ../../../../qlib/MistralRestClient.qm
+%requires ../../../../qlib/OllamaRestClient.qm
+%requires ../../../../qlib/BedrockRestClient.qm
+%requires json
+%exec-class EmbedderRetryTest
+
+class RetryEmbeddingHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex m();
+        list<hash<auto>> script;
+        list<hash<auto>> requests = ();
+    }
+    public {
+        Channel entered(1);
+        Channel release(1);
+    }
+    setScript(list<hash<auto>> responses) {
+        AutoLock al(m);
+        script = responses;
+        requests = ();
+    }
+    list<hash<auto>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        hash<auto> step;
+        {
+            AutoLock al(m);
+            push requests, {"path": cx.raw_path, "body": body ? parse_json(body) : NOTHING};
+            step = shift script;
+        }
+        if (step.block) {
+            entered.send(True);
+            release.recv(5s);
+        }
+        return makeResponse(step.status ?? 200, make_json(step.body ?? {"message": "busy"}),
+            {"Content-Type": MimeTypeJson} + (step.headers ?? {}));
+    }
+}
+
+class EmbedderRetryTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        RetryEmbeddingHandler handler;
+        int port;
+    }
+    constructor() : Test("EmbedderRetry", "1.0", \ARGV) {
+        addTestCase("all HTTP embedders retry transient requests", \testProviders());
+        addTestCase("per-call retry overrides and telemetry", \testOverrides());
+        addTestCase("permanent model and malformed response errors do not retry", \testPermanent());
+        addTestCase("retry disabled and exhausted counts", \testLimits());
+        addTestCase("Retry-After beyond deadline stops immediately", \testServerDeadline());
+        addTestCase("deadline cancels blocked HTTP request", \testTimeout());
+        addTestCase("retry consumes remaining request timeout", \testRetryTimeout());
+        addTestCase("cancellation cancels pending HTTP", \testCancelHttp());
+        addTestCase("invalid HTTP deadline rejected before sending", \testInvalidTimeout());
+        addTestCase("Gemini slices do not replay successful requests", \testSlices());
+        addTestCase("SGLang fallback shares retries", \testFallback());
+        addTestCase("generic REST subclass inherits opt-in retry", \testGeneric());
+        addTestCase("empty batch does not send a request", \testEmpty());
+        set_return_value(main());
+    }
+    globalSetUp() {
+        Logger logger("retry-test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new RetryEmbeddingHandler();
+        http.setDefaultHandler("retry", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+    globalTearDown() {
+        delete http;
+    }
+    private hash<EmbedderConfig> config(string backend, *hash<auto> extra) {
+        return cast<hash<EmbedderConfig>>(<EmbedderConfig>{
+            "backend": backend, "url": "http://localhost:" + port,
+            "model": "test-embedding", "api_key": "fixture-key", "retry_max_delay": 0,
+        } + (extra ?? {}));
+    }
+    private hash<auto> success(string backend, int count = 1) {
+        list<list<float>> vectors = ();
+        list<hash<auto>> data = ();
+        list<hash<auto>> embeddings = ();
+        for (int i = 0; i < count; ++i) {
+            push vectors, (1.0, 2.0);
+            push data, {"index": i, "embedding": (1.0, 2.0)};
+            push embeddings, {"values": (1.0, 2.0)};
+        }
+        switch (backend) {
+            case "gemini": return {"embeddings": embeddings};
+            case "cohere": return {"embeddings": {"float": vectors}};
+            case "bge-m3": return {"dense": vectors};
+            case "ollama": return {"embeddings": vectors};
+            case "bedrock": return {"embedding": (1.0, 2.0)};
+        }
+        return {"data": data};
+    }
+    private AbstractEmbedder embedder(string backend, *hash<auto> extra) {
+        hash<EmbedderConfig> cfg = config(backend, extra);
+        switch (backend) {
+            case "voyage": return new VoyageEmbedder(cfg);
+            case "openai": return new OpenAiEmbedder(cfg);
+            case "cohere": return new CohereEmbedder(cfg);
+            case "bge-m3": return new BgeM3FastApiEmbedder(cfg);
+            case "sglang": return new SGLangEmbedder(cfg);
+            case "gemini": return new GeminiEmbedder(cfg);
+            case "jina": return new JinaEmbedder(cfg);
+            case "fireworks": return new FireworksEmbedder(cfg);
+            case "together": return new TogetherEmbedder(cfg);
+            case "mistral": return new MistralEmbedder(cfg);
+            case "ollama": return new OllamaEmbedder(cfg);
+            case "bedrock":
+                cfg.model = "amazon.titan-embed-text-v2:0";
+                cfg.options = {"aws_region": "us-east-1", "aws_keyid": "fixture",
+                    "aws_secret": "fixture", "aws_imds_disabled": True};
+                return new BedrockRestClient::BedrockEmbedder(cfg);
+        }
+        throw "TEST-ERROR", backend;
+    }
+    private hash<ExceptionInfo> failure(AbstractEmbedder emb, *hash<auto> opts) {
+        try {
+            emb.encode("test", opts);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        fail("expected request failure");
+        return <ExceptionInfo>{};
+    }
+    testProviders() {
+        foreach string backend in (("voyage", "openai", "cohere", "bge-m3", "sglang", "gemini", "jina",
+                "fireworks", "together", "mistral", "ollama", "bedrock")) {
+            handler.setScript(({"status": 503}, {"body": success(backend)}));
+            AbstractEmbedder emb = embedder(backend);
+            assertEq((1.0, 2.0), emb.encode("hello"), backend);
+            list<hash<auto>> requests = handler.getRequests();
+            assertEq(2, requests.size(), backend);
+            assertEq(requests[0], requests[1], "retry preserves the exact request for " + backend);
+        }
+    }
+    testOverrides() {
+        list<hash<RagTelemetryEvent>> events = ();
+        AbstractEmbedder emb = embedder("voyage", {"max_retries": 0,
+            "telemetry_observer": <RagTelemetryObserver>{"event_callback": sub (hash<RagTelemetryEvent> event) {
+                fail("per-call observer must override configured observer");
+            }}});
+        handler.setScript(({"status": 503}, {"body": success("voyage")}));
+        hash<auto> opts = {"max_retries": 1, "input_type": "query", "telemetry_context": {"trace": "test"},
+            "telemetry_observer": <RagTelemetryObserver>{"event_callback": sub (hash<RagTelemetryEvent> event) {
+                push events, event;
+                throw "OBSERVER-ERROR", "ignored";
+            }}};
+        assertEq((1.0, 2.0), emb.encode("sensitive text", opts));
+        assertFalse(exists opts._embedder_retry_policy, "caller options remain unchanged");
+        assertEq(1, events.size());
+        assertEq("embed", events[0].operation);
+        assertEq("voyage", events[0].backend);
+        assertEq("test-embedding", events[0].model);
+        assertEq(503, events[0].error.status_code);
+        assertEq(1, events[0].error.attempt);
+        assertTrue(events[0].error.retryable);
+        assertEq("test", events[0].telemetry_context.trace);
+        assertFalse(exists events[0].request);
+        assertEq("query", handler.getRequests()[1].body.input_type);
+    }
+    testPermanent() {
+        handler.setScript(({"status": 400, "body": {"detail": "Invalid model 'bad-model'"}},));
+        hash<ExceptionInfo> ex = failure(embedder("voyage"));
+        assertEq("EMBEDDER-MODEL-CONFIG-ERROR", ex.err);
+        assertEq(1, ex.arg.attempts);
+        assertEq(1, handler.getRequests().size());
+        handler.setScript(({"body": {"invalid": True}},));
+        assertEq("EMBEDDER-RESPONSE-ERROR", failure(embedder("voyage")).err);
+        assertEq(1, handler.getRequests().size());
+    }
+    testLimits() {
+        foreach int retries in ((0, 2)) {
+            handler.setScript(({"status": 503}, {"status": 503}, {"status": 503}));
+            hash<ExceptionInfo> ex = failure(embedder("voyage"), {"max_retries": retries});
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(retries + 1, ex.arg.attempts);
+            assertEq(retries + 1, handler.getRequests().size());
+        }
+    }
+    testServerDeadline() {
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "60"}},));
+        hash<ExceptionInfo> ex = failure(embedder("voyage"), {"timeout": 100ms});
+        assertEq(1, ex.arg.attempts);
+        assertEq(1, handler.getRequests().size());
+    }
+    testTimeout() {
+        handler.setScript(({"block": True, "body": success("voyage")},));
+        Channel done(1);
+        AbstractEmbedder emb = embedder("voyage");
+        int started = clock_get_monotonic_us();
+        background sub () { done.send(failure(emb, {"timeout": 200ms})); }();
+        assertTrue(handler.entered.recv(2s));
+        on_exit handler.release.send(True);
+        hash<ExceptionInfo> ex = done.recv(2s);
+        assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+        assertEq(1, ex.arg.attempts);
+        assertLt(1000000, clock_get_monotonic_us() - started);
+        assertEq(1, handler.getRequests().size());
+    }
+    testRetryTimeout() {
+        handler.setScript(({"status": 503}, {"block": True, "body": success("voyage")}));
+        Channel done(1);
+        AbstractEmbedder emb = embedder("voyage");
+        background sub () { done.send(failure(emb, {"timeout": 200ms})); }();
+        assertTrue(handler.entered.recv(2s));
+        on_exit handler.release.send(True);
+        hash<ExceptionInfo> ex = done.recv(2s);
+        assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+        assertEq(2, ex.arg.attempts);
+        assertEq(2, handler.getRequests().size());
+    }
+    testCancelHttp() {
+        handler.setScript(({"block": True, "body": success("voyage")},));
+        Channel done(1);
+        Channel started(1);
+        AbstractEmbedder emb = embedder("voyage");
+        background sub () {
+            started.send(gettid());
+            hash<ExceptionInfo> ex = failure(emb);
+            clear_thread_cancel();
+            done.send(ex.err);
+        }();
+        int tid = started.recv(2s);
+        assertTrue(handler.entered.recv(2s));
+        on_exit handler.release.send(True);
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", done.recv(2s));
+        assertEq(1, handler.getRequests().size());
+    }
+    testInvalidTimeout() {
+        RestClientIo::RestClientIo client({"url": "http://localhost:" + port, "data": "json"});
+        AwsRestClient::AwsRestClientIo aws({"url": "http://localhost:" + port,
+            "aws_region": "us-east-1", "aws_service": "bedrock", "aws_keyid": "fixture",
+            "aws_secret": "fixture", "aws_imds_disabled": True});
+        handler.setScript(());
+        foreach int timeout_ms in ((0, -1, 9223372036854775807)) {
+            assertThrows("RESTCLIENTIO-OPTION-ERROR", sub () {
+                client.restPostWithTimeout("/never", {}, NOTHING, timeout_ms);
+            });
+            assertThrows("RESTCLIENTIO-OPTION-ERROR", sub () {
+                aws.restDoEncodedRawRequest("POST", "/never", "{}", NOTHING, timeout_ms);
+            });
+        }
+        assertEq((), handler.getRequests());
+    }
+    testSlices() {
+        handler.setScript(({"body": success("gemini", 100)}, {"status": 503}, {"body": success("gemini")}));
+        list<string> texts = ();
+        for (int i = 0; i < 101; ++i) {
+            push texts, "text " + i;
+        }
+        assertEq(101, embedder("gemini").encodeBatch(texts).size());
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(3, requests.size());
+        assertEq(100, requests[0].body.requests.size());
+        assertEq(1, requests[1].body.requests.size());
+        assertEq(requests[1], requests[2]);
+    }
+    testFallback() {
+        handler.setScript(({"status": 404}, {"status": 503}, {"body": {"dense": ((1.0, 2.0),)}}));
+        assertEq((1.0, 2.0), embedder("sglang").encode("hello"));
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(3, requests.size());
+        assertEq("/v1/embeddings", requests[0].path);
+        assertEq("/embed", requests[1].path);
+        assertEq(requests[1], requests[2]);
+    }
+    testGeneric() {
+        VoyageRestClient::VoyageRestClientIo client({"url": "http://localhost:" + port, "apikey": "fixture"});
+        handler.setScript(({"status": 503}, {"body": {"result": "ok"}}));
+        hash<auto> response = client.restDoRequestWithRetry("GET", "/inventory", NOTHING, NOTHING,
+            new RestClientIo::RestRetryPolicy(<RestClientIo::RestRetryOptions>{"retry_max_delay": 0}));
+        assertEq("ok", response.body.result);
+        assertEq(2, handler.getRequests().size());
+        handler.setScript(({"status": 503},));
+        assertThrows("REST-RESPONSE-ERROR", \client.restGet(), ("/inventory",));
+        assertEq(1, handler.getRequests().size(), "ordinary requests remain opt-in");
+    }
+    testEmpty() {
+        handler.setScript(());
+        assertEq((), embedder("voyage").encodeBatch(()));
+        assertEq((), handler.getRequests());
+    }
+}

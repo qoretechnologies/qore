@@ -1635,14 +1635,19 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param path the request path with encoded path variables
         @param body the pre-serialized request body, if any
         @param hdr any additional request headers
+        @param timeout_ms optional positive response deadline in milliseconds, including transport retries;
+            unfinished I/O is cancelled on timeout or thread cancellation
+
+        @throw RESTCLIENTIO-OPTION-ERROR timeout_ms is not positive
+        @throw HTTPCLIENT-TIMEOUT the deadline is exhausted
 
         @return the deserialized REST response
 
         @since AwsRestClient 1.4
     */
     hash<RestClient::RestResponseInfo> restDoEncodedRawRequest(string method, string path, *data body,
-            *hash<auto> hdr) {
-        return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True);
+            *hash<auto> hdr, *timeout timeout_ms) {
+        return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True, timeout_ms);
     }
 
     #! Opens a SigV4-authenticated AWS event stream without buffering the response
@@ -1753,11 +1758,20 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         header is only supplied when the server sent none, so a typed response is never reinterpreted
         @param raw_body if @ref True, a body is already serialized and must be sent unchanged
         @param path_is_encoded if @ref True, path variables are already percent-encoded for transport
+        @param timeout_ms optional positive response deadline; NOTHING preserves the client default
 
         @return the deserialized @ref RestClient::RestResponseInfo hash
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
-            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded) {
+            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded, *timeout timeout_ms) {
+        *int deadline_us;
+        if (exists timeout_ms) {
+            int started = clock_get_monotonic_us();
+            if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive and fit a monotonic deadline";
+            }
+            deadline_us = started + timeout_ms * 1000;
+        }
         # Prepare request (serialize ordinary bodies; preserve already serialized raw bodies)
         hash<auto> prepared = raw_body
             ? prepareRawRequest(method, \path, body, \hdr)
@@ -1768,8 +1782,27 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
 
         # Make HTTP request via multiplexed connection manager
         # the body is received as octets for response_body_raw; buildResponse() decodes text
-        hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
-            prepared.serialized_body, NOTHING, False);
+        hash<auto> raw;
+        if (exists timeout_ms) {
+            HttpClientIo::HttpCancellableFuture future = getConnectionManager().requestAsync(
+                getUrl(), method, path, hdr, prepared.serialized_body, False);
+            try {
+                int remaining = (deadline_us - clock_get_monotonic_us()) / 1000;
+                if (remaining <= 0) {
+                    throw "HTTPCLIENT-TIMEOUT", "AWS request deadline exhausted";
+                }
+                raw = future.get(remaining);
+            } catch (hash<ExceptionInfo> ex) {
+                defer_thread_cancel(sub () { future.cancel(); });
+                if (ex.err == "FUTURE-TIMEOUT") {
+                    throw "HTTPCLIENT-TIMEOUT", "AWS request deadline exhausted";
+                }
+                rethrow;
+            }
+        } else {
+            raw = getConnectionManager().request(getUrl(), method, path, hdr,
+                prepared.serialized_body, NOTHING, False);
+        }
 
         if (assume_content_type.val() && !raw.headers."content-type".val()) {
             log(LoggerLevel::DEBUG, "missing content-type from response; assuming %y", assume_content_type);
