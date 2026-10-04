@@ -169,6 +169,7 @@ resp = rc.restGet("/api/data");
     - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
       jittered backoff, cancellation, and safe retry observers (issue 5475)
     - call-local timeout requests now cancel unfinished I/O when their deadline expires
+    - async request and SSE startup timeouts retain their completion error when the controller aborts I/O
     - initial release
 */
 
@@ -5430,7 +5431,15 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             });
         } else if (result.ex) {
             cancelPendingStream();
-            reject(result.ex);
+            if (result.ex.err == "SOCKET-TIMEOUT") {
+                reject(<ExceptionInfo>{
+                    "err": "HTTPCLIENT-TIMEOUT",
+                    "desc": result.ex.desc,
+                    "arg": result.ex.arg,
+                });
+            } else {
+                reject(result.ex);
+            }
         } else if (!goal_reached) {
             cancelPendingStream();
             reject(<ExceptionInfo>{
@@ -5440,9 +5449,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         }
     }
 
-    #! Aborts the current request attempt and rejects the final Future
+    #! Aborts transport work; the controller delivers the terminal reason through onComplete()
+    /** The controller calls this for both timeout and cancellation. Publishing cancellation here would race
+        the completion callback and hide its actual error. Explicit Future cancellation uses @ref cancel().
+    */
     abort() {
-        cancel();
+        cancelPendingStream();
     }
 
     #! Cancels the current request attempt and rejects the final Future
@@ -5816,7 +5828,15 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             });
         } else if (result.ex) {
             cancelPendingStream();
-            fail(result.ex);
+            if (result.ex.err == "SOCKET-TIMEOUT") {
+                fail(<ExceptionInfo>{
+                    "err": "HTTPCLIENT-TIMEOUT",
+                    "desc": result.ex.desc,
+                    "arg": result.ex.arg,
+                });
+            } else {
+                fail(result.ex);
+            }
         } else if (!goal_reached) {
             cancelPendingStream();
             fail(<ExceptionInfo>{
@@ -5826,8 +5846,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         }
     }
 
+    #! Aborts transport work without suppressing the controller's pending completion notification
     abort() {
-        cancel();
+        cancelPendingStream();
     }
 
     bool cancel() {

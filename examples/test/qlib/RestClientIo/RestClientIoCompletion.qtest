@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RestClientIoCompletion.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%exec-class RestCompletionTest
+
+class CompletionObservable inherits HttpClientStreamingIo::SseObservable {
+    public {
+        list<hash<ExceptionInfo>> failures = ();
+    }
+    constructor(HttpClientIo::HttpClientConnectionManager mgr)
+            : SseObservable(mgr, "http://127.0.0.1", "GET", "/events") {
+    }
+    startupFailed(hash<ExceptionInfo> ex) {
+        push failures, ex;
+    }
+}
+
+class CompletionHandler inherits AbstractHttpRequestHandler {
+    public {
+        Channel entered(1);
+        Channel release(1);
+        Channel finished(1);
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        if (cx.raw_path == "/blocked") {
+            entered.send(True);
+            release.recv(10s);
+            finished.send(True);
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+class CompletionObserver inherits DataProvider::Observer {
+    public {
+        Channel closed(1);
+    }
+    update(string event_id, hash<auto> data) {
+        if (event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED) {
+            closed.send(data);
+        }
+    }
+}
+
+class RestCompletionTest inherits QUnit::Test {
+    constructor() : Test("RestClientIo completion", "1.0", \ARGV) {
+        addTestCase("request completion survives either abort order", \testRequestCompletion());
+        addTestCase("explicit request cancellation stays terminal", \testExplicitCancellation());
+        addTestCase("SSE completion survives either abort order", \testSseCompletion());
+        addTestCase("controller deadline rejects a blocked request", \testControllerTimeout());
+        addTestCase("explicit cancellation rejects a blocked request", \testHttpCancellation());
+        addTestCase("controller deadline notifies SSE observers", \testSseTimeout());
+        set_return_value(main());
+    }
+
+    private list<hash<SocketPollResultInfo>> results() {
+        return (
+            <SocketPollResultInfo>{"ex": <ExceptionInfo>{
+                "err": "SOCKET-TIMEOUT", "desc": "controller deadline", "arg": {"phase": "response"}}},
+            <SocketPollResultInfo>{"ex": <ExceptionInfo>{
+                "err": "TEST-TRANSPORT-ERROR", "desc": "original failure", "arg": {"phase": "connect"}}},
+            <SocketPollResultInfo>{"canceled": True},
+            <SocketPollResultInfo>{},
+        );
+    }
+
+    private string expected(hash<SocketPollResultInfo> result, bool sse = False) {
+        if (!result.canceled && !result.ex) {
+            return sse ? "RESTCLIENTIO-SSE-STARTUP-ERROR" : "RESTCLIENTIO-ASYNC-ERROR";
+        }
+        return result.canceled ? "HTTPCLIENT-CANCELLED"
+            : result.ex.err == "SOCKET-TIMEOUT" ? "HTTPCLIENT-TIMEOUT" : result.ex.err;
+    }
+
+    private hash<ExceptionInfo> failure(code<auto()> call) {
+        try {
+            call();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        fail("expected an exception");
+        return <ExceptionInfo>{};
+    }
+
+    testRequestCompletion() {
+        RestClientIo client({"url": "http://127.0.0.1"});
+        on_exit client.close();
+        foreach bool abort_first in ((True, False)) {
+            foreach hash<SocketPollResultInfo> result in (results()) {
+                Promise promise();
+                Future future = promise.getFuture();
+                RestClientIoAsyncRequestOperation op(client, promise, "GET", "/unused", NOTHING, NOTHING, False);
+                if (abort_first) {
+                    op.abort();
+                    assertFalse(future.isDone(), "cleanup must not publish a terminal reason");
+                }
+                op.onComplete(result);
+                op.abort();
+                assertTrue(future.isDone());
+                hash<ExceptionInfo> ex = failure(auto sub () { return future.get(1s); });
+                assertEq(expected(result), ex.err);
+                if (result.ex) {
+                    assertEq(result.ex.desc, ex.desc);
+                    assertEq(result.ex.arg, ex.arg);
+                }
+                assertFalse(op.cancel(), "completion remains terminal");
+                op.onComplete(<SocketPollResultInfo>{"canceled": True});
+                assertEq(ex.err, failure(auto sub () { return future.get(1s); }).err);
+            }
+        }
+    }
+
+    testExplicitCancellation() {
+        RestClientIo client({"url": "http://127.0.0.1"});
+        on_exit client.close();
+        Promise promise();
+        Future future = promise.getFuture();
+        RestClientIoAsyncRequestOperation op(client, promise, "GET", "/unused", NOTHING, NOTHING, False);
+        assertTrue(op.cancel());
+        op.abort();
+        op.onComplete(results()[0]);
+        assertEq("HTTPCLIENT-CANCELLED", failure(auto sub () { return future.get(1s); }).err);
+        assertFalse(op.cancel());
+    }
+
+    testSseCompletion() {
+        RestClientIo client({"url": "http://127.0.0.1"});
+        on_exit client.close();
+        foreach bool abort_first in ((True, False)) {
+            foreach hash<SocketPollResultInfo> result in (results()) {
+                CompletionObservable observable(client.getConnectionManager());
+                RestClientIoSseObservableStartOperation op(client, observable, "GET", "/unused");
+                if (abort_first) {
+                    op.abort();
+                    assertEq((), observable.failures);
+                }
+                op.onComplete(result);
+                op.abort();
+                op.onComplete(<SocketPollResultInfo>{"canceled": True});
+                assertEq(1, observable.failures.size());
+                assertEq(expected(result, True), observable.failures[0].err);
+                if (result.ex) {
+                    assertEq(result.ex.desc, observable.failures[0].desc);
+                    assertEq(result.ex.arg, observable.failures[0].arg);
+                }
+            }
+        }
+    }
+
+    private httpCompletion(bool cancel) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("completion-test", LoggerLevel::getLevelWarn()),
+        });
+        on_exit delete server;
+        CompletionHandler handler();
+        server.setDefaultHandler("completion", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RestClientIo client({"url": "http://127.0.0.1:" + port, "timeout": cancel ? 5s : 1s});
+        on_exit client.close();
+        RestFuture future = client.restGetAsync("/blocked");
+        on_exit handler.release.send(True);
+        assertTrue(handler.entered.recv(5s));
+        if (cancel) {
+            assertTrue(future.cancel());
+        }
+        assertEq(cancel ? "HTTPCLIENT-CANCELLED" : "HTTPCLIENT-TIMEOUT",
+            failure(auto sub () { return future.get(5s); }).err);
+        assertFalse(future.cancel());
+        handler.release.send(True);
+        assertTrue(handler.finished.recv(5s));
+        assertEq("ok", client.restGet("/ready").body, "client remains usable after completion");
+    }
+
+    testControllerTimeout() {
+        httpCompletion(False);
+    }
+
+    testHttpCancellation() {
+        httpCompletion(True);
+    }
+
+    testSseTimeout() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("completion-test", LoggerLevel::getLevelWarn()),
+        });
+        on_exit delete server;
+        CompletionHandler handler();
+        server.setDefaultHandler("completion", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RestClientIo client({"url": "http://127.0.0.1:" + port, "timeout": 1s});
+        on_exit client.close();
+        HttpClientStreamingIo::SseObservable observable = client.restObserveSse("GET", "/blocked");
+        on_exit observable.stopEvents();
+        CompletionObserver observer();
+        observable.registerObserver(observer);
+        observable.observersReady();
+        on_exit handler.release.send(True);
+        assertTrue(handler.entered.recv(5s));
+        hash<auto> closed = observer.closed.recv(5s);
+        assertEq("startup-error", closed.reason);
+        assertEq("HTTPCLIENT-TIMEOUT", closed.error.err);
+    }
+}

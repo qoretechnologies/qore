@@ -63,6 +63,13 @@ C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
 
 ## Thread Model
 
+An operation's `abort()` callback performs transport cleanup for both timeout and explicit cancellation.
+The terminal reason is delivered separately in `onComplete(result)`, and either worker callback may run first.
+Operations that publish a Future or observable error must therefore leave error publication to `onComplete()`;
+publishing cancellation from `abort()` can mask a timeout or suppress the later notification entirely.
+RestClientIo request and SSE startup operations follow this rule, translating the controller's `SOCKET-TIMEOUT`
+to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still publishes cancellation immediately.
+
 - **I/O thread** — one per controller instance
   - Blocks in EventLoop::poll() over all registered sockets plus the EventNotifier.
   - Wakes on socket readiness or EventNotifier activity.
