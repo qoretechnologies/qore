@@ -364,7 +364,13 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     -# otherwise the default policy decides
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
-    not restricted by allowed ports.  A bind on all interfaces uses the wildcard address, which an allowed IP range
+    not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
+    or \c ::1, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
+    @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
+    local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any
+    other address in them, such as a private interface address; allowed ports, allowed IP ranges and the default
+    policy apply to loopback binds as to any other bind.  A bind on all interfaces uses the wildcard address, which an allowed IP range
     only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or \c ::/0); with the default
     deny policy and no allowed IP ranges, no socket can be bound.
 

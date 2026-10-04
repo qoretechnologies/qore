@@ -3995,6 +3995,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a @ref sandboxing "sandbox" whose network policy blocks private networks or the local host, such as
+      with @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", denying a
+      bind to a loopback address (\c 127.0.0.0/8 or \c ::1): a socket bound there can only be reached from the
+      local host, which is less than a bind on all interfaces exposes, so denied IP ranges no longer deny loopback
+      binds; connections to loopback addresses stay denied, and binds to other addresses in denied ranges stay
+      denied
+
     - Fixed @ref Qore::Socket::bind() "Socket::bind()" and @ref Qore::Socket::listen() "Socket::listen()"
       returning an error code without setting the error number, so that a failure was reported as \c "Success" by
       @ref Qore::strerror() "strerror()"; the error number is now set, also when the bind is denied by the network

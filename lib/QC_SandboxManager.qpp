@@ -561,6 +561,9 @@ nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port,
 
     @note This is essential for SSRF prevention in web applications.
 
+    @note The ranges deny connections and binds to their addresses, except a bind to a loopback address, which can
+    only be reached from the local host; see @ref sandboxing
+
     @par Example:
     @code{.py}
 sm.blockPrivateNetworks();
@@ -571,7 +574,10 @@ nothing SandboxManager::blockPrivateNetworks() {
 }
 
 //! Blocks localhost only (127.0.0.0/8 and ::1/128)
-/** @par Example:
+/** Connections to loopback addresses are denied; binding a loopback address is not, because a socket bound there
+    can only be reached from the local host; see @ref sandboxing
+
+    @par Example:
     @code{.py}
 sm.blockLocalhost();
     @endcode

@@ -658,6 +658,17 @@ struct qore_net_security_private {
         return false;
     }
 
+    // Returns true if the address is a loopback address (127.0.0.0/8 or ::1)
+    static bool isLoopback(const struct sockaddr* addr) {
+        if (addr->sa_family == AF_INET) {
+            return (ntohl(reinterpret_cast<const struct sockaddr_in*>(addr)->sin_addr.s_addr) >> 24) == 127;
+        }
+        if (addr->sa_family == AF_INET6) {
+            return IN6_IS_ADDR_LOOPBACK(&reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr);
+        }
+        return false;
+    }
+
     // Check if address is in denied ranges
     bool isDenied(const struct sockaddr* addr) const {
         for (const auto& range : denied_ranges) {
@@ -854,7 +865,9 @@ bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_
     struct sockaddr_storage storage;
     addr = qore_net_security_private::normalizeAddr(addr, storage, false);
 
-    if (priv->isDenied(addr)) {
+    // denied ranges keep code from reaching networks; a socket bound to a loopback address can only be reached from
+    // the local host, which is less than a bind on all interfaces exposes, so denied ranges do not apply to it
+    if (!qore_net_security_private::isLoopback(addr) && priv->isDenied(addr)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Binding to %s denied by security policy (private/blocked network)",
             priv->getAddrString(addr).c_str());

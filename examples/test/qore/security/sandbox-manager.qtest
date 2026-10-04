@@ -2538,18 +2538,46 @@ sub proxied_get(string url, string proxy) {
         assertEq({"rc": -1, "errno": Err::EACCES}, deny.callFunction("bind_target", "127.0.0.1:0"),
             "Socket::bind() sets the error number of a denied bind");
 
-        # a denied range applies to the address bound, also as an IPv4-mapped IPv6 address
+        # a denied range does not deny a bind to a loopback address, which can only be reached from the local host,
+        # also as an IPv4-mapped IPv6 address or a name; connections to it stay denied
         SandboxManager local();
         local.setNetworkDefaultPolicy(True);
         local.blockLocalhost();
         Program lp = sandboxedProgram(local, NetworkPolicyCode, "bind-local");
-        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "127.0.0.1", 0));
-        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "::ffff:127.0.0.1", 0,
-            AF_INET6));
-        assertEq({"rc": -1, "errno": Err::EACCES}, lp.callFunction("bind_target", "localhost:0"),
-            "Socket::bind() sets the error number of a bind on a denied name");
+        assertEq("127.0.0.1", lp.callFunction("bind_inet", "127.0.0.1", 0).address,
+            "a loopback address is bound although a denied range contains it");
+        assertTrue(lp.callFunction("bind_inet", "::ffff:127.0.0.1", 0, AF_INET6).port > 0,
+            "an IPv4-mapped loopback address is bound");
+        assertEq({"rc": 0, "errno": 0}, lp.callFunction("bind_target", "localhost:0"),
+            "Socket::bind() binds a loopback name");
         assertTrue(lp.callFunction("bind_inet", NOTHING, 0).port > 0,
             "a bind on all interfaces is allowed when the default policy allows it");
+        {
+            Socket listener();
+            listener.bindINET("127.0.0.1", 0, True, AF_INET);
+            listener.listen();
+            on_exit listener.close();
+            assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(),
+                ("connect", "127.0.0.1:" + listener.getSocketInfo().port),
+                "a connection to a loopback address in a denied range is denied");
+        }
+        SandboxManager private_nets();
+        private_nets.setNetworkDefaultPolicy(True);
+        private_nets.blockPrivateNetworks();
+        Program pnp = sandboxedProgram(private_nets, NetworkPolicyCode, "bind-private");
+        assertEq("127.0.0.1", pnp.callFunction("bind_inet", "127.0.0.1", 0).address,
+            "blocking private networks still allows a loopback bind");
+
+        # a denied range still denies a bind to any other address in it, such as the wildcard address
+        SandboxManager no_wildcard();
+        no_wildcard.setNetworkDefaultPolicy(True);
+        no_wildcard.addNetworkDeniedIPRange("0.0.0.0/32");
+        Program nwp = sandboxedProgram(no_wildcard, NetworkPolicyCode, "bind-denied-other");
+        assertThrows("NETWORK-ACCESS-DENIED", "0.0.0.0", \nwp.callFunction(), ("bind_inet", "0.0.0.0", 0, AF_INET),
+            "a denied range denies a bind to a non-loopback address");
+        assertEq("127.0.0.1", nwp.callFunction("bind_inet", "127.0.0.1", 0).address);
+
+        # the default policy and allowed ranges still apply to loopback binds (see "default deny" above)
 
         # an allowed range must contain the address bound; the IPv4 wildcard is bound if only it is allowed
         SandboxManager ranges();

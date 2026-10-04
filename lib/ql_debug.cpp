@@ -930,8 +930,26 @@ static void ut_network_security_rules(UnitTestCounters& c) {
         // binds: a wildcard address is not the loopback address
         b = ut_net_bind_allowed(net, AF_INET, "0.0.0.0", 0);
         UT_ASSERT(c, b, "a bind on all interfaces is allowed by the default allow policy");
+        // binds: a loopback address can only be reached from the local host, so a denied range does not deny it
         b = ut_net_bind_allowed(net, AF_INET6, "::ffff:127.0.0.1", 0);
-        UT_ASSERT(c, !b, "a bind to an IPv4-mapped loopback address is denied");
+        UT_ASSERT(c, b, "a bind to an IPv4-mapped loopback address in a denied range is allowed");
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.2", 0);
+        UT_ASSERT(c, b, "a bind to a loopback address in a denied range is allowed");
+        b = ut_net_bind_allowed(net, AF_INET6, "::1", 0);
+        UT_ASSERT(c, b, "a bind to the IPv6 loopback address in a denied range is allowed");
+        b = ut_net_connect_allowed(net, nullptr, AF_INET, "127.0.0.2", 80);
+        UT_ASSERT(c, !b, "a connection to a loopback address in a denied range is denied");
+        b = ut_net_connect_allowed(net, nullptr, AF_INET6, "::1", 80);
+        UT_ASSERT(c, !b, "a connection to the IPv6 loopback address in a denied range is denied");
+
+        // binds: a denied range denies a bind to any other address in it
+        net.blockPrivateNetworks();
+        b = ut_net_bind_allowed(net, AF_INET, "10.1.2.3", 0);
+        UT_ASSERT(c, !b, "a bind to a private address in a denied range is denied");
+        b = ut_net_bind_allowed(net, AF_INET6, "fe80::1", 0);
+        UT_ASSERT(c, !b, "a bind to a link-local address in a denied range is denied");
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 0);
+        UT_ASSERT(c, b, "blocking private networks allows a loopback bind");
     }
     {
         // binds follow the default policy, allowed ranges, and allowed ports
