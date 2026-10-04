@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3KeysTest
+
+#! Primary keys, unique indexes, upsert and duplicate-row detection on an in-memory SQLite database
+class Sqlite3KeysTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("Sqlite3KeysTest", "1.0", \ARGV) {
+        addTestCase("primary keys are described", \primaryKeys());
+        addTestCase("automatic indexes are described", \automaticIndexes());
+        addTestCase("upsert uses the key", \upsert());
+        addTestCase("duplicate rows are recognized", \duplicateRows());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table single_pk (id integer not null primary key, status varchar(100))");
+        ds.exec("create table composite_pk (a integer, b varchar(10), v varchar(10), primary key (b, a))");
+        ds.exec("create table unique_col (id integer primary key, code varchar(10) unique, v varchar(10))");
+        ds.exec("create table no_pk (x integer)");
+        ds.exec("create table quoted (\"id\" integer, \"code\" varchar(10), \"name\" varchar(10))");
+        ds.exec("create unique index \"quoted_code\" on \"quoted\" (\"code\")");
+        ds.exec("create index quoted_name on quoted (name collate nocase)");
+        ds.commit();
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    primaryKeys() {
+        Datasource ds = getDatasource();
+        assertEq(("id",), (new Table(ds, "single_pk")).getPrimaryKey().keys());
+        assertEq(("b", "a"), (new Table(ds, "composite_pk")).getPrimaryKey().keys(),
+            "a composite key keeps its declared column order");
+        assertEq((), (new Table(ds, "no_pk")).getPrimaryKey().keys(), "a table without a key has none");
+    }
+
+    automaticIndexes() {
+        Datasource ds = getDatasource();
+        # the composite key's own index is the primary key, not an extra index
+        assertEq(0, (new Table(ds, "composite_pk")).getIndexes().size());
+        list<auto> indexes = map $1, (new Table(ds, "unique_col")).getIndexes().iterator();
+        assertEq(1, indexes.size(), "a unique constraint's index is described");
+        assertTrue(indexes[0].unique);
+        assertEq(("code",), indexes[0].columns.keys());
+
+        # an index's columns are described without their quotes, and a lower-case unique index is unique
+        hash<auto> quoted = map {$1.getName(): $1}, (new Table(ds, "quoted")).getIndexes().iterator();
+        assertEq(("quoted_code", "quoted_name"), sort(keys quoted));
+        assertEq(("code",), quoted.quoted_code.columns.keys());
+        assertTrue(quoted.quoted_code.unique);
+        assertFalse(quoted.quoted_name.unique);
+        assertEq({"name": "nocase"}, quoted.quoted_name.collations, "a column collation is kept as declared");
+    }
+
+    upsert() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Table single(ds, "single_pk");
+        single.insert({"id": 1, "status": "A"});
+        single.upsert({"id": 1, "status": "B"});
+        single.upsert({"id": 2, "status": "C"});
+        assertEq(({"id": 1, "status": "B"}, {"id": 2, "status": "C"}), single.selectRows({"orderby": "id"}));
+
+        Table composite(ds, "composite_pk");
+        composite.upsert({"a": 1, "b": "x", "v": "1"});
+        composite.upsert({"a": 1, "b": "x", "v": "2"});
+        assertEq(({"a": 1, "b": "x", "v": "2"},), composite.selectRows());
+    }
+
+    duplicateRows() {
+        Datasource ds = getDatasource();
+        Table single(ds, "single_pk");
+        # a driver that reports SQLite's result codes
+        assertTrue(single.isDuplicateRowError(<ExceptionInfo>{"err": "SQLITE3-EXEC", "desc": "",
+            "arg": {"code": 19, "extended_code": SQLITE_CONSTRAINT_PRIMARYKEY}}));
+        assertTrue(single.isDuplicateRowError(<ExceptionInfo>{"err": "SQLITE3-EXEC", "desc": "",
+            "arg": {"code": 19, "extended_code": SQLITE_CONSTRAINT_UNIQUE}}));
+        assertFalse(single.isDuplicateRowError(<ExceptionInfo>{"err": "SQLITE3-EXEC",
+            "desc": "sqlite3 error: NOT NULL constraint failed: single_pk.id",
+            "arg": {"code": 19, "extended_code": 1299}}), "another constraint is not a duplicate row");
+        # an older driver that reports only SQLite's message
+        assertTrue(single.isDuplicateRowError(<ExceptionInfo>{"err": "SQLITE3-EXEC",
+            "desc": "sqlite3 error: UNIQUE constraint failed: single_pk.id"}));
+        assertFalse(single.isDuplicateRowError(<ExceptionInfo>{"err": "SQLITE3-EXEC",
+            "desc": "Duplicate entry '1' for key 'PRIMARY'"}), "another database's message is not SQLite's");
+
+        # and the driver installed here raises an error that is recognized
+        on_exit ds.rollback();
+        single.insert({"id": 7, "status": "A"});
+        try {
+            single.insert({"id": 7, "status": "B"});
+            fail("a duplicate insert succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(single.isDuplicateRowError(ex), get_exception_string(ex));
+        }
+    }
+}

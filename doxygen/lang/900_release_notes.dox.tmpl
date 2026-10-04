@@ -2632,6 +2632,12 @@ while (*binary chunk = input.read(65536)) {
         converted (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - fixed passing a REST client in the \c snrestclient option, which always failed
 
+    - @ref sqlite3sqlutilintro "Sqlite3SqlUtil" module
+      - fixed tables reporting no primary key, so \c upsert() always failed
+      - fixed duplicate-row detection never recognizing a duplicate key
+      - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,
+        and quoted column names kept their quotes
+
     - @ref sqlutilintro "SqlUtil" module
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
         @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by @ref bulksqlutilintro "BulkSqlUtil"

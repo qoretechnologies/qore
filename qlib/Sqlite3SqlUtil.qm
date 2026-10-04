@@ -88,6 +88,14 @@ module Sqlite3SqlUtil {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - fixed tables reporting no primary key, so \c upsert() always failed with \c UPSERT-ERROR; the primary key is
+      now read from the table's description
+    - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
+      constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
+      names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
+    - fixed duplicate-row detection, which matched another database's error message and so never recognized a
+      duplicate key; a primary key or unique constraint violation is now recognized from the result code the
+      sqlite3 driver reports, or from SQLite's own message with an older driver
     - added temporary-table support (\c "create temp table"); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
@@ -105,6 +113,11 @@ module Sqlite3SqlUtil {
 
 #! the Sqlite3SqlUtil namespace contains all the objects in the Sqlite3SqlUtil module
 public namespace Sqlite3SqlUtil {
+    #! SQLite's extended result code for a primary key constraint violation
+    public const SQLITE_CONSTRAINT_PRIMARYKEY = 1555;
+    #! SQLite's extended result code for a unique constraint violation
+    public const SQLITE_CONSTRAINT_UNIQUE = 2067;
+
     #! returns a Sqlite3Table object corresponding to the arguments
     public Sqlite3Table sub get_table(AbstractDatasource nds, string nname, *hash<auto> opts) {
         return new Sqlite3Table(nds, nname, opts);
@@ -1109,34 +1122,51 @@ auto v = c.name;
         }
 
         private Sqlite3PrimaryKey getPrimaryKeyImpl() {
-            return new Sqlite3PrimaryKey();
+            # pragma table_info gives each primary key column its 1-based position in the key; a table
+            # without a declared primary key has none (its rowid is not one)
+            *hash<auto> qh = ds.select("pragma table_info(%s)", name);
+            hash<string, string> key_columns;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                if (row.pk.toInt() > 0) {
+                    key_columns{sprintf("%06d", row.pk.toInt())} = row.name;
+                }
+            }
+            if (!key_columns) {
+                return new Sqlite3PrimaryKey();
+            }
+            hash<auto> rv;
+            foreach string position in (sort(keys key_columns)) {
+                string col = key_columns{position};
+                rv{col} = columns{col};
+            }
+            return new Sqlite3PrimaryKey(rv);
         }
 
         private Indexes getIndexesImpl() {
             hash<auto> rv;
 
-            # get index descriptions
-            *hash<auto> qh = ds.select("select * from sqlite_master where type = 'index' and tbl_name = %v", name);
-            if (qh.name) {
-                hash<auto> ih;
-                foreach hash<auto> row in (qh.contextIterator()) {
-                    list<string> cols = map trim($1),
-                        (row.sql =~ x/CREATE (?:UNIQUE )?INDEX.*[^\(]+\((.*)\)$/)[0].split(",");
-                    bool unique = (row.sql =~ /^CREATE UNIQUE INDEX /);
-                    ih{row.name}.unique = unique;
-                    foreach string col in (cols) {
-                        *string collation = (col =~ x/ COLLATE (.*)$/)[0];
-                        if (collation) {
-                            col =~ s/ COLLATE .*//g;
-                            ih{row.name}.collations{col} = collation;
-                        }
-                        ih{row.name}.columns{col} = columns{col};
+            # pragma index_list and index_xinfo describe every index - including those SQLite creates itself
+            # for a primary key or unique constraint, which have no SQL - so no index SQL has to be parsed
+            *hash<auto> index_list = ds.select("pragma index_list(%s)", name);
+            foreach hash<auto> il in (index_list.contextIterator()) {
+                # the primary key's own index is described by getPrimaryKeyImpl()
+                if (il.origin == "pk") {
+                    continue;
+                }
+                hash<auto> index_columns = {};
+                *hash<string, string> collations;
+                *hash<auto> info = ds.select("pragma index_xinfo(%s)", il.name);
+                foreach hash<auto> ii in (info.contextIterator()) {
+                    # only key columns; an expression has no column name
+                    if (!ii.key.toInt() || ii.name.typeCode() != NT_STRING) {
+                        continue;
+                    }
+                    index_columns{ii.name} = columns{ii.name};
+                    if (ii.coll.typeCode() == NT_STRING && ii.coll.upr() != "BINARY") {
+                        collations{ii.name} = ii.coll;
                     }
                 }
-
-                foreach hash<auto> i in (ih.pairIterator()) {
-                    rv{i.key} = new Sqlite3Index(i.key, i.value.unique, i.value.columns, i.value.collations);
-                }
+                rv{il.name} = new Sqlite3Index(il.name, il.unique.toBool(), index_columns, collations);
             }
 
             return new Indexes(rv);
@@ -1324,7 +1354,13 @@ auto v = c.name;
         /** @since Sqlite3SqlUtil 1.4.2
         */
         private bool isDuplicateRowErrorImpl(hash<ExceptionInfo> ex) {
-            return (ex.desc =~ /^Duplicate entry /);
+            # the sqlite3 driver reports SQLite's extended result code: a primary key or unique constraint
+            # violation is a duplicate row
+            if (ex.arg.typeCode() == NT_HASH && exists ex.arg.extended_code) {
+                return inlist(ex.arg.extended_code, (SQLITE_CONSTRAINT_PRIMARYKEY, SQLITE_CONSTRAINT_UNIQUE));
+            }
+            # drivers that predate the result codes report only SQLite's own (engine-defined) message
+            return ex.desc.typeCode() == NT_STRING && (ex.desc =~ /UNIQUE constraint failed: /);
         }
 
         private hash<auto> getQoreTypeMapImpl() {
