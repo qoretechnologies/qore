@@ -3744,6 +3744,8 @@ nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
 
     A host name whose addresses are in more than one address family, such as \c "localhost", is bound on one address, and the socket holds its port on the name's addresses in the other address families, as described for @ref Qore::Socket::bindINET() "Socket::bindINET()".
 
+    When the bind fails, the error number is set (see @ref Qore::errno() "errno()" and @ref Qore::strerror() "strerror()"): \c EACCES if the network policy of a @ref sandboxing "sandbox" denies the bind, \c EADDRNOTAVAIL if the name cannot be resolved, otherwise the system error of the bind; use @ref Qore::Socket::bindINET() "Socket::bindINET()" or @ref Qore::Socket::bindUNIX() "Socket::bindUNIX()" to get an exception describing the failure.
+
     @par Example:
     @code{.py} # bind to a UNIX socket on the local system and reuse the address, check return code
 if (sock.bind("/tmp/my-socket", True))

@@ -48,6 +48,8 @@ class MllpUtilTest inherits QUnit::Test {
         addTestCase("TLS client test", \tlsClientTest());
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("negative test", \negativeTest());
+        addTestCase("listener bind target test", \listenerBindTargetTest());
+        addTestCase("sandboxed listener bind test", \sandboxedListenerBindTest());
 
         set_return_value(main());
     }
@@ -160,6 +162,112 @@ class MllpUtilTest inherits QUnit::Test {
 
         assertEq(Message, server.received.get(5s));
         assertEq(0, server.done.waitForZero(5s));
+    }
+
+    #! Tests that a listener binds every form of bind target that Socket::bind() accepts
+    private listenerBindTargetTest() {
+        MllpUtil::MllpListener named("localhost:0");
+        named.start(*string sub (string msg) {
+            return MllpUtil::mllp_build_ack(msg);
+        });
+        on_exit named.stop(5s);
+        assertGt(0, named.getPort(), "a host name is bound");
+        hash<MllpUtil::MllpAckInfo> ack = sendToListener("localhost", named.getPort());
+        assertTrue(ack.accepted);
+        named.stop(5s);
+
+        if (hasIpv6Loopback()) {
+            MllpUtil::MllpListener v6("[::1]:0");
+            v6.start(*string sub (string msg) {
+                return MllpUtil::mllp_build_ack(msg);
+            });
+            on_exit v6.stop(5s);
+            assertGt(0, v6.getPort(), "a bracketed IPv6 address is bound");
+            v6.stop(5s);
+        }
+
+%ifndef Windows
+        string path = sprintf("%s/mllp-%d-%s.sock", tmp_location(), getpid(), get_random_string(8));
+        on_exit unlink(path);
+        MllpUtil::MllpListener unix_listener(path);
+        unix_listener.start(*string sub (string msg) {
+            return MllpUtil::mllp_build_ack(msg);
+        });
+        on_exit unix_listener.stop(5s);
+        assertTrue(is_socket(path), "a path is bound as a UNIX domain socket");
+        unix_listener.stop(5s);
+%endif
+
+        # a target that cannot be bound is reported with the cause of the failure
+        Socket holder();
+        holder.bindINET("127.0.0.1", 0, False, AF_INET);
+        holder.listen();
+        on_exit holder.close();
+        MllpUtil::MllpListener in_use("127.0.0.1:" + holder.getSocketInfo().port);
+        assertThrows("MLLP-LISTENER-ERROR", "SOCKET-BIND-ERROR", sub () {
+            in_use.start(*string sub (string msg) {
+                return msg;
+            });
+        });
+        assertFalse(in_use.isRunning());
+    }
+
+    #! Tests the bind of a listener in a sandboxed Program whose network policy blocks private networks
+    /** Regression test: a bind denied by the network policy of a sandbox is not a system error, and the listener
+        reported it as "could not bind MLLP listener to localhost:0: Success" without the cause.
+    */
+    private sandboxedListenerBindTest() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.loadModule("MllpUtil");
+        p.parse("%modern
+int sub start_listener(string target) {
+    MllpUtil::MllpListener listener(target);
+    listener.start(*string sub (string msg) { return msg; });
+    on_exit listener.stop(5s);
+    return listener.getPort();
+}
+", "sandboxed-mllp-listener");
+
+        # a loopback address is in a private network, which the policy does not allow to be bound
+        try {
+            p.callFunction("start_listener", "localhost:0");
+            assertTrue(False, "a bind on a blocked network is denied");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MLLP-LISTENER-ERROR", ex.err);
+            assertRegex("NETWORK-ACCESS-DENIED", ex.desc, "the cause of the failure is reported");
+            assertNRegex("Success", ex.desc, "a denial is not reported as a failure without an error");
+        }
+
+        # all interfaces can be bound, as the default policy allows it
+        assertGt(0, p.callFunction("start_listener", "0.0.0.0:0"), "the IPv4 wildcard address is bound");
+    }
+
+    private hash<MllpUtil::MllpAckInfo> sendToListener(string host, int port) {
+        MllpUtil::MllpClient client({
+            "host": host,
+            "port": port,
+            "no_connect": True,
+        });
+        client.connect();
+        on_exit client.disconnect();
+        return client.sendAndReceiveAck(Message, 5s);
+    }
+
+    private static bool hasIpv6Loopback() {
+        try {
+            Socket s();
+            s.bindINET("::1", 0, True, AF_INET6);
+            s.close();
+            return True;
+        } catch () {
+            return False;
+        }
     }
 
     private listenerApiTest() {

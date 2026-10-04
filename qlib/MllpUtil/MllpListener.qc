@@ -78,8 +78,8 @@ public namespace MllpUtil {
         /** @param handler code called for each received HL7 v2 message; if it
             returns a string, the string is sent as an MLLP response frame
 
-            @throw MLLP-LISTENER-ERROR the listener is already running or TLS
-            setup is incomplete
+            @throw MLLP-LISTENER-ERROR the listener is already running, TLS
+            setup is incomplete, or the listener cannot be bound or cannot listen
         */
         start(code<*string(string)> handler) {
             AutoLock al(m);
@@ -93,16 +93,14 @@ public namespace MllpUtil {
                 listener.setCertificate(cert);
                 listener.setPrivateKey(key);
             }
-            if (listener.bind(bind_target, True)) {
-                throw "MLLP-LISTENER-ERROR", sprintf("could not bind MLLP listener to %s: %s", bind_target,
-                    strerror());
-            }
+            bindListener();
             if (listener.listen(backlog)) {
                 listener.close();
                 throw "MLLP-LISTENER-ERROR", sprintf("could not listen on MLLP target %s: %s", bind_target,
                     strerror());
             }
-            port = listener.getSocketInfo().port;
+            # a UNIX domain socket has no port
+            port = listener.getSocketInfo().port ?? 0;
             stopping = False;
             running = True;
             listener_done.inc();
@@ -141,7 +139,7 @@ public namespace MllpUtil {
             return running;
         }
 
-        #! Returns the bound TCP port
+        #! Returns the bound TCP port, 0 for a UNIX domain socket
         int getPort() {
             AutoLock al(m);
             return port;
@@ -150,6 +148,36 @@ public namespace MllpUtil {
         #! Returns True if TLS is enabled
         bool isTls() {
             return tls;
+        }
+
+        #! Binds the listener socket to the bind target
+        /** The target is interpreted as by @ref Qore::Socket::bind() "Socket::bind()": \c "host:port" (a host in
+            square brackets or containing a colon is bound as IPv6), otherwise a UNIX domain socket path.  The binding
+            methods that raise exceptions are used, so that a failure is reported with its cause, such as a bind
+            denied by the network policy of a sandbox, which is not a system error.
+
+            @throw MLLP-LISTENER-ERROR the listener could not be bound
+        */
+        private bindListener() {
+            try {
+                *list<*string> target = (bind_target =~ x/^(.*):([^:]*)$/s);
+                if (!target) {
+                    listener.bindUNIX(bind_target);
+                    return;
+                }
+                string host = target[0] ?? "";
+                int family;
+                if (host.size() > 2 && host[0] == "[" && host[host.size() - 1] == "]") {
+                    host = host.substr(1, -1);
+                    family = AF_INET6;
+                } else {
+                    family = (host =~ /:/) ? AF_INET6 : AF_INET;
+                }
+                listener.bindINET(host, target[1] ?? "", True, family);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "MLLP-LISTENER-ERROR", sprintf("could not bind MLLP listener to %s: %s: %s", bind_target,
+                    ex.err, ex.desc);
+            }
         }
 
         private acceptLoop(code<*string(string)> handler) {

@@ -2466,6 +2466,12 @@ int sub bind_port(int port) {
     on_exit s.close();
     return s.bind(port, True);
 }
+hash<auto> sub bind_target(string target) {
+    Socket s();
+    on_exit s.close();
+    int rc = s.bind(target, True);
+    return {\"rc\": rc, \"errno\": errno()};
+}
 sub connect(string target) {
     Socket s();
     s.connect(target, 5s);
@@ -2527,6 +2533,10 @@ sub proxied_get(string url, string proxy) {
         assertThrows("NETWORK-ACCESS-DENIED", \deny.callFunction(), ("bind_inet", NOTHING, 0, AF_UNSPEC,
             SOCK_DGRAM), "UDP binds are controlled");
         assertEq(-1, deny.callFunction("bind_port", 0), "Socket::bind() reports the denied bind");
+        # the bind runs on an I/O thread; the denial is reported in the calling thread's error number, not as a
+        # failure without an error ("Success")
+        assertEq({"rc": -1, "errno": Err::EACCES}, deny.callFunction("bind_target", "127.0.0.1:0"),
+            "Socket::bind() sets the error number of a denied bind");
 
         # a denied range applies to the address bound, also as an IPv4-mapped IPv6 address
         SandboxManager local();
@@ -2536,6 +2546,8 @@ sub proxied_get(string url, string proxy) {
         assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "127.0.0.1", 0));
         assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "::ffff:127.0.0.1", 0,
             AF_INET6));
+        assertEq({"rc": -1, "errno": Err::EACCES}, lp.callFunction("bind_target", "localhost:0"),
+            "Socket::bind() sets the error number of a bind on a denied name");
         assertTrue(lp.callFunction("bind_inet", NOTHING, 0).port > 0,
             "a bind on all interfaces is allowed when the default policy allows it");
 

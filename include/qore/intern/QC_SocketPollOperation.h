@@ -331,9 +331,17 @@ public:
         return rc;
     }
 
+    //! Returns the system error number of a failed operation, 0 if the operation did not fail with one
+    /** The operation runs on an I/O thread, whose error number the requesting thread cannot see.
+    */
+    DLLLOCAL int getErrorCode() const {
+        return error_code;
+    }
+
     DLLLOCAL bool isConfigAction() const;
 
 private:
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     DLLLOCAL static Action getAction(ConfigAction config_action);
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
@@ -354,6 +362,8 @@ private:
     int backlog = 0;
     int64 value = 0;
     int rc = -1;
+    //! the system error number of a failed operation, recorded on the I/O thread for the requesting thread
+    int error_code = 0;
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
     bool done = false;

@@ -1253,6 +1253,23 @@ public:
             return nullptr;
         }
 
+        // the operation runs on an I/O thread, so its error number is recorded for the requesting thread; it is
+        // cleared first so that an error number left by an earlier operation on the I/O thread is never reported
+        sock_set_raw_error(0);
+        QoreHashNode* rv = continuePollIntern(xsink);
+        if (*xsink || (done && rc < 0)) {
+            error_code = sock_get_raw_error();
+        }
+        return rv;
+    }
+
+    //! Returns the system error number of a failed operation, 0 if the operation did not fail with one
+    DLLLOCAL int getErrorCode() const {
+        return error_code;
+    }
+
+private:
+    DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink) {
         switch (action) {
             case Action::BindPort:
                 return continueBindInet(xsink);
@@ -1356,6 +1373,7 @@ public:
         return nullptr;
     }
 
+public:
     DLLLOCAL virtual QoreValue getOutput() const override {
         return rc;
     }
@@ -1470,6 +1488,8 @@ private:
     int addr_size = 0;
     sockaddr_storage addr = {};
     int rc = -1;
+    //! the system error number of a failed operation, recorded on the I/O thread for the requesting thread
+    int error_code = 0;
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
     bool bind_inet_resolved = false;
@@ -4237,13 +4257,24 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
     return qore_socket_get_setup_rc(*result, xsink);
 }
 
+//! Runs a setup operation that reports errors with a return code and the error number instead of an exception
+/** The operation runs on an I/O thread, whose error number the calling thread cannot see, so the error number that
+    the operation recorded is set in the calling thread when the operation fails.
+*/
 static int qore_socket_exec_setup_no_exception(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
         const char* owner_name) {
     ExceptionSink xsink;
+    // keep the operation to read its error number after it has run
+    poller->ref();
+    ReferenceHolder<QoreSocketControllerSetupPollOperation> poller_holder(poller, &xsink);
     int rc = qore_socket_exec_setup(s, poller, owner_name, &xsink);
-    if (xsink) {
+    if (xsink || rc < 0) {
+        int err = poller->getErrorCode();
+        poller_holder = nullptr;
+        bool failed = xsink;
         xsink.clear();
-        return -1;
+        sock_set_raw_error(err);
+        return failed ? -1 : rc;
     }
     return rc;
 }
@@ -11802,6 +11833,27 @@ static int qore_socket_sandbox_proto(int family, int socktype) {
     return socktype == SOCK_STREAM ? QSEC_NET_TCP : socktype == SOCK_DGRAM ? QSEC_NET_UDP : QSEC_NET_ALL;
 }
 
+//! Sets the error number of a socket operation that the sandbox denied
+/** A denial is reported with an exception; the error number is also set, so that an API that reports errors with a
+    return code and the error number, such as Socket::bind(), does not report a failure without an error.
+*/
+static void qore_socket_set_sandbox_denied_error() {
+#ifdef _Q_WINDOWS
+    sock_set_raw_error(WSAEACCES);
+#else
+    sock_set_raw_error(EACCES);
+#endif
+}
+
+//! Sets the error number of a bind whose name resolved to no address that can be bound
+static void qore_socket_set_bind_no_address_error() {
+#ifdef _Q_WINDOWS
+    sock_set_raw_error(WSAEADDRNOTAVAIL);
+#else
+    sock_set_raw_error(EADDRNOTAVAIL);
+#endif
+}
+
 //! Checks that the sandbox allows the UNIX socket path to be created (bind) or connected to
 /** A UNIX socket is a file: the network policy decides whether UNIX sockets may be used at all, and the filesystem
     policy decides which socket files may be reached, so a sandbox without filesystem access cannot reach a local
@@ -11821,10 +11873,14 @@ static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* pa
     const struct sockaddr* sa = reinterpret_cast<const struct sockaddr*>(&addr);
     if (bind ? !sm->checkNetworkBind(sa, sizeof(addr), QSEC_NET_UNIX, xsink)
             : !sm->checkNetworkAccess(path, sa, sizeof(addr), QSEC_NET_UNIX, xsink)) {
+        qore_socket_set_sandbox_denied_error();
         return -1;
     }
-    return sm->checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)
-        ? 0 : -1;
+    if (!sm->checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)) {
+        qore_socket_set_sandbox_denied_error();
+        return -1;
+    }
+    return 0;
 #endif
 }
 
@@ -12083,6 +12139,7 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
             "ares_getaddrinfo(node: '%s', service: '%s') returned no addresses", name ? name : "",
             service ? service : "");
+        qore_socket_set_bind_no_address_error();
         return -1;
     }
 
@@ -12148,6 +12205,7 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
     if (denied_xsink && !en) {
         // every candidate was denied by the sandbox
         xsink->assimilate(denied_xsink);
+        qore_socket_set_sandbox_denied_error();
         return -1;
     }
     denied_xsink.clear();
@@ -12157,6 +12215,8 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
     } else {
         qore_socket_error_intern(en, xsink, "SOCKET-BIND-ERROR", "error binding on socket", 0, name, service);
     }
+    // the error of the last candidate is the error of the bind
+    sock_set_raw_error(en);
     return -1;
 }
 
@@ -12187,6 +12247,7 @@ QoreHashNode* QoreSocketControllerSetupPollOperation::continueBindInet(Exception
 
         int rrc = resolver->continuePoll(xsink);
         if (*xsink || rrc < 0) {
+            qore_socket_set_bind_no_address_error();
             done = true;
             return nullptr;
         }
@@ -12255,6 +12316,7 @@ QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
 
         int rrc = resolver->continuePoll(xsink);
         if (*xsink || rrc < 0) {
+            qore_socket_set_bind_no_address_error();
             clearNonBlockLocked();
             done = true;
             return nullptr;
@@ -12304,6 +12366,7 @@ static int qore_socket_bind_check_sandbox(QoreSandboxManager* sandbox_manager, c
         int size, int socktype, ExceptionSink* xsink) {
     if (sandbox_manager && !sandbox_manager->checkNetworkBind(addr, size,
             qore_socket_sandbox_proto(addr->sa_family, socktype), xsink)) {
+        qore_socket_set_sandbox_denied_error();
         return -1;
     }
     return 0;
@@ -14331,6 +14394,17 @@ void SocketSetupPollOperation::clearNonBlockLocked() {
 }
 
 QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
+    // the operation runs on an I/O thread, so its error number is recorded for the requesting thread; it is cleared
+    // first so that an error number left by an earlier operation on the I/O thread is never reported
+    sock_set_raw_error(0);
+    QoreHashNode* rv = continuePollIntern(xsink);
+    if (*xsink || (done && rc < 0)) {
+        error_code = sock_get_raw_error();
+    }
+    return rv;
+}
+
+QoreHashNode* SocketSetupPollOperation::continuePollIntern(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
     if (done) {

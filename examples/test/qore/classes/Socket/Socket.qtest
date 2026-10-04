@@ -209,7 +209,39 @@ class SocketTest inherits QUnit::Test {
         addTestCase("wildcard bind port conflict", \wildcardBindPortConflictTest());
         addTestCase("single-family and datagram wildcard binds", \wildcardBindSingleFamilyTest());
         addTestCase("IPv4-mapped peer addresses", \ipv4MappedPeerAddressTest());
+        addTestCase("bind and listen errors set the error number", \bindErrorNumberTest());
         set_return_value(main());
+    }
+
+    #! Tests that Socket::bind() and Socket::listen() set the error number of a failure in the calling thread
+    /** Regression test: the operations run on an I/O thread, so the error number of a failure was never seen by the
+        calling thread, and the documented idiom \c "if (sock.bind(...)) throw ..., strerror();" reported "Success".
+    */
+    bindErrorNumberTest() {
+        Socket holder();
+        holder.bindINET("127.0.0.1", 0, False, AF_INET);
+        holder.listen();
+        int port = holder.getSocketInfo().port;
+
+        Socket s();
+        assertEq(-1, s.bind("127.0.0.1:" + port), "a port in use cannot be bound");
+        assertEq(Err::EADDRINUSE, errno(), "the error number of a bind on a port in use");
+
+        assertEq(-1, s.bind(port), "a port in use cannot be bound on all interfaces");
+        assertEq(Err::EADDRINUSE, errno(), "the error number of a bind on all interfaces on a port in use");
+
+        assertEq(-1, s.bind("unresolvable.invalid:0"), "an unresolvable name cannot be bound");
+        assertEq(Err::EADDRNOTAVAIL, errno(), "the error number of a bind on an unresolvable name");
+
+        Socket udp();
+        udp.bindINET("127.0.0.1", 0, False, AF_INET, SOCK_DGRAM);
+        assertEq(-1, udp.listen(), "a datagram socket cannot listen");
+        assertEq(Err::EOPNOTSUPP, errno(), "the error number of a failed listen");
+        udp.close();
+
+        # a successful bind is still reported as success
+        assertEq(0, s.bind("127.0.0.1:0"));
+        s.close();
     }
 
     private doServ(Queue q) {

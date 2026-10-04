@@ -3993,6 +3993,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Socket::bind() "Socket::bind()" and @ref Qore::Socket::listen() "Socket::listen()"
+      returning an error code without setting the error number, so that a failure was reported as \c "Success" by
+      @ref Qore::strerror() "strerror()"; the error number is now set, also when the bind is denied by the network
+      policy of a @ref sandboxing "sandbox" (\c EACCES) or the name cannot be resolved (\c EADDRNOTAVAIL)
+      - The \c MllpUtil listener now reports the cause of a failed bind, such as a denial by the network policy of a
+        sandbox, instead of \c "Success"
+
     - Fixed converting a string to a character encoding that needs more bytes than the source, such as UTF-8 text to
       UTF-16 with @ref Qore::convert_encoding() "convert_encoding()", taking time quadratic in the length of the
       string: a megabyte took more than half a minute, and now takes milliseconds

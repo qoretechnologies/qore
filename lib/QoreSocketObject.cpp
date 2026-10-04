@@ -3134,6 +3134,26 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
     return *xsink ? -1 : setup_poller->getRc();
 }
 
+//! Runs a setup operation that reports errors with a return code and the error number instead of an exception
+/** The operation runs on an I/O thread, whose error number the calling thread cannot see, so the error number that
+    the operation recorded is set in the calling thread when the operation fails.
+*/
+static int qore_socket_object_exec_setup_no_exception(QoreSocketObject* s, SocketSetupPollOperation* setup_poller,
+        const char* owner_name, const char* goal, ExceptionSink& xsink) {
+    // keep the operation to read its error number after it has run
+    setup_poller->ref();
+    int rc = qore_socket_object_exec_setup(s, setup_poller, owner_name, goal, &xsink);
+    int err = setup_poller->getErrorCode();
+    setup_poller->deref(&xsink);
+    if (xsink || rc < 0) {
+        bool failed = xsink;
+        xsink.clear();
+        sock_set_raw_error(err);
+        return failed ? -1 : rc;
+    }
+    return rc;
+}
+
 static QoreHashNode* qore_socket_object_get_addr_info_from_output(const QoreValue output, const char* err,
         ExceptionSink* xsink) {
     if (output.getType() != NT_HASH) {
@@ -4775,37 +4795,22 @@ int QoreSocketObject::connectUNIX(const char* p, int sock_type, int protocol, Ex
 // to bind to either a UNIX socket or an INET interface:port
 int QoreSocketObject::bind(const char* name, bool reuseaddr) {
     ExceptionSink xsink;
-    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, name, reuseaddr),
-        "bind", "bind", &xsink);
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-    return rc;
+    return qore_socket_object_exec_setup_no_exception(this,
+        new SocketSetupPollOperation(&xsink, this, name, reuseaddr), "bind", "bind", xsink);
 }
 
 // to bind to an INET tcp port on all interfaces
 int QoreSocketObject::bind(int port, bool reuseaddr) {
     ExceptionSink xsink;
-    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, port, reuseaddr),
-        "bind", "bind", &xsink);
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-    return rc;
+    return qore_socket_object_exec_setup_no_exception(this,
+        new SocketSetupPollOperation(&xsink, this, port, reuseaddr), "bind", "bind", xsink);
 }
 
 // to bind an open socket to an INET tcp port on a specific interface
 int QoreSocketObject::bind(const char* iface, int port, bool reuseaddr) {
     ExceptionSink xsink;
-    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, iface, port, reuseaddr),
-        "bind", "bind", &xsink);
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-    return rc;
+    return qore_socket_object_exec_setup_no_exception(this,
+        new SocketSetupPollOperation(&xsink, this, iface, port, reuseaddr), "bind", "bind", xsink);
 }
 
 int QoreSocketObject::bindUNIX(const char* name, int socktype, int protocol, ExceptionSink* xsink) {
@@ -4833,13 +4838,8 @@ int QoreSocketObject::getPort() {
 
 int QoreSocketObject::listen(int backlog) {
     ExceptionSink xsink;
-    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, backlog), "listen",
-        "listen", &xsink);
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-    return rc;
+    return qore_socket_object_exec_setup_no_exception(this, new SocketSetupPollOperation(&xsink, this, backlog),
+        "listen", "listen", xsink);
 }
 
 // send a buffer of a particular size
