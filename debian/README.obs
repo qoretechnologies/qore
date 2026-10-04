@@ -64,8 +64,9 @@ Do not regenerate sources from a moving branch during an import. Record the
 OBS source revision, qualified Git commit, source hashes and native build
 results. Source archives remain available alongside the binary packages.
 
-Keep publication disabled at both project and package level until acceptance
-of the actual OBS outputs. The project defaults to builds disabled; enable
+In the unpublished qualification project, keep publication disabled at both
+project and package level until acceptance of the actual OBS outputs. The
+project defaults to builds disabled; enable
 each qualified source package explicitly for the two supported architectures.
 Set package hardware constraints appropriate to its measured build memory and
 disk requirements. An OBS commit starts the package build independently of
@@ -197,6 +198,34 @@ Use a separate unpublished build project for subsequent qualification, or
 freeze builds in the publication project. Account for package-level build
 enable rules as well as the project default. Do not leave unrestricted
 dependency rebuilds feeding a public repository under unchanged versions.
+
+The home:davidnichols:qore:testing:debian:staging project provides the separate
+build environment for updates. Its Debian_13 repository uses the frozen
+testing project as its first dependency path, followed by the Debian paths
+listed above, and defines this manual release target:
+
+    <releasetarget project="home:davidnichols:qore:testing:debian"
+                   repository="Debian_13" trigger="manual"/>
+
+Increment the Debian revision and qualify the exact new source package on
+both CPUs before importing it into staging. After its OBS binaries pass
+artifact checks and match the qualified native outputs, freeze its staging
+builds too. Verify the source revision and binary hashes again before release.
+Keep builds disabled in the destination, including package-level overrides.
+Then copy the accepted sources and binaries without rebuilding them; for Qore:
+
+    osc release --no-delay --repo Debian_13 \
+        --target-project home:davidnichols:qore:testing:debian \
+        --target-repository Debian_13 \
+        home:davidnichols:qore:testing:debian:staging qore
+
+Verify the destination source revision and every copied binary hash, then
+check the signed public indexes, source downloads, fresh APT installation,
+SDK tests, combined modules and upgrades on both CPUs. An accepted release
+command alone does not complete these checks. Keep the previous and new
+acceptance manifests so the upgrade baseline and published bytes remain
+traceable. See the release action in the OBS User Guide:
+https://openbuildservice.org/help/manuals/obs-user-guide/cha-obs-request-and-review-system.html
 
 Record the exact Architecture: all artifact selected for publication.
 Documented semantic equivalence between two architecture-independent outputs
