@@ -31,6 +31,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("unsupported primary key DDL remains explicit", \unsupportedPrimaryKeyDdl());
         addTestCase("automatic indexes are described", \automaticIndexes());
         addTestCase("upsert uses the key", \upsert());
+        addTestCase("a select that locks rows is refused", \forUpdateRefused());
         addTestCase("duplicate rows are recognized", \duplicateRows());
         set_return_value(main());
     }
@@ -132,6 +133,16 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertThrows("UNSUPPORTED", \no_pk.addPrimaryKey(), ("PRIMARY", ("x",)),
             "adding a key to an existing SQLite table still fails");
         assertEq((), no_pk.getPrimaryKey().keys(), "failed DDL must not publish a primary key");
+    }
+
+    forUpdateRefused() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Table single(ds, "single_pk");
+        # SQLite cannot lock rows, so a select asking for the lock must fail rather than run without it
+        assertThrows("FORUPDATE-NOT-SUPPORTED", sub () { single.selectRows({"forupdate": True}); });
+        assertFalse(ds.currentThreadInTransaction(), "the refused select leaves no transaction open");
+        assertEq((), single.selectRows() ?? (), "a select without the option still runs");
     }
 
     upsert() {

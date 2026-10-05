@@ -88,6 +88,8 @@ module Sqlite3SqlUtil {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - a select with the \c forupdate @ref select_option_hash "select option" now raises
+      \c FORUPDATE-NOT-SUPPORTED, since SQLite cannot lock rows; it failed with an SQL syntax error before
     - fixed tables reporting no primary key, so \c upsert() always failed with \c UPSERT-ERROR; the primary key is
       now read from the table's description
     - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
@@ -999,6 +1001,15 @@ auto v = c.name;
         #! returns the column operator map for this object
         private hash getColumnOperatorMapImpl() {
             return Sqlite3CopMap;
+        }
+
+        #! SQLite has no row locks and no \c "for update" clause
+        /** @throw FORUPDATE-NOT-SUPPORTED always: SQLite cannot lock the selected rows, and a select that asked for
+            the lock must not run without it
+        */
+        private doForUpdate(reference<string> sql) {
+            throw "FORUPDATE-NOT-SUPPORTED", sprintf("%s: database driver %y does not support row locking with the "
+                "\"forupdate\" select option", getDesc(), ds.getDriverName());
         }
 
         #! Returns the expression map for SQLite3
