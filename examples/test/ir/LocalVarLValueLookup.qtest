@@ -67,6 +67,28 @@ string sub deleteIt() {
     return "deleted";
 }
 ';
+
+        #! removals through a local holding a reference whose target, or a container on the removed path, is missing
+        const RemoveThroughRefSrc = 'hash<auto> sub drop(string tk, string type, string id, string alert) {
+    hash<auto> store = {"present": {"t": {"i": {"a": 1, "b": 2}}}};
+    reference<auto> r = \store{tk};
+    auto removed = remove r{type}{id}{alert};
+    *hash<auto> rv;
+    rv.removed = removed;
+    if (!r{type}{id}) {
+        remove r{type}{id};
+    }
+    rv.store = store;
+    return rv;
+}
+printf("%y\n", drop("missing", "t", "i", "a"));
+printf("%y\n", drop("present", "t", "i", "a"));
+printf("%y\n", drop("present", "x", "i", "a"));
+';
+        #! the output of RemoveThroughRefSrc: nothing is removed where the path is missing, and nothing is created
+        const RemoveThroughRefOut = "{removed: null, store: {present: {t: {i: {a: 1, b: 2}}}}}\n"
+            "{removed: 1, store: {present: {t: {i: {b: 2}}}}}\n"
+            "{removed: null, store: {present: {t: {i: {a: 1, b: 2}}}}}\n";
     }
 
     private {
@@ -94,6 +116,8 @@ string sub deleteIt() {
         addTestCase("an interpreted AOT closure body keeps its loop variables in the slot cache", \testAotClosure());
         addTestCase("negative: an access to a local that is not instantiated raises LVALUE-ERROR",
             \testNotInstantiatedWrite());
+        addTestCase("a removal through a reference to a missing key removes nothing, in every execution mode",
+            \testRemoveThroughMissingRef());
 
         set_return_value(main());
     }
@@ -153,6 +177,29 @@ string sub deleteIt() {
             assertRegex(sprintf("^%s: rc=1 err=LVALUE-ERROR: local variable 'counter' is not instantiated in the "
                 "current context$", fn), (select rv.out.split("\n"), $1.find(fn + ":") == 0)[0] ?? "", fn);
         }
+    }
+
+    #! a removal through a reference whose target is missing is an empty removal, not an error
+    /** LocalVar::getLValue() returns -1 with no exception for it; a debug build asserted that an exception had been
+        raised and aborted (seen in Qorus's AlertManager::clearOngoingAlert()).
+    */
+    testRemoveThroughMissingRef() {
+        TmpDir tmp("qore-lvalue-lookup-");
+        string src = writeFile(tmp.path + DirSep + "remove_ref.qr", RemoveThroughRefSrc);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            assertEq(0, rv.rc, mode + ": " + rv.err);
+            assertEq(RemoveThroughRefOut, rv.out, mode);
+        }
+        if (!qcc_bin) {
+            return;
+        }
+        string exe = tmp.path + DirSep + "remove_ref";
+        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertEq(0, rv.rc, rv.err);
+        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        assertEq(0, rv.rc, "aot: " + rv.err);
+        assertEq(RemoveThroughRefOut, rv.out, "aot");
     }
 
     private checkQcc() {

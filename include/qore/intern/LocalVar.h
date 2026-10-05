@@ -836,7 +836,8 @@ public:
         \c LVALUE-ERROR is raised.  Code that writes a value it also keeps elsewhere (an IR or native slot) and
         only needs to mirror it to the thread's variable when one exists must use tryGetLValue() instead.
 
-        @return 0 for success, -1 if an exception was raised
+        @return 0 for success, -1 if an exception was raised or, with @a for_remove, if the variable holds a
+        reference whose target does not exist (nothing to remove; no exception is raised)
     */
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         LocalVarLValueLookup rc = tryGetLValue(lvh, for_remove, initial_assignment);
@@ -846,14 +847,17 @@ public:
         if (rc == LocalVarLValueLookup::NotInstantiated) {
             raiseNotInstantiated(lvh.vl.xsink);
         }
-        assert(*lvh.vl.xsink);
+        // a removal through a reference to a missing hash key or object member finds nothing to remove; that
+        // returns -1 without an exception, and callers treat it as an empty removal
+        assert(*lvh.vl.xsink || for_remove);
         return -1;
     }
 
     //! Binds the variable's value on the current thread to @a lvh if it has one
     /** @return LocalVarLValueLookup::Found if the value was bound, LocalVarLValueLookup::NotInstantiated (with no
         exception raised) if the variable has no value on the current thread, LocalVarLValueLookup::Error if an
-        exception was raised
+        exception was raised or, with @a for_remove, if the variable holds a reference whose target does not exist
+        (nothing to remove; no exception is raised)
     */
     DLLLOCAL LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         //printd(5, "LocalVar::tryGetLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
