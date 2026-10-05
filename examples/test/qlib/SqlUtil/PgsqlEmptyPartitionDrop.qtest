@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# Deterministic database regressions; every case owns a new schema, removed on exit.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class EmptyPartitionDropTest
+
+class EmptyPartitionDropTest inherits QUnit::Test {
+    private {
+        int serial = 0;
+    }
+
+    constructor() : Test("atomic empty partition drop", "1.0", \ARGV) {
+        addTestCase("empty, nonempty, rollback and quoted identifiers", \basicTest());
+        addTestCase("stale child and parent identities", \staleTest());
+        addTestCase("timeouts, isolation and transaction requirements", \contractTest());
+        addTestCase("RLS and dependent objects fail closed", \visibilityTest());
+        addTestCase("nested partitions rejected", \nestedTest());
+        addTestCase("direct and routed writers exclude drop", \writerTest());
+        addTestCase("fresh snapshot after waiting for writer", \snapshotTest());
+        set_return_value(main());
+    }
+
+    private Datasource connection() {
+%ifdef NoPgsql
+        testSkip("pgsql module is unavailable");
+%endif
+        *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!dsn) {
+            testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable PostgreSQL test database");
+        }
+        Datasource ds(dsn);
+        ds.open();
+        ds.setAutoCommit(False);
+        return ds;
+    }
+
+    private hash<auto> fixture() {
+        Datasource ds = connection();
+        string schema = sprintf("empty_drop_%d_%d", getpid(), ++serial);
+        ds.execRaw("create schema " + schema);
+        on_error {
+            ds.rollback();
+            ds.execRaw("drop schema if exists " + schema + " cascade");
+            ds.commit();
+        }
+        # A name requiring quotes exercises driver identifier generation.
+        ds.execRaw("create table " + schema + ".parent (id int) partition by range (id)");
+        ds.execRaw("create table " + schema + ".\"order\" partition of " + schema
+            + ".parent for values from (0) to (100)");
+        ds.commit();
+        AbstractTable table = AbstractTable::getTable(ds, schema + ".parent");
+        hash<PartitionInfo> pi = table.getPartition(schema + ".order");
+        ds.commit();
+        return {"ds": ds, "schema": schema, "table": table, "pi": pi};
+    }
+
+    private cleanup(hash<auto> f) {
+        f.ds.rollback();
+        f.ds.execRaw("drop schema " + f.schema + " cascade");
+        f.ds.commit();
+        assertFalse(exists f.ds.selectRow("select 1 from pg_catalog.pg_namespace where nspname = %v", f.schema));
+        f.ds.commit();
+    }
+
+    private basicTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        assertTrue(f.table.supportsEmptyPartitionDrop());
+        f.ds.commit();
+        assertTrue(f.pi.driver.pgsql.relation_oid > 0);
+        assertTrue(f.pi.driver.pgsql.parent_oid > 0);
+        assertEq(f.pi.driver.pgsql, f.table.listPartitions(){f.pi.name}.driver.pgsql);
+        hash<auto> description = f.table.getDescriptionHash({"with_partitions": True});
+        foreach hash<auto> part in (description.partitions.iterator()) {
+            assertFalse(exists part.driver.pgsql.relation_oid, "runtime identity is not a recreatable option");
+        }
+        f.ds.commit();
+        f.ds.execRaw("insert into " + f.schema + ".parent values (1)");
+        f.ds.commit();
+        assertFalse(f.table.dropEmptyPartitionCommit(f.pi));
+        assertEq(1, f.ds.selectRow("select count(*) as n from " + f.schema + ".parent").n);
+        f.ds.execRaw("delete from " + f.schema + ".parent");
+        f.ds.commit();
+        int allocated = f.ds.selectRow("select pg_total_relation_size(%v::oid) as bytes",
+            f.pi.driver.pgsql.relation_oid).bytes;
+        assertTrue(allocated > 0, "logical deletion left allocated physical storage to reclaim");
+        f.ds.commit();
+        f.ds.beginTransaction();
+        assertTrue(f.table.dropEmptyPartition(f.pi));
+        f.ds.rollback();
+        assertTrue(exists f.table.getPartition(f.pi.name));
+        f.ds.commit();
+        # Never execute a sql_name supplied by a caller, even in a typed catalog record.
+        f.pi.sql_name = "nonexistent; select pg_sleep(30)";
+        assertTrue(f.table.dropEmptyPartitionCommit(f.pi));
+        assertFalse(exists f.table.getPartition(f.pi.name));
+        assertFalse(exists f.ds.selectRow("select 1 from pg_class where oid = %v", f.pi.driver.pgsql.relation_oid));
+        f.ds.commit();
+        assertThrows("PARTITION-ERROR", sub() { f.table.dropEmptyPartitionCommit(f.pi); });
+    }
+
+    private staleTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("drop table " + f.schema + ".\"order\"");
+        f.ds.execRaw("create table " + f.schema + ".\"order\" partition of " + f.schema
+            + ".parent for values from (0) to (100)");
+        f.ds.commit();
+        assertThrows("PARTITION-ERROR", sub() { f.table.dropEmptyPartitionCommit(f.pi); });
+        AbstractTable fresh = AbstractTable::getTable(f.ds, f.schema + ".parent");
+        hash<PartitionInfo> pi = fresh.getPartition(f.pi.name);
+        assertTrue(pi.driver.pgsql.relation_oid != f.pi.driver.pgsql.relation_oid);
+        f.ds.commit();
+        # Preserve the child OID but attach it to a replacement parent with the same name.
+        f.ds.execRaw("alter table " + f.schema + ".parent detach partition " + f.schema + ".\"order\"");
+        f.ds.execRaw("drop table " + f.schema + ".parent");
+        f.ds.execRaw("create table " + f.schema + ".parent (id int) partition by range (id)");
+        f.ds.execRaw("alter table " + f.schema + ".parent attach partition " + f.schema
+            + ".\"order\" for values from (0) to (100)");
+        f.ds.commit();
+        assertThrows("PARTITION-ERROR", sub() { fresh.dropEmptyPartitionCommit(pi); });
+    }
+
+    private contractTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        assertThrows("PARTITION-ERROR", sub() { f.table.dropEmptyPartition(f.pi); });
+        AbstractTable manual = AbstractTable::getTable(f.ds, f.schema + ".parent");
+        manual.setupTable({"columns": {"id": {"qore_type": Type::Int}}});
+        f.ds.beginTransaction();
+        assertThrows("PARTITION-ERROR", sub() { manual.dropEmptyPartition(f.pi); });
+        f.ds.rollback();
+        foreach list<int> bounds in ((0, 5000), (100, 99), (1000, 60001)) {
+            assertThrows("OPTION-ERROR", sub() { f.table.dropEmptyPartitionCommit(f.pi, bounds[0], bounds[1]); });
+        }
+        f.ds.execRaw("set transaction isolation level repeatable read");
+        assertThrows("PARTITION-ERROR", sub() { f.table.dropEmptyPartition(f.pi); });
+        f.ds.rollback();
+        f.ds.execRaw("insert into " + f.schema + ".parent values (1)");
+        f.ds.execRaw("set local lock_timeout = '71ms'");
+        f.ds.execRaw("set local statement_timeout = '711ms'");
+        assertFalse(f.table.dropEmptyPartition(f.pi));
+        assertEq("71ms", f.ds.selectRow("show lock_timeout").lock_timeout);
+        assertEq("711ms", f.ds.selectRow("show statement_timeout").statement_timeout);
+        assertEq("on", f.ds.selectRow("show row_security").row_security);
+        f.ds.rollback();
+        assertTrue(f.table.dropEmptyPartitionCommit(f.pi));
+    }
+
+    private visibilityTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("insert into " + f.schema + ".parent values (1)");
+        f.ds.execRaw("alter table " + f.schema + ".\"order\" enable row level security");
+        f.ds.execRaw("alter table " + f.schema + ".\"order\" force row level security");
+        f.ds.commit();
+        bool bypass = f.ds.selectRow("select rolsuper or rolbypassrls as bypass from pg_roles "
+            "where rolname = current_user").bypass;
+        f.ds.commit();
+        if (bypass) {
+            assertFalse(f.table.dropEmptyPartitionCommit(f.pi), "privileged caller still sees rows");
+        } else {
+            assertThrows("DBI:PGSQL:ERROR", sub() { f.table.dropEmptyPartitionCommit(f.pi); });
+        }
+        f.ds.execRaw("alter table " + f.schema + ".\"order\" disable row level security");
+        assertEq(1, f.ds.selectRow("select count(*) as n from " + f.schema + ".parent").n);
+        f.ds.execRaw("delete from " + f.schema + ".parent");
+        f.ds.execRaw("create view " + f.schema + ".dependent as select * from " + f.schema + ".\"order\"");
+        f.ds.commit();
+        assertThrows("DBI:PGSQL:ERROR", sub() { f.table.dropEmptyPartitionCommit(f.pi); });
+        assertTrue(exists f.table.getPartition(f.pi.name));
+        f.ds.commit();
+    }
+
+    private nestedTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("create table " + f.schema + ".nested partition of " + f.schema
+            + ".parent for values from (100) to (200) partition by range (id)");
+        f.ds.commit();
+        hash<PartitionInfo> nested = f.table.getPartition(f.schema + ".nested");
+        f.ds.commit();
+        assertThrows("PARTITION-ERROR", sub() { f.table.dropEmptyPartitionCommit(nested); });
+    }
+
+    private writerTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        Datasource writer = connection();
+        on_exit writer.rollback();
+        foreach string target in ("parent", "\"order\"") {
+            # The uncommitted writer holds ROW EXCLUSIVE before the maintenance call starts.
+            writer.execRaw("insert into " + f.schema + "." + target + " values (1)");
+            f.ds.execRaw("set local lock_timeout = '30ms'");
+            assertThrows("DBI:PGSQL:ERROR", "lock timeout", sub() {
+                f.table.dropEmptyPartition(f.pi, 500, 1000);
+            });
+            f.ds.rollback();
+            writer.commit();
+            assertFalse(f.table.dropEmptyPartitionCommit(f.pi));
+            assertEq(1, f.ds.selectRow("select count(*) as n from " + f.schema + ".parent").n);
+            f.ds.execRaw("delete from " + f.schema + ".parent");
+            f.ds.commit();
+        }
+    }
+
+    private snapshotTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        Datasource writer = connection();
+        on_exit writer.rollback();
+        writer.execRaw("insert into " + f.schema + ".\"order\" values (1)");
+        int pid = f.ds.selectRow("select pg_backend_pid() as pid").pid;
+        f.ds.commit();
+        Counter done(1);
+        Queue result();
+        background sub() {
+            on_exit done.dec();
+            try {
+                result.push({"dropped": f.table.dropEmptyPartitionCommit(f.pi, 3000, 5000)});
+            } catch (hash<ExceptionInfo> ex) {
+                result.push({"error": ex});
+            }
+        }();
+        on_exit {
+            writer.rollback();
+            done.waitForZero(10s);
+        }
+        # Observe the actual lock wait before releasing the writer, rather than relying on a sleep.
+        bool waiting = False;
+        for (int i = 0; i < 200; ++i) {
+            if (writer.selectRow("select 1 from pg_catalog.pg_locks where pid = %v and not granted", pid)) {
+                waiting = True;
+                break;
+            }
+            usleep(10000);
+        }
+        assertTrue(waiting, "drop waits for the direct child writer");
+        writer.commit();
+        assertEq(0, done.waitForZero(10s));
+        hash<auto> rv = result.get();
+        assertFalse(exists rv.error, sprintf("worker failed: %y", rv.error));
+        assertFalse(rv.dropped, "post-lock snapshot sees the newly committed row");
+        assertEq(1, f.ds.selectRow("select count(*) as n from " + f.schema + ".parent").n);
+        f.ds.commit();
+    }
+}

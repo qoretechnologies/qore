@@ -7659,6 +7659,18 @@ if (table.supportsPartitionRead()) {
         return supportsPartitions() && supportsTargetedPartitionLookupImpl();
     }
 
+    #! Returns whether the driver can prove emptiness and drop one partition under the same database locks
+    /** @return True when @ref dropEmptyPartition() is available
+        @throw DBI-ERROR capability discovery failed
+        @par Example
+        Check this capability before scheduling physical removal of an empty retention partition.
+        @note Callers must keep their retention policy, storage-generation fence and admission checks separately.
+        @since SqlUtil 3.3.0
+    */
+    bool supportsEmptyPartitionDrop() {
+        return supportsPartitions() && supportsEmptyPartitionDropImpl();
+    }
+
     #! returns @ref True "True" if this table supports partition detach operations
     /** @since SqlUtil 3.0.0
     */
@@ -8019,6 +8031,70 @@ if (june) {
         on_exit ds.commit();
         on_error ds.rollback();
         dropPartition(spec, opt);
+    }
+
+    #! Drops an unchanged physical partition only if it is empty while protected against concurrent writes
+    /** @param expected the unmodified @ref PartitionInfo returned by @ref getPartition() or @ref listPartitions();
+            the driver uses its physical identity and definition to reject stale discovery
+        @param lock_timeout_ms positive per-lock wait bound, at most 60000 milliseconds
+        @param statement_timeout_ms positive per-statement execution bound, at most 60000 milliseconds;
+            must be at least the lock wait bound
+        @return True if the empty partition was dropped, False if it still contains rows
+        @throw PARTITION-NOT-SUPPORTED the driver cannot provide the atomic guarantee
+        @throw PARTITION-ERROR the table is description-only, the transaction is not pinned, or the discovered
+            partition identity, definition, isolation level or physical shape cannot be verified
+        @throw OPTION-ERROR a timeout is outside the supported bounds
+        @note Requires an active transaction on the calling thread. Success retains database locks until the
+            caller commits or rolls back; after any error the caller must roll back. No CASCADE, backend
+            termination, automatic failover retry or description-only simulation is performed. A lost result
+            must be reconciled against the catalog and the caller's durable operation identity before retrying.
+        @par Example
+        A retention worker obtains a partition from the current catalog, checks its age and storage generation,
+        and calls @ref dropEmptyPartitionCommit() to reclaim it without racing a late insert.
+        @since SqlUtil 3.3.0
+    */
+    bool dropEmptyPartition(hash<PartitionInfo> expected, int lock_timeout_ms = 1000,
+            int statement_timeout_ms = 5000) {
+        if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms || statement_timeout_ms > 60000) {
+            throw "OPTION-ERROR", "empty-partition drop requires 1 <= lock timeout <= statement timeout <= 60000 ms";
+        }
+        l.lock();
+        on_exit l.unlock();
+        if (manual || !ds.currentThreadInTransaction()) {
+            throw "PARTITION-ERROR", "empty-partition drop requires a database table and a pinned transaction";
+        }
+        assertPartitionSupportUnlocked();
+        if (!supportsEmptyPartitionDropImpl()) {
+            throw "PARTITION-NOT-SUPPORTED", "the database driver does not support atomic empty-partition drop";
+        }
+        on_exit clearPartitionsUnlocked();
+        return dropEmptyPartitionImpl(expected, lock_timeout_ms, statement_timeout_ms);
+    }
+
+    #! Drops an unchanged empty partition and completes the transaction
+    /** @param expected catalog discovery record; see @ref dropEmptyPartition()
+        @param lock_timeout_ms positive per-lock wait bound in milliseconds
+        @param statement_timeout_ms positive per-statement execution bound in milliseconds
+        @return True when dropped, False when nonempty
+        @throw PARTITION-NOT-SUPPORTED the atomic operation is unavailable
+        @throw PARTITION-ERROR the discovered partition or transaction cannot be verified
+        @throw OPTION-ERROR invalid timeout bounds
+        @note Like other Commit methods, this commits the current transaction on success and rolls it back on
+            error. Use a dedicated maintenance transaction; unrelated work must be completed beforehand.
+        @par Example
+        @code{.py}
+hash<PartitionInfo> partition = table.getPartition("events_2025_01");
+ds.commit();
+bool reclaimed = table.dropEmptyPartitionCommit(partition, 1000, 5000);
+        @endcode
+        @since SqlUtil 3.3.0
+    */
+    bool dropEmptyPartitionCommit(hash<PartitionInfo> expected, int lock_timeout_ms = 1000,
+            int statement_timeout_ms = 5000) {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.beginTransaction();
+        return dropEmptyPartition(expected, lock_timeout_ms, statement_timeout_ms);
     }
 
     #! returns SQL to truncate a partition
@@ -12116,6 +12192,16 @@ on_exit printf("SQL> %s\n", sql);
     #! returns @ref True "True" if the driver implements targeted canonical-name partition lookup
     private bool supportsTargetedPartitionLookupImpl() {
         return False;
+    }
+
+    #! Drivers must explicitly implement the locking, identity and visibility guarantee
+    private bool supportsEmptyPartitionDropImpl() {
+        return False;
+    }
+
+    private bool dropEmptyPartitionImpl(hash<PartitionInfo> expected, int lock_timeout_ms,
+            int statement_timeout_ms) {
+        throw "PARTITION-NOT-SUPPORTED", "the database driver does not support atomic empty-partition drop";
     }
 
     #! returns @ref True "True" if the database supports detaching partitions

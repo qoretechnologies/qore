@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 1.9
+%requires SqlUtil >= 3.3
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.10";
+    version = "1.11";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,15 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.11
+    - supports atomic empty-partition removal through SqlUtil; parent and leaf locks exclude routed and direct
+      writers, catalog OIDs reject replaced relations, and READ COMMITTED visibility prevents stale emptiness
+      proofs; row-level security cannot silently hide retained rows
+    - discovery exposes runtime parent/leaf OIDs and relation kind in PartitionInfo::driver; these identities
+      are not portable schema definitions and must not be reused after a restore or relation replacement
+    - nested and foreign partitions are rejected; dependency errors never trigger a cascading drop, and
+      successful calls restore caller timeout and row-security settings
 
     @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
     - tables, views, sequences, and materialized views are listed only from the schemas of the connection's
@@ -4609,6 +4618,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return True;
     }
 
+    private bool supportsEmptyPartitionDropImpl() {
+        return True;
+    }
+
     private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return True;
     }
@@ -4725,7 +4738,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         *hash<auto> qh = ds.select("select cn.nspname as schema, c.relname as relation_name, "
             "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
             + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
-            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes, "
+            "p.oid::bigint as parent_oid, c.oid::bigint as relation_oid, c.relkind::text as relation_kind "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4748,7 +4762,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
-                "driver": {"pgsql": {"detach_pending": row.detach_pending}},
+                "driver": {"pgsql": {"detach_pending": row.detach_pending,
+                    "parent_oid": row.parent_oid, "relation_oid": row.relation_oid,
+                    "relation_kind": row.relation_kind}},
             });
             info.estimated_row_count = row.estimated_row_count;
             info.size_bytes = row.size_bytes;
@@ -4830,7 +4846,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, "
             "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
             + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
-            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes, "
+            "p.oid::bigint as parent_oid, c.oid::bigint as relation_oid, c.relkind::text as relation_kind "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4854,7 +4871,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
             "bound_sql": row.bound_sql,
             "is_default": False,
-            "driver": {"pgsql": {"detach_pending": row.detach_pending}},
+            "driver": {"pgsql": {"detach_pending": row.detach_pending,
+                    "parent_oid": row.parent_oid, "relation_oid": row.relation_oid,
+                    "relation_kind": row.relation_kind}},
         });
         info.estimated_row_count = row.estimated_row_count;
         info.size_bytes = row.size_bytes;
@@ -4907,6 +4926,62 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("drop table %s", info.sql_name);
+    }
+
+    #! Pins both relation identities, excludes late writers, then proves emptiness with a fresh snapshot
+    private bool dropEmptyPartitionImpl(hash<PartitionInfo> expected, int lock_timeout_ms,
+            int statement_timeout_ms) {
+        hash<auto> identity = expected.driver.pgsql ?? {};
+        if (identity.parent_oid.typeCode() != NT_INT || identity.parent_oid <= 0
+                || identity.relation_oid.typeCode() != NT_INT || identity.relation_oid <= 0
+                || identity.relation_kind != "r" || !exists expected.bound_sql) {
+            throw "PARTITION-ERROR", "empty-partition drop requires the catalog identity of a local leaf partition";
+        }
+        hash<auto> settings = ds.selectRow("select current_setting('transaction_isolation') as isolation, "
+            "current_setting('row_security') as row_security, "
+            "(select setting::bigint from pg_catalog.pg_settings where name = 'lock_timeout') as lock_ms, "
+            "(select setting::bigint from pg_catalog.pg_settings where name = 'statement_timeout') as statement_ms");
+        if (!inlist(settings.isolation, ("read committed", "read uncommitted"))) {
+            throw "PARTITION-ERROR", "empty-partition drop requires a fresh READ COMMITTED snapshot after locking";
+        }
+        # Preserve stricter caller deadlines and never leave session settings changed after the transaction.
+        int effective_lock_ms = settings.lock_ms ? min(lock_timeout_ms, settings.lock_ms) : lock_timeout_ms;
+        int effective_statement_ms = settings.statement_ms
+            ? min(statement_timeout_ms, settings.statement_ms) : statement_timeout_ms;
+        ds.selectRow("select pg_catalog.set_config('lock_timeout', %v, true), "
+            "pg_catalog.set_config('statement_timeout', %v, true), "
+            "pg_catalog.set_config('row_security', 'off', true)",
+            effective_lock_ms.toString() + "ms", effective_statement_ms.toString() + "ms");
+        on_success ds.selectRow("select pg_catalog.set_config('lock_timeout', %v, true), "
+            "pg_catalog.set_config('statement_timeout', %v, true), "
+            "pg_catalog.set_config('row_security', %v, true)",
+            settings.lock_ms.toString() + "ms", settings.statement_ms.toString() + "ms", settings.row_security);
+
+        # Parent-first order matches routed inserts. ONLY avoids locking unrelated partitions. The leaf lock
+        # also excludes direct child-table writes. No caller-provided SQL identifier or sql_name is trusted.
+        ds.execRaw("lock table only " + getSqlName() + " in access exclusive mode");
+        clearPartitionsUnlocked();
+        hash<PartitionInfo> actual = requireEmptyDropIdentity(expected);
+        ds.execRaw("lock table only " + actual.sql_name + " in access exclusive mode");
+        actual = requireEmptyDropIdentity(expected);
+        # row_security=off raises instead of silently hiding rows behind an applicable RLS policy.
+        if (ds.selectRow("select 1 as present from " + actual.sql_name + " limit 1")) {
+            return False;
+        }
+        ds.execRaw("drop table " + actual.sql_name);
+        return True;
+    }
+
+    private hash<PartitionInfo> requireEmptyDropIdentity(hash<PartitionInfo> expected) {
+        *hash<PartitionInfo> actual = getPartitionByNameImpl(expected.name);
+        if (!actual || actual.driver.pgsql.parent_oid != expected.driver.pgsql.parent_oid
+                || actual.driver.pgsql.relation_oid != expected.driver.pgsql.relation_oid
+                || actual.driver.pgsql.relation_kind != "r" || actual.driver.pgsql.detach_pending
+                || actual.bound_sql != expected.bound_sql || actual.method != expected.method
+                || actual.columns != expected.columns || actual.is_default != expected.is_default) {
+            throw "PARTITION-ERROR", "empty-partition drop rejected stale or unverifiable partition discovery";
+        }
+        return actual;
     }
 
     private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {

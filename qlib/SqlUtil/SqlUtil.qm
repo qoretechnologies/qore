@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.2.0";
+    version = "3.3.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,14 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_3_0 SqlUtil v3.3.0
+    - added capability-checked @ref SqlUtil::AbstractTable::dropEmptyPartition()
+      "dropEmptyPartition()" and its commit wrapper: physical identity, emptiness proof, and removal are
+      protected by the same database locks, preventing late inserts from being lost during retention
+    - callers must supply current catalog discovery, use a dedicated transaction, and reconcile ambiguous
+      results before retrying; PostgreSQL supplies the first implementation, with bounded lock waits and
+      statement execution, while other drivers fail closed
 
     @subsection sqlutilv3_2_0 SqlUtil v3.2.0
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting primary-key DDL

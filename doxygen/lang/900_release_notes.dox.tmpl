@@ -462,6 +462,14 @@
     without failure records.
     @endparblock
 
+    @par Safe Removal of Empty Retention Partitions
+    @parblock
+    SqlUtil can now remove an empty PostgreSQL partition while excluding concurrent inserts. The operation
+    verifies the original physical partition, uses bounded lock waits, and preserves nonempty partitions.
+    Applications can check driver support before scheduling this maintenance; see
+    @ref SqlUtil::AbstractTable::dropEmptyPartition() "dropEmptyPartition()".
+    @endparblock
+
     @par PostgreSQL Lists Only the Connection's Schemas
     @parblock
     On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
