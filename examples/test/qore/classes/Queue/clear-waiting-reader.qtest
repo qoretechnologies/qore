@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class QueueClearTest
+
+class QueueClearTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Queue clear with waiting readers", "1.0") {
+        addTestCase("clear while get wakes up", \clearGetTest());
+        addTestCase("clear while pop wakes up", \clearPopTest());
+        set_return_value(main());
+    }
+
+    clearGetTest() {
+        clearWithWaitingReader(False);
+    }
+
+    clearPopTest() {
+        clearWithWaitingReader(True);
+    }
+
+    private clearWithWaitingReader(bool use_pop) {
+        foreach int max in ((-1, 1)) {
+            for (int i = 0; i < 100; ++i) {
+                Queue<int> q(max);
+                Queue<hash<ExceptionInfo>> errors();
+                Counter running(1);
+                background read(q, errors, running, use_pop);
+                on_exit {
+                    # If clear removes the value before the reader wakes, release that reader.
+                    q.setError("CLEAR-TEST-DONE", "reader cleanup");
+                    assertEq(0, running.waitForZero(5s));
+                    assertTrue(errors.empty(), "the reader must finish without an unexpected error");
+                }
+
+                int deadline = clock_get_monotonic_us() + 5000000;
+                while (!q.getReadWaiting() && clock_get_monotonic_us() < deadline) {
+                    usleep(1ms);
+                }
+                assertEq(1, q.getReadWaiting(), "the reader must be waiting before push");
+                q.clear();
+                assertTrue(q.empty(), "clearing an empty queue leaves the reader waiting");
+
+                # A signalled reader is still counted as waiting until it reacquires the queue lock.
+                # Either it consumes this value or clear removes it; neither outcome can leave data.
+                q.push(42);
+                q.clear();
+                assertEq(0, q.size(), "clear must remove data even while a reader is waking up");
+                assertNothing(q.tryGet());
+            }
+        }
+    }
+
+    private static read(Queue<int> q, Queue<hash<ExceptionInfo>> errors, Counter running, bool use_pop) {
+        on_exit running.dec();
+        try {
+            if (use_pop) {
+                q.pop(10s);
+            } else {
+                q.get(10s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CLEAR-TEST-DONE") {
+                errors.push(ex);
+            }
+        }
+    }
+}

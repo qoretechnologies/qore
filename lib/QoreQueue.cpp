@@ -447,9 +447,9 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
             return;
         }
 
-        if (read_waiting) {
-            // the queue must be empty
-            assert(!head);
+        // A signalled reader remains in read_waiting until it reacquires this lock, so waiting
+        // readers do not imply an empty queue. Check the data itself before skipping the clear.
+        if (!head) {
             return;
         }
 
