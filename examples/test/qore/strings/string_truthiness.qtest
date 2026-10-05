@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A string has the same value in a boolean context however it is stored: a heap-allocated string, an
+# inline short string (strings of up to 6 bytes, as returned by buffer<string> elements and DataFrame
+# cells), or a string from a list.  Only an empty string and the string "0" are False; with
+# %strict-bool-eval the string is converted to a number instead.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires dataframe
+
+%exec-class StringTruthinessTest
+
+class StringTruthinessTest inherits QUnit::Test {
+    public {
+        #! the strings to check and their value in a boolean context, by default and with %strict-bool-eval
+        const Values = (
+            ("0", False, False),
+            ("", False, False),
+            ("00", True, False),
+            ("0.0", True, False),
+            (" ", True, False),
+            ("false", True, False),
+            ("1", True, True),
+            ("0.5", True, True),
+            ("abc", True, False),
+            # longer than an inline short string
+            ("0000000", True, False),
+        );
+
+        #! code that evaluates a value in a boolean context in every way; run in a program with
+        #! %strict-bool-eval as well
+        const EvalCode = "%new-style\n"
+            "hash<string, bool> sub eval_bool(auto v) {\n"
+            "    bool if_result;\n"
+            "    if (v) {\n"
+            "        if_result = True;\n"
+            "    } else {\n"
+            "        if_result = False;\n"
+            "    }\n"
+            "    bool while_result = False;\n"
+            "    while (v) {\n"
+            "        while_result = True;\n"
+            "        break;\n"
+            "    }\n"
+            "    return {\n"
+            "        \"if\": if_result,\n"
+            "        \"while\": while_result,\n"
+            "        \"not\": !(!v),\n"
+            "        \"ternary\": v ? True : False,\n"
+            "        \"and\": (v && True),\n"
+            "        \"or\": (v || False),\n"
+            "        \"toBool\": v.toBool(),\n"
+            "        \"boolean\": boolean(v),\n"
+            "        \"cast\": cast<bool>(v),\n"
+            "    };\n"
+            "}\n";
+    }
+
+    constructor() : Test("StringTruthinessTest", "1.0", \ARGV) {
+        addTestCase("default boolean evaluation", \testDefault());
+        addTestCase("strict boolean evaluation", \testStrict());
+        addTestCase("in-process boolean contexts", \testInProcess());
+        set_return_value(main());
+    }
+
+    #! Returns each value from every source of strings, with the name of the source
+    private list<hash<auto>> getSources(string value) {
+        list<hash<auto>> rv = (
+            {"source": "string", "value": value},
+            # a string built at runtime
+            {"source": "runtime string", "value": sprintf("%s", value)},
+            {"source": "list element", "value": (value,)[0]},
+            {"source": "buffer<string> element", "value": (new buffer<string>((value,)))[0]},
+            {"source": "DataFrame cell", "value": (new DataFrame::DataFrame({"s": (value,)})).toRecords()[0].s},
+        );
+%ifdef QoreDebug
+        if (value.size() <= 6) {
+            push rv, {"source": "inline short string", "value": dbg_make_short_string(value)};
+        }
+%endif
+        return rv;
+    }
+
+    #! Checks the values from every source in a program with the given parse options
+    private checkProgram(int po, int expected_index) {
+        Program p(po);
+        p.parse(EvalCode, "eval");
+        foreach list<auto> v in (Values) {
+            bool expected = v[expected_index];
+            foreach hash<auto> src in (getSources(v[0])) {
+                hash<string, bool> result = p.callFunction("eval_bool", src.value);
+                foreach hash<auto> i in (result.pairIterator()) {
+                    assertEq(expected, i.value, sprintf("%y from %s with %s", v[0], src.source, i.key));
+                }
+            }
+        }
+    }
+
+    private testDefault() {
+        checkProgram(PO_NEW_STYLE, 1);
+    }
+
+    private testStrict() {
+        checkProgram(PO_NEW_STYLE | PO_STRICT_BOOLEAN_EVAL, 2);
+    }
+
+    #! the same checks in this program's own code, so each execution mode compiles them
+    private testInProcess() {
+        foreach list<auto> v in (Values) {
+            bool expected = v[1];
+            foreach hash<auto> src in (getSources(v[0])) {
+                auto value = src.value;
+                string label = sprintf("%y from %s", v[0], src.source);
+                bool if_result;
+                if (value) {
+                    if_result = True;
+                } else {
+                    if_result = False;
+                }
+                assertEq(expected, if_result, label + " with if");
+                assertEq(!expected, !value, label + " with !");
+                assertEq(expected, value ? True : False, label + " with ?:");
+                assertEq(expected, value && True, label + " with &&");
+                assertEq(expected, value.toBool(), label + " with toBool()");
+                assertEq(expected, boolean(value), label + " with boolean()");
+            }
+        }
+    }
+}

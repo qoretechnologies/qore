@@ -3995,6 +3995,15 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a \c buffer<string> or a
+      \c DataFrame cell, having a different value in a boolean context than the same
+      string in any other value: the string \c "0" was @ref True "True" in a boolean context, such as with \c if,
+      \c !, \c ?:, \c && and \c || and with @ref Qore::boolean() "boolean()", and
+      @ref strict-bool-eval "%strict-bool-eval" was not applied; now only an empty string and \c "0" are
+      @ref False "False", or, with @ref strict-bool-eval "%strict-bool-eval", a string that converts to the number
+      \c 0, as for every other string.  This affects strings read from \c buffer<string> values, including the
+      columns of \c DataFrame and \c ColumnarResult values
+
     - Fixed a @ref sandboxing "sandbox" whose network policy blocks private networks or the local host, such as
       with @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", denying a
       bind to a loopback address (\c 127.0.0.0/8 or \c ::1): a socket bound there can only be reached from the

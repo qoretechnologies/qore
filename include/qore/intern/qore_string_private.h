@@ -1044,4 +1044,14 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     return rv;
 }
 
+//! Returns the value of a string with the given content in a boolean context
+/** The same rule applies to a string in a QoreStringNode and to a short string stored inline in a QoreValue:
+    with @ref strict-bool-eval "%strict-bool-eval", the string is converted to a number, otherwise only an empty
+    string and the string \c "0" are False
+
+    @param str the string content; must be null-terminated
+    @param len the length of the string in bytes
+*/
+DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
+
 #endif

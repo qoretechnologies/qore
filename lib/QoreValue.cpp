@@ -479,10 +479,10 @@ bool QoreValue::getAsBool() const {
         return n ? n->getAsBool() : false;
     }
     if (isShortString()) {
-        return shortStringLen() > 0;
-    }
-    if (isChar()) {
-        return true;
+        // a short string has the same value as the same string in a QoreStringNode
+        char buf[8];
+        getShortString(buf);
+        return qore_string_get_as_bool(buf, shortStringLen());
     }
     if (isNothing() || isNull()) {
         return false;

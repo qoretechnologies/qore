@@ -151,15 +151,19 @@ int QoreStringNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink)
     return 0;
 }
 
-bool QoreStringNode::getAsBoolImpl() const {
+bool qore_string_get_as_bool(const char* str, size_t len) {
     // check if we should do perl-style boolean evaluation
     if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
-        return q_strtod(c_str());
+        return q_strtod(str);
     }
-    if (priv->len == 1 && priv->effective_buf()[0] == '0') {
+    if (len == 1 && str[0] == '0') {
         return false;
     }
-    return !empty();
+    return len > 0;
+}
+
+bool QoreStringNode::getAsBoolImpl() const {
+    return qore_string_get_as_bool(priv->effective_buf(), priv->len);
 }
 
 // get the value of the type in a string context, empty string for complex types (default implementation)

@@ -256,7 +256,7 @@ public class ColumnarExpressionFilter {
         list<bool> mask = ();
         int rows = df.shape().rows;
         for (int i = 0; i < rows; ++i) {
-            push mask, valueTruthy(evalDataFrameExpressionValue(df, value_expr, i, \column_cache));
+            push mask, valueMatchesTruthyOp(evalDataFrameExpressionValue(df, value_expr, i, \column_cache), op);
         }
         return makeDataFrameRowMask(mask);
     }
@@ -695,7 +695,7 @@ public class ColumnarExpressionFilter {
         if (!value || !value.vector) {
             return;
         }
-        return buildTruthyMaskFromVector(value.value);
+        return buildTruthyMaskFromVector(value.value, op);
     }
 
     #! Builds a boolean buffer mask for one computed expression comparison
@@ -1086,14 +1086,14 @@ public class ColumnarExpressionFilter {
         return new buffer<bool>(mask);
     }
 
-    #! Converts a vector to a dense truthiness mask
-    private static *auto buildTruthyMaskFromVector(auto vector) {
+    #! Converts a vector to a dense truthiness mask for a top-level truthiness test (\c has-value or a condition)
+    private static *auto buildTruthyMaskFromVector(auto vector, string op) {
         if (vector.typeCode() != NT_BUFFER && vector.typeCode() != NT_LIST) {
             return;
         }
         list<bool> mask = ();
         foreach auto raw in (vector) {
-            push mask, valueTruthy(raw);
+            push mask, valueMatchesTruthyOp(raw, op);
         }
         return new buffer<bool>(mask);
     }
@@ -1299,12 +1299,27 @@ public class ColumnarExpressionFilter {
         return new buffer<bool>(mask);
     }
 
-    #! Returns True if the value has truthy generic expression semantics
+    #! Returns True if the value is True as a condition, with the same conversion as generic expression evaluation
+    /** Generic evaluation converts a condition to a boolean value with the same rules as \c boolean() and
+        \c toBool(), so for example the string \c "0" is @ref False
+    */
     private static bool valueTruthy(auto value) {
+        return value.toBool();
+    }
+
+    #! Returns True if the value has a value, with the same conversion as the generic \c has-value expression
+    /** The generic \c has-value expression uses \c val(), so for example the string \c "0" has a value
+    */
+    private static bool valueHasValue(auto value) {
         if (!exists value || value === NULL) {
             return False;
         }
         return value.val();
+    }
+
+    #! Returns True if the value matches a top-level truthiness test: \c has-value or a condition
+    private static bool valueMatchesTruthyOp(auto value, string op) {
+        return op == DP_OP_HAS_VALUE ? valueHasValue(value) : valueTruthy(value);
     }
 
     #! Evaluates an IN or NOT IN predicate using scalar comparison semantics

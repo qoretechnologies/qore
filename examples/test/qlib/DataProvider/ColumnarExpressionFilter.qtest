@@ -50,6 +50,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed string function filters", \computedStringFunctionFilters());
         addTestCase("computed date function filters", \computedDateFunctionFilters());
         addTestCase("float columns compared with numbers", \floatNumberComparisonFilters());
+        addTestCase("string \"0\" as a condition", \stringZeroConditionFilters());
 
         set_return_value(main());
     }
@@ -383,6 +384,65 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
             );
             list<int> rows = map $1.id, records, AbstractDataProvider::evalGenericExpression($1, expr);
             assertEq(i.value, rows, i.key + " records");
+        }
+    }
+
+    #! the string "0" is False as a condition and has a value in every evaluation path
+    private stringZeroConditionFilters() {
+        hash<auto> columns = makeColumns() + {
+            "text": new buffer<string>(("0", "1", "", "abc")),
+            "text_list": ("0", "1", "", "abc"),
+        };
+        foreach string field in ("text", "text_list") {
+            hash<DataProviderExpression> value = <DataProviderExpression>{
+                "exp": DP_EXPR_VALUE,
+                "args": (<DataProviderFieldReference>{"field": field},),
+            };
+            hash<string, list<auto>> cases = {
+                # top-level condition: truthiness mask
+                "value": (value, (2, 4)),
+                # negated condition: inverted mask
+                "not": (<DataProviderExpression>{"exp": DP_SEARCH_OP_NOT, "args": (value,)}, (1, 3)),
+                # combined conditions
+                "and": (<DataProviderExpression>{"exp": DP_OP_AND, "args": (value,
+                    <DataProviderExpression>{"exp": ">", "args": (<DataProviderFieldReference>{"field": "id"}, 0)},
+                )}, (2, 4)),
+                # condition evaluated per row inside a computed value
+                "ternary": (<DataProviderExpression>{"exp": "==", "args": (
+                    <DataProviderExpression>{"exp": DP_OP_TERNARY, "args": (value, 1, 0)}, 1,
+                )}, (2, 4)),
+                "or in ternary": (<DataProviderExpression>{"exp": "==", "args": (
+                    <DataProviderExpression>{"exp": DP_OP_TERNARY, "args": (
+                        <DataProviderExpression>{"exp": DP_OP_OR, "args": (value, False)}, 1, 0)}, 1,
+                )}, (2, 4)),
+                # has-value: "0" has a value
+                "has-value": (<DataProviderExpression>{
+                    "exp": DP_OP_HAS_VALUE,
+                    "args": (<DataProviderFieldReference>{"field": field},),
+                }, (1, 2, 4)),
+            };
+            foreach hash<auto> i in (cases.pairIterator()) {
+                hash<DataProviderExpression> expr = i.value[0];
+                list<int> expected = i.value[1];
+                string label = sprintf("%s %s", field, i.key);
+
+                # generic evaluation of each record
+                list<int> generic_ids = ();
+                foreach int id in (1, 2, 3, 4) {
+                    if (AbstractDataProvider::evalGenericExpression({"id": id, field: columns{field}[id - 1]}, expr)) {
+                        push generic_ids, id;
+                    }
+                }
+                assertEq(expected, generic_ids, label + " generic");
+
+                QoreFilterRecordsProcessor proc({"where_cond": expr});
+                DataFrame::DataFrame df(columns);
+                assertEq(expected, dataframeIds(proc.processRecordsShape(df, DataProviderShape::DataFrameBlock)),
+                    label + " DataFrameBlock");
+                ColumnarResult result = ColumnarResult::fromColumnHash(columns, NOTHING);
+                assertEq(expected, columnarIds(proc.processRecordsShape(result, DataProviderShape::BufferColumns)),
+                    label + " BufferColumns");
+            }
         }
     }
 }

@@ -1406,6 +1406,10 @@ fetch
       and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
       "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
       argument types, so that expressions saved before still run
+    - fixed the string \c "0" being @ref True "True" as a condition when a \c filter-records expression or another
+      DPQL filter is evaluated on DataFrame or columnar data, such as <tt>\@code && \@id > 1</tt> for a \c code of
+      \c "0", while it is @ref False "False" when the expression is evaluated on records; the \c has-value
+      expression, which is @ref True "True" for \c "0", is unchanged
     - a search operator with one argument given without a value, such as \c dp_op_ne() for \c != \c NOTHING, gives an
       expression with the @ref nothing argument instead of none, so the expression has all its arguments
     - fixed <tt>not in</tt> with more than one value, such as <tt>\@id not in (2, 4)</tt>, comparing only the first
