@@ -123,6 +123,9 @@ module DataProvider {
                             "predicate directly as text instead of using the expression builder",
                         "type": AbstractDataProviderTypeMap."*string",
                         "example_value": "@status == \"active\" && @score >= 90",
+                        # DPQL text is data: expanding templates in it would break its own template references
+                        # and escapes
+                        "supports_expressions": False,
                     },
                 }, {
                     "loc": "constructor",
@@ -1406,6 +1409,12 @@ fetch
       and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
       "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
       argument types, so that expressions saved before still run
+    - the \c dpql_where option of the \c filter-records action and of
+      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" has \c supports_expressions set to
+      @ref False, so that DPQL text is not evaluated or template-expanded before it is parsed, which broke DPQL's own
+      \c $ctx:value template references and backslash escapes; added \c supports_expressions to
+      @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo" (default @ref True), which is
+      passed on to action options
     - fixed the string \c "0" being @ref True "True" as a condition when a \c filter-records expression or another
       DPQL filter is evaluated on DataFrame or columnar data, such as <tt>\@code && \@id > 1</tt> for a \c code of
       \c "0", while it is @ref False "False" when the expression is evaluated on records; the \c has-value

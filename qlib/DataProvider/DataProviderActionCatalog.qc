@@ -3685,7 +3685,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
-                    "server_expression_handling", "ui_type"}
+                    "supports_expressions", "server_expression_handling", "ui_type"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",

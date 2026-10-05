@@ -192,6 +192,14 @@ public hashdecl DataProviderOptionBaseInfo inherits BaseOptionInfo {
     #! A tag allowing the default value for the option to be returned dynamically
     *string default_ref_data;
 
+    #! Does the option support expressions?
+    /** @ref False for an option whose value is data that must not be evaluated or template-expanded, such as a DPQL
+        string, which has its own \c $ctx:value template references and backslash escapes; it is passed to actions
+        as \c supports_expressions in @ref DataProvider::ActionOptionInfo "ActionOptionInfo"
+
+        @since %DataProvider 3.9
+    */
+    bool supports_expressions = True;
 }
 
 #! Data provider option info

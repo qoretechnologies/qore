@@ -131,6 +131,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("filter - bulk mode support", \filterBulkMode());
         addTestCase("filter - bulk edge cases", \filterBulkEdgeCases());
         addTestCase("filter - bulk in pipeline", \filterBulkPipeline());
+        addTestCase("filter - DPQL option takes no expressions", \filterDpqlOptionMetadata());
 
         addTestCase("index round-trip - expression return_type deserialization",
             \indexRoundTripExpressionReturnType());
@@ -990,6 +991,31 @@ class QoreProcessorsTest inherits QUnit::Test {
         hash<auto> bulk_one = {"id": (42,), "v": (1,)};
         assertEq(bulk_one, fp_all.processRecord(bulk_one), "single record bulk pass");
         assertEq(NOTHING, fp_none.processRecord(bulk_one), "single record bulk filtered");
+    }
+
+    #! dpql_where is DPQL text, so it must not be evaluated or template-expanded: that would break DPQL's own
+    #! $ctx:value references and backslash escapes
+    filterDpqlOptionMetadata() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Qore", "filter-records");
+        assertFalse(action.options.dpql_where.supports_expressions, "filter-records action option dpql_where");
+        assertFalse(QoreFilterRecordsProcessor::ConstructorOptions.dpql_where.supports_expressions,
+            "filter-records constructor option dpql_where");
+        # the expression option keeps expressions
+        assertTrue(action.options.where_cond.supports_expressions, "filter-records action option where_cond");
+        assertTrue(QoreFilterRecordsProcessor::ConstructorOptions.where_cond.supports_expressions,
+            "filter-records constructor option where_cond");
+        # the pipeline processor info carries the constructor options
+        assertFalse(new QoreFilterRecordsProcessor().getInfo().pipeline_processor_options.dpql_where
+            .supports_expressions, "pipeline processor option dpql_where");
+        # an option declared without the attribute supports expressions, as before
+        assertTrue((<DataProviderOptionInfo>{"type": AbstractDataProviderTypeMap."*string"}).supports_expressions,
+            "default");
+
+        # DPQL template references and escapes reach the parser unchanged
+        QoreFilterRecordsProcessor proc({"dpql_where": "@name == \"z\\$local:x\" || @name == \"two words\""});
+        assertEq({"name": "z$local:x"}, proc.processRecord({"name": "z$local:x"}));
+        assertEq(NOTHING, proc.processRecord({"name": "z"}));
+        assertEq({"name": "two words"}, proc.processRecord({"name": "two words"}));
     }
 
     filterBulkPipeline() {

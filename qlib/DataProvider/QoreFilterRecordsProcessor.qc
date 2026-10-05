@@ -57,6 +57,8 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 "desc": "A DPQL string expression to parse and use as the filter condition; for example "
                     "`@status == \"active\" && @score >= 90`",
                 "type": AbstractDataProviderTypeMap."*string",
+                # DPQL text is data: expanding templates in it would break its own template references and escapes
+                "supports_expressions": False,
             },
         };
     }
