@@ -132,6 +132,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("optional argument count tests", \optionalArgumentCountTests());
         addTestCase("float operands with number operands", \floatNumberOperandTests());
         addTestCase("nested expression verification", \nestedVerificationTests());
+        addTestCase("argument type verification", \argumentTypeVerificationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -6057,7 +6058,8 @@ public class DpqlTest inherits QUnit::Test {
                 '@age == 1 && str-func()', fields, bool_expmap);
             list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W004";
             assertTrue(warnings.size() > 0, "should warn about string-returning func in && context");
-            assertTrue(warnings[0].message.find("bool") >= 0, "message should mention bool");
+            assertTrue(warnings[0].message.find("cannot be used as a condition") >= 0,
+                "message should say that the value cannot be a condition");
         }
 
         # No warning for && with bool operands
@@ -7827,6 +7829,259 @@ public class DpqlTest inherits QUnit::Test {
         # filter-records evaluates the same way
         QoreFilterRecordsProcessor proc({"dpql_where": "@price * 1.19 == @price * @rate"});
         assertEq(rec, proc.processRecord(rec));
+    }
+
+    #! Returns the error from verifying an expression with every verification path, or NOTHING if all accept it
+    /** The paths are: generic verification, verification with the generic expression map, and verification with
+        an expression map that only has the logical operators and comparisons, so other nested expressions are
+        verified for generic evaluation
+    */
+    private *string getArgTypeError(string text, *hash<string, AbstractDataField> fields) {
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(text);
+        hash<string, hash<DataProviderExpressionInfo>> limited_expmap = DataProviderGenericExpressions{
+            DP_OP_AND, DP_OP_OR, DP_SEARCH_OP_NOT, DP_SEARCH_OP_EQ, DP_SEARCH_OP_NE, DP_SEARCH_OP_LT,
+            DP_SEARCH_OP_GT,
+        };
+        list<string> errors = ();
+        try {
+            AbstractDataProvider::verifyGenericExpression(exp, fields);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-EXPRESSION-ERROR", ex.err, text + " generic");
+            push errors, ex.desc;
+        }
+        foreach hash<string, hash<DataProviderExpressionInfo>> expmap in ((DataProviderGenericExpressions,
+                limited_expmap)) {
+            try {
+                AbstractDataProvider::verifyExpression(ER_Search, expmap, LC_All, AbstractDataProviderTypeMap."any",
+                    exp, fields);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("DATA-PROVIDER-EXPRESSION-ERROR", ex.err, text + " expression map");
+                push errors, ex.desc;
+            }
+        }
+        # every path must give the same result
+        assertTrue(!errors || errors.size() == 3, sprintf("%s: rejected by %d of 3 verification paths: %y", text,
+            errors.size(), errors));
+        return errors[0];
+    }
+
+    argumentTypeVerificationTests() {
+        AbstractDataProviderType hash_type = new HashDataType("customer", {
+            "name": new QoreDataField("name", "Customer name", StringType),
+            "active": new QoreDataField("active", "Customer is active", BoolType),
+            "since": new QoreDataField("since", "Customer since", DateType),
+        });
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", "a string", StringType),
+            "opt_name": new QoreDataField("opt_name", "an optional string", StringOrNothingType),
+            "soft_name": new QoreDataField("soft_name", "a soft string", SoftStringType),
+            "created": new QoreDataField("created", "a date", DateType),
+            "opt_created": new QoreDataField("opt_created", "an optional date", DateOrNothingType),
+            "flag": new QoreDataField("flag", "a bool", BoolType),
+            "opt_flag": new QoreDataField("opt_flag", "an optional bool", BoolOrNothingType),
+            "count": new QoreDataField("count", "an int", IntType),
+            "opt_count": new QoreDataField("opt_count", "an optional int", IntOrNothingType),
+            "amount": new QoreDataField("amount", "a number", NumberType),
+            "ratio": new QoreDataField("ratio", "a float", FloatType),
+            "tags": new QoreDataField("tags", "a list", AutoListType),
+            "attrs": new QoreDataField("attrs", "a hash", AutoHashType),
+            "blob": new QoreDataField("blob", "a binary", BinaryType),
+            "anything": new QoreDataField("anything", "any value", AutoType),
+            "customer": new QoreDataField("customer", "a hash with fields", hash_type),
+        };
+
+        # conditions accept the results of operations of every type but string and date: the result is evaluated
+        # by its truthiness
+        foreach string text in (
+                # int
+                "size(@b) && @a == 1", "@a == 1 && size(@b)", "!size(@b)", "@a == 1 || length(@b)",
+                "get_year(@d) && @a == 1",
+                # float and number
+                "toFloat(@b) && @a == 1", "@a == 1 || toNumber(@b)",
+                # list, hash and binary
+                "split(@s, \",\") && @a == 1", "!split(@s, \",\")", "(hash_map @name, @age, @users) && @a == 1",
+                "parse_hex(@h) || @a == 1",
+                # results of any type
+                "ternary(@a > 1, @b, @c) && @d == 1", "coalesce(@a, @b) || @c == 1", "!coalesce(@a)",
+                "findIn(@a, @l) && @b == 1", "@a + 1 && @b == 1", "!(@a - @b)", "@l[0] && @a == 1",
+                # bool
+                "toBool(@b) && @a == 1", "has-value(@b) || @a == 1", "!isNull(@a)",
+                # the condition of ternary is a condition as well
+                "ternary(size(@a), 1, 2) == 1",
+                # several levels deep
+                "@a == 1 && (@b > 2 || !(size(@c) && @d < 3))",
+                "ternary(@a == 1 && (@b > 2 || !size(@c)), 1, 2) == 1",
+                # field references whose type is not known are not checked
+                "@x && @y",
+            ) {
+            assertEq(NOTHING, getArgTypeError(text), text);
+        }
+
+        # string and date results cannot be conditions, at any depth, also as the condition of ternary
+        map assertRegex($1.value, getArgTypeError($1.key) ?? "<accepted>", $1.key), {
+            "lwr(@a) && @b == 1": "^argument 1 of expression \"&&\": expecting a condition, but expression "
+                "\"lwr\" returns a \"string\" value, which cannot be used as a condition; compare it explicitly "
+                "instead \\(ex: @status == \"open\" or @x != \"\"\\)$",
+            "@b == 1 || toString(@a)": "^argument 2 of expression \"\\|\\|\": expecting a condition, but "
+                "expression \"toString\" returns a \"string\"",
+            "!lwr(@a)": "^argument 1 of expression \"!\": .*\"lwr\" returns a \"string\"",
+            "!now()": "^argument 1 of expression \"!\": .*\"now\" returns a \"date\"",
+            "@a == 1 && toDate(@b)": "\"toDate\" returns a \"date\"",
+            "@a == 1 && (@b > 2 || !trim(@c))": "^argument 1 of expression \"!\": .*\"trim\" returns a "
+                "\"string\".*\\(in an argument of expression \"\\|\\|\"\\).*\\(in an argument of expression "
+                "\"&&\"\\)",
+            "@a == 1 && (@b > 2 || (@c < 3 && days(1)))": "\"days\" returns a \"date\" value.*in an argument of "
+                "expression \"\\|\\|\".*in an argument of expression \"&&\"",
+            "ternary(lwr(@a), 1, 2) == 1": "^argument 1 of expression \"ternary\": expecting a condition, but "
+                "expression \"lwr\" returns a \"string\".*in an argument of expression \"==\"",
+            "ternary(@a > 1, 1, 2) == 1 && concat(@a, @b)": "\"concat\" returns a \"string\"",
+        }.pairIterator();
+
+        # arguments that are not conditions are checked by assignability
+        foreach string text in ("lwr(@a) == \"x\"", "days(size(@a)) > now()", "get_year(now()) > 2000",
+                "substr(@a, size(@b)) == \"x\"", "lwr(toString(@a)) == \"x\"", "lwr(ternary(@a, @b, @c)) == \"x\"",
+                "substr(@a, @b + 1) == \"x\"", "join(split(@a, \",\"), \";\") == \"x\"") {
+            assertEq(NOTHING, getArgTypeError(text), text);
+        }
+        map assertRegex($1.value, getArgTypeError($1.key) ?? "<accepted>", $1.key), {
+            "lwr(size(@a)) == \"x\"": "^argument 1 of expression \"lwr\": expecting a \"string\" value, but "
+                "expression \"size\" returns a \"int\" value instead",
+            "get_year(lwr(@a)) > 2000": "^argument 1 of expression \"get_year\": expecting a \"date\" value, but "
+                "expression \"lwr\" returns a \"string\"",
+            "substr(@a, lwr(@b)) == \"x\"": "^argument 2 of expression \"substr\": expecting a \"int\" value, but "
+                "expression \"lwr\" returns a \"string\"",
+            "@a == 1 && lwr(size(@b)) == \"x\"": "\"size\" returns a \"int\" value instead.*in an argument of "
+                "expression \"==\".*in an argument of expression \"&&\"",
+        }.pairIterator();
+
+        # field references are checked with the type of the field, if known
+        foreach string text in ("@flag && @count == 1", "@opt_flag || @count == 1", "!@flag", "@count && @flag",
+                "!@opt_count", "@amount && @ratio", "@tags || @attrs", "!@blob", "@anything && @flag",
+                "@customer.active && @flag", "@customer && @flag", "@unknown && @flag", "@customer.nosuch && @flag",
+                "lwr(@name) == \"x\"", "get_year(@created) > 2000", "lwr(@opt_name) == \"x\"",
+                "lwr(@soft_name) == \"x\"", "lwr(@customer.name) == \"x\"") {
+            assertEq(NOTHING, getArgTypeError(text, fields), text);
+        }
+        map assertRegex($1.value, getArgTypeError($1.key, fields) ?? "<accepted>", $1.key), {
+            "@name && @flag": "^argument 1 of expression \"&&\": expecting a condition, but field \"name\" returns "
+                "a \"string\" value, which cannot be used as a condition",
+            "@flag || @opt_name": "^argument 2 of expression \"\\|\\|\": .*field \"opt_name\" returns a \"\\*string\"",
+            "!@soft_name": "field \"soft_name\" returns a \"softstring\"",
+            "!@created": "field \"created\" returns a \"date\"",
+            "@flag && @opt_created": "field \"opt_created\" returns a \"\\*date\"",
+            "@customer.name && @flag": "field \"customer.name\" returns a \"string\"",
+            "@flag && (@count > 1 || !@customer.since)": "field \"customer.since\" returns a \"date\".*in an "
+                "argument of expression \"\\|\\|\"",
+            "ternary(@name, 1, 2) == 1": "argument 1 of expression \"ternary\": .*field \"name\" returns a "
+                "\"string\"",
+            "lwr(@count) == \"x\"": "^argument 1 of expression \"lwr\": expecting a \"string\" value, but field "
+                "\"count\" returns a \"int\" value instead",
+            "get_year(@name) > 2000": "expecting a \"date\" value, but field \"name\" returns a \"string\"",
+        }.pairIterator();
+        # without the fields, field references are not checked
+        assertEq(NOTHING, getArgTypeError("@name && @flag"));
+
+        # or-nothing and soft results of operations: a provider's own operations returning these types
+        {
+            hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions;
+            foreach hash<auto> i in ({
+                    "opt-str": StringOrNothingType, "soft-str": SoftStringType, "opt-date": DateOrNothingType,
+                    "opt-int": IntOrNothingType, "opt-bool": BoolOrNothingType, "opt-num": NumberOrNothingType,
+                    "opt-list": ListOrNothingType,
+                }.pairIterator()) {
+                expmap{i.key} = <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": i.key,
+                    "display_name": i.key,
+                    "short_desc": "Returns a " + i.value.getName(),
+                    "desc": "Returns a " + i.value.getName(),
+                    "symbol": i.key + "()",
+                    "args": (),
+                    "arg_info": (),
+                    "return_type": AbstractDataProviderType::get(i.value),
+                };
+            }
+            code<*string(string)> verify_error = *string sub (string name) {
+                try {
+                    AbstractDataProvider::verifyExpression(ER_Search, expmap, LC_All, AbstractDataProviderTypeMap."any",
+                        <DataProviderExpression>{
+                            "exp": DP_OP_AND,
+                            "args": (
+                                <DataProviderExpression>{"exp": name, "args": ()},
+                                <DataProviderExpression>{"exp": DP_SEARCH_OP_EQ, "args": (
+                                    <DataProviderFieldReference>{"field": "a"}, 1)},
+                            ),
+                        });
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex.desc;
+                }
+            };
+            map assertEq(NOTHING, verify_error($1), $1), ("opt-int", "opt-bool", "opt-num", "opt-list");
+            map assertRegex("expecting a condition, but expression \"" + $1 + "\" returns", verify_error($1) ?? "",
+                $1), ("opt-str", "soft-str", "opt-date");
+        }
+
+        # the type of a whole expression is checked the same way
+        AbstractDataProvider::verifyExpression(ER_Search, DataProviderGenericExpressions, LC_All,
+            AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("size(@a)"));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^expecting a condition, but expression \"lwr\" returns a "
+            "\"string\" value", \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions,
+            LC_All, AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("lwr(@a)")));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^expecting a \"date\" value, but expression \"lwr\" returns",
+            \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions, LC_All,
+            AbstractDataProviderTypeMap."date", DataProvider::parseDpqlExpression("lwr(@a)")));
+        # the overload with an expression definition (used for SQL generation) keeps strict assignability
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expecting a \"bool\" value, but expression \"size\" returns",
+            \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions.size, LC_All,
+            AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("size(@a)")));
+
+        # the helpers
+        assertTrue(AbstractDataProvider::isConditionType(AbstractDataProviderTypeMap."int"));
+        assertTrue(AbstractDataProvider::isConditionType(AbstractDataProviderTypeMap."any"));
+        assertTrue(AbstractDataProvider::isConditionType(AbstractDataProviderType::get(DataType)));
+        assertFalse(AbstractDataProvider::isConditionType(AbstractDataProviderTypeMap."*string"));
+        assertFalse(AbstractDataProvider::isConditionType(AbstractDataProviderTypeMap."date"));
+        assertTrue(AbstractDataProvider::isArgTypeCompatible(AbstractDataProviderTypeMap."*bool",
+            AbstractDataProviderTypeMap."hash"));
+        assertFalse(AbstractDataProvider::isArgTypeCompatible(AbstractDataProviderType::get(SoftBoolType),
+            AbstractDataProviderTypeMap."string"));
+        assertTrue(AbstractDataProvider::isArgTypeCompatible(AbstractDataProviderTypeMap."string",
+            AbstractDataProviderTypeMap."any"));
+        assertTrue(AbstractDataProvider::isArgTypeCompatible(AbstractDataProviderTypeMap."any",
+            AbstractDataProviderTypeMap."date"));
+        assertFalse(AbstractDataProvider::isArgTypeCompatible(AbstractDataProviderTypeMap."int",
+            AbstractDataProviderTypeMap."string"));
+        assertEq("string", AbstractDataProvider::getFieldReferenceType(<DataProviderFieldReference>{
+            "field": "customer.name"}, fields).getName());
+        assertEq("bool", AbstractDataProvider::getFieldReferenceType(<DataProviderFieldReference>{
+            "field": "customer.active", "field_path": ("customer", "active")}, fields).getName());
+        assertEq(NOTHING, AbstractDataProvider::getFieldReferenceType(<DataProviderFieldReference>{
+            "field": "customer.nosuch"}, fields));
+        assertEq(NOTHING, AbstractDataProvider::getFieldReferenceType(<DataProviderFieldReference>{
+            "field": "name"}));
+
+        # expressions are prepared for evaluation without checking argument types, so expressions saved before
+        # types were verified still run, and a string condition is evaluated by its truthiness
+        hash<DataProviderExpression> prepared = AbstractDataProvider::prepareExpression(
+            DataProvider::parseDpqlExpression("lwr(@a) && @b == 1"));
+        assertTrue(AbstractDataProvider::evalGenericExpression({"a": "X", "b": 1}, prepared));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"a": "", "b": 1}, prepared));
+        # filter-records verifies the same way when it is created
+        assertEq({"a": "x", "b": 1}, new QoreFilterRecordsProcessor({"dpql_where": "lwr(@a) && @b == 1"})
+            .processRecord({"a": "x", "b": 1}));
+
+        # the DPQL parser warns with the same rules (DPQL-W004)
+        hash<string, AbstractDataField> parser_fields = getTestFields();
+        map assertEq((), (select DataProvider::validateDpqlExpression($1, parser_fields),
+            $1.code == "DPQL-W004"), $1), ("size(@name) && @age == 1", "@age && @active", "!@age",
+            "@active || toNumber(@name)", "lwr(@name) == \"x\"");
+        map assertRegex($1.value, (select DataProvider::validateDpqlExpression($1.key, parser_fields),
+            $1.code == "DPQL-W004")[0].message ?? "<no warning>", $1.key), {
+            "@name && @age == 1": "Argument 1 of '&&' has type 'string', which cannot be used as a condition",
+            "@age == 1 || @status": "Argument 2 of '\\|\\|' has type 'string', which cannot be used as a condition",
+            "!@name": "Argument 1 of '!' has type 'string', which cannot be used as a condition",
+            "lwr(@age) == \"x\"": "has type 'int', expected 'string'",
+        }.pairIterator();
     }
 
     nestedVerificationTests() {

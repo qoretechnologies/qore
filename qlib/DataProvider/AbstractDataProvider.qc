@@ -6194,8 +6194,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         Call this once after deserializing an expression (e.g. in a processor constructor) and store the
         result for use in hot loops.
 
-        Each expression in the tree is verified for generic evaluation as with
-        @ref AbstractDataProvider::verifyGenericExpression().
+        Each expression in the tree must be known for generic evaluation and have an accepted number of arguments,
+        as with @ref AbstractDataProvider::verifyGenericExpression(); the types of the arguments are not verified
+        here, so that an expression that was saved before argument types were verified can still be evaluated.
 
         @param exp the expression to prepare
         @return a new expression with pre-computed field paths
@@ -6351,33 +6352,185 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! processes an expression in a certain context
-    /** @param role the role of the operation being performed
+    /** Each argument of the expression and of every nested expression is verified against the type of its
+        argument position: a nested expression by its return type and a field reference by the type of the field
+        in \a fields, if known; see @ref AbstractDataProvider::isArgTypeCompatible() for the rules.  A nested
+        expression that the provider does not have is verified for generic evaluation, as it can be evaluated on the
+        client by providers that support client-side filtering.
+
+        @param role the role of the operation being performed
         @param expmap the map of supported expressions for this data provider
         @param caps the logic capabilities supported by the data provider for the current operation
         @param expected_type the type the expression should be compatible with
         @param exp the expression to process
+        @param fields the fields of the record that the expression is evaluated on, if known, to verify the types of
+        field references
 
         @throw DATA-PROVIDER-EXPRESSION-ERROR the expression has an error; argument mismatch, type error, etc
+
+        @since DataProvider 3.9 the nested expressions and field references in the arguments are verified against
+        the type of their argument position, and the \a fields parameter was added
     */
     static verifyExpression(int role, *hash<string, hash<DataProviderExpressionInfo>> expmap, int caps,
-            AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
+            AbstractDataProviderType expected_type, hash<DataProviderExpression> exp,
+            *hash<string, AbstractDataField> fields) {
+        hash<DataProviderExpressionInfo> expinfo = AbstractDataProvider::verifyExpressionTree(role, expmap, caps, exp,
+            fields);
+        if (!AbstractDataProvider::isArgTypeCompatible(expected_type, expinfo.return_type)) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", AbstractDataProvider::getTypeMismatchMessage(expected_type,
+                expinfo.return_type, sprintf("expression %y", expinfo.name));
+        }
+    }
+
+    #! Verifies an expression and its nested expressions with an expression map and returns its definition
+    private static hash<DataProviderExpressionInfo> verifyExpressionTree(int role,
+            *hash<string, hash<DataProviderExpressionInfo>> expmap, int caps, hash<DataProviderExpression> exp,
+            *hash<string, AbstractDataField> fields) {
         hash<DataProviderExpressionInfo> expinfo = AbstractDataProvider::getExpression(role, exp.exp, expmap);
-        AbstractDataProvider::verifyExpression(role, expinfo, caps, expected_type, exp);
+        AbstractDataProvider::verifyExpressionArgs(role, expinfo, caps, exp);
         # verify the nested expressions in the arguments as well; a nested expression that the provider does not
         # have can be evaluated on the client for providers that support client-side filtering, so it must be known
         # for generic evaluation instead
         foreach auto arg in (exp.args) {
+            *AbstractDataProviderType arg_type;
+            string arg_desc;
             if (arg instanceof hash<DataProviderExpression>) {
-                on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
                 hash<DataProviderExpression> nested = cast<hash<DataProviderExpression>>(arg);
-                if (expmap{nested.exp} || expmap{OperatorAliasMap{nested.exp}}) {
-                    AbstractDataProvider::verifyExpression(role, expmap, caps, AbstractDataProviderTypeMap."any",
-                        nested);
-                } else {
-                    AbstractDataProvider::verifyGenericExpression(nested);
+                *hash<DataProviderExpressionInfo> nested_info;
+                {
+                    on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
+                    if (expmap{nested.exp} || expmap{OperatorAliasMap{nested.exp}}) {
+                        nested_info = AbstractDataProvider::verifyExpressionTree(role, expmap, caps, nested, fields);
+                    } else {
+                        nested_info = AbstractDataProvider::verifyGenericExpressionTree(nested, fields);
+                    }
                 }
+                arg_type = nested_info.return_type;
+                arg_desc = sprintf("expression %y", nested.exp);
+            } else if (arg instanceof hash<DataProviderFieldReference>) {
+                arg_type = AbstractDataProvider::getFieldReferenceType(cast<hash<DataProviderFieldReference>>(arg),
+                    fields);
+                arg_desc = sprintf("field %y", arg.field);
+            }
+            if (arg_type) {
+                AbstractDataProvider::checkArgType(expinfo, $#, arg_type, arg_desc);
             }
         }
+        return expinfo;
+    }
+
+    #! Returns True if a value of the given type can be used as a condition
+    /** A condition is evaluated by its truthiness, so a value of any type converts to a boolean value; however a
+        string or a date as a condition is almost always an error, as with <tt>\@status && \@id > 1</tt>, so a
+        string or a date type (including types that also accept @ref nothing and soft types) cannot be used as a
+        condition and must be compared explicitly instead (ex: <tt>\@status == "open"</tt> or
+        <tt>\@x != ""</tt>).
+
+        All other types can be used as a condition: \c bool, \c int, \c float, \c number, \c list, \c hash,
+        \c binary, a type that also accepts @ref nothing, and a type that can be any type (\c auto or \c any).
+
+        @param type the type to check
+
+        @return @ref True if a value of the given type can be used as a condition
+
+        @since DataProvider 3.9
+    */
+    static bool isConditionType(AbstractDataProviderType type) {
+        if (!type.hasType()) {
+            return True;
+        }
+        string base = type.getBaseTypeName();
+        return base != "string" && base != "date";
+    }
+
+    #! Returns True if an argument position of the given type accepts a value of the given type
+    /** An argument position of type \c bool (or \c *bool or \c softbool) is a condition and accepts any type that
+        @ref AbstractDataProvider::isConditionType() accepts; any other argument position accepts types that it is
+        @ref AbstractDataProviderType::isAssignableFrom() "assignable from".  A type that can be any type (\c auto or
+        \c any) is accepted by and accepts every type.
+
+        The same rules are used to verify expressions and for DPQL argument type warnings (\c DPQL-W004).
+
+        @param slot_type the type of the argument position
+        @param arg_type the type of the value given for the argument (ex: the return type of a nested expression or
+        the type of a field reference)
+
+        @return @ref True if the argument position accepts a value of the given type
+
+        @since DataProvider 3.9
+    */
+    static bool isArgTypeCompatible(AbstractDataProviderType slot_type, AbstractDataProviderType arg_type) {
+        if (!slot_type.hasType() || !arg_type.hasType()) {
+            return True;
+        }
+        if (slot_type.getBaseTypeName() == "bool") {
+            return AbstractDataProvider::isConditionType(arg_type);
+        }
+        return slot_type.isAssignableFrom(arg_type);
+    }
+
+    #! Returns the type of a field reference from the fields of a record, if known
+    /** @param ref the field reference; a dotted field name refers to a field of a field (ex: \c customer.name)
+        @param fields the fields of the record
+
+        @return the type of the field, or @ref nothing if \a fields is not given or does not have the field
+
+        @since DataProvider 3.9
+    */
+    static *AbstractDataProviderType getFieldReferenceType(hash<DataProviderFieldReference> ref,
+            *hash<string, AbstractDataField> fields) {
+        if (!fields) {
+            return;
+        }
+        list<string> path = ref.field_path ?? (map regex_subst($1, "\\\\.", ".", RE_Global),
+            ref.field.splitRegex("(?<!\\\\)\\."));
+        *AbstractDataField field = fields{path[0]};
+        if (!field) {
+            return;
+        }
+        AbstractDataProviderType type = field.getType();
+        foreach string name in (path[1..]) {
+            *AbstractDataProviderType field_type = type.getFieldType(name);
+            if (!field_type) {
+                return;
+            }
+            type = field_type;
+        }
+        return type;
+    }
+
+    #! Verifies the type of a value given for an argument of an expression
+    /** @param expinfo the definition of the expression
+        @param pos the position of the argument
+        @param arg_type the type of the value given for the argument
+        @param arg_desc a description of the argument for the error message
+
+        @throw DATA-PROVIDER-EXPRESSION-ERROR the argument position does not accept a value of the given type
+    */
+    private static checkArgType(hash<DataProviderExpressionInfo> expinfo, int pos, AbstractDataProviderType arg_type,
+            string arg_desc) {
+        *hash<DataProviderSignatureTypeInfo> sig = expinfo.args[pos] ?? expinfo.args.last();
+        # only arguments that can be any expression are checked here; values and field arguments are checked with
+        # their type code
+        if (!sig || sig.type_code != ST_Any) {
+            return;
+        }
+        if (!AbstractDataProvider::isArgTypeCompatible(sig.type, arg_type)) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("argument %d of expression %y: %s", pos + 1,
+                expinfo.name, AbstractDataProvider::getTypeMismatchMessage(sig.type, arg_type, arg_desc));
+        }
+    }
+
+    #! Returns the error message for a value of a type that an argument position or context does not accept
+    private static string getTypeMismatchMessage(AbstractDataProviderType expected_type,
+            AbstractDataProviderType arg_type, string arg_desc) {
+        if (expected_type.hasType() && expected_type.getBaseTypeName() == "bool") {
+            return sprintf("expecting a condition, but %s returns a %y value, which cannot be used as a condition; "
+                "compare it explicitly instead (ex: @status == \"open\" or @x != \"\")", arg_desc,
+                arg_type.getName());
+        }
+        return sprintf("expecting a %y value, but %s returns a %y value instead", expected_type.getName(), arg_desc,
+            arg_type.getName());
     }
 
     #! Returns the number of arguments that a call to an expression must provide
@@ -6414,26 +6567,54 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         module, or a custom expression), and must be called with no fewer arguments than it requires
         (@ref AbstractDataProvider::getRequiredArgCount()) and no more than it accepts.
 
-        @ref AbstractDataProvider::prepareExpression() verifies expressions this way.
+        Each nested expression and field reference in the arguments must also have a type that its argument
+        position accepts: a nested expression by its return type and a field reference by the type of the field in
+        \a fields, if known; see @ref AbstractDataProvider::isArgTypeCompatible() for the rules.
 
         @param exp the expression to verify
+        @param fields the fields of the record that the expression is evaluated on, if known, to verify the types of
+        field references
 
-        @throw DATA-PROVIDER-EXPRESSION-ERROR an expression is unknown or has too few or too many arguments
+        @throw DATA-PROVIDER-EXPRESSION-ERROR an expression is unknown, has too few or too many arguments, or has an
+        argument of a type that its argument position does not accept
 
         @since DataProvider 3.9
     */
-    static verifyGenericExpression(hash<DataProviderExpression> exp) {
-        AbstractDataProvider::verifyGenericExpressionNode(exp);
-        foreach auto arg in (exp.args) {
-            if (arg instanceof hash<DataProviderExpression>) {
-                on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
-                AbstractDataProvider::verifyGenericExpression(cast<hash<DataProviderExpression>>(arg));
-            }
-        }
+    static verifyGenericExpression(hash<DataProviderExpression> exp, *hash<string, AbstractDataField> fields) {
+        AbstractDataProvider::verifyGenericExpressionTree(exp, fields);
     }
 
-    #! Verifies one expression for generic evaluation, without its nested expressions
-    private static verifyGenericExpressionNode(hash<DataProviderExpression> exp) {
+    #! Verifies an expression and its nested expressions for generic evaluation and returns its definition, if any
+    private static *hash<DataProviderExpressionInfo> verifyGenericExpressionTree(hash<DataProviderExpression> exp,
+            *hash<string, AbstractDataField> fields) {
+        *hash<DataProviderExpressionInfo> info = AbstractDataProvider::verifyGenericExpressionNode(exp);
+        foreach auto arg in (exp.args) {
+            *AbstractDataProviderType arg_type;
+            string arg_desc;
+            if (arg instanceof hash<DataProviderExpression>) {
+                *hash<DataProviderExpressionInfo> nested_info;
+                {
+                    on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
+                    nested_info = AbstractDataProvider::verifyGenericExpressionTree(
+                        cast<hash<DataProviderExpression>>(arg), fields);
+                }
+                arg_type = nested_info.return_type;
+                arg_desc = sprintf("expression %y", arg.exp);
+            } else if (arg instanceof hash<DataProviderFieldReference>) {
+                arg_type = AbstractDataProvider::getFieldReferenceType(cast<hash<DataProviderFieldReference>>(arg),
+                    fields);
+                arg_desc = sprintf("field %y", arg.field);
+            }
+            # an expression without an argument signature is not checked
+            if (arg_type && info.args) {
+                AbstractDataProvider::checkArgType(info, $#, arg_type, arg_desc);
+            }
+        }
+        return info;
+    }
+
+    #! Verifies one expression for generic evaluation, without its nested expressions, and returns its definition
+    private static *hash<DataProviderExpressionInfo> verifyGenericExpressionNode(hash<DataProviderExpression> exp) {
         *hash<auto> impl;
         if (*hash<auto> custom_map = get_app_registry("dp-custom-expressions")) {
             impl = custom_map{exp.exp};
@@ -6452,7 +6633,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         *hash<DataProviderExpressionInfo> info = impl.exp;
         # an expression without an argument signature is not checked
         if (!info || !exists info.args) {
-            return;
+            return info;
         }
         int actual = exp.args.lsize();
         int required = AbstractDataProvider::getRequiredArgCount(info);
@@ -6465,10 +6646,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y accepts at most %d argument%s; got %d",
                 exp.exp, info.args.size(), info.args.size() == 1 ? "" : "s", actual);
         }
+        return info;
     }
 
     #! processes an expression in a certain context
-    /** @param role the role of the operation being performed
+    /** The arguments of the expression are verified with their type codes, and the return type of the expression
+        must be @ref AbstractDataProviderType::isAssignableFrom() "assignable" to \a expected_type; nested
+        expressions are not verified.
+
+        @param role the role of the operation being performed
         @param expinfo the definition of the expression to evaluate
         @param caps the logic capabilities supported by the data provider for the current operation
         @param expected_type the type the expression should be compatible with
@@ -6478,7 +6664,16 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     */
     static verifyExpression(int role, hash<DataProviderExpressionInfo> expinfo, int caps,
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
-        # check arguments
+        AbstractDataProvider::verifyExpressionArgs(role, expinfo, caps, exp);
+        if (!expected_type.isAssignableFrom(expinfo.return_type)) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expecting a %y value, but expression %y returns a %y "
+                "value instead", expected_type.getName(), expinfo.name, expinfo.return_type.getName());
+        }
+    }
+
+    #! Verifies the number of arguments of an expression and the arguments with their type codes
+    private static verifyExpressionArgs(int role, hash<DataProviderExpressionInfo> expinfo, int caps,
+            hash<DataProviderExpression> exp) {
         if (exp.args.lsize() > expinfo.args.size() && !expinfo.varargs) {
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value provided for expression %y has too many values "
                 "(%d); only max %d are accepted (%y)", expinfo.name, exp.args.lsize(), expinfo.args.size(), exp.args);
@@ -6488,10 +6683,6 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             # process the rest of the arguments
             map AbstractDataProvider::verifyExpressionArgValue(role, caps, expinfo, exp.args, expinfo.args.size() + $#),
                 xrange(exp.args.lsize() - expinfo.args.size());
-        }
-        if (!expected_type.isAssignableFrom(expinfo.return_type)) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expecting a %y value, but expression %y returns a %y "
-                "value instead", expected_type.getName(), expinfo.name, expinfo.return_type.getName());
         }
     }
 

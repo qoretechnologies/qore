@@ -555,16 +555,16 @@ public class DpqlParser {
             }
         }
 
-        # Validate logical operator arguments (&&, ||) expect bool operands
-        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR) {
-            string op_name = exp.exp == DP_OP_AND ? "&&" : "||";
+        # Validate logical operator arguments (&&, ||, !): their operands are conditions
+        if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR || exp.exp == DP_SEARCH_OP_NOT) {
+            string op_name = exp.exp == DP_OP_AND ? "&&" : (exp.exp == DP_OP_OR ? "||" : "!");
             for (int i = 0; i < exp.args.size(); ++i) {
                 *AbstractDataProviderType arg_type = inferArgType(exp.args[i]);
-                if (arg_type && arg_type.getName() != "bool"
-                        && !AbstractDataProviderType::get(BoolType).isAssignableFrom(arg_type)) {
+                if (arg_type && !AbstractDataProvider::isConditionType(arg_type)) {
                     diags += <DpqlDiagnostic>{
                         "severity": "warning",
-                        "message": sprintf("Argument %d of '%s' has type '%s'; expected 'bool'",
+                        "message": sprintf("Argument %d of '%s' has type '%s', which cannot be used as a condition; "
+                            "compare it explicitly instead (ex: @status == \"open\" or @x != \"\")",
                             i + 1, op_name, arg_type.getName()),
                         "code": "DPQL-W004",
                         "line": 1,
@@ -1881,7 +1881,7 @@ public class DpqlParser {
             }
 
             # Check if the argument type is compatible with the expected type
-            if (!sig.type.isAssignableFrom(arg_type)) {
+            if (!AbstractDataProvider::isArgTypeCompatible(sig.type, arg_type)) {
                 string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
                 addWarning(
                     sprintf("Argument '%s' of '%s' has type '%s', expected '%s'",
@@ -1914,7 +1914,7 @@ public class DpqlParser {
                 }
 
                 *AbstractDataProviderType arg_type = inferArgType(arg);
-                if (arg_type && !last_sig.type.isAssignableFrom(arg_type)) {
+                if (arg_type && !AbstractDataProvider::isArgTypeCompatible(last_sig.type, arg_type)) {
                     addWarning(
                         sprintf("Varargs argument %d of '%s' has type '%s', expected '%s'",
                             i + 1, name, arg_type.getName(), last_sig.type.getName()),
@@ -1955,12 +1955,8 @@ public class DpqlParser {
 
         # Hash types: field references and expressions
         if (arg instanceof hash<DataProviderFieldReference>) {
-            # Look up field type from fields map
-            if (fields{arg.field}) {
-                return fields{arg.field}.getType();
-            }
-            # Unknown field — cannot determine type
-            return NOTHING;
+            # Look up the field type from the fields map; NOTHING if the field is unknown
+            return AbstractDataProvider::getFieldReferenceType(arg, fields);
         }
 
         if (arg instanceof hash<DataProviderExpression>) {

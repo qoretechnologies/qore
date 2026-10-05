@@ -1387,6 +1387,25 @@ fetch
     - @ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()" with an
       expression map verifies the nested expressions in the arguments as well: with the expression map if it has
       them, otherwise for generic evaluation, as a provider with client-side filtering evaluates them
+    - expression verification checks each nested expression and field reference against the type that its argument
+      position requires (with
+      @ref DataProvider::AbstractDataProvider::verifyGenericExpression()
+      "AbstractDataProvider::verifyGenericExpression()" and
+      @ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()" with an
+      expression map); a field reference is checked when the new \c fields parameter gives the record's fields:
+      - a condition, such as an argument of \c &&, \c || or \c !, or the condition of \c ternary, accepts a
+        result of any type that converts to a boolean value, such as <tt>size(\@items) && \@active</tt>, but not a
+        string or a date, such as <tt>lwr(\@status) && \@id > 1</tt>, which must be compared explicitly instead
+        (ex: <tt>\@status == "open"</tt> or <tt>\@x != ""</tt>)
+      - other arguments need a result of a type that they accept, so <tt>lwr(size(\@a))</tt> is rejected
+      - a result of any type, such as from \c ternary or \c coalesce, is accepted everywhere
+
+      the DPQL argument type warning \c DPQL-W004 uses the same rules, and is also given for \c !; added
+      @ref DataProvider::AbstractDataProvider::isConditionType() "AbstractDataProvider::isConditionType()",
+      @ref DataProvider::AbstractDataProvider::isArgTypeCompatible() "AbstractDataProvider::isArgTypeCompatible()"
+      and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
+      "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
+      argument types, so that expressions saved before still run
     - a search operator with one argument given without a value, such as \c dp_op_ne() for \c != \c NOTHING, gives an
       expression with the @ref nothing argument instead of none, so the expression has all its arguments
     - fixed <tt>not in</tt> with more than one value, such as <tt>\@id not in (2, 4)</tt>, comparing only the first
