@@ -1,10 +1,12 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
+%requires ../../../../../qlib/QUnit.qm
 
 %exec-class DeletedProgramClassAccessTest
 
@@ -32,6 +34,10 @@ class MyClass {
 
     int f() {
         return 99;
+    }
+
+    static int s() {
+        return 101;
     }
 }
 
@@ -67,6 +73,9 @@ hash<MyDecl> sub geth() { return new hash<MyDecl>(); }
         object obj = p.callFunction("get");
         assertEq("MyClass", obj.className());
         assertEq(99, obj.f());
+        assertEq(101, call_object_method(obj, "s"));
+        assertTrue(obj.hasCallableNormalMethod("f"));
+        assertTrue(obj.hasCallableStaticMethod("s"));
         assertEq(7, obj.m);
         assertEq(1, p.callFunction("geth").i);
     }
@@ -77,6 +86,9 @@ hash<MyDecl> sub geth() { return new hash<MyDecl>(); }
 
         # the exception must name the class and the method so the failure is diagnosable
         assertThrows("PROGRAM-ERROR", "MyClass::f\\(\\)", \call_object_method(), (o.obj, "f"));
+        assertThrows("PROGRAM-ERROR", "MyClass::s\\(\\)", \call_object_method(), (o.obj, "s"));
+        assertThrows("PROGRAM-ERROR", "already been deleted",
+            auto sub () { return o.obj.hasCallableMethod("f"); });
         # the same applies to a pseudo-method call, which resolves against the class first
         assertThrows("PROGRAM-ERROR", "already been deleted", auto sub () { return o.obj.className(); });
         # ...and to a dynamic call by name

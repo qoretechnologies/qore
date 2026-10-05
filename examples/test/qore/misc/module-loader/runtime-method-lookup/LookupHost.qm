@@ -1,0 +1,86 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+module LookupHost {
+    version = "1.0";
+    desc = "Runtime method lookup during module initialization test fixture";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace LookupHost {
+    public class Base {
+        int inherited() { return 41; }
+    }
+
+    public class Probe inherits Base {
+        public {
+            static Queue entered();
+            static Queue release();
+        }
+
+        constructor() {}
+        int value() { return 42; }
+        static int staticValue() { return 43; }
+        private int secret() { return 44; }
+        private static int staticSecret() { return 45; }
+        int selfValue() { return value() + secret(); }
+        int closureValue(int n) {
+            code<int(int)> add = int sub (int m) { return value() + n + m; };
+            return add(1);
+        }
+
+        static int hold() {
+            if (ENV.QORE_TEST_METHOD_LOOKUP) {
+                entered.push(True);
+                release.get();
+            }
+            return 1;
+        }
+
+        static load() {
+            load_module("LookupDep");
+        }
+    }
+
+    # A different class runs lookups in the module Program without granting access
+    # to Probe's private methods. AOT static methods retain their owning Program.
+    public class Reader {
+        static int lookup(string mode, object obj) {
+            switch (mode) {
+                case "instance":
+                    return call_object_method(obj, "value");
+                case "self":
+                    return obj.selfValue();
+                case "static":
+                    return call_static_method("LookupHost::Probe", "staticValue");
+                case "static-object":
+                    return call_object_method(obj, "staticValue");
+                case "inherited":
+                    return call_object_method(obj, "inherited");
+                case "closure":
+                    return obj.closureValue(7);
+                case "callable":
+                    if (!obj.hasCallableMethod("value") || !obj.hasCallableNormalMethod("inherited")
+                        || !obj.hasCallableStaticMethod("staticValue") || obj.hasCallableNormalMethod("staticValue")
+                        || obj.hasCallableStaticMethod("value") || obj.hasCallableMethod("missing")
+                        || obj.hasCallableMethod("secret") || obj.hasCallableStaticMethod("staticSecret")) {
+                        throw "PROBE-ERROR", "incorrect method visibility";
+                    }
+                    return 1;
+                default:
+                    try {
+                        call_object_method(obj, mode);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if ((mode == "secret" && ex.err == "METHOD-IS-PRIVATE")
+                            || (mode == "missing" && ex.err == "METHOD-DOES-NOT-EXIST")
+                            || (mode == "constructor" && ex.err == "ILLEGAL-EXPLICIT-METHOD-CALL")) {
+                            return 1;
+                        }
+                        rethrow;
+                    }
+                    throw "PROBE-ERROR", "an inaccessible method call succeeded";
+            }
+        }
+    }
+}

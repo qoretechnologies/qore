@@ -102,6 +102,46 @@ child process, and checks that each original and copy reports one destruction at
 
 ## Testing
 
+### Runtime method lookup during initialization
+
+Module initialization executes arbitrary Qore code while the importing thread owns
+the target Program's parse lock. Runtime method lookup must not acquire that lock:
+an initializer can wait for another thread whose method lookup reads the same
+Program, creating a cycle. The same cycle occurs when a loader waits for an AOT
+shadow initializer which calls a method in the loader's Program.
+
+`qore_class_private::getMethodForEval()` uses `ProgramRuntimeParseAccessHelper` to
+retain the owning Program during a cross-Program lookup and select its context.
+`RuntimeNamespaceReadLocker` fences the declaring namespace while reading committed
+methods. The guard ends before method execution, so user code cannot retain a
+namespace read lock across a later import. Static lookups and callable-method
+predicates use the same namespace reader guard instead of taking parse ownership
+of the incidental thread-current Program. Deleted-Program rejection, private
+access, and illegal explicit constructor/destructor checks remain in place.
+
+Cold AOT calls also build their slot contexts at runtime. That construction uses
+Program access and a namespace reader lock, not parse ownership. The existing
+per-variant and per-metadata resolver mutexes serialize context publication and
+resolution caches. A separate recursive `runtime_metadata_lock` protects the
+Program's local-variable arena, interned strings and locations, and shared AOT
+`self`/`argv` locals. It is held only for metadata operations, never across name
+resolution or user execution. Recursion allows signature interning to allocate
+locals through the same guarded arena API. Teardown clears these arenas after
+all Program users have left.
+
+`examples/test/qore/misc/module-loader/runtime-method-lookup.qtest` reproduces the
+cycle with source and AOT modules. For example, one thread runs
+`LookupHost::Probe::load()`, whose dependency initializer signals a queue and waits for a
+second queue. The reader receives the first signal, calls
+`call_object_method(probe, "value")`, and releases the initializer. The signal
+proves that parse ownership is held before lookup; no timing sleeps are used.
+Separate bounded child processes cover instance, self, static, inherited, and
+callable lookups, plus private, missing, and explicit constructor errors. Cold
+closure calls and eight simultaneous cold readers exercise context construction
+and publication while the loader still owns parsing.
+
+### Shared closure lifetime
+
 `AOTModuleSharedClosureLifetime.qtest` compiles a module whose public constant
 holds closures, loads it into a Program that is then destroyed, and uses it from
 another Program. The probe runs in its own process, so a crash shows up as a

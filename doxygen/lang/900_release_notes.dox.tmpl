@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Runtime instance, self, static, and callable-method lookups no longer acquire exclusive Program
+    parse ownership, including on first calls that construct lazy AOT execution contexts.
+    Concurrent module initialization can wait for those readers without deadlocking
+    startup; committed namespace reads remain synchronized, and deleted-Program and method access
+    checks are preserved.
+
     @ref Qore::SSLCertificate "SSLCertificate" validity dates now preserve UTC independently of the process
     time zone and correctly interpret both ASN.1 UTCTime (1950-2049) and GeneralizedTime (including 2050
     and later). Invalid validity dates raise <tt>SSLCERTIFICATE-DATE-ERROR</tt> when read from Qore.

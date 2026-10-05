@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%requires LookupHost.qm
+
+object probe = new LookupHost::Probe();
+Queue entered = LookupHost::Probe::entered;
+Queue release = LookupHost::Probe::release;
+Counter running(1);
+*hash<ExceptionInfo> loader_error;
+background sub () {
+    on_exit running.dec();
+    try {
+        LookupHost::Probe::load();
+    } catch (hash<ExceptionInfo> ex) {
+        loader_error = ex;
+        entered.push(False);
+    }
+}();
+if (!entered.get()) {
+    throw "PROBE-ERROR", sprintf("loader failed: %y", loader_error);
+}
+# The initializer has entered under the loader's parse ownership. It cannot finish
+# until this thread completes its lookup; no scheduling sleeps are needed.
+printf("INITIALIZER-HELD\n");
+int result;
+{
+    on_exit release.push(True);
+    if (ARGV[0] == "concurrent") {
+        Queue results();
+        for (int i = 0; i < 8; ++i) {
+            background sub (int index) {
+                try {
+                    results.push(LookupHost::Reader::lookup(index % 2 ? "self" : "closure", probe));
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(ex.err);
+                }
+            }(i);
+        }
+        for (int i = 0; i < 8; ++i) {
+            auto value = results.get();
+            if (value.typeCode() != NT_INT) {
+                throw "PROBE-ERROR", sprintf("concurrent lookup failed: %y", value);
+            }
+            result += value;
+        }
+    } else {
+        result = LookupHost::Reader::lookup(ARGV[0], probe);
+    }
+}
+running.waitForZero();
+if (loader_error) {
+    throw "PROBE-ERROR", sprintf("loader failed: %y", loader_error);
+}
+printf("DONE %s %d\n", ARGV[0], result);

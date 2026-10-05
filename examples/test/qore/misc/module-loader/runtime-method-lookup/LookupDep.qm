@@ -1,0 +1,14 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%requires LookupHost.qm
+
+module LookupDep {
+    version = "1.0";
+    desc = "Blocking initializer for the runtime method lookup regression";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace LookupDep {
+    public const Held = LookupHost::Probe::hold();
+}

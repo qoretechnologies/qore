@@ -3017,16 +3017,17 @@ const QoreMethod* QoreClass::findStaticMethod(const char* nme) const {
         class_ctx = nullptr;
     }
 
-    CurrentProgramRuntimeParseContextHelper pch;
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->ns ? priv->ns->getRoot() : nullptr);
     ClassAccess access;
     return priv->runtimeFindCommittedStaticMethod(nme, access, class_ctx);
 }
 
 const QoreMethod* QoreClass::findStaticMethod(const char* nme, ClassAccess& access) const {
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !priv->runtimeCheckPrivateClassAccess(class_ctx))
+    if (class_ctx && !priv->runtimeCheckPrivateClassAccess(class_ctx)) {
         class_ctx = nullptr;
-    CurrentProgramRuntimeParseContextHelper pch;
+    }
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->ns ? priv->ns->getRoot() : nullptr);
     return priv->runtimeFindCommittedStaticMethod(nme, access, class_ctx);
 }
 
@@ -4191,7 +4192,7 @@ bool qore_class_private::runtimeHasCallableMethod(const char* m, int mask) const
 
     const QoreMethod* w = nullptr;
     ClassAccess access;
-    CurrentProgramRuntimeParseContextHelper pch;
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(ns ? ns->getRoot() : nullptr);
 
     if (mask & QCCM_NORMAL) {
         w = runtimeFindCommittedMethod(m, access, class_ctx);
@@ -4279,10 +4280,14 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
             return nullptr;
         }
         QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
-        ProgramRuntimeParseContextHelper pch(xsink, lookup_pgm);
+        // Keep the owning Program alive and select its context without claiming parse ownership.
+        // A module loader can own parsing while waiting for an initializer in this thread, so
+        // runtime readers must only take the committed namespace's read lock, never its parse lock.
+        ProgramRuntimeParseAccessHelper pch(xsink, lookup_pgm ? lookup_pgm : getProgram());
         if (*xsink) {
             return nullptr;
         }
+        qore_root_ns_private::RuntimeNamespaceReadLocker rnl(ns ? ns->getRoot() : nullptr);
 
         if (!(w = runtimeFindCommittedMethodForEval(nme, access, class_ctx))
             && !(w = runtimeFindCommittedStaticMethod(nme, access, class_ctx))) {

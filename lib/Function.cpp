@@ -1837,33 +1837,36 @@ void UserSignature::setupFromAOTMetadata(
     defaultArgList = std::move(defaults);
     defaultArgList.resize(nparams);
 
-    // selfid per class — interned across every method variant of a class
-    // using the program-scoped cache.  Same safety argument as the argv
-    // intern above (LocalVar* is the identity, thread-local stack holds
-    // the per-call value).  Keep the normal `self` marker: AOT slot metadata
-    // and LLVM lowering rely on it for the static borrowed-reference semantics
-    // of constructor/method self.
-    if (classTypeInfo) {
-        LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
-        if (!cached) {
-            cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
-            cached->setSelf();
-        } else if (!cached->isSelf()) {
-            cached->setSelf();
+    {
+        std::lock_guard<std::recursive_mutex> lock(local_pp->runtime_metadata_lock);
+        // selfid per class — interned across every method variant of a class
+        // using the program-scoped cache.  Same safety argument as the argv
+        // intern above (LocalVar* is the identity, thread-local stack holds
+        // the per-call value).  Keep the normal `self` marker: AOT slot metadata
+        // and LLVM lowering rely on it for the static borrowed-reference semantics
+        // of constructor/method self.
+        if (classTypeInfo) {
+            LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
+            if (!cached) {
+                cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+                cached->setSelf();
+            } else if (!cached->isSelf()) {
+                cached->setSelf();
+            }
+            selfid = cached;
         }
-        selfid = cached;
-    }
 
-    // argv local var — interned across every AOT-deserialized variant.
-    // Runtime identifies locals by (LocalVar*, stack frame), so sharing
-    // one pointer is safe even under concurrent invocation: each call
-    // instantiates its own frame-local slot via the thread-local stack.
-    // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
-    // 656 k variants).
-    if (!local_pp->shared_aot_argv) {
-        local_pp->shared_aot_argv = local_pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+        // argv local var — interned across every AOT-deserialized variant.
+        // Runtime identifies locals by (LocalVar*, stack frame), so sharing
+        // one pointer is safe even under concurrent invocation: each call
+        // instantiates its own frame-local slot via the thread-local stack.
+        // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
+        // 656 k variants).
+        if (!local_pp->shared_aot_argv) {
+            local_pp->shared_aot_argv = local_pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+        }
+        argvid = local_pp->shared_aot_argv;
     }
-    argvid = local_pp->shared_aot_argv;
 
     // Set flags
     varargs = hasVarargs;

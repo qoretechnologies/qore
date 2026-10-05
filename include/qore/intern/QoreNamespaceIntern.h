@@ -1416,7 +1416,8 @@ protected:
         }
     }
 
-    //! Exception-safe runtime namespace read lock
+public:
+    //! Exception-safe runtime namespace read lock, also used by committed class method lookups
     class RuntimeNamespaceReadLocker {
     public:
         DLLLOCAL RuntimeNamespaceReadLocker(const qore_root_ns_private& root)
@@ -1436,8 +1437,12 @@ protected:
     private:
         const qore_root_ns_private* root;
         bool locked;
+
+        RuntimeNamespaceReadLocker(const RuntimeNamespaceReadLocker&) = delete;
+        RuntimeNamespaceReadLocker& operator=(const RuntimeNamespaceReadLocker&) = delete;
     };
 
+protected:
     //! Exception-safe runtime namespace write lock, for one write to this root's committed namespace
     /** Recursive for the current thread.  Hold it for the write alone: see RuntimeNamespaceWriteLocker.
     */

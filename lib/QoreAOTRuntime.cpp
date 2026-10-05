@@ -9263,14 +9263,19 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
     const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
     AOTSlotResolutionCacheScope resolution_cache_scope(
         use_resolution_cache ? &lazy_ir.resolution_cache : nullptr);
-    ProgramRuntimeParseContextHelper pch(build_xsink, lazy_ir.pgm);
+    // A first runtime call is a namespace reader, even though it builds private slot metadata.
+    // Taking parse ownership here deadlocks against a module initializer waiting for this call.
+    // The resolution mutex protects the shared resolver, and the Program's metadata lock protects
+    // its local/string/location arenas; neither requires serializing arbitrary module execution.
+    ProgramRuntimeParseAccessHelper pch(build_xsink, lazy_ir.pgm);
     if (*build_xsink) {
         if (!xsink) {
             local_xsink.clear();
         }
-        error = "could not acquire the program parse context";
+        error = "could not access the function's Program";
         return nullptr;
     }
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(qore_root_ns_private::get(*lazy_ir.pgm->getRootNS()));
     std::string build_error;
     QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, entry_end,
         uvb, lazy_ir.pgm, aot_func, serialized_name, entry_end, &lazy_ir.type_resolver,

@@ -63,6 +63,7 @@ class QoreSandboxManager;
 #include <cerrno>
 #include <cstdarg>
 #include <map>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -115,11 +116,9 @@ typedef StatementBlock* q_exp_t;
 //      Program ends — replaces the manual `for (auto v : ...) delete v`
 //      loop in the old `LocalVariableList` dtor.
 //
-// Thread-safety note: this container was a `safe_dslist` with
-// whatever concurrency guarantees that gave.  In practice the only
-// caller that mutates is `createLocalVar`, which is only invoked
-// during parse/AOT-deserialization (single-threaded boot phase).
-// No runtime thread iterates the arena during user execution.
+// Appends are protected by runtime_metadata_lock: lazy AOT contexts can allocate
+// locals concurrently with module loading. No runtime thread iterates the arena;
+// teardown clears it only after all Program users have left.
 class LocalVariableList : private std::deque<LocalVar> {
 public:
     using std::deque<LocalVar>::size;
@@ -407,6 +406,12 @@ class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
 public:
+    //! Protects Program-owned local, string, location, and AOT signature metadata.
+    /** Recursive because signature interning allocates locals through createLocalVar().
+        Hold only around metadata operations, never namespace lookup or user execution.
+    */
+    std::recursive_mutex runtime_metadata_lock;
+
     LocalVariableList local_var_list;
 
     //! Interned `argv` LocalVar shared across every AOT-deserialized variant.
@@ -2709,6 +2714,7 @@ public:
     }
 
     DLLLOCAL const char* addString(const char* str) {
+        std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
         str_set_t::iterator i = str_set.lower_bound(str);
         if (i == str_set.end() || strcmp(*i, str)) {
             str_vec.push_back(strdup(str));

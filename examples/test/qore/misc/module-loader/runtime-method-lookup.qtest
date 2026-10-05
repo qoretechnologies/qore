@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/FsUtil.qm
+
+%exec-class RuntimeMethodLookupTest
+
+#! Runtime method readers must not acquire a module loader's exclusive parse ownership
+/** LookupDep's initializer signals a queue while the loader holds LookupHost's parse lock,
+    then waits for the reader to finish. Each lookup runs in its own bounded child process,
+    so a lock-order regression fails the test instead of hanging the test runner. Source
+    and AOT modules exercise the same ownership cycle without sleeps or runtime test hooks.
+*/
+class RuntimeMethodLookupTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string timeout_bin;
+        string libqore_dir;
+        const Expected = {
+            "instance": 42, "self": 86, "static": 43, "static-object": 43, "inherited": 41,
+            "callable": 1, "secret": 1, "missing": 1, "constructor": 1,
+            "closure": 50, "concurrent": 544,
+        };
+    }
+
+    constructor() : QUnit::Test("RuntimeMethodLookupTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        timeout_bin = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_bin;
+        addTestCase("runtime lookup during source module initialization", \sourceTest());
+        addTestCase("runtime lookup during AOT module initialization", \aotTest());
+        set_return_value(main());
+    }
+
+    sourceTest() { runLookups(False); }
+    aotTest() { runLookups(True); }
+
+    private runLookups(bool aot) {
+        if (!timeout_bin) {
+            testSkip("the deadlock regression requires timeout or gtimeout");
+        }
+        TmpDir tmp("qore-runtime-method-lookup-");
+        foreach string name in (("LookupHost.qm", "LookupDep.qm", "probe.qr")) {
+            copy_file(get_script_dir() + "/runtime-method-lookup/" + name, tmp.path + "/" + name);
+        }
+        string module_dir = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s ",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(module_dir));
+        if (aot) {
+            foreach string name in (("LookupHost", "LookupDep")) {
+                string qmod = tmp.path + "/" + name + ".qmod";
+                int rc;
+                string output = backquote(env + shellQuote(qcc_bin) + " --module --strip-source -o "
+                    + shellQuote(qmod) + " " + shellQuote(tmp.path + "/" + name + ".qm") + " 2>&1", \rc);
+                assertEq(0, rc, output);
+                assertTrue(is_file(qmod), output);
+            }
+            useCompiledHost(tmp.path + "/probe.qr");
+            # Remove the sources to prove that the child executes compiled initializers and methods.
+            unlink(tmp.path + "/LookupHost.qm");
+            unlink(tmp.path + "/LookupDep.qm");
+        }
+        foreach hash<auto> test in (Expected.pairIterator()) {
+            int rc;
+            int child_timeout = (ENV.QORE_TEST_CHILD_TIMEOUT ?? "60").toInt();
+            assertTrue(child_timeout > 0, "the child timeout must be positive");
+            # QORE_TEST_CHILD_PREFIX supports running the actual child under Valgrind.
+            string output = backquote(env + "QORE_TEST_METHOD_LOOKUP=1 " + shellQuote(timeout_bin)
+                + " -s KILL " + child_timeout + " " + (ENV.QORE_TEST_CHILD_PREFIX ?? "") + " " + shellQuote(qore_bin)
+                + " -b --enable-debug " + shellQuote(tmp.path + "/probe.qr") + " "
+                + shellQuote(test.key) + " 2>&1", \rc);
+            assertEq(0, rc, sprintf("%s child: %s", test.key, output));
+            assertTrue(output.find("INITIALIZER-HELD\n") >= 0, output);
+            assertTrue(output.find(sprintf("DONE %s %d\n", test.key, test.value)) >= 0, output);
+        }
+    }
+
+    private static useCompiledHost(string path) {
+        string source = replace(File::readTextFile(path), "LookupHost.qm", "LookupHost.qmod");
+        File f();
+        f.open2(path, O_TRUNC | O_WRONLY);
+        f.write(source);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

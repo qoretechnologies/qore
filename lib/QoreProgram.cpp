@@ -805,6 +805,7 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc(sline, eline);
 
     loc_set_t::iterator i = loc_set.find(&loc);
@@ -830,6 +831,7 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc(sline, eline, scol, ecol);
 
     loc_set_t::iterator i = loc_set.find(&loc);
@@ -844,6 +846,7 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline, int eline) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
     loc1.end_line = eline;
@@ -870,6 +873,7 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
 
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline,
         int eline, int scol, int ecol) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
     loc1.end_line = eline;
@@ -1702,13 +1706,16 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             dom |= pend_dom;
             pend_dom = 0;
 
-            // free temporary data structures
-            str_set.clear();
-            loc_set.clear();
+            {
+                // Runtime initialization can admit threads that materialize AOT metadata.
+                std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+                str_set.clear();
+                loc_set.clear();
 
-            // update high water marks for atomic rollback support
-            str_vec_hwm = str_vec.size();
-            pgmloc_hwm = pgmloc.size();
+                // update high water marks for atomic rollback support
+                str_vec_hwm = str_vec.size();
+                pgmloc_hwm = pgmloc.size();
+            }
 
             // After directives and extension-based defaults are known, choose
             // the implicit execution mode.  Modern code defaults to tiered,
@@ -1744,8 +1751,11 @@ int qore_program_private::internParseCommit(bool standard_parse) {
         pend_dom = 0;
 
         // free temporary data structures
-        str_set.clear();
-        loc_set.clear();
+        {
+            std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+            str_set.clear();
+            loc_set.clear();
+        }
         rc = 0;
     }
 
@@ -2438,11 +2448,12 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
 }
 
 LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeInfo* typeInfo) {
-   // emplace into the deque-backed arena; returns a stable pointer
-   // that stays valid for the Program's lifetime.  Avoids the per-
-   // LocalVar `new`+list-node allocation of the prior safe_dslist
-   // implementation — hot path in AOT deserialization.
-   return local_var_list.emplace(name, typeInfo);
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+    // emplace into the deque-backed arena; returns a stable pointer
+    // that stays valid for the Program's lifetime.  Avoids the per-
+    // LocalVar `new`+list-node allocation of the prior safe_dslist
+    // implementation — hot path in AOT deserialization.
+    return local_var_list.emplace(name, typeInfo);
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {
