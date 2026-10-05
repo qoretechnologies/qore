@@ -334,6 +334,25 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par An Empty String Is Found in Every String
+    @parblock
+    An empty string is contained in every string and is found at every position from the start to the end of a
+    string inclusive, as in most other languages: <tt>"Hello".contains("")</tt> is now @ref True "True" (it was
+    @ref False "False"), <tt>"Hello".find("")</tt>, @ref Qore::index() "index()" and @ref Qore::bindex() "bindex()"
+    return the search position (\c 0 by default) instead of \c -1, and <tt>"Hello".rfind("")</tt>,
+    @ref Qore::rindex() "rindex()" and @ref Qore::brindex() "brindex()" return the end of the string (\c 5) by
+    default instead of \c 0; a search position after the end of the string has no match with a forward search.
+    <tt>binary::find()</tt> and <tt>binary::rfind()</tt> follow the same rules, as they were documented to, and the
+    result no longer depends on the platform's \c memmem() (an empty pattern was found on Linux but not on macOS).
+    The DPQL \c contains and \c contains-any expressions follow \c contains(), so <tt>contains(\@name, "")</tt> is
+    @ref True "True" in generic and columnar evaluation alike.
+
+    Code that relied on an empty search string not being found, for example a loop such as
+    <tt>while ((i = str.find(sep, i)) >= 0) { ...; i += sep.size(); }</tt> with an empty \c sep, must now check
+    for an empty search string; @ref Qore::replace() "replace()" and the string \c split() methods do not change
+    a string for an empty search string, as before.
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

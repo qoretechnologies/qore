@@ -2940,6 +2940,10 @@ int qore_get_object_hash(QoreString& str, const void* ptr, uint64_t id) {
 
 void* q_memmem(const void* big, size_t big_len, const void* little, size_t little_len) {
     assert(big && little);
+    // an empty sequence is found at the start; memmem(3) does not return the same on every platform
+    if (!little_len) {
+        return const_cast<void*>(big);
+    }
 #ifdef HAVE_MEMMEM
     return memmem(big, big_len, little, little_len);
 #else
@@ -2980,11 +2984,12 @@ void* q_memmem(const void* big, size_t big_len, const void* little, size_t littl
 
 void* q_memrmem(const void* big, size_t big_len, const void* little, size_t little_len) {
     assert(big && little);
+    // the last occurrence of an empty sequence is at the end
+    if (!little_len) {
+        return const_cast<char*>(static_cast<const char*>(big)) + big_len;
+    }
     if (!big_len || little_len > big_len) {
         return nullptr;
-    }
-    if (!little_len) {
-        return (void*)big;
     }
     //printd(5, "q_memrmem() big: '%s' (%d) little: '%s' (%d)\n", big, (int)big_len, little, (int)little_len);
     const char* lt_end = (const char*)little + little_len - 1;

@@ -916,12 +916,21 @@ DLLEXPORT void q_normalize_path(QoreString& path, const char* cwd = 0);
 DLLEXPORT int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink = 0);
 
 //! finds a memory sequence in a larger memory sequence
+/** @return a pointer to the first occurrence of \a little in \a big, or nullptr if there is none; an empty
+    \a little is found at the start of \a big on every platform
+
+    @since %Qore 3.0 an empty \a little is found at the start of \a big on every platform
+*/
 DLLEXPORT void* q_memmem(const void* big, size_t big_len, const void* little, size_t little_len);
 
 //! finds a memory sequence in a larger memory sequence searching from the end of the sequence
-/** @note returns <tt>void*</tt> for compatibility with memmem() and q_memmem() signatures
+/** @return a pointer to the last occurrence of \a little in \a big, or nullptr if there is none; the last
+    occurrence of an empty \a little is at the end of \a big (<tt>big + big_len</tt>)
+
+    @note returns <tt>void*</tt> for compatibility with memmem() and q_memmem() signatures
 
     @since Qore 0.9.1
+    @since %Qore 3.0 the last occurrence of an empty \a little is at the end of \a big
 */
 DLLEXPORT void* q_memrmem(const void* big, size_t big_len, const void* little, size_t little_len);
 

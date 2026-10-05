@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# An empty string is contained in every string and is found at every position from the start to the end of the
+# string inclusive, as with Python's "in" and str.find() / str.rfind(), JavaScript's includes(), indexOf() and
+# lastIndexOf(), and Java's contains(); every search function must agree, for character and byte positions, for
+# single-byte, multi-byte and inline short strings, and for binary data.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class EmptySubstringTest
+
+class EmptySubstringTest inherits QUnit::Test {
+    constructor() : Test("EmptySubstringTest", "1.0", \ARGV) {
+        addTestCase("contains and prefix checks", \testContains());
+        addTestCase("forward search positions", \testForward());
+        addTestCase("backward search positions", \testBackward());
+        addTestCase("multi-byte strings", \testMultiByte());
+        addTestCase("binary data", \testBinary());
+        addTestCase("non-empty substrings are unchanged", \testNonEmpty());
+        addTestCase("empty search strings do not loop", \testNoLoop());
+        set_return_value(main());
+    }
+
+    #! Returns the string from every source of strings
+    private list<hash<auto>> getSources(string value) {
+        list<hash<auto>> rv = (
+            {"source": "string", "value": value},
+            {"source": "runtime string", "value": sprintf("%s", value)},
+            {"source": "buffer<string> element", "value": (new buffer<string>((value,)))[0]},
+        );
+%ifdef QoreDebug
+        if (value.size() <= 6) {
+            push rv, {"source": "inline short string", "value": dbg_make_short_string(value)};
+        }
+%endif
+        return rv;
+    }
+
+    private testContains() {
+        foreach string value in ("Hello", "", "0", "héllo") {
+            foreach hash<auto> src in (getSources(value)) {
+                string str = src.value;
+                string label = sprintf("%y from %s", value, src.source);
+                assertTrue(str.contains(""), label + " contains()");
+                assertTrue(str.startsWith(""), label + " startsWith()");
+                assertTrue(str.endsWith(""), label + " endsWith()");
+            }
+        }
+        # the empty string is the only string contained in an empty string
+        assertTrue("".contains(""));
+        assertFalse("".contains("a"));
+    }
+
+    private testForward() {
+        string str = "Hello";
+        assertEq(0, str.find(""));
+        assertEq(0, index(str, ""));
+        assertEq(0, bindex(str, ""));
+        # the search position is returned, up to the end of the string
+        assertEq(2, str.find("", 2));
+        assertEq(5, str.find("", 5));
+        assertEq(5, index(str, "", 5));
+        assertEq(5, bindex(str, "", 5));
+        # a position after the end of the string has no match
+        assertEq(-1, str.find("", 6));
+        assertEq(-1, index(str, "", 6));
+        assertEq(-1, bindex(str, "", 6));
+        # negative positions are offsets from the end
+        assertEq(4, str.find("", -1));
+        assertEq(0, str.find("", -99));
+        # an empty string has the empty string at position 0
+        assertEq(0, "".find(""));
+        assertEq(0, index("", ""));
+        assertEq(0, bindex("", ""));
+        assertEq(-1, "".find("", 1));
+    }
+
+    private testBackward() {
+        string str = "Hello";
+        # the last occurrence is at the end of the string
+        assertEq(5, str.rfind(""));
+        assertEq(5, rindex(str, ""));
+        assertEq(5, brindex(str, ""));
+        # the search position is returned
+        assertEq(2, str.rfind("", 2));
+        assertEq(2, rindex(str, "", 2));
+        assertEq(2, brindex(str, "", 2));
+        # a position after the end of the string is the end of the string
+        assertEq(5, str.rfind("", 99));
+        # -1 is the end of the string; other negative positions are before it
+        assertEq(4, str.rfind("", -2));
+        assertEq(0, str.rfind("", -6));
+        assertEq(-1, str.rfind("", -7));
+        assertEq(0, "".rfind(""));
+        assertEq(0, rindex("", ""));
+        assertEq(0, brindex("", ""));
+    }
+
+    private testMultiByte() {
+        # character positions for find() / index() / rfind() / rindex(), byte positions for bindex() / brindex()
+        string str = "héllo";
+        assertEq(5, str.length());
+        assertEq(6, str.size());
+        assertEq(5, str.rfind(""));
+        assertEq(5, rindex(str, ""));
+        assertEq(6, brindex(str, ""));
+        assertEq(5, str.find("", 5));
+        assertEq(-1, str.find("", 6));
+        assertEq(6, bindex(str, "", 6));
+        assertEq(-1, bindex(str, "", 7));
+
+        string utf16 = convert_encoding("héllo", "UTF-16LE");
+        assertTrue(utf16.contains(convert_encoding("", "UTF-16LE")));
+        assertEq(5, utf16.rfind(convert_encoding("", "UTF-16LE")));
+        assertEq(0, utf16.find(convert_encoding("", "UTF-16LE")));
+    }
+
+    private testBinary() {
+        binary bin = binary("Hello");
+        assertEq(0, bin.find(binary()));
+        assertEq(0, bin.find(""));
+        assertEq(5, bin.find(binary(), 5));
+        assertEq(-1, bin.find(binary(), 6));
+        assertEq(5, bin.rfind(binary()));
+        assertEq(2, bin.rfind(binary(), 2));
+        assertEq(0, binary().find(binary()));
+        assertEq(0, binary().rfind(binary()));
+    }
+
+    private testNonEmpty() {
+        string str = "Hello";
+        assertEq(2, str.find("l"));
+        assertEq(3, str.rfind("l"));
+        assertEq(-1, str.find("x"));
+        assertEq(-1, str.find("o", 5));
+        assertTrue(str.contains("ell"));
+        assertFalse(str.contains("hel"));
+        assertEq(1, binary("Hello").find(binary("e")));
+        assertEq(-1, binary("Hello").rfind(binary("x")));
+    }
+
+    private testNoLoop() {
+        # replacing or splitting with an empty string does not change the string
+        assertEq("abc", replace("abc", "", "x"));
+        assertEq(("abc",), "abc".split(""));
+    }
+}

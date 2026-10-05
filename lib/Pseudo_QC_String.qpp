@@ -298,6 +298,9 @@ string <string>::upr() [const;flags=CONSTANT] {
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; a search position after the end of the string has no match
+
     @par Example:
     @code{.py}
 int i = str.find(substr);
@@ -327,6 +330,10 @@ int <string>::find(softstring substring, softint offset = 0) [const;flags=RET_VA
     @param offset the starting character position for the search, -1 means start from the end of the string
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
+
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; with the default search position (-1, the end of the string), it is found at the end of the
+    string (the length of the string)
 
     @par Example:
     @code{.py}
@@ -1504,7 +1511,10 @@ bool <string>::endsWith(string suffix) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
 
     @return @ref True if the given string contains the argument
 
+    @note an empty \a substring is contained in every string, including an empty string
+
     @since %Qore 2.0
+    @since %Qore 3.0 an empty \a substring is contained in every string
 */
 bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary

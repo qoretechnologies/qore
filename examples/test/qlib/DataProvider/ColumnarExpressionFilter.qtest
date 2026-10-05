@@ -51,6 +51,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed date function filters", \computedDateFunctionFilters());
         addTestCase("float columns compared with numbers", \floatNumberComparisonFilters());
         addTestCase("string \"0\" as a condition", \stringZeroConditionFilters());
+        addTestCase("contains an empty string", \emptySubstringFilters());
 
         set_return_value(main());
     }
@@ -444,5 +445,15 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
                     label + " BufferColumns");
             }
         }
+    }
+
+    #! an empty string is contained in every string in every shape
+    private emptySubstringFilters() {
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('contains(@status, "")'), (1, 2, 3, 4),
+            "contains an empty string");
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('contains(@status, "") && @id > 2'), (3, 4),
+            "contains an empty string with another condition");
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('contains(@name, "")'), (1, 2, 3, 4),
+            "contains an empty string in a list column");
     }
 }

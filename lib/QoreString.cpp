@@ -2207,6 +2207,10 @@ void QoreString::replaceAll(const char* old_str, const char* new_str) {
     assert(new_str);
 
     int old_len = ::strlen(old_str);
+    // an empty string is found at every position; there is nothing to replace
+    if (!old_len) {
+        return;
+    }
     int new_len = ::strlen(new_str);
 
     qore_offset_t start = 0;

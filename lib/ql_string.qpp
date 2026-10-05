@@ -1062,6 +1062,9 @@ nothing substr() [flags=NOOP] {
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; a search position after the end of the string has no match
+
     @par Example:
     @code{.py}
 int i = index(str, substr);
@@ -1100,6 +1103,9 @@ int index() [flags=RUNTIME_NOOP] {
 
     @return the byte position of a substring within a string, -1 is returned if the substring is not found
 
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; a search position after the end of the string has no match
+
     @par Example:
     @code{.py}
 int i = bindex(str, substr);
@@ -1135,6 +1141,10 @@ int bindex() [flags=RUNTIME_NOOP] {
     @param pos the starting character position for the search, -1 means start from the end of the string
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
+
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; with the default search position (-1, the end of the string), it is found at the end of the
+    string (the length of the string)
 
     @par Example:
     @code{.py}
@@ -1173,6 +1183,10 @@ int rindex() [flags=RUNTIME_NOOP] {
     @param pos the starting character position for the search, -1 means start from the end of the string
 
     @return the byte position of a substring within a string, -1 is returned if the substring is not found
+
+    @note an empty substring is found at the search position, as at every position from the start to the end of the
+    string inclusive; with the default search position (-1, the end of the string), it is found at the end of the
+    string (the length of the string)
 
     @par Example:
     @code{.py}

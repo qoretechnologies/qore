@@ -65,6 +65,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("map/hash_map tests", \mapTests());
         addTestCase("streaming operator tests", \streamingOperatorTests());
         addTestCase("like operator tests", \likeTests());
+        addTestCase("empty substring tests", \emptySubstringTests());
         set_return_value(main());
     }
 
@@ -848,6 +849,24 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", sub () {
             eval_expr(DP_OP_DROP, (-1, field_ref("users")), rec);
         });
+    }
+
+    #! an empty string is contained in every string, as in Qorus expressions and other languages
+    emptySubstringTests() {
+        assertTrue(eval_expr("contains", ("Hello", "")));
+        assertTrue(eval_expr("contains", ("", "")));
+        assertTrue(eval_expr("contains", ("Hello", "", True)));
+        assertTrue(eval_expr("contains", (field_ref("s"), ""), {"s": "abc"}));
+        assertTrue(eval_expr("contains-any", ("Hello", "x", "")));
+        assertTrue(eval_expr("starts-with", ("Hello", "")));
+        assertTrue(eval_expr("ends-with", ("Hello", "")));
+        assertTrue(AbstractDataProvider::evalGenericExpression({},
+            DataProvider::parseDpqlExpression('contains("Hello", "")')));
+        # like with an empty pattern matches only the empty string, as in SQL
+        assertFalse(eval_expr("like", ("Hello", "")));
+        assertTrue(eval_expr("like", ("", "")));
+        # a non-empty substring is unchanged
+        assertFalse(eval_expr("contains", ("Hello", "x")));
     }
 
     likeTests() {

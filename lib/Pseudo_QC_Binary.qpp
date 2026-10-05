@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 //! Methods in this pseudo-class can be executed on @ref binary "binary values"
 /**
@@ -96,6 +97,9 @@ int <binary>::find(data pattern, softint byte_offset = 0) [const;flags=RET_VALUE
     size_t bin_len;
     q_get_data(pattern, bin_ptr, bin_len);
 
+    if (!bin_len) {
+        return qore_string_private::emptyNeedleIndex(byte_offset, b->size());
+    }
     if (byte_offset < 0) {
         byte_offset = b->size() + byte_offset;
         if (byte_offset < 0) {
@@ -148,6 +152,9 @@ int <binary>::rfind(data pattern, softint byte_offset = -1) [const;flags=RET_VAL
     size_t bin_len;
     q_get_data(pattern, bin_ptr, bin_len);
 
+    if (!bin_len) {
+        return qore_string_private::emptyNeedleRindex(byte_offset, b->size());
+    }
     if (byte_offset < 0) {
         byte_offset = b->size() + byte_offset;
         if (byte_offset < 0) {

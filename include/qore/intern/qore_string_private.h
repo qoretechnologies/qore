@@ -347,11 +347,68 @@ public:
         return ptr - start + pos;
     }
 
+    //! Returns the position of an empty needle when searching forwards from \a pos
+    /** An empty string is found at every position from 0 to the end of the string inclusive, so the search
+        position is returned as with any other match: a negative \a pos is an offset from the end of the string,
+        and a position after the end of the string has no match
+
+        @param pos the search position
+        @param slen the length of the string in the units of \a pos (characters or bytes)
+
+        @return the position of the match or -1 if there is none
+    */
+    DLLLOCAL static qore_offset_t emptyNeedleIndex(qore_offset_t pos, size_t slen) {
+        if (pos < 0) {
+            pos += slen;
+            if (pos < 0) {
+                pos = 0;
+            }
+        }
+        return pos > (qore_offset_t)slen ? -1 : pos;
+    }
+
+    //! Returns the position of an empty needle when searching backwards from \a pos
+    /** An empty string is found at every position from 0 to the end of the string inclusive; -1 means the end of
+        the string, so the last match is the end of the string, and other negative positions are offsets before
+        it; a position after the end of the string is the end of the string
+
+        @param pos the search position
+        @param slen the length of the string in the units of \a pos (characters or bytes)
+
+        @return the position of the match or -1 if there is none
+    */
+    DLLLOCAL static qore_offset_t emptyNeedleRindex(qore_offset_t pos, size_t slen) {
+        if (pos < 0) {
+            pos += slen + 1;
+            return pos < 0 ? -1 : pos;
+        }
+        return pos > (qore_offset_t)slen ? (qore_offset_t)slen : pos;
+    }
+
+    //! Returns the length of the string in characters
+    DLLLOCAL int getCharLength(size_t& clen, ExceptionSink* xsink) const {
+        if (!getEncoding()->isMultiByte()) {
+            clen = len;
+            return 0;
+        }
+        const char* b = effective_buf();
+        clen = getEncoding()->getLength(b, b + len, xsink);
+        return *xsink ? -1 : 0;
+    }
+
     DLLLOCAL qore_offset_t index(const QoreString &orig_needle, qore_offset_t pos, ExceptionSink *xsink) const {
         assert(xsink);
         TempEncodingHelper needle(orig_needle, getEncoding(), xsink);
         if (!needle)
             return -1;
+
+        if (!needle->size()) {
+            size_t clen;
+            if (getCharLength(clen, xsink)) {
+                return -1;
+            }
+            return emptyNeedleIndex(pos, clen);
+        }
 
         const char* b = effective_buf();
         // do simple index
@@ -388,6 +445,9 @@ public:
     }
 
     DLLLOCAL qore_offset_t bindex(const QoreString& needle, qore_offset_t pos) const {
+        if (!needle.strlen()) {
+            return emptyNeedleIndex(pos, len);
+        }
         if (needle.strlen() + pos > len)
             return -1;
 
@@ -395,6 +455,9 @@ public:
     }
 
     DLLLOCAL qore_offset_t bindex(const std::string& needle, qore_offset_t pos) const {
+        if (needle.empty()) {
+            return emptyNeedleIndex(pos, len);
+        }
         if (needle.size() + pos > len)
             return -1;
 
@@ -402,6 +465,12 @@ public:
     }
 
     DLLLOCAL qore_offset_t bindex(const char* needle, qore_offset_t pos, size_t nsize = 0) const {
+        if (!nsize) {
+            nsize = strlen(needle);
+        }
+        if (!nsize) {
+            return emptyNeedleIndex(pos, len);
+        }
         if (pos < 0) {
             pos = len + pos;
             if (pos < 0) {
@@ -411,9 +480,6 @@ public:
             return -1;
         }
 
-        if (!nsize) {
-            nsize = strlen(needle);
-        }
         return index_simple(effective_buf(), len, needle, nsize, pos, getCharAlignment());
     }
 
@@ -464,6 +530,14 @@ public:
         if (!needle)
             return -1;
 
+        if (!needle->size()) {
+            size_t clen;
+            if (getCharLength(clen, xsink)) {
+                return -1;
+            }
+            return emptyNeedleRindex(pos, clen);
+        }
+
         const char* b = effective_buf();
         if (!getEncoding()->isMultiByte()) {
             if (pos < 0) {
@@ -503,6 +577,10 @@ public:
     }
 
     DLLLOCAL qore_offset_t brindex(const char* needle, size_t needle_len, qore_offset_t pos) const {
+        if (!needle_len) {
+            return emptyNeedleRindex(pos, len);
+        }
+
         if (pos < 0) {
             pos = len + pos;
         }
@@ -512,9 +590,6 @@ public:
         }
 
         if (pos < 0) {
-            if (pos == -1 && !len && !needle_len) {
-                return 0;
-            }
             return -1;
         }
 
