@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# IRLocalListPushLinear.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+# push to a typed local list must push in place, in top-level code and for locals that may hold NOTHING.
+#
+# The native load/list.push/store sequence for a local is only linear when qore_ir_mark_local_list_pushes() proves
+# the loaded list unique; otherwise the push copies the whole list (copy-on-write for a second reference), making N
+# pushes O(N^2): 40000 pushes took 3.4 s instead of 3 ms, in the IR, JIT, and tiered modes and in AOT-compiled
+# programs.  The analysis never ran for top-level code, whose IR is not optimized, and never recognized the push of a
+# local that may hold NOTHING (ex: "list<int> l;" or "*list<int> l = ();" in a function), whose auto-vivification
+# puts a branch between the load and the push.  Those pushes now use the structured lvalue path, which pushes in the
+# variable's own storage.
+#
+# The test checks:
+# - that the top-level IR does not use the native list.push sequence (deterministic)
+# - that the results, including aliases, type errors, and auto-vivification, are the same in every execution mode
+#   and in an AOT-compiled program
+# - that 4x the pushes costs no more than ~8x the time (linear is ~4x, a copy per push ~16x)
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+list<int> direct = (1,);
+list<int> direct_alias = direct;
+push direct, 2;
+
+list<int> typed = (7,);
+string type_error = \"none\";
+try {
+    push typed, \"invalid\";
+} catch (hash<ExceptionInfo> ex) {
+    type_error = ex.err;
+}
+
+list<int> invalid_empty;
+string empty_type_error = \"none\";
+try {
+    push invalid_empty, \"invalid\";
+} catch (hash<ExceptionInfo> ex) {
+    empty_type_error = ex.err;
+}
+
+list<int> empty;
+push empty, 4;
+list<softint> soft;
+push soft, \"3\";
+
+list<int> nested_alias;
+{
+    list<int> inner = (1, 2);
+    nested_alias = inner;
+    push inner, 3;
+    nested_alias += 9;
+}
+
+# locals that may hold NOTHING in a function
+string sub functionCases() {
+    list<int> uninit;
+    push uninit, 1;
+    *list<int> nullable = ();
+    push nullable, 2;
+    list<softint> soft_uninit;
+    push soft_uninit, \"3\";
+    list<int> invalid;
+    string error = \"none\";
+    try {
+        push invalid, \"invalid\";
+    } catch (hash<ExceptionInfo> ex) {
+        error = ex.err;
+    }
+    return sprintf(\"%y:%y:%y:%s:%y\", uninit, nullable, soft_uninit, error, invalid);
+}
+
+int sub pushUninit(int n) {
+    list<int> l;
+    for (int i = 0; i < n; ++i) {
+        push l, i;
+    }
+    return l.size();
+}
+
+int sub pushNullable(int n) {
+    *list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, i;
+    }
+    return l.size();
+}
+
+# returns True if 4x the pushes costs no more than ~8x the time (linear is ~4x, a copy per push ~16x)
+bool sub scalesLinearly(code<int(int)> pusher) {
+    pusher(1000);
+    int started = clock_get_monotonic_us();
+    int small_size = pusher(10000);
+    int small_elapsed = clock_get_monotonic_us() - started;
+    started = clock_get_monotonic_us();
+    int large_size = pusher(40000);
+    int large_elapsed = clock_get_monotonic_us() - started;
+    return small_size == 10000 && large_size == 40000
+        && (large_elapsed < 8 * small_elapsed || large_elapsed < 250000);
+}
+
+# clock_get_monotonic_us() is a monotonic clock: an NTP step cannot corrupt the elapsed times
+bool linear = True;
+if (ENV.QORE_TEST_LIST_PUSH_SCALING == \"1\") {
+    list<int> warmup = ();
+    for (int i = 0; i < 1000; ++i) {
+        push warmup, i;
+    }
+    list<int> small = ();
+    int started = clock_get_monotonic_us();
+    for (int i = 0; i < 10000; ++i) {
+        push small, i;
+    }
+    int small_elapsed = clock_get_monotonic_us() - started;
+    list<int> large = ();
+    started = clock_get_monotonic_us();
+    for (int i = 0; i < 40000; ++i) {
+        push large, i;
+    }
+    int large_elapsed = clock_get_monotonic_us() - started;
+    # the absolute bound keeps timer noise on loaded hosts from failing runs that are already an order of
+    # magnitude below the quadratic cost (more than 3 seconds for 40000 pushes)
+    linear = small.size() == 10000 && large.size() == 40000
+        && (large_elapsed < 8 * small_elapsed || large_elapsed < 250000)
+        && scalesLinearly(\\pushUninit()) && scalesLinearly(\\pushNullable());
+}
+
+printf(\"%d:%d|%s:%d|%s:%y:%d|%d:%d|%y|%y|%s|%y\\n\", direct_alias.size(), direct.size(), type_error,
+    typed.size(), empty_type_error, invalid_empty === NOTHING, invalid_empty.size(), empty.size(), empty[0], soft,
+    nested_alias, functionCases(), linear);
+";
+
+string base_path = "/tmp/qore-ir-local-list-push-linear-" + string(getpid());
+string script_path = base_path + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+on_exit {
+    unlink(script_path);
+    unlink(base_path);
+}
+
+int failures = 0;
+
+# the top-level IR pushes through the structured lvalue path, not the native list.push sequence
+string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1", libqore_dir,
+    qore_bin, script_path));
+if (ir_dump !~ /lvalue\.path/) {
+    printf("the top-level IR dump has no structured lvalue push:\n%s", ir_dump);
+    ++failures;
+}
+if (ir_dump =~ /list\.push/) {
+    printf("the top-level IR uses the native list.push sequence:\n%s", ir_dump);
+    ++failures;
+}
+
+string expected = "1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0|1:4|[3]|[1, 2, 9]"
+    "|[1]:[2]:[3]:RUNTIME-TYPE-ERROR:[]|True\n";
+foreach string mode in ("ast", "ir", "tiered", "jit") {
+    string actual = backquote(sprintf(
+        "QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        ++failures;
+    }
+}
+
+string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1", libqore_dir, qcc_bin, base_path,
+    script_path));
+if (!is_file(base_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    ++failures;
+} else {
+    string aot = backquote(sprintf("QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+        base_path));
+    if (aot != expected) {
+        printf("mismatch in AOT\nexpected:\n%sactual:\n%s", expected, aot);
+        ++failures;
+    }
+}
+
+if (failures) {
+    exit(2);
+}
+printf("IRLocalListPushLinear: OK\n");

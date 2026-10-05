@@ -556,6 +556,12 @@ private:
     //! Handlers registered for current block, to be lowered inline at exit points
     std::vector<InlineHandler> block_handlers;
 
+    //! True while lowering top-level code
+    /** Top-level IR is executed without the IR optimization passes, so the analysis that proves a local list
+        unique for a native list push (qore_ir_mark_local_list_pushes()) never runs for it; see lowerPush()
+    */
+    bool lowering_top_level = false;
+
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
      *  be lost when lowerStatementBlock() erases block_handlers. Only populated at

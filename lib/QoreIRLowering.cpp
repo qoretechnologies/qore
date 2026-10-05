@@ -3543,6 +3543,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // thread before the top-level block runs.  Treating the root top-level
     // block as an ordinary lexical scope pops program-scope CVVs too early.
     const bool root_top_level = dynamic_cast<const TopLevelStatementBlock*>(block) != nullptr;
+    if (root_top_level) {
+        lowering_top_level = true;
+    }
 
     // Get the block's local variables for cleanup.
     const LVList* lvars = root_top_level ? nullptr : block->getLVList();
@@ -10221,7 +10224,24 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         // native sequence.
         const bool local_may_be_reference = !QoreTypeInfo::hasType(local_type)
             || QoreTypeInfo::isReference(local_type);
-        if (local_var && !local_may_be_reference && !var->ref.id->closureUse()) {
+        // The native sequence is only linear when qore_ir_mark_local_list_pushes() proves the loaded list unique
+        // and marks the push in place or the load as borrowed; otherwise the loaded value holds a second reference
+        // and the generic ListPush copies the whole list before each push (copy-on-write for aliases), so N pushes
+        // cost O(N^2).  The analysis only recognizes a load immediately followed by the push and the store of its
+        // result, so the native sequence is used only where lowering emits exactly that:
+        // - not in top-level code, whose IR is executed without the optimization passes that run the analysis
+        // - only for a local that is definitely assigned a value that is not NOTHING here: otherwise the push must
+        //   first auto-vivify the typed list (QorePushOperatorNode commits it before validating the pushed value,
+        //   so a caught element type error leaves an empty list), which puts a branch and a phi between the load
+        //   and the push
+        // Every other push goes through the structured path below, which pushes in place in the variable's own
+        // storage and preserves the auto-vivification order.
+        const bool local_known_assigned = local_var && parse_context
+            && parse_context->isLocalDefinitelyAssigned(var->ref.id)
+            && local_type
+            && QoreTypeInfo::parseReturns(local_type, NT_NOTHING) == QTI_NOT_EQUAL;
+        if (local_var && !local_may_be_reference && !var->ref.id->closureUse() && !lowering_top_level
+                && local_known_assigned) {
 
             // Lower the value to push first
             QoreIRValue push_val = lowerMutationOperand(left_expr, op->getRight(), op->loc, error);
@@ -10243,51 +10263,6 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             QoreIRValue list_val = lowerExpression(left_expr, error);
             if (!list_val.isValid()) {
                 return QoreIRValue();
-            }
-
-            // QorePushOperatorNode commits typed-list auto-vivification before
-            // validating the pushed value. Preserve that exception-visible
-            // ordering: a caught element type error must leave an empty list,
-            // not the local's previous NOTHING value. Definitely assigned,
-            // non-NOTHING locals keep the straight-line fast path.
-            bool local_known_assigned = parse_context
-                && parse_context->isLocalDefinitelyAssigned(var->ref.id)
-                && var_type
-                && QoreTypeInfo::parseReturns(var_type, NT_NOTHING) == QTI_NOT_EQUAL;
-            if (!local_known_assigned) {
-                QoreIRBasicBlock* has_value_block = createBlock("push.has_value");
-                QoreIRBasicBlock* nothing_block = createBlock("push.nothing");
-                QoreIRBasicBlock* merge_block = createBlock("push.merge");
-                if (!has_value_block || !nothing_block || !merge_block) {
-                    error = "IR builder failed to create blocks for push auto-vivification";
-                    return QoreIRValue();
-                }
-                QoreIRValue nothing = builder.createConstNothing(op->loc)->result;
-                QoreIRValue is_nothing = builder.createBinaryOp(
-                    QoreIROpcode::EqHard, list_val, nothing, op->loc)->result;
-                builder.createBranchIf(is_nothing, nothing_block, has_value_block,
-                    op->loc);
-
-                builder.setBlock(nothing_block);
-                QoreIRValue empty_list =
-                    builder.createEmptyList(op->loc, element_type)->result;
-                auto* initial_store = builder.createStoreLocal(
-                    var->ref.id, empty_list, op->loc);
-                if (!exception_stack.empty()) {
-                    initial_store->exception_target = exception_stack.back();
-                }
-                QoreIRBasicBlock* nothing_exit_block = builder.getBlock();
-                builder.createBranch(merge_block, op->loc);
-
-                builder.setBlock(has_value_block);
-                QoreIRBasicBlock* has_value_exit_block = builder.getBlock();
-                builder.createBranch(merge_block, op->loc);
-
-                builder.setBlock(merge_block);
-                list_val = builder.createPhi({
-                    {list_val, has_value_exit_block},
-                    {empty_list, nothing_exit_block},
-                }, op->loc)->result;
             }
 
             if (!exception_stack.empty()) {

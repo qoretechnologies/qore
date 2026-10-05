@@ -100,6 +100,16 @@ before validating the pushed element. A caught element-type error therefore
 leaves an empty list in the local, and any tentative helper-owned COW result is
 released on failure.
 
+The native load/`list.push`/store sequence is linear only when
+`qore_ir_mark_local_list_pushes()` proves the loaded list unique and marks the
+push in place or the load as borrowed; otherwise the loaded value is a second
+reference and the generic `ListPush` copies the list before each push. That
+analysis is part of the IR optimization passes, which do not run for top-level
+code (interpreted, JIT, or AOT), so `lowerPush()` uses the structured lvalue path
+for every push in top-level code (`lowering_top_level`); it pushes in the
+variable's own storage. `examples/test/ir/IRTopLevelListPush.qtest` checks the
+lowering and the scaling.
+
 ## Shared-Local Mutation Rule
 
 Captured, closure-bound, and thread-safe locals must use the structured lvalue
