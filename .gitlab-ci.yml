@@ -3,6 +3,10 @@ stages:
   - test
 
 default:
+  # A Kubernetes job pod can time out waiting for CPU capacity before tests start.
+  retry:
+    max: 2
+    when: runner_system_failure
   services:
     - name: mariadb:11.4
       alias: mysql
