@@ -1305,6 +1305,9 @@ if (resp.stop_reason == "tool_use") {
         if (exists body.max_retries) {
             options_h.max_retries = body.max_retries;
         }
+        if (body.cached_content.val()) {
+            options_h.cached_content = body.cached_content;
+        }
 
         hash<auto!> body_options;
         provider.applyOpenAiRequestControls(\body_options, body);

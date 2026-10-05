@@ -79,6 +79,9 @@ module QoreLlmTypes {
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - initial release
+    - @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content" for explicit prompt
+      caching and @ref QoreLlmUtils::LlmTokenUsage::reasoning_in_output "LlmTokenUsage::reasoning_in_output",
+      which says whether the reasoning tokens are part of the output tokens
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -243,6 +246,13 @@ public hashdecl LlmRequestOptions {
     *hash<auto> output_schema;
     #! Provider-specific request body fields merged into the generated body
     *hash<auto> body_options;
+    #! Cached content (explicit prompt cache) resource for this call
+    /** For providers with explicit prompt caching, such as Gemini and Vertex AI (\c cachedContents), the name or
+        ID of a cached content resource that holds the system instruction, tools and leading contents of the
+        request.  The request then references it and does not send those parts again; system messages and tools
+        given with the request are not sent.  Providers without explicit caching ignore it.
+    */
+    *string cached_content;
     #! Optional per-call telemetry observer
     /** When set, this observer receives provider-neutral call lifecycle
         events for this request.  Per-call observers override the backend
@@ -399,6 +409,13 @@ public hashdecl LlmTokenUsage {
     int cache_creation_input_tokens = 0;
     #! Hidden reasoning / thinking token count
     int reasoning_tokens = 0;
+    #! Whether \c reasoning_tokens are part of \c output_tokens
+    /** @ref True when the provider reports its reasoning tokens as part of its output count, such as OpenAI;
+        @ref False when it reports them separately, such as Gemini, in which case the generated tokens to bill
+        are \c output_tokens plus \c reasoning_tokens.  Set by
+        @ref QoreLlmUtils::LlmTelemetry::normalizeUsage "normalizeUsage"; no value means no usage was reported.
+    */
+    *bool reasoning_in_output;
     #! Embedding token count when the response came from an embedding API
     int embedding_tokens = 0;
     #! Reranker token count when the response came from a rerank API

@@ -142,4 +142,10 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - initial release
+    - @ref QoreLlmUtils::LlmTelemetry::normalizeUsage() "LlmTelemetry::normalizeUsage()" sets
+      \c reasoning_in_output, so cost calculations add the reasoning tokens to the output tokens only when the
+      provider reports them separately (Gemini thinking tokens), and keeps an explicit \c reasoning_in_output of
+      usage that a provider module already normalized
+    - the OpenAI-compatible facade (@ref QoreLlmUtils::LlmBackend::chatCompletions() "chatCompletions()") takes a
+      \c cached_content request field for providers with explicit prompt caching
 */

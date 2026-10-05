@@ -71,6 +71,10 @@ module GeminiBodyShape {
       (in compact mode) flatten deep object/array payloads
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
+    - @ref applyCachedContent() — make a request use a cached content resource
+      (explicit prompt caching)
+    - @ref shapeCachedContentBody() / @ref shapeCacheExpiration() — the bodies
+      of \c cachedContents create and update requests
 
     Response-side:
     - @ref parseChatResponse() — Gemini response → @ref QoreLlmUtils::ChatResponse
@@ -90,6 +94,12 @@ module GeminiBodyShape {
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
+    - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
+      \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
+      (@ref shapeCachedContentBody()); providers take it from
+      @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content"
+    - @ref normalizeUsage() marks that thinking tokens are not part of the output tokens
+      (\c reasoning_in_output = @ref False) and reports the cached tokens explicitly, as \c 0 for a cache miss
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
@@ -626,6 +636,13 @@ public hash<auto> sub parseToolResponse(*string content) {
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without
           modifying this shaper
+        - \c cached_content (\c *string): the name of a cached content resource
+          (\c cachedContents/... for the Gemini API, or
+          \c projects/.../locations/.../cachedContents/... for Vertex AI); when set,
+          the body references it in \c cachedContent and leaves out
+          \c systemInstruction, \c tools and \c toolConfig, which must be part of
+          the cached content instead (see @ref applyCachedContent()); system
+          messages are therefore not sent
 
     @return the Gemini-shaped request body
 */
@@ -737,11 +754,121 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
     if (resolved.extra_body.typeCode() == NT_HASH) {
         body += resolved.extra_body;
     }
+    if (resolved.cached_content.val()) {
+        return GeminiBodyShape::applyCachedContent(body, resolved.cached_content);
+    }
+    return body;
+}
+
+#! Makes a request body use a cached content resource
+/** A request that uses cached content must not repeat the parts of the request that the cache holds: Gemini and
+    Vertex AI reject a request with \c cachedContent that also has \c systemInstruction, \c tools or
+    \c toolConfig, so they are removed and must be given when the cache is created
+    (see @ref shapeCachedContentBody()).
+
+    @param body a \c generateContent request body
+    @param cached_content the cached content resource name
+
+    @return the body with \c cachedContent set and without \c systemInstruction, \c tools and \c toolConfig
+*/
+public hash<auto> sub applyCachedContent(hash<auto> body, string cached_content) {
+    return body - ("systemInstruction", "tools", "toolConfig") + {"cachedContent": cached_content};
+}
+
+#! Options for creating a cached content resource with @ref shapeCachedContentBody()
+public hashdecl GeminiCachedContentOptions {
+    #! Time to live in seconds; the server default (one hour) applies if neither this nor \c expire_time is set
+    *int ttl_seconds;
+    #! Absolute expiration time; mutually exclusive with \c ttl_seconds
+    *date expire_time;
+    #! Optional display name for the cached content
+    *string display_name;
+    #! Optional Gemini \c toolConfig for the cached tools (ex: <tt>{"functionCallingConfig": {"mode": "AUTO"}}</tt>)
+    *hash<auto> tool_config;
+}
+
+#! Returns the expiration fields of a cached content resource
+/** @param ttl_seconds the time to live in seconds
+    @param expire_time the absolute expiration time
+
+    @return \c ttl as a duration string (ex: \c "3600s") or \c expireTime as an RFC 3339 UTC timestamp, or an
+    empty hash if neither is given
+
+    @throw GEMINI-CACHE-ERROR both values are given, or the time to live is not positive
+*/
+public hash<auto> sub shapeCacheExpiration(*int ttl_seconds, *date expire_time) {
+    if (exists ttl_seconds && exists expire_time) {
+        throw "GEMINI-CACHE-ERROR", "a cached content expiration takes either a time to live or an expiration "
+            "time, not both";
+    }
+    if (exists ttl_seconds) {
+        if (ttl_seconds <= 0) {
+            throw "GEMINI-CACHE-ERROR", sprintf("the cached content time to live must be positive; got %d",
+                ttl_seconds);
+        }
+        return {"ttl": sprintf("%ds", ttl_seconds)};
+    }
+    if (exists expire_time) {
+        return {"expireTime": gmtime(expire_time).format("YYYY-MM-DDTHH:mm:SS.xxZ")};
+    }
+    return {};
+}
+
+#! Builds the body of a request that creates a cached content resource
+/** The cached content holds the parts of a request that do not change between calls: the system instruction,
+    the tools and their configuration, and the leading conversation contents.  Requests then reference it with
+    \c cached_content (see @ref shapeChatBody()) instead of sending those parts again.
+
+    The messages are shaped as with @ref shapeChatBody(): system messages become \c systemInstruction and the
+    other messages become \c contents.
+
+    @par Example
+    @code{.py}
+hash<auto> body = GeminiBodyShape::shapeCachedContentBody(
+    "projects/my-project/locations/us-central1/publishers/google/models/gemini-2.5-flash",
+    (<ChatMessage>{"role": "system", "content": policy_text},
+     <ChatMessage>{"role": "user", "content": contract_text}),
+    tools, <GeminiCachedContentOptions>{"ttl_seconds": 3600});
+    @endcode
+
+    @param model the model resource name (\c models/... for the Gemini API, or
+        \c projects/.../locations/.../publishers/google/models/... for Vertex AI)
+    @param messages the messages to cache
+    @param tools optional tool definitions to cache
+    @param opts optional expiration, display name and tool configuration
+
+    @return the \c cachedContents create request body
+
+    @throw GEMINI-CACHE-ERROR invalid expiration options
+*/
+public hash<auto> sub shapeCachedContentBody(string model, list<hash<QoreLlmUtils::ChatMessage>> messages,
+        *list<hash<QoreLlmUtils::ToolDefinition>> tools, *hash<GeminiCachedContentOptions> opts) {
+    hash<auto> shaped = GeminiBodyShape::shapeChatBody(messages, tools, NOTHING, {});
+    hash<auto!> body = {"model": model};
+    if (shaped.contents) {
+        body.contents = shaped.contents;
+    }
+    if (shaped.systemInstruction) {
+        body.systemInstruction = shaped.systemInstruction;
+    }
+    if (shaped.tools) {
+        body.tools = shaped.tools;
+    }
+    if (opts.tool_config) {
+        body.toolConfig = opts.tool_config;
+    }
+    if (opts.display_name.val()) {
+        body.displayName = opts.display_name;
+    }
+    body += GeminiBodyShape::shapeCacheExpiration(opts.ttl_seconds, opts.expire_time);
     return body;
 }
 
 #! Parses a Gemini response into a generic @ref QoreLlmUtils::ChatResponse
-public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
+/** @param body the response body
+    @param cache_requested @ref True if the request used cached content; see @ref normalizeUsage()
+*/
+public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body, *bool cache_requested) {
     hash<auto> cand = body.candidates[0] ?? {};
     list<string> text_parts = ();
     *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
@@ -778,7 +905,7 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
                 : GeminiBodyShape::mapFinishReason(cand.finishReason),
         "content": text_parts ? text_parts.join("") : NOTHING,
         "tool_calls": tool_calls,
-        "usage": GeminiBodyShape::normalizeUsage(body.usageMetadata),
+        "usage": GeminiBodyShape::normalizeUsage(body.usageMetadata, cache_requested),
         "raw": body,
         "provider_diagnostics": GeminiBodyShape::providerDiagnostics(body, cand),
     };
@@ -853,24 +980,44 @@ public string sub extractText(hash<auto> body) {
 }
 
 #! Maps Gemini usage metadata to the OpenAI-style counters
-public hash<auto> sub normalizeUsage(auto usage) {
+/** Gemini reports its thinking tokens (\c thoughtsTokenCount) separately from the generated output
+    (\c candidatesTokenCount), unlike OpenAI, whose reasoning tokens are part of its completion count.  The
+    result therefore always has \c reasoning_in_output set to @ref False, and \c reasoning_tokens holds the
+    thinking tokens, which are not part of \c completion_tokens / \c output_tokens; consumers such as
+    \c QoreLlmUtils::LlmTelemetry::normalizeUsage() and cost calculations must
+    add them to the output tokens, while \c total_tokens already includes them.
+
+    The cached input tokens (\c cachedContentTokenCount) are part of the prompt tokens and are returned in
+    \c cached_content_token_count, \c cache_read_input_tokens and <tt>prompt_tokens_details.cached_tokens</tt>
+    when reported, and as \c 0 when the request used cached content (\a cache_requested) but the response
+    reports none, so a cache miss is explicit.
+
+    @param usage the Gemini \c usageMetadata
+    @param cache_requested @ref True if the request used cached content
+
+    @return OpenAI-style usage counters
+*/
+public hash<auto> sub normalizeUsage(auto usage, *bool cache_requested) {
     int prompt_tokens = usage.promptTokenCount ?? 0;
     int completion_tokens = usage.candidatesTokenCount ?? 0;
+    int reasoning_tokens = usage.thoughtsTokenCount ?? 0;
     int total_tokens = usage.totalTokenCount
-        ?? (prompt_tokens + completion_tokens);
+        ?? (prompt_tokens + completion_tokens + reasoning_tokens);
     hash<auto!> rv = {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
         "input_tokens": prompt_tokens,
         "output_tokens": completion_tokens,
+        # thinking tokens are reported separately from the output tokens
+        "reasoning_in_output": False,
     };
-    int cached_tokens = usage.cachedContentTokenCount ?? 0;
-    if (cached_tokens > 0) {
+    if (exists usage.cachedContentTokenCount || cache_requested) {
+        int cached_tokens = usage.cachedContentTokenCount ?? 0;
         rv.cached_content_token_count = cached_tokens;
         rv.cache_read_input_tokens = cached_tokens;
+        rv.prompt_tokens_details = {"cached_tokens": cached_tokens};
     }
-    int reasoning_tokens = usage.thoughtsTokenCount ?? 0;
     if (reasoning_tokens > 0) {
         rv.reasoning_tokens = reasoning_tokens;
     }
@@ -1035,7 +1182,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         hash<auto> resp = postGenerate(body, opts);
         return <QoreLlmUtils::LlmCompletionResult>{
             "content": GeminiBodyShape::extractText(resp.body),
-            "usage": GeminiBodyShape::normalizeUsage(resp.body.usageMetadata),
+            "usage": GeminiBodyShape::normalizeUsage(resp.body.usageMetadata, exists body.cachedContent),
         };
     }
 
@@ -1046,7 +1193,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         hash<auto> body = buildModelBody(messages, tools, opts.output_schema, opts);
         hash<auto> resp = postGenerate(body, opts);
         hash<QoreLlmUtils::ChatResponse> rv =
-            GeminiBodyShape::parseChatResponse(resp.body);
+            GeminiBodyShape::parseChatResponse(resp.body, exists body.cachedContent);
         rv.model = getModelName(opts);
         return rv;
     }
@@ -1365,14 +1512,39 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<auto> output_schema,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *string cached_content = getRequestCachedContent(opts);
         hash<auto> resolved = {
             "max_output_tokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
             "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
+            "cached_content": cached_content,
         };
         hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
             output_schema, resolved);
-        return mergeRequestBodyOptions(body, opts);
+        body = mergeRequestBodyOptions(body, opts);
+        # body options such as a toolConfig translated from an OpenAI tool_choice must not be sent with a cache
+        return cached_content
+            ? GeminiBodyShape::applyCachedContent(body, cached_content)
+            : body;
+    }
+
+    #! Returns the cached content resource that a request uses, if any
+    /** @return @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content", or a
+        \c cachedContent given in \c body_options, resolved with @ref resolveCachedContentName()
+    */
+    *string getRequestCachedContent(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *string name = opts.cached_content ?? opts.body_options.cachedContent;
+        return name.val() ? resolveCachedContentName(name) : NOTHING;
+    }
+
+    #! Returns the full resource name for a cached content name or ID
+    /** The base class returns names that have a \c / unchanged and prefixes IDs with \c "cachedContents/", the
+        Gemini API form; providers with another resource layout override it
+
+        @param name a cached content resource name or ID
+    */
+    string resolveCachedContentName(string name) {
+        return name =~ /\// ? name : "cachedContents/" + name;
     }
 
     #! Posts a generateContent request through the provider transport and returns the response

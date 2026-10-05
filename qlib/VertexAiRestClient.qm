@@ -136,10 +136,45 @@ hash<ChatResponse> r = p.chat((
 ));
     @endcode
 
+    @par Explicit prompt caching
+
+    Requests that repeat a long system instruction, tool catalog or document can cache them in a Vertex AI
+    \c cachedContents resource and reference it instead of sending them again; cached input tokens are billed at
+    a reduced rate.  Vertex AI requires the system instruction, the tools and the tool configuration of a request
+    that uses a cache to be in the cache, so:
+    - @ref VertexAiRestClient::VertexAiLlmProvider::createCachedContent() "createCachedContent()" creates the cache
+      from messages (system messages become the system instruction), tools and
+      @ref GeminiBodyShape::GeminiCachedContentOptions "GeminiCachedContentOptions" (\c ttl_seconds or
+      \c expire_time, \c display_name, \c tool_config) for the model of the request
+    - requests reference it with
+      @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content" (the resource
+      name or ID; the OpenAI-compatible facade takes a \c cached_content request field); they then leave out
+      system messages, tools and the tool configuration
+    - @ref VertexAiRestClient::VertexAiLlmProvider::getCachedContent() "getCachedContent()",
+      @ref VertexAiRestClient::VertexAiLlmProvider::refreshCachedContent() "refreshCachedContent()" (new time to
+      live or expiration time) and
+      @ref VertexAiRestClient::VertexAiLlmProvider::deleteCachedContent() "deleteCachedContent()" manage it
+
+    The usage of a request that uses a cache reports the cached input tokens in \c cached_content_token_count,
+    \c cache_read_input_tokens and <tt>prompt_tokens_details.cached_tokens</tt>, as \c 0 for a cache miss.
+
+    @code{.py}
+hash<auto> cache = provider.createCachedContent(
+    (<ChatMessage>{"role": "system", "content": policy_text},
+     <ChatMessage>{"role": "user", "content": contract_text}),
+    tools, <GeminiCachedContentOptions>{"ttl_seconds": 3600});
+hash<ChatResponse> r = provider.chat(
+    (<ChatMessage>{"role": "user", "content": "List the termination clauses"},), NOTHING,
+    <LlmRequestOptions>{"cached_content": cache.name});
+provider.deleteCachedContent(cache.name);
+    @endcode
+
     @section vertexairestclientrelnotes Release Notes
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release
+    - explicit prompt caching with Vertex AI \c cachedContents resources: create, get, refresh and delete, and
+      requests that reference a cache
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
@@ -362,6 +397,147 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
     #! Returns the Vertex \c :generateContent REST path for this request
     string getRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getVertexPath(opts);
+    }
+
+    #! Returns the Vertex AI resource name of a model
+    /** @param opts per-call options; the model is resolved as for requests
+
+        @return \c projects/{project}/locations/{location}/publishers/google/models/{model}
+    */
+    string getModelResourceName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        string model = getModelName(opts);
+        return model =~ /^projects\//
+            ? model
+            : sprintf("projects/%s/locations/%s/publishers/google/models/%s", project_id, region,
+                GeminiBodyShape::bareModelName(model));
+    }
+
+    #! Returns the full Vertex AI resource name for a cached content name or ID
+    /** @param name a cached content ID, or a full resource name, which is returned unchanged
+
+        @return \c projects/{project}/locations/{location}/cachedContents/{id}
+
+        @throw VERTEX-AI-CACHE-ERROR a name with a \c / that is not a Vertex AI cached content resource name
+    */
+    string resolveCachedContentName(string name) {
+        if (name =~ /^projects\/[^\/]+\/locations\/[^\/]+\/cachedContents\/[^\/]+$/) {
+            return name;
+        }
+        if (name =~ /\//) {
+            throw "VERTEX-AI-CACHE-ERROR", sprintf("%y is not a Vertex AI cached content resource name "
+                "(projects/{project}/locations/{location}/cachedContents/{id}) or ID", name);
+        }
+        return sprintf("projects/%s/locations/%s/cachedContents/%s", project_id, region, name);
+    }
+
+    #! Creates a cached content resource (explicit prompt cache)
+    /** Vertex AI requires the system instruction, the tools and the tool configuration of requests that use a
+        cache to be in the cache, so they are given here and requests that reference the cache with
+        @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content" do not send
+        them.  The cache is created for the model of the request (\a opts or the configured model); requests
+        that use it must use the same model.
+
+        @par Example
+        @code{.py}
+hash<auto> cache = provider.createCachedContent(
+    (<ChatMessage>{"role": "system", "content": policy_text},
+     <ChatMessage>{"role": "user", "content": contract_text}),
+    tools, <GeminiCachedContentOptions>{"ttl_seconds": 3600, "display_name": "contract review"});
+hash<ChatResponse> r = provider.chat(
+    (<ChatMessage>{"role": "user", "content": "List the termination clauses"},), NOTHING,
+    <LlmRequestOptions>{"cached_content": cache.name});
+        @endcode
+
+        @param messages the messages to cache: system messages become the system instruction, the others the
+            leading contents
+        @param tools optional tools to cache
+        @param cache_opts optional time to live or expiration time, display name and tool configuration
+        @param opts optional per-call options (model, timeout)
+
+        @return the created \c CachedContent resource, with its full resource name in \c name, its
+            \c expireTime and its \c usageMetadata
+
+        @throw GEMINI-CACHE-ERROR invalid expiration options
+        @throw LLM-ERROR the request failed
+    */
+    hash<auto> createCachedContent(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<GeminiBodyShape::GeminiCachedContentOptions> cache_opts,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = GeminiBodyShape::shapeCachedContentBody(getModelResourceName(opts), messages, tools,
+            cache_opts);
+        # creating a cache is not idempotent, so a failed create is not retried
+        return doCacheRequest("POST", sprintf("/v1/projects/%s/locations/%s/cachedContents",
+            encode_url(project_id, True), encode_url(region, True)), body, opts, False);
+    }
+
+    #! Returns a cached content resource
+    /** @param name the cached content ID or full resource name
+        @param opts optional per-call options (timeout, retries)
+
+        @return the \c CachedContent resource
+
+        @throw LLM-ERROR the request failed, for example because the cache has expired
+    */
+    hash<auto> getCachedContent(string name, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return doCacheRequest("GET", getCachedContentPath(name), NOTHING, opts, True);
+    }
+
+    #! Updates the expiration of a cached content resource
+    /** Exactly one of \a ttl_seconds and \a expire_time must be given; a time to live is counted from the
+        update.
+
+        @param name the cached content ID or full resource name
+        @param ttl_seconds the new time to live in seconds
+        @param expire_time the new absolute expiration time
+        @param opts optional per-call options (timeout, retries)
+
+        @return the updated \c CachedContent resource
+
+        @throw GEMINI-CACHE-ERROR neither or both expiration values given, or a time to live that is not positive
+        @throw LLM-ERROR the request failed
+    */
+    hash<auto> refreshCachedContent(string name, *int ttl_seconds, *date expire_time,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = GeminiBodyShape::shapeCacheExpiration(ttl_seconds, expire_time);
+        if (!body) {
+            throw "GEMINI-CACHE-ERROR", "refreshing a cached content requires a time to live or an expiration "
+                "time";
+        }
+        return doCacheRequest("PATCH", getCachedContentPath(name) + "?updateMask=" + (keys body)[0], body, opts,
+            True);
+    }
+
+    #! Deletes a cached content resource
+    /** @param name the cached content ID or full resource name
+        @param opts optional per-call options (timeout, retries)
+
+        @throw LLM-ERROR the request failed
+    */
+    deleteCachedContent(string name, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        doCacheRequest("DELETE", getCachedContentPath(name), NOTHING, opts, True);
+    }
+
+    #! Returns the REST path of a cached content resource
+    private string getCachedContentPath(string name) {
+        return "/v1/" + (map encode_url($1, True), resolveCachedContentName(name).split("/")).join("/");
+    }
+
+    #! Sends a cachedContents request and returns the response body
+    private hash<auto> doCacheRequest(string method, string path, auto body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts, bool retry) {
+        ensureRestClient();
+        *hash<auto> hdr = getRequestHeaders(opts);
+        code call = hash<auto> sub () {
+            return getRestClient().restDoRequestWithTimeout(method, path, body, hdr, getRequestTimeoutMs(opts));
+        };
+        try {
+            hash<auto> resp = retry ? withRetry(call, opts) : call();
+            return resp.body.typeCode() == NT_HASH ? resp.body : {};
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("%s %s request to %y failed: %s", getProviderLabel(), method, path,
+                GeminiBodyShape::requestErrorDetail(ex)), ex;
+        }
     }
 
     #! Returns the bearer token (ADC/service-account) plus optional quota-project header

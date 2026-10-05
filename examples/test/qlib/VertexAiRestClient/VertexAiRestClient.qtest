@@ -47,7 +47,10 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
     }
     public {
         string last_path = "";
+        string last_method = "";
         *hash<auto> last_body;
+        #! cachedContents requests in the order received: method, path and body
+        list<hash<auto>> cache_requests = ();
         string last_authorization = "";
         hash<auto> generate_response = {
             "candidates": (
@@ -86,6 +89,7 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
 
     hash handleRequest(hash cx, hash hdr, *data body) {
         last_path = cx.raw_path;
+        last_method = hdr.method;
         last_authorization = hdr."authorization" ?? "";
         string body_str = body
             ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
@@ -99,6 +103,20 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
         if (last_path =~ /\/token\/?$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(token_response));
+        }
+        if (last_path =~ /\/cachedContents/) {
+            push cache_requests, {"method": last_method, "path": last_path, "body": last_body};
+            string name = "projects/fake-project/locations/us-central1/cachedContents/cache-1";
+            if (last_method == "DELETE") {
+                return makeResponse({"Content-Type": MimeTypeJson}, 200, "{}");
+            }
+            return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+                "name": name,
+                "model": last_body.model
+                    ?? "projects/fake-project/locations/us-central1/publishers/google/models/gemini-2.0-flash",
+                "expireTime": "2026-10-05T12:00:00Z",
+                "usageMetadata": {"totalTokenCount": 4096},
+            } + (last_body.displayName ? {"displayName": last_body.displayName} : {})));
         }
         if (last_path =~ /:streamGenerateContent\?alt=sse$/) {
             if (stream_error_code) {
@@ -150,6 +168,11 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("missing project_id throws",          \missingProjectTest());
         addTestCase("embedder factory + round-trip",      \embedderTest());
         addTestCase("VertexAiRestConnection constructs",  \connectionTest());
+        addTestCase("chat body with and without cached content", \cachedContentBodyShapeTest());
+        addTestCase("cachedContents create/get/refresh/delete requests", \cacheResourceTest());
+        addTestCase("chat with cached content omits cached parts", \cachedChatTest());
+        addTestCase("Gemini usage normalization", \usageNormalizationTest());
+        addTestCase("streamed usage counts thinking tokens once", \streamUsageTest());
 
         try {
             setupFakeServer();
@@ -640,6 +663,258 @@ public class VertexAiTest inherits QUnit::Test {
                     "gcp_sa_json_path": sa_path,
                 },
             });
+    }
+
+    #! a request that uses cached content leaves out what the cache holds; without it the body is unchanged
+    private cachedContentBodyShapeTest() {
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": "You review contracts."},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "Find the termination clauses"},
+        );
+        list<hash<QoreLlmUtils::ToolDefinition>> tools = (
+            <QoreLlmUtils::ToolDefinition>{"name": "lookup", "description": "look up a clause",
+                "parameters": {"type": "object", "properties": {"k": {"type": "string"}}}},
+        );
+        hash<auto> resolved = {"max_output_tokens": 100, "temperature": 0.2};
+        hash<auto> plain = GeminiBodyShape::shapeChatBody(messages, tools, NOTHING, resolved);
+        assertEq("You review contracts.", plain.systemInstruction.parts[0].text);
+        assertEq("lookup", plain.tools[0].functionDeclarations[0].name);
+        assertFalse(plain.hasKey("cachedContent"));
+        # a resolved hash without cached_content and one with an empty value give the same body
+        assertEq(plain, GeminiBodyShape::shapeChatBody(messages, tools, NOTHING, resolved + {"cached_content": ""}));
+
+        string cache = "projects/p/locations/us-central1/cachedContents/c1";
+        hash<auto> cached = GeminiBodyShape::shapeChatBody(messages, tools, NOTHING, resolved + {
+            "cached_content": cache,
+            "extra_body": {"toolConfig": {"functionCallingConfig": {"mode": "ANY"}}},
+        });
+        assertEq(cache, cached.cachedContent);
+        assertFalse(cached.hasKey("systemInstruction"), "the system instruction is in the cache");
+        assertFalse(cached.hasKey("tools"), "the tools are in the cache");
+        assertFalse(cached.hasKey("toolConfig"), "the tool configuration is in the cache");
+        # everything else is unchanged
+        assertEq(plain.contents, cached.contents);
+        assertEq(plain.generationConfig, cached.generationConfig);
+        assertEq(plain - ("systemInstruction", "tools") + {"cachedContent": cache}, cached);
+
+        # the cache create body holds the parts that the requests leave out
+        hash<auto> create = GeminiBodyShape::shapeCachedContentBody(
+            "projects/p/locations/us-central1/publishers/google/models/gemini-2.5-flash", messages, tools,
+            <GeminiBodyShape::GeminiCachedContentOptions>{
+                "ttl_seconds": 600,
+                "display_name": "contracts",
+                "tool_config": {"functionCallingConfig": {"mode": "AUTO"}},
+            });
+        assertEq({
+            "model": "projects/p/locations/us-central1/publishers/google/models/gemini-2.5-flash",
+            "contents": plain.contents,
+            "systemInstruction": plain.systemInstruction,
+            "tools": plain.tools,
+            "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
+            "displayName": "contracts",
+            "ttl": "600s",
+        }, create);
+        assertEq({"expireTime": "2026-10-05T10:00:00.000000+00:00"},
+            GeminiBodyShape::shapeCacheExpiration(NOTHING, 2026-10-05T12:00:00+02:00));
+        assertEq({}, GeminiBodyShape::shapeCacheExpiration());
+        assertThrows("GEMINI-CACHE-ERROR", \GeminiBodyShape::shapeCacheExpiration(), (60, now_us()));
+        assertThrows("GEMINI-CACHE-ERROR", \GeminiBodyShape::shapeCacheExpiration(), (0,));
+    }
+
+    #! cache resources are created, read, refreshed and deleted with the Vertex AI cachedContents API
+    private cacheResourceTest() {
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        handler.cache_requests = ();
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        string base = "/v1/projects/fake-project/locations/us-central1/cachedContents";
+        string full = "projects/fake-project/locations/us-central1/cachedContents/cache-1";
+        assertEq(full, p.resolveCachedContentName("cache-1"));
+        assertEq(full, p.resolveCachedContentName(full));
+        assertThrows("VERTEX-AI-CACHE-ERROR", \p.resolveCachedContentName(), "cachedContents/cache-1");
+        assertEq("projects/fake-project/locations/us-central1/publishers/google/models/gemini-2.0-flash",
+            p.getModelResourceName());
+
+        hash<auto> created = p.createCachedContent((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": "You review contracts."},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "the contract"},
+        ), NOTHING, <GeminiBodyShape::GeminiCachedContentOptions>{"ttl_seconds": 3600, "display_name": "c"});
+        assertEq(full, created.name);
+        assertEq({
+            "method": "POST",
+            "path": base,
+            "body": {
+                "model": "projects/fake-project/locations/us-central1/publishers/google/models/gemini-2.0-flash",
+                "contents": ({"role": "user", "parts": ({"text": "the contract"},)},),
+                "systemInstruction": {"parts": ({"text": "You review contracts."},)},
+                "displayName": "c",
+                "ttl": "3600s",
+            },
+        }, handler.cache_requests[0]);
+        assertEq("Bearer fake-vertex-token", handler.last_authorization);
+
+        assertEq(full, p.getCachedContent("cache-1").name);
+        assertEq({"method": "GET", "path": base + "/cache-1"}, handler.cache_requests[1] - "body");
+
+        p.refreshCachedContent(full, 7200);
+        assertEq({"method": "PATCH", "path": base + "/cache-1?updateMask=ttl", "body": {"ttl": "7200s"}},
+            handler.cache_requests[2]);
+        p.refreshCachedContent("cache-1", NOTHING, 2026-10-06T00:00:00Z);
+        assertEq({"method": "PATCH", "path": base + "/cache-1?updateMask=expireTime",
+            "body": {"expireTime": "2026-10-06T00:00:00.000000+00:00"}}, handler.cache_requests[3]);
+        assertThrows("GEMINI-CACHE-ERROR", \p.refreshCachedContent(), ("cache-1",));
+
+        p.deleteCachedContent("cache-1");
+        assertEq({"method": "DELETE", "path": base + "/cache-1"}, handler.cache_requests[4] - "body");
+        assertEq(5, handler.cache_requests.size());
+    }
+
+    #! a chat that uses cached content references it and leaves out the cached parts, through the provider and
+    #! the OpenAI-compatible facade
+    private cachedChatTest() {
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": "not sent"},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "question"},
+        ), (<QoreLlmUtils::ToolDefinition>{"name": "lookup", "parameters": {"type": "object"}},),
+            <QoreLlmUtils::LlmRequestOptions>{"cached_content": "cache-1"});
+        assertEq("projects/fake-project/locations/us-central1/cachedContents/cache-1",
+            handler.last_body.cachedContent);
+        assertFalse(handler.last_body.hasKey("systemInstruction"));
+        assertFalse(handler.last_body.hasKey("tools"));
+        assertEq(({"role": "user", "parts": ({"text": "question"},)},), handler.last_body.contents);
+        # the response reports no cached tokens; the cache miss is explicit
+        assertEq(0, r.usage.cached_content_token_count);
+        assertEq(0, r.usage.prompt_tokens_details.cached_tokens);
+
+        # the OpenAI-compatible facade takes the cache in cached_content, and a tool_choice translated to
+        # toolConfig is left out
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        backend.chatCompletions({
+            "messages": ({"role": "system", "content": "not sent"}, {"role": "user", "content": "hi"}),
+            "tools": ({"type": "function", "function": {"name": "lookup", "parameters": {"type": "object"}}},),
+            "tool_choice": "required",
+            "cached_content": "cache-1",
+        });
+        assertEq("projects/fake-project/locations/us-central1/cachedContents/cache-1",
+            handler.last_body.cachedContent);
+        assertFalse(handler.last_body.hasKey("systemInstruction"));
+        assertFalse(handler.last_body.hasKey("tools"));
+        assertFalse(handler.last_body.hasKey("toolConfig"));
+
+        # a cachedContent given in body_options is used the same way
+        p.chat((<QoreLlmUtils::ChatMessage>{"role": "system", "content": "not sent"},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "question"}), NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"body_options": {"cachedContent": "cache-1",
+                "toolConfig": {"functionCallingConfig": {"mode": "ANY"}}}});
+        assertEq("projects/fake-project/locations/us-central1/cachedContents/cache-1",
+            handler.last_body.cachedContent);
+        assertFalse(handler.last_body.hasKey("systemInstruction"));
+        assertFalse(handler.last_body.hasKey("tools"));
+        assertFalse(handler.last_body.hasKey("toolConfig"));
+
+        # without a cache the request is unchanged
+        p.chat((<QoreLlmUtils::ChatMessage>{"role": "system", "content": "sent"},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "question"}));
+        assertFalse(handler.last_body.hasKey("cachedContent"));
+        assertEq("sent", handler.last_body.systemInstruction.parts[0].text);
+    }
+
+    #! Gemini reports thinking tokens separately from the output tokens, and cached tokens as part of the prompt
+    private usageNormalizationTest() {
+        # thinking tokens are separate from the output; the flag says so
+        hash<auto> usage = GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 20,
+            "thoughtsTokenCount": 30,
+            "totalTokenCount": 150,
+        });
+        assertEq(20, usage.output_tokens);
+        assertEq(30, usage.reasoning_tokens);
+        assertFalse(usage.reasoning_in_output);
+        assertEq(150, usage.total_tokens);
+        assertFalse(usage.hasKey("cached_content_token_count"), "no cache: no cached count");
+        hash<LlmTokenUsage> tokens = LlmTelemetry::normalizeUsage(usage);
+        assertEq(20, tokens.output_tokens);
+        assertEq(30, tokens.reasoning_tokens);
+        assertFalse(tokens.reasoning_in_output, "the normalized usage keeps the flag");
+        assertEq(150, tokens.total_tokens, "thinking tokens are counted once");
+        # the raw usage gives the same result
+        assertEq(tokens, LlmTelemetry::normalizeUsage({
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 20,
+            "thoughtsTokenCount": 30,
+            "totalTokenCount": 150,
+        }));
+        # without a reported total, the derived total counts the thinking tokens once
+        assertEq(150, GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20, "thoughtsTokenCount": 30}).total_tokens);
+        assertEq(150, LlmTelemetry::normalizeUsage(GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20, "thoughtsTokenCount": 30})).total_tokens);
+        # OpenAI reasoning tokens are part of the output count
+        hash<LlmTokenUsage> openai = LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 100, "completion_tokens": 50,
+            "completion_tokens_details": {"reasoning_tokens": 30},
+        });
+        assertTrue(openai.reasoning_in_output);
+        assertEq(150, openai.total_tokens);
+        # Gemini without thinking tokens still says that reasoning is not part of the output
+        assertFalse(LlmTelemetry::normalizeUsage(GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 10, "candidatesTokenCount": 5})).reasoning_in_output);
+
+        # cached tokens: present, present as 0, absent with and without a cache request
+        hash<auto> cached = GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20, "cachedContentTokenCount": 80});
+        assertEq(80, cached.cached_content_token_count);
+        assertEq(80, cached.cache_read_input_tokens);
+        assertEq(80, cached.prompt_tokens_details.cached_tokens);
+        assertEq(80, LlmTelemetry::normalizeUsage(cached).cached_input_tokens);
+        hash<auto> zero = GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20, "cachedContentTokenCount": 0});
+        assertEq(0, zero.cached_content_token_count);
+        assertTrue(zero.hasKey("cached_content_token_count"));
+        hash<auto> miss = GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20}, True);
+        assertEq(0, miss.cached_content_token_count);
+        assertEq(0, miss.prompt_tokens_details.cached_tokens);
+        assertFalse(GeminiBodyShape::normalizeUsage({
+            "promptTokenCount": 100, "candidatesTokenCount": 20}).hasKey("prompt_tokens_details"));
+    }
+
+    #! the usage of the final stream chunk counts the thinking tokens once
+    private streamUsageTest() {
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        handler.stream_chunks = (
+            {"candidates": ({"content": {"role": "model", "parts": ({"text": "A"},)}},)},
+            {
+                "candidates": ({"content": {"role": "model", "parts": ({"text": "B"},)}, "finishReason": "STOP"},),
+                "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 4, "thoughtsTokenCount": 6,
+                    "cachedContentTokenCount": 8, "totalTokenCount": 20},
+            },
+        );
+        on_exit handler.stream_chunks = ();
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        hash<auto> resp = backend.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "stream"},),
+        }, sub (hash<auto> chunk) {});
+        assertEq(4, resp.usage.output_tokens);
+        assertEq(6, resp.usage.reasoning_tokens);
+        assertFalse(resp.usage.reasoning_in_output);
+        assertEq(8, resp.usage.cached_content_token_count);
+        assertEq(20, resp.usage.total_tokens);
+        hash<LlmTokenUsage> tokens = LlmTelemetry::normalizeUsage(resp.usage);
+        assertEq(20, tokens.total_tokens);
+        assertEq(8, tokens.cached_input_tokens);
+        assertFalse(tokens.reasoning_in_output);
     }
 
     private VertexAiRestClient::VertexAiLlmProvider newProvider() {

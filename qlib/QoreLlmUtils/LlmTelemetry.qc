@@ -40,7 +40,10 @@ hash<LlmTokenUsage> usage = LlmTelemetry::normalizeUsage(provider_usage);
 public class LlmTelemetry {
     #! Normalizes provider usage counters into a stable token accounting shape
     /** \c output_tokens keeps the meaning of the provider's own count: OpenAI reports its reasoning tokens as
-        part of the completion / output count, while formats such as Gemini report thinking tokens separately.
+        part of the completion / output count, while formats such as Gemini report thinking tokens separately;
+        \c reasoning_in_output in the result says which applies, so cost calculations add \c reasoning_tokens to
+        \c output_tokens only when it is @ref False.  Usage that was already normalized by a provider module, such
+        as \c GeminiBodyShape::normalizeUsage(), keeps its explicit \c reasoning_in_output.
         A total reported by the provider is preserved; a missing total is derived without adding a reasoning
         count that the provider already includes in its output count.
 
@@ -71,9 +74,14 @@ public class LlmTelemetry {
             "cacheCreationInputTokens", "cacheWriteInputTokens"));
         # formats such as Gemini report their thinking tokens separately from the output count
         int separate_reasoning_tokens = firstInt(usage, ("thoughtsTokenCount",));
-        # OpenAI reports its reasoning tokens as part of the completion / output count
+        # OpenAI reports its reasoning tokens as part of the completion / output count; usage that was already
+        # normalized says explicitly whether its reasoning count is part of the output count
         int included_reasoning_tokens = firstInt(usage, (
             "reasoning_tokens", "thinking_tokens", "reasoningTokens"));
+        if (usage.reasoning_in_output === False) {
+            separate_reasoning_tokens = max(separate_reasoning_tokens, included_reasoning_tokens);
+            included_reasoning_tokens = 0;
+        }
         int embedding_tokens = firstInt(usage, ("embedding_tokens", "embeddingTokens"));
         int reranker_tokens = firstInt(usage, (
             "reranker_tokens", "rerank_tokens", "rerankerTokens",
@@ -125,7 +133,7 @@ public class LlmTelemetry {
             total_tokens = input_tokens + output_tokens + separate_reasoning_tokens;
         }
 
-        return <LlmTokenUsage>{
+        hash<LlmTokenUsage> rv = <LlmTokenUsage>{
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
@@ -135,6 +143,11 @@ public class LlmTelemetry {
             "embedding_tokens": embedding_tokens,
             "reranker_tokens": reranker_tokens,
         };
+        # no value when no tokens were reported
+        if (input_tokens || output_tokens || total_tokens || reasoning_tokens) {
+            rv.reasoning_in_output = !separate_reasoning_tokens && usage.reasoning_in_output !== False;
+        }
+        return rv;
     }
 
     #! Builds a safe summary for @ref LlmBackend::complete()
