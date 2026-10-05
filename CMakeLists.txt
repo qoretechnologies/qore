@@ -2718,6 +2718,11 @@ add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
 target_include_directories(qore-number-round-trip-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-number-round-trip-test PRIVATE libqore)
+add_executable(qore-asn1-time-test EXCLUDE_FROM_ALL
+    examples/test/qore/classes/SSLCertificate/asn1_time.cpp)
+target_include_directories(qore-asn1-time-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(qore-asn1-time-test PRIVATE libqore ${OPENSSL_LIBRARIES})
 add_executable(qore-native-thread-cleanup-test
     examples/test/qore/classes/ThreadPool/native_thread_cleanup.cpp)
 target_include_directories(qore-native-thread-cleanup-test PRIVATE

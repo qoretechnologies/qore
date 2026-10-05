@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -165,8 +165,8 @@ binary SSLCertificate::getDER() [flags=RET_VALUE_ONLY] {
     return s->getDER(xsink);
 }
 
-//! Returns a hash of all information for the certificate
-/** @return a hash of all information for the certificate with the following keys:
+//! Returns a hash of certificate metadata
+/** @return a hash of certificate metadata with the following keys:
     - \c "version": The version of the X.509 certificate (see SSLCertificate::getVersion())
     - \c "serialNumber": The serial number of the X.509 certificate (see SSLCertificate::getSerialNumber())
     - \c "subject": The subject hash of the X.509 certificate (see SSLCertificate::getSubjectHash())
@@ -175,16 +175,22 @@ binary SSLCertificate::getDER() [flags=RET_VALUE_ONLY] {
     - \c "notBefore": The "not before date" of the X.509 certificate (see SSLCertificate::getNotBeforeDate())
     - \c "notAfter": The "not after date" of the X.509 certificate (see SSLCertificate::getNotAfterDate())
     - \c "signatureType": The signature type string of the X.509 certificate (see SSLCertificate::getSignatureType())
-    - \c "signature": The binary signature of the X.509 certificate (see SSLCertificate::getSignature())
-    - \c "publicKey": The binary public key of the X.509 certificate (see SSLCertificate::getPublicKey())
+
+    Use getSignature() and getPublicKey() to retrieve the signature and public key.
+
+    @throw SSLCERTIFICATE-DATE-ERROR The certificate contains an invalid validity date
 
     @par Example:
     @code{.py}
 hash<auto> h = cert.getInfo();
     @endcode
  */
-hash<auto> SSLCertificate::getInfo() [flags=CONSTANT] {
-    return s->getInfo();
+hash<auto> SSLCertificate::getInfo() [flags=RET_VALUE_ONLY] {
+    QoreHashNode* info = s->getInfo();
+    if (!info) {
+        xsink->raiseException("SSLCERTIFICATE-DATE-ERROR", "invalid certificate validity date");
+    }
+    return info;
 }
 
 //! Returns a binary object representing the signature of the certificate
@@ -262,6 +268,9 @@ hash<auto> SSLCertificate::getIssuerHash() [flags=CONSTANT] {
 //! Returns the integer serial number of the certificate
 /** @return the integer serial number of the certificate
 
+    @note Returns -1 when the serial number does not fit in the platform's signed long integer.
+    Use getSerialNumberHex() for arbitrary-size serial numbers, including typical CA-issued serials.
+
     @par Example:
     @code{.py}
 int sn = cert.getSerialNumber();
@@ -269,6 +278,27 @@ int sn = cert.getSerialNumber();
  */
 int SSLCertificate::getSerialNumber() [flags=CONSTANT] {
     return s->getSerialNumber();
+}
+
+//! Returns the complete certificate serial number in hexadecimal
+/** @return the serial number as uppercase hexadecimal without a prefix or separators; zero is \c "0",
+    other values have an even number of digits, and negative serials have a leading minus sign
+
+    @throw SSLCERTIFICATE-SERIAL-ERROR The serial number could not be converted
+
+    @note This method preserves all digits of CA-issued serial numbers, including 128-bit and 160-bit values.
+    The integer returned by getSerialNumber() and the \c serialNumber key of getInfo() remain unchanged.
+
+    @par Example:
+    @code{.py}
+# Record the complete serial number when auditing an issued certificate
+string serial = cert.getSerialNumberHex();
+    @endcode
+
+    @since %Qore 3.0
+ */
+string SSLCertificate::getSerialNumberHex() [flags=RET_VALUE_ONLY] {
+    return s->getSerialNumberHex(xsink);
 }
 
 //! Returns the version of the certificate as an integer
@@ -296,25 +326,37 @@ hash<auto> SSLCertificate::getPurposeHash() [flags=CONSTANT] {
 }
 
 //! Returns a date/time value representing the start date of the certificate
-/** @return a date/time value representing the start date of the certificate
+/** @return an absolute UTC date/time value representing the start date of the certificate
+
+    @throw SSLCERTIFICATE-DATE-ERROR The certificate contains an invalid start date
 
     @par Example:
     @code{.py}
 date start = cert.getNotBeforeDate();
     @endcode
  */
-date SSLCertificate::getNotBeforeDate() [flags=CONSTANT] {
-    return s->getNotBeforeDate();
+date SSLCertificate::getNotBeforeDate() [flags=RET_VALUE_ONLY] {
+    DateTimeNode* date = s->getNotBeforeDate();
+    if (!date) {
+        xsink->raiseException("SSLCERTIFICATE-DATE-ERROR", "invalid certificate start date");
+    }
+    return date;
 }
 
 //! Returns a date/time value representing the end date of the certificate
-/** @return a date/time value representing the end date of the certificate
+/** @return an absolute UTC date/time value representing the end date of the certificate
+
+    @throw SSLCERTIFICATE-DATE-ERROR The certificate contains an invalid end date
 
     @par Example:
     @code{.py}
 date end = cert.getNotAfterDate();
     @endcode
  */
-date SSLCertificate::getNotAfterDate() [flags=CONSTANT] {
-    return s->getNotAfterDate();
+date SSLCertificate::getNotAfterDate() [flags=RET_VALUE_ONLY] {
+    DateTimeNode* date = s->getNotAfterDate();
+    if (!date) {
+        xsink->raiseException("SSLCERTIFICATE-DATE-ERROR", "invalid certificate end date");
+    }
+    return date;
 }

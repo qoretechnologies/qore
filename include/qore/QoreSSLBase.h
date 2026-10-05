@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2023 David Nichols
+    Copyright (C) 2003 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,11 @@
 class QoreSSLBase {
 public:
     DLLEXPORT static QoreHashNode* X509_NAME_to_hash(X509_NAME* n);
+    //! Converts an ASN.1 UTCTime or GeneralizedTime to an absolute UTC date
+    /** @param t the ASN.1 time to convert; not modified
+        @return a date owned by the caller, or nullptr for a null, invalid, or unconvertible time
+        @note The exported signature is retained for binary compatibility.
+    */
     DLLEXPORT static DateTimeNode* ASN1_TIME_to_DateTime(ASN1_STRING* t);
     DLLEXPORT static QoreStringNode* ASN1_OBJECT_to_QoreStringNode(ASN1_OBJECT* o);
 };

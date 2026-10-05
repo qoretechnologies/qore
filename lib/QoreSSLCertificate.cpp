@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,7 @@
 #include "qore/intern/QoreSSLIntern.h"
 
 #include <openssl/err.h>
+#include <memory>
 
 QoreSSLCertificate::~QoreSSLCertificate() {
     delete priv;
@@ -136,6 +137,22 @@ int64 QoreSSLCertificate::getSerialNumber() const {
     return (int64)ASN1_INTEGER_get(X509_get_serialNumber(priv->cert));
 }
 
+QoreStringNode* QoreSSLCertificate::getSerialNumberHex(ExceptionSink* xsink) const {
+    std::unique_ptr<BIGNUM, decltype(&BN_free)> serial(
+        ASN1_INTEGER_to_BN(X509_get_serialNumber(priv->cert), nullptr), BN_free);
+    if (!serial) {
+        xsink->raiseException("SSLCERTIFICATE-SERIAL-ERROR", "cannot convert the certificate serial number");
+        return nullptr;
+    }
+    auto free_hex = [](char* str) { OPENSSL_free(str); };
+    std::unique_ptr<char, decltype(free_hex)> hex(BN_bn2hex(serial.get()), free_hex);
+    if (!hex) {
+        xsink->raiseException("SSLCERTIFICATE-SERIAL-ERROR", "cannot encode the certificate serial number");
+        return nullptr;
+    }
+    return new QoreStringNode(hex.get());
+}
+
 int64 QoreSSLCertificate::getVersion() const {
     return (int64)(X509_get_version(priv->cert) + 1);
 }
@@ -235,7 +252,15 @@ QoreHashNode* QoreSSLCertificate::getPurposeHash() const {
 }
 
 QoreHashNode* QoreSSLCertificate::getInfo() const {
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<DateTimeNode> not_before(getNotBeforeDate(), nullptr);
+    if (!not_before) {
+        return nullptr;
+    }
+    ReferenceHolder<DateTimeNode> not_after(getNotAfterDate(), nullptr);
+    if (!not_after) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
     // get version
     h->setKeyValue("version", getVersion(), nullptr);
     // get serial number
@@ -247,9 +272,9 @@ QoreHashNode* QoreSSLCertificate::getInfo() const {
     // get purposes
     h->setKeyValue("purposes", getPurposeHash(), nullptr);
     // get not before date
-    h->setKeyValue("notBefore", getNotBeforeDate(), nullptr);
+    h->setKeyValue("notBefore", not_before.release(), nullptr);
     // get not after date
-    h->setKeyValue("notAfter", getNotAfterDate(), nullptr);
+    h->setKeyValue("notAfter", not_after.release(), nullptr);
     // get signature type
     h->setKeyValue("signatureType", getSignatureType(), nullptr);
     // get signature
@@ -257,7 +282,7 @@ QoreHashNode* QoreSSLCertificate::getInfo() const {
     // get public key
     //h->setKeyValue("publicKey", getPublicKey(), nullptr);
 
-    return h;
+    return h.release();
 }
 
 QoreSSLCertificate* QoreSSLCertificate::certRefSelf() const {

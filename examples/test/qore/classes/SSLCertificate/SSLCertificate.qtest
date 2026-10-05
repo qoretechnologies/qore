@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%exec-class SSLCertificateTest
+
+class SSLCertificateTest inherits QUnit::Test {
+    constructor() : QUnit::Test("X.509 certificate metadata", "1.0") {
+        addTestCase("UTC validity in different local zones", \zones());
+        addTestCase("UTCTime century and GeneralizedTime boundaries", \boundaries());
+        addTestCase("ASN.1 offsets and fractional seconds", \asn1Forms());
+        addTestCase("complete serial numbers and legacy compatibility", \serials());
+        addTestCase("PEM, DER, copy, and serialization", \roundTrips());
+        addTestCase("invalid validity dates and certificate input", \invalidDates());
+        set_return_value(main());
+    }
+
+    # Build DER fixtures in memory so dates and integer widths are deterministic.
+    # The public key is a test Ed25519 key; the placeholder signature is deliberately
+    # not valid. These tests read certificate metadata, not TLS signature verification.
+    private static binary tlv(int tag, binary value) {
+        int size = value.size();
+        @assert(size < 65536);
+        string length = size < 128 ? sprintf("%02x", size)
+            : (size < 256 ? sprintf("81%02x", size) : sprintf("82%04x", size));
+        return parse_hex_string(sprintf("%02x", tag) + length) + value;
+    }
+
+    private static SSLCertificate certificate(string start = "261005070000Z", string end = "20510101000000Z",
+            binary serial = <1234567890abcdef1234567890abcdef12345678>, int start_tag = 23, int end_tag = 24) {
+        binary algorithm = <300506032b6570>;
+        binary name = <30293127302506035504030c1e516f7265206365727469666963617465206d657461646174612074657374>;
+        binary key = <302a300506032b6570032100802d3f0a542513c643cb47780821c93e88452f0e3e8306803a15fab9c69cdce4>;
+        binary validity = tlv(48, tlv(start_tag, start.toBinary()) + tlv(end_tag, end.toBinary()));
+        binary tbs = tlv(48, <a003020102> + tlv(2, serial) + algorithm + name + validity + name + key);
+        return new SSLCertificate(tlv(48, tbs + algorithm + tlv(3, <0000>)));
+    }
+
+    private checkDates(SSLCertificate cert, date start, date end) {
+        hash<auto> info = cert.getInfo();
+        foreach date value in (cert.getNotBeforeDate(), info.notBefore) {
+            assertEq(get_epoch_microseconds(start), get_epoch_microseconds(value));
+            assertEq("+00:00", value.format("Z"));
+        }
+        foreach date value in (cert.getNotAfterDate(), info.notAfter) {
+            assertEq(get_epoch_microseconds(end), get_epoch_microseconds(value));
+            assertEq("+00:00", value.format("Z"));
+        }
+    }
+
+    private zones() {
+        TimeZone original = TimeZone::get();
+        on_exit TimeZone::set(original);
+        foreach string zone in ("UTC", "Europe/Prague", "America/New_York", "Asia/Kolkata") {
+            TimeZone::setRegion(zone);
+            SSLCertificate cert = certificate();
+            assertEq(1791183600, get_epoch_seconds(cert.getNotBeforeDate()), zone);
+            assertEq(2556144000, get_epoch_seconds(cert.getNotAfterDate()), zone);
+            checkDates(cert, 2026-10-05T07:00:00Z, 2051-01-01T00:00:00Z);
+        }
+    }
+
+    private boundaries() {
+        checkDates(certificate("500101000000Z", "491231235959Z", <01>, 23, 23),
+            1950-01-01T00:00:00Z, 2049-12-31T23:59:59Z);
+        checkDates(certificate("991231235959Z", "000101000000Z", <01>, 23, 23),
+            1999-12-31T23:59:59Z, 2000-01-01T00:00:00Z);
+        checkDates(certificate("491231235959Z", "20500101000000Z"),
+            2049-12-31T23:59:59Z, 2050-01-01T00:00:00Z);
+        checkDates(certificate("19491231235959Z", "99991231235959Z", <01>, 24, 24),
+            1949-12-31T23:59:59Z, 9999-12-31T23:59:59Z);
+        checkDates(certificate("000229123456Z", "20000229123456Z"),
+            2000-02-29T12:34:56Z, 2000-02-29T12:34:56Z);
+    }
+
+    private asn1Forms() {
+        checkDates(certificate("261005070000+0200", "20510101000000-0500"),
+            2026-10-05T05:00:00Z, 2051-01-01T05:00:00Z);
+        checkDates(certificate("2610050700+0000", "205101010000+0530"),
+            2026-10-05T07:00:00Z, 2050-12-31T18:30:00Z);
+        checkDates(certificate("20261005070000.123456Z", "20510101000000.5Z", <01>, 24, 24),
+            2026-10-05T07:00:00.123456Z, 2051-01-01T00:00:00.5Z);
+    }
+
+    private serials() {
+        hash<string, string> values = {
+            "00": "0",
+            "01": "01",
+            "7f": "7F",
+            "0080": "80",
+            "7fffffffffffffff": "7FFFFFFFFFFFFFFF",
+            "008000000000000000": "8000000000000000",
+            "00fedcba98765432100123456789abcdef": "FEDCBA98765432100123456789ABCDEF",
+            "1234567890abcdef1234567890abcdef12345678": "1234567890ABCDEF1234567890ABCDEF12345678",
+            "0080abcdef1234567890abcdef1234567890abcdef": "80ABCDEF1234567890ABCDEF1234567890ABCDEF",
+            "ff": "-01",
+            "80": "-80",
+        };
+        foreach string encoded in (keys values) {
+            string expected = values{encoded};
+            SSLCertificate cert = certificate(serial: parse_hex_string(encoded));
+            assertEq(expected, cert.getSerialNumberHex(), encoded);
+            assertEq(cert.getSerialNumber(), cert.getInfo().serialNumber);
+        }
+        assertEq(0, certificate(serial: <00>).getSerialNumber());
+        assertEq(128, certificate(serial: <0080>).getSerialNumber());
+        assertEq(-1, certificate().getSerialNumber());
+    }
+
+    private roundTrips() {
+        SSLCertificate cert = certificate();
+        foreach SSLCertificate copy in (new SSLCertificate(cert.getPEM()), new SSLCertificate(cert.getDER()),
+                cert.copy(), Serializable::deserialize(cert.serializeToData())) {
+            checkDates(copy, 2026-10-05T07:00:00Z, 2051-01-01T00:00:00Z);
+            assertEq("1234567890ABCDEF1234567890ABCDEF12345678", copy.getSerialNumberHex());
+        }
+    }
+
+    private invalidDates() {
+        # OpenSSL rejects empty or truncated times while decoding the certificate itself.
+        foreach string truncated in ("", "261005", "261005070000") {
+            assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub() { certificate(start: truncated); });
+        }
+        foreach string invalid in ("261305070000Z", "260230070000Z", "261005250000Z",
+                "261005076000Z", "261005070060Z", "261005070000Zjunk",
+                "261005070000+2500", "261005070000Z\0junk") {
+            SSLCertificate cert = certificate(start: invalid);
+            assertThrows("SSLCERTIFICATE-DATE-ERROR", \cert.getNotBeforeDate());
+            assertThrows("SSLCERTIFICATE-DATE-ERROR", \cert.getInfo());
+            assertEq(2051-01-01T00:00:00Z, cert.getNotAfterDate());
+        }
+        foreach string invalid in ("20511301000000Z", "20510229000000Z", "20510101000000Zjunk") {
+            SSLCertificate cert = certificate(end: invalid);
+            assertThrows("SSLCERTIFICATE-DATE-ERROR", \cert.getNotAfterDate());
+            assertThrows("SSLCERTIFICATE-DATE-ERROR", \cert.getInfo());
+            assertEq(2026-10-05T07:00:00Z, cert.getNotBeforeDate());
+        }
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub() { new SSLCertificate(<0001>); });
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub() { new SSLCertificate("invalid PEM"); });
+        checkDates(certificate(), 2026-10-05T07:00:00Z, 2051-01-01T00:00:00Z);
+    }
+}

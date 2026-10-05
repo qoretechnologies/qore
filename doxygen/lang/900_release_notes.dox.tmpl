@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    @ref Qore::SSLCertificate "SSLCertificate" validity dates now preserve UTC independently of the process
+    time zone and correctly interpret both ASN.1 UTCTime (1950-2049) and GeneralizedTime (including 2050
+    and later). Invalid validity dates raise <tt>SSLCERTIFICATE-DATE-ERROR</tt> when read from Qore.
+    The new @ref Qore::SSLCertificate::getSerialNumberHex() "getSerialNumberHex()" method returns complete
+    hexadecimal serial numbers without integer overflow. The existing integer accessor and
+    <tt>getInfo().serialNumber</tt> retain their previous behavior for compatibility.
+
     On platforms with timed signal waits, signal-handler changes and shutdown no longer hang when a container
     security policy denies an internal thread wakeup. The denied wakeup is reported and the pending operation
     completes through a bounded wait. On other platforms, a denied wakeup reports a fatal error instead of hanging.

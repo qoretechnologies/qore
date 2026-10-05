@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -89,15 +89,27 @@ public:
     // caller owns value returned
     DLLEXPORT QoreHashNode* getIssuerHash() const;
     DLLEXPORT int64 getSerialNumber() const;
+
+    //! Returns the full serial number as uppercase hexadecimal without a prefix or separators
+    /** @param xsink receives SSLCERTIFICATE-SERIAL-ERROR if conversion fails
+        @return a string owned by the caller, or nullptr on error; zero is "0", other values have
+        an even number of digits, and negative serials have a leading minus sign
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreStringNode* getSerialNumberHex(ExceptionSink* xsink) const;
     DLLEXPORT int64 getVersion() const;
 
     // caller owns value returned
     DLLEXPORT QoreHashNode* getPurposeHash() const;
 
-    // caller owns value returned
+    //! Returns the start date in UTC
+    /** @return a date owned by the caller, or nullptr for an invalid or unconvertible date
+    */
     DLLEXPORT DateTimeNode* getNotBeforeDate() const;
 
-    // caller owns value returned
+    //! Returns the end date in UTC
+    /** @return a date owned by the caller, or nullptr for an invalid or unconvertible date
+    */
     DLLEXPORT DateTimeNode* getNotAfterDate() const;
 
     // caller owns value returned
@@ -112,7 +124,9 @@ public:
     // caller owns value returned
     DLLEXPORT BinaryNode* getPublicKey() const;
 
-    // caller owns value returned
+    //! Returns certificate information with UTC validity dates
+    /** @return a hash owned by the caller, or nullptr if either validity date cannot be converted
+    */
     DLLEXPORT QoreHashNode* getInfo() const;
 
     // caller owns reference returned

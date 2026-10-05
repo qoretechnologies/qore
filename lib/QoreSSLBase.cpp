@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,8 @@
 #include <qore/Qore.h>
 #include <qore/QoreSSLBase.h>
 
+#include <memory>
+
 #define OBJ_BUF_LEN 80
 
 // static method
@@ -57,15 +59,39 @@ QoreHashNode* QoreSSLBase::X509_NAME_to_hash(X509_NAME* n) {
 
 // static method
 DateTimeNode* QoreSSLBase::ASN1_TIME_to_DateTime(ASN1_STRING* t) {
-    // FIXME: check ASN1_TIME format if this algorithm is always correct
-    QoreString str("20");
+    if (!t || !ASN1_TIME_check(t)) {
+        return nullptr;
+    }
+    // Let OpenSSL expand the UTCTime century (1950-2049). This API also supports
+    // the older OpenSSL versions supported by Qore, unlike ASN1_TIME_to_tm().
+    std::unique_ptr<ASN1_GENERALIZEDTIME, decltype(&ASN1_GENERALIZEDTIME_free)> time(
+        nullptr, ASN1_GENERALIZEDTIME_free);
+    if (ASN1_STRING_type(t) == V_ASN1_UTCTIME) {
+        time.reset(ASN1_TIME_to_generalizedtime(t, nullptr));
+        if (!time) {
+            return nullptr;
+        }
+        t = time.get();
+    }
+    // Do not convert GeneralizedTime again: OpenSSL can discard fractional seconds.
 #ifdef HAVE_OPENSSL_INIT_CRYPTO
-    str.concat((char*)ASN1_STRING_get0_data(t));
+    const unsigned char* data = ASN1_STRING_get0_data(t);
 #else
-    str.concat((char*)ASN1_STRING_data(t));
+    const unsigned char* data = ASN1_STRING_data(t);
 #endif
-    str.terminate(14);
-    return new DateTimeNode(str.c_str());
+    QoreString str(reinterpret_cast<const char*>(data), ASN1_STRING_length(t));
+    // ASN.1 permits omitted seconds; Qore's date parser needs them to read the zone.
+    if (str.size() > 12 && (data[12] == 'Z' || data[12] == '+' || data[12] == '-')) {
+        str.insert("00", 12);
+    }
+    ExceptionSink xsink;
+    ReferenceHolder<DateTimeNode> date(new DateTimeNode(nullptr, str.c_str(), &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    date->setZone(nullptr);
+    return date.release();
 }
 
 // static method
