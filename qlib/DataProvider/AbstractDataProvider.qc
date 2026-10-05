@@ -197,9 +197,14 @@ public hashdecl DataProviderOptionBaseInfo inherits BaseOptionInfo {
         string, which has its own \c $ctx:value template references and backslash escapes; it is passed to actions
         as \c supports_expressions in @ref DataProvider::ActionOptionInfo "ActionOptionInfo"
 
+        @ref nothing (the default) means that the option supports expressions; the member has no value unless it is
+        set, like the other members of this hashdecl that other option hashdecls do not have, so that an option
+        hash without it can still be converted to another option hashdecl, such as
+        @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo"
+
         @since %DataProvider 3.9
     */
-    bool supports_expressions = True;
+    *bool supports_expressions;
 }
 
 #! Data provider option info

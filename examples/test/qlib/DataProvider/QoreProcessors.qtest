@@ -1002,14 +1002,28 @@ class QoreProcessorsTest inherits QUnit::Test {
             "filter-records constructor option dpql_where");
         # the expression option keeps expressions
         assertTrue(action.options.where_cond.supports_expressions, "filter-records action option where_cond");
-        assertTrue(QoreFilterRecordsProcessor::ConstructorOptions.where_cond.supports_expressions,
+        # no value means that the option supports expressions
+        assertEq(NOTHING, QoreFilterRecordsProcessor::ConstructorOptions.where_cond.supports_expressions,
             "filter-records constructor option where_cond");
         # the pipeline processor info carries the constructor options
         assertFalse(new QoreFilterRecordsProcessor().getInfo().pipeline_processor_options.dpql_where
             .supports_expressions, "pipeline processor option dpql_where");
-        # an option declared without the attribute supports expressions, as before
-        assertTrue((<DataProviderOptionInfo>{"type": AbstractDataProviderTypeMap."*string"}).supports_expressions,
-            "default");
+        # an option declared without the attribute has no value for it and supports expressions in actions
+        assertEq(NOTHING, (<DataProviderOptionInfo>{"type": AbstractDataProviderTypeMap."*string"})
+            .supports_expressions, "default");
+        assertTrue(DataProviderActionCatalog::getActionOptionFromFields({
+            "x": <DataProviderOptionInfo>{"type": AbstractDataProviderTypeMap."*string"},
+        }).x.supports_expressions, "default action option");
+        # a plain option hash sets it as well
+        assertFalse(DataProviderActionCatalog::getActionOptionFromFields({
+            "x": {"type": AbstractDataProviderTypeMap."*string", "supports_expressions": False},
+        }).x.supports_expressions, "plain option hash");
+
+        # an option without supports_expressions converts to a connection option, as with other data provider
+        # option members that connection options do not have, while the data provider subtypes of a connection
+        # load
+        hash<auto> opt = QoreFilterRecordsProcessor::ConstructorOptions.where_cond - "type" + {"type": "string"};
+        assertEq("Filter Expression", cast<hash<ConnectionOptionInfo>>(opt).display_name);
 
         # DPQL template references and escapes reach the parser unchanged
         QoreFilterRecordsProcessor proc({"dpql_where": "@name == \"z\\$local:x\" || @name == \"two words\""});

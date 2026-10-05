@@ -1416,8 +1416,9 @@ fetch
       @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" has \c supports_expressions set to
       @ref False, so that DPQL text is not evaluated or template-expanded before it is parsed, which broke DPQL's own
       \c $ctx:value template references and backslash escapes; added \c supports_expressions to
-      @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo" (default @ref True), which is
-      passed on to action options
+      @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo", which is passed on to action
+      options; it has no value unless set (meaning that the option supports expressions), so option hashes still
+      convert to other option hashdecls such as \c ConnectionOptionInfo
     - fixed the string \c "0" being @ref True "True" as a condition when a \c filter-records expression or another
       DPQL filter is evaluated on DataFrame or columnar data, such as <tt>\@code && \@id > 1</tt> for a \c code of
       \c "0", while it is @ref False "False" when the expression is evaluated on records; the \c has-value

@@ -3685,14 +3685,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
-                    "supports_expressions", "server_expression_handling", "ui_type"}
+                    "server_expression_handling", "ui_type"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "validation_regex", "depends_on", "has_dependents", "on_change", "metadata", "icon",
-                    "image", "supports_templates", "supports_custom_values", "supports_expressions",
-                    "server_expression_handling", "ui_type"} +
+                    "image", "supports_templates", "supports_custom_values", "server_expression_handling",
+                    "ui_type"} +
                     additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {
@@ -3700,6 +3700,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                         "qore.external_name": i.value.option_type_name,
                     });
                 }
+            }
+            # an option without a value for supports_expressions keeps the default (True)
+            if (exists i.value.supports_expressions && !additional_fields.hasKey("supports_expressions")) {
+                info.supports_expressions = i.value.supports_expressions;
             }
             if (info.required && !exists info.preselected) {
                 info.preselected = True;

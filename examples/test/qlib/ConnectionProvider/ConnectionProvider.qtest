@@ -46,6 +46,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
         addTestCase("async HE cancel mid-race", \asyncHeCancelMidRaceTest());
         addTestCase("startPollConnect does not block", \asyncStartPollConnectNonBlockingTest());
+        addTestCase("data provider subtype options", \dataProviderSubtypeOptionTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -728,6 +729,39 @@ public class ConnectionProviderTest inherits QUnit::Test {
         made \c PollingConnectionMonitor::stopClear() hang (see
         @ref asyncHeCancelMidRaceTest).
     */
+    #! data provider option hashes with supports_expressions are loaded as connection subtype info and converted
+    #! to connection options
+    private dataProviderSubtypeOptionTest() {
+        FilesystemConnection fs("test-fs-subtypes", "test", "file://" + Util::tmp_location());
+        *hash<string, *hash<string, hash<DataProviderOptionInfo>>> subtypes = fs.getDataProviderSubtypes();
+        assertTrue(subtypes.filepoller.mask.display_name.val(), "subtype option info is loaded");
+        hash<ConnectionDataInfo> info = fs.getInfoAsData();
+        assertEq(keys subtypes.filepoller, keys info.dataprovider_subtypes.filepoller);
+
+        # options with and without supports_expressions convert to connection options
+        hash<string, hash<DataProviderOptionInfo>> opts = {
+            "dpql": <DataProviderOptionInfo>{
+                "display_name": "DPQL",
+                "short_desc": "A DPQL expression",
+                "desc": "A DPQL expression",
+                "type": AbstractDataProviderTypeMap."*string",
+                "supports_expressions": False,
+            },
+            "other": <DataProviderOptionInfo>{
+                "display_name": "Other",
+                "short_desc": "Another option",
+                "desc": "Another option",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+        hash<string, hash<ConnectionOptionInfo>> copts = AbstractConnection::getConnectionOptionInfo(opts);
+        assertEq(("dpql", "other"), keys copts);
+        assertEq("string", copts.dpql.type);
+        # an option hash without the member converts implicitly as well
+        hash<auto> other = opts.other - "type" + {"type": "string"};
+        assertEq("Other", cast<hash<ConnectionOptionInfo>>(other).display_name);
+    }
+
     asyncStartPollConnectNonBlockingTest() {
         # a plain-TCP server that accepts but never speaks TLS: the handshake can
         # never complete, so any blocking wait runs to the connect timeout
