@@ -6692,6 +6692,15 @@ static bool isFunctionRefFastCallDisabled() {
     return disabled;
 }
 
+// Only this internal concrete node implements the guarded convention. An exact
+// RTTI check avoids an inheritance walk; future subclasses keep virtual dispatch
+// rather than accidentally bypassing an overridden execValue(). Callers have
+// already established a non-null NT_FUNCREF node and the owning Program.
+static const FunctionCallReferenceNode* getExactFunctionRef(const AbstractQoreNode* node) {
+    return typeid(*node) == typeid(FunctionCallReferenceNode)
+        ? static_cast<const FunctionCallReferenceNode*>(node) : nullptr;
+}
+
 // Signature eligibility is immutable metadata; program/debugger/tier state and
 // actual argument compatibility remain dynamic checks on every invocation.
 static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
@@ -6706,7 +6715,7 @@ static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
     if (pgm != getProgram()) {
         return false;
     }
-    const auto* ref = dynamic_cast<const FunctionCallReferenceNode*>(node);
+    const auto* ref = getExactFunctionRef(node);
     if (!ref || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;
     }
@@ -9905,10 +9914,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
         target.pgm, base_bits, args, arg_cleanups, nargs, xsink);
 }
 
-// Stack location for JIT/AOT-executed frames.
-class QoreJITStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+// Ordinary frames own potentially synthesized names. Function-reference frames
+// can borrow the immutable function name: the active Program and reference
+// outlive the frame, including inspection by another thread while it is pushed.
+template <typename Name>
+class QoreJITStackLocationImpl : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
-    DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
+    DLLLOCAL QoreJITStackLocationImpl(const std::string& call_name, const QoreProgramLocation* loc,
             const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)
         : call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
     }
@@ -9939,7 +9951,7 @@ public:
     }
 
 private:
-    std::string call_name;
+    Name call_name;
     const QoreProgramLocation* loc;
     const StatementBlock* statements;
     QoreProgram* pgm;
@@ -9952,6 +9964,9 @@ private:
     QoreProgramStackLocationHelper stack_helper{this, saved_stmt, saved_pgm};
 };
 
+using QoreJITStackLocation = QoreJITStackLocationImpl<std::string>;
+using QoreFunctionRefStackLocation = QoreJITStackLocationImpl<const std::string&>;
+
 // A context-independent native body has private parameters/body locals and
 // cannot call back into AST code or inspect a caller's local-variable context.
 // Keep the normal diagnostic and policy frame, but do not instantiate TLS
@@ -9961,8 +9976,8 @@ static auto execFunctionRefNativeContext(const FunctionCallReferenceNode* ref,
         const UserVariantBase* uvb, ExceptionSink* xsink, Exec&& exec)
         -> decltype(exec(static_cast<QoreAOTContext*>(nullptr))) {
     using Result = decltype(exec(static_cast<QoreAOTContext*>(nullptr)));
-    const char* name = ref->getFunction()->getName();
-    if (!uvb->ensureAOTContext(name, xsink)) {
+    const std::string& name = ref->getFunction()->getNameStr();
+    if (!uvb->ensureAOTContext(name.c_str(), xsink)) {
         return Result{};
     }
     qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
@@ -9970,7 +9985,7 @@ static auto execFunctionRefNativeContext(const FunctionCallReferenceNode* ref,
     ThreadFrameBoundaryHelper frame_boundary(true);
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = get_runtime_location();
-    QoreJITStackLocation stack_loc(name, call_loc ? call_loc : parse_loc,
+    QoreFunctionRefStackLocation stack_loc(name, call_loc ? call_loc : parse_loc,
         uvb->getStatementBlock(), ref->getProgram(), true);
     struct ContextGuard {
         ExceptionSink* xsink;
@@ -10026,7 +10041,7 @@ static const FunctionCallReferenceNode* getTypedFunctionRef(uint64_t ref_bits, u
     if (pgm != getProgram()) {
         return nullptr;
     }
-    const auto* ref = dynamic_cast<const FunctionCallReferenceNode*>(node);
+    const auto* ref = getExactFunctionRef(node);
     if (!ref || !ref->getTypedEntry(signature)
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return nullptr;

@@ -4395,6 +4395,8 @@ while (*binary chunk = input.read(65536)) {
     - Cached immutable eligibility metadata on finalized function references and added guarded AOT native
       scalar dispatch for zero/one-argument, non-throwing context-independent callbacks; dynamic binding
       fallback, full-width scalar values, diagnostic frames, and argument ownership are preserved
+    - Further reduced same-program function-reference overhead with exact internal node recognition and
+      borrowed immutable diagnostic names, retaining stack frames and generic dispatch for other reference kinds
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

@@ -759,3 +759,139 @@ controls, limitations, and the matched Java result.
 Evidence validation passed for seven phased experiments, 258 jobs and 1290
 measured samples: unique job keys, fork/sample counts, finite positive samples,
 recomputed medians and final library identity. Metadata is allowlisted.
+
+## Exact-reference recognition and borrowed diagnostic names audit (2026-10-06)
+
+The audit-changes skill covers this follow-up after merge 2fd14f43d. Scope:
+lib/JITRuntime.cpp, the existing function-reference fixture, design/release
+notes, results and sanitized measurement evidence. No qlib source, public
+class layout/vtable, serialized descriptor, compiler lowering, parser or QPP
+changed in this follow-up. The sandboxing, cancellation and table guides were
+applied. No agents were used.
+
+### Registration, structure, and tests
+
+|!Check|!Status|!Evidence
+|New module entry in 120_modules.dox.tmpl|N/A|No .qm module added
+|New module release-note entry|N/A|No .qm module; runtime change has a release note
+|qore_user_module or qore_external_user_module registration|N/A|No installed module
+|CMake QMOD list registration|N/A|No QMOD added
+|First lowercase module intro section|N/A|No .qm changed
+|Module %modern and redundant directives|N/A|No .qm changed
+|No parse directives in separated .qc files|N/A|No .qc changed
+|No deprecated %include usage|Pass|No added source uses %include
+|Copyright 2026 on new files|Pass|New evidence carries a 2026 notice; modified fixtures retain theirs
+|Multi-file module directory layout|N/A|No module added
+|No duplicate top-level .qm entry point|N/A|No .qm added
+|QPP namespace matches namespace constructor|N/A|No QPP class
+|Test %modern directive|Pass|Both test files use %modern
+|Test executable permission|Pass|Both .qr and .qtest have executable permission
+|Module path precedes %requires|Pass|Wrapper prepends repository qlib before QUnit and FsUtil
+|External modules use %try-module|N/A|Only Qore-delivered QUnit and FsUtil are required
+
+
+### Sandboxing and cancellation
+
+|!Check|!Status|!Evidence
+|No unchecked C++ filesystem operations|Pass|No filesystem operation added
+|No unchecked C++ network operations|Pass|No network operation added
+|QoreSandboxManagerHelper for filesystem/network operations|N/A|No new C++ I/O
+|Qore File, Dir, Socket, HTTPClient usage justified|N/A|Fixture changes add no I/O
+|C++ loops over 100 iterations check cancellation|Pass|No new C++ loop
+|Use qore_check_cancel, not qore_check_io_interrupt|Pass|Existing call/body cancellation behavior untouched; no deprecated API
+|100 tight / 10 expensive iteration frequency|N/A|No new C++ loop
+|No uncancellable blocking operation|Pass|Frame publication/pop and Program guards remain unchanged; no blocking operation added
+
+### DataProvider checklist
+
+|!Check|!Status|!Evidence
+|Action display_name, short_desc, desc|N/A|No action registration
+|Action options from getActionOptionFromFields|N/A|No action registration
+|Typed action output_type|N/A|No action registration
+|DPAT_API supports_request and doRequestImpl|N/A|No provider
+|DPAT_FIND SearchOptions and getRecordTypeImpl|N/A|No provider
+|Scheme app actions use path without cls|N/A|No app registration
+|Single-key hash slices have trailing comma|N/A|No hash slice added
+|Request/response HashDataType classes, Fields, addQoreFields, public constants|N/A|No DataProvider types
+|Input Fields public|N/A|No DataProvider types
+|Output Fields private|N/A|No DataProvider types
+|Field display_name, type, desc|N/A|No DataProvider fields
+|Input example_value where useful|N/A|No DataProvider fields
+|Finite values use AllowedValueInfo value/display_name|N/A|No DataProvider fields
+|Secret fields use sensitive=True|N/A|No credential fields
+|AppGroup enum for app groups|N/A|No app registration
+|Separate logo loaded in module-level Priv namespace|N/A|No app registration
+|App description includes capabilities, website, business value|N/A|No app registration
+|Friendly app display_name|N/A|No app registration
+|Plain-text short_desc below 80 characters|N/A|No action/app descriptions
+|Markdown desc formatting and caveats|N/A|No action/app descriptions
+|Business language explains why/when|N/A|No action/app descriptions
+|Backticks around True, False, NOTHING in desc|N/A|No action/app descriptions
+|Backticks around field/option names in desc|N/A|No action/app descriptions
+|Long descriptions use section headings and lists|N/A|No action/app descriptions
+|FactoryMap cross-repository registration|N/A|No DataProvider factory
+|Exact getRecordTypeImpl signature|N/A|No provider override
+|JNI dependency JARs committed|N/A|No JNI change
+|JAR install rules in CMake|N/A|No Java installation change
+
+
+### Code review
+
+|!Check|!Status|!Evidence
+|No workarounds, TODOs, FIXMEs or stubs|Pass|Exact concrete-node guard and complete owned/borrowed frame specializations; other reference kinds retain virtual dispatch
+|Exception safety|Pass|Stack helper remains last member: pop/readers finish before destruction; context restoration and sink checks unchanged; no new allocation
+|Thread safety|Pass|Borrowed function name is stable for the active invocation; frames initialize all fields before publication and wait for readers on pop; thread.cpp copies names into owned QoreStringNodes during snapshot construction
+|Type safety|Pass|typeid equality proves the static downcast to the exact internal class; future derived nodes fall back; Name template has only owning string and const-string-reference specializations
+|Performance|Pass|Saved merged baseline, interleaved process-level timing, arithmetic/polymorphic controls, count-4096 repeat, Program-boundary probe and separate original-baseline comparison
+|Error handling|Pass|Program-first rejection, debugger, signature, argument, execution-mode and normal-entry guards unchanged; closure/method/foreign references retain general dispatch
+|Public Doxygen params, returns, throws, examples, caveats|N/A|No public helper or method added; internal comments document lifetime and exact-type scope
+|Documentation|Pass|Design and release notes document borrowed-name lifetime and unchanged diagnostics; results report measured scope and limitations
+|QPP CONSTANT and RET_VALUE_ONLY flags|N/A|No QPP change
+|Security|Pass|No capability check removed; exact downcast guarded; no new input indices, user-controlled format strings or credentials
+|Correctness and edge cases|Pass|Long-name reference shared by four threads, captured closure with updated capture, all previous semantic cases, concurrent stack snapshots, debugger, cancellation and sandbox regressions
+
+Borrowed-name lifetime was traced through QoreProgramStackLocationHelper and
+thread.cpp's stack publication/pop and getCallStackHash implementation. Names
+are copied into snapshot values before the reader releases the frame. The
+active invocation and its reference outlive the frame; ordinary frames still
+own synthesized names. No diagnostic frame, policy boundary or cancellation
+check is elided. FunctionCallReferenceNode has no current subclasses; future
+subclasses deliberately retain virtual dispatch rather than inheriting an
+unchecked fast convention.
+
+### Integration and verification
+
+|!Verification|!Result
+|Fetch origin and merge origin/develop|Pass; e88224334 merged cleanly in 2fd14f43d after d3e546088 was audited and committed
+|Merged release/debug qore/qcc baseline builds|Pass; saved release library hash 84f62496296c44547caf70bdae147c577488d2fb8c1c927877e41a484181b7f0
+|Merged QoreAgentStrategies qmod rebuild and tests|Pass; rebuilt changed module and dependencies; 25 cases / 104 assertions
+|Merged AOTTypedForeachNothing release/debug|Pass; each 3 cases / 24 assertions
+|Optimized release/debug qore/qcc builds|Pass; cmake --build build (and build-debug) --target qore qcc -j3
+|IRFunctionRefCalls release/debug|Pass; each 1 case / 43 wrapper assertions, all execution modes, disabled paths, stripped debug and experimental C++ EH; updated long-name and captured-closure cases
+|Five standalone AOT scripts|Pass; known reference, generic function, cross-object generic, optional scalar, native closure
+|IR/AOT regression suite|Pass; AOTQoLinkNativeSymbols, IRCallFrameReuse, IRExecModeSmoke, IRExceptionTrace, IRReturnBorrowedSlot, JitDebugStep, StackGuardCompiled
+|Sandbox policy barrier and sandbox-manager|Pass after rebuilding required DataProvider qmod; initial missing-artifact failure was not a runtime correctness failure
+|Cancellation and debugger regressions|Pass; thread-cancel and test-debug
+|Concurrent stack snapshots release/debug|Pass; each 3 cases / 7 assertions
+|get-call-stack|Pass; 1 case / 7 assertions
+|Pre-merge typed AOT executable on final runtime|Pass; 165 independent reference checks
+|Harness unit tests|Pass; 10 tests
+|Strict documentation tables and git diff --check|Pass
+
+Successful final release cases total 338 / 13333 assertions plus five standalone
+scripts; debug subset 15 / 11317. The initial sandbox run stopped on a
+missing DataProvider qmod after configure invalidated stale generated links;
+DataProvider-qmod was rebuilt, then sandbox and remaining tests reran and
+passed. CMake's two root-owned generated packaging files were preserved under
+/tmp/qore-cpack-backup.WA2Lvn and regenerated as the normal user. No tracked
+source was removed. The debug subset does not test the changed qlib module.
+
+No full-suite, sanitizer or allocation-count run was performed. The timing
+kernels use short callback names; long-name behavior is regression-tested but
+its separate performance benefit is not quantified. Measurements attribute
+the combined recognition/name change, not independent shares to each edit.
+
+Evidence validation passed for four phased experiments, 119 jobs and 595
+measured samples: unique jobs, expected fork/sample counts, finite positive
+timings, recomputed medians, benchmark source hashes and final library identity.
+Metadata is allowlisted and excludes inherited environment values.

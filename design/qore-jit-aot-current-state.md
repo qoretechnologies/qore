@@ -127,6 +127,17 @@ typed caller lowering at compile time, leaving the boxed adapter available.
 The ABI is additive and does not change serialized descriptors; old artifacts
 remain supported, while newly compiled artifacts require these runtime helpers.
 
+The runtime recognizes the exact internal FunctionCallReferenceNode type before
+downcasting, avoiding a general RTTI inheritance search. Derived or other node
+types keep virtual dispatch; no public node layout or virtual table is extended.
+The Program identity guard remains first. Native reference diagnostic frames
+borrow QoreFunction's stable name instead of constructing and copying strings
+on every call. Only this frame specialization borrows: ordinary JIT/AOT frames
+still own potentially synthesized names. The active invocation keeps the
+function alive, and stack_helper remains the last member so the frame is
+unpublished before any name storage can disappear. No frame, location update,
+debugger fallback, exception boundary or policy check is removed.
+
 ## Tiered Execution
 
 Tiered mode starts functions on AST and promotes by call count:

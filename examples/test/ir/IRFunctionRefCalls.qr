@@ -11,6 +11,7 @@ sub expect(auto expected, auto actual) {
 }
 
 int sub increment(int value) { return value + 1; }
+int sub increment_with_a_diagnostic_name_longer_than_the_small_string_buffer(int value) { return value + 1; }
 float sub half(float value) { return value + 0.5; }
 bool sub invert(bool value) { return !value; }
 int sub zero() { return 42; }
@@ -180,7 +181,7 @@ foreach auto mode in ((EM_AST, EM_IR, EM_TIERED)) {
 expect(5, invokeInt(\increment(), 4));
 
 # Share the same immutable descriptor and compiled entry between threads.
-code<int(int)> shared = \increment();
+code<int(int)> shared = \increment_with_a_diagnostic_name_longer_than_the_small_string_buffer();
 Counter pending(4);
 Queue<auto> outcomes();
 for (int worker = 0; worker < 4; ++worker) {
@@ -197,4 +198,10 @@ for (int worker = 0; worker < 4; ++worker) {
 }
 expect(0, pending.waitForZero(10000));
 for (int worker = 0; worker < 4; ++worker) { expect(200, outcomes.get(1000)); }
+# Exact function-node recognition must reject closures and preserve captures.
+int offset = 2;
+code<int(int)> captured = int sub (int value) { return value + offset; };
+expect(6, invokeInt(captured, 4));
+offset = 3;
+expect(7, invokeInt(captured, 4));
 printf("function-references: ok (%d)\n", division_line);

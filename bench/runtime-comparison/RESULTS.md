@@ -987,3 +987,84 @@ A separate five-second profile confirmed the typed helper and still sampled
 RTTI, diagnostic stack-location construction, runtime location/parse-option
 updates, and context/PC-map readiness. These are candidates for the next
 measured optimization, not costs removed by this commit.
+
+## Post-merge exact-reference and diagnostic-name optimization (2026-10-06)
+
+The metadata/scalar-ABI work was audited and committed as d3e546088, then
+origin was fetched and origin/develop (e88224334) merged cleanly in 2fd14f43d.
+The merged release/debug runtimes were rebuilt and integration-tested;
+QoreAgentStrategies-qmod was rebuilt before its changed module tests.
+The merged release library was preserved as the baseline for this follow-up.
+
+The executed plan was to remove two costs observed in the prior profile:
+general RTTI inheritance lookup for the exact internal function-reference node,
+and per-call copies of the immutable diagnostic name. The runtime now uses
+an exact type check before a static downcast, with other/derived nodes falling
+back. Native reference frames borrow the stable name; ordinary frames still
+own synthesized names. All diagnostic frames, Program guards, policy checks,
+location updates, cancellation behavior and exception boundaries remain.
+
+Same host/build/methodology as above. Five forks per mode/kernel, count 1024,
+three warmups and five 300 ms measurement windows. Java was remeasured in the
+same shuffled schedule. Values are median fork means in ns/element.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|indirect_call|227.29|224.89|69.63|61.69|1.66
+|arithmetic|94.62|94.75|4.10|4.09|0.89
+|polymorphic_call|420.07|423.92|294.63|291.38|2.53
+
+The AOT callback reduction is 11.4%.
+The count-4096, three-fork repeat gave
+68.92 -> 61.51 ns
+(10.8% less time).
+The IR callback changes are only 1.1% and
+0.8%, with overlapping fork ranges.
+They do not establish a strong independent IR benefit for this second round.
+Arithmetic was essentially unchanged; polymorphic controls moved 0.9% slower
+in IR and 1.1% faster in AOT, not evidence of optimized method dispatch.
+
+The five-fork Program probe gave
+226.90 -> 221.72 ns/call in one Program and
+338.03 -> 340.70 across Programs.
+The cross-program median is 0.8% slower, with overlapping ranges. All raw
+forks are retained, including the slow same-program baseline fork; no outlier
+was discarded.
+
+A separate interleaved three-fork comparison measured the final runtime
+directly against the original 766a5ce07 baseline, including both optimization
+rounds and the develop merge:
+
+|!Mode|!Original baseline ns/element|!Final ns/element|!Time reduction
+|IR|238.80|227.53|4.7%
+|AOT|86.38|62.91|27.2%
+
+These are directly measured overall changes, not multiplied percentages from
+different runs. AOT remains about 37.1 times Java in the matched callback
+comparison, and polymorphic AOT dispatch about 115.0 times Java. Future larger
+gains need guarded native method dispatch, less per-call context work and
+compiler-visible unboxed/inlinable callback paths, with explicit ownership,
+debugger and diagnostic semantics. Those broader changes are not implemented
+by this follow-up.
+
+A separate five-second profile retained the typed helper and context/location
+work; the general dynamic cast and owning-name constructor were no longer
+sampled in that callback stack. Source review confirms those operations were
+removed. This is qualitative evidence, not an allocation count. Long names
+are covered by a four-thread regression but were not separately timed.
+
+Reproduce with run.py --modes qore-ir qore-aot java-jit --kernels indirect_call
+arithmetic polymorphic_call --forks 5 --time-ms 300 and the merged saved library
+as --baseline-libdir. Repeat indirect_call with --count 4096 --forks 3, and
+program_calls.py --forks 5 --time-ms 300. The overall comparison selects the
+original saved library with --modes qore-ir qore-aot --kernels indirect_call
+--forks 3 --time-ms 300.
+
+[Sanitized evidence](results-native-frame-macos-arm64.json) contains four
+experiments, 119 jobs / 595 measured samples, source/library hashes and raw
+dispersion. All modes passed their independent reference checks. Timing,
+builds, regression tests and profiling were separate; background workstation
+activity and lightweight inspection were not eliminated.
+[Full audit](FOLLOWUP-AUDIT.md#exact-reference-recognition-and-borrowed-diagnostic-names-audit-2026-10-06)
+records integration recovery and 338 release cases / 13333 assertions plus five
+standalone AOT scripts, 15 debug cases / 11317 assertions and ten harness tests.
+No full-suite, sanitizer or production performance claim is made.
