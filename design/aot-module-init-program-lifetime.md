@@ -129,6 +129,36 @@ resolution or user execution. Recursion allows signature interning to allocate
 locals through the same guarded arena API. Teardown clears these arenas after
 all Program users have left.
 
+Nothing reached from context construction may take parse ownership either. A
+module loader owns the target Program's parse lock first and then takes the root
+namespace write lock to merge the module (`RuntimeNamespaceMergeLocker`), so a
+reader that holds the namespace read lock and then waits for the parse lock
+deadlocks against it. Two such paths existed after the method-lookup fix:
+
+- `qore_aot_resolve_variant_from_arg_type_signature()`: a call the parser left
+  unbound (for example a self call to an abstract method) serializes argument
+  types. When `runtimeFindVariant()` rejects them for a single-variant method,
+  for example a hashdecl value for an optional hashdecl parameter, the resolver
+  falls back to `parseFindVariantNoDiagnostics()`. That fallback reads only
+  committed variants, signatures and the current Program's parse options, so it
+  selects the Program with `QoreProgramContextHelper`.
+- `read_expr_closure_create()`: closures nested in deserialized IR, such as an
+  inner closure created when an outer closure's IR is materialized on its first
+  call, construct the `UserClosureFunction` with the same Program selection as
+  the `CLOSURE_CREATE` slot reader. Signature locations, strings and locals use
+  the runtime metadata lock.
+
+Callers keep the Program alive: lazy context materialization holds Program
+access, closure calls run in the closure's Program, and module registration
+runs in the owning loader. A second `ProgramRuntimeParseAccessHelper` would add
+only a failure mode while the Program is being parsed.
+
+Debug builds count the runtime namespace read locks each thread holds
+(`qore_root_ns_private::runtime_namespace_read_depth`).
+`qore_program_private::lockParsing()` asserts that a thread waiting for parse
+ownership holds none, unless it already owns parsing, so this inversion fails
+immediately instead of hanging.
+
 `examples/test/qore/misc/module-loader/runtime-method-lookup.qtest` reproduces the
 cycle with source and AOT modules. For example, one thread runs
 `LookupHost::Probe::load()`, whose dependency initializer signals a queue and waits for a
@@ -138,7 +168,12 @@ proves that parse ownership is held before lookup; no timing sleeps are used.
 Separate bounded child processes cover instance, self, static, inherited, and
 callable lookups, plus private, missing, and explicit constructor errors. Cold
 closure calls and eight simultaneous cold readers exercise context construction
-and publication while the loader still owns parsing.
+and publication while the loader still owns parsing. The `abstract-hashdecl` case
+makes a cold AOT call whose context resolves an abstract self call through the
+parse-equivalent fallback, and `nested-closure` (run with
+`QORE_DISABLE_AOT_NATIVE_CLOSURES=1`) materializes an outer closure's IR that
+creates an inner closure. Both hung before the fix; after the reader returns,
+the loader finishes and merges `LookupDep` under the namespace write lock.
 
 ### Shared closure lifetime
 

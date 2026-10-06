@@ -1704,6 +1704,10 @@ StaticSystemNamespace::~StaticSystemNamespace() {
     priv->purge();
 }
 
+#ifdef DEBUG
+thread_local unsigned qore_root_ns_private::runtime_namespace_read_depth = 0;
+#endif
+
 // returns 0 for success, non-zero return value means error
 int qore_root_ns_private::parseAddMethodToClassIntern(const QoreProgramLocation* loc, const NamedScope& scname, MethodVariantBase* qcmethod, bool static_flag) {
     std::unique_ptr<MethodVariantBase> v(qcmethod);

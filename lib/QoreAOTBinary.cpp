@@ -3598,13 +3598,17 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     // parser and can reject valid parse-time calls such as a hashdecl value
     // passed to an optional hashdecl parameter.  Fall back to parse-equivalent
     // matching (which can only resolve to that single variant here).
-    ExceptionSink parse_xsink;
-    ProgramRuntimeParseContextHelper pch(&parse_xsink, pgm);
-    if (parse_xsink) {
-        parse_xsink.clear();
-        error = "failed to set parse context while resolving AOT argument type signature";
-        return nullptr;
-    }
+    //
+    // That matching reads only committed variants, their signatures, and the
+    // current Program's parse options -- the same committed data
+    // runtimeFindVariant() reads above -- so it selects the Program without
+    // claiming parse ownership.  A cold call builds its AOT context here while
+    // holding the namespace read lock; taking the parse lock as well would
+    // deadlock against a module loader that owns parsing and waits either for
+    // the namespace write lock or for an initializer that waits for this call.
+    // Every caller already keeps pgm alive: lazy context materialization holds
+    // Program access, and module registration runs in the owning loader.
+    QoreProgramContextHelper pch(pgm);
     QoreTypeParamInstantiation parse_type_param_instantiation;
     variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
         &parse_type_param_instantiation);

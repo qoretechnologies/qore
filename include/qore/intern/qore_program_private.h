@@ -1347,6 +1347,10 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
 
+        // A module loader owns parsing before it takes a namespace write lock; a namespace reader that
+        // waits for parse ownership inverts that order and can deadlock startup
+        assert(parse_tid == tid || !qore_root_ns_private::threadHoldsRuntimeNamespaceReadLock());
+
         while (parse_tid != -1 && parse_tid != tid && !ptid) {
             ++thread_waiting;
             pcond.wait(plock);

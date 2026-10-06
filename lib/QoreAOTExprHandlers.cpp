@@ -1418,7 +1418,13 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
 
-    // Resolve class for method context
+    // Resolve the class for the method context and construct the closure in the
+    // closure's Program.  This runs when a cold call or a closure's first call
+    // deserializes IR, so it selects the Program without claiming parse ownership,
+    // like the CLOSURE_CREATE slot reader in buildContextFromSlotMap(): a module
+    // loader can own parsing while waiting for this thread.  The caller keeps the
+    // Program alive, and the Program's runtime metadata lock protects the
+    // locations, strings, and locals that the closure signature allocates.
     QoreProgramContextHelper closure_program_context(ctx.pgm);
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
@@ -1426,14 +1432,6 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     }
 
     // Construct UserClosureFunction + UserClosureVariant
-    ExceptionSink closure_xsink;
-    ProgramRuntimeParseContextHelper closure_pch(&closure_xsink, ctx.pgm);
-    if (closure_xsink.isException()) {
-        closure_xsink.clear();
-        ctx.ptr = ir_end_ptr;
-        ctx.error = "failed to acquire parse context for closure";
-        return QoreValue();
-    }
     auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
     auto* closure_variant = static_cast<UserClosureVariant*>(
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));

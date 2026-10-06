@@ -9,8 +9,21 @@ module LookupHost {
 }
 
 public namespace LookupHost {
+    public hashdecl LookupInfo {
+        int v = 0;
+    }
+
     public class Base {
         int inherited() { return 41; }
+
+        # A self call to an abstract method is bound at runtime, so AOT serializes its argument
+        # types. Runtime type matching rejects a hashdecl argument for the optional hashdecl
+        # parameter, so the cold context resolves the single variant with parse-equivalent matching.
+        abstract int infoValue(*hash<LookupInfo> info);
+        int abstractInfoValue(int n) {
+            hash<LookupInfo> info({"v": n});
+            return infoValue(info);
+        }
     }
 
     public class Probe inherits Base {
@@ -28,6 +41,18 @@ public namespace LookupHost {
         int closureValue(int n) {
             code<int(int)> add = int sub (int m) { return value() + n + m; };
             return add(1);
+        }
+
+        int infoValue(*hash<LookupInfo> info) { return info.v ?? 0; }
+
+        # Without native closure bodies, the first call of the outer closure deserializes its
+        # IR, including the creation of the inner closure.
+        int nestedClosureValue(int n) {
+            code outer = int sub (int m) {
+                code inner = int sub (int k) { return value() + n + m + k; };
+                return inner(1);
+            };
+            return outer(2);
         }
 
         static int hold() {
@@ -60,6 +85,10 @@ public namespace LookupHost {
                     return call_object_method(obj, "inherited");
                 case "closure":
                     return obj.closureValue(7);
+                case "abstract-hashdecl":
+                    return obj.abstractInfoValue(60);
+                case "nested-closure":
+                    return obj.nestedClosureValue(9);
                 case "callable":
                     if (!obj.hasCallableMethod("value") || !obj.hasCallableNormalMethod("inherited")
                         || !obj.hasCallableStaticMethod("staticValue") || obj.hasCallableNormalMethod("staticValue")

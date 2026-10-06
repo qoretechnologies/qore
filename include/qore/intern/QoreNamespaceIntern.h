@@ -1375,6 +1375,15 @@ protected:
     mutable std::atomic<int> runtime_namespace_writer_tid{-1};
     unsigned runtime_namespace_writer_depth = 0;
 
+#ifdef DEBUG
+    //! Runtime namespace read locks held by the current thread
+    /** A runtime namespace reader must never wait for Program parse ownership: a module loader
+        acquires parse ownership first and then the namespace write lock, so the reverse order
+        deadlocks.  qore_program_private::lockParsing() asserts this in debug builds.
+    */
+    DLLLOCAL static thread_local unsigned runtime_namespace_read_depth;
+#endif
+
     //! Acquires the read lock unless this thread already owns the write lock
     DLLLOCAL bool runtimeNamespaceReadLock() const {
         if (runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid()) {
@@ -1382,15 +1391,32 @@ protected:
         }
         int rc = runtime_namespace_lock.rdlock();
         assert(!rc);
+#ifdef DEBUG
+        ++runtime_namespace_read_depth;
+#endif
         return true;
     }
 
     DLLLOCAL void runtimeNamespaceReadUnlock(bool locked) const {
         if (locked) {
+#ifdef DEBUG
+            assert(runtime_namespace_read_depth);
+            --runtime_namespace_read_depth;
+#endif
             int rc = runtime_namespace_lock.unlock();
             assert(!rc);
         }
     }
+
+public:
+#ifdef DEBUG
+    //! Returns true if the current thread holds a runtime namespace read lock (debug builds only)
+    DLLLOCAL static bool threadHoldsRuntimeNamespaceReadLock() {
+        return runtime_namespace_read_depth != 0;
+    }
+#endif
+
+protected:
 
     //! Recursively acquires the write lock for the current thread
     DLLLOCAL void runtimeNamespaceWriteLock() {

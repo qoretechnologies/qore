@@ -3,8 +3,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 
 %exec-class RuntimeMethodLookupTest
 
@@ -23,7 +23,14 @@ class RuntimeMethodLookupTest inherits QUnit::Test {
         const Expected = {
             "instance": 42, "self": 86, "static": 43, "static-object": 43, "inherited": 41,
             "callable": 1, "secret": 1, "missing": 1, "constructor": 1,
-            "closure": 50, "concurrent": 544,
+            "closure": 50, "abstract-hashdecl": 60, "nested-closure": 54, "concurrent": 544,
+        };
+        #! Per-case child environment
+        /** AOT closures normally run native bodies; disabling them makes the first outer-closure
+            call deserialize the closure IR, including the nested closure's creation.
+        */
+        const CaseEnv = {
+            "nested-closure": "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ",
         };
     }
 
@@ -73,7 +80,8 @@ class RuntimeMethodLookupTest inherits QUnit::Test {
             int child_timeout = (ENV.QORE_TEST_CHILD_TIMEOUT ?? "60").toInt();
             assertTrue(child_timeout > 0, "the child timeout must be positive");
             # QORE_TEST_CHILD_PREFIX supports running the actual child under Valgrind.
-            string output = backquote(env + "QORE_TEST_METHOD_LOOKUP=1 " + shellQuote(timeout_bin)
+            string output = backquote(env + (CaseEnv{test.key} ?? "") + "QORE_TEST_METHOD_LOOKUP=1 "
+                + shellQuote(timeout_bin)
                 + " -s KILL " + child_timeout + " " + (ENV.QORE_TEST_CHILD_PREFIX ?? "") + " " + shellQuote(qore_bin)
                 + " -b --enable-debug " + shellQuote(tmp.path + "/probe.qr") + " "
                 + shellQuote(test.key) + " 2>&1", \rc);

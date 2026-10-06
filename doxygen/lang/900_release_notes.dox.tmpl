@@ -10,6 +10,11 @@
     startup; committed namespace reads remain synchronized, and deleted-Program and method access
     checks are preserved.
 
+    First calls to AOT-compiled code no longer acquire Program parse ownership when they resolve a
+    runtime-dispatched method call (such as a call to an abstract method) or create a closure while
+    building their execution context.  A module loaded at runtime concurrently with such a call
+    could otherwise deadlock the process, which hung application startup.
+
     @ref Qore::SSLCertificate "SSLCertificate" validity dates now preserve UTC independently of the process
     time zone and correctly interpret both ASN.1 UTCTime (1950-2049) and GeneralizedTime (including 2050
     and later). Invalid validity dates raise <tt>SSLCERTIFICATE-DATE-ERROR</tt> when read from Qore.
