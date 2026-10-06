@@ -78,6 +78,10 @@ public hashdecl TabularTextFormat {
 
     #! The line ending: \c "\n", \c "\r\n", or \c "\r"
     string eol;
+
+    #! The field quote character
+    /** @since %DataProvider 3.9 */
+    string quote = "\"";
 }
 
 #! The raw cells of a workbook or text file, the input to @ref TabularProfiler

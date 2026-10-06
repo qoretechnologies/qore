@@ -827,6 +827,18 @@
           "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
           "message": "文字エンコーディング。指定しない場合はバイトオーダーマークまたは有効な UTF-8 が検出され、それ以外のデータは `ISO-8859-1` として読み取られます"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.display_name": {
+          "source": "Quote Character",
+          "message": "引用符文字"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.short_desc": {
+          "source": "The field quote character, instead of the double quote",
+          "message": "二重引用符の代わりに使うフィールドの引用符文字"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
+          "message": "フィールドの引用符文字（デフォルト: `\"`）。フィールドはこの文字で読み取られ、区切り文字の検出では引用符で囲まれたフィールド内の区切り文字は数えられません"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "最大行数"

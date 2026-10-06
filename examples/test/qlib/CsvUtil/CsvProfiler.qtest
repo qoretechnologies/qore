@@ -22,6 +22,7 @@ public class CsvProfilerTest inherits QUnit::Test {
         addTestCase("explicit format options", \explicitOptions());
         addTestCase("profile action", \action());
         addTestCase("invalid requests", \invalidRequests());
+        addTestCase("quote character", \quoteCharacter());
         set_return_value(main());
     }
 
@@ -173,5 +174,31 @@ public class CsvProfilerTest inherits QUnit::Test {
 
     private hash<TabularTextFormat> sniff(string data) {
         return CsvProfiler::sniffTextFormat(binary(data));
+    }
+
+    #! fields are read with the given quote character, which also hides separators inside quoted fields from the
+    #! separator detection
+    private quoteCharacter() {
+        # with the default double quote, the commas inside the single-quoted fields make the comma the separator
+        binary data = binary("'a,b';c\n'd,e';f\n'g,h';i\n");
+        hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(data);
+        assertEq("\"", grid.text_format.quote);
+        assertEq(",", grid.text_format.separator);
+
+        grid = CsvProfiler::readGrid(data, {"quote": "'"});
+        assertEq("'", grid.text_format.quote);
+        assertEq(";", grid.text_format.separator);
+        assertEq((("a,b", "c"), ("d,e", "f"), ("g,h", "i")), grid.sheets[0].rows);
+
+        # the profile action takes the option
+        CsvProfileDataProvider prov();
+        hash<auto> profile = prov.doRequest({"data": data, "quote": "'"});
+        assertEq("'", profile.text_format.quote);
+        assertEq(";", profile.text_format.separator);
+        assertEq(2, profile.sheets[0].columns.size());
+
+        # one character only
+        assertThrows("CSV-PROFILE-ERROR", "quote", \CsvProfiler::readGrid(), (data, {"quote": "''"}));
+        assertThrows("CSV-PROFILE-ERROR", "quote", \CsvProfiler::readGrid(), (data, {"quote": ""}));
     }
 }

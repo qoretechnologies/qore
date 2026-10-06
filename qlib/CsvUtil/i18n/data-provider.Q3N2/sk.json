@@ -827,6 +827,18 @@
           "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
           "message": "Kódovanie znakov; ak nie je zadané, rozpozná sa značka poradia bajtov alebo platné UTF-8 a ostatné údaje sa čítajú ako `ISO-8859-1`"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.display_name": {
+          "source": "Quote Character",
+          "message": "Znak úvodzovky"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.short_desc": {
+          "source": "The field quote character, instead of the double quote",
+          "message": "Znak úvodzovky polí namiesto dvojitej úvodzovky"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
+          "message": "Znak úvodzovky polí (predvolené: `\"`); polia sa čítajú s ním a oddeľovače v poliach v úvodzovkách sa pri zisťovaní oddeľovača nepočítajú"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Maximálny počet riadkov"

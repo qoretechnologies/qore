@@ -827,6 +827,18 @@
           "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
           "message": "L'encodage des caractères ; s'il n'est pas indiqué, un indicateur d'ordre des octets ou un UTF-8 valide est détecté, et les autres données sont lues en `ISO-8859-1`"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.display_name": {
+          "source": "Quote Character",
+          "message": "Caractère de guillemet"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.short_desc": {
+          "source": "The field quote character, instead of the double quote",
+          "message": "Le caractère de guillemet des champs, à la place du guillemet double"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
+          "message": "Le caractère de guillemet des champs (par défaut : `\"`) ; les champs sont lus avec lui, et les séparateurs dans les champs entre guillemets ne sont pas comptés lors de la détection du séparateur"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Nombre maximal de lignes"

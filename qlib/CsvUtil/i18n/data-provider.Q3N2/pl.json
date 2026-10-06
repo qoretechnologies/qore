@@ -827,6 +827,18 @@
           "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
           "message": "Kodowanie znaków; jeśli nie podano, wykrywany jest znacznik kolejności bajtów lub poprawne UTF-8, a inne dane są odczytywane jako `ISO-8859-1`"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.display_name": {
+          "source": "Quote Character",
+          "message": "Znak cudzysłowu"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.short_desc": {
+          "source": "The field quote character, instead of the double quote",
+          "message": "Znak cudzysłowu pól zamiast cudzysłowu podwójnego"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
+          "message": "Znak cudzysłowu pól (domyślnie: `\"`); pola są odczytywane z jego użyciem, a separatory w polach ujętych w cudzysłowy nie są liczone przy wykrywaniu separatora"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Maksymalna liczba wierszy"

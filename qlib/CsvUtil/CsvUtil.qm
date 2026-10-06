@@ -353,6 +353,8 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - the CSV profiler and the \c profile action take a \c quote option for files quoted with another character
+      than \c "\""; the profile's text format reports the quote character
     - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools
       and agents learn the reader from the action catalog and the data provider index: the defaults of
       \c ignore_empty, \c ignore_whitespace (both \c true) and \c header_lines (\c 0) are declared, common

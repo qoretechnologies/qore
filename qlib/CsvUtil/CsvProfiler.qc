@@ -51,18 +51,23 @@ public class CsvProfiler {
 
     #! Detects the text format of delimited text data
     /** @param data the file content
+        @param quote the field quote character; separators inside quoted fields are not counted
 
         @return the separator, the encoding (\c "UTF-8", \c "UTF-16LE", \c "UTF-16BE", or \c "ISO-8859-1" when the
-        content is not valid UTF-8), whether the content starts with a byte order mark, and the line ending
+        content is not valid UTF-8), whether the content starts with a byte order mark, the line ending, and the
+        quote character
+
+        @since CsvUtil 1.12 the \a quote parameter
     */
-    static hash<TabularTextFormat> sniffTextFormat(binary data) {
+    static hash<TabularTextFormat> sniffTextFormat(binary data, string quote = "\"") {
         hash<auto> enc = detectEncoding(data);
         string text = decode(data, enc);
         return <TabularTextFormat>{
-            "separator": detectSeparator(text),
+            "separator": detectSeparator(text, quote),
             "encoding": enc.encoding,
             "bom": enc.bom,
             "eol": detectEol(text),
+            "quote": quote,
         };
     }
 
@@ -73,17 +78,22 @@ public class CsvProfiler {
           still reported
         - \c separator (string): the separator, instead of detecting it
         - \c encoding (string): the character encoding, instead of detecting it
+        - \c quote (string): the field quote character (default \c "\""); fields are quoted with it and
+          separators inside quoted fields are not counted when the separator is detected
 
         @return a grid with one sheet named \c "csv", in which every cell is a string and empty lines are empty rows
 
-        @throw CSV-PROFILE-ERROR the \c max_rows option is not positive
+        @throw CSV-PROFILE-ERROR the \c max_rows option is not positive, or the \c quote option is not one character
     */
     static hash<TabularWorkbookGrid> readGrid(binary data, *hash<auto> opts) {
         int max_rows = opts.max_rows ?? DefaultMaxRows;
         if (max_rows <= 0) {
             throw "CSV-PROFILE-ERROR", sprintf("max_rows must be positive; got %d", max_rows);
         }
-        hash<TabularTextFormat> format = sniffTextFormat(data);
+        if (exists opts.quote && opts.quote.length() != 1) {
+            throw "CSV-PROFILE-ERROR", sprintf("quote must be one character; got %y", opts.quote);
+        }
+        hash<TabularTextFormat> format = sniffTextFormat(data, opts.quote);
         hash<auto> enc = {"encoding": format.encoding, "bom": format.bom};
         if (opts.encoding) {
             enc.encoding = opts.encoding;
@@ -99,6 +109,7 @@ public class CsvProfiler {
         if (text.val()) {
             CsvDataIterator i(text, {
                 "separator": format.separator,
+                "quote": format.quote,
                 "eol": format.eol,
                 "ignore_empty": False,
                 "header_lines": 0,
@@ -194,7 +205,8 @@ public class CsvProfiler {
         separator is the candidate whose count is the same in most lines, and on a tie the one with more fields.  A
         file with one column has no separator in its lines; the default comma is returned.
     */
-    private static string detectSeparator(string text) {
+    private static string detectSeparator(string text, string quote) {
+        string q = regex_escape(quote);
         list<string> lines = ();
         foreach string line in (text.split("\n")) {
             line =~ s/\r$//;
@@ -202,7 +214,7 @@ public class CsvProfiler {
                 continue;
             }
             # remove quoted fields so separators inside them are not counted
-            line =~ s/"([^"]|"")*"//g;
+            line = regex_subst(line, sprintf("%s([^%s]|%s%s)*%s", q, quote, q, q, q), "", RE_Global);
             lines += line;
             if (lines.size() == SniffLines) {
                 break;

@@ -827,6 +827,18 @@
           "source": "The character encoding; if not given, a byte order mark or valid UTF-8 is detected, and other data is read as `ISO-8859-1`",
           "message": "字元編碼；若未指定，會偵測位元組順序標記或有效的 UTF-8，其他資料則以 `ISO-8859-1` 讀取"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.display_name": {
+          "source": "Quote Character",
+          "message": "引號字元"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.short_desc": {
+          "source": "The field quote character, instead of the double quote",
+          "message": "用於欄位的引號字元，取代雙引號"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
+          "message": "欄位引號字元（預設：`\"`）；欄位以此字元讀取，偵測分隔符號時不計算加引號欄位中的分隔符號"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "最大列數"

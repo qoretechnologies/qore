@@ -68,7 +68,7 @@ public class CsvProfileDataProvider inherits DataProvider::AbstractDataProvider 
         binary content = exists req.path
             ? FileLocationHandler::getBinaryFileFromLocation(req.path)
             : binary(req.data);
-        return CsvProfiler::profile(content, req{"max_rows", "separator", "encoding"},
+        return CsvProfiler::profile(content, req{"max_rows", "separator", "encoding", "quote"},
             <TabularProfileOptions>{
                 "sample_rows": req.sample_rows ?? 5,
                 "redact": req.redact ?? True,

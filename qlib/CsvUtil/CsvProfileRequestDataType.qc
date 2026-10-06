@@ -63,6 +63,14 @@ public class CsvProfileRequestDataType inherits HashDataType {
                     "other data is read as `ISO-8859-1`",
                 "example_value": "windows-1250",
             },
+            "quote": {
+                "display_name": "Quote Character",
+                "short_desc": "The field quote character, instead of the double quote",
+                "type": StringOrNothingType,
+                "desc": "The field quote character (default: `\"`); fields are read with it, and separators inside "
+                    "quoted fields are not counted when the separator is detected",
+                "example_value": "'",
+            },
             "max_rows": {
                 "display_name": "Maximum Rows",
                 "short_desc": "The maximum number of rows read",
