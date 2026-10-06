@@ -58,6 +58,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("text-only and single-column sheets", \textOnly());
         addTestCase("redaction", \redaction());
         addTestCase("empty markers", \emptyMarkers());
+        addTestCase("amounts and rates stored as text", \amounts());
         addTestCase("column letters", \columnLetters());
         addTestCase("profiles match their data type", \dataType());
         addTestCase("untyped grids from format readers", \gridFromHash());
@@ -434,6 +435,56 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertNothing(profileOne((("A",), (0,), (-1,))).columns[0].empty_markers);
         # the vocabulary has no duplicates
         assertEq(TabularProfiler::EmptyMarkers.size(), (map {$1: True}, TabularProfiler::EmptyMarkers).size());
+    }
+
+    #! numbers written with a currency, "%", parentheses or a trailing minus are numbers, and the column reports how
+    #! they are written
+    amounts() {
+        hash<string, hash<auto>> cases = {
+            "€1,234.56": {"number_format": "decimal_point", "amount": {"currency": "€", "currency_position": "before",
+                "currency_space": False}},
+            "1.234,56 €": {"number_format": "decimal_comma", "amount": {"currency": "€", "currency_position": "after",
+                "currency_space": True}},
+            "1,234.00 USD": {"number_format": "decimal_point", "amount": {"currency": "USD",
+                "currency_position": "after", "currency_space": True}},
+            "EUR 12": {"amount": {"currency": "EUR", "currency_position": "before", "currency_space": True}},
+            "12,5 %": {"number_format": "decimal_comma", "amount": {"percent": True}},
+            "5%": {"amount": {"percent": True}},
+            "(1,234.00)": {"number_format": "decimal_point", "amount": {"parentheses": True}},
+            "1.234,56-": {"number_format": "decimal_comma", "amount": {"trailing_minus": True}},
+            "−5 €": {"amount": {"currency": "€", "currency_position": "after", "currency_space": True}},
+            "-$5": {"amount": {"currency": "$", "currency_position": "before", "currency_space": False}},
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            hash<auto> cls = TabularProfiler::classify(i.key);
+            assertEq("number", cls.type, i.key);
+            assertEq(i.value.amount, cls.amount, i.key);
+            assertEq(i.value.number_format, cls.number_format, i.key);
+        }
+        # not numbers: a sign with parentheses or a trailing minus, two units, an unknown code, text
+        foreach string v in ("-(5)", "-5-", "5 € %", "ABC 5", "€ abc", "5-5", "(abc)", "total 5") {
+            assertEq("string", TabularProfiler::classify(v).type, v);
+        }
+        # a plain number has no amount parts
+        assertNothing(TabularProfiler::classify("1,5").amount);
+
+        hash<TabularSheetProfile> sheet = profileOne((
+            ("Item", "Price", "Rate", "Balance"),
+            ("A", "1.234,56 €", "12,5 %", "(1,234.00)"),
+            ("B", "99,00 €", "5 %", "56.00"),
+            ("C", "5 USD", "7,25 %", "(7.50)"),
+        ));
+        hash<TabularColumnProfile> price = sheet.columns[1];
+        assertEq("number", price.type);
+        assertEq(1.0, price.confidence);
+        assertEq("decimal_comma", price.number_format);
+        assertEq(<TabularAmountFormat>{"currency": "€", "currency_position": "after", "currency_space": True},
+            price.amount_format);
+        assertEq(<TabularAmountFormat>{"percent": True}, sheet.columns[2].amount_format);
+        assertEq("number", sheet.columns[3].type);
+        assertEq(<TabularAmountFormat>{"parentheses": True}, sheet.columns[3].amount_format);
+        # a column of plain numbers has no amount format
+        assertNothing(profileOne((("Qty",), ("1,5",), ("2,5",))).columns[0].amount_format);
     }
 
     columnLetters() {

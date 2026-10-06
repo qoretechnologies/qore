@@ -183,6 +183,11 @@ public class TabularColumnProfileDataType inherits HashDataType {
                     "redaction is disabled): it may be a yes/no column"},
             "counter_examples": {"display_name": "Counter-Examples", "type": AutoListType,
                 "desc": "Cells that do not match the inferred type, each with its 1-based `row` and its `value`"},
+            "amount_format": {"display_name": "Amount Format", "type": AutoHashOrNothingType,
+                "desc": "For numbers stored as text with a currency, `%`, parentheses or a trailing minus: the "
+                    "`currency` (a symbol such as `€` or an ISO 4217 code such as `EUR`), its "
+                    "`currency_position` (`before` or `after`) and `currency_space`, and the flags `percent`, "
+                    "`parentheses` (negative numbers in parentheses) and `trailing_minus`"},
             "empty_markers": {"display_name": "Empty Markers", "type": AutoHashOrNothingType,
                 "desc": "Text cells that stand for a missing value, such as `n/a`, `-` or `#N/A`: each marker with its "
                     "number of cells.  Markers come from a fixed vocabulary and are matched exactly as written, so "

@@ -131,6 +131,32 @@ public hashdecl TabularProfileFinding {
     auto detail;
 }
 
+#! How a column writes amounts and rates as text: the parts around the number
+/** Describes the number mask shapes \c "(...)", a trailing \c "-", a currency symbol or code before or after the
+    number, and \c "%"
+
+    @since %DataProvider 3.9
+*/
+public hashdecl TabularAmountFormat {
+    #! The currency symbol (such as \c "€") or ISO 4217 code (such as \c "EUR") written with the numbers, if any
+    *string currency;
+
+    #! Where the currency is written: \c "before" or \c "after" the number
+    *string currency_position;
+
+    #! True if a space separates the currency from the number
+    bool currency_space = False;
+
+    #! True if the numbers are percentages, written with \c "%"
+    bool percent = False;
+
+    #! True if negative numbers are written in parentheses, as in \c "(1,234.00)"
+    bool parentheses = False;
+
+    #! True if negative numbers are written with a trailing minus, as in \c "1.234,56-"
+    bool trailing_minus = False;
+}
+
 #! The profile of one column of a sheet's data region
 /** @since %DataProvider 3.9
 */
@@ -164,6 +190,10 @@ public hashdecl TabularColumnProfile {
 
     #! The format of numbers stored as text: \c "decimal_comma" or \c "decimal_point"
     *string number_format;
+
+    #! For numbers stored as text with a currency, \c "%", parentheses or a trailing minus: how they are written
+    /** @since %DataProvider 3.9 */
+    *hash<TabularAmountFormat> amount_format;
 
     #! True if the column holds digit strings with leading zeros, such as identifiers
     bool leading_zeros = False;
@@ -334,6 +364,16 @@ public class TabularProfiler {
     }
 
     private {
+        #! ISO 4217 codes recognized as currencies around numbers stored as text
+        const CurrencyCodes = (
+            "EUR", "USD", "GBP", "CHF", "JPY", "CNY", "CZK", "PLN", "HUF", "SEK", "NOK", "DKK", "RON", "BGN",
+            "HRK", "RUB", "UAH", "TRY", "CAD", "AUD", "NZD", "INR", "BRL", "MXN", "ZAR", "KRW", "SGD", "HKD", "TWD",
+            "ILS", "AED", "SAR",
+        );
+
+        #! @ref CurrencyCodes for quick lookups
+        const CurrencyCodeSet = map {$1: True}, CurrencyCodes;
+
         #! @ref EmptyMarkers for quick lookups
         const EmptyMarkerSet = map {$1: True}, EmptyMarkers;
 
@@ -496,6 +536,19 @@ public class TabularProfiler {
         if (!s.val()) {
             return {"type": "empty"};
         }
+        # an amount or rate: a number with a currency, "%", parentheses or a trailing minus
+        *hash<auto> amount = parseAmount(s);
+        if (amount) {
+            hash<auto> number = classifyString(amount.number);
+            if (number.type == "int" || number.type == "number") {
+                return {
+                    "type": "number",
+                    "text": True,
+                    "number_format": number.number_format,
+                    "amount": amount - "number",
+                };
+            }
+        }
         # every number and date starts with a digit or a sign
         if (s !~ /^[0-9+-]/) {
             return s =~ /^(true|false)$/i ? {"type": "bool", "text": True} : {"type": "string", "text": True};
@@ -527,6 +580,68 @@ public class TabularProfiler {
             };
         }
         return {"type": "string", "text": True};
+    }
+
+    #! Splits a number written with amount or rate parts into the parts and the number
+    /** Follows the number mask shapes \c "(...)", a trailing \c "-", one currency symbol (Unicode \c Sc) or
+        ISO 4217 code before or after the number, and \c "%"
+
+        @return the parts and the remaining \c number text, or @ref NOTHING if the text has none of these parts
+    */
+    private static *hash<auto> parseAmount(string s) {
+        # U+2212 is a minus sign
+        s = replace(s, "\u2212", "-");
+        hash<auto> rv;
+        if (s =~ /^\(.*\)$/u) {
+            rv.parentheses = True;
+            s = trim(s.substr(1, -1));
+        } else if (s =~ /[0-9%\p{Sc}A-Z ]-$/u && s !~ /^-/) {
+            rv.trailing_minus = True;
+            s = trim(s.substr(0, -1));
+        }
+        string sign;
+        if (s =~ /^[-+]/) {
+            sign = s[0];
+            s = trim(s.substr(1));
+        }
+        # a currency before the number
+        *list<*string> pre = (s =~ x/^(\p{Sc}|[A-Z]{3})( *)(.*)$/u);
+        if (pre && (pre[0] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{pre[0]})) {
+            rv.currency = pre[0];
+            rv.currency_position = "before";
+            rv.currency_space = pre[1].val();
+            s = pre[2];
+            if (!sign && s =~ /^[-+]/) {
+                sign = s[0];
+                s = trim(s.substr(1));
+            }
+        }
+        # a currency after the number, then "%"
+        if (s =~ /\s*%$/) {
+            rv.percent = True;
+            s = trim(s.substr(0, -1));
+        }
+        if (!rv.currency) {
+            *list<*string> post = (s =~ x/^(.*?)( *)(\p{Sc}|[A-Z]{3})$/u);
+            if (post && (post[2] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{post[2]})) {
+                rv.currency = post[2];
+                rv.currency_position = "after";
+                rv.currency_space = post[1].val();
+                s = post[0];
+            }
+        }
+        if (!rv) {
+            return;
+        }
+        # negative at most once, and the rest must be the number itself
+        if (sign && (rv.parentheses || rv.trailing_minus)) {
+            return;
+        }
+        if (s !~ /^[0-9]/ || (rv.currency && rv.percent)) {
+            return;
+        }
+        rv.number = s;
+        return rv;
     }
 
     #! Profiles one sheet
@@ -837,6 +952,9 @@ public class TabularProfiler {
         bool iso_dates;
         bool decimal_comma;
         bool decimal_point;
+        # amount and rate parts of numbers stored as text
+        *hash<TabularAmountFormat> amount_format;
+        hash<string, int> currencies = {};
         # the distinct text values, for yes/no columns: lower case -> spelling -> count; up to a few only
         hash<string, hash<string, int>> spellings = {};
         bool many_values;
@@ -888,6 +1006,19 @@ public class TabularProfiler {
                 decimal_comma = True;
             } else if (cls.number_format == "decimal_point") {
                 decimal_point = True;
+            }
+            if (cls.amount) {
+                if (!amount_format) {
+                    amount_format = <TabularAmountFormat>{};
+                }
+                if (cls.amount.currency) {
+                    ++currencies{cls.amount.currency};
+                    if (!amount_format.currency_position) {
+                        amount_format.currency_position = cls.amount.currency_position;
+                        amount_format.currency_space = cls.amount.currency_space;
+                    }
+                }
+                map amount_format{$1} = True, ("percent", "parentheses", "trailing_minus"), cls.amount{$1};
             }
         }
         if (empty_markers) {
@@ -946,6 +1077,17 @@ public class TabularProfiler {
             rv.number_format = "decimal_comma";
         } else if (decimal_point) {
             rv.number_format = "decimal_point";
+        }
+        if (amount_format && rv.type == "number") {
+            # the most frequent currency
+            int n;
+            foreach hash<auto> i in (currencies.pairIterator()) {
+                if (i.value > n) {
+                    amount_format.currency = i.key;
+                    n = i.value;
+                }
+            }
+            rv.amount_format = amount_format;
         }
 
         # counter-examples
