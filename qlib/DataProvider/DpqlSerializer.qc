@@ -607,8 +607,8 @@ public class DpqlSerializer {
     private string serializeFieldRef(hash<auto> ref) {
         string field = ref.field;
 
-        # Check if field name needs quoting
-        if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
+        # A name the tokenizer reads bare, in any script, is written bare; any other is quoted
+        if (!DpqlTokenizer::isBareFieldName(field)) {
             # Escape special characters: backslash first, then quote
             # Note: use '\"' not '\\"' - in single quotes, \\ is two backslashes
             field = replace(replace(field, "\\", "\\\\"), '"', '\"');

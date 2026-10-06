@@ -133,6 +133,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("float operands with number operands", \floatNumberOperandTests());
         addTestCase("nested expression verification", \nestedVerificationTests());
         addTestCase("argument type verification", \argumentTypeVerificationTests());
+        addTestCase("field names in any script", \unicodeFieldNameTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -147,6 +148,117 @@ public class DpqlTest inherits QUnit::Test {
             "score": new QoreDataField("score", "User score", new QoreFloatDataType()),
             "active": new QoreDataField("active", "Is active", new QoreBoolDataType()),
         };
+    }
+
+    #! A field name may be written bare in any script: @menge_bestätigt, @größe; it round-trips through the
+    #! serializer, and completion and errors keep whole characters
+    unicodeFieldNameTests() {
+        # the names a bare field reference can have
+        foreach string name in (("größe", "menge_bestätigt", "žluťoučký_kůň", "名前", "_x1", "order.id", "a.größe",
+                "Ölpreis.2026", "e\u0301clair")) {
+            assertTrue(DpqlTokenizer::isBareFieldName(name), name);
+        }
+        foreach string name in (("Menge bestätigt", "1x", "a..b", "a.", ".a", "", "größe-x", "a\"b", "€")) {
+            assertFalse(DpqlTokenizer::isBareFieldName(name), name);
+        }
+
+        # tokens: the whole name, columns in characters
+        {
+            DpqlTokenizer tok('@größe > 0');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@größe", tokens[0].value);
+            assertEq(1, tokens[0].column);
+            assertEq(7, tokens[0].end_column, "the end column counts characters, not bytes");
+            assertEq(DPQL_TOK_OP_GT, tokens[2].type);
+            assertEq(8, tokens[2].column);
+            assertEq((), tok.getErrors());
+        }
+
+        hash<string, AbstractDataField> fields = {
+            "menge_bestätigt": new QoreDataField("menge_bestätigt", NOTHING, AbstractDataProviderType::get(IntType)),
+            "größe": new QoreDataField("größe", NOTHING, AbstractDataProviderType::get(IntType)),
+            "名前": new QoreDataField("名前", NOTHING, AbstractDataProviderType::get(StringType)),
+            "Menge bestätigt": new QoreDataField("Menge bestätigt", NOTHING, AbstractDataProviderType::get(IntType)),
+            "adresse": new QoreDataField("adresse", NOTHING,
+                new HashDataType(NOTHING, {
+                    "straße": new QoreDataField("straße", NOTHING, AbstractDataProviderType::get(StringType)),
+                    "ort": new QoreDataField("ort", NOTHING, AbstractDataProviderType::get(StringType)),
+                })),
+        };
+
+        # parse, validate and serialize: the Text and the Visual view give the same field
+        foreach list<auto> c in ((
+                ('@menge_bestätigt > 0', "menge_bestätigt"),
+                ('@größe >= 10', "größe"),
+                ('@名前 == "x"', "名前"),
+                ('@"Menge bestätigt" > 0', "Menge bestätigt"),
+                ('@"größe" >= 10', "größe"),
+            )) {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(c[0]);
+            assertEq(c[1], exp.args[0].field, c[0]);
+            DpqlParser parser(NOTHING, fields);
+            assertEq((), parser.validate(exp, fields), c[0]);
+            string text = DataProvider::serializeDpqlExpression(exp);
+            # a name read bare is written bare, a name with a space quoted
+            assertEq(DpqlTokenizer::isBareFieldName(c[1]) ? "@" + c[1] : '@"' + c[1] + '"', text.split(" ")[0]
+                + (c[1] =~ / / ? " " + text.split(" ")[1] : ""), c[0]);
+            assertEq(exp, DataProvider::parseDpqlExpression(text), "round trip: " + c[0]);
+        }
+        assertEq('@größe >= 10', DataProvider::serializeDpqlExpression(
+            DataProvider::parseDpqlExpression('@"größe" >= 10')), "a quoted name that can be bare is written bare");
+
+        # an accessor's key after a dot in any script
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@adresse.straße == "x"');
+            assertEq("adresse.straße", exp.args[0].field);
+        }
+
+        # a character that is not part of a name is said whole, as valid text
+        # a bare word is read as text, in any script as in ASCII
+        assertEq(DataProvider::parseDpqlExpression('name > 0').args[0], "name");
+        assertEq(DataProvider::parseDpqlExpression('größe > 0').args[0], "größe");
+        foreach string src in (('@größe § 1', '§ == 1', '@€ == 1')) {
+            try {
+                DataProvider::parseDpqlExpression(src);
+                assertTrue(False, src + " is refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("DPQL-PARSE-ERROR", ex.err, src);
+                # the message and every diagnostic can be encoded: no byte of a character on its own
+                string json = sprintf("%s %y", ex.desc, ex.arg);
+                assertEq(json, binary_to_string(binary(json), "UTF-8"), src);
+                assertFalse(ex.desc.find("\ufffd") >= 0, src + ": " + ex.desc);
+            }
+        }
+        try {
+            DataProvider::parseDpqlExpression('@größe § 1');
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("Unexpected character '§'", ex.desc);
+            assertEq(8, ex.arg[0].column, "the column counts characters");
+        }
+        try {
+            DataProvider::parseDpqlExpression('@€ == 1');
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("got '€'", ex.desc);
+        }
+
+        # completion offers the names bare, and works after them
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@gr', 3, fields);
+            list<hash<DpqlCompletionItem>> field_items = select items, $1.kind == "field";
+            assertEq(("größe",), (map $1.label, field_items));
+            assertEq("@größe", field_items[0].insert_text ?? ("@" + field_items[0].label));
+            items = DataProvider::getDpqlCompletions('@Me', 3, fields);
+            field_items = select items, $1.kind == "field" && $1.label == "Menge bestätigt";
+            assertEq('@"Menge bestätigt"', field_items[0].insert_text, "a name with a space is quoted");
+            field_items = select items, $1.kind == "field" && $1.label == "menge_bestätigt";
+            assertEq('@menge_bestätigt', field_items[0].insert_text ?? "@" + field_items[0].label);
+            items = DataProvider::getDpqlCompletions('@größe ', 7, fields);
+            assertTrue((select items, $1.kind == "operator").size() > 0, "operators after a field in any script");
+            # a key after a field preceded by non-ASCII text
+            items = DataProvider::getDpqlCompletions('@größe > 1 && @adresse{', 23, fields);
+            assertEq(("ort", "straße"), sort(map $1.label, items), "the keys of the hash field");
+        }
     }
 
     tokenizerTests() {
