@@ -1,0 +1,297 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/RestClientDataProvider
+%requires ../../../../qlib/HttpServer.qm
+%requires json
+%exec-class GenericApiCallTransportsTest
+
+class GenericTransportHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex mutex();
+        hash<string, int> counts;
+    }
+
+    int count(string path) {
+        AutoLock lock(mutex);
+        return counts{path} ?? 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock lock(mutex);
+            ++counts{cx.raw_path};
+        }
+        if (cx.raw_path == "/oauth/token") {
+            return makeResponse(200, make_json({"access_token": "refreshed", "token_type": "Bearer",
+                "refresh_token": "refresh-fixture", "expires_in": 3600}), {"Content-Type": "application/json"});
+        }
+        if (cx.raw_path == "/auth-always" || (cx.raw_path == "/auth-once" && hdr.authorization != "Bearer refreshed")) {
+            return makeResponse(401, "expired token", {"Content-Type": "text/plain"});
+        }
+        if (cx.raw_path == "/plain-error") {
+            return makeResponse(404, "missing contact", {"Content-Type": "text/plain"});
+        }
+        if (cx.raw_path == "/empty-error") {
+            return makeResponse(500, new StringInputStream(""), {"Content-Type": "text/plain"});
+        }
+        int status = cx.raw_path =~ /status-404/ ? 404 : (cx.raw_path =~ /status-500/ ? 500 : 200);
+        return makeResponse(status, make_json({
+            "path": cx.raw_path,
+            "body": body,
+            "content_type": hdr."content-type",
+            "content_encoding": hdr."content-encoding",
+            "authorization": hdr.authorization,
+            "custom": hdr."x-custom",
+        }), {"Content-Type": "application/json", "X-Fixture": "transport"});
+    }
+}
+
+#! A subclass policy error must not become an accepted HTTP response
+class GenericPolicyClient inherits RestClient {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(opts, do_not_connect) {
+    }
+
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        throw "REST-RESPONSE-ERROR", "request denied by subclass", {"status_code": 404};
+    }
+}
+
+class GenericApiCallTransportsTest inherits QUnit::Test {
+    private {
+        HttpServer server();
+        string url;
+        GenericTransportHandler handler();
+    }
+
+    constructor() : Test("Generic API call transports", "1.0") {
+        server.setDefaultHandler("fixture", handler);
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        addTransport(False);
+        addTransport(True);
+        addTestCase("synchronous client state and subclass policy", \testClientState());
+        addTestCase("concurrent synchronous status policies", \testConcurrentPolicies());
+        set_return_value(main());
+    }
+
+    private addTransport(bool async) {
+        string label = async ? "async" : "sync";
+        addTestCase(label + " error passthrough", sub() { testStatus(async, True); });
+        addTestCase(label + " expected non-success status", sub() { testStatus(async, False); });
+        addTestCase(label + " encoded request target", sub() { testPath(async); });
+        addTestCase(label + " automatic array body", sub() { testBody(async, "auto"); });
+        addTestCase(label + " explicit JSON array body", sub() { testBody(async, "json"); });
+        addTestCase(label + " negative status policies", sub() { testStatusErrors(async); });
+        addTestCase(label + " body validation", sub() { testBodyValidation(async); });
+        addTestCase(label + " OAuth refresh with status policies", sub() { testAuthRetry(async); });
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private AbstractRestClient client(bool async) {
+        hash<auto> opts = {"url": url, "data": "json"};
+        return async ? new RestClientIo(opts) : new RestClient(opts, True);
+    }
+
+    private testStatus(bool async, bool passthru) {
+        GenericApiCallProvider call(client(async));
+        hash<auto!> req = {"method": "GET", "path": "/status-404"};
+        if (passthru) {
+            req.error_passthru = True;
+        } else {
+            req.expected_status = (200, 404);
+        }
+        hash<auto> resp = call.doRequest(req);
+        assertEq(404, resp.status);
+        assertEq("transport", resp.headers."x-fixture");
+        assertEq("/status-404", resp.body.path);
+        req.path = "/status-500";
+        if (!passthru) {
+            req.expected_status = (500,);
+        }
+        resp = call.doRequest(req);
+        assertEq(500, resp.status);
+        assertEq("/status-500", resp.body.path);
+        # Exercise the raw-body dispatch branch as well.
+        req.body_type = "json";
+        req.method = "POST";
+        req.body = {"hello": "world"};
+        resp = call.doRequest(req);
+        assertEq(500, resp.status);
+        assertEq(req.body, parse_json(resp.body.body));
+        req.path = "/plain-error";
+        if (!passthru) {
+            req.expected_status = (404,);
+        }
+        resp = call.doRequest(req);
+        assertEq(404, resp.status);
+        assertEq("missing contact", resp.body);
+        req.path = "/empty-error";
+        if (!passthru) {
+            req.expected_status = (500,);
+        }
+        resp = call.doRequest(req);
+        assertEq(500, resp.status);
+        assertTrue(!resp.body, "an empty error response has no fabricated body");
+    }
+
+    private testStatusErrors(bool async) {
+        GenericApiCallProvider call(client(async));
+        string error = async ? "REST-RESPONSE-ERROR" : "HTTP-CLIENT-RECEIVE-ERROR";
+        hash<auto!> req = {"method": "GET", "path": "/status-404"};
+        assertThrows(error, \call.doRequest(), (req,));
+        hash<auto> opts = {"url": url, "data": "json", "error_passthru": True};
+        GenericApiCallProvider configured(async ? new RestClientIo(opts) : new RestClient(opts, True));
+        assertEq(404, configured.doRequest(req).status);
+        req.error_passthru = False;
+        assertThrows(error, \configured.doRequest(), (req,));
+        remove req.error_passthru;
+        assertEq(404, configured.doRequest(req).status);
+        req.error_passthru = False;
+        assertThrows(error, \call.doRequest(), (req,));
+        req.expected_status = (200,);
+        assertThrows("REST-STATUS-ERROR", \call.doRequest(), (req,));
+        req.error_passthru = True;
+        assertThrows("REST-STATUS-ERROR", \call.doRequest(), (req,));
+        req.path = "/ok";
+        req.expected_status = (404,);
+        assertThrows("REST-STATUS-ERROR", \call.doRequest(), (req,));
+        remove req.expected_status;
+        req.path = "/status-404";
+        assertEq(404, call.doRequest(req).status);
+        remove req.error_passthru;
+        assertThrows(error, \call.doRequest(), (req,));
+    }
+
+    private testPath(bool async) {
+        GenericApiCallProvider call(client(async));
+        hash<auto> resp = call.doRequest({"method": "GET", "path": "/contacts/{email}",
+            "path_vars": {"email": "a+b@example.com"}, "query_args": {"idProperty": "email"}});
+        assertEq("/contacts/a%2Bb%40example.com?idProperty=email", resp.body.path);
+        foreach string body_type in (("auto", "json")) {
+            foreach string path in (("/contacts/a%2Bb%40example.com?next=x%2Fy", "/contacts/a+b@example.com",
+                    "/contacts/%252B%2f%3F%23")) {
+                resp = call.doRequest({"method": "GET", "path": path, "body_type": body_type});
+                assertEq(path, resp.body.path);
+            }
+            resp = call.doRequest({"method": "GET", "path": "/contacts/{email}",
+                "path_vars": {"email": "ü /?#%"}, "body_type": body_type,
+                "query_args": {"q": "a+b &c"}});
+            assertEq("/contacts/%C3%BC%20%2F%3F%23%25?q=a%2Bb%20%26c", resp.body.path);
+        }
+    }
+
+    private testBody(bool async, string body_type) {
+        GenericApiCallProvider call(client(async));
+        foreach auto body in ((("123", "456"), (), {"id": "123"},
+                "hello", 42, False, NULL)) {
+            hash<auto> resp = call.doRequest({"method": "PUT", "path": "/memberships/add",
+                "body_type": body_type, "body": body});
+            if (body.typeCode() == NT_NULL) {
+                assertEq("null", resp.body.body);
+            } else {
+                assertEq(body, parse_json(resp.body.body));
+            }
+        }
+        assertNothing(call.doRequest({"method": "GET", "path": "/empty", "body_type": body_type}).body.body);
+    }
+
+    private testBodyValidation(bool async) {
+        GenericApiCallProvider call(client(async));
+        assertThrows("INVALID-REQUEST", \call.doRequest(), ({"method": "POST", "path": "/echo",
+            "body_type": "form", "body": (1, 2)},));
+        assertEq("auto", call.getRequestTypeWithData({"body_type": "json"}).getField("body").getType().getName());
+    }
+
+    private testClientState() {
+        RestClient rest({"url": url, "data": "url"}, True);
+        rest.setSerialization("json");
+        rest.setToken("Bearer", "fixture-token");
+        rest.addDefaultHeaders({"X-Custom": "changed-after-construction"});
+        GenericApiCallProvider call(rest);
+        list<string> body = (sprintf("%03072d", 1),);
+        hash<auto> resp = call.doRequest({"method": "POST", "path": "/encoded%2Fpath",
+            "body": body});
+        assertEq("Bearer fixture-token", resp.body.authorization);
+        assertEq("changed-after-construction", resp.body.custom);
+        assertEq(body, parse_json(resp.body.body));
+        assertNothing(resp.body.content_encoding, "copy must retain the uncompressed request setting");
+        assertFalse(rest.getPreEncodedUrls());
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \rest.restGet(), ("/status-404",));
+        GenericApiCallProvider denied(new GenericPolicyClient({"url": url}, True));
+        assertThrows("REST-RESPONSE-ERROR", \denied.doRequest(), ({"method": "GET", "path": "/policy",
+            "error_passthru": True, "expected_status": (404,)},));
+        assertEq("/echo?existing=1&a%26b=x%3Dy&bool=true&list=1%2C2&empty=", GenericApiCallProvider::appendQueryArgs(
+            "/echo?existing=1", {"a&b": "x=y", "bool": True, "list": (1, 2), "empty": ""}));
+    }
+
+    private testAuthRetry(bool async) {
+        foreach string body_type in (("auto", "json")) {
+            foreach string path in (("/auth-once", "/auth-always")) {
+                hash<auto> opts = {"url": url, "data": "json", "token": "expired", "token_type": "Bearer",
+                    "oauth2_grant_type": "client_credentials", "oauth2_client_id": "fixture-client",
+                    "oauth2_client_secret": "fixture-secret", "oauth2_refresh_token": "refresh-fixture",
+                    "oauth2_token_url": url + "/oauth/token"};
+                GenericApiCallProvider call(async ? new RestClientIo(opts) : new RestClient(opts, True));
+                if (!async) {
+                    assertTrue(new RestClient(opts, True).getOAuth2Options().oauth2_auto_refresh,
+                        "omitting oauth2_auto_refresh must retain the documented enabled default");
+                }
+                int refreshes = handler.count("/oauth/token");
+                int requests = handler.count(path);
+                hash<auto> response = call.doRequest({"method": "POST", "path": path,
+                    "body_type": body_type, "body": {"test": True}, "expected_status": (200, 401)});
+                assertEq(path == "/auth-once" ? 200 : 401, response.status);
+                assertEq(refreshes + 1, handler.count("/oauth/token"), "refresh must be bounded to one attempt");
+                assertEq(requests + 2, handler.count(path), "request must be retried exactly once");
+                if (path == "/auth-once") {
+                    assertEq(200, call.doRequest({"method": "GET", "path": path}).status);
+                    assertEq(refreshes + 1, handler.count("/oauth/token"),
+                        "subsequent calls must reuse the refreshed token");
+                }
+            }
+        }
+        hash<auto> disabled_opts = {"url": url, "data": "json", "token": "expired",
+            "oauth2_grant_type": "client_credentials", "oauth2_client_id": "fixture-client",
+            "oauth2_client_secret": "fixture-secret", "oauth2_token_url": url + "/oauth/token",
+            "oauth2_auto_refresh": False};
+        GenericApiCallProvider disabled(async ? new RestClientIo(disabled_opts) : new RestClient(disabled_opts, True));
+        int refreshes = handler.count("/oauth/token");
+        assertEq(401, disabled.doRequest({"method": "GET", "path": "/auth-once", "error_passthru": True}).status);
+        assertEq(refreshes, handler.count("/oauth/token"), "explicitly disabled refresh must stay disabled");
+    }
+
+    private testConcurrentPolicies() {
+        GenericApiCallProvider call(client(False));
+        Counter workers(2);
+        Mutex mutex();
+        list<auto> outcomes = ();
+        foreach bool passthru in ((True, False)) {
+            background sub (bool passthru) {
+                on_exit workers.dec();
+                for (int i = 0; i < 10; ++i) {
+                    auto outcome;
+                    try {
+                        outcome = call.doRequest({"method": "GET", "path": "/status-404",
+                            "error_passthru": passthru}).status;
+                    } catch (hash<ExceptionInfo> ex) {
+                        outcome = ex.err;
+                    }
+                    AutoLock lock(mutex);
+                    push outcomes, {"passthru": passthru, "outcome": outcome};
+                }
+            }(passthru);
+        }
+        workers.waitForZero();
+        assertEq(20, outcomes.size());
+        foreach auto result in (outcomes) {
+            assertEq(result.passthru ? 404 : "HTTP-CLIENT-RECEIVE-ERROR", result.outcome);
+        }
+    }
+}

@@ -219,12 +219,15 @@ public class GenericApiCallRequestDataType inherits HashDataType {
 
         @param body_type one of the @ref BodyTypeAllowedValues values
         @return a copy of this type with the <tt>body</tt> field re-typed for the given body_type, or the
-        original type for <tt>body_type = "auto"</tt> or unknown values
+        original type for <tt>body_type = "auto"</tt>, <tt>body_type = "json"</tt>, or unknown values.
+        JSON retains @c AutoType because JSON arrays, objects, scalars, and null are all valid bodies.
     */
     GenericApiCallRequestDataType withBodyType(*string body_type) {
         *AbstractDataProviderType new_body_type;
         switch (body_type) {
             case "json":
+                # JSON permits arrays and scalar values as well as objects.
+                return self;
             case "form":
             case "yaml":
                 # hash-shaped body (will be serialized in the requested format)

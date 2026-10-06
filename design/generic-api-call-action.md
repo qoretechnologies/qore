@@ -256,7 +256,8 @@ returns a type with `body` re-typed:
 | `body_type` | `body` field type |
 |-------------|-------------------|
 | `auto` | `auto` (template / context picker) |
-| `json` / `form` / `yaml` | `*hash<auto>` |
+| `json` | `auto` (JSON objects, arrays, scalars, and null) |
+| `form` / `yaml` | `*hash<auto>` |
 | `xml` / `text` | `*softstring` |
 | `binary` | `*softbinary` |
 | `multipart` | `FileDataType` (name + base64 content + mime_type) |
@@ -264,6 +265,53 @@ returns a type with `body` re-typed:
 For `body_type=multipart`, the provider builds a `multipart/form-data`
 envelope at request time using the boundary helper described in the
 Anthropic file-upload reference implementation.
+
+### Synchronous and async transport behavior
+
+The action treats its path as a URI request target: valid percent escapes remain
+unchanged, while `path_vars` and each query name/value are encoded as individual
+components. A literal percent sign in a path variable is encoded to `%25`.
+
+`RestClientIo` already preserves percent escapes. The synchronous `HTTPClient`
+transport normally encodes `%` again. At construction, the provider creates a
+private same-class client with `copyWithUrl()` and enables
+`pre_encoded_urls` on that copy. It carries over current serialization,
+compression, validator, connection path, default headers, response decoding
+policy, logger, and OAuth token state. Configure the supplied client before
+constructing the provider. The private copy retains its HTTP connection and
+refreshed OAuth tokens across calls. A mutex serializes synchronous calls and
+restores their original error policy on every exit, including exceptions. It does
+not mutate the supplied client's encoding or HTTP error settings.
+Subclasses use their existing `copySelf()` hook, preserving connection-specific
+constructors, signing, OAuth persistence callbacks, and HubSpot CMS checks.
+
+The synchronous copy enables HTTP error passthrough when requested or when an
+`expected_status` list is supplied. Responses are decoded by the normal REST
+response path, including plain-text and empty errors. Async `REST-RESPONSE-ERROR`
+exceptions already contain a typed response and are converted to response data.
+Transport failures, authentication failures, and subclass policy errors propagate.
+`expected_status` always takes precedence: a status outside its list raises
+`REST-STATUS-ERROR`, including when `error_passthru` is true. An omitted policy
+inherits the connection setting; an explicit `error_passthru: False` disables
+passthrough for that call.
+
+For example, a contact lookup can accept a missing contact without catching a
+transport exception:
+
+```qore
+hash<auto> response = app.getChildProviderEx("__call__").doRequest({
+    "method": "PATCH",
+    "path": "/crm/v3/objects/contacts/{email}",
+    "path_vars": {"email": "a+b@example.com"},
+    "query_args": {"idProperty": "email"},
+    "body_type": "json",
+    "body": {"properties": {"firstname": "Alex"}},
+    "expected_status": (200, 404),
+});
+# A 404 response can drive the workflow's create-contact branch.
+```
+
+An array endpoint can use `"body_type": "json", "body": ("123", "456")`.
 
 ### Response type — `GenericApiCallResponseDataType`
 
@@ -410,6 +458,13 @@ cover:
 Per-provider integration is covered by spot-checks in the qtest plus the
 existing per-app test suites (each app's `__call__` child resolves through
 the framework's reflective discovery — no per-app test code needed).
+
+`GenericApiCallTransports.qtest` exercises both actual HTTP transports against a
+loopback server: status policies, negative cases, decoded JSON/text/empty error
+bodies, exact wire paths, reserved query delimiters, JSON arrays/scalars/null,
+form rejection, and client-state/subclass-policy preservation. The downstream
+`module-v8/test/hubspot-oauth.qtest` covers the real TypeScript HubSpot connection
+and its CMS authorization policies with local fixtures.
 
 ## Open issues
 

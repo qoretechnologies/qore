@@ -109,14 +109,40 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
     private {
         #! The underlying REST client; sync @c RestClient or async @c RestClientIo are both accepted
         RestClient::AbstractRestClient rest;
+        #! Private synchronous client; serializes call-specific settings and retains refreshed tokens
+        *RestClient::RestClient sync_client;
+        Mutex sync_mutex();
     }
 
     #! Creates the object from a REST client
     /** @param rest the authenticated REST client to dispatch requests through; may be any
         @c AbstractRestClient subclass (e.g. @c RestClient or @c RestClientIo)
+
+        @note Configure the client before creating the provider. Synchronous clients are copied
+        with @c copyWithUrl() to isolate encoding and error policies; their @c copySelf() overrides
+        must preserve subclass authentication. The private copy retains refreshed tokens and
+        connections across calls, which are serialized with a mutex. Async clients are used directly.
+
+        @throw RESTCLIENT-ERROR the synchronous client's configuration cannot be copied
     */
     constructor(RestClient::AbstractRestClient rest) {
         self.rest = rest;
+        if (rest instanceof RestClient::RestClient) {
+            # HTTPClient's legacy send() encodes '%' unless pre_encoded_urls is enabled.
+            # Own a same-class client so connection settings remain unchanged. Reusing this copy
+            # retains refreshed/rotated OAuth tokens and the HTTP connection across generic calls.
+            RestClient::RestClient sync = cast<RestClient::RestClient>(rest);
+            sync_client = cast<RestClient::RestClient>(sync.copyWithUrl(sync.getUrl()));
+            sync_client.setPreEncodedUrls(True);
+            sync_client.setErrorPassthru(sync.getErrorPassthru());
+            sync_client.setSerialization(sync.getSerialization());
+            sync_client.setSendEncoding(sync.getSendEncoding() ?? "identity");
+            sync_client.setAllowAnyResponse(sync.getAllowAnyResponse());
+            sync_client.setValidator(sync.getValidator());
+            sync_client.setConnectionPath(sync.getConnectionPath());
+            sync_client.replaceDefaultHeaders(sync.getDefaultHeaders());
+            sync_client.setLogger(sync.getLogger());
+        }
     }
 
     #! Returns the data provider name
@@ -179,15 +205,21 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         switch (body_type) {
             case "json":
                 body = exists req.body ? make_json(req.body) : NOTHING;
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.json;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.json;
+                }
                 break;
             case "form":
                 body = exists req.body ? encodeFormBody(req.body) : NOTHING;
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.form;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.form;
+                }
                 break;
             case "yaml":
                 body = exists req.body ? make_yaml(req.body) : NOTHING;
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.yaml;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.yaml;
+                }
                 break;
             case "xml":
 %ifndef NoXml
@@ -201,23 +233,31 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
                 }
                 body = exists req.body ? string(req.body) : NOTHING;
 %endif
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.xml;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.xml;
+                }
                 break;
             case "text":
                 body = exists req.body ? string(req.body) : NOTHING;
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.text;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.text;
+                }
                 break;
             case "binary":
                 body = exists req.body
                     ? (req.body.typeCode() == NT_BINARY ? req.body : binary(req.body))
                     : NOTHING;
-                if (!ct_present) hdr."Content-Type" = ContentTypeMap.binary;
+                if (!ct_present) {
+                    hdr."Content-Type" = ContentTypeMap.binary;
+                }
                 break;
             case "multipart":
                 # build a multipart/form-data body from the FileDataType-shaped input
                 string boundary = generateMultipartBoundary();
                 body = buildMultipartBody(req.body, boundary);
-                if (!ct_present) hdr."Content-Type" = "multipart/form-data; boundary=" + boundary;
+                if (!ct_present) {
+                    hdr."Content-Type" = "multipart/form-data; boundary=" + boundary;
+                }
                 break;
             case "auto":
             default:
@@ -231,23 +271,43 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         # For everything else we've already serialized the body to the requested format (and set the
         # Content-Type header), so we use restDoRawRequest() to bypass client-side serialization —
         # otherwise RestClient would JSON-wrap our already-serialized string a second time.
+        RestClient::AbstractRestClient client = rest;
+        *AutoLock sync_lock;
+        *bool saved_passthru;
+        on_exit if (exists saved_passthru) {
+            sync_client.setErrorPassthru(saved_passthru);
+        }
+        if (sync_client) {
+            # The lock remains held until the call's original policy is restored on every exit.
+            sync_lock = new AutoLock(sync_mutex);
+            saved_passthru = sync_client.setErrorPassthru(req.expected_status ? True
+                : (req.error_passthru ?? sync_client.getErrorPassthru()));
+            client = sync_client;
+            path = HttpClientIo::encode_http_request_target(path);
+        }
         hash<RestClient::RestResponseInfo> resp;
         try {
             if (!body_type || body_type == "auto") {
-                resp = rest.restDoRequest(req.method, path, body, hdr);
+                resp = client.restDoRequest(req.method, path, body, hdr);
             } else {
-                resp = rest.restDoRawRequest(req.method, path, body, hdr);
+                resp = client.restDoRawRequest(req.method, path, body, hdr);
             }
         } catch (hash<ExceptionInfo> ex) {
-            # if error_passthru is requested and the exception carries a response, convert it to data
-            if (req.error_passthru
-                && (ex.err == "REST-RESPONSE-ERROR" || ex.err == "REST-CLIENT-ERROR" || ex.err == "REST-CLIENT-RECEIVE-ERROR")
+            # Only HTTP response errors can be accepted by a status policy. Authentication,
+            # transport, serialization, and application-policy exceptions must retain their meaning.
+            if (!(client instanceof RestClient::RestClient) && (req.error_passthru || req.expected_status)
+                && ex.err == "REST-RESPONSE-ERROR"
                 && ex.arg.typeCode() == NT_HASH
                 && exists ex.arg.status_code) {
                 resp = cast<hash<RestClient::RestResponseInfo>>(ex.arg);
             } else {
                 rethrow;
             }
+        }
+
+        # An explicit False also overrides an async client's connection-level passthrough.
+        if (exists req.error_passthru && !req.error_passthru && !req.expected_status && resp.status_code >= 300) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", resp.status_code), resp;
         }
 
         # 5. expected_status assertion
@@ -323,7 +383,9 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         are masked.
     */
     static *hash<auto> redactRequestHeaders(*hash<auto> hdr) {
-        if (!hdr) return;
+        if (!hdr) {
+            return;
+        }
         hash<auto> rv = {};
         foreach hash<auto> i in (hdr.pairIterator()) {
             rv{i.key} = RedactedRequestHeaders{i.key.lwr()} ? "***" : i.value;
@@ -377,7 +439,9 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         server returns a 404 that's easier to diagnose than a silent path corruption.
     */
     static string applyPathVars(string path, *hash<auto> path_vars) {
-        if (!path_vars) return path;
+        if (!path_vars) {
+            return path;
+        }
         foreach hash<auto> i in (path_vars.pairIterator()) {
             string placeholder = "{" + i.key + "}";
             string val = encode_url(string(i.value), True);
@@ -387,10 +451,22 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Appends query_args to a path, URL-encoding values
+    /** @param path URI request target, optionally including an existing query
+        @param query_args query names and values; booleans use lowercase and lists use comma separators
+        @return the request target with separately escaped query names and values appended
+        @par Example
+        @code{.py}
+string path = GenericApiCallProvider::appendQueryArgs("/contacts", {"email": "a+b@example.com"});
+# /contacts?email=a%2Bb%40example.com
+        @endcode
+    */
     static string appendQueryArgs(string path, *hash<auto> query_args) {
-        if (!query_args) return path;
-        # reuse the existing helper for consistency
-        return RestClientDataProviderBase::getRequestPath({"path": path, "query_args": query_args});
+        if (!query_args) {
+            return path;
+        }
+        list<string> pairs = map encode_url($1.key, True) + "="
+            + encode_url(RestClientDataProviderBase::getUriValue($1.value), True), query_args.pairIterator();
+        return path + (path =~ /\?/ ? "&" : "?") + pairs.join("&");
     }
 
     #! URL-encodes a hash of form fields into application/x-www-form-urlencoded body bytes
@@ -483,7 +559,9 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
         depending on the caller. Returns the unwrapped string value, or @ref NOTHING if not set.
     */
     static *string extractBodyType(*hash<auto> opts) {
-        if (!opts) return;
+        if (!opts) {
+            return;
+        }
         auto v = opts.body_type;
         if (v.typeCode() == NT_HASH && exists v.value) {
             return v.value;

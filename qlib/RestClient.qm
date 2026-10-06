@@ -143,6 +143,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - synchronous requests with \c error_passthru enabled retain the normal bounded OAuth2 token
+      refresh and retry behavior on authentication errors, including generic API calls with status policies
+    - restored the documented \c oauth2_auto_refresh default of \c True when the option is omitted
     - explicit \c Authorization headers take precedence over generated bearer headers when constructing a client
       with a saved token, preserving combined credentials such as Trello's consumer key and token
     - added the \c status_message, \c effective_url, and \c redirects keys to
@@ -1422,7 +1425,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (exists opts.oauth2_refresh_token) {
             refresh_token = opts.oauth2_refresh_token;
         }
-        if (exists opts.oauth2_auto_refresh.val()) {
+        if (exists opts.oauth2_auto_refresh) {
             oauth2_auto_refresh = parse_boolean(opts.oauth2_auto_refresh);
         }
         if (opts.oauth2_auth_args) {
@@ -3702,6 +3705,17 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                     }
                 }
                 rethrow ex.err, ex.desc, ex.arg;
+            }
+
+            # With HTTP error passthrough, authentication failures arrive as responses rather than
+            # exceptions. Retry before response decoding, just as in the exception path above.
+            if (retry && needsRefresh(NOTHING, info)) {
+                on_error rethrow;
+                detail("RestClient: authorization response; trying to acquire a new token");
+                getNewTokenIntern();
+                retry = False;
+                hdr.Authorization = headers.Authorization;
+                continue;
             }
 
             on_error {
