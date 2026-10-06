@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub tracedValue(int value) {
+    return value + 1;
+}
+
+sub tracedNothing() {
+    return;
+}
+
+int sub tracedCatch() {
+    try {
+        throw "TRACE-TEST", "caught by the fixture";
+    } catch (hash<ExceptionInfo> ex) {
+        return 42;
+    }
+}
+
+sub exercise() {
+    printf("%d\n", tracedValue(41));
+    tracedNothing();
+    printf("%d\n", tracedCatch());
+}
+
+stderr.printf("PHASE1\n");
+exercise();
+if (ARGV[0] == "enable") {
+    setenv("QORE_IR_TRACE_EXCEPTIONS", "1");
+} else {
+    unsetenv("QORE_IR_TRACE_EXCEPTIONS");
+}
+stderr.printf("PHASE2\n");
+exercise();

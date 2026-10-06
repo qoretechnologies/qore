@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Keep these kernels equivalent to RuntimeBench.java and reference() in run.py.
+# Values stay small enough that integer overflow is not part of the workload.
+int sub step(int value) {
+    return (value * 33 + 17) & 65535;
+}
+
+final class Stepper {
+    int next(int value) {
+        return (value * 33 + 17) & 65535;
+    }
+}
+
+int sub arithmetic(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub directCall(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = step(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub methodCall(int count, int seed, Stepper receiver) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+list<int> sub makeData(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    return data;
+}
+
+int sub listRead(list<int> data, int seed) {
+    int sum = 0;
+    for (int i = 0; i < data.size(); ++i) {
+        sum += data[i] ^ seed;
+    }
+    return sum;
+}
+
+int sub listBuild(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += data[i];
+    }
+    return sum;
+}
+
+int sub listMutate(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        data[i] += 1;
+        sum += data[i];
+    }
+    return sum;
+}
+
+int sub temporaryList(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        list<int> pair = (seed, seed + 1);
+        sum += pair[seed & 1];
+    }
+    return sum;
+}
+
+int sub temporaryHash(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        hash<string, int> pair = {"left": seed, "right": seed + 1};
+        string key = seed & 1 ? "right" : "left";
+        sum += pair{key};
+    }
+    return sum;
+}
+
+int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver) {
+    switch (name) {
+        case "arithmetic": return arithmetic(count, seed);
+        case "direct_call": return directCall(count, seed);
+        case "method_call": return methodCall(count, seed, receiver);
+        case "list_read": return listRead(data, seed);
+        case "list_build": return listBuild(count, seed);
+        case "list_mutate": return listMutate(count, seed);
+        case "temporary_list": return temporaryList(count, seed);
+        case "temporary_hash": return temporaryHash(count, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown kernel: " + name;
+}
+
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+
+sub main() {
+    if (ARGV.size() == 1 && ARGV[0] == "startup") {
+        printf("ready\n");
+        return;
+    }
+    if (ARGV.size() == 1 && ARGV[0] == "check") {
+        Stepper receiver();
+        foreach int count in ((0, 1, 17, 1024, 4096)) {
+            list<int> data = makeData(count, 7);
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("arithmetic", "direct_call", "method_call", "list_read",
+                        "list_build", "list_mutate", "temporary_list", "temporary_hash")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
+                        dispatch(name, count, seed, data, receiver));
+                }
+            }
+        }
+        return;
+    }
+    if (ARGV.size() != 6) {
+        throw "BENCH-ARGUMENT-ERROR", "expected: startup | check | KERNEL COUNT WARMUP SAMPLES MS SEED";
+    }
+    string name = ARGV[0];
+    int count = integerArg(1, 1, 1000000);
+    int warmup = integerArg(2, 0, 1000);
+    int samples = integerArg(3, 1, 1000);
+    int duration_us = integerArg(4, 1, 60000) * 1000;
+    int seed = integerArg(5, 0, 65535);
+    list<int> data = makeData(count, 7);
+    Stepper receiver();
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, count, seed, data, receiver);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        # Emit warmup checksums too: every computed result is observable.
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+
+# Explicit entry call for both interpreter and single-source AOT execution.
+main();

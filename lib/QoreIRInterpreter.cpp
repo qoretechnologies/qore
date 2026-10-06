@@ -6384,8 +6384,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // break, which left the loop running.  See QoreIRBasicBlock::enclosing_loop_exit.
     QoreIRBasicBlock* debug_break_target = nullptr;
 
+    // Like the reference-tracing flags below, exception tracing is a process diagnostic
+    // selected before the first IR execution. Normal returns also consult this flag;
+    // scanning the environment on every return is significant for small IR callees.
+    static const bool trace_ir_exceptions = getenv("QORE_IR_TRACE_EXCEPTIONS") != nullptr;
+
     auto returnAfterUnhandledException = [&](bool values_cleaned = false) -> bool {
-        if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+        if (trace_ir_exceptions) {
             fprintf(stderr, "[ir-exception] func='%s' return-unhandled xsink=%d\n",
                 func.name.c_str(), xsink && *xsink ? 1 : 0);
             fflush(stderr);
@@ -7794,7 +7799,7 @@ next_instruction:
                     cleanupLocalCaches();
                 }
                 if (xsink && *xsink) {
-                    if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (trace_ir_exceptions) {
                         fprintf(stderr, "[ir-exception] func='%s' invoke-op=%d loc=%s:%d ex-target=%p\n",
                             func.name.c_str(), static_cast<int>(inv->invoke_opcode),
                             inst->loc ? inst->loc->getFile() : "",
@@ -7804,7 +7809,7 @@ next_instruction:
                     }
                     if (debug_active) {
                         tlpd->dbgException(getDebugStatement(inst), xsink);
-                        if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                        if (trace_ir_exceptions) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
                                 static_cast<void*>(inv->exception_target));
@@ -7831,7 +7836,7 @@ next_instruction:
                         return returnAfterUnhandledException();
                     }
                     cleanupToTempScope(inv->temp_scope_id, true, false, true);
-                    if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (trace_ir_exceptions) {
                         fprintf(stderr, "[ir-exception] func='%s' branch-exception xsink=%d target=%p\n",
                             func.name.c_str(), xsink && *xsink ? 1 : 0,
                             static_cast<void*>(inv->exception_target));
@@ -7853,7 +7858,7 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::LandingPad: {
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (trace_ir_exceptions) {
                     fprintf(stderr, "[ir-exception] func='%s' landingpad loc=%s:%d xsink=%d\n",
                         func.name.c_str(),
                         inst->loc ? inst->loc->getFile() : "",
@@ -7931,7 +7936,7 @@ next_instruction:
                     break;
                 }
                 QoreException* caught = xsink->catchException();
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (trace_ir_exceptions) {
                     fprintf(stderr, "[ir-exception] func='%s' catch.exception caught=%p xsink=%d\n",
                         func.name.c_str(), static_cast<void*>(caught), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -15576,7 +15581,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (trace_ir_exceptions) {
                     fprintf(stderr, "[ir-exception] func='%s' return xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -15591,7 +15596,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (trace_ir_exceptions) {
                     fprintf(stderr, "[ir-exception] func='%s' return-nothing xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);

@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%exec-class IRExceptionTraceTest
+
+class IRExceptionTraceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IRExceptionTraceTest", "1.0", \ARGV) {
+        addTestCase("unset trace stays disabled after first IR execution", \testDisabled());
+        addTestCase("enabled trace survives later unset", \testEnabled());
+        addTestCase("empty trace value enables tracing", \testEmpty());
+        addTestCase("zero trace value enables tracing", \testZero());
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private check(*string initial, string change, bool tracing) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string command = "env -u QORE_IR_TRACE_EXCEPTIONS ";
+        if (exists initial) {
+            command += "QORE_IR_TRACE_EXCEPTIONS=" + shellQuote(initial) + " ";
+        }
+        # Force actual interpreter frames, including the tiny return-value callee.
+        command += "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 "
+            + "LD_LIBRARY_PATH=" + shellQuote(libdir) + " "
+            + "DYLD_LIBRARY_PATH=" + shellQuote(libdir) + " "
+            + shellQuote(qore_bin) + " --exec-mode=ir "
+            + shellQuote(get_script_dir() + "/IRExceptionTraceScenario.qr") + " " + shellQuote(change);
+        int rc;
+        string output = backquote(command + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        list<string> phases = output.split("PHASE2\n");
+        assertEq(2, phases.size(), output);
+        foreach string phase in (phases) {
+            int values = 0;
+            foreach string line in (phase.split("\n")) {
+                if (line == "42") {
+                    ++values;
+                }
+            }
+            assertEq(2, values, output);
+            foreach string marker in (("return xsink-after-dbg-exit=", "return-nothing xsink-after-dbg-exit=",
+                    "catch.exception caught=")) {
+                assertEq(tracing, phase.find(marker) >= 0, marker + ": " + phase);
+            }
+        }
+        if (!tracing) {
+            assertEq(-1, output.find("[ir-exception]"), output);
+        }
+    }
+
+    testDisabled() { check(NOTHING, "enable", False); }
+    testEnabled() { check("1", "disable", True); }
+    testEmpty() { check("", "disable", True); }
+    testZero() { check("0", "disable", True); }
+}
