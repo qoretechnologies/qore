@@ -4065,6 +4065,12 @@ while (*binary chunk = input.read(65536)) {
       binds; connections to loopback addresses stay denied, and binds to other addresses in denied ranges stay
       denied
 
+    - Fixed a task submitted to a @ref Qore::Thread::ThreadPool "ThreadPool" or with
+      @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()" by module code called from a
+      @ref sandboxing "sandboxed" Program not being governed by the caller's sandbox; for example, an
+      @ref httpserverintro "HttpServer" listener added by sandboxed code could bind an address that the sandbox
+      denies.  The task is now governed by the sandbox of the thread that submits it
+
     - Fixed @ref Qore::Socket::bind() "Socket::bind()" and @ref Qore::Socket::listen() "Socket::listen()"
       returning an error code without setting the error number, so that a failure was reported as \c "Success" by
       @ref Qore::strerror() "strerror()"; the error number is now set, also when the bind is denied by the network

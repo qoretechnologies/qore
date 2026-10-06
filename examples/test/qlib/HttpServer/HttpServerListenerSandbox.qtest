@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpServer listeners created for sandboxed code are governed by the sandbox: the listener is created in a task
+    run by a thread pool in the HttpServer module's Program, which has no sandbox of its own when the module was
+    loaded by trusted code
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerListenerSandboxTest
+
+public class HttpServerListenerSandboxTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerListenerSandbox", "1.0") {
+        addTestCase("listeners are governed by the caller's sandbox", \listenerSandboxTest());
+        set_return_value(main());
+    }
+
+    #! Adds a listener in a sandboxed Program and returns the error, if any
+    private *hash<ExceptionInfo> addListener(Program p, HttpServer server, string bind) {
+        return p.callFunction("add_listener", server, bind, <HttpListenerOptionInfo>{});
+    }
+
+    listenerSandboxTest() {
+        # a sandbox that denies the IPv4 wildcard address, which can always be bound without a sandbox, and the
+        # loopback addresses, which can still be bound but not connected to
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkDeniedIPRange("0.0.0.0/32");
+        sm.blockLocalhost();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%modern
+*hash<ExceptionInfo> sub add_listener(object server, string bind, hash<auto> info) {
+    try {
+        server.addListeners(bind, info);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+", "http-listener-sandbox");
+
+        HttpServer server(sub (string msg) {}, sub (string msg) {});
+        on_exit server.stop();
+
+        # the listener's bind to a denied address is denied
+        *hash<ExceptionInfo> ex = addListener(p, server, "0.0.0.0:0");
+        assertEq("NETWORK-ACCESS-DENIED", ex.err, "a listener on a denied address is denied");
+        assertEq(0, server.getListeners().size(), "no listener is created on a denied address");
+
+        # a loopback listener is allowed
+        assertEq(NOTHING, addListener(p, server, "127.0.0.1:0"), "a listener on a loopback address is allowed");
+        assertEq(1, server.getListeners().size(), "the loopback listener is created");
+
+        # without a sandbox, the same address can be bound
+        server.addListeners("0.0.0.0:0", <HttpListenerOptionInfo>{});
+        assertEq(2, server.getListeners().size(), "an unsandboxed listener on the wildcard address is created");
+    }
+}

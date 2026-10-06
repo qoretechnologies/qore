@@ -400,6 +400,11 @@ if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSE
   takes it).
 - A callback worker that continues a request for another thread applies the captured context with
   `QoreSandboxContextHelper` (see the HTTP client redirect handling).
+- A thread pool task (`ThreadPool::submit()` and `AsyncIoController::submitTask()`) captures the
+  `QoreSandboxContext` of the submitting thread when it is created and applies it while it runs
+  (`ThreadTask` in `include/qore/intern/ThreadPool.h`): module code such as the `HttpServer` listener
+  setup runs in the module's Program, which has no sandbox when the module was loaded by trusted code.
+  Without a captured sandbox, the task's own Program's sandbox applies.
 - Pass the host name to `checkNetworkAccess()` / `checkConnect()` so allowed host patterns apply; check
   binds with `checkNetworkBind()` / `checkBind()`, not with the connect check.
 - A UNIX domain socket also needs filesystem access to its path (`checkFilesystemAccess()`).
