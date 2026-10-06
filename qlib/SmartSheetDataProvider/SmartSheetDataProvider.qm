@@ -632,4 +632,6 @@ module SmartSheetDataProvider {
 
     @subsection smartsheetdataproviderv1_0 SmartSheetDataProvider v1.0
     - initial release
+    - a row search with a \c limit and a where condition reads the sheet page by page until enough rows match,
+      instead of filtering only the first \c limit rows, so matching rows after the first page are found
 */

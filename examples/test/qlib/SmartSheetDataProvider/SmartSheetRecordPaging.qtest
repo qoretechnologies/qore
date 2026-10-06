@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A search with a limit and a where condition filters rows on the client, so it must read the sheet page by page
+# until enough rows match: matching rows can be on any page.  A search with a limit and no condition reads one page
+# of the limit's size.  The Smartsheet API is mocked with a local HTTP server.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClientIo
+%requires SmartSheetDataProvider
+%requires json
+
+%exec-class SmartSheetRecordPagingTest
+
+#! Serves a sheet of 250 rows: GET /2.0/sheets/1 with optional pageSize and page parameters
+class FakeSmartSheetHandler inherits AbstractHttpRequestHandler {
+    public {
+        const RowCount = 250;
+        const ColumnId = 7001;
+
+        #! the query parameters of each request
+        list<hash<auto>> requests = ();
+
+        #! the row numbers whose status is "match"
+        hash<string, bool> matches;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> params = parse_uri_query(cx.raw_path);
+        if (params.method !~ /^\/?2\.0\/sheets\/1$/) {
+            return makeResponse(404, "unknown path " + cx.raw_path);
+        }
+        push requests, params.params ?? {};
+        int page_size = params.params.pageSize ? int(params.params.pageSize) : RowCount;
+        int page = params.params.page ? int(params.params.page) : 1;
+        list<hash<auto>> rows = ();
+        for (int i = (page - 1) * page_size + 1; i <= min(page * page_size, RowCount); ++i) {
+            push rows, {
+                "id": i,
+                "rowNumber": i,
+                "cells": ({"columnId": ColumnId, "value": matches{i} ? "match" : "other"},),
+            };
+        }
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+            "id": 1,
+            "totalRowCount": RowCount,
+            "rows": rows,
+        }));
+    }
+}
+
+public class SmartSheetRecordPagingTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        FakeSmartSheetHandler handler;
+        int port;
+    }
+
+    constructor() : Test("SmartSheetRecordPagingTest", "1.0") {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new FakeSmartSheetHandler();
+        server.setDefaultHandler("smartsheet", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        addTestCase("matches on later pages", \laterPageTest());
+        addTestCase("limit without a condition", \limitTest());
+        addTestCase("condition without a limit", \noLimitTest());
+        addTestCase("fewer matches than the limit", \fewerMatchesTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    #! Reads the rows with the given condition and search options and returns their row numbers
+    private list<int> read(*hash<auto> where_cond, *hash<auto> search_options) {
+        handler.requests = ();
+        RestClientIo rest({"url": sprintf("http://localhost:%d/2.0", port)});
+        hash<SmartSheetRecordInfo> info = <SmartSheetRecordInfo>{
+            "record_type": {"status": new QoreDataField("status", "status", StringOrNothingType)},
+            "column_id_to_name": {string(FakeSmartSheetHandler::ColumnId): "status"},
+            "column_name_to_id": {"status": string(FakeSmartSheetHandler::ColumnId)},
+            "column_types": {"status": "TEXT_NUMBER"},
+            "date_time_fields": {},
+            "date_fields": {},
+        };
+        SmartSheetRecordIterator i(rest, "1", info, where_cond, search_options);
+        list<int> rv = ();
+        while (i.next()) {
+            push rv, i.getValue().rowNumber;
+        }
+        return rv;
+    }
+
+    private laterPageTest() {
+        # matches on the second and third pages
+        handler.matches = {"150": True, "199": True, "230": True};
+        assertEq((150, 199), read({"status": "match"}, {"limit": 2}));
+        # pages are read until the limit is reached, and no further
+        int page_size = SmartSheetRecordIterator::FilteredPageSize;
+        assertEq(({"pageSize": string(page_size), "page": "1"}, {"pageSize": string(page_size), "page": "2"}),
+            handler.requests);
+
+        # all matches when the limit is larger than the number of matches on the first pages
+        assertEq((150, 199, 230), read({"status": "match"}, {"limit": 3}));
+        assertEq(3, handler.requests.size());
+    }
+
+    private limitTest() {
+        handler.matches = {};
+        # without a condition, the limit is the page size of a single request
+        assertEq((1, 2, 3, 4, 5), read(NOTHING, {"limit": 5}));
+        assertEq(({"pageSize": "5"},), handler.requests);
+    }
+
+    private noLimitTest() {
+        handler.matches = {"3": True, "240": True};
+        # without a limit, the whole sheet is read in one request
+        assertEq((3, 240), read({"status": "match"}));
+        assertEq(({},), handler.requests);
+    }
+
+    private fewerMatchesTest() {
+        handler.matches = {"10": True};
+        # every page is read when there are fewer matches than the limit, and reading stops at the last page
+        assertEq((10,), read({"status": "match"}, {"limit": 5}));
+        assertEq(3, handler.requests.size());
+        assertEq("3", handler.requests.last().page);
+    }
+}

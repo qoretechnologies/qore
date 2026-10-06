@@ -30,6 +30,13 @@ public namespace SmartSheetDataProvider {
     column ID-to-name mapping.
 */
 public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
+    public {
+        #! The number of rows requested per page when rows are filtered on the client with a limit
+        /** @since SmartSheetDataProvider 1.0
+        */
+        const FilteredPageSize = 100;
+    }
+
     private:internal {
         #! The REST client
         RestClientIo::RestClientIo rest;
@@ -84,26 +91,25 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
                     rethrow;
                 }
             }
+        } else if (search_options.limit && where_cond) {
+            # rows are filtered on the client, so matching rows can be on any page: read pages until the limit is
+            # reached or the sheet has no more rows
+            records = getFilteredRows(search_options.limit);
         } else {
-            # Fetch the full sheet with rows
+            # without a filter, the limit is the page size of a single request; without a limit, the whole sheet is
+            # read in one request
             hash<auto> params;
             if (search_options.limit) {
                 params.pageSize = search_options.limit;
             }
             hash<auto> sheet = rest.restGet("sheets/" + sheet_id
                 + (params ? "?" + buildQS(params) : "")).body;
-            if (sheet.rows) {
-                foreach hash<auto> row in (sheet.rows) {
-                    hash<auto> record = mapRow(row);
-                    # Apply client-side where conditions
-                    if (where_cond && !matchesWhereCond(record, where_cond)) {
-                        continue;
-                    }
-                    records += record;
-                    if (search_options.limit && records.size() >= search_options.limit) {
-                        break;
-                    }
+            foreach hash<auto> row in (sheet.rows) {
+                hash<auto> record = mapRow(row);
+                if (where_cond && !matchesWhereCond(record, where_cond)) {
+                    continue;
                 }
+                push records, record;
             }
         }
 
@@ -130,15 +136,48 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
         return i.next();
     }
 
+    #! Returns up to \a limit rows that match the where conditions, reading the sheet page by page
+    /** Pages of @ref FilteredPageSize rows are read until \a limit rows match or the sheet has no more rows, so
+        no page after the one with the last needed match is read
+
+        @throw THREAD-CANCELLED the thread was cancelled while reading pages
+    */
+    private list<hash<auto>> getFilteredRows(int limit) {
+        list<hash<auto>> records = ();
+        for (int page = 1; ; ++page) {
+            if (thread_cancelled()) {
+                throw "THREAD-CANCELLED", sprintf("reading Smartsheet sheet %y was cancelled at page %d", sheet_id,
+                    page);
+            }
+            hash<auto> sheet = rest.restGet("sheets/" + sheet_id + "?" + buildQS({
+                "pageSize": FilteredPageSize,
+                "page": page,
+            })).body;
+            int rows = sheet.rows.lsize();
+            foreach hash<auto> row in (sheet.rows) {
+                hash<auto> record = mapRow(row);
+                if (!matchesWhereCond(record, where_cond)) {
+                    continue;
+                }
+                push records, record;
+                if (records.size() == limit) {
+                    return records;
+                }
+            }
+            # the last page has fewer rows than the page size, or ends at the total row count
+            if (rows < FilteredPageSize
+                    || (exists sheet.totalRowCount && page * FilteredPageSize >= sheet.totalRowCount)) {
+                return records;
+            }
+        }
+    }
+
     #! Maps a raw API row to a record with column names
     private hash<auto> mapRow(hash<auto> row) {
-        hash<auto> rv = {
-            "id": row.id,
-            "rowNumber": row.rowNumber,
-            "parentId": row.parentId,
-            "createdAt": row.createdAt,
-            "modifiedAt": row.modifiedAt,
-        };
+        # an untyped hash: a literal whose values all have one type would be typed for them, and the cell values
+        # added below can have any type
+        hash<auto> rv = {};
+        map rv{$1} = row{$1}, ("id", "rowNumber", "parentId", "createdAt", "modifiedAt");
         if (row.cells) {
             foreach hash<auto> cell in (row.cells) {
                 *string col_name = record_info.column_id_to_name{string(cell.columnId)};
