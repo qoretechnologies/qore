@@ -170,12 +170,7 @@ public class SimpleAgentStrategy inherits AbstractAgentStrategy {
                     "tool_call_id": dr.id,
                     "name": dr.name,
                 };
-                push all_tool_calls, {
-                    "tool": dr.name,
-                    "args": dr.args ?? {},
-                    "result": dr.result,
-                    "error": dr.error,
-                };
+                push all_tool_calls, toolCallRecord(dr);
             }
 
             emitEvent(<AgentEvent>{
@@ -374,12 +369,7 @@ audit.recordTurn(res);
                     "tool_call_id": dr.id,
                     "name": dr.name,
                 };
-                push all_tool_calls, {
-                    "tool": dr.name,
-                    "args": dr.args ?? {},
-                    "result": dr.result,
-                    "error": dr.error,
-                };
+                push all_tool_calls, toolCallRecord(dr);
             }
 
             emitEvent(<AgentEvent>{
@@ -431,6 +421,31 @@ audit.recordTurn(res);
         };
     }
 
+    #! Returns the record of one dispatched tool call for @ref AgentResult::tool_calls
+    /** The provider's call id and reasoning signature are kept so a caller that stores the turn can
+        replay the call to the provider as it was made.
+
+        @param dr one result from @ref dispatchTools()
+
+        @return \c {tool, args, result, error, id, thought_signature}; \c id and
+        \c thought_signature are only present when the provider supplied them
+    */
+    private static hash<auto> toolCallRecord(hash<auto> dr) {
+        hash<auto> rv = {
+            "tool": dr.name,
+            "args": dr.args ?? {},
+            "result": dr.result,
+            "error": dr.error,
+        };
+        if (dr.id.val()) {
+            rv.id = dr.id;
+        }
+        if (dr.thought_signature.val()) {
+            rv.thought_signature = dr.thought_signature;
+        }
+        return rv;
+    }
+
     #! Dispatches tool calls (parallel or sequential)
     private list<hash<auto>> dispatchTools(hash<AgentContext> ctx,
             list<hash<QoreLlmUtils::ChatToolCall>> tool_calls) {
@@ -443,9 +458,12 @@ audit.recordTurn(res);
             list<hash<auto>> results =
                 parallel_dispatcher.dispatchToolsParallel(tc_list, ctx.tool_dispatch);
 
-            # Add tool call IDs to results
+            # Add tool call IDs and reasoning signatures to results
             for (int i = 0; i < results.size(); ++i) {
                 results[i].id = tool_calls[i].id;
+                if (tool_calls[i].thought_signature.val()) {
+                    results[i].thought_signature = tool_calls[i].thought_signature;
+                }
             }
             return results;
         }
@@ -468,6 +486,7 @@ audit.recordTurn(res);
                     "name": tc.name,
                     "args": tc.arguments ?? {},
                     "result": tool_result,
+                    "thought_signature": tc.thought_signature,
                 };
                 emitEvent(<AgentEvent>{
                     "event_type": "tool_completed",
@@ -483,6 +502,7 @@ audit.recordTurn(res);
                     "name": tc.name,
                     "args": tc.arguments ?? {},
                     "error": err,
+                    "thought_signature": tc.thought_signature,
                 };
                 emitEvent(<AgentEvent>{
                     "event_type": "error",

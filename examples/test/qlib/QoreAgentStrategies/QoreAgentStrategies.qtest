@@ -170,6 +170,8 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         addTestCase("SimpleAgent - event callback", \simpleEventsTest());
         addTestCase("SimpleAgent - conversation history", \simpleHistoryTest());
         addTestCase("SimpleAgent - token budget", \simpleBudgetTest());
+        addTestCase("SimpleAgent - tool call records keep the provider id and signature",
+            \simpleToolCallIdentityTest());
 
         # PlanningAgentStrategy tests
         addTestCase("Planning - basic execution", \planningBasicTest());
@@ -264,6 +266,75 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         assertEq("get_weather", result.tool_calls[0].tool);
         assertEq(22, result.tool_calls[0].result.temp);
         assertEq(2, result.llm_calls);
+    }
+
+    simpleToolCallIdentityTest() {
+        # A caller that stores the turn replays each call to the provider, so the record keeps the
+        # provider's call id and Gemini reasoning signature; a call without a signature gets none
+        hash<ChatResponse> tool_response(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "content": "",
+            "tool_calls": (
+                <ChatToolCall>{
+                    "id": "call_a",
+                    "name": "get_weather",
+                    "arguments": {"city": "Prague"},
+                    "thought_signature": "sig-a",
+                },
+                <ChatToolCall>{
+                    "id": "call_b",
+                    "name": "get_weather",
+                    "arguments": {"city": "Brno"},
+                },
+            ),
+            "usage": {"total_tokens": 100},
+        });
+        hash<ChatResponse> text_response(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Sunny in both.",
+            "usage": {"total_tokens": 80},
+        });
+        code dispatch = auto sub (string name, hash<auto> args) {
+            if (args.city == "Brno") {
+                throw "TOOL-ERROR", "no data for Brno";
+            }
+            return {"city": args.city};
+        };
+
+        foreach bool parallel in ((False, True)) {
+            string mode = parallel ? "parallel" : "sequential";
+            MockChatLlm mock((tool_response, text_response));
+            SimpleAgentStrategy agent(mock, {"max_iterations": 5, "parallel_dispatch": parallel});
+            hash<AgentResult> result = agent.execute(<AgentContext>{
+                "message": "Weather in Prague and Brno?",
+                "tools": (<ToolDefinition>{"name": "get_weather"},),
+                "tool_dispatch": dispatch,
+            });
+            assertEq(2, result.tool_calls.size(), mode + ": both calls are recorded");
+            assertEq("call_a", result.tool_calls[0].id, mode + ": the first call keeps its provider id");
+            assertEq("sig-a", result.tool_calls[0].thought_signature,
+                mode + ": the first call keeps its reasoning signature");
+            assertEq("Prague", result.tool_calls[0].result.city, mode + ": the first call keeps its result");
+            assertEq("call_b", result.tool_calls[1].id,
+                mode + ": a call that failed keeps its provider id");
+            assertFalse(result.tool_calls[1].hasKey("thought_signature"),
+                mode + ": a call without a signature gets no signature key");
+            assertTrue(result.tool_calls[1].error =~ /no data for Brno/,
+                mode + ": the failed call keeps its error");
+        }
+
+        # A provider that gives no call id leaves no id key
+        hash<ChatResponse> no_id_response = tool_response;
+        no_id_response.tool_calls = (<ChatToolCall>{"id": "", "name": "get_weather",
+            "arguments": {"city": "Prague"}},);
+        MockChatLlm mock((no_id_response, text_response));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Weather in Prague?",
+            "tools": (<ToolDefinition>{"name": "get_weather"},),
+            "tool_dispatch": dispatch,
+        });
+        assertFalse(result.tool_calls[0].hasKey("id"), "an empty provider id is not recorded");
     }
 
     simpleMultiIterationTest() {
