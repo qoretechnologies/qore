@@ -120,6 +120,10 @@ public:
     void emitFunctionRefNativeEntry(llvm::Value* ref, const QoreIRInstruction* inst,
         llvm::Module& module);
 
+    //! Try a guarded zero/unary scalar call; the generic branch preserves boxed result semantics.
+    llvm::Value* emitTypedFunctionRefCall(const QoreIRInstruction* inst,
+        llvm::Value* ref_boxed, llvm::Module& module, llvm::Function* llvm_func, std::string& error);
+
     //! Set fast entry mode for Approach B: parameters are passed as LLVM function
     //! arguments instead of being loaded from the thread-local variable stack.
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")

@@ -97,6 +97,36 @@ checks all execution modes and both disabled paths. Compile-time
 `QORE_DISABLE_FUNCREF_FAST_CALL` disables the complete guarded path (both are
 diagnostic presence flags, the latter sampled at first use).
 
+References now prevalidate the finalized, single-variant signature at creation
+and retain immutable pointers and a two-bit scalar tag per parameter. A
+reference created before parse finalization remains on the generic path.
+Execution mode, compiled-code readiness, active Program, debugger state and
+actual argument types are still checked at invocation; they are not cached.
+This removes repeated static eligibility scans without a shared target cache.
+
+AOT also provides an additive typed-reference ABI v1 for zero or one strict
+`int`, `float` or `bool` argument and a strict scalar result. It retains the
+same non-throwing, context-independent body proof and normal-entry identity
+guard. The native entry receives scalar arguments followed by the callee's
+explicit AOT context and exception sink; boolean arguments/results use an
+`int64_t` 0/1 carrier. Twelve signature-specific runtime helpers return a
+handled flag and write the native result through an output pointer. Rejection
+leaves the general call responsible for invocation and ownership. Attachment
+validates the signature against the immutable reference metadata.
+
+Ordinary AOT call sites with a typed callable use this route after proving or
+checking the argument representation. Unassigned values, container holes,
+non-matching signatures and references without a typed entry fall back. The
+caller reboxes the successful result at the merge with generic dispatch so
+that fallback results, including NOTHING, retain their original semantics.
+Arguments remain borrowed through execution and consumed temporaries are
+released afterward. Invoke-form calls retain the previous dispatch. Thus this
+is a native scalar call boundary, not yet a fully unboxed callback loop.
+`QORE_DISABLE_AOT_TYPED_FUNCREF_CALL` suppresses both typed-entry attachment and
+typed caller lowering at compile time, leaving the boxed adapter available.
+The ABI is additive and does not change serialized descriptors; old artifacts
+remain supported, while newly compiled artifacts require these runtime helpers.
+
 ## Tiered Execution
 
 Tiered mode starts functions on AST and promotes by call count:

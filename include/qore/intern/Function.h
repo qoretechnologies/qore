@@ -1525,6 +1525,11 @@ public:
         return vlist.size();
     }
 
+    //! Finalized function signatures cannot acquire additional user variants.
+    DLLLOCAL bool isParseInitialized() const {
+        return parse_init_done;
+    }
+
     //! Returns true if a call of this method can resolve to a variant inherited from a base class
     /** numVariants() counts only the variants declared in this function; a method that a derived class overrides
         with a single variant still has every non-abstract variant of its base classes' methods of the same name

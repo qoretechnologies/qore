@@ -14,6 +14,14 @@ int sub increment(int value) { return value + 1; }
 float sub half(float value) { return value + 0.5; }
 bool sub invert(bool value) { return !value; }
 int sub zero() { return 42; }
+float sub zeroFloat() { return 1.25; }
+bool sub zeroBool() { return True; }
+int sub intFromBool(bool value) { return value ? 7 : 3; }
+float sub floatFromBool(bool value) { return value ? 1.5 : 2.5; }
+bool sub boolFromInt(int value) { return value > 0; }
+float sub floatFromInt(int value) { return value + 0.5; }
+int sub intFromFloat(float value) { return int(value); }
+bool sub boolFromFloat(float value) { return value > 0.0; }
 float sub mixed(int a, float b, bool c, int d) { return a + b + (c ? d : 0); }
 string sub text(string value) { return value; }
 hash<string, int> sub container(hash<string, int> value) { return value; }
@@ -36,6 +44,17 @@ hash<auto!> sub noNarrow(hash<auto!> value) { value.text = "ok"; return value; }
 int sub invokeInt(code<int(int)> fn, int value) { return fn(value); }
 float sub invokeFloat(code<float(float)> fn, float value) { return fn(value); }
 bool sub invokeBool(code<bool(bool)> fn, bool value) { return fn(value); }
+auto sub invokeIntZero(code<int()> fn) { return fn(); }
+auto sub invokeFloatZero(code<float()> fn) { return fn(); }
+auto sub invokeBoolZero(code<bool()> fn) { return fn(); }
+auto sub invokeIntBool(code<int(bool)> fn, bool value) { return fn(value); }
+auto sub invokeFloatBool(code<float(bool)> fn, bool value) { return fn(value); }
+auto sub invokeBoolInt(code<bool(int)> fn, int value) { return fn(value); }
+auto sub invokeFloatInt(code<float(int)> fn, int value) { return fn(value); }
+auto sub invokeIntFloat(code<int(float)> fn, float value) { return fn(value); }
+auto sub invokeBoolFloat(code<bool(float)> fn, float value) { return fn(value); }
+auto sub invokeMissing(code<int(int)> fn) { int value; return fn(value); }
+auto sub invokeSlot(code<int(int)> fn, list<int> values, int index) { return fn(values[index]); }
 auto sub invokeZero(code fn) { return fn(); }
 auto sub invokeOne(code fn, auto value) { return fn(value); }
 auto sub invokeMixed(code fn, int a, float b, bool c, int d) { return fn(a, b, c, d); }
@@ -65,6 +84,19 @@ for (int i = 0; i < 100; ++i) {
     expect(True, invokeBool(\invert(), False));
     expect(False, invokeBool(\invert(), True));
     expect(42, invokeZero(\zero()));
+    expect(42, invokeIntZero(\zero()));
+    expect(1.25, invokeFloatZero(\zeroFloat()));
+    expect(True, invokeBoolZero(\zeroBool()));
+    expect(7, invokeIntBool(\intFromBool(), True));
+    expect(3, invokeIntBool(\intFromBool(), False));
+    expect(1.5, invokeFloatBool(\floatFromBool(), True));
+    expect(2.5, invokeFloatBool(\floatFromBool(), False));
+    expect(True, invokeBoolInt(\boolFromInt(), 1));
+    expect(False, invokeBoolInt(\boolFromInt(), -1));
+    expect(4.5, invokeFloatInt(\floatFromInt(), 4));
+    expect(4, invokeIntFloat(\intFromFloat(), 4.5));
+    expect(True, invokeBoolFloat(\boolFromFloat(), 4.5));
+    expect(False, invokeBoolFloat(\boolFromFloat(), -4.5));
     expect(9.5, invokeMixed(\mixed(), 2, 3.5, True, 4));
     expect(5.5, invokeMixed(\mixed(), 2, 3.5, False, 4));
     expect("long string that requires node ownership", invokeOne(\text(),
@@ -116,6 +148,21 @@ for (int i = 0; i < 100; ++i) {
         }
     }
     expect(5, invokeInt(\increment(), 4));
+    try {
+        invokeMissing(\increment());
+        throw "FUNCREF-TEST-ERROR", "an unassigned int must not become native zero";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+    }
+    list<int> sparse = (1, 2);
+    delete sparse[1];
+    expect(2, invokeSlot(\increment(), sparse, 0));
+    try {
+        invokeSlot(\increment(), sparse, 1);
+        throw "FUNCREF-TEST-ERROR", "a sparse slot must not become native zero";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+    }
 }
 
 Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
@@ -126,5 +173,28 @@ foreign.parse("%modern\nint sub increment(int value) { return value + 100; }\n"
 code<int(int)> foreignRef = foreign.callFunction("callback");
 expect(104, invokeInt(foreignRef, 4));
 expect(5, foreign.callFunction("invoke", \increment(), 4));
+foreach auto mode in ((EM_AST, EM_IR, EM_TIERED)) {
+    foreign.setExecMode(mode);
+    expect(104, foreign.callFunction("invoke", foreignRef, 4));
+}
 expect(5, invokeInt(\increment(), 4));
+
+# Share the same immutable descriptor and compiled entry between threads.
+code<int(int)> shared = \increment();
+Counter pending(4);
+Queue<auto> outcomes();
+for (int worker = 0; worker < 4; ++worker) {
+    background sub() {
+        on_exit pending.dec();
+        try {
+            int value = 0;
+            for (int j = 0; j < 200; ++j) { value = invokeInt(shared, value); }
+            outcomes.push(value);
+        } catch (hash<ExceptionInfo> ex) {
+            outcomes.push(ex.err);
+        }
+    }();
+}
+expect(0, pending.waitForZero(10000));
+for (int worker = 0; worker < 4; ++worker) { expect(200, outcomes.get(1000)); }
 printf("function-references: ok (%d)\n", division_line);

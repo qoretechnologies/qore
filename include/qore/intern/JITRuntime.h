@@ -799,6 +799,22 @@ void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     uint64_t (*entry)(const uint64_t*, QoreAOTContext*, ExceptionSink*));
 
+//! Bind a versioned zero/unary scalar ABI; only before publishing a new reference.
+void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Return 1 after an attempted native call (also on exception), 0 for generic fallback.
+//! Scalar arguments/results are native, borrowed, and bool uses a 0/1 int64_t carrier.
+#define QORE_DECLARE_TYPED_FUNCREF_RESULT(NAME, TYPE) \
+    int qore_rt_try_funcref_##NAME##_0_v1(uint64_t ref, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_int_v1(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_float_v1(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_bool_v1(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink);
+QORE_DECLARE_TYPED_FUNCREF_RESULT(int, int64_t)
+QORE_DECLARE_TYPED_FUNCREF_RESULT(float, double)
+QORE_DECLARE_TYPED_FUNCREF_RESULT(bool, int64_t)
+#undef QORE_DECLARE_TYPED_FUNCREF_RESULT
+
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);
 

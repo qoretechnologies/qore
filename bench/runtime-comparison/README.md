@@ -205,6 +205,12 @@ call is not replaced by a direct inlined recurrence. See the
 [calling-convention contract](../../design/qore-jit-aot-current-state.md#opaque-function-reference-calls)
 for the conservative scalar-body eligibility and remaining fallbacks.
 
+`QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1` at compilation isolates the additional
+zero/one-argument scalar ABI while retaining the boxed adapter and cached
+signature metadata. References constructed before parse finalization are not
+cached. Runtime state and actual argument types remain guarded. The typed ABI
+does not remove diagnostic frames or make the caller's merged result unboxed.
+
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`
 directly. Arguments are `KERNEL COUNT WARMUP SAMPLES MS SEED`:
 

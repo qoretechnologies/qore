@@ -4387,6 +4387,9 @@ while (*binary chunk = input.read(65536)) {
       argument-list binding; AOT now supports an optional boxed-argument adapter to non-throwing, context-independent typed
       native entries, avoiding TLS parameter setup while preserving diagnostics and guarded fallback for
       cross-program calls, coercion, overloads, defaults, reference parameters, and attached debuggers
+    - Cached immutable eligibility metadata on finalized function references and added guarded AOT native
+      scalar dispatch for zero/one-argument, non-throwing context-independent callbacks; dynamic binding
+      fallback, full-width scalar values, diagnostic frames, and argument ownership are preserved
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

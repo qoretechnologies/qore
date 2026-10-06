@@ -996,6 +996,43 @@ bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Ex
     return vc && uf == vc->uf;
 }
 
+uint32_t qore_function_ref_scalar_kind(const QoreTypeInfo* type) {
+    using Kind = QoreFunctionRefScalarKind;
+    return static_cast<uint32_t>(type == bigIntTypeInfo ? Kind::Int
+        : type == floatTypeInfo ? Kind::Float : type == boolTypeInfo ? Kind::Bool : Kind::None);
+}
+
+FunctionCallReferenceNode::FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
+        QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
+    assert(pgm);
+    // Keep the existing weak Program lifetime; a strong reference could cycle.
+    pgm->depRef();
+    if (!uf->isParseInitialized() || uf->numVariants() != 1) {
+        return;
+    }
+    const AbstractQoreFunctionVariant* variant = uf->first();
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb || uvb->pgm != pgm || variant->getFunctionality()) {
+        return;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned count = sig->numParams();
+    // Bound all signature scans before checking static eligibility.
+    if (count > 16 || !uvb->isStaticallyFastCallEligible()) {
+        return;
+    }
+    uint32_t scalar_params = 0;
+    for (unsigned i = 0; i < count; ++i) {
+        const QoreTypeInfo* ti = sig->getParamTypeInfo(i);
+        if (QoreTypeInfo::isReference(ti) || sig->lv[i]->isNoNarrowContainer()) {
+            return;
+        }
+        unsigned kind = qore_function_ref_scalar_kind(ti);
+        scalar_params |= kind << (2 * i);
+    }
+    fast_call = {variant, uvb, sig, count, scalar_params};
+}
+
 bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "FunctionCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm, reference_count(),
     //  reference_count() - 1);

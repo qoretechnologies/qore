@@ -530,6 +530,186 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
     auto bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_native",
         llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type}, false));
     builder->CreateCall(bind, {ref, normal.getCallee(), adapter});
+
+    if (info->num_params > 1 || std::getenv("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")) {
+        return;
+    }
+    unsigned ret_kind = qore_function_ref_scalar_kind(sig->getReturnTypeInfo());
+    unsigned arg_kind = info->num_params ? qore_function_ref_scalar_kind(sig->getParamTypeInfo(0)) : 0;
+    auto expected_param = arg_kind == 1 ? BatchCalleeParamKind::NativeInt
+        : arg_kind == 2 ? BatchCalleeParamKind::NativeFloat : BatchCalleeParamKind::NativeBool;
+    auto expected_return = ret_kind == 1 ? BatchCalleeReturnKind::NativeInt
+        : ret_kind == 2 ? BatchCalleeReturnKind::NativeFloat : BatchCalleeReturnKind::NativeBool;
+    if (!ret_kind || info->return_kind != expected_return
+            || (info->num_params && (!arg_kind || getFastEntryParamKind(*info, 0) != expected_param))) {
+        return;
+    }
+    std::string typed_name = info->fast_name + "_funcref_typed_v1";
+    llvm::Function* typed = module.getFunction(typed_name);
+    if (!typed) {
+        std::vector<llvm::Type*> params;
+        if (arg_kind) {
+            params.push_back(arg_kind == 2 ? double_type : i64_type);
+        }
+        params.push_back(ptr_type);
+        params.push_back(ptr_type);
+        typed = llvm::Function::Create(llvm::FunctionType::get(
+            ret_kind == 2 ? double_type : i64_type, params, false),
+            llvm::GlobalValue::InternalLinkage, typed_name, module);
+        typed->addFnAttr("frame-pointer", "all");
+        llvm::IRBuilder<> ab(llvm::BasicBlock::Create(ctx, "entry", typed));
+        std::vector<llvm::Value*> args;
+        if (arg_kind) {
+            llvm::Value* arg = typed->getArg(0);
+            if (arg_kind == 3) {
+                arg = ab.CreateICmpNE(arg, llvm::ConstantInt::get(i64_type, 0));
+            }
+            args.push_back(arg);
+        }
+        args.push_back(typed->getArg(info->num_params));
+        args.push_back(typed->getArg(info->num_params + 1));
+        llvm::Value* result = ab.CreateCall(fast_fn, args);
+        if (ret_kind == 3) {
+            result = ab.CreateZExt(result, i64_type);
+        }
+        ab.CreateRet(result);
+    }
+    auto typed_bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_typed_v1",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
+    builder->CreateCall(typed_bind, {ref, normal.getCallee(), typed,
+        llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))});
+}
+
+llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* inst,
+        llvm::Value* ref_boxed, llvm::Module& module, llvm::Function* llvm_func, std::string& error) {
+    if (!aot_mode || !current_ir_func || inst->operands.empty() || inst->operands.size() > 2
+            || std::getenv("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")) {
+        return nullptr;
+    }
+    const QoreIRValueFacts* ref_facts = current_ir_func->getValueFacts(inst->operands[0]);
+    const QoreComplexCodeTypeInfo* callable = QoreTypeInfo::getComplexCodeType(
+        ref_facts ? ref_facts->type_info : nullptr);
+    unsigned nargs = inst->operands.size() - 1;
+    if (!callable || callable->hasVarArgs() || callable->getParamTypes().size() != nargs) {
+        return nullptr;
+    }
+    unsigned ret_kind = qore_function_ref_scalar_kind(callable->getReturnType());
+    unsigned arg_kind = nargs ? qore_function_ref_scalar_kind(callable->getParamTypes()[0]) : 0;
+    if (!ret_kind || (nargs && !arg_kind)) {
+        return nullptr;
+    }
+    llvm::Value* arg = nullptr;
+    llvm::Value* compatible = llvm::ConstantInt::getTrue(ctx);
+    if (nargs) {
+        uint32_t id = inst->operands[1].id;
+        arg = getVal(id, error);
+        if (!arg) {
+            return nullptr;
+        }
+        const QoreIRValueFacts* facts = current_ir_func->getValueFacts(inst->operands[1]);
+        bool assigned_native = !nanboxed_values.count(id) && !native_boxed_sources.count(id)
+            && facts && (facts->assigned_state == QoreIRAssignedState::Assigned || facts->never_nothing)
+            && facts->type_info == callable->getParamTypes()[0]
+            && ((arg_kind == 1 && arg->getType() == i64_type
+                    && facts->representation == QoreIRValueRepresentation::NativeInt)
+                || (arg_kind == 2 && arg->getType() == double_type
+                    && facts->representation == QoreIRValueRepresentation::NativeFloat)
+                || (arg_kind == 3 && arg->getType() == i1_type
+                    && facts->representation == QoreIRValueRepresentation::NativeBool));
+        if (!assigned_native) {
+            llvm::Value* boxed = boxValue(arg, id);
+            if (arg_kind == 1) {
+                compatible = emitIsBoxedInt48(boxed);
+                arg = builder->CreateAShr(builder->CreateShl(boxed,
+                    llvm::ConstantInt::get(i64_type, 16)), llvm::ConstantInt::get(i64_type, 16));
+            } else if (arg_kind == 2) {
+                compatible = emitIsBoxedFloat(boxed);
+                arg = builder->CreateBitCast(builder->CreateSub(boxed,
+                    llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET)), double_type);
+            } else {
+                llvm::Value* is_true = builder->CreateICmpEQ(boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_TRUE));
+                compatible = builder->CreateOr(is_true, builder->CreateICmpEQ(boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+                arg = builder->CreateZExt(is_true, i64_type);
+            }
+        } else if (arg_kind == 3) {
+            arg = builder->CreateZExt(arg, i64_type);
+        }
+    }
+    bool has_cleanups = false;
+    llvm::Value* cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs, has_cleanups);
+    llvm::Type* result_type = ret_kind == 2 ? double_type : i64_type;
+    llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+    auto* result_slot = entry_builder.CreateAlloca(result_type, nullptr, "typed_funcref_result");
+    auto* attempt = llvm::BasicBlock::Create(ctx, "typed_funcref_try", llvm_func);
+    auto* fast = llvm::BasicBlock::Create(ctx, "typed_funcref_fast", llvm_func);
+    auto* fallback = llvm::BasicBlock::Create(ctx, "typed_funcref_fallback", llvm_func);
+    auto* merge = llvm::BasicBlock::Create(ctx, "typed_funcref_merge", llvm_func);
+    builder->CreateCondBr(compatible, attempt, fallback);
+    builder->SetInsertPoint(attempt);
+    const char* names[] = {"0", "int", "float", "bool"};
+    std::string helper_name = std::string("qore_rt_try_funcref_") + names[ret_kind] + "_"
+        + names[arg_kind] + "_v1";
+    std::vector<llvm::Type*> types{i64_type};
+    std::vector<llvm::Value*> args{ref_boxed};
+    if (arg) {
+        types.push_back(arg_kind == 2 ? double_type : i64_type);
+        args.push_back(arg);
+    }
+    types.insert(types.end(), {ptr_type, ptr_type});
+    args.insert(args.end(), {result_slot, xsink_arg});
+    auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
+    llvm::Value* handled = builder->CreateCall(helper, args);
+    builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)), fast, fallback);
+
+    builder->SetInsertPoint(fast);
+    llvm::Value* native_result = builder->CreateLoad(result_type, result_slot);
+    // The reference's *actual* return is not statically fixed on the fallback:
+    // preserve NOTHING and arbitrary boxed results there, rather than coercing
+    // them merely because the reference has a typed declaration.
+    llvm::Value* fast_result = ret_kind == 1 ? boxIntInline(native_result)
+        : ret_kind == 2 ? boxFloat(native_result)
+        : boxBool(builder->CreateICmpNE(native_result, llvm::ConstantInt::get(i64_type, 0)));
+    if (has_cleanups) {
+        auto clear = module.getOrInsertFunction("qore_rt_clear_arg_cleanups",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        builder->CreateCall(clear, {cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    }
+    builder->CreateBr(merge);
+    fast = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(fallback);
+    llvm::Value* boxed_args = nullptr;
+    int fallback_nargs = 0;
+    if (!buildArgsArray(inst, 1, llvm_func, boxed_args, fallback_nargs, error)) {
+        return nullptr;
+    }
+    auto ft = llvm::FunctionType::get(i64_type, has_cleanups
+        ? std::vector<llvm::Type*>{i64_type, ptr_type, ptr_type, i32_type, ptr_type}
+        : std::vector<llvm::Type*>{i64_type, ptr_type, i32_type, ptr_type}, false);
+    std::string fallback_name = has_cleanups ? "qore_rt_call_closure_fast_consume_args" : "qore_rt_call_closure_fast";
+    std::vector<llvm::Value*> fallback_args{ref_boxed, boxed_args};
+    if (has_cleanups) {
+        fallback_args.push_back(cleanups);
+    }
+    fallback_args.push_back(llvm::ConstantInt::get(i32_type, fallback_nargs));
+    fallback_args.push_back(xsink_arg);
+    llvm::Value* slow_result = emitMaybeInvoke(module.getOrInsertFunction(fallback_name, ft),
+        module.getOrInsertFunction(fallback_name + "_throwing", ft), fallback_args, module, llvm_func, inst);
+    // Only the fallback edge is guaranteed sink-clean after an invoke. The
+    // merged result also includes a non-throwing helper that reports errors
+    // through xsink (for example stack exhaustion), so retain its sink check
+    // and ordinary cleanup registration.
+    skip_next_exception_check = false;
+    last_call_was_invoke_eh = false;
+    builder->CreateBr(merge);
+    fallback = builder->GetInsertBlock();
+    builder->SetInsertPoint(merge);
+    auto* result = builder->CreatePHI(i64_type, 2, "typed_funcref_boxed_result");
+    result->addIncoming(fast_result, fast);
+    result->addIncoming(slow_result, fallback);
+    return result;
 }
 
 static bool qore_ir_fast_entry_variant_has_reference_params(
@@ -25016,6 +25196,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* ref = getVal(inst->operands[0].id, error);
                 if (!ref) { return false; }
                 ref_boxed = boxValue(ref, inst->operands[0].id);
+            }
+
+            if (!immediate_closure && !guarded_stored_closure) {
+                if (llvm::Value* typed_result = emitTypedFunctionRefCall(inst, ref_boxed, module, llvm_func, error)) {
+                    reloadAllLocalsFromRuntime(module, llvm_func,
+                        !static_cast<const QoreIRExprInstruction*>(inst)->has_ref_args);
+                    values[inst->result.id] = typed_result;
+                    nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(typed_result, inst->result.id, llvm_func);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    return true;
+                }
+                if (!error.empty()) {
+                    return false;
+                }
             }
 
             // Build args array from operands[1..]

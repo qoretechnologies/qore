@@ -913,3 +913,77 @@ checks, diagnostic frames, parse-option/location setup, and scalar conversion.
 Generic binding and TLS parameter setup remain elsewhere in the harness, not
 in that sampled native callback stack. This is qualitative evidence for the
 next targets, not an allocation count or an additional timing experiment.
+
+## Cached metadata and typed scalar callback ABI (2026-10-06)
+
+Follow-up to 766a5ce07, measured against its saved Release runtime/compiler
+library. The host remains Apple M4 Pro / arm64 / macOS 27.0.1, LLVM 22.1.8,
+-O3 -DNDEBUG. This phase caches finalized signature eligibility at reference
+creation, then adds native scalar dispatch for zero/one-argument AOT callbacks.
+No Java-equivalent semantic or universal speedup claim is intended.
+
+Median of independent process means, ns/element (callback plus loop/checksum
+work); five forks, three warmups and five 300 ms measurement windows, count
+1024. Java is freshly measured with Temurin 25.0.2 and JMH 1.37. Its indirect
+and polymorphic targets retain DONT_INLINE controls.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|arithmetic|95.58|95.91|4.15|4.14|0.89
+|direct_call|361.45|357.81|4.15|4.13|0.89
+|method_call|414.48|414.86|4.39|4.36|0.89
+|indirect_call|238.07|229.03|86.90|70.37|1.67
+|polymorphic_call|431.98|421.97|297.68|296.82|2.54
+|dispatch_control|279.87|270.11|5.71|5.65|0.96
+
+The callback reductions are 3.8% for IR and
+19.0% for AOT. A three-fork count-4096 repeat gave
+233.08 -> 224.86 ns for IR and
+87.24 -> 69.29 ns for AOT.
+Controls do not establish improvements outside the optimized path: IR
+arithmetic and method calls were 0.3% and 0.1% slower, while the other
+unrelated controls varied by up to 3.5% in the faster direction.
+
+Separate five-fork Program-boundary measurements gave
+235.29 -> 223.96 ns/call within one Program
+and 338.53 -> 342.16 across Programs. The latter is
+1.1% slower; this optimization does not accelerate Program crossings.
+
+The separately saved metadata-only intermediate improved the indirect kernel
+from 240.59 -> 227.56 ns in IR and 86.18 -> 77.79 ns in AOT (five forks).
+An initial typed-ABI pilot compared to that intermediate gave 80.93 -> 73.99 ns
+(three forks); it precedes final exact-type and experimental-EH audit fixes and
+is not the final combined result. Repeating the typed-only comparison with the
+final corrected implementation gave 78.32 -> 70.16 ns (five forks), a further
+10.4% reduction versus the saved metadata-only intermediate.
+
+AOT callbacks are still 42.0 times the matched Java result; polymorphic AOT
+calls are 117.1 times Java. The direct/final-method kernels allow inlining and
+must not be read as isolated call overhead. The typed boundary retains RTTI,
+diagnostic frames, Program/context setup and caller-result boxing. It is not
+yet a fully unboxed loop. Reference construction cost and allocations were
+not quantified; caching adds reference storage and a bounded creation scan.
+The benchmark AOT artifact grew from 129408 to 129752 bytes (0.27%).
+
+All implementations passed 165 independent checks per kernel-suite mode;
+Program probes passed 30 checks per mode. Builds and tests were separate from
+timing. Ordinary workstation activity and lightweight inspection were not
+eliminated. No full-suite, sanitizer or production-latency claim is made.
+
+Reproduce with the saved baseline library selected through --baseline-libdir,
+using run.py --modes qore-ir qore-aot java-jit --kernels arithmetic direct_call
+method_call indirect_call polymorphic_call dispatch_control --forks 5
+--time-ms 300. Repeat indirect_call with --count 4096 --forks 3; run
+program_calls.py --forks 5 --time-ms 300 for Program boundaries. Every AOT
+comparison compiles separately against the selected runtime. The compile-time
+QORE_DISABLE_AOT_TYPED_FUNCREF_CALL flag retains the boxed adapter for isolation.
+
+[Raw samples and sanitized metadata](results-native-calls-macos-arm64.json)
+retain separate intermediate/final phases, source and binary hashes, and
+process-level dispersion. The interrupted pre-EH-correction broad run is
+excluded. [Full audit](FOLLOWUP-AUDIT.md#cached-metadata-and-typed-scalar-reference-abi-audit-2026-10-06)
+records all checklist items and regression coverage.
+
+A separate five-second profile confirmed the typed helper and still sampled
+RTTI, diagnostic stack-location construction, runtime location/parse-option
+updates, and context/PC-map readiness. These are candidates for the next
+measured optimization, not costs removed by this commit.
