@@ -2653,7 +2653,7 @@ sub proxied_get(string url, string proxy) {
     });
     return q.get(30s);
 }
-code sub get_binder(string name) {
+code<*hash<ExceptionInfo>(string)> sub get_binder(string name) {
     return name == \"pool\" ? \\bind_in_pool_task() : \\bind_in_controller_task();
 }
 ";
@@ -2673,10 +2673,10 @@ code sub get_binder(string name) {
         sm.addNetworkDeniedIPRange("0.0.0.0/32");
         sm.blockLocalhost();
         Program sp = sandboxedProgram(sm, "
-auto sub call_binder(code binder, string addr) {
+*hash<ExceptionInfo> sub call_binder(code<*hash<ExceptionInfo>(string)> binder, string addr) {
     return binder(addr);
 }
-code sub make_bind_task(Queue q, string addr) {
+code<nothing()> sub make_bind_task(Queue q, string addr) {
     return sub () {
         try {
             Socket s();
@@ -2691,7 +2691,7 @@ code sub make_bind_task(Queue q, string addr) {
 ", "thread-pool-task-sandboxed");
 
         foreach string name in ("controller", "pool") {
-            code binder = lib.callFunction("get_binder", name);
+            code<*hash<ExceptionInfo>(string)> binder = lib.callFunction("get_binder", name);
             # without a sandbox, the library binds the address
             assertEq(NOTHING, lib.callFunction("bind_in_" + name + "_task", "0.0.0.0"),
                 name + ": an unsandboxed task binds the wildcard address");
