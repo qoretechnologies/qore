@@ -36,6 +36,7 @@ class PineconeAdminHandler inherits AbstractHttpRequestHandler {
         list<hash<auto>> calls = ();
         int tokens = 0;
         bool reject = False;
+        string token_type = "Bearer";
     }
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         AutoLock al(lck);
@@ -54,7 +55,7 @@ class PineconeAdminHandler inherits AbstractHttpRequestHandler {
             ++tokens;
             reject = False;
             return makeResponse(200, make_json({"access_token": sprintf("admin-token-%d", tokens),
-                "token_type": "Bearer", "expires_in": 3600}), {"Content-Type": MimeTypeJson});
+                "token_type": token_type, "expires_in": 3600}), {"Content-Type": MimeTypeJson});
         }
         if (reject || hdr.authorization != sprintf("Bearer admin-token-%d", tokens)) {
             return makeResponse(401, make_json({"error": "invalid_token"}), {"Content-Type": MimeTypeJson});
@@ -68,6 +69,26 @@ class PineconeAdminHandler inherits AbstractHttpRequestHandler {
     invalidate() {
         AutoLock al(lck);
         reject = True;
+    }
+    setTokenType(string token_type) {
+        AutoLock al(lck);
+        self.token_type = token_type;
+    }
+}
+
+#! Records persistence callbacks independently of the thread executing the login
+class PineconeAdminTokenUpdates {
+    private {
+        Mutex lck();
+        list<hash<auto>> updates = ();
+    }
+    record(hash<auto> options) {
+        AutoLock al(lck);
+        updates += options;
+    }
+    list<hash<auto>> getUpdates() {
+        AutoLock al(lck);
+        return updates;
     }
 }
 class PineconeAdminConnectionTest inherits QUnit::Test {
@@ -132,31 +153,68 @@ class PineconeAdminConnectionTest inherits QUnit::Test {
         assertNothing(calls.last().headers."api-key");
     }
     private syncTest() {
-        PineconeAdminRestClient c(options());
+        PineconeAdminTokenUpdates updates();
+        date start = now_us();
+        PineconeAdminRestClient c(options() + {"update_options": \updates.record()});
         assertTrue(c.restGet("/admin/projects").body.ok);
+        assertEq(1, updates.getUpdates().size());
+        checkUpdate(updates.getUpdates()[0], "admin-token-1", "Bearer", start, now_us());
         handler.invalidate();
+        handler.setTokenType("bearer");
         c.setToken("Bearer", "expired-token", NOTHING, now_us() - 15m);
+        start = now_us();
         assertTrue(c.restGet("/admin/projects").body.ok);
+        assertEq(2, updates.getUpdates().size());
+        checkUpdate(updates.getUpdates()[1], "admin-token-2", NOTHING, start, now_us());
         checkCalls();
     }
     private asyncTest() {
-        PineconeAdminRestClientIo c(options());
+        PineconeAdminTokenUpdates updates();
+        date start = now_us();
+        # Both the previous token and its type are absent on this first login.
+        PineconeAdminRestClientIo c(options() + {"update_options": \updates.record()});
+        on_exit c.close();
         assertTrue(c.restGet("/admin/projects").body.ok);
+        assertEq(1, updates.getUpdates().size());
+        checkUpdate(updates.getUpdates()[0], "admin-token-1", "Bearer", start, now_us());
         handler.invalidate();
+        handler.setTokenType("bearer");
         c.setToken("Bearer", "expired-token", NOTHING, now_us() - 15m);
+        start = now_us();
         assertTrue(c.restGet("/admin/projects").body.ok);
+        assertEq(2, updates.getUpdates().size());
+        checkUpdate(updates.getUpdates()[1], "admin-token-2", NOTHING, start, now_us());
         checkCalls();
     }
+    private checkUpdate(hash<auto> options, string token, *string token_type, date start, date finish) {
+        hash<auto> expected = {"token": token};
+        if (token_type) {
+            expected.token_type = token_type;
+        }
+        # The callback must not invent a refresh token or persist a casing-only type change.
+        assertEq(expected, options - "oauth2_token_expiry");
+        assertEq(NT_DATE, options.oauth2_token_expiry.typeCode());
+        assertTrue(options.oauth2_token_expiry >= start + 1h);
+        assertTrue(options.oauth2_token_expiry <= finish + 1h);
+    }
     private pingTest() {
+        PineconeAdminTokenUpdates good_updates();
         PineconeAdminRestConnection good("admin", "test", url, {}, options() - "url");
+        good.setUpdateOptionsCode(\good_updates.record());
+        date start = now_us();
         assertTrue(good.ping(True).ok);
+        assertEq(1, good_updates.getUpdates().size());
+        checkUpdate(good_updates.getUpdates()[0], "admin-token-1", "Bearer", start, now_us());
         assertEq("/admin/projects", handler.getCalls().last().path);
+        PineconeAdminTokenUpdates bad_updates();
         PineconeAdminRestConnection bad("admin-bad", "test", url, {},
             (options() - "url") + {"oauth2_client_secret": "wrong-secret"});
+        bad.setUpdateOptionsCode(\bad_updates.record());
         hash<PingInfo> result = bad.ping();
         assertFalse(result.ok);
         assertTrue(result.info =~ /401|invalid_client/);
         assertEq("/oauth/token", handler.getCalls().last().path);
+        assertEq(0, bad_updates.getUpdates().size());
     }
     private optionsTest() {
         hash<auto> o = PineconeAdminRestClientBase::getOptions({

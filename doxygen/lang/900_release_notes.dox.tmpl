@@ -2593,6 +2593,9 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref restclientiointro "RestClientIo" module
+      - fixed initial OAuth2 login with an \c update_options token-persistence callback raising
+        \c RUNTIME-TYPE-ERROR when no previous token or token type is set; this also fixes
+        Pinecone Admin connection pings using \c client_credentials without a refresh token
       - async request and SSE startup timeouts now report \c HTTPCLIENT-TIMEOUT even when the controller's
         transport cleanup runs before its completion callback; explicit cancellation remains distinct
       - added reusable opt-in transient HTTP retries for all subclasses, with bounded exponential backoff,

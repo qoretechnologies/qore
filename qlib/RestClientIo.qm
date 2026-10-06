@@ -123,6 +123,12 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     - Concurrent refresh serialization — only one thread refreshes at a time
     - Configurable basic auth for token requests
 
+    The \c update_options constructor callback receives changed token options after initial login
+    and renewal, including when no token was previously configured. The payload contains \c token,
+    \c token_type, and \c oauth2_refresh_token only when those values change, plus
+    \c oauth2_token_expiry when an expiry is available. Refresh tokens are optional for
+    \c client_credentials; token-type changes that differ only in case are not persisted.
+
     @par OAuth2 Example
     @code{.py}
 %requires RestClientIo
@@ -4719,8 +4725,9 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         #! Returns options to update in the connection after an OAuth2 login/refresh
         private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
             hash<auto> new_opts;
-            string token_val;
-            string token_type_val;
+            # Neither the token nor its type is set before the initial login.
+            *string token_val;
+            *string token_type_val;
             *string cur_refresh_token;
             *int expiry_hint;
             {
