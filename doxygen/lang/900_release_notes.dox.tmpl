@@ -4383,6 +4383,9 @@ while (*binary chunk = input.read(65536)) {
     - Removed repeated environment-variable lookups on IR function returns when exception tracing is disabled.
       The diagnostic variable \c QORE_IR_TRACE_EXCEPTIONS is now read once on the first IR execution,
       like the existing IR reference-tracing flags; set it before starting the process.
+    - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
+      value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
+      behavior are preserved.
     - Reduced inactive cancellation-check overhead while preserving thread/program interruption and blocking-wait
       ordering; indexed compound mutation in JIT/AOT also avoids copying simple root/index path metadata.
     - Fixed a weak reference (<tt>:=</tt>) to a list being rejected with \c RUNTIME-TYPE-ERROR when assigned to a

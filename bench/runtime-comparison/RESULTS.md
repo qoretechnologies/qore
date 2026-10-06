@@ -573,3 +573,189 @@ python3 bench/runtime-comparison/thread_pool.py \
 [FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md#container-follow-up-audit-2026-10-06)
 records every `audit-changes` item, release/debug coverage, and the existing
 macOS linker-warning-sensitive test failure reproduced on the baseline.
+
+## Retained calls and program boundaries (2026-10-06)
+
+Baseline revision: `b7de8f1f92274e4d5ce9e5ab76983c4b318d772f`, release
+library SHA-256 `ef6505c2e610ab54c7cd2f6da3c0153414bd2473e3abc4b460adae921ac8832a`.
+The benchmark now includes typed callable references, three runtime receiver
+types, and a selection/recurrence control. Java's retained-call targets use
+JMH `CompilerControl(DONT_INLINE)`; the generated `META-INF/CompilerHints`
+contains all four directives. This is deliberately distinct from the existing
+direct/final-method tests, which allow inlining. It is not a comparison with
+the best default, freely inlined HotSpot result.
+An additional diagnostic JVM run with `PrintInlining` confirms that inlining
+`boundaryStep` is disallowed by the compile command.
+
+Same-program baseline, ns/element (three fork means, median; 1024 elements,
+three warmup and five measured windows of 300 ms):
+
+|!Kernel|!Qore IR|!Qore AOT|!Java interpreted|!Java warmed JIT
+|arithmetic|93.82|4.10|6.86|0.90
+|direct_call|366.66|4.11|16.38|0.88
+|method_call|414.29|4.32|16.55|0.88
+|indirect_call|308.46|212.23|27.23|1.65
+|polymorphic_call|429.32|293.65|22.32|2.54
+|dispatch_control|275.12|5.68|10.58|0.92
+
+The large retained-call gap exists **without** a program crossing. These are
+whole workloads, including Qore ownership, argument/return validation, and
+loop machinery, not ABI-only call latencies. Do not subtract the control to
+claim an exact dispatch cost. Qore function references and Java functional
+interfaces do not have identical semantics.
+
+Final AOT disassembly confirms calls to `qore_rt_call_closure_fast` inside the
+indirect loop and `qore_rt_dot_eval_object_method_direct_aot` inside the
+polymorphic loop. It also exposes per-iteration coercion, boxing/unboxing,
+reference cleanup, and (for the polymorphic receiver) local-stack helpers.
+The function-reference branch of `qore_rt_call_closure_fast_impl` in
+`lib/JITRuntime.cpp` builds a `QoreListNode` and calls `execValue`; the special
+closure fast path applies to `NT_RUNTIME_CLOSURE`, not `NT_FUNCREF`. The helper's
+name therefore does not mean this function-reference case has a fast ABI.
+An independent five-second AOT sample confirms the generic route through
+`QoreFunction::evalFunction(..., RuntimeConfig&, ...)`, `UserVariantExecHelper`,
+and `evalTiered`, with TLS parameter instantiation and `qore_rt_load_local_aot`
+before the tiny native callee's arithmetic. This is direct evidence that an
+explicit context argument already exists on part of the route but does not yet
+remove the surrounding generic-call and TLS machinery.
+
+### Existing explicit context and safe optimization boundaries
+
+- `RuntimeConfig&` already passes context through AST evaluation and
+  `CodeEvaluationHelper`. It has not removed all TLS consumers. In particular,
+  `rc_get_current_ref()` refreshes object/class fields from `ThreadData`, while
+  `ObjectSubstitutionHelper` saves/restores both stores. Passing a pointer alone
+  cannot safely eliminate those writes while legacy callbacks still use TLS.
+- `IRDirectParams` already bypasses the TLS parameter stack for eligible IR
+  callees. The interpreter's cached direct-call shortcut requires the caller
+  and callee to share a program and retains general fallbacks for ineligible
+  signatures, specialization, AST-visible locals, and native callees.
+- `ProgramThreadCountContextHelper::set()` already returns immediately when
+  the current program matches and thread-local program data exists. Same-program
+  calls are not paying the full cross-program switch on every invocation.
+- Cross-program calls still need program lifetime/thread accounting, the right
+  local stacks and parse options, sandbox/cancellation context, and correct
+  restoration on exceptions. Same-program method calls still need the callee's
+  lexical class and receiver, not merely the caller's current context.
+- An eventual compact explicit-context native entry should have a guarded
+  same-program path plus a full transition path. TLS synchronization can be
+  elided only where all consumers are proven compatible; AST/builtin callbacks,
+  reentry, debugging/stack inspection, and deoptimization need a defined bridge.
+  Copying the owning public `RuntimeConfig` is not an allocation-free solution:
+  its copy constructor allocates its implementation.
+
+### Narrow runtime change
+
+The IR direct-call sample showed repeated ownership-set hash-node allocation
+and freeing inside `IRCallFrame::reset`, plus per-invocation vector storage.
+The retained change uses a pooled dense byte array for local-owned value IDs
+and moves the scope-handler watermark stack into the existing per-depth,
+thread-local frame pool. It changes no program transition, object/class
+context, argument binding, cancellation poll, or public/native ABI.
+
+Every ownership mark/erase/lookup keeps its original logical meaning. The array
+is reset to the current function's value-slot count; invalid initialization
+sentinels are bounds-checked. Scope-exit guards still run before the frame is
+returned to the pool, and nested calls use distinct frames. Other node-based
+sets remain, so this is not a claim of allocation-free IR calls.
+
+The next native-call target is the generic function-reference route: resolve
+and guard the target/signature/program, pass native arguments to its fast entry
+without constructing an argument list, and retain the general path for overloads,
+coercions, references/defaults, deleted receivers, and cross-program transitions.
+That is likely more valuable for this AOT workload than removing a program
+switch that is already skipped. The benchmark makes that hypothesis testable;
+the new native entry itself is not implemented in this change.
+
+### Before/after measurements
+
+The saved baseline and rebuilt libraries are ABI-compatible; AOT executables
+are compiled separately against the corresponding libraries. The interleaved
+1024-element run covers all eleven kernels, three forks per mode, three warmup
+and five measured windows of 300 ms. All 660 reference checks passed.
+
+|!Kernel|!IR before|!IR after|!IR time reduction|!AOT before|!AOT after
+|arithmetic|94.26|94.51|-0.3%|4.14|4.13
+|direct_call|369.18|356.34|3.5%|4.14|4.14
+|method_call|419.45|407.35|2.9%|4.38|4.37
+|indirect_call|318.14|309.24|2.8%|215.56|218.52
+|polymorphic_call|437.43|428.97|1.9%|296.45|293.53
+|dispatch_control|277.96|274.76|1.2%|5.58|5.89
+|list_read|206.54|196.15|5.0%|5.68|5.67
+|list_build|283.64|273.69|3.5%|82.34|82.51
+|list_mutate|168.72|169.36|-0.4%|158.73|158.97
+|temporary_list|362.05|352.94|2.5%|122.99|122.64
+|temporary_hash|668.92|655.23|2.0%|327.93|316.60
+
+The IR-only change does not consistently improve AOT. Its indirect-call median
+was 1.4% slower, and the selection-control median was 5.5% slower, with overlapping
+fork ranges (after 5.20-5.90 ns, before 5.38-5.73 ns). Conversely, the AOT hash
+median improved without a corresponding native-helper change. These mixed
+movements are not evidence of an AOT optimization; native code layout and
+workstation noise remain uncontrolled.
+
+A 4096-element repeat used the same fork/window counts and a different shuffle
+seed. All 660 reference checks passed:
+
+|!Kernel|!IR before|!IR after|!IR time reduction|!AOT before|!AOT after
+|arithmetic|94.56|92.79|1.9%|3.48|3.48
+|direct_call|357.40|356.56|0.2%|3.49|3.48
+|method_call|424.72|395.27|6.9%|3.53|3.52
+|indirect_call|309.31|304.40|1.6%|215.84|215.08
+|polymorphic_call|430.21|426.94|0.8%|290.17|297.70
+|dispatch_control|273.82|265.74|3.0%|5.59|5.43
+
+Method and indirect-call improvements recur, but the direct-call difference
+shrinks to noise at the larger batch size (before fork range 353.64-365.44 ns,
+after 356.22-358.62 ns). AOT's earlier indirect/control slowdowns do not recur;
+its polymorphic median instead slows by 2.6%. Retain the narrower conclusion:
+less IR allocation/bookkeeping with modest workload-dependent gains, not a
+stable universal call speedup and not an AOT-call improvement.
+
+### Same-program versus cross-program IR
+
+The companion probe explicitly pins both child programs to `EM_IR` before
+parsing and checks their modes afterward. A typed callback created by the loop's
+program is compared with one created by the other program from identical source.
+Program creation, parsing, callback lookup, and the outer `Program::callFunction`
+entry are outside timing. Five forks per library/scenario, 1024 calls per batch,
+three warmup and five measured 300-ms windows; all 60 reference checks passed.
+
+|!Scenario|!Before ns/call|!After ns/call|!Time reduction|!After fork range
+|Same program|306.10|299.85|2.0%|296.59-302.36
+|Cross program|340.60|334.43|1.8%|332.38-338.27
+
+The cross-program premium is about 34.5 ns before and after (11.3% / 11.5%).
+This supports the hypothesis that crossings cost extra, but most of the cost
+in this workload is already present in a same-program call. The frame change
+does not optimize program switching. This probe does not measure sandbox policy,
+foreign-language calls, module loading, or cross-program AOT-to-AOT execution.
+
+### Evidence and reproduction
+
+[results-calls-macos-arm64.json](results-calls-macos-arm64.json) contains the
+sanitized metadata, fork means, and all 1480 timing samples from 296 jobs across
+the Java baseline, two interleaved Qore comparisons, and program-boundary probe.
+Summary medians and expected fork/sample counts were independently recomputed.
+No local paths or environment values are included. The after-library SHA-256 is
+`f73c47949e65a9f17de09585b1360475fbeb26abe7620cadbf67f3339555fcb3`.
+
+```sh
+python3 bench/runtime-comparison/run.py \
+    --kernels arithmetic direct_call method_call indirect_call polymorphic_call dispatch_control \
+    --forks 3 --time-ms 300 --startup-samples 3
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --baseline-libdir /path/to/saved-library \
+    --forks 3 --time-ms 300 --startup-samples 3
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --kernels arithmetic direct_call method_call indirect_call polymorphic_call dispatch_control \
+    --baseline-libdir /path/to/saved-library --count 4096 \
+    --forks 3 --time-ms 300 --startup-samples 3 --order-seed 20261007
+python3 bench/runtime-comparison/program_calls.py \
+    --baseline-libdir /path/to/saved-library --forks 5 --time-ms 300
+```
+
+Builds, runtime regression suites, and sampling/JVM diagnostics were separate
+from timing. Lightweight evidence inspection and ordinary workstation activity
+were not eliminated. See the [call audit](FOLLOWUP-AUDIT.md#call-frame-and-call-boundary-audit-2026-10-06)
+for checks, skips, and the baseline-reproduced linker-warning wrapper failure.

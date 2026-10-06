@@ -9,6 +9,7 @@ import unittest
 
 import run
 import thread_pool
+import program_calls
 
 
 class RunnerTest(unittest.TestCase):
@@ -26,6 +27,9 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(8451, run.reference("list_mutate", 2, 7))
         self.assertEqual(8450, run.reference("temporary_list", 2, 7))
         self.assertEqual(8450, run.reference("temporary_hash", 2, 7))
+        self.assertEqual(8449, run.reference("indirect_call", 2, 7))
+        self.assertEqual(8451, run.reference("polymorphic_call", 2, 7))
+        self.assertEqual(8451, run.reference("dispatch_control", 2, 7))
 
     def test_checks(self):
         run.validate_checks(self.checks())
@@ -70,6 +74,28 @@ class RunnerTest(unittest.TestCase):
                           ("--warmup", "-1"), ("--baseline-libdir", str(run.HERE))):
             with self.subTest(arguments=arguments):
                 result = subprocess.run([sys.executable, str(run.HERE / "thread_pool.py"), *arguments],
+                                        text=True, capture_output=True, timeout=10)
+                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                self.assertIn("error:", result.stderr)
+
+    def test_program_checks(self):
+        checks = "".join(f"CHECK\t{name}\t{count}\t{seed}\t{run.reference('direct_call', count, seed)}\n"
+                         for name in program_calls.NAMES for count in (0, 1, 17, 1024, 4096)
+                         for seed in (0, 7, 65535))
+        program_calls.validate(checks)
+        for invalid in ("", checks + checks.splitlines()[0],
+                        "\n".join(checks.splitlines()[1:]),
+                        checks.replace("CHECK", "WRONG", 1),
+                        checks.replace("\t0\t0\t0\n", "\t0\t0\t1\n", 1)):
+            with self.subTest(invalid=invalid[:60]), self.assertRaises(ValueError):
+                program_calls.validate(invalid)
+
+    def test_program_invalid_arguments(self):
+        for arguments in (("--samples", "0"), ("--forks", "0"), ("--time-ms", "0"),
+                          ("--warmup", "-1"), ("--count", "1000001"),
+                          ("--baseline-libdir", str(run.HERE)), ("--qore", str(run.HERE))):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run([sys.executable, str(run.HERE / "program_calls.py"), *arguments],
                                         text=True, capture_output=True, timeout=10)
                 self.assertEqual(2, result.returncode, result.stdout + result.stderr)
                 self.assertIn("error:", result.stderr)

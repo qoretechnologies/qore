@@ -15,6 +15,46 @@ final class Stepper {
     }
 }
 
+# Three runtime receiver types prevent this from being a final-method benchmark.
+class DynamicStep {
+    int next(int value) { return (value * 33 + 17) & 65535; }
+}
+class DynamicStepB inherits DynamicStep {
+    int next(int value) { return (value * 33 + 19) & 65535; }
+}
+class DynamicStepC inherits DynamicStep {
+    int next(int value) { return (value * 33 + 23) & 65535; }
+}
+
+int sub indirectCall(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = callback(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub polymorphicCall(int count, int seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        DynamicStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub dispatchControl(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        int increment = i % 3 == 0 ? 17 : i % 3 == 1 ? 19 : 23;
+        seed = (seed * 33 + increment) & 65535;
+        sum += seed;
+    }
+    return sum;
+}
+
 int sub arithmetic(int count, int seed) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -107,11 +147,15 @@ int sub temporaryHash(int count, int seed) {
     return sum;
 }
 
-int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver) {
+int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver,
+        code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c) {
     switch (name) {
         case "arithmetic": return arithmetic(count, seed);
         case "direct_call": return directCall(count, seed);
         case "method_call": return methodCall(count, seed, receiver);
+        case "indirect_call": return indirectCall(count, seed, callback);
+        case "polymorphic_call": return polymorphicCall(count, seed, a, b, c);
+        case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
         case "list_build": return listBuild(count, seed);
         case "list_mutate": return listMutate(count, seed);
@@ -139,13 +183,18 @@ sub main() {
     }
     if (ARGV.size() == 1 && ARGV[0] == "check") {
         Stepper receiver();
+        code<int(int)> callback = \step();
+        DynamicStep a();
+        DynamicStepB b();
+        DynamicStepC c();
         foreach int count in ((0, 1, 17, 1024, 4096)) {
             list<int> data = makeData(count, 7);
             foreach int seed in ((0, 7, 65535)) {
-                foreach string name in (("arithmetic", "direct_call", "method_call", "list_read",
+                foreach string name in (("arithmetic", "direct_call", "method_call", "indirect_call",
+                        "polymorphic_call", "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
-                        dispatch(name, count, seed, data, receiver));
+                        dispatch(name, count, seed, data, receiver, callback, a, b, c));
                 }
             }
         }
@@ -162,6 +211,10 @@ sub main() {
     int seed = integerArg(5, 0, 65535);
     list<int> data = makeData(count, 7);
     Stepper receiver();
+    code<int(int)> callback = \step();
+    DynamicStep a();
+    DynamicStepB b();
+    DynamicStepC c();
     for (int sample = -warmup; sample < samples; ++sample) {
         int checksum = 0;
         int calls = 0;
@@ -169,7 +222,7 @@ sub main() {
         int elapsed;
         do {
             seed = (seed + 1) & 65535;
-            checksum ^= dispatch(name, count, seed, data, receiver);
+            checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c);
             ++calls;
             elapsed = clock_get_monotonic_us() - start;
         } while (elapsed < duration_us);

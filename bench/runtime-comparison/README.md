@@ -4,8 +4,8 @@ Copyright (c) 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT.
 
 This suite compares Qore IR, Qore AOT, Java interpreted execution (`-Xint`), and
 warmed HotSpot execution. It is intended to locate optimization opportunities,
-not produce a single language ranking. No Qore runtime settings or production
-code are changed by the suite.
+not produce a single language ranking. Running the suite does not modify
+installed runtime configuration or production code.
 
 ## Running
 
@@ -66,6 +66,9 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |arithmetic|Dependent integer recurrence and checksum
 |direct_call|Same recurrence through a small function
 |method_call|Same recurrence through a method on a final class; receiver created outside timing
+|indirect_call|Typed Qore function reference / Java LongUnaryOperator; callback created outside timing
+|polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
+|dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
 |list_build|Build a growing list, then read every element into the checksum
 |list_mutate|Build a growing list, then increment and read every element
@@ -86,9 +89,17 @@ can allocate while Qore's small integers are inline. A compiler may eliminate
 temporary aggregates; this is an intended optimization opportunity. Do not
 interpret a temporary-pair result as a general list throughput measurement.
 
+The original direct/final-method kernels permit inlining. The new indirect and
+polymorphic kernels retain calls in Qore AOT; Java's target methods explicitly
+use JMH `CompilerControl(DONT_INLINE)`. These are retained-call comparisons,
+not a claim that default HotSpot would leave the calls uninlined. A Qore typed
+call reference and a Java functional interface have different runtime contracts.
+The polymorphic control measures the selection/recurrence work, but subtracting
+it does not isolate an exact virtual-call cost.
+
 ## Measurement contract
 
-- All four modes first pass 120 checks: every kernel at sizes 0, 1, 17, 1024,
+- All four modes first pass 165 checks: every kernel at sizes 0, 1, 17, 1024,
   and 4096, each with seeds 0, 7, and 65535. Python independently computes the
   expected results. Missing, duplicate, extra, or incorrect records fail.
 - Kernel definitions are identical between Qore IR and AOT. There are no
@@ -157,6 +168,30 @@ As with `run.py`, jobs are shuffled and sequential, results summarize process
 means, and sources, hashes, commands, raw output, and settings are saved in a
 unique ignored `pool-*` directory. Before/after libraries must be ABI-compatible;
 AOT code is compiled and run against its corresponding library.
+
+## Program-boundary calls
+
+`program_calls.py` is a separate **IR-only** probe, not a Java or AOT comparison:
+
+```sh
+python3 bench/runtime-comparison/program_calls.py --check-only
+python3 bench/runtime-comparison/program_calls.py \
+    --baseline-libdir /path/to/saved-library --forks 3 --time-ms 300
+```
+
+Two programs explicitly pinned to IR parse identical code. A typed function-reference loop runs in one
+program and calls either its own function or the second program's function.
+The outer `Program::callFunction` enters the measuring program before timing;
+it is not invoked once per measured call. Both cases retain the same outer call
+stack and keep both programs alive. This measures the whole callback workload
+in ns/call, not an isolated context-switch instruction. It does not test sandbox
+policy overhead, module loading, or cross-program AOT-to-AOT calls.
+
+Thirty checks cover both cases, five sizes, and three seeds against the Python
+reference before timing. Independent processes warm up separately; a seeded
+shuffled schedule interleaves scenarios and compatible before/after libraries.
+The `calls-*` output preserves sources, library hashes, commands, raw records,
+and medians of fork means. No external modules or Java dependencies are needed.
 
 ## Investigating a gap
 

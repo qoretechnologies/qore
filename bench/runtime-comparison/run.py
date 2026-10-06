@@ -21,7 +21,8 @@ import urllib.request
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-KERNELS = ("arithmetic", "direct_call", "method_call", "list_read", "list_build",
+KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
+           "dispatch_control", "list_read", "list_build",
            "list_mutate", "temporary_list", "temporary_hash")
 MODES = ("qore-ir", "qore-aot", "java-int", "java-jit")
 MAIN = "org.qore.bench.RuntimeBench"
@@ -75,8 +76,9 @@ def reference(name, count, seed):
             result += value ^ seed
         return result
     result = 0
-    for _ in range(count):
-        seed = (seed * 33 + 17) & 65535
+    for index in range(count):
+        increment = (17, 19, 23)[index % 3] if name in ("polymorphic_call", "dispatch_control") else 17
+        seed = (seed * 33 + increment) & 65535
         result += seed
         if name == "list_mutate":
             result += 1
@@ -257,7 +259,7 @@ def main():
     for mode in args.modes:
         validate_checks(run(base[mode] + ["check"], "check-" + mode,
                             environment=mode_environments[mode])[0])
-        print(f"{mode}: 120 reference checks passed", flush=True)
+        print(f"{mode}: {len(KERNELS) * 15} reference checks passed", flush=True)
     if args.check_only:
         return
 

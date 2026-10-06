@@ -327,3 +327,136 @@ These are documented tradeoffs rather than hidden failures. Runtime builds,
 Qore regression suites, and profiling were separate from timing; lightweight
 validation and ordinary workstation background activity were not eliminated.
 No production latency guarantee is inferred from these microbenchmarks.
+
+## Call-frame and call-boundary audit (2026-10-06)
+
+Review scope: changes after `b7de8f1f92274e4d5ce9e5ab76983c4b318d772f` on
+`feature/performance`. The complete `audit-changes` checklist and the sandboxing,
+cooperative-cancellation, and documentation-table guides were applied. No agent
+delegation was used. No qlib source changed; qmod rebuilding is not required.
+
+Runtime changes are private to `IRCallFrame`: pooled scope watermarks and a
+dense local-owned-slot bitmap. Other changes are benchmark kernels/harnesses,
+one regression test, release notes, and measurement/review records. No context
+switching, public ABI, QPP, parser, compiler lowering, or installed module changed.
+
+### Registration, structure, and tests
+
+|!Check|!Status|!Evidence
+|New module entry in 120_modules.dox.tmpl|N/A|No .qm module added
+|New module release-note entry|N/A|No .qm module; runtime change has a release note
+|qore_user_module or qore_external_user_module registration|N/A|No installed module
+|CMake QMOD list registration|N/A|No QMOD added
+|First lowercase module intro section|N/A|No .qm file changed
+|Module %modern and redundant directives|N/A|No .qm file changed
+|No parse directives in separated .qc files|N/A|No .qc file changed
+|No deprecated %include usage|Pass|No added source uses %include
+|Copyright 2026 on new files|Pass|New test, benchmark scripts, and evidence carry 2026 notices
+|Multi-file module directory layout|N/A|No module added
+|No duplicate top-level .qm entry point|N/A|No .qm added
+|QPP namespace matches namespace constructor|N/A|No QPP class added
+|Test %modern directive|Pass|New regression and benchmark fixtures use %modern
+|Test executable permission|Pass|New .qtest, .qr, and benchmark driver are executable
+|Module path precedes %requires|Pass|Regression prepends in-repo qlib before requiring QUnit
+|External modules use %try-module|N/A|Only Qore-delivered QUnit is required
+
+### Sandboxing and cancellation
+
+|!Check|!Status|!Evidence
+|No unchecked C++ filesystem operations|Pass|None added
+|No unchecked C++ network operations|Pass|None added
+|QoreSandboxManagerHelper around filesystem/network operations|N/A|No such C++ operation added
+|Qore File, Dir, Socket, HTTPClient usage justified|N/A|No such Qore operation added
+|C++ loops over 100 iterations check cancellation|Pass|No loop added; existing dispatch, scope cleanup, and DGC traversal retain their control flow
+|Use qore_check_cancel, not deprecated qore_check_io_interrupt|Pass|No polling API changed or added
+|Cancellation frequency of 100 tight or 10 expensive iterations|N/A|No new explicit loop; contiguous byte initialization joins existing frame-array reset operations
+|No uncancellable blocking operation|Pass|No runtime blocking operation; benchmark subprocesses have duration-derived timeouts
+
+### DataProvider checklist
+
+|!Check|!Status|!Evidence
+|Action display_name, short_desc, desc|N/A|No action registration
+|Action options from getActionOptionFromFields|N/A|No action registration
+|Typed action output_type|N/A|No action registration
+|DPAT_API supports_request and doRequestImpl|N/A|No provider
+|DPAT_FIND SearchOptions and getRecordTypeImpl|N/A|No provider
+|Scheme app actions use path without cls|N/A|No app registration
+|Single-key hash slices have trailing comma|N/A|No hash slice added
+|Request/response HashDataType classes, Fields, addQoreFields, public constants|N/A|No DataProvider types
+|Input Fields public|N/A|No DataProvider types
+|Output Fields private|N/A|No DataProvider types
+|Field display_name, type, desc|N/A|No DataProvider fields
+|Input example_value where useful|N/A|No DataProvider fields
+|Finite values use AllowedValueInfo value/display_name|N/A|No DataProvider fields
+|Secret fields use sensitive=True|N/A|No credential fields
+|AppGroup enum for app groups|N/A|No app registration
+|Separate logo loaded in module-level Priv namespace|N/A|No app registration
+|App description includes capabilities, website, business value|N/A|No app registration
+|Friendly app display_name|N/A|No app registration
+|Plain-text short_desc below 80 characters|N/A|No action/app descriptions
+|Markdown desc formatting and caveats|N/A|No action/app descriptions
+|Business language explains why/when|N/A|No action/app descriptions
+|Backticks around True, False, NOTHING in desc|N/A|No action/app descriptions
+|Backticks around field/option names in desc|N/A|No action/app descriptions
+|Long descriptions use section headings and lists|N/A|No action/app descriptions
+|FactoryMap cross-repository registration|N/A|No DataProvider factory
+|Exact getRecordTypeImpl signature|N/A|No provider override
+|JNI dependency JARs committed|N/A|No JNI module; existing checksum-pinned JMH development dependencies remain in ignored build output
+|JAR install rules in CMake|N/A|No installed Java component
+
+### Code review
+
+|!Check|!Status|!Evidence
+|No workarounds, TODOs, FIXMEs, stubs|Pass|Complete storage change; future explicit-context/native-entry work is documentation, not disabled production code
+|Exception safety|Pass|Only POD metadata storage changes; reference cleanup and ScopeExitGuard run before FrameGuard pops the pool; no new Qore allocation or fallible runtime helper
+|Thread safety|Pass|Pool is thread-local; recursive/reentrant calls use distinct stable heap frames even when the pool vector grows
+|Type safety|Pass|uint8_t ownership flags, size_t scope watermarks, strongly typed callbacks and regression containers; no new C-style casts
+|Performance|Pass|Interleaved before/after measurements at 1024 and 4096 elements and a five-fork program-boundary probe; modest IR gains, direct-call repeat near noise, and mixed AOT controls explicitly reported
+|Error handling|Pass|Array accesses are bounds-checked; UINT32_MAX init sentinels ignored as before; harness validates ranges, mode, record sets, checksums, and subprocess exit status
+|Public method Doxygen params, returns, throws, examples, caveats|N/A|No public runtime method added
+|Documentation|Pass|Frame lifetime/invariants, retained-call semantics, context limitations, reproduction commands, and release notes documented
+|QPP CONSTANT and RET_VALUE_ONLY flags|N/A|No QPP changes
+|Security|Pass|No credentials or user-controlled format strings; Python launches argument arrays without a shell; no program/sandbox transition bypass
+|Correctness and edge cases|Pass|Regression covers normal/exceptional recursive scope exit, callback reentry, scalar/container frame reuse, and returned container lifetimes; reference checks include zero/one/large counts and boundary seeds
+
+The ownership set is indexed by the same dense value ID bound already used by
+`values`, cleanup counts, and load-slot registration. Marks are not restricted
+to scalar or node types, preserving the previous set's semantics. Every erase
+site is retained, including the local-init sentinel path and transferred-owned
+operand path. The scope stack contains indices only, not owned references;
+pooling it changes allocation lifetime, not handler execution order.
+
+Review corrections: replaced the inaccurate allocation-free frame comment,
+fixed the new fixture's ambiguous hash type, validated benchmark library paths,
+and explicitly set/check `EM_IR` on both probe programs. Child programs otherwise
+can reset an inherited mode when their parse options change, silently measuring
+tiered/native execution instead. No measurement from that unpinned probe is
+used as IR evidence.
+
+### Verification and limitations
+
+|!Verification|!Result
+|Release and debug cmake builds, targets qore qcc, -j3|Pass; existing compiler/linker warnings
+|Python harness unit tests|Pass; 10 tests including missing/duplicate/wrong records and invalid program-probe arguments
+|IRCallFrameReuse.qtest|Pass; release AST/IR/JIT/tiered and debug IR, each 2 cases and 1200 assertions; also passed on saved baseline IR
+|IRBlockScopedObjectLifetime.qtest|Pass; release/debug, each 8 cases and 9 assertions; wrapper covers AST/IR/JIT/tiered/promoted and AOT fixtures
+|IRFusedIntLocalOwnership.qtest|Pass for value/lifetime checks; 15 reported cases, 9 assertions, including 7 Linux-only RSS cases skipped on macOS
+|IRReturnBorrowedSlot.qtest|Pass; release/debug, each 2 cases and 10002 assertions
+|IRWeakReferenceLocalStore.qtest|Pass; release/debug, each 1 case and 12 assertions
+|IRBorrowedListRead.qtest|Pass; standalone all-mode/AOT checks, exit 0
+|IRExceptionTrace.qtest|Pass; release/debug, each 4 cases and 41 assertions
+|JITSmoke.qtest|Pass; release, 167 cases and 1171 assertions
+|IRExecModeSmoke.qtest|Pass; release, 159 cases and 496 assertions
+|RecursiveClosureLocals.qtest|Existing environment failure reproduced before/after: its AOT wrapper rejects a macOS object-target linker warning; other two cases pass
+|RecursiveClosureLocals.qr, -O3 --strip-source --parse-option=PO_ENABLE_DEBUG|Pass; manual compile/run bypassing only the wrapper's warning assertion, prints recursive-closure-locals: ok
+|Java/Qore baseline plus two interleaved comparisons|Pass; 660 independent-reference checks each, including the three new call/selection workloads
+|Pinned-IR program-boundary comparison|Pass; 60 reference checks, 5 forks per library/scenario
+|Native/JVM call retention|Pass; AOT loop disassembly retains call helpers; JMH compiler hints prohibit callee inlining, and diagnostic PrintInlining confirms boundaryStep was not inlined
+|Committed measurement evidence|Pass; 296 unique jobs, 1480 positive samples, expected fork/sample counts and independently recomputed medians; local paths/environment excluded
+|Strict Qore documentation tables|Pass; qpp --table-strict for all changed documentation
+|Working/staged git diff --check|Pass
+
+No full-suite, sanitizer, or allocation-counting run was performed. The storage
+change is justified by sampled allocation stacks and measured workloads, not
+an exact malloc count or production latency claim. The retained runtime diff
+does not implement a new explicit-context calling convention or AOT fast entry.

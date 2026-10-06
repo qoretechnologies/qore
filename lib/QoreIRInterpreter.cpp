@@ -959,13 +959,18 @@ struct IRCallFrame {
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_set<FunctionalOperatorInterface*> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
+    // Handler-list indices for ScopeEnter/ScopeExit; retain storage across calls.
+    std::vector<size_t> scope_stack;
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
     // results from variable-held values — only temporaries are cleared at block exit.
-    std::unordered_set<uint32_t> local_owned_slots;
+    // Value IDs are dense and bounded by the frame's value-slot count.  A byte
+    // per slot avoids allocating/freeing a hash node for every local load/store.
+    std::vector<uint8_t> local_owned_slots;
 
-    // Reset all fields for reuse.  clear() retains capacity, so no heap
-    // allocation after the first call at each recursion depth.
+    // Release owned references before reusing the frame.  Vector capacity and
+    // hash buckets are retained, but node-based hash containers still allocate
+    // their entries on subsequent calls.
     // IMPORTANT: QoreValue has no destructor that calls discard(), so we must
     // explicitly discard all reference-counted values before clearing vectors.
     void releaseReferences(ExceptionSink* xsink) {
@@ -1040,7 +1045,8 @@ struct IRCallFrame {
         threadlocals.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
-        local_owned_slots.clear();
+        scope_stack.clear();
+        local_owned_slots.assign(reserve_size, 0);
     }
 };
 
@@ -5870,7 +5876,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     } catch_stack_cleanup{catch_exception_stack, xsink};
     // Scope stack: tracks handler list indices at each ScopeEnter
     // Used to know which handlers to execute on ScopeExit
-    std::vector<size_t> scope_stack;
+    auto& scope_stack = frame.scope_stack;
     auto preserveParentSlotForWriteback = [&](size_t slot_id) {
         // Dirty inherited parent slots must survive cache invalidation until
         // ParentSlotWriteback publishes them to the enclosing frame.
@@ -8262,8 +8268,8 @@ load_local_done:
                     }
                 }
                 // Mark as local-owned for DGC container scan
-                if (!weak_ref_load && local_inst->result.id >= 0) {
-                    local_owned_slots.insert(local_inst->result.id);
+                if (!weak_ref_load && local_inst->result.id < local_owned_slots.size()) {
+                    local_owned_slots[local_inst->result.id] = 1;
                 }
                 if (result_slot_owned && out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
@@ -10359,8 +10365,8 @@ load_local_done:
                     && hasCleanupEntry(cleanup, operand.id);
 
                 // Track this slot as local-owned for DGC container scan
-                if (operand.id >= 0) {
-                    local_owned_slots.insert(operand.id);
+                if (operand.id < local_owned_slots.size()) {
+                    local_owned_slots[operand.id] = 1;
                 }
 
                 if (local_inst->mode != AssignmentMode::Normal) {
@@ -10430,7 +10436,9 @@ load_local_done:
                     assignLocalVarValueTransfer(local_inst->local, val, xsink);
                     removeCleanupEntry(cleanup, operand.id);
                     values[operand.id] = QoreValue();
-                    local_owned_slots.erase(operand.id);
+                    if (operand.id < local_owned_slots.size()) {
+                        local_owned_slots[operand.id] = 0;
+                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -10848,7 +10856,10 @@ load_local_done:
                                         // Remove this variable's owned slots
                                         if (local_inst->slot_id != UINT32_MAX
                                                 && local_inst->slot_id < local_init_slots.size()) {
-                                            local_owned_slots.erase(local_init_slots[local_inst->slot_id]);
+                                            uint32_t init_slot = local_init_slots[local_inst->slot_id];
+                                            if (init_slot < local_owned_slots.size()) {
+                                                local_owned_slots[init_slot] = 0;
+                                            }
                                         }
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (!values[vi].hasNode()) {
@@ -10858,7 +10869,7 @@ load_local_done:
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
-                                            if (local_owned_slots.count(vi)) {
+                                            if (vi < local_owned_slots.size() && local_owned_slots[vi]) {
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi],
                                                     "keep-local-owned");
                                                 continue;

@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%exec-class IRCallFrameReuseTest
+
+thread_local list<int> frame_events;
+
+int sub frameScalar(int value) {
+    return (value * 33 + 17) & 65535;
+}
+
+list<int> sub frameNested(int depth, bool fail) {
+    on_exit {
+        # Reenter the interpreter while an enclosing frame is unwinding.
+        push frame_events, frameScalar(depth);
+    }
+    list<int> result = (depth,);
+    if (depth) {
+        list<int> child = frameNested(depth - 1, fail);
+        push result, child[0];
+    } else if (fail) {
+        throw "FRAME-EXPECTED";
+    }
+    return result;
+}
+
+class FrameValue {
+    public { int value; }
+    constructor(int value) { self.value = value; }
+}
+
+list<FrameValue> sub frameContainers(int value) {
+    list<FrameValue> result = ();
+    for (int i = 0; i < 4; ++i) {
+        FrameValue marker(i);
+        hash<string, FrameValue> owner = {"item": new FrameValue(value + marker.value)};
+        push result, owner.item;
+    }
+    return result;
+}
+
+class IRCallFrameReuseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IRCallFrameReuseTest", "1.0", \ARGV) {
+        addTestCase("reuse after normal and exceptional scope exits", \testScopes());
+        addTestCase("reuse across scalar and container frame shapes", \testOwnership());
+        set_return_value(main());
+    }
+
+    testScopes() {
+        for (int i = 0; i < 100; ++i) {
+            frame_events = ();
+            assertEq((3, 2), frameNested(3, False));
+            assertEq((17, 50, 83, 116), frame_events);
+            frame_events = ();
+            assertThrows("FRAME-EXPECTED", \frameNested(), (3, True));
+            assertEq((17, 50, 83, 116), frame_events);
+            assertEq((0,), frameNested(0, False));
+            assertEq((17, 50, 83, 116, 17), frame_events);
+        }
+    }
+
+    testOwnership() {
+        for (int i = 0; i < 100; ++i) {
+            list<FrameValue> first = frameContainers(i);
+            assertEq((i * 33 + 17) & 65535, frameScalar(i));
+            list<FrameValue> second = frameContainers(i + 10);
+            assertEq(4, first.size());
+            assertEq(i, first[0].value);
+            assertEq(i + 3, first[3].value);
+            assertEq(i + 10, second[0].value);
+            assertEq(i + 13, second[3].value);
+        }
+    }
+}
