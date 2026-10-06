@@ -1173,6 +1173,11 @@ public:
         return cached_aot_fn != nullptr;
     }
 
+    //! Identity guard for an optional native function-reference adapter.
+    DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
+        return cached_aot_fn;
+    }
+
     //! Returns true if this variant's AOT context has already been materialized.
     DLLLOCAL bool hasMaterializedAOTContext() const {
         return cached_aot_ctx.load(std::memory_order_acquire) != nullptr;

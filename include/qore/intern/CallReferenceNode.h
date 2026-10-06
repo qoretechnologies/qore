@@ -38,6 +38,11 @@
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
 class RuntimeConfig;
+struct QoreAOTContext;
+
+// Optional AOT function-reference ABI. Arguments are borrowed NaN-boxed values;
+// the result is owned. Only context-independent typed entries may implement it.
+using QoreFunctionRefNativeEntry = uint64_t (*)(const uint64_t*, QoreAOTContext*, ExceptionSink*);
 
 struct CallReferenceNodeLocation {
     const QoreProgramLocation* loc;
@@ -298,8 +303,26 @@ public:
         return pgm;
     }
 
+    // Set only before publishing the newly created reference. Keep the normal
+    // entry as an identity guard: a name/signature alone cannot identify code.
+    DLLLOCAL void setNativeEntry(QoreFunctionRefNativeEntry entry,
+            uint64_t (*normal)(QoreAOTContext*, ExceptionSink*)) {
+        native_entry = entry;
+        normal_entry = normal;
+    }
+
+    DLLLOCAL QoreFunctionRefNativeEntry getNativeEntry() const {
+        return native_entry;
+    }
+
+    DLLLOCAL auto getNormalEntry() const -> uint64_t (*)(QoreAOTContext*, ExceptionSink*) {
+        return normal_entry;
+    }
+
 protected:
     QoreProgram* pgm;
+    QoreFunctionRefNativeEntry native_entry = nullptr;
+    uint64_t (*normal_entry)(QoreAOTContext*, ExceptionSink*) = nullptr;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };

@@ -195,6 +195,16 @@ and medians of fork means. No external modules or Java dependencies are needed.
 
 ## Investigating a gap
 
+The function-reference optimization can be isolated with
+`QORE_DISABLE_FUNCREF_FAST_CALL=1` at execution (disables both new paths), or
+`QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1` while compiling (suppresses native
+adapters but retains guarded runtime dispatch). Native adapters require AOT
+recompilation; old binaries still work with the updated runtime. The
+`indirect_call` kernel keeps its target opaque inside the loop, so the measured
+call is not replaced by a direct inlined recurrence. See the
+[calling-convention contract](../../design/qore-jit-aot-current-state.md#opaque-function-reference-calls)
+for the conservative scalar-body eligibility and remaining fallbacks.
+
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`
 directly. Arguments are `KERNEL COUNT WARMUP SAMPLES MS SEED`:
 

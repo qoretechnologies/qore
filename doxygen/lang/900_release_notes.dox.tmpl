@@ -4383,6 +4383,10 @@ while (*binary chunk = input.read(65536)) {
     - Removed repeated environment-variable lookups on IR function returns when exception tracing is disabled.
       The diagnostic variable \c QORE_IR_TRACE_EXCEPTIONS is now read once on the first IR execution,
       like the existing IR reference-tracing flags; set it before starting the process.
+    - Accelerated eligible same-program opaque function-reference calls in IR and AOT by bypassing dynamic
+      argument-list binding; AOT now supports an optional boxed-argument adapter to non-throwing, context-independent typed
+      native entries, avoiding TLS parameter setup while preserving diagnostics and guarded fallback for
+      cross-program calls, coercion, overloads, defaults, reference parameters, and attached debuggers
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

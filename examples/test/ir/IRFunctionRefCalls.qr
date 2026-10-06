@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+sub expect(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "FUNCREF-TEST-ERROR", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+int sub increment(int value) { return value + 1; }
+float sub half(float value) { return value + 0.5; }
+bool sub invert(bool value) { return !value; }
+int sub zero() { return 42; }
+float sub mixed(int a, float b, bool c, int d) { return a + b + (c ? d : 0); }
+string sub text(string value) { return value; }
+hash<string, int> sub container(hash<string, int> value) { return value; }
+*int sub optional(bool present) { if (present) { return 7; } return NOTHING; }
+int sub divide(int value) {
+    # Keep the throwing statement on a different line from the signature:
+    # stripped-debug native entries must not report only the signature line.
+    return 100 / value;
+}
+int sub defaulted(int value = 9) { return value; }
+int sub overloaded(int value) { return value + 10; }
+string sub overloaded(string value) { return value + "!"; }
+int sub softened(softint value) { return value + 1; }
+int sub extra(int value, ...) { return value + int(argv[0]); }
+sub bump(reference<int> value) { ++value; }
+hash<auto!> sub noNarrow(hash<auto!> value) { value.text = "ok"; return value; }
+
+# The callee is an argument, not a compiler-known function reference at this
+# call site. Include zero, one, and array-argument runtime dispatch helpers.
+int sub invokeInt(code<int(int)> fn, int value) { return fn(value); }
+float sub invokeFloat(code<float(float)> fn, float value) { return fn(value); }
+bool sub invokeBool(code<bool(bool)> fn, bool value) { return fn(value); }
+auto sub invokeZero(code fn) { return fn(); }
+auto sub invokeOne(code fn, auto value) { return fn(value); }
+auto sub invokeMixed(code fn, int a, float b, bool c, int d) { return fn(a, b, c, d); }
+
+int sub recursive(int depth) {
+    return depth ? invokeInt(\recursive(), depth - 1) + 1 : 0;
+}
+
+thread_local int destroyed = 0;
+thread_local int division_line = 0;
+class Marker {
+    public { int value; }
+    constructor(int value) { self.value = value; }
+    destructor() { ++destroyed; }
+    int method(int add) { return value + add; }
+    int callback() { return invokeInt(\method(), 3); }
+}
+Marker sub identity(Marker value) { return value; }
+
+for (int i = 0; i < 100; ++i) {
+    expect(i + 1, invokeInt(\increment(), i));
+    expect(1125899906842625, invokeInt(\increment(), 1125899906842624));
+    expect(-1125899906842623, invokeInt(\increment(), -1125899906842624));
+    expect(-9223372036854775807 - 1, invokeInt(\increment(), 9223372036854775807));
+    expect(1.75, invokeFloat(\half(), 1.25));
+    expect(-1.0e308, invokeFloat(\half(), -1.0e308));
+    expect(True, invokeBool(\invert(), False));
+    expect(False, invokeBool(\invert(), True));
+    expect(42, invokeZero(\zero()));
+    expect(9.5, invokeMixed(\mixed(), 2, 3.5, True, 4));
+    expect(5.5, invokeMixed(\mixed(), 2, 3.5, False, 4));
+    expect("long string that requires node ownership", invokeOne(\text(),
+        "long string that requires node ownership"));
+    hash<string, int> original = {"key": i};
+    hash<string, int> copy = invokeOne(\container(), original);
+    copy.key = -1;
+    expect(i, original.key);
+    expect(NOTHING, invokeOne(\optional(), False));
+    expect(7, invokeOne(\optional(), True));
+    expect(9, invokeZero(\defaulted()));
+    expect(14, invokeOne(\overloaded(), 4));
+    expect("value!", invokeOne(\overloaded(), "value"));
+    expect(13, invokeOne(\softened(), "12"));
+    code variadic = \extra();
+    expect(9, variadic(4, 5));
+    int value = 4;
+    code referenceCall = \bump();
+    referenceCall(\value);
+    expect(5, value);
+    hash<auto> wide = invokeOne(\noNarrow(), original);
+    expect("ok", wide.text);
+    expect(i, original.key);
+    expect(8, invokeInt(\recursive(), 8));
+    {
+        Marker marker = invokeOne(\identity(), new Marker(i));
+        expect(i, marker.value);
+        expect(i + 3, marker.callback());
+    }
+    expect(i + 1, destroyed);
+    try {
+        invokeInt(\divide(), 0);
+        throw "FUNCREF-TEST-ERROR", "division must throw";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("DIVISION-BY-ZERO", ex.err);
+        division_line = ex.line;
+        bool found = False;
+        foreach hash<CallStackInfo> frame in (ex.callstack) {
+            if (frame.function =~ /divide/) { found = True; }
+        }
+        expect(True, found);
+    }
+    foreach auto invalid in ((NOTHING, "wrong", (1, 2))) {
+        try {
+            invokeOne(\increment(), invalid);
+            throw "FUNCREF-TEST-ERROR", "invalid binding must throw";
+        } catch (hash<ExceptionInfo> ex) {
+            expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+        }
+    }
+    expect(5, invokeInt(\increment(), 4));
+}
+
+Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nint sub increment(int value) { return value + 100; }\n"
+    "code<int(int)> sub callback() { return \\increment(); }\n"
+    "int sub invoke(code<int(int)> fn, int value) { return fn(value); }", "foreign-funcref");
+code<int(int)> foreignRef = foreign.callFunction("callback");
+expect(104, invokeInt(foreignRef, 4));
+expect(5, foreign.callFunction("invoke", \increment(), 4));
+expect(5, invokeInt(\increment(), 4));
+printf("function-references: ok (%d)\n", division_line);

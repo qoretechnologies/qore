@@ -47,6 +47,56 @@ Normal method dispatch cannot invoke a copy variant: its calling convention is
 different. `ImplicitCopyDispatch.qtest` exercises polymorphic copies and failing
 copy hooks in all four execution modes.
 
+## Opaque Function-Reference Calls
+
+IR/JIT/AOT runtime dispatch can bypass `QoreListNode` and dynamic binding for a
+same-Program `FunctionCallReferenceNode` with exactly one user variant and
+exactly matching, already evaluated arguments. This guard excludes defaults,
+reference parameters, synchronized/generic/no-narrow binding, domain-bearing
+functions, and attached debuggers. The variant and reference must both belong
+to the current Program. It is deliberately bounded to 16 arguments. Other
+references, including methods and foreign-Program references, retain normal
+dispatch. The existing IR direct-parameter convention is reused when eligible.
+
+For AOT references, a new optional internal adapter has the C++ ABI
+`uint64_t entry(const uint64_t* args, QoreAOTContext* ctx, ExceptionSink* xsink)`: the argument array
+contains borrowed NaN-boxed values and the return value is owned. It converts
+to the existing per-function typed fast-entry ABI; parameters do not pass
+through TLS. Only compiler-proven context-independent, non-throwing scalar
+expressions qualify (bounded integer/boolean or floating-point summaries of
+at most 64 nodes; division, shifts, container access, and boxed returns are
+excluded). The adapter supplies the callee's own AOT context for stripped-debug source
+locations and return-type caches. Context-dependent bodies, imported fast
+entries, specializations, and closures are excluded. Integer/float boxing uses
+the full-width helpers, not a truncated inline encoding. Other eligible
+references still avoid argument-list binding through the runtime fast path.
+
+The scalar-only proof is required because the lazy PC location registry does
+not yet describe adapter symbols. Bodies that can raise ordinary Qore
+exceptions must enter their registered normal function, preserving exact
+throwing locations. Expanding eligibility requires location-map registration
+for adapters first; the explicit context argument alone is not sufficient.
+
+The compiler attaches the adapter to a newly created reference before it can
+escape. Attachment and each invocation compare the registered normal AOT
+entry's address with the adapter's normal-entry identity. A matching name or
+signature is not sufficient. The pointer fields are immutable after reference
+publication; the reference's existing Program lifetime rules still apply.
+This is additive: no serialized descriptor, public ABI, or existing AOT entry
+changes. Previously compiled artifacts use the guarded runtime path without
+an adapter. Newly compiled artifacts require the new runtime helper.
+
+Native reference calls retain stack checks, the caller Program context,
+diagnostic frames, runtime parse options/location, lazy PC maps, and the C++
+exception boundary. They omit TLS parameter/body-local/argv instantiation only
+under the existing context-independence proof. An attached debugger forces the
+generic path. Argument cleanup occurs after the borrowed call has completed,
+with its owned result protected across cleanup. `IRFunctionRefCalls.qtest`
+checks all execution modes and both disabled paths. Compile-time
+`QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY` suppresses adapters; runtime
+`QORE_DISABLE_FUNCREF_FAST_CALL` disables the complete guarded path (both are
+diagnostic presence flags, the latter sampled at first use).
+
 ## Tiered Execution
 
 Tiered mode starts functions on AST and promotes by call count:

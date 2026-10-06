@@ -116,6 +116,10 @@ public:
     const BatchCalleeInfo* getBatchCallee(
         const AbstractQoreFunctionVariant* variant) const;
 
+    //! Attach a uniform boxed-argument adapter to an eligible opaque AOT function reference.
+    void emitFunctionRefNativeEntry(llvm::Value* ref, const QoreIRInstruction* inst,
+        llvm::Module& module);
+
     //! Set fast entry mode for Approach B: parameters are passed as LLVM function
     //! arguments instead of being loaded from the thread-local variable stack.
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")
@@ -621,6 +625,7 @@ private:
     // fast entry while retaining ordinary call-reference creation semantics.
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
         known_function_call_refs;
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> function_call_ref_definitions;
     // Native scalar captures cached at creation for entry-assigned stored
     // closures whose captured parameters cannot be modified by the owner.
     std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>

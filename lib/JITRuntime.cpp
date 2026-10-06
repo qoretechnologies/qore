@@ -423,6 +423,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_create_function_call_ref_aot", reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot) },
     { "qore_rt_create_function_call_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot_throwing) },
+    { "qore_rt_bind_function_call_ref_native",
+        reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_native) },
     { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
     { "qore_rt_create_self_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot_throwing) },
@@ -3171,6 +3173,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(const char* f
     RuntimeConfig& rc = rc_get_current_ref();
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
     return toBits(QoreValue(new FunctionCallReferenceNode(&loc_builtin, func, call_pgm)));
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
+        AotFunctionPtr normal, QoreFunctionRefNativeEntry entry) {
+    QoreValue value = fromBits(ref_bits);
+    auto* ref = value.hasNode()
+        ? dynamic_cast<FunctionCallReferenceNode*>(value.getInternalNode()) : nullptr;
+    if (!ref || !entry || !normal) {
+        return;
+    }
+    const QoreFunction* func = ref->getFunction();
+    const UserVariantBase* uvb = func->numVariants() == 1
+        ? func->first()->getUserVariantBase() : nullptr;
+    if (uvb && uvb->getCachedAOTFunction() == normal) {
+        ref->setNativeEntry(entry, normal);
+    }
 }
 
 // --- Method reference creation helper (delegates to call ref - identical behavior) ---
@@ -6602,6 +6620,9 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         int nargs, const uint64_t* args, ExceptionSink* xsink,
         uint64_t** arg_cleanups = nullptr);
 
+static uint64_t execFunctionRefNative(const FunctionCallReferenceNode* ref,
+    const UserVariantBase* uvb, const uint64_t* args, ExceptionSink* xsink);
+
 static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
         const uint64_t* args, int nargs, ExceptionSink* xsink) {
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -6623,6 +6644,62 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
                 || sig->lv[i]->isNoNarrowContainer()) {
             return false;
         }
+    }
+    return true;
+}
+
+// Unlike a resolved compiler call, a function reference is still dynamically
+// bound. Check the program, overload set, and binding semantics on every call.
+static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
+        int nargs, uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result) {
+    static const bool disabled = std::getenv("QORE_DISABLE_FUNCREF_FAST_CALL") != nullptr;
+    if (disabled || nargs < 0 || nargs > 16) {
+        return false;
+    }
+    // NT_FUNCREF is already established by the caller. Reject foreign-program
+    // references before RTTI so their mandatory slow path pays only a cheap
+    // program-identity test for this optimization.
+    QoreProgram* pgm = static_cast<const ResolvedCallReferenceNode*>(node)->getProgram();
+    if (pgm != getProgram()) {
+        return false;
+    }
+    const auto* ref = dynamic_cast<const FunctionCallReferenceNode*>(node);
+    if (!ref || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    const QoreFunction* func = ref->getFunction();
+    if (func->numVariants() != 1) {
+        return false;
+    }
+    const AbstractQoreFunctionVariant* variant = func->first();
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb || uvb->pgm != ref->getProgram() || variant->getFunctionality()
+            || uvb->getUserSignature()->numParams() != static_cast<unsigned>(nargs)
+            || (!uvb->hasCachedAOT() && ref->getProgram()->getExecMode() == QEM_AST)
+            || !uvb->isStaticallyFastCallEligible()
+            || (!uvb->hasCachedFunction() && !uvb->getCachedIR())
+            || !closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
+        return false;
+    }
+    for (int i = 0; i < nargs; ++i) {
+        if (QoreTypeInfo::isReference(uvb->getUserSignature()->getParamTypeInfo(i))) {
+            return false;
+        }
+    }
+    // Match evalFunction's caller-program context even when no program switch
+    // is needed. Method references and foreign-program references never enter.
+    ProgramCallContextHelper pcch(ref->getProgram());
+    uint64_t bits = ref->getNativeEntry()
+            && ref->getNormalEntry() == uvb->getCachedAOTFunction()
+        ? execFunctionRefNative(ref, uvb, args, xsink)
+        : qore_rt_call_fast(func, variant, ref->getProgram(), args, nargs, xsink);
+    ValueHolder value(fromBits(bits), xsink);
+    // Arguments remain borrowed until the callee has finished (including EH).
+    // Keep an owned result alive across destructors run by consumed temporaries.
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        result = toBits(QoreValue());
+    } else {
+        result = toBits(value.release());
     }
     return true;
 }
@@ -6714,6 +6791,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
 
     // For function references (NT_FUNCREF) and other types: use type check + static_cast
     if (ntype == NT_FUNCREF) {
+        uint64_t function_result;
+        if (tryExecFunctionRef(node, nullptr, 0, nullptr, xsink, function_result)) {
+            return function_result;
+        }
         ResolvedCallReferenceNode* callref = static_cast<ResolvedCallReferenceNode*>(
             const_cast<AbstractQoreNode*>(node));
         QoreValue result = callref->execValue(nullptr, xsink);
@@ -6737,6 +6818,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
 
     const AbstractQoreNode* node = ref_val.getInternalNode();
     qore_type_t ntype = node->getType();
+
+    uint64_t function_result;
+    if (ntype == NT_FUNCREF
+            && tryExecFunctionRef(node, &arg0_bits, 1, nullptr, xsink, function_result)) {
+        return function_result;
+    }
 
     // Fast path for closures: bypass QoreListNode + dynamic_cast
     if (ntype == NT_RUNTIME_CLOSURE) {
@@ -6796,6 +6883,12 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
 
     const AbstractQoreNode* node = ref_val.getInternalNode();
     qore_type_t ntype = node->getType();
+
+    uint64_t function_result;
+    if (ntype == NT_FUNCREF
+            && tryExecFunctionRef(node, args, nargs, arg_cleanups, xsink, function_result)) {
+        return function_result;
+    }
 
     // Fast path for closures: bypass QoreListNode + dynamic_cast
     if (ntype == NT_RUNTIME_CLOSURE) {
@@ -9813,6 +9906,57 @@ private:
     // last: pushes this location once it is fully constructed and pops it before any member is destroyed
     QoreProgramStackLocationHelper stack_helper{this, saved_stmt, saved_pgm};
 };
+
+// A context-independent native body has private parameters/body locals and
+// cannot call back into AST code or inspect a caller's local-variable context.
+// Keep the normal diagnostic and policy frame, but do not instantiate TLS
+// locals or argv. The adapter and typed entry borrow the explicit argument array.
+static uint64_t execFunctionRefNative(const FunctionCallReferenceNode* ref,
+        const UserVariantBase* uvb, const uint64_t* args, ExceptionSink* xsink) {
+    const char* name = ref->getFunction()->getName();
+    if (!uvb->ensureAOTContext(name, xsink)) {
+        return toBits(QoreValue());
+    }
+    qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+    ThreadFrameBoundaryHelper frame_boundary(true);
+    const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
+    const QoreProgramLocation* call_loc = get_runtime_location();
+    QoreJITStackLocation stack_loc(name, call_loc ? call_loc : parse_loc,
+        uvb->getStatementBlock(), ref->getProgram(), true);
+    struct ContextGuard {
+        ExceptionSink* xsink;
+        const AbstractStatement* stmt = nullptr;
+        const QoreProgramLocation* loc = nullptr;
+        QoreParseOptions po;
+        uintptr_t sp = get_runtime_loc_sp();
+        bool swapped;
+
+        ContextGuard(ExceptionSink* xs, const QoreProgramLocation* parse_loc,
+                const QoreParseOptions& options) : xsink(xs), swapped(parse_loc != nullptr) {
+            if (swapped) {
+                swap_runtime_statement_location(xsink, nullptr, parse_loc, options, stmt, loc, po);
+            }
+        }
+        ~ContextGuard() {
+            if (swapped) {
+                update_runtime_statement_location(stmt, loc, po);
+            }
+            set_runtime_loc_sp(sp);
+        }
+    } context(xsink, parse_loc, uvb->getParseOptions(ref->getProgram()->getParseOptions()));
+    // Installing the runtime location can itself report stack exhaustion.
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    try {
+        // The typed fast entry performs its own return-type checking. It has
+        // the same exact-binding proof as a direct compiler-emitted fast call.
+        return ref->getNativeEntry()(args, uvb->getCachedAOTContext(), xsink);
+    } catch (const QoreJITException&) {
+        return toBits(QoreValue());
+    }
+}
 
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 

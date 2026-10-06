@@ -460,3 +460,166 @@ No full-suite, sanitizer, or allocation-counting run was performed. The storage
 change is justified by sampled allocation stacks and measured workloads, not
 an exact malloc count or production latency claim. The retained runtime diff
 does not implement a new explicit-context calling convention or AOT fast entry.
+
+## Function-reference native-entry audit (2026-10-06)
+
+This `audit-changes` review covers changes after `54e3d929b` on
+`feature/performance`: guarded function-reference dispatch, an additive native
+adapter ABI, compiler lowering, semantic fixtures, and documentation/evidence.
+The complete sandboxing, cancellation, and documentation-table guides were
+applied. No qlib, parser, QPP, public ABI, or serialized AOT descriptor changed.
+No agents were delegated work. The earlier audits above describe earlier commits.
+
+### Registration, structure, and tests
+
+|!Check|!Status|!Evidence
+|New module entry in 120_modules.dox.tmpl|N/A|No .qm module added
+|New module release-note entry|N/A|No .qm module; runtime change has a release note
+|qore_user_module or qore_external_user_module registration|N/A|No installed module
+|CMake QMOD list registration|N/A|No QMOD added
+|First lowercase module intro section|N/A|No .qm changed
+|Module %modern and redundant directives|N/A|No .qm changed
+|No parse directives in separated .qc files|N/A|No .qc changed
+|No deprecated %include usage|Pass|No added source uses %include
+|Copyright 2026 on new files|Pass|Both fixtures and measurement evidence carry 2026 notices
+|Multi-file module directory layout|N/A|No module added
+|No duplicate top-level .qm entry point|N/A|No .qm added
+|QPP namespace matches namespace constructor|N/A|No QPP class
+|Test %modern directive|Pass|Both new test files use %modern
+|Test executable permission|Pass|Both .qr and .qtest have executable permission
+|Module path precedes %requires|Pass|Wrapper prepends repository qlib before QUnit and FsUtil
+|External modules use %try-module|N/A|Only Qore-delivered QUnit and FsUtil are required
+
+### Sandboxing and cancellation
+
+|!Check|!Status|!Evidence
+|No unchecked C++ filesystem operations|Pass|None added
+|No unchecked C++ network operations|Pass|None added; bind_function_call_ref_native binds code metadata, not a socket
+|QoreSandboxManagerHelper around filesystem/network operations|N/A|No such C++ operation added
+|Qore File, Dir, Socket, HTTPClient usage justified|Pass|Wrapper uses FsUtil-owned temporary directory and quoted trusted subprocess arguments under explicit no-child-restrictions
+|C++ loops over 100 iterations check cancellation|Pass|New loops are bounded by 16 arguments or 64 scalar-expression nodes; signature count is checked before existing static eligibility scans
+|Use qore_check_cancel, not deprecated qore_check_io_interrupt|Pass|Existing compiler/interpreter/native loop polling is unchanged; no deprecated API added
+|Cancellation frequency of 100 tight or 10 expensive iterations|N/A|No new unbounded loop; native adapter calls an existing compiled body with its existing polls
+|No uncancellable blocking operation|Pass|No runtime blocking operation added
+
+The fast path checks both reference and variant ownership against the active
+Program; it never bypasses a Program boundary. Domain-bearing variants fall
+back. Program call context, diagnostic frame, parse options/location, stack
+checks, and native exception handling remain. Attached debuggers fall back.
+
+### DataProvider checklist
+
+|!Check|!Status|!Evidence
+|Action display_name, short_desc, desc|N/A|No action registration
+|Action options from getActionOptionFromFields|N/A|No action registration
+|Typed action output_type|N/A|No action registration
+|DPAT_API supports_request and doRequestImpl|N/A|No provider
+|DPAT_FIND SearchOptions and getRecordTypeImpl|N/A|No provider
+|Scheme app actions use path without cls|N/A|No app registration
+|Single-key hash slices have trailing comma|N/A|No hash slice added
+|Request/response HashDataType classes, Fields, addQoreFields, public constants|N/A|No DataProvider types
+|Input Fields public|N/A|No DataProvider types
+|Output Fields private|N/A|No DataProvider types
+|Field display_name, type, desc|N/A|No DataProvider fields
+|Input example_value where useful|N/A|No DataProvider fields
+|Finite values use AllowedValueInfo value/display_name|N/A|No DataProvider fields
+|Secret fields use sensitive=True|N/A|No credential fields
+|AppGroup enum for app groups|N/A|No app registration
+|Separate logo loaded in module-level Priv namespace|N/A|No app registration
+|App description includes capabilities, website, business value|N/A|No app registration
+|Friendly app display_name|N/A|No app registration
+|Plain-text short_desc below 80 characters|N/A|No action/app descriptions
+|Markdown desc formatting and caveats|N/A|No action/app descriptions
+|Business language explains why/when|N/A|No action/app descriptions
+|Backticks around True, False, NOTHING in desc|N/A|No action/app descriptions
+|Backticks around field/option names in desc|N/A|No action/app descriptions
+|Long descriptions use section headings and lists|N/A|No action/app descriptions
+|FactoryMap cross-repository registration|N/A|No DataProvider factory
+|Exact getRecordTypeImpl signature|N/A|No provider override
+|JNI dependency JARs committed|N/A|No JNI change
+|JAR install rules in CMake|N/A|No Java installation change
+
+### Code review
+
+|!Check|!Status|!Evidence
+|No workarounds, TODOs, FIXMEs, stubs|Pass|Complete conservative adapter with generic fallback, not a partial replacement of the general calling convention
+|Exception safety|Pass|Arguments borrowed until return; ValueHolder protects owned result during argument cleanup; RAII restores diagnostic state on native unwind; QoreJITException caught at C++ boundary
+|Thread safety|Pass|Adapter and code-identity fields written only before reference publication, then immutable; no shared last-target cache; existing Program metadata lifetime/publication applies
+|Type safety|Pass|Typed native function pointer and typed scalar test drivers; intentionally untyped test drivers exercise coercion/overload/error fallback rather than asserting a false static contract
+|Performance|Pass|Separate saved baseline compiler/library; interleaved process-level measurements and larger-batch repeat; controls and program-boundary probe recorded separately
+|Error handling|Pass|Check reference kind, owning Program, unique variant, argument count, exact binding, native code identity, debugger and execution mode; preserve generic fallback
+|Public method Doxygen params, returns, throws, examples, caveats|N/A|Only internal runtime/compiler helpers added
+|Documentation|Pass|ABI ownership, eligibility, lifetime, compatibility limits, diagnostic switches and release notes documented
+|QPP CONSTANT and RET_VALUE_ONLY flags|N/A|No QPP changed
+|Security|Pass|No new I/O capability, unchecked user indices, user-controlled format strings or credentials; compiled adapter is bound by code identity, not function name alone
+|Correctness and edge cases|Pass|AST-referenced all-mode tests cover zero/multiple args, integer/float boxing, bools, boxed ownership/COW, NOTHING, defaults, overloads, coercion, references, no-narrow, varargs, recursion, methods, exception stacks and foreign Program calls in both directions
+
+Audit corrections: added debugger and execution-mode fallback, bounded the
+signature scan before static eligibility, and changed the adapter to pass the
+callee's AOT context explicitly. A context-independent body can still need its
+context for stripped-debug source locations and return-type caches. The initial
+null-context timing run was stopped and excluded from final evidence. The
+fixture compares throwing source locations with AST and includes stripped-debug
+AOT compilation. That stronger test also exposed missing lazy PC maps for
+adapter frames; native eligibility was restricted to compiler-proven
+non-throwing scalar expressions. Potentially throwing bodies use the normal
+registered entry through the runtime fast path. No serialized ABI extension
+or native-symbol lookup is needed.
+
+The final exception-safety pass also checks the sink after installing the
+runtime location (which can report stack exhaustion). Restoration uses the
+non-fallible location update, matching QoreProgramLocationHelper, instead of
+performing another stack check during destruction. Both builds, regression
+checks, and targeted before/after measurements were rerun after this correction.
+
+Performance review also moved the program-identity guard ahead of RTTI:
+the initial same-program optimization added 2.3-3.4% to the cross-program
+control in two runs. Foreign references now reject before the dynamic cast.
+Both guard orderings are distinguished in the measurement evidence; final
+performance claims use the program-first ordering.
+
+This remains a focused review, not a full-suite or sanitizer run. The adapter
+does not yet cover potentially throwing or context-dependent bodies, boxed
+returns, method references, or imported fast entries, and is not a universal
+TLS-free calling convention.
+
+### Verification
+
+|!Verification|!Result
+|Release/debug cmake builds, qore and qcc, -j3|Pass; existing warnings only
+|IRFunctionRefCalls.qtest|Pass release/debug, each 1 case and 33 wrapper assertions, plus 100 repetitions of the semantic matrix per child; AST/IR/JIT/tiered, runtime-disabled, AOT adapter-disabled, stripped-source and stripped-debug builds
+|AOTKnownCallRefFastEntry, AOTGenericFunctionFastEntry, AOTGenericCrossObjectFastEntry, AOTOptionalScalarFastEntry, AOTNativeClosure|Pass; all five standalone scripts exit 0
+|AOTQoLinkNativeSymbols|Pass; 4 cases, 38 assertions
+|IRCallFrameReuse|Pass release/debug; each 2 cases, 1200 assertions
+|IRExecModeSmoke|Pass; 159 cases, 496 assertions
+|IRExceptionTrace|Pass release/debug; each 4 cases, 41 assertions
+|IRReturnBorrowedSlot|Pass release/debug; each 2 cases, 10002 assertions
+|JitDebugStep|Pass; 1 case, 7 assertions
+|policy-barrier|Pass; 4 cases, 6 assertions
+|sandbox-manager|Pass; 67 cases, 408 assertions
+|thread-cancel|Pass; 47 cases, 81 assertions
+|test-debug|Pass; 10 cases, 847 assertions
+|Harness unit tests|Pass; 10 tests
+|Pre-change AOT executable with new runtime|Pass; all 165 independent reference checks, no adapter required
+|Native-entry emission|Pass; final benchmark executable contains the step adapter and calls the binding helper
+|Strict documentation tables and git diff --check|Pass
+
+The final release regression run used `--exec-mode=ir` for the listed test
+drivers (child processes also exercise their explicitly selected modes).
+It passed 301 QUnit cases / 13159 assertions, plus the five standalone AOT
+scripts. The debug subset passed 9 cases / 11276 assertions. Harness checks
+are separate: 10 Python unit tests. The final builds used
+`cmake --build build --target qore qcc -j3` and the corresponding `build-debug`
+command. No production performance or full-suite/sanitizer claim is made.
+
+Final measurement validation: 13 explicitly phased experiments, 464 jobs and
+2320 measured samples; the final runtime contributes 98 jobs / 490 samples.
+The evidence validator checked unique job keys, fork/sample counts, finite
+positive timings, recomputed median-of-fork-means summaries, benchmark source
+hashes, and the final runtime library hash. Committed metadata is allowlisted
+and excludes inherited environments, credentials, and absolute local paths.
+The final same-program callback reductions are 22.7-23.0% for IR and
+59.4-60.0% for AOT; the final cross-program probe is 1.9% slower, and IR
+arithmetic/list controls are 2.4% / 0.8% slower. These limitations are included
+in [RESULTS.md](RESULTS.md#guarded-function-reference-calling-convention-2026-10-06),
+not omitted from the performance review.

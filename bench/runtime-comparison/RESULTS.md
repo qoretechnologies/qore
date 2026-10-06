@@ -759,3 +759,157 @@ Builds, runtime regression suites, and sampling/JVM diagnostics were separate
 from timing. Lightweight evidence inspection and ordinary workstation activity
 were not eliminated. See the [call audit](FOLLOWUP-AUDIT.md#call-frame-and-call-boundary-audit-2026-10-06)
 for checks, skips, and the baseline-reproduced linker-warning wrapper failure.
+
+## Guarded function-reference calling convention (2026-10-06)
+
+Baseline: `54e3d929bb0de97e06706c41f0e48020d80e6009`, including the previous
+IR call-frame storage improvement. The saved release library/compiler was
+preserved before changing runtime dispatch or LLVM lowering. Kernel sources,
+workstation, LLVM version, and optimization level are unchanged.
+
+Same-program opaque function references can now bypass argument-list creation
+and generic binding when their unique user variant and exact argument types
+are eligible. IR reuses the existing direct-parameter path where possible.
+AOT additionally has an internal adapter ABI:
+
+```cpp
+uint64_t entry(const uint64_t* borrowed_args,
+               QoreAOTContext* callee_context, ExceptionSink* xsink);
+```
+
+The owned boxed result and borrowed boxed arguments bridge the runtime to an
+existing typed native entry, without TLS parameter installation. Creation and
+invocation validate the normal native entry's identity, not merely its name.
+No existing artifact descriptor or public ABI changes. Old AOT binaries remain
+usable; newly compiled adapters require the updated runtime.
+
+Native eligibility is intentionally restricted to compiler-proven non-throwing
+scalar expressions. Testing found that context-independent bodies can still
+need an explicit context for eager source locations, and that the lazy PC
+registry does not yet cover adapter frames. Potentially throwing bodies,
+boxed returns, defaults/coercion/overloads, context-dependent code, method
+references and cross-program calls therefore retain the appropriate existing
+runtime path. This is not a general removal of Qore's runtime context.
+
+### Guard ordering and controls
+
+The first complete, safety-correct version checked RTTI before program
+identity. Five forks, three warmups, five 300 ms samples, 1024 iterations gave:
+
+|!Kernel|!IR before ns|!IR after ns|!AOT before ns|!AOT after ns
+|arithmetic|93.70|95.69|4.14|4.13
+|direct_call|354.23|357.11|4.15|4.13
+|method_call|406.09|411.14|4.36|4.37
+|indirect_call|305.82|238.63|217.35|88.73
+|polymorphic_call|423.80|425.31|298.19|296.55
+|dispatch_control|274.08|275.06|5.68|5.87
+|list_read|194.73|200.29|5.66|5.67
+|temporary_hash|661.75|664.45|324.57|301.39
+
+The 4096-iteration, three-fork repeat measured indirect calls at
+308.68 -> 239.07 ns (IR, 22.6% less time) and 214.03 -> 88.92 ns
+(AOT, 58.5% less time). Unrelated controls moved in both directions; these
+results do not establish a general interpreter/compiler speedup. A separate
+five-fork, 500 ms control repeat measured IR arithmetic at 92.50 -> 93.48 ns
+and list reads at 193.30 -> 196.55 ns: small slowdowns remained on this host.
+
+The IR Program probe confirmed the intended same-program benefit but exposed
+a negative-path cost. At 1024 iterations, same-program calls went
+302.79 -> 234.98 ns, while cross-program calls went 333.59 -> 344.91 ns.
+At 4096 iterations with 500 ms windows, the corresponding values were
+303.54 -> 233.41 ns and 334.18 -> 341.93 ns. The cross-program slowdown
+(2.3-3.4%) motivated moving the cheap program-identity check ahead of RTTI.
+These intermediate results are retained, not presented as final measurements.
+
+Moving the program guard first, before the final stack-error/restoration
+correction, gave 305.29 -> 238.69 ns for IR indirect calls and
+214.57 -> 88.34 ns for AOT. The 4096-iteration repeat gave
+304.61 -> 234.38 ns and 212.07 -> 87.90 ns, respectively. The Program
+probe's cross-program cost narrowed to 339.62 -> 343.68 ns (+1.2%), while
+same-program calls went 300.22 -> 235.45 ns. Compiling with native adapters
+disabled gave 213.13 -> 152.20 ns for AOT indirect calls, isolating the
+benefit of bypassing generic binding. IR arithmetic and list controls were
+94.86 -> 96.02 ns and 194.97 -> 199.21 ns. These are also intermediate
+results, included in the evidence rather than silently discarded.
+
+### Final implementation
+
+After the final stack-error check and non-fallible context restoration,
+the five-fork, 1024-iteration run measured:
+
+|!Kernel|!IR before ns|!IR after ns|!IR time reduction|!AOT before ns|!AOT after ns|!AOT time reduction
+|indirect_call|311.10|240.34|22.7%|215.67|87.62|59.4%
+|arithmetic|93.21|95.42|-2.4%|4.13|4.14|-0.3%
+|list_read|198.49|200.05|-0.8%|5.68|5.68|approximately 0%
+
+These are medians of process-fork means, in nanoseconds per element; for
+`indirect_call`, one element includes one opaque callback plus the loop and
+checksum work. Startup is excluded. Negative reductions are slowdowns, not
+benefits. The arithmetic/list controls do not enter the new reference path,
+but their observed slowdowns must not be hidden or generalized away as noise.
+
+The three-fork, 4096-iteration repeat measured 306.70 -> 236.09 ns for IR
+(23.0% less time) and 215.54 -> 86.25 ns for AOT (60.0% less time).
+Thus the same-program callback benefit survives a larger batch size and
+separate process forks; this is a workload-specific result, not a speedup
+claim for arbitrary Qore applications.
+
+The final Program probe measured same-program calls at 306.11 -> 235.36 ns
+(23.1% less time), but cross-program calls at 337.03 -> 343.50 ns
+(1.9% more time). Guard reordering reduced the earlier negative-path cost,
+but did not eliminate it. Cross-program execution is not optimized by this
+change and remains a follow-up target.
+
+With `QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1` during compilation, the final
+three-fork AOT run measured 215.35 -> 152.32 ns (29.3% less time). The
+ordinary argument-binding bypass therefore explains only part of the full
+AOT benefit: the native adapter reduces the remaining cost from roughly
+152 ns to 88 ns in separate runs. Those figures are not an additive
+decomposition or a paired experiment between the two changed binaries.
+
+[Sanitized measurement evidence](results-funcref-macos-arm64.json) contains
+13 experiments, 464 process/kernel jobs and 2320 measured samples. The final
+implementation accounts for 98 jobs / 490 samples; the rest explicitly
+record superseded guard/error-handling revisions. Each experiment includes
+fork-level samples, summary statistics, source and binary hashes, and settings.
+Every kernel mode passed 165 independent reference checks before timing;
+each Program-probe mode passed 30 checks. The native adapter's symbol and
+binding-helper reference were also verified in the final executable.
+
+Reproduce the final runs after saving the baseline `qore`, `qcc`, and compatible
+`libqore` files, then building the changed release runtime/compiler:
+
+```sh
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --kernels indirect_call arithmetic list_read \
+    --baseline-libdir /path/to/saved-baseline --forks 5 --time-ms 300
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --kernels indirect_call --count 4096 \
+    --baseline-libdir /path/to/saved-baseline --forks 3 --time-ms 300
+python3 bench/runtime-comparison/program_calls.py \
+    --baseline-libdir /path/to/saved-baseline --forks 5 --time-ms 300
+QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 python3 bench/runtime-comparison/run.py \
+    --modes qore-aot --kernels indirect_call \
+    --baseline-libdir /path/to/saved-baseline --forks 3 --time-ms 300
+```
+
+All runs used three warmups and five measured windows per fork. These are
+single-workstation microbenchmarks, with no CPU/frequency isolation. Builds
+and regression tests did not overlap timing; ordinary workstation activity
+and lightweight inspection were not eliminated. Java was not remeasured in
+this step, so historical Java results are not a fresh matched comparison.
+See the [full audit and test record](FOLLOWUP-AUDIT.md#function-reference-native-entry-audit-2026-10-06).
+
+Next priorities are reducing per-call eligibility/type-check overhead and the
+foreign-reference rejection cost, registering adapter PC maps before admitting
+throwing bodies, and then extending explicit call context to class/object-aware
+entries with legacy TLS bridges. The small IR-control regressions also need
+broader platform and code-layout investigation before claiming a general win.
+
+A separate five-second, 1 ms macOS sampling run confirmed the hot callback
+stack enters `tryExecFunctionRef`, `execFunctionRefNative`, and the generated
+scalar adapter. It still spends work in RTTI, exact-binding/static-eligibility
+checks, diagnostic frames, parse-option/location setup, and scalar conversion.
+Generic binding and TLS parameter setup remain elsewhere in the harness, not
+in that sampled native callback stack. This is qualitative evidence for the
+next targets, not an allocation count or an additional timing experiment.

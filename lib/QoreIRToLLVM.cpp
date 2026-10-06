@@ -374,6 +374,164 @@ static bool isFastFunctionCallEligible(
         && uvb->isStaticallyFastCallEligible(allow_type_parameters);
 }
 
+// NaN-boxing constants matching QoreValue.h
+static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
+static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
+static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
+static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
+static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
+static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
+static constexpr uint64_t VAL_NOTHING        = 0;
+static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
+static constexpr uint64_t VAL_FALSE          = 0xFFFB000000000002ULL;
+static constexpr uint64_t VAL_TRUE           = 0xFFFB000000000003ULL;
+// 48-bit signed integer range
+static constexpr int64_t INT48_MIN           = -(1LL << 47);
+static constexpr int64_t INT48_MAX           = (1LL << 47) - 1;
+
+void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
+        const QoreIRInstruction* inst, llvm::Module& module) {
+    if (!aot_mode || std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")) {
+        return;
+    }
+    auto definition = function_call_ref_definitions.find(inst->result.id);
+    if (definition == function_call_ref_definitions.end()) {
+        return;
+    }
+    const auto* variant = definition->second;
+    const BatchCalleeInfo* info = getBatchCallee(variant);
+    // Exclude context-dependent bodies, specializations, captures, and imported
+    // entries. The normal entry must identify the same body as the typed entry.
+    if (!info || !info->single_variant_function || !info->approach_b_eligible
+            || !info->context_independent_fast_entry || info->preloaded_fast_entry
+            || info->generic_specialized_fast_entry || info->implicit_self_method
+            || !info->capture_locals.empty() || info->num_params > 16
+            || !isFastFunctionCallEligible(variant)) {
+        return;
+    }
+    // The lazy PC registry currently describes normal entries, not adapter
+    // symbols. Until adapters have their own registered ranges, only bodies
+    // proved to be non-throwing scalar expressions may omit the normal entry.
+    // These bounded summaries describe the whole body, not just its return.
+    bool nothrow_scalar = false;
+    if ((info->return_kind == BatchCalleeReturnKind::NativeInt
+                || info->return_kind == BatchCalleeReturnKind::NativeBool)
+            && info->int_expression
+            && info->int_expression.nodes.size() <= QORE_AOT_INT_EXPRESSION_MAX_NODES) {
+        nothrow_scalar = true;
+        for (const auto& node : info->int_expression.nodes) {
+            switch (node.kind) {
+                case AOTIntExpressionNodeKind::Param:
+                case AOTIntExpressionNodeKind::Constant:
+                case AOTIntExpressionNodeKind::Add:
+                case AOTIntExpressionNodeKind::Sub:
+                case AOTIntExpressionNodeKind::Mul:
+                case AOTIntExpressionNodeKind::And:
+                case AOTIntExpressionNodeKind::Or:
+                case AOTIntExpressionNodeKind::Xor:
+                case AOTIntExpressionNodeKind::Eq:
+                case AOTIntExpressionNodeKind::Ne:
+                case AOTIntExpressionNodeKind::Lt:
+                case AOTIntExpressionNodeKind::Le:
+                case AOTIntExpressionNodeKind::Gt:
+                case AOTIntExpressionNodeKind::Ge:
+                case AOTIntExpressionNodeKind::Select:
+                case AOTIntExpressionNodeKind::Neg:
+                    break;
+                default:
+                    nothrow_scalar = false;
+                    break;
+            }
+        }
+    } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat
+            && info->float_expression
+            && info->float_expression.nodes.size() <= QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
+        nothrow_scalar = true;
+        for (const auto& node : info->float_expression.nodes) {
+            switch (node.kind) {
+                case AOTFloatExpressionNodeKind::Param:
+                case AOTFloatExpressionNodeKind::Constant:
+                case AOTFloatExpressionNodeKind::Add:
+                case AOTFloatExpressionNodeKind::Sub:
+                case AOTFloatExpressionNodeKind::Mul:
+                case AOTFloatExpressionNodeKind::Neg:
+                case AOTFloatExpressionNodeKind::BoolParam:
+                case AOTFloatExpressionNodeKind::Select:
+                    break;
+                default:
+                    nothrow_scalar = false;
+                    break;
+            }
+        }
+    }
+    if (!nothrow_scalar) {
+        return;
+    }
+    const UserSignature* sig = variant->getUserVariantBase()->getUserSignature();
+    for (unsigned i = 0; i < info->num_params; ++i) {
+        if (QoreTypeInfo::isReference(sig->getParamTypeInfo(i))) {
+            return;
+        }
+    }
+    llvm::Function* fast_fn = module.getFunction(info->fast_name);
+    if (!fast_fn) {
+        return;
+    }
+    std::string adapter_name = info->fast_name + "_funcref";
+    llvm::Function* adapter = module.getFunction(adapter_name);
+    if (!adapter) {
+        // Uniform runtime ABI: borrowed boxed arguments, explicit AOT context
+        // and sink, owned boxed result. Convert to the existing typed ABI.
+        adapter = llvm::Function::Create(llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, ptr_type}, false), llvm::GlobalValue::InternalLinkage,
+            adapter_name, module);
+        adapter->addFnAttr("frame-pointer", "all");
+        llvm::IRBuilder<> ab(llvm::BasicBlock::Create(ctx, "entry", adapter));
+        std::vector<llvm::Value*> args;
+        for (unsigned i = 0; i < info->num_params; ++i) {
+            llvm::Value* slot = ab.CreateInBoundsGEP(i64_type, adapter->getArg(0),
+                llvm::ConstantInt::get(i32_type, i));
+            llvm::Value* value = ab.CreateLoad(i64_type, slot);
+            BatchCalleeParamKind kind = getFastEntryParamKind(*info, i);
+            if (kind == BatchCalleeParamKind::NativeInt) {
+                auto convert = module.getOrInsertFunction("qore_rt_to_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                value = ab.CreateCall(convert, {value});
+            } else if (kind == BatchCalleeParamKind::NativeFloat) {
+                auto convert = module.getOrInsertFunction("qore_rt_to_float",
+                    llvm::FunctionType::get(double_type, {i64_type}, false));
+                value = ab.CreateCall(convert, {value});
+            } else if (kind == BatchCalleeParamKind::NativeBool) {
+                value = ab.CreateICmpEQ(value, llvm::ConstantInt::get(i64_type, VAL_TRUE));
+            }
+            args.push_back(value);
+        }
+        // Even a body with no context-dependent operations needs its own AOT
+        // context for stripped-debug source locations and return-type caches.
+        args.push_back(adapter->getArg(1));
+        args.push_back(adapter->getArg(2));
+        llvm::Value* result = ab.CreateCall(fast_fn, args);
+        if (info->return_kind == BatchCalleeReturnKind::NativeInt) {
+            auto box = module.getOrInsertFunction("qore_rt_box_big_int",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            result = ab.CreateCall(box, {result});
+        } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat) {
+            auto box = module.getOrInsertFunction("qore_rt_box_float",
+                llvm::FunctionType::get(i64_type, {double_type}, false));
+            result = ab.CreateCall(box, {result});
+        } else if (info->return_kind == BatchCalleeReturnKind::NativeBool) {
+            result = ab.CreateSelect(result, llvm::ConstantInt::get(i64_type, VAL_TRUE),
+                llvm::ConstantInt::get(i64_type, VAL_FALSE));
+        }
+        ab.CreateRet(result);
+    }
+    auto normal = module.getOrInsertFunction(info->name,
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    auto bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_native",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(bind, {ref, normal.getCallee(), adapter});
+}
+
 static bool qore_ir_fast_entry_variant_has_reference_params(
         const AbstractQoreFunctionVariant* variant, bool& cancelled) {
     cancelled = false;
@@ -1047,21 +1205,6 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
     }
     return nullptr;
 }
-
-// NaN-boxing constants matching QoreValue.h
-static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
-static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
-static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
-static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
-static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
-static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
-static constexpr uint64_t VAL_NOTHING        = 0;
-static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
-static constexpr uint64_t VAL_FALSE          = 0xFFFB000000000002ULL;
-static constexpr uint64_t VAL_TRUE           = 0xFFFB000000000003ULL;
-// 48-bit signed integer range
-static constexpr int64_t INT48_MIN           = -(1LL << 47);
-static constexpr int64_t INT48_MAX           = (1LL << 47) - 1;
 
 static std::string formatLLVMDateOffset(int utc_offset) {
     char buf[16];
@@ -2267,6 +2410,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_def_block.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
+    function_call_ref_definitions.clear();
     stored_closure_capture_allocas.clear();
     entry_promoted_closure_captures.clear();
     guarded_stored_closure_creates.clear();
@@ -10468,8 +10612,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<uint32_t> non_dot_eval_uses;
     std::unordered_map<uint32_t, int> to_bool_uses;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
-    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
-        function_call_ref_definitions;
     std::unordered_map<const LocalVar*, size_t> closure_capture_counts;
     bool owner_has_parse_reference = false;
     std::vector<const QoreIRInstruction*> closure_call_candidates;
@@ -17126,6 +17268,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {expr_const, xsink_arg});
                 }
+                emitFunctionRefNativeEntry(result, inst, module);
                 // CreateCallRef doesn't modify locals — no reload needed
 
             } else if (inv->invoke_opcode == QoreIROpcode::CreateMethodRef) {
@@ -26323,6 +26466,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {expr_const, xsink_arg}, module, llvm_func, inst);
             }
+            emitFunctionRefNativeEntry(result, inst, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRFunctionRefCallsTest
+
+class IRFunctionRefCallsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("function-reference fast calls", "1.0", \ARGV) {
+        addTestCase("opaque references and binding fallbacks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int rc;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/IRFunctionRefCalls.qr";
+        # Compare the exact throwing source line as well as the computation.
+        # The AST is the reference so inserting lines in the fixture is safe.
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("^function-references: ok \\([1-9][0-9]*\\)\\n$", expected);
+        foreach string prefix in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
+            }
+        }
+        TmpDir dir("qore-function-references-");
+        foreach string disabled in (("", "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ",
+                "QORE_AOT_NO_DEBUG_INFO=1 ")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, "-O3", "--strip-source", "-o", executable, source), disabled);
+            assertEq(expected, run((executable,)), "AOT");
+            assertEq(expected, run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "fallback");
+        }
+    }
+}

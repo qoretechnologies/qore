@@ -793,6 +793,12 @@ uint64_t qore_rt_create_local_method_call_ref_aot_throwing(const char* class_pat
 uint64_t qore_rt_create_function_call_ref_aot(const char* function_name, ExceptionSink* xsink);
 uint64_t qore_rt_create_function_call_ref_aot_throwing(const char* function_name, ExceptionSink* xsink);
 
+//! Attach an optional context-independent adapter to a newly created function reference.
+//! Both entries must come from the same compiled body; no change to the serialized AOT ABI.
+void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(const uint64_t*, QoreAOTContext*, ExceptionSink*));
+
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
