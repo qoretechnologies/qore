@@ -32,7 +32,10 @@
 
 #define QTP_DEFAULT_RELEASE_MS 5000
 
+#include "qore/intern/qore_thread_intern.h"
+
 #include <deque>
+#include <optional>
 #include <qore/qlist>
 
 class ThreadTask;
@@ -41,8 +44,14 @@ class ThreadPoolThread;
 typedef std::deque<ThreadTask*> taskq_t;
 typedef qlist<ThreadPoolThread*> tplist_t;
 
+//! A task run by a thread pool worker
+/** The task captures the sandbox that governs the thread that submits it, so that the task is governed by the same
+    sandbox on the worker thread: a task submitted by module code (for example, an HTTP server listener created by a
+    Qore-language module) runs in the module's Program, whose Program context does not include the sandboxed caller.
+*/
 class ThreadTask {
 public:
+    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox
     DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
     }
 
@@ -71,17 +80,38 @@ public:
         if (*xsink) {
             return QoreValue();
         }
+        SandboxScope sandbox_scope(sandbox_context);
         return code->execValue(0, xsink);
     }
 
     DLLLOCAL void cancel(ExceptionSink* xsink) {
-        if (cancelCode)
+        if (cancelCode) {
+            SandboxScope sandbox_scope(sandbox_context);
             cancelCode->execValue(0, xsink).discard(xsink);
+        }
     }
 
 protected:
     ResolvedCallReferenceNode* code;
     ResolvedCallReferenceNode* cancelCode;
+    //! The sandbox of the submitting thread
+    const QoreSandboxContext sandbox_context;
+
+    //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
+    /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
+        closure in a sandboxed Program) is still governed by its Program's own sandbox.
+    */
+    class SandboxScope {
+    public:
+        DLLLOCAL SandboxScope(const QoreSandboxContext& ctx) {
+            if (ctx.manager || ctx.policy_manager) {
+                helper.emplace(ctx);
+            }
+        }
+
+    private:
+        std::optional<QoreSandboxContextHelper> helper;
+    };
 };
 
 class ThreadTaskHolder {

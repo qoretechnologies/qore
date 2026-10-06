@@ -60,6 +60,8 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("QoreSandboxManagerHelper with specific Program", \testHelperWithProgram());
         addTestCase("Module-context network sandbox propagation", \testModuleContextNetworkSandbox());
         addTestCase("Network policy controls binds", \testNetworkBindPolicy());
+        addTestCase("Thread pool tasks are governed by the sandbox of the submitting thread",
+            \testThreadPoolTaskSandbox());
         addTestCase("Network policy controls UNIX domain sockets", \testNetworkUnixSocketPolicy());
         addTestCase("Network policy normalizes addresses and applies host patterns", \testNetworkConnectAddressForms());
         addTestCase("Network policy controls datagram destinations", \testNetworkDatagramPolicy());
@@ -2550,6 +2552,11 @@ sub proxied_get(string url, string proxy) {
             "an IPv4-mapped loopback address is bound");
         assertEq({"rc": 0, "errno": 0}, lp.callFunction("bind_target", "localhost:0"),
             "Socket::bind() binds a loopback name");
+        assertEq(0, lp.callFunction("bind_target", "127.0.0.1:0").rc,
+            "Socket::bind() binds a loopback address");
+        assertEq(0, lp.callFunction("bind_target", "[::ffff:127.0.0.1]:0").rc,
+            "Socket::bind() binds a bracketed IPv6 loopback address");
+        assertEq(0, lp.callFunction("bind_port", 0), "Socket::bind() binds a port on all interfaces");
         assertTrue(lp.callFunction("bind_inet", NOTHING, 0).port > 0,
             "a bind on all interfaces is allowed when the default policy allows it");
         {
@@ -2567,6 +2574,12 @@ sub proxied_get(string url, string proxy) {
         Program pnp = sandboxedProgram(private_nets, NetworkPolicyCode, "bind-private");
         assertEq("127.0.0.1", pnp.callFunction("bind_inet", "127.0.0.1", 0).address,
             "blocking private networks still allows a loopback bind");
+        assertThrows("NETWORK-ACCESS-DENIED", "10.0.0.1", \pnp.callFunction(), ("bind_inet", "10.0.0.1", 0),
+            "blocking private networks denies a bind to a private address");
+        assertEq({"rc": -1, "errno": Err::EACCES}, pnp.callFunction("bind_target", "10.0.0.1:0"),
+            "Socket::bind() reports a denied bind to a private address with the error number");
+        assertEq({"rc": -1, "errno": Err::EACCES}, pnp.callFunction("bind_target", "[fd00::1]:0"),
+            "Socket::bind() reports a denied bind to a private bracketed IPv6 address with the error number");
 
         # a denied range still denies a bind to any other address in it, such as the wildcard address
         SandboxManager no_wildcard();
@@ -2576,6 +2589,10 @@ sub proxied_get(string url, string proxy) {
         assertThrows("NETWORK-ACCESS-DENIED", "0.0.0.0", \nwp.callFunction(), ("bind_inet", "0.0.0.0", 0, AF_INET),
             "a denied range denies a bind to a non-loopback address");
         assertEq("127.0.0.1", nwp.callFunction("bind_inet", "127.0.0.1", 0).address);
+        assertEq({"rc": -1, "errno": Err::EACCES}, nwp.callFunction("bind_target", "0.0.0.0:0"),
+            "Socket::bind() reports a denied bind to a non-loopback address with the error number");
+        # a successful bind does not reset the error number, so only the return code is checked
+        assertEq(0, nwp.callFunction("bind_target", "127.0.0.1:0").rc, "Socket::bind() binds a loopback address");
 
         # the default policy and allowed ranges still apply to loopback binds (see "default deny" above)
 
@@ -2599,6 +2616,101 @@ sub proxied_get(string url, string proxy) {
         Program pp = sandboxedProgram(ports, NetworkPolicyCode, "bind-ports");
         assertThrows("NETWORK-ACCESS-DENIED", "port 8123", \pp.callFunction(), ("bind_inet", "127.0.0.1", 8123));
         assertTrue(pp.callFunction("bind_inet", "127.0.0.1", 0).port > 0, "a system-assigned port is allowed");
+    }
+
+    #! Code of an unsandboxed library Program that binds sockets in thread pool tasks
+    /** Models a Qore-language module, such as HttpServer, that is loaded by trusted code and therefore has no
+        sandbox of its own, and that creates its listeners in tasks run by a thread pool.
+    */
+    const ThreadPoolTaskLibraryCode = "
+*hash<ExceptionInfo> sub bind_in_controller_task(string addr) {
+    Queue q();
+    AsyncIoController::submitTask(sub () {
+        try {
+            Socket s();
+            on_exit s.close();
+            s.bindINET(addr, 0, True, AF_INET);
+            q.push(NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex);
+        }
+    });
+    return q.get(30s);
+}
+*hash<ExceptionInfo> sub bind_in_pool_task(string addr) {
+    ThreadPool tp(1);
+    on_exit tp.stopWait();
+    Queue q();
+    tp.submit(sub () {
+        try {
+            Socket s();
+            on_exit s.close();
+            s.bindINET(addr, 0, True, AF_INET);
+            q.push(NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex);
+        }
+    });
+    return q.get(30s);
+}
+code sub get_binder(string name) {
+    return name == \"pool\" ? \\bind_in_pool_task() : \\bind_in_controller_task();
+}
+";
+
+    #! Tests that thread pool tasks are governed by the sandbox of the thread that submits them
+    /** Regression test: a task submitted to a thread pool by unsandboxed library code called from a sandboxed
+        Program ran on the worker thread with the library's Program context only, so it was not governed by the
+        sandbox; for example, an HttpServer listener created for sandboxed code could bind any address.
+    */
+    testThreadPoolTaskSandbox() {
+        Program lib(PO_NO_CHILD_PO_RESTRICTIONS);
+        lib.parse("%modern\n" + ThreadPoolTaskLibraryCode, "thread-pool-task-library");
+
+        # a sandbox that denies the IPv4 wildcard address, which can always be bound without a sandbox
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkDeniedIPRange("0.0.0.0/32");
+        sm.blockLocalhost();
+        Program sp = sandboxedProgram(sm, "
+auto sub call_binder(code binder, string addr) {
+    return binder(addr);
+}
+code sub make_bind_task(Queue q, string addr) {
+    return sub () {
+        try {
+            Socket s();
+            on_exit s.close();
+            s.bindINET(addr, 0, True, AF_INET);
+            q.push(NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex);
+        }
+    };
+}
+", "thread-pool-task-sandboxed");
+
+        foreach string name in ("controller", "pool") {
+            code binder = lib.callFunction("get_binder", name);
+            # without a sandbox, the library binds the address
+            assertEq(NOTHING, lib.callFunction("bind_in_" + name + "_task", "0.0.0.0"),
+                name + ": an unsandboxed task binds the wildcard address");
+            # called from sandboxed code, the task is governed by the caller's sandbox
+            *hash<ExceptionInfo> ex = sp.callFunction("call_binder", binder, "0.0.0.0");
+            assertEq("NETWORK-ACCESS-DENIED", ex.err,
+                name + ": a task submitted for sandboxed code cannot bind a denied address");
+            # the sandbox's loopback bind rule applies in the task as well
+            assertEq(NOTHING, sp.callFunction("call_binder", binder, "127.0.0.1"),
+                name + ": a task submitted for sandboxed code binds a loopback address");
+        }
+
+        # a task created by sandboxed code and submitted by an unsandboxed thread is governed by its own sandbox
+        Queue q();
+        AsyncIoController::submitTask(sp.callFunction("make_bind_task", q, "0.0.0.0"));
+        assertEq("NETWORK-ACCESS-DENIED", q.get(30s).err,
+            "a sandboxed task submitted by an unsandboxed thread cannot bind a denied address");
+        AsyncIoController::submitTask(sp.callFunction("make_bind_task", q, "127.0.0.1"));
+        assertEq(NOTHING, q.get(30s), "a sandboxed task submitted by an unsandboxed thread binds a loopback address");
     }
 
     #! Tests that a UNIX domain socket needs filesystem access to its socket file

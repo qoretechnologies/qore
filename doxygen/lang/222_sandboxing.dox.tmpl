@@ -349,7 +349,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
       the client's behalf; a destination that cannot be resolved cannot be checked and is denied
 
     The sandbox that governs an operation is the one of the thread that starts it; an operation continued on an
-    async I/O thread keeps that sandbox.  Network checks honor
+    async I/O thread keeps that sandbox, and so does a task submitted to a @ref Qore::Thread::ThreadPool "ThreadPool"
+    or with @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", such as a listener that
+    the @ref httpserverintro "HttpServer" module creates for sandboxed code.  Network checks honor
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
