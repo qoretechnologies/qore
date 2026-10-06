@@ -17,6 +17,8 @@ class IRPerformanceSemanticsTest inherits QUnit::Test {
     constructor() : Test("IR performance semantics", "1.0", \ARGV) {
         addTestCase("indexed compound mutation in all execution modes", \indexed());
         addTestCase("bounded integer pair ownership and fallback", \bounded());
+        addTestCase("typed container checks and conversion fallbacks", \typedContainers());
+        addTestCase("deferred lvalue reference release and overflow", \deferredRelease());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -47,5 +49,13 @@ class IRPerformanceSemanticsTest inherits QUnit::Test {
         string disabled = "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 ";
         checkFixture("IRBoundedPair", "bounded-pair: ok\n");
         checkFixture("IRBoundedPair", "bounded-pair: ok\n", disabled);
+    }
+    private typedContainers() {
+        checkFixture("IRTypedContainerChecks", "typed-containers: ok\n");
+        checkFixture("IRTypedContainerChecks", "typed-containers: ok\n",
+            "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1 ");
+    }
+    private deferredRelease() {
+        checkFixture("IRDeferredLValueRelease", "deferred-lvalue-release: ok\n");
     }
 }

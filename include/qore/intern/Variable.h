@@ -507,6 +507,9 @@ public:
 
 private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
+    // Most writes defer just one reference. Keep it inline, with overflow in tvec;
+    // both are released in insertion order after unlocking and the recursive scan.
+    AbstractQoreNode* first_temp = nullptr;
     nvec_t tvec;
     lvid_set_t* lvid_set = nullptr;
     // to track object count changes

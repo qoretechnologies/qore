@@ -346,3 +346,230 @@ or environment values. Full local commands/output remain in the runner's build
 directories. [FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md) records the complete
 `audit-changes` checklist, 175 passing QUnit cases (746 assertions), four
 standalone regression scripts, and the measurement/validation scope.
+
+## Post-merge container follow-up (2026-10-06)
+
+The next baseline is the clean `feature/performance` merge
+`6c87c18cf17599bcafd62b1240c08fdd551b39b4`, including `origin/develop` at
+`6d94b1848`. It already contains the earlier performance changes and the merged
+sandbox/thread-pool behavior. These measurements do **not** isolate the cost of
+that merge: the new optimizations are compared against this post-merge baseline.
+
+### Refreshed Java comparison
+
+Same machine, release build, LLVM 22.1.8 and Temurin 25.0.2/JMH 1.37 as above.
+Three independent processes, three warmup and five measured 300 ms windows,
+1024 elements. All 480 reference checks passed. Values are ns/element:
+
+|!Kernel|!Qore IR|!Qore AOT|!Java interpreted|!Java warmed JIT
+|arithmetic|92.81|3.80|6.88|0.89
+|direct_call|364.36|3.82|16.36|0.88
+|method_call|418.35|4.01|16.56|0.89
+|list_read|203.47|5.25|78.24|0.29
+|list_build|281.53|95.27|165.43|2.09
+|list_mutate|177.73|171.78|359.89|5.84
+|temporary_list|355.16|126.73|50.07|1.16
+|temporary_hash|664.08|311.75|638.47|15.28
+
+Launch-to-exit medians were 39.31/34.62/27.70/27.48 ms for IR/AOT/Java
+interpreted/Java normal mode. These are not cold-start measurements.
+
+The remaining AOT gap is largest in container work: about 46 times Java's
+warmed time for growing lists, 29 times for mutation, 109 times for temporary
+pairs, and 20 times for hashes. These compare different representations and
+runtime contracts, not identical implementations. The pair still allocates
+about 32 bytes/element under JMH's GC profiler and the hash about 240; Java's
+advantage here is not evidence that either allocation disappeared.
+
+IR direct/method calls take about 22/25 times Java interpreted execution in
+these kernels. In contrast, tiny AOT calls are almost as cheap as AOT arithmetic.
+That makes IR frame/value bookkeeping and shared container helpers useful
+separate targets; implementing more tiny-function inlining is not the first
+priority for this AOT workload.
+
+The workstation was not isolated. Backup/sync, desktop, and browser processes
+were active at different points; they were not stopped. Runtime builds, Qore
+regression suites, and stack sampling were kept out of timing runs; lightweight
+report/harness validation and desktop activity were not eliminated. Small changes and cross-run comparisons
+require caution; the direct before/after experiments below are interleaved.
+
+### Profile-driven changes
+
+Separate five-second macOS stack samples of AOT list construction, mutation,
+and temporary pairs showed runtime assignment/cleanup, allocations, type
+comparisons, and type lookup in hot paths. Two limited changes were retained:
+
+- `QoreTypeInfo::superSetOf()` skips its ordered structural comparison when both
+  operands have concrete type metadata and are the same pointer. Null/auto
+  semantics, unequal-type comparisons, conversions, and assignment validation
+  are unchanged.
+- `LValueHelper` holds its first deferred old reference inline, with vector
+  overflow. The old code heap-allocated that vector even for a single reference.
+  Lock release, recursive scans, release order, exception cleanup, and semantic
+  alias ownership are preserved. This removes a temporary bookkeeping allocation,
+  not the actual list/hash allocation. The helper's internal size grows by one
+  pointer; public class layouts and helper ABI are unchanged.
+
+Both apply to shared runtime operations, including IR and native/AOT paths;
+neither bypasses COW or introduces a special language-semantic shortcut.
+
+Isolated comparisons used three forks and 200 ms windows (three warmup, five
+measured). The first compares metadata identity alone with the merged baseline;
+the second adds inline reference storage against a saved identity-only library:
+
+|!Experiment and kernel|!IR before|!IR after|!AOT before|!AOT after|!AOT time reduction
+|Identity: list_build|285.60|281.23|96.28|94.14|2.2%
+|Identity: list_mutate|180.83|178.98|173.57|171.49|1.2%
+|Identity: temporary_list|363.22|359.00|127.03|120.51|5.1%
+|Identity: temporary_hash|663.64|670.11|319.21|305.35|4.3%
+|Inline reference: list_build|279.73|281.52|95.31|81.17|14.8%
+|Inline reference: list_mutate|178.20|165.21|171.17|155.64|9.1%
+|Inline reference: temporary_list|360.82|367.48|121.05|121.36|-0.3%
+|Inline reference: temporary_hash|668.96|665.60|308.15|309.06|-0.3%
+
+These effects must not be added across runs. The identity-only arithmetic
+controls were 3.2% slower in IR and 1.6% slower in AOT; the inline-storage
+experiment was 3.3% faster in IR and 1.2% slower in AOT. Mixed controls are
+retained in the evidence, not omitted in favor of successful targets.
+
+### Combined retained changes
+
+The final comparison uses the unchanged merged library and the rebuilt library
+containing both changes: five independent forks, three warmup and five measured
+300 ms windows, 1024 elements. All 480 reference checks passed; 160 shuffled jobs
+produced 800 timing samples. Positive reduction means less elapsed time:
+
+|!Kernel|!IR before|!IR after|!IR reduction|!AOT before|!AOT after|!AOT reduction
+|arithmetic|94.42|94.21|0.2%|3.80|3.83|-0.7%
+|direct_call|363.43|361.44|0.5%|3.80|3.84|-1.2%
+|method_call|414.29|411.75|0.6%|4.04|4.03|0.1%
+|list_read|204.50|203.63|0.4%|5.31|5.30|0.2%
+|list_build|285.39|284.22|0.4%|96.63|82.36|14.8%
+|list_mutate|182.13|167.65|8.0%|171.59|156.69|8.7%
+|temporary_list|358.64|360.57|-0.5%|127.31|122.25|4.0%
+|temporary_hash|662.74|665.48|-0.4%|330.26|304.71|7.7%
+
+AOT list-build process means ranged from 94.22-99.22 ns before to 81.65-82.65 ns
+after; list mutation from 167.68-174.40 to 155.98-157.47 ns. The corresponding IR
+mutation ranges were 178.58-182.28 and 164.97-168.46 ns. These targeted reductions
+exceed the observed between-process spread in this run.
+
+Other IR kernels are essentially flat here. AOT arithmetic/direct-call controls
+are slightly slower (roughly 0.02/0.04 ns per element); no improvement is claimed
+for them. Hash speedup magnitude varies between experiments. Do not generalize
+the best kernel's percentage to all Qore programs.
+
+### Larger batches and IR controls
+
+At 4096 elements, three forks and the same 300 ms windows produced 72 jobs and
+360 timing samples, with another 480 reference checks:
+
+|!Kernel|!IR before|!IR after|!IR reduction|!AOT before|!AOT after|!AOT reduction
+|arithmetic|93.83|92.62|1.3%|3.40|3.43|-0.9%
+|direct_call|362.41|364.02|-0.4%|3.41|3.44|-0.8%
+|list_build|279.27|287.11|-2.8%|96.28|82.70|14.1%
+|list_mutate|181.09|164.17|9.3%|171.86|158.47|7.8%
+|temporary_list|357.55|362.99|-1.5%|129.12|122.47|5.2%
+|temporary_hash|662.64|669.62|-1.1%|317.23|306.07|3.5%
+
+AOT container improvements and the IR mutation improvement repeat at the larger
+batch size. The 2.8% slower IR construction result has overlapping process ranges
+(278.82-288.10 before, 282.91-292.67 after); the temporary-list result also
+overlaps (351.91-363.83 before, 362.67-367.62 after). They are retained as possible
+small tradeoffs, not reclassified as improvements.
+
+A focused five-fork repeat with longer 500 ms windows measured IR construction
+at 281.58 before versus 286.70 after (1.8% slower), and temporary lists at
+361.25 versus 363.65 (0.7% slower). Ranges again overlap: 274.46-292.05 versus
+279.67-295.18 for construction and 358.33-362.30 versus 359.58-367.25 for pairs.
+The slower construction median repeats at 4096 elements, so it remains a
+potential cost of the retained changes, even though the 1024-element run was
+flat. The changes are retained for the larger AOT/container-mutation benefits,
+not presented as uniformly beneficial to IR. This repeat adds 20 jobs, 100
+timing samples, and 240 reference checks.
+
+### Thread-pool delivery with sandbox context
+
+Three forks, three warmup and five measured 300 ms windows; 96 shuffled jobs,
+480 timing samples, 32 reference checks. Both variants use a persistent
+single-worker pool. The container task builds, increments, and sums 1024
+integers. Values below are **microseconds per completed task**, not ns/element:
+
+|!Context / work / batch|!IR before|!IR after|!AOT before|!AOT after
+|Plain / no-op / 1|11.83|11.72|11.44|11.46
+|Sandbox / no-op / 1|11.83|11.77|11.43|11.60
+|Plain / no-op / 64|8.50|8.44|8.62|8.48
+|Sandbox / no-op / 64|8.47|8.54|8.60|8.44
+|Plain / container / 1|198.83|184.40|184.75|171.73
+|Sandbox / container / 1|194.29|182.95|189.83|169.88
+|Plain / container / 64|196.00|182.01|189.08|168.84
+|Sandbox / container / 64|196.32|177.06|186.12|169.81
+
+The container tasks take 5.8-9.8% less time in IR and 7.0-10.7% less in AOT.
+For sandboxed AOT, serial round trips improve by 10.5% and batched delivery by
+8.8%; the latter corresponds to about 5373 to 5889 completed tasks/second.
+No-op delivery changes are small and mixed, within about 2% in either direction,
+including a 1.5% slower sandboxed AOT serial result. This is not a general
+thread-pool scheduling improvement.
+
+The sandbox is attached to the submitting Program while the worker closure
+belongs to a trusted parent Program. Thus this probes the merged context-
+propagation path as well as container work. It does not measure the cost of
+introducing that security behavior: both before and after already include it.
+Small differences between plain and sandboxed rows do not establish zero sandbox
+overhead. Results include submission, queue delivery, and checksum validation;
+they are not individual-task latency percentiles or an HTTP benchmark.
+
+### Remaining priorities
+
+1. Profile the remaining typed-container helper paths: repeated coercion,
+   metadata lookup, and owned-value bookkeeping still dominate native container
+   kernels. A typed fast path must preserve soft conversions, optional values,
+   semantic aliases, full-width integer ownership, cancellation, and destructor
+   timing. The identity shortcut is only a first step. A separate post-change
+   five-second AOT list-build sample still has approximately 32% of main-thread
+   samples in the local-assignment dispatch branch and 22% in coercion. These
+   are inclusive sampled branches, not exact per-instruction or allocation counts.
+2. Extend aggregate elimination only after boundedness and ownership are proved.
+   Temporary pairs with a runtime index and temporary hashes remain expensive.
+   The retained full-width/alias/exception fixtures are guards for this work;
+   Java's result alone is not proof that Qore can erase an allocation safely.
+3. Profile IR call-frame reset, owned-slot cleanup, dispatch, and value handling.
+   A thread-local frame pool already exists; adding another pool is not the
+   proposal. The roughly 360/420 ns direct/method-call kernels still warrant
+   separate work even though their AOT equivalents inline well.
+4. Repeat on Linux and a representative application under sustained concurrency.
+   The task benchmark provides a reproducible sandbox-context probe, not
+   request-latency percentiles or a production throughput prediction.
+
+No new scalar-replacement or IR frame optimization is included in this change.
+
+### Evidence and reproduction
+
+[results-containers-macos-arm64.json](results-containers-macos-arm64.json)
+contains all seven experiments: the refreshed Java baseline, each isolated
+change, combined changes, larger batches, the focused IR repeat, and thread-pool
+delivery. There are 600 unique jobs and 3000 positive timing samples. Process
+means, medians, ranges, fork counts, and sample counts were independently
+validated. Metadata preserves source/library/executable hashes and settings,
+but excludes local paths and environment values. Full local output, commands,
+and profiles remain in ignored build directories.
+
+After saving the unchanged compatible library as described in the README:
+
+```sh
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --baseline-libdir /path/to/saved-library \
+    --forks 5 --warmup 3 --samples 5 --time-ms 300
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --kernels arithmetic direct_call list_build list_mutate temporary_list temporary_hash \
+    --baseline-libdir /path/to/saved-library --count 4096 \
+    --forks 3 --warmup 3 --samples 5 --time-ms 300
+python3 bench/runtime-comparison/thread_pool.py \
+    --baseline-libdir /path/to/saved-library \
+    --forks 3 --warmup 3 --samples 5 --time-ms 300
+```
+
+[FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md#container-follow-up-audit-2026-10-06)
+records every `audit-changes` item, release/debug coverage, and the existing
+macOS linker-warning-sensitive test failure reproduced on the baseline.

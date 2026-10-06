@@ -43,3 +43,20 @@ The native companion enters the map helper with cancellation already pending.
 It checks the exact `THREAD-CANCELLED` error after partial construction, clears
 cancellation, and verifies a subsequent 205-item map succeeds. Both normal and
 checked append paths run, without timing or scheduling dependencies.
+
+## Identical type metadata
+
+The static `QoreTypeInfo::superSetOf(first, second)` shortcut accepts identical
+metadata pointers only after both `hasType()` checks. A metadata object has the
+same ordered accept/return specifications as itself, so the structural walk is
+redundant in that case. Pointer inequality still uses the full structural
+comparison; null and `auto` metadata retain their existing asymmetric rules.
+This is not a new conversion rule and does not bypass element assignment,
+soft-type conversion, hashdecl validation, or ownership checks.
+
+`examples/test/ir/IRTypedContainerChecks.qr`, driven by
+`IRPerformanceSemantics.qtest`, compares AST, IR, JIT, tiered, and stripped-source
+AOT behavior for typed and optional containers, soft conversions, rejected
+assignments, boxed full-width integers, aliases, nested containers, and untyped
+fallbacks. The wrapper also repeats the fixture with fixed-list scalarization
+and fixed-hash construction specialization disabled.

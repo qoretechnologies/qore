@@ -125,6 +125,39 @@ and record background load. Use Qore before/after measurements with the same
 inputs and settings to establish improvements; a Java ratio alone is not
 evidence that a particular Qore change is safe or effective.
 
+## Thread-pool and sandbox context
+
+`thread_pool.py` measures Qore IR/AOT task delivery with a persistent one-worker
+pool, both without a sandbox and with a sandbox attached to the submitting
+`Program`. No Java installation or downloaded dependency is needed:
+
+```sh
+python3 bench/runtime-comparison/thread_pool.py --check-only
+python3 bench/runtime-comparison/thread_pool.py \
+    --baseline-libdir /path/to/saved-library --forks 3 --time-ms 300
+```
+
+Each task either does no container work or builds, increments, and sums 1024
+integers. Every result is checked. Batch size 1 measures serial round-trip
+cost; batch size 64 measures amortized delivery/throughput cost. Both report
+**nanoseconds per task**, including submission, worker execution/recycling,
+queue delivery, and validation. Neither reports an individual-task latency
+percentile. Divide one billion by ns/task to obtain completed tasks/second.
+
+The submitting wrapper has the same call-stack shape in both contexts. It is
+entered before timing, and the worker closure belongs to the trusted parent
+Program, like work supplied by a library. The sandbox context must therefore
+propagate from submission to the worker. This is a synthetic throughput probe,
+not a sandbox enforcement test or an HTTP-server benchmark; the existing
+thread-pool and HTTP sandbox regression tests check policy enforcement.
+
+Compilation, worker startup, and the first batch are outside timing. Queue
+reads have a 30-second timeout; task exceptions are reported as failed results.
+As with `run.py`, jobs are shuffled and sequential, results summarize process
+means, and sources, hashes, commands, raw output, and settings are saved in a
+unique ignored `pool-*` directory. Before/after libraries must be ABI-compatible;
+AOT code is compiled and run against its corresponding library.
+
 ## Investigating a gap
 
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`

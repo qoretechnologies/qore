@@ -608,7 +608,8 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink) : vl(xsink), 
 LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
 }
 
-LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
+LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)),
+        first_temp(std::exchange(o.first_temp, nullptr)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
@@ -715,6 +716,12 @@ LValueHelper::~LValueHelper() {
     // of the root's set that has real references (RObject::deferScanToPinnedMember()).  Decided before the removed
     // values are released: a value that needs a scan qualifies only if it is an object in no recursive set.
     bool insertion_only = removal_objects.empty();
+    if (insertion_only && first_temp && needs_scan(first_temp)
+            && (first_temp->getType() != NT_OBJECT
+                || qore_object_private::get(*static_cast<QoreObject*>(first_temp))
+                    ->rset.load(std::memory_order_acquire))) {
+        insertion_only = false;
+    }
     for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); insertion_only && i != e; ++i) {
         if (needs_scan(*i) && ((*i)->getType() != NT_OBJECT
             || qore_object_private::get(*static_cast<QoreObject*>(*i))->rset.load(std::memory_order_acquire))) {
@@ -765,6 +772,9 @@ LValueHelper::~LValueHelper() {
     // and collect objects that are still referenced (a cycle's back edge replaced while the root is held by a
     // local variable or a list).  A removed value that the scan did not reach keeps the reference held here, which
     // only makes it look held from outside while the scan runs.
+    if (first_temp) {
+        discard(first_temp, vl.xsink);
+    }
     for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
         discard(*i, vl.xsink);
     }
@@ -824,7 +834,7 @@ void LValueHelper::startContainerRemoval() {
 
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
-    // replaced is still held in tvec here, so its address cannot have been reused
+    // replaced is still held in the deferred temporaries here, so its address cannot have been reused
     if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
         return false;
     }
@@ -856,19 +866,19 @@ int LValueHelper::set(const ReferenceNode& ref, bool for_remove) {
 }
 
 void LValueHelper::saveTemp(QoreValue val) {
-    if (!val.isReferenceCounted()) {
-        return;
-    }
-    // save for dereferencing later
-    tvec.push_back(val.takeNode());
+    saveTempRef(val);
 }
 
 void LValueHelper::saveTempRef(QoreValue& val) {
     if (!val.isReferenceCounted()) {
         return;
     }
-    // save for dereferencing later
-    tvec.push_back(val.takeNode());
+    // Save for dereferencing later, never while the lvalue lock is held.
+    if (!first_temp) {
+        first_temp = val.takeNode();
+    } else {
+        tvec.push_back(val.takeNode());
+    }
 }
 
 static int var_type_err(const QoreTypeInfo* typeInfo, const char* type, ExceptionSink* xsink) {

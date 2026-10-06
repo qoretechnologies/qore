@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+our list<int> destroyed = ();
+
+sub expect(bool ok, string message) {
+    if (!ok) {
+        throw "TEST-FAILURE", message;
+    }
+}
+
+class ReleaseOwner {
+    public {
+        auto! value;
+        list<int> notifications = ();
+    }
+    notify(int id) {
+        # Re-enters the object whose member assignment caused the destructor.
+        push notifications, id;
+    }
+}
+
+class ReleasedValue {
+    public {
+        int id;
+    }
+    private {
+        *ReleaseOwner owner;
+        bool fail;
+    }
+    constructor(int id, *ReleaseOwner owner = NOTHING, bool fail = False) {
+        self.id = id;
+        self.owner = owner;
+        self.fail = fail;
+    }
+    destructor() {
+        push destroyed, id;
+        if (owner) {
+            owner.notify(id);
+        }
+        if (fail) {
+            throw "EXPECTED-DESTRUCTOR-ERROR", "intentional cleanup error";
+        }
+    }
+}
+
+sub checks() {
+    # One old value: its destructor must run after the member lock is released.
+    ReleaseOwner owner();
+    owner.value = new ReleasedValue(1, owner);
+    owner.value = NOTHING;
+    expect(owner.notifications == (1,) && destroyed == (1,), "single deferred release");
+
+    # COW navigation retains old outer and inner containers, then the overwritten
+    # element. This requires the overflow path as well as the first inline slot.
+    list<list<ReleasedValue>> nested = ((new ReleasedValue(2),),);
+    list<list<ReleasedValue>> alias = nested;
+    nested[0][0] = new ReleasedValue(3);
+    expect(alias[0][0].id == 2 && nested[0][0].id == 3, "nested COW retains both values");
+    expect(destroyed == (1,), "temporary releases do not destroy semantic aliases");
+    nested = ();
+    expect(destroyed == (1, 3), "replacement released once");
+    alias = ();
+    expect(destroyed == (1, 3, 2), "old value released with its alias");
+
+    # Cleanup still finishes and publishes the assignment when a destructor raises.
+    owner.value = new ReleasedValue(4, owner, True);
+    bool caught = False;
+    try {
+        owner.value = NOTHING;
+    } catch (hash<ExceptionInfo> ex) {
+        caught = ex.err == "EXPECTED-DESTRUCTOR-ERROR";
+    }
+    expect(caught && owner.value === NOTHING, "destructor exception propagation");
+    expect(owner.notifications == (1, 4) && destroyed == (1, 3, 2, 4), "throwing release runs once");
+
+    # A subsequent assignment must not inherit any pending cleanup state.
+    owner.value = new ReleasedValue(5, owner);
+    owner.value = NOTHING;
+    expect(owner.notifications == (1, 4, 5) && destroyed == (1, 3, 2, 4, 5), "cleanup recovery");
+}
+
+checks();
+printf("deferred-lvalue-release: ok\n");

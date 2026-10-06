@@ -8,6 +8,7 @@ import sys
 import unittest
 
 import run
+import thread_pool
 
 
 class RunnerTest(unittest.TestCase):
@@ -52,6 +53,26 @@ class RunnerTest(unittest.TestCase):
     def test_summary(self):
         self.assertEqual(2, run.summarize([3, 1, 2])["median"])
         self.assertEqual(0, run.summarize([3])["stdev"])
+
+    def test_pool_checks(self):
+        checks = "".join(f"CHECK\t{name}\t{batch * sum(range(2, count + 2))}\n"
+                         for name, _, count, batch in thread_pool.SCENARIOS)
+        thread_pool.validate_checks(checks)
+        for invalid in ("", checks + checks.splitlines()[0],
+                        "\n".join(checks.splitlines()[1:]),
+                        checks.replace("CHECK", "WRONG", 1),
+                        checks.replace("\t0\n", "\t1\n", 1)):
+            with self.subTest(invalid=invalid[:60]), self.assertRaises(ValueError):
+                thread_pool.validate_checks(invalid)
+
+    def test_pool_invalid_arguments(self):
+        for arguments in (("--samples", "0"), ("--forks", "0"), ("--time-ms", "0"),
+                          ("--warmup", "-1"), ("--baseline-libdir", str(run.HERE))):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run([sys.executable, str(run.HERE / "thread_pool.py"), *arguments],
+                                        text=True, capture_output=True, timeout=10)
+                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                self.assertIn("error:", result.stderr)
 
     def test_invalid_arguments(self):
         for arguments in (("--samples", "0"), ("--count", "0"), ("--count", "1000001"),

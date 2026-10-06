@@ -122,6 +122,26 @@ For a structured mutation that throws, the interpreter must release the
 `LValueHelper` (and therefore its lock) before cleaning up values or transferring
 control to the instruction's exception target.
 
+## Deferred Reference Storage
+
+`LValueHelper` retains replaced values and old COW containers until it has
+released the lvalue lock and completed any recursive-reference scan. Its first
+deferred reference is stored inline; additional references use the existing
+overflow vector. This avoids allocating a vector for the common one-reference
+case without changing the lifetime of any value.
+
+Both the inline reference and overflow references participate in the
+insertion-only scan decision. They remain alive throughout the scan and are
+then discarded in insertion order, even when a destructor raises an exception.
+Moving the helper transfers the inline reference and clears the source slot.
+Do not release a reference early to optimize storage: destructor callbacks can
+re-enter the locked object, and cycle collection relies on these temporary roots.
+
+`examples/test/ir/IRDeferredLValueRelease.qr` covers single-reference cleanup,
+nested COW overflow, aliases, destructor re-entry, and throwing destructors in
+all execution modes through `IRPerformanceSemantics.qtest`. The DGC scan,
+ownership, and operand-temporary suites cover the associated graph invariants.
+
 ## Cache Invalidation Rule
 
 Before any lvalue mutation that can write through `LValueHelper`, the

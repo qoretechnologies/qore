@@ -165,3 +165,165 @@ Total: 175 QUnit cases, 746 assertions, plus four standalone test scripts.
 The native fixture's internal assertions and fixture expect() checks are additional.
 No sanitizer/full-suite run was performed. Timing results are microbenchmarks on
 a shared workstation, not a universal speedup or a production latency guarantee.
+
+## Container follow-up audit (2026-10-06)
+
+This additional `audit-changes` review covers changes after merge
+`6c87c18cf17599bcafd62b1240c08fdd551b39b4` on `feature/performance`. The preceding
+audit remains a record of the earlier cancellation/indexed-path changes.
+
+Scope: identical-type metadata comparison, inline storage for the first
+`LValueHelper` deferred reference, two semantic fixtures and their all-mode
+wrapper, a sandbox-context thread-pool benchmark, harness tests, design notes,
+release notes, and measured evidence. No QPP, public API, installed module,
+parser, or qlib source changes. No agent delegation was used.
+
+### Registration, structure, and test checks
+
+|!Check|!Status|!Evidence
+|New module entry in 120_modules.dox.tmpl|N/A|No .qm module added
+|New module release-note entry|N/A|No .qm module added; runtime changes have a release note
+|qore_user_module or qore_external_user_module registration|N/A|No installed module added
+|CMake QMOD list registration|N/A|No QMOD added
+|First lowercase module intro section|N/A|No .qm source changed
+|Module %modern and redundant directives|N/A|No .qm source changed
+|No parse directives in separated .qc files|N/A|No .qc source changed
+|No deprecated %include usage|Pass|No added source uses %include
+|Copyright 2026 on new files|Pass|Both fixtures, both benchmark files, and JSON evidence carry a 2026 notice
+|Multi-file module directory layout|N/A|No module added
+|No duplicate top-level .qm entry point|N/A|No .qm added
+|QPP namespace matches namespace constructor|N/A|No QPP class added
+|Test %modern directive|Pass|Both new fixtures, the benchmark, and the changed wrapper use %modern
+|Test executable permission|Pass|Both fixtures and both benchmark scripts are executable; wrapper retains its executable mode
+|Module path precedes %requires|Pass|The wrapper prepends in-repo qlib before QUnit/FsUtil; fixtures and benchmark need no module
+|External modules use %try-module|N/A|Only Qore-delivered QUnit and FsUtil are required
+
+### Sandboxing and cancellation checks
+
+|!Check|!Status|!Evidence
+|No unchecked C++ filesystem operations|Pass|Runtime diff adds no filesystem operations
+|No unchecked C++ network operations|Pass|Runtime diff adds no network operations
+|QoreSandboxManagerHelper around filesystem/network operations|N/A|No such operation added
+|Qore File, Dir, Socket, HTTPClient usage justified|Pass|Fixtures/benchmark add no such calls; existing wrapper uses trusted FsUtil temporary directories and quoted child commands
+|C++ loops over 100 iterations check cancellation|Pass|No new loop; existing scan and mandatory deferred-release loops are retained, with one inline element handled outside them
+|Use qore_check_cancel, not deprecated qore_check_io_interrupt|Pass|Neither API is changed or added; existing runtime polling remains
+|Cancellation frequency of 100 tight or 10 expensive iterations|N/A|No new C++ loop or work proportional to input size; cleanup must drain all owned references even with cancellation pending
+|No uncancellable blocking operation|Pass|No runtime blocking operation added; benchmark Queue reads have a 30-second timeout and subprocess execution has a timeout
+
+The complete sandboxing and cooperative-cancellation guides were applied.
+The pool benchmark attaches a manager to its submitting Program; it does not
+bypass checks or claim to validate enforcement. Existing ThreadPool,
+HttpServerListenerSandbox, sandbox-manager, interruption, and cancellation
+regressions were run separately. No qlib module rebuild is needed.
+
+### DataProvider checks
+
+|!Check|!Status|!Evidence
+|Action display_name, short_desc, desc|N/A|No action registration
+|Action options from getActionOptionFromFields|N/A|No action registration
+|Typed action output_type|N/A|No action registration
+|DPAT_API supports_request and doRequestImpl|N/A|No provider
+|DPAT_FIND SearchOptions and getRecordTypeImpl|N/A|No provider
+|Scheme app actions use path without cls|N/A|No app registration
+|Single-key hash slices have trailing comma|N/A|No hash slice added
+|Request/response HashDataType classes, Fields, addQoreFields, public constants|N/A|No DataProvider types
+|Input Fields public|N/A|No DataProvider types
+|Output Fields private|N/A|No DataProvider types
+|Field display_name, type, desc|N/A|No DataProvider fields
+|Input example_value where useful|N/A|No DataProvider fields
+|Finite values use AllowedValueInfo value/display_name|N/A|No DataProvider fields
+|Secret fields use sensitive=True|N/A|No credential fields
+|AppGroup enum for app groups|N/A|No app registration
+|Separate logo loaded in module-level Priv namespace|N/A|No app registration
+|App description includes capabilities, website, business value|N/A|No app registration
+|Friendly app display_name|N/A|No app registration
+|Plain-text short_desc below 80 characters|N/A|No action/app descriptions
+|Markdown desc formatting and caveats|N/A|No action/app descriptions
+|Business language explains why/when|N/A|No action/app descriptions
+|Backticks around True, False, NOTHING in desc|N/A|No action/app descriptions
+|Backticks around field/option names in desc|N/A|No action/app descriptions
+|Long descriptions use section headings and lists|N/A|No action/app descriptions
+|FactoryMap cross-repository registration|N/A|No DataProvider factory
+|Exact getRecordTypeImpl signature|N/A|No provider override
+|JNI dependency JARs committed|N/A|No JNI or installed Java component
+|JAR install rules in CMake|N/A|No JAR dependency added
+
+### Code review checks
+
+|!Check|!Status|!Evidence
+|No workarounds, TODOs, FIXMEs, stubs|Pass|Both complete runtime changes preserve general fallbacks; no partially implemented compiler optimization
+|Exception safety|Pass|No new allocation; inline ownership transfers exactly once, locks and scans precede release, overflow cleanup continues after destructor exceptions; move clears the source slot
+|Thread safety|Pass|Inline storage is invocation-local; metadata identity is read-only; existing object locks, recursive scans, and acquire load of recursive-set membership remain
+|Type safety|Pass|Existing AbstractQoreNode storage and static_cast pattern; both hasType guards retained before identity shortcut; benchmark closures have explicit return/argument types
+|Performance|Pass|Separate identity-only and inline-storage experiments, then interleaved combined comparison and controls; no quadratic loop or extra container copy introduced
+|Error handling|Pass|Null/auto metadata keep old behavior; unequal types use structural comparison; benchmark validates arguments, every task result, process status, and exact sample/check counts
+|Public method Doxygen params, returns, throws, examples, caveats|N/A|No public method or API added; internal lifetime invariant and measurement limitations documented
+|Documentation and release notes|Pass|Design notes describe type-check boundaries, lock/scan/release order, overflow, and move transfer; README defines pool timing units and semantics
+|QPP CONSTANT and RET_VALUE_ONLY flags|N/A|No QPP changes
+|Security|Pass|No format-string or unchecked indexed-access change; no credentials; evidence strips environment and local paths; no policy bypass
+|Correctness and edge cases|Pass|All-mode AST reference comparisons cover empty/optional/heterogeneous/nested containers, soft conversions, full-width integers, aliases, rejected writes, destructor re-entry, exceptions, and overflow; debug DGC counters remain correct
+
+The inline slot holds the same first reference that previously occupied
+`tvec[0]`. It participates in the insertion-only predicate, remains held during
+the scan, and is released before the remaining vector entries. It does not
+change COW eligibility or the recursive graph. General overflow remains a
+vector, not a fixed limit. The internal helper gains one pointer; no public
+class layout or runtime helper ABI changes. Saved-library comparisons use
+compatible qore/qcc tools and independently compiled AOT executables.
+
+### Correctness verification
+
+Release commands used `DYLD_LIBRARY_PATH="$PWD/build" QORE_LIBDIR="$PWD/build"
+QORE_BIN="$PWD/build/qore" QCC="$PWD/build/qcc" build/qore --exec-mode=ir FILE`.
+Debug commands substituted `build-debug`. Subprocess wrappers also exercise
+their own AST/IR/JIT/tiered/AOT or compiled-module variants.
+
+|!Verification|!Result
+|Release qore/qcc build|Pass; existing compiler warnings
+|Debug qore/qcc build|Pass with -DDEBUG -g -Og; stale SDK cache updated to installed SDK 27.0 and HAVE_PIPE2=0 for deployment target 26.3, no tracked build change
+|Harness unit tests|Pass; 8 tests
+|New semantics against saved baseline|Pass; 4 cases, 66 assertions across AST/IR/JIT/tiered/stripped AOT
+|IRPerformanceSemantics, release and debug|Pass; 4 cases, 66 assertions each
+|list, hash, hashdecl|Pass; 18 cases, 454 assertions
+|lvalue-delete-semantics, lvalue-delete-cycle-scan|Pass; 15 cases, 45 assertions
+|DGC deferred/removed/shared/graph/closed/unchanged/concurrent/deref suites|Pass; all eight files
+|DGC scan avoidance, release|Pass; 7 cases, 552 assertions
+|DGC scan avoidance, debug|Pass; 7 cases, 1482 assertions including scan counters
+|Weak container references, release and debug|Pass; 2 cases, 61 assertions each
+|TypedConversionTiers|Pass; 17 cases, 46 assertions
+|Lvalue operand temporaries and assignment ownership, release and debug|Pass; 4 cases, 182 assertions each build
+|IRReferencedContainerCow, IRListPushLocalCow, IRInPlaceListPush, AOTFreshContainerInit|Pass; four standalone checks
+|Program interruption, cancellation cleanup/lifecycle|Pass; 22 cases, 110 assertions
+|sandbox-manager|Pass; 67 cases, 408 assertions
+|ThreadPool and HttpServerListenerSandbox|Pass; 7 cases, 14 assertions
+|Pool before/after reference checks|Pass; 8 checks in each of IR/AOT before/after
+|OptionalMapTypeFolding wrapper|Known baseline/environment failure; 2 of 3 cases pass, AOT compile exits 0 but wrapper rejects macOS deployment-version linker warning, identically before and after
+|OptionalMapTypeFolding stripped AOT, direct execution|Pass with normal and checked append paths; actual program output correct despite the pre-existing link warning
+
+The successful release/debug suites total 249 QUnit cases and 3909 assertions,
+plus four standalone scripts. The known warning-sensitive wrapper and its
+partial assertions are excluded from that total. No sanitizer or full-suite
+run was performed. This audit does not claim every repository test passes.
+
+### Measurement and final audit gates
+
+|!Verification|!Result
+|Refreshed Qore/Java baseline|Pass; 96 jobs, 480 timing samples, 480 reference checks
+|Isolated type-identity comparison|Pass; 96 jobs, 480 timing samples, 480 reference checks
+|Isolated inline-reference comparison|Pass; 60 jobs, 300 timing samples, 480 reference checks
+|Final combined comparison, 1024 elements|Pass; 160 jobs, 800 timing samples, 480 reference checks
+|Larger-batch comparison, 4096 elements|Pass; 72 jobs, 360 timing samples, 480 reference checks
+|Focused IR construction/pair repeat|Pass; 20 jobs, 100 timing samples, 240 reference checks
+|Thread-pool comparison|Pass; 96 jobs, 480 timing samples, 32 reference checks
+|Independent evidence validation|Pass; 600 unique jobs, 3000 positive timing samples; all process means/summary medians/ranges/fork and sample counts recomputed; local paths and environment removed
+|Strict Qore documentation table validation|Pass for every changed documentation file with build/qpp --table-strict
+|Working and staged git diff --check|Pass
+
+The retained changes improve targeted AOT container operations and IR mutation,
+including sandbox-context task workloads, but do not improve every control.
+The larger-batch IR construction medians were 2.8% and 1.8% slower in successive
+runs with overlapping ranges; AOT arithmetic/direct calls were around 1% slower.
+These are documented tradeoffs rather than hidden failures. Runtime builds,
+Qore regression suites, and profiling were separate from timing; lightweight
+validation and ordinary workstation background activity were not eliminated.
+No production latency guarantee is inferred from these microbenchmarks.

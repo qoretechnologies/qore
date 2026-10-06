@@ -715,8 +715,11 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static bool superSetOf(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         if (hasType(first)) {
-            if (hasType(second))
-                return first->superSetOf(second);
+            if (hasType(second)) {
+                // Identical type metadata has identical ordered accept/return specifications.
+                // Keep this inside the hasType checks: untyped/auto inputs have different rules.
+                return first == second || first->superSetOf(second);
+            }
             return false;
         }
         return hasType(second);
