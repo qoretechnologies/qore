@@ -37,9 +37,71 @@ GENERATE_TAGFILE = "{tag}"
         self.run_command(["doxygen", str(config)], root)
         return tag
 
-    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False):
+    def configure_installed_assets(self, root, *, missing_header=False, relative_template=False):
+        source = root / "module source"
+        (source / "docs").mkdir(parents=True)
+        sdk = root / "sdk prefix/custom data/qore"
+        sdk.mkdir(parents=True)
+        for name in ("Doxyfile.in", "header_template.html", "dox_qore.css", "Qore-Q.ico",
+                     "qore-logo-55x151-white.png"):
+            if name != "header_template.html" or not missing_header:
+                shutil.copyfile(ROOT / "doxygen" / name, sdk / name)
+        shutil.copyfile(ROOT / "doxygen/footer_template.html", source / "docs/footer_template.html")
+        (source / "fixture.dox").write_text("/** @mainpage SDK asset fixture */\n")
+        template = sdk / "Doxyfile.in"
+        if relative_template:
+            template = Path(os.path.relpath(template, source))
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(InstalledDocAssets NONE)
+include("{ROOT}/cmake/QoreMacros.cmake")
+set(module_name fixture)
+set(CURRENT_MODULE_NAME fixture)
+set(VERSION_MAJOR 1)
+set(VERSION_MINOR 0)
+set(VERSION_PATCH 0)
+set(_dox_input "\\\"${{CMAKE_SOURCE_DIR}}/fixture.dox\\\"")
+set(_dox_output "${{CMAKE_BINARY_DIR}}/docs")
+qore_configure_module_doxygen("{template}" "${{CMAKE_BINARY_DIR}}/Doxyfile")
+file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
+''')
+        build = root / "build"
+        for prefix in (root / "consumer prefix", root / "another prefix"):
+            self.run_command([CMAKE, "-S", str(source), "-B", str(build),
+                              f"-DCMAKE_INSTALL_PREFIX={prefix}"], root)
+            config = (build / "Doxyfile").read_text()
+            self.assertNotIn(str(prefix), config)
+            self.assertIn(f'HTML_HEADER            = "{sdk}/header_template.html"', config)
+        return build, sdk
+
+    def test_installed_assets_ignore_consumer_prefix_and_support_spaces(self):
+        for relative in (False, True):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory(
+                    prefix="qore doc assets ") as directory:
+                build, sdk = self.configure_installed_assets(Path(directory), relative_template=relative)
+                self.run_command(["doxygen", "Doxyfile"], build)
+                html = build / "docs/html"
+                self.assertIn("SDK asset fixture", (html / "index.html").read_text())
+                for name in ("dox_qore.css", "Qore-Q.ico", "qore-logo-55x151-white.png"):
+                    self.assertEqual((sdk / name).read_bytes(), (html / name).read_bytes())
+
+    def test_missing_sdk_header_fails_instead_of_using_consumer_assets(self):
+        with tempfile.TemporaryDirectory(prefix="qore missing doc asset ") as directory:
+            build, sdk = self.configure_installed_assets(Path(directory), missing_header=True)
+            result = subprocess.run(["doxygen", "Doxyfile"], cwd=build,
+                                    capture_output=True, text=True, timeout=60)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(str(sdk / "header_template.html"), result.stderr)
+            self.assertIn("does not exist", result.stderr)
+
+    def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False,
+                  provider_icon=False):
         source = root / "module source"
         source.mkdir(exist_ok=True)
+        icon = source / "qlib/ExampleDataProvider/app.svg"
+        if provider_icon:
+            icon.parent.mkdir(parents=True)
+            icon.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">'
+                            '<rect width="16" height="16" fill="red"/></svg>')
         for name in image_dirs:
             (source / name).mkdir(exist_ok=True)
         language = self.make_tag(root, "language") if language_tag else root / "absent.tag"
@@ -53,7 +115,9 @@ GENERATE_TAGFILE = "{tag}"
                               + ("See @ref language and " if language_tag else "See ")
                               + "@ref native.\n"
                               + ("See @ref child.\n" if two_phase else "")
-                              + ("See @ref SdkDependency.\n" if module_indexes else "") + "*/\n")
+                              + ("See @ref SdkDependency.\n" if module_indexes else "")
+                              + ('<img src="app.svg" width="32" alt="Example app"/>\n'
+                                 if provider_icon else "") + "*/\n")
         template = root / "Doxyfile.in"
         template.write_text('''QUIET = YES
 INPUT = "@_dox_input@"
@@ -74,6 +138,7 @@ set(QORE_DOXYGEN_MODULE_URL "https://example.invalid/modules")
 set(QORE_DOXYGEN_MODULES "{'SdkDependency;Unavailable' if module_indexes else ''}")
 set(TAGFILES "\\\"{native}=https://example.invalid/native\\\"")
 set(_dox_input "{input_file}")
+set(QORE_DOXYGEN_IMAGES "{icon if provider_icon else ''}")
 qore_configure_module_doxygen("{template}" "{root}/Doxyfile")
 file(WRITE "{root}/tagfiles-after" "${{TAGFILES}}")
 ''')
@@ -85,7 +150,10 @@ include("{script}")
 set(DOXYGEN_FOUND TRUE)
 set(DOXYGEN_EXECUTABLE doxygen)
 add_custom_target(docs)
+add_custom_target(docs-module)
 add_custom_target(docs-child)
+file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/doxygen")
+file(WRITE "${{CMAKE_BINARY_DIR}}/doxygen/Doxyfile.child" "# child\n")
 qore_binary_module_two_phase_docs(module "child")
 ''')
             self.run_command([CMAKE, "-S", str(source), "-B", str(root)], root)
@@ -98,6 +166,15 @@ qore_binary_module_two_phase_docs(module "child")
         html = (root / "output/html/module.html").read_text()
         self.assertIn("https://example.invalid/native/native.html", html)
         return html, config.read_text(), source
+
+    def test_provider_icon_is_copied_from_qlib(self):
+        with tempfile.TemporaryDirectory(prefix="qore provider icon ") as directory:
+            root = Path(directory)
+            html, config, source = self.configure(root, provider_icon=True)
+            self.assertRegex(html, r'(?:src|data)="app\.svg"')
+            self.assertIn(f'"{source}/qlib/ExampleDataProvider"', config)
+            self.assertEqual((source / "qlib/ExampleDataProvider/app.svg").read_bytes(),
+                             (root / "output/html/app.svg").read_bytes())
 
     def test_two_phase_docs_retain_language_and_caller_indexes(self):
         with tempfile.TemporaryDirectory(prefix="qore doc two phase ") as directory:
@@ -141,6 +218,67 @@ qore_configure_module_doxygen("absent.in" "output")
                                     timeout=60)
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Invalid QORE_DOXYGEN_MODULES name", result.stderr)
+
+    def test_module_index_install_is_optional_and_respects_staging_paths(self):
+        for datadir in ("default", "gnu", "empty", "relative", "absolute", "legacy-full"):
+            with self.subTest(datadir=datadir), tempfile.TemporaryDirectory(
+                    prefix="qore external index ") as directory:
+                root = Path(directory)
+                source = root / "source"
+                build = root / "build"
+                prefix = root / "relocated sdk"
+                stage = root / "stage"
+                data_path = prefix / "share"
+                data_config = ""
+                if datadir == "gnu":
+                    data_config = "include(GNUInstallDirs)"
+                elif datadir == "empty":
+                    data_config = 'set(CMAKE_INSTALL_DATADIR "")'
+                elif datadir == "relative":
+                    data_config = 'set(CMAKE_INSTALL_DATADIR "custom data")'
+                    data_path = prefix / "custom data"
+                elif datadir in ("absolute", "legacy-full"):
+                    data_path = root / "absolute data"
+                    variable = ("CMAKE_INSTALL_DATADIR" if datadir == "absolute"
+                                else "CMAKE_INSTALL_FULL_DATADIR")
+                    data_config = f'set({variable} "{data_path}")'
+                (source / "cmake").mkdir(parents=True)
+                (source / "cmake/cmake_uninstall.cmake.in").write_text("# fixture\n")
+                (source / "fixture.c").write_text("void fixture(void) {}\n")
+                (source / "Doxyfile.in").write_text("PROJECT_NAME = Fixture\n")
+                (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(ExternalNativeIndex C)
+include("{ROOT}/cmake/QoreMacros.cmake")
+{data_config}
+set(QORE_INSTALL_COMPONENT_BOOTSTRAP doc-index)
+set(QORE_USERMODULE_DOXYGEN_TEMPLATE "${{CMAKE_SOURCE_DIR}}/Doxyfile.in")
+set(QORE_MODULES_DIR lib/qore-modules)
+set(QORE_API_VERSION 2.0)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+add_library(fixture MODULE fixture.c)
+qore_binary_module_intern2(fixture 1.0 "" "2")
+qore_install_module_doxygen_tag(fixture "${{CMAKE_BINARY_DIR}}/fixture.tag")
+''')
+                self.run_command([CMAKE, "-S", str(source), "-B", str(build),
+                                  f"-DCMAKE_INSTALL_PREFIX={root / 'original sdk'}"], root)
+                self.run_command([CMAKE, "--build", str(build), "--target", "fixture"], root)
+                # Stage the complete install, just as packaging does, before any
+                # documentation exists. DESTDIR also confines a bad absolute
+                # destination to the fixture instead of touching the host root.
+                install = [CMAKE, "-E", "env", f"DESTDIR={stage}", CMAKE,
+                           "--install", str(build), "--prefix", str(prefix)]
+                self.run_command(install, root)
+                self.assertTrue((stage / prefix.relative_to(prefix.anchor)
+                                 / "lib/qore-modules/fixture-api-2.0.qmod").is_file())
+                self.assertFalse((stage / "qore").exists())
+                installed = (stage / data_path.relative_to(data_path.anchor)
+                             / "qore/module-tags/fixture.tag")
+                self.assertFalse(installed.exists())
+                tag = self.make_tag(build, "fixture")
+                self.run_command(install + ["--component", "doc-index"], root)
+                self.assertEqual(tag.read_bytes(), installed.read_bytes())
+                self.assertEqual([installed], list(stage.rglob("*.tag")))
+                self.assertFalse((root / "original sdk").exists())
 
     def test_language_and_module_references_with_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="qore doc sdk ") as directory:
