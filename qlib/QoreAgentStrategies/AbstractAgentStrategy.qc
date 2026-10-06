@@ -45,7 +45,11 @@ public hashdecl AgentContext {
 public hashdecl AgentResult {
     #! The final response text
     string response;
-    #! Tool calls made during execution (list of {tool, args, result, *error} hashes)
+    #! Tool calls made during execution (list of {tool, args, result, *error, *id, *thought_signature} hashes)
+    /** \c id is the provider's id for the call and \c thought_signature its opaque reasoning signature
+        (Gemini 3.x); both are present only when the provider supplied them.  A caller that stores the
+        turn as conversation history must replay both so the provider sees the call as it was made.
+    */
     list<hash<auto>> tool_calls;
     #! Total tokens consumed
     int total_tokens;
