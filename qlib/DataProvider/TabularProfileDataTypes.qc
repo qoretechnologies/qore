@@ -183,6 +183,10 @@ public class TabularColumnProfileDataType inherits HashDataType {
                     "redaction is disabled): it may be a yes/no column"},
             "counter_examples": {"display_name": "Counter-Examples", "type": AutoListType,
                 "desc": "Cells that do not match the inferred type, each with its 1-based `row` and its `value`"},
+            "empty_markers": {"display_name": "Empty Markers", "type": AutoHashOrNothingType,
+                "desc": "Text cells that stand for a missing value, such as `n/a`, `-` or `#N/A`: each marker with its "
+                    "number of cells.  Markers come from a fixed vocabulary and are matched exactly as written, so "
+                    "they are reported unredacted"},
         };
     }
 

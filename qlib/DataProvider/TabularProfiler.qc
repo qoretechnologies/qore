@@ -186,6 +186,15 @@ public hashdecl TabularColumnProfile {
 
     #! Cells that do not match the inferred type: \c row (1-based) and \c value
     list<hash<auto>> counter_examples = ();
+
+    #! Text cells that stand for a missing value, such as \c n/a or \c -: each marker with its number of cells
+    /** Markers come from the fixed @ref TabularProfiler::EmptyMarkers vocabulary and are matched exactly as written
+        (after trimming whitespace), so they are reported unredacted: no other cell text is reported here.  No value
+        if the column has none.
+
+        @since %DataProvider 3.9
+    */
+    *hash<string, int> empty_markers;
 }
 
 #! The profile of one sheet
@@ -299,7 +308,35 @@ hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbook
     @since %DataProvider 3.9
 */
 public class TabularProfiler {
+    public {
+        #! Text that stands for a missing value in spreadsheets and exported data
+        /** Reported in @ref TabularColumnProfile::empty_markers "TabularColumnProfile::empty_markers" when a cell's
+            trimmed text is exactly one of these values; the vocabulary is fixed, so the reported markers never
+            contain data from the file.  Case variants are listed explicitly.
+
+            @since %DataProvider 3.9
+        */
+        const EmptyMarkers = (
+            # not applicable / not available
+            "n/a", "N/A", "N/a", "n.a.", "N.A.", "na", "NA", "n.v.", "N.V.", "k.A.", "k. A.", "K.A.", "n.d.", "N.D.",
+            # dashes
+            "-", "--", "---", "—", "–", "-/-",
+            # null and none
+            "null", "NULL", "Null", "nil", "NIL", "none", "None", "NONE", "(none)", "(blank)", "(empty)", "empty",
+            "unknown", "Unknown", "UNKNOWN",
+            # to be determined / announced
+            "TBD", "tbd", "TBA", "tba", "TBC", "tbc",
+            # placeholders
+            "?", "??", "???", ".", "..", "...", "…", "*", "#",
+            # spreadsheet error values written as text
+            "#N/A", "#NA", "#N/V", "#NV", "#NULL!", "#REF!", "#VALUE!", "#DIV/0!", "#NUM!", "#NAME?",
+        );
+    }
+
     private {
+        #! @ref EmptyMarkers for quick lookups
+        const EmptyMarkerSet = map {$1: True}, EmptyMarkers;
+
         #! Labels of totals rows in common languages
         const TotalsRegex = "^\\s*(grand\\s+total|sub\\s*-?\\s*total|total|totals|sum|summe|gesamt|zwischensumme"
             "|celkem|mezisou[cč]et|spolu|razem|suma|totale|totaal|итого|всього|합계|소계|合計|小計|总计|小计)\\b";
@@ -803,10 +840,18 @@ public class TabularProfiler {
         # the distinct text values, for yes/no columns: lower case -> spelling -> count; up to a few only
         hash<string, hash<string, int>> spellings = {};
         bool many_values;
+        # cells with text from the fixed empty-marker vocabulary
+        hash<string, int> empty_markers = {};
         foreach int r in (data_rows) {
             if ((types[r][col] ?? "empty") == "empty") {
                 ++rv.empty;
                 continue;
+            }
+            if (rows[r][col].typeCode() == NT_STRING) {
+                string text = trim(rows[r][col]);
+                if (EmptyMarkerSet{text}) {
+                    ++empty_markers{text};
+                }
             }
             hash<auto> cls = classify(rows[r][col]);
             ++rv.non_empty;
@@ -844,6 +889,9 @@ public class TabularProfiler {
             } else if (cls.number_format == "decimal_point") {
                 decimal_point = True;
             }
+        }
+        if (empty_markers) {
+            rv.empty_markers = empty_markers;
         }
         if (!rv.non_empty) {
             return rv;

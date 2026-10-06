@@ -57,6 +57,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("hidden sheets, formulas, named ranges, and text formats", \workbook());
         addTestCase("text-only and single-column sheets", \textOnly());
         addTestCase("redaction", \redaction());
+        addTestCase("empty markers", \emptyMarkers());
         addTestCase("column letters", \columnLetters());
         addTestCase("profiles match their data type", \dataType());
         addTestCase("untyped grids from format readers", \gridFromHash());
@@ -394,6 +395,45 @@ public class TabularProfilerTest inherits QUnit::Test {
             "sheets": (<TabularSheetGrid>{"name": "s", "rows": (("Name", "Qty"), (" Jane Doe ", 5))},),
         }, <TabularProfileOptions>{"redact": False, "sample_rows": 1}).sheets[0];
         assertEq((("Jane Doe", 5),), sheet.samples, "unredacted samples are trimmed");
+    }
+
+    #! text from the fixed vocabulary of empty markers is reported per column with its count, unredacted
+    emptyMarkers() {
+        list<list<auto>> rows = (
+            ("SKU", "Price", "Note", "Code"),
+            ("A", 5.5, "n/a", "X-1"),
+            ("B", "n/a", " - ", "na"),
+            ("C", "N/A", "", "Na"),
+            ("D", 7.25, "Jane Doe", "#N/A"),
+            ("E", "n/a", "—", "nan"),
+            ("F", "-", "TBD", "none of these"),
+        );
+        hash<TabularSheetProfile> sheet = profileOne(rows);
+        # markers are matched exactly as written, after trimming
+        assertEq({"n/a": 2, "N/A": 1, "-": 1}, sheet.columns[1].empty_markers);
+        assertEq({"n/a": 1, "-": 1, "—": 1, "TBD": 1}, sheet.columns[2].empty_markers);
+        assertEq({"na": 1, "#N/A": 1}, sheet.columns[3].empty_markers, "case variants not listed and other text "
+            "are not markers");
+        # a column without markers has no value
+        assertNothing(sheet.columns[0].empty_markers);
+        # markers are reported unredacted while the rest of the profile is redacted
+        assertEq("x/x", sheet.samples[1][1]);
+        # every reported marker comes from the fixed vocabulary
+        foreach hash<TabularColumnProfile> c in (sheet.columns) {
+            foreach string m in (keys c.empty_markers) {
+                assertTrue(inlist(m, TabularProfiler::EmptyMarkers), m);
+            }
+        }
+        # the same without redaction
+        hash<TabularSheetProfile> unredacted = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "csv",
+            "sheets": (<TabularSheetGrid>{"name": "s", "rows": rows},),
+        }, <TabularProfileOptions>{"redact": False}).sheets[0];
+        assertEq((map $1.empty_markers, sheet.columns), (map $1.empty_markers, unredacted.columns));
+        # non-string cells are never markers
+        assertNothing(profileOne((("A",), (0,), (-1,))).columns[0].empty_markers);
+        # the vocabulary has no duplicates
+        assertEq(TabularProfiler::EmptyMarkers.size(), (map {$1: True}, TabularProfiler::EmptyMarkers).size());
     }
 
     columnLetters() {
