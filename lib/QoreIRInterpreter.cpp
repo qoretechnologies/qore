@@ -10215,7 +10215,21 @@ load_local_done:
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIterator(
                     value_type, iterable, false, "foldr operator", xsink);
-                if ((xsink && *xsink) || value_type == FunctionalOperator::nothing) {
+                if (xsink && *xsink) {
+                    delete iter;
+                    if (inst->exception_target) {
+                        setValueSlotDirect(values, inst->result.id, QoreValue(static_cast<int64_t>(0)));
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (value_type == FunctionalOperator::nothing) {
                     delete iter;
                     setValueSlot(values, inst->result.id, QoreValue(), xsink);
                     ++ip;
@@ -11470,6 +11484,17 @@ load_local_done:
                         "foreach statement", xsink);
                 }
                 if (xsink && *xsink) {
+                    delete iter;
+                    if (inst->exception_target) {
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        setValueSlotDirect(values, iter_inst->result.id, QoreValue(static_cast<int64_t>(0)));
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -11553,6 +11578,16 @@ load_local_done:
                 if (xsink && *xsink) {
                     active_iterators.erase(iter);
                     delete iter;
+                    if (inst->exception_target) {
+                        // the loop is left for the in-frame landing pad; the iterator is gone, so clear its slot
+                        // in case the handler runs the loop again
+                        setValueSlotDirect(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)));
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;

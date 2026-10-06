@@ -439,6 +439,16 @@ private:
         std::string& error, bool containers_only = false);
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
+    //! Gives an instruction that can raise an exception the active handler
+    /** Without it, an exception raised by the instruction returns from the frame instead of branching to an
+        enclosing try/catch in the same function.  Iterator instructions call iterator code (a user
+        iterator's next() and getValue(), or a conversion error), which can raise exceptions.
+    */
+    template <typename T>
+    T* withExceptionTarget(T* inst) const {
+        inst->exception_target = getCurrentExceptionTarget();
+        return inst;
+    }
     void setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
         QoreIRBasicBlock* handler = nullptr);
     bool needsNotNothingGuard(const QoreValue& expr) const;

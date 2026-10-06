@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# An exception raised while a loop or a functional operator advances an iterator (an iterator's next() or
+# getValue(), or a value that cannot be iterated) must be caught by the enclosing try block in the same function.
+# IR, tiered and JIT execution returned from the function instead, so the exception escaped its handler.  The
+# program below is run in every execution mode and as an AOT binary, and must give the same output as AST
+# execution.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class IRIteratorExceptionHandlerTest
+
+class IRIteratorExceptionHandlerTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+
+class ThrowingIterator inherits AbstractIterator {
+    private {
+        int i = 0;
+        int fail_at;
+        bool fail_in_next;
+    }
+    constructor(int fail_at, bool fail_in_next = False) {
+        self.fail_at = fail_at;
+        self.fail_in_next = fail_in_next;
+    }
+    bool next() {
+        ++i;
+        if (fail_in_next && i == fail_at) {
+            throw \"NEXT-ERROR\", sprintf(\"next %d\", i);
+        }
+        return i <= 3;
+    }
+    auto getValue() {
+        if (!fail_in_next && i == fail_at) {
+            throw \"VALUE-ERROR\", sprintf(\"value %d\", i);
+        }
+        return i;
+    }
+    bool valid() {
+        return i > 0 && i <= 3;
+    }
+}
+
+string sub foreachValue(int fail_at, bool fail_in_next = False) {
+    list<auto> seen = ();
+    try {
+        foreach auto v in (new ThrowingIterator(fail_at, fail_in_next)) {
+            push seen, v;
+        }
+        return \"none\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s(%s)@%d\", ex.err, ex.desc, seen.size());
+    }
+}
+
+string sub nested(int fail_at) {
+    string trace = \"\";
+    try {
+        try {
+            foreach auto v in (new ThrowingIterator(fail_at)) {
+                trace += string(v);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            trace += \"|inner:\" + ex.err;
+            rethrow;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        trace += \"|outer:\" + ex.err;
+    }
+    return trace;
+}
+
+string sub listAndHash() {
+    string trace = \"\";
+    try {
+        foreach int i in ((1, 2, 3)) {
+            if (i == 2) {
+                throw \"LIST-ERROR\", \"two\";
+            }
+            trace += string(i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        trace += \"|\" + ex.err;
+    }
+    try {
+        try {
+            foreach hash<auto> i in ({\"a\": 1, \"b\": 2}.pairIterator()) {
+                if (i.key == \"b\") {
+                    throw \"HASH-ERROR\", i.key;
+                }
+                trace += i.key;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            trace += \"|\" + ex.err;
+            rethrow;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        trace += \"|rethrown:\" + ex.desc;
+    }
+    return trace;
+}
+
+# the select predicate is not one of the specialized patterns (such as $1 > 0), so the select advances its
+# source with the iterator instructions like map and foldl
+string sub operators() {
+    list<string> errs = ();
+    try {
+        push errs, sprintf(\"map:%y\", (map $1, new ThrowingIterator(2)));
+    } catch (hash<ExceptionInfo> ex) {
+        push errs, \"map:\" + ex.err;
+    }
+    try {
+        push errs, sprintf(\"select:%y\", (select new ThrowingIterator(2), $1 >= 1));
+    } catch (hash<ExceptionInfo> ex) {
+        push errs, \"select:\" + ex.err;
+    }
+    try {
+        push errs, sprintf(\"foldl:%y\", (foldl $1 + $2, new ThrowingIterator(3)));
+    } catch (hash<ExceptionInfo> ex) {
+        push errs, \"foldl:\" + ex.err;
+    }
+    try {
+        push errs, sprintf(\"map-next:%y\", (map $1, new ThrowingIterator(2, True)));
+    } catch (hash<ExceptionInfo> ex) {
+        push errs, \"map-next:\" + ex.err;
+    }
+    return errs.join(\",\");
+}
+
+# the handler runs the loop again: each attempt must get a new iterator
+string sub retry() {
+    string trace = \"\";
+    for (int attempt = 1; attempt <= 3; ++attempt) {
+        try {
+            foreach auto v in (new ThrowingIterator(attempt == 3 ? 99 : 2)) {
+                trace += string(v);
+            }
+            trace += \"|done\";
+            break;
+        } catch (hash<ExceptionInfo> ex) {
+            trace += \"|retry\";
+        }
+    }
+    return trace;
+}
+
+list<string> out = (
+    foreachValue(1), foreachValue(2), foreachValue(3), foreachValue(1, True), foreachValue(3, True),
+    nested(2), listAndHash(), operators(), retry(),
+);
+print(out.join(\"\\n\") + \"\\n\");
+";
+
+        const Expected = "VALUE-ERROR(value 1)@0
+VALUE-ERROR(value 2)@1
+VALUE-ERROR(value 3)@2
+NEXT-ERROR(next 1)@0
+NEXT-ERROR(next 3)@2
+1|inner:VALUE-ERROR|outer:VALUE-ERROR
+1|LIST-ERRORa|HASH-ERROR|rethrown:b
+map:VALUE-ERROR,select:VALUE-ERROR,foldl:VALUE-ERROR,map-next:NEXT-ERROR
+1|retry1|retry123|done
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string src;
+    }
+
+    constructor() : QUnit::Test("IRIteratorExceptionHandlerTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        src = tmp_location() + sprintf("/qore-ir-iterator-exception-%d.qr", getpid());
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Code);
+        f.close();
+
+        addTestCase("execution modes", \modeTest());
+        addTestCase("AOT", \aotTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        unlink(src);
+    }
+
+    private string run(string cmd) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, cmd));
+    }
+
+    private modeTest() {
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            assertEq(Expected, run(sprintf("%s --exec-mode=%s %s", qore_bin, mode, src)), mode);
+        }
+        # tiered execution after promotion to IR and JIT
+        assertEq(Expected, run(sprintf("%s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 %s",
+            qore_bin, src)), "tiered, promoted");
+    }
+
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        string bin = src + ".bin";
+        on_exit if (is_file(bin)) {
+            unlink(bin);
+        }
+        string compile = run(sprintf("%s -o %s %s", qcc_bin, bin, src));
+        assertTrue(is_file(bin), compile);
+        assertEq(Expected, run(bin), "AOT");
+    }
+}

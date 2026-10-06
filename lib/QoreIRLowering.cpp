@@ -2345,7 +2345,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         } else {
             // The parse-tree iterator_func pointer is a compile-time artifact
             // that does not exist at runtime in AOT-compiled binaries.
-            iter_val = builder.createIteratorCreate(list_val, nullptr, stmt->loc)->result;
+            iter_val = withExceptionTarget(builder.createIteratorCreate(list_val, nullptr, stmt->loc))->result;
         }
 
         // Create basic blocks for the loop structure AFTER evaluating the list
@@ -2407,8 +2407,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             value_val = next->result;
             builder.setBlock(body_block);
         } else {
-            value_val = builder.createIteratorNext(
-                iter_val, exit_block, body_block, stmt->loc)->result;
+            value_val = withExceptionTarget(builder.createIteratorNext(
+                iter_val, exit_block, body_block, stmt->loc))->result;
             builder.setBlock(body_block);
         }
 
@@ -14974,8 +14974,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Create iterator from input list
     auto* iter_inst = iterate_right
-        ? builder.createIteratorCreateIterate(input_list, map->loc)
-        : builder.createIteratorCreate(input_list, nullptr, map->loc);
+        ? withExceptionTarget(builder.createIteratorCreateIterate(input_list, map->loc))
+        : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, map->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create basic blocks for the loop structure AFTER evaluating the input
@@ -15031,7 +15031,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator (branches to exit if done, body if has element)
-    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, map->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, map->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context, evaluate expression, append result
@@ -15416,7 +15416,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     }
 
     // Create iterator from input list
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, select->loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, select->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create basic blocks AFTER evaluating the input expression
@@ -15470,7 +15470,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, select->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, select->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context, evaluate predicate
@@ -15783,7 +15783,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input list
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, foldl->loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, foldl->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create basic blocks for the loop structure AFTER evaluating the input
@@ -15804,7 +15804,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // Init block: get first element as initial accumulator
     builder.setBlock(init_block);
     QoreIRValue nothing_val = builder.createConstNothing(foldl->loc)->result;
-    auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldl->loc);
+    auto* first_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, header_block, foldl->loc));
     QoreIRValue first_val = first_inst->result;
 
     // Header block: check for next element
@@ -15815,7 +15815,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     QoreIRValue accum_val = accum_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, foldl->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, foldl->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context with both $1 (accumulator) and $2 (element)
@@ -16009,7 +16009,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     // Untyped and ownership-sensitive element types retain reverse iteration.
 
     // Create reverse iterator from input list
-    auto* iter_inst = builder.createIteratorCreateReverse(input_list, foldr->loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreateReverse(input_list, foldr->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create basic blocks for the loop structure AFTER evaluating the input
@@ -16030,7 +16030,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     // Init block: get first element as initial accumulator
     builder.setBlock(init_block);
     QoreIRValue nothing_val = builder.createConstNothing(foldr->loc)->result;
-    auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldr->loc);
+    auto* first_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, header_block, foldr->loc));
     QoreIRValue first_val = first_inst->result;
 
     // Header block: check for next element
@@ -16041,7 +16041,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     QoreIRValue accum_val = accum_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, foldr->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, foldr->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context with both $1 (accumulator) and $2 (element)
@@ -16373,8 +16373,8 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // Create iterator from input list
     auto* iter_inst = iterate_source
-        ? builder.createIteratorCreateIterate(input_list, ms->loc)
-        : builder.createIteratorCreate(input_list, nullptr, ms->loc);
+        ? withExceptionTarget(builder.createIteratorCreateIterate(input_list, ms->loc))
+        : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, ms->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create loop blocks AFTER expression evaluation
@@ -16430,7 +16430,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, ms->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, loop_exit_block, body_block, ms->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: push implicit args, evaluate select predicate
@@ -16724,7 +16724,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hm->loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hm->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create loop blocks AFTER expression evaluation
@@ -16760,7 +16760,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hm->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, hm->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: evaluate key and value expressions
@@ -17051,7 +17051,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hms->loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hms->loc));
     QoreIRValue iter_val = iter_inst->result;
 
     // Create loop blocks AFTER expression evaluation
@@ -17090,7 +17090,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hms->loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, hms->loc));
     QoreIRValue element_val = next_inst->result;
 
     // Body block: evaluate select predicate
@@ -17410,8 +17410,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         is_collection_val = builder.createUnaryOp(QoreIROpcode::IsCollectionType, source, loc)->result;
     }
     auto* iter_inst = source_uses_iterate
-        ? builder.createIteratorCreateIterate(source, loc)
-        : builder.createIteratorCreate(source, nullptr, loc);
+        ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))
+        : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc));
     QoreIRValue iter_val = iter_inst->result;
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
@@ -17668,7 +17668,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     builder.createBranch(next_block, loc);
 
     builder.setBlock(next_block);
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);
@@ -18295,8 +18295,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             || stages.front().kind == LazyPipelineStage::StreamTakeWhile
             || stages.front().kind == LazyPipelineStage::StreamTakeUntil);
     auto* iter_inst = source_uses_iterate
-        ? builder.createIteratorCreateIterate(source, loc)
-        : builder.createIteratorCreate(source, nullptr, loc);
+        ? withExceptionTarget(builder.createIteratorCreateIterate(source, loc))
+        : withExceptionTarget(builder.createIteratorCreate(source, nullptr, loc));
     QoreIRValue iter_val = iter_inst->result;
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
@@ -18441,7 +18441,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     builder.createBranch(next_block, loc);
 
     builder.setBlock(next_block);
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);
@@ -18707,7 +18707,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
         return QoreIRValue();
     }
 
-    auto* iter_inst = builder.createIteratorCreateIterate(source, loc);
+    auto* iter_inst = withExceptionTarget(builder.createIteratorCreateIterate(source, loc));
     QoreIRValue iter_val = iter_inst->result;
 
     auto lower_predicate = [&](QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
@@ -18777,7 +18777,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             builder.setBlock(header_block);
             auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
-            auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+            auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
 
             builder.setBlock(body_block);
@@ -18862,7 +18862,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             auto* count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             QoreIRValue count_val = count_phi->result;
-            auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+            auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
             QoreIRValue element_val = next_inst->result;
 
             builder.setBlock(body_block);
@@ -18981,7 +18981,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     }
 
     builder.setBlock(next_block);
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    auto* next_inst = withExceptionTarget(builder.createIteratorNext(iter_val, exit_block, body_block, loc));
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);

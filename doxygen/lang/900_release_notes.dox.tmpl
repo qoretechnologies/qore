@@ -4041,6 +4041,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed an exception raised while a loop or a functional operator advances an iterator escaping the
+      enclosing \c try block with IR, tiered and JIT execution: an exception from an iterator's \c next() or
+      \c getValue() in a \c foreach loop, or in an operator such as \c map, \c select or \c foldl, returned from
+      the function instead of running the \c catch block, as it does with AST execution
+
     - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a \c buffer<string> or a
       \c DataFrame cell, having a different value in a boolean context than the same
       string in any other value: the string \c "0" was @ref True "True" in a boolean context, such as with \c if,
