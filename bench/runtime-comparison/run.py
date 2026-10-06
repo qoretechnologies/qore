@@ -131,7 +131,7 @@ def main():
     parser.add_argument("--qcc", default=str(ROOT / "build/qcc"))
     parser.add_argument("--java", default="java")
     parser.add_argument("--javac", default="javac")
-    parser.add_argument("--baseline-libdir", help="also run IR against a saved compatible libqore directory")
+    parser.add_argument("--baseline-libdir", help="also run selected Qore modes against a saved compatible libqore")
     parser.add_argument("--output-root", type=Path, default=ROOT / "build/bench-runtime-comparison")
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--kernels", nargs="+", choices=KERNELS, default=list(KERNELS))
@@ -155,12 +155,13 @@ def main():
         parser.error("duplicate modes/kernels")
     if args.baseline_libdir:
         args.baseline_libdir = str(Path(args.baseline_libdir).resolve())
-        if "qore-ir" not in args.modes or not Path(args.baseline_libdir).is_dir():
-            parser.error("baseline-libdir requires qore-ir mode and an existing library directory")
+        qore_modes = [mode for mode in args.modes if mode.startswith("qore-")]
+        if not qore_modes or not Path(args.baseline_libdir).is_dir():
+            parser.error("baseline-libdir requires a Qore mode and an existing library directory")
         library_name = "libqore.dylib" if sys.platform == "darwin" else "libqore.so"
         if not (Path(args.baseline_libdir) / library_name).is_file():
             parser.error(f"baseline-libdir must contain {library_name}")
-        args.modes.append("qore-ir-before")
+        args.modes.extend(mode + "-before" for mode in qore_modes)
 
     args.output_root = args.output_root.resolve()
     args.output_root.mkdir(parents=True, exist_ok=True)
@@ -178,7 +179,9 @@ def main():
     if args.baseline_libdir:
         baseline_env = env.copy()
         baseline_env[library_var] = args.baseline_libdir + os.pathsep + env[library_var]
-        mode_environments["qore-ir-before"] = baseline_env
+        for mode in args.modes:
+            if mode.endswith("-before"):
+                mode_environments[mode] = baseline_env
     commands = []
 
     def run(command, label, timeout=300, environment=None):
@@ -216,7 +219,7 @@ def main():
             libraries = sorted(Path(args.baseline_libdir).glob("libqore*.dylib"))
             libraries += sorted(Path(args.baseline_libdir).glob("libqore.so*"))
             metadata["baseline_libraries"] = {str(p.resolve()): digest(p) for p in libraries}
-            metadata["baseline_library_path"] = mode_environments["qore-ir-before"][library_var]
+            metadata["baseline_library_path"] = baseline_env[library_var]
     if "qore-aot" in args.modes:
         executable = output / "kernels-aot"
         _, compile_ms = run([qcc, "-O3", "-o", executable, output / "kernels.qr"], "qcc", timeout=600)
@@ -224,6 +227,13 @@ def main():
         metadata["qcc_sha256"] = digest(qcc)
         metadata["aot_sha256"] = digest(executable)
         base["qore-aot"] = [str(executable)]
+        if args.baseline_libdir:
+            baseline_executable = output / "kernels-aot-before"
+            _, compile_ms = run([qcc, "-O3", "-o", baseline_executable, output / "kernels.qr"],
+                                "qcc-before", timeout=600, environment=baseline_env)
+            metadata["baseline_aot_compile_ms"] = compile_ms
+            metadata["baseline_aot_sha256"] = digest(baseline_executable)
+            base["qore-aot-before"] = [str(baseline_executable)]
     classpath = ""
     java = shutil.which(args.java)
     if any(mode.startswith("java-") for mode in args.modes):

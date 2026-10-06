@@ -51,6 +51,7 @@
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/QoreSandboxInterrupt.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -4717,7 +4718,16 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         return true;
     }
 
-    // check program-level interrupt
+    // No manager can report an interrupt if the global conservative count is zero.
+    // Keep this load seq_cst: a waiter publishes waiting_on before this check, and
+    // requestInterrupt() publishes the count before broadcasting to registered waiters.
+    // Thread cancellation and deferral above are independent and must always run first.
+    if (!qore_pending_program_interrupts.load(std::memory_order_seq_cst)) {
+        return false;
+    }
+
+    // An interrupt exists somewhere; resolve the actual governing manager, including
+    // enclosing callers and captured async contexts. Policy barriers do not suppress it.
     QoreSandboxManagerHelper smh;
     if (smh) {
         if (xsink) {

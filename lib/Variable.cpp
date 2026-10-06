@@ -1641,8 +1641,10 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
-int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove,
+        const int64_t* single_index) {
     assert(num_steps > 0);
+    assert(!single_index || (num_steps == 2 && steps[1].kind == LVPathStepKind::ListIndex));
 
     // Step 0: resolve root variable
     const LVPathStep& root = steps[0];
@@ -1790,7 +1792,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
-                int64_t idx = step.index;
+                int64_t idx = single_index ? *single_index : step.index;
                 int64_t original_idx = idx;
                 bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
                 if (t == NT_BUFFER) {

@@ -708,8 +708,10 @@ public:
     //! @param steps array of LVPathStep describing the navigation
     //! @param num_steps number of steps in the array
     //! @param for_remove true if navigating for a remove operation
+    //! @param single_index optional per-call index for a two-step root/ListIndex path; leaves shared steps immutable
     //! @return 0 on success, -1 on error (exception raised in vl.xsink)
-    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
+        const int64_t* single_index = nullptr);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);

@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ProgramInterruptFastPathTest
+
+class ProgramInterruptFastPathTest inherits QUnit::Test {
+    constructor() : Test("Program interrupt fast path", "1.0", \ARGV) {
+        addTestCase("native contexts, deferral, priority, and concurrent requests", \native());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private native() {
+        string root = realpath(get_script_dir() + "/../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-interrupt-fast-path-");
+        string executable = dir.path + "/interrupt-test";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/program_interrupt_fast_path.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int rc;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + quote(executable) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("program-interrupt-fast-path: ok\n", output);
+    }
+}

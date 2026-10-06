@@ -204,6 +204,24 @@ Regression coverage: `examples/test/qore/misc/lvalue-delete-semantics.qtest` pin
 whatever engine it is run under, and `examples/test/qore/misc/lvalue-delete-cycle-scan.qtest` covers
 the lock-release requirement.
 
+## Indexed compound mutation metadata
+
+For a two-step `root / ListIndex` compound mutation, native runtime helpers
+pass the resolved integer index separately to `LValueHelper::navigatePath()`.
+This avoids copying the path vector and its root-name strings on every call.
+The shared instruction remains immutable: the override is stack-local, including
+when concurrent calls use different indices. Static indices use the same path.
+Longer paths and other selector kinds retain the private copied-path fallback.
+The IR interpreter also retains its private copy: specializing its large dispatch
+function improved indexed mutation but regressed several unrelated IR kernels
+in an interleaved benchmark, so that experimental change was not retained.
+
+This is a metadata optimization, not direct container access. Root resolution,
+reference following, locking, copy-on-write, auto-vivification, negative indices,
+buffer handling, type checks, RHS ownership, cache invalidation, and exception
+cleanup still use the existing navigation and compound-assignment machinery.
+`IRPerformanceSemantics.qtest` exercises the change in AST/IR/JIT/tiered/AOT modes.
+
 ## Review Checklist
 
 When adding a new lvalue opcode or helper:

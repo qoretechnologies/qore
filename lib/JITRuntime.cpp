@@ -12789,13 +12789,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
         return toBits(QoreValue());
     }
     std::vector<LVPathStep> path_copy;
-    patchLVPath(path_copy, inst, dyn_vals);
+    // A root/index path only varies by its integer index. Keep that value on the
+    // stack instead of copying strings/vectors in the shared path on every mutation.
+    // Navigation still handles references, locks, COW, vivification and type checks.
+    const bool single_index = inst->path.size() == 2
+        && inst->path[1].kind == LVPathStepKind::ListIndex;
+    int64_t index = 0;
+    if (single_index) {
+        const LVPathStep& step = inst->path[1];
+        index = step.operand_idx == UINT32_MAX ? step.index : fromBits(dyn_vals[0]).getAsBigInt();
+    } else {
+        patchLVPath(path_copy, inst, dyn_vals);
+    }
+    const auto& path = single_index ? inst->path : path_copy;
 
     QoreValue rhs = fromBits(rhs_bits);
     ValueHolder rhs_holder(rhs.refSelf(), xsink);
 
     LValueHelper lvh(xsink);
-    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+    if (lvh.navigatePath(path.data(), path.size(), false, single_index ? &index : nullptr)) {
         return toBits(QoreValue());
     }
     QoreValue res = qore_rt_apply_lvalue_compound(

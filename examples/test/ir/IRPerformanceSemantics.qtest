@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRPerformanceSemanticsTest
+
+class IRPerformanceSemanticsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("IR performance semantics", "1.0", \ARGV) {
+        addTestCase("indexed compound mutation in all execution modes", \indexed());
+        addTestCase("bounded integer pair ownership and fallback", \bounded());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int rc;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        return output;
+    }
+    private checkFixture(string fixture, string expected, string prefix = "") {
+        string source = get_script_dir() + "/" + fixture + ".qr";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
+        }
+        TmpDir dir("qore-performance-semantics-");
+        string executable = dir.path + "/fixture";
+        run((qcc, "-O3", "--strip-source", "-o", executable, source), prefix);
+        assertEq(expected, run((executable,), prefix), "AOT");
+    }
+    private indexed() {
+        checkFixture("IRIndexedCompound", "indexed-compound: ok\n");
+    }
+    private bounded() {
+        string disabled = "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 ";
+        checkFixture("IRBoundedPair", "bounded-pair: ok\n");
+        checkFixture("IRBoundedPair", "bounded-pair: ok\n", disabled);
+    }
+}

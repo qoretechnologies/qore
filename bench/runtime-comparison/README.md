@@ -42,12 +42,18 @@ compatible binaries/libraries. The default output root is
 `build/bench-runtime-comparison`; every run creates a unique `run-*` directory.
 Run `--help` for all settings.
 
-For an interleaved before/after IR comparison, preserve the original shared
+For an interleaved before/after IR and/or AOT comparison, preserve the original shared
 library and its `libqore.dylib`/`libqore.so` link in a separate directory before
-rebuilding. Pass `--modes qore-ir --baseline-libdir /path/to/saved-library`.
-The runner adds `qore-ir-before` jobs, using the same executable, source snapshot,
+rebuilding. Pass `--modes qore-ir qore-aot --baseline-libdir /path/to/saved-library`.
+The runner adds corresponding `-before` jobs, using the same tools, source snapshot,
 settings, and shuffled schedule with the saved library selected by its loader
-path. The two libraries must be ABI-compatible. Their hashes are recorded.
+path. AOT is compiled twice: once against each library, then run against that
+same library. This measures compiler optimizations as well as runtime changes;
+it does not run a newly optimized executable against an old runtime and call
+that a baseline. The two libraries must be ABI-compatible with the tools. Library
+and executable hashes and both compile times are recorded. Preserve the tools
+too if a future change makes them incompatible; this option is for compatible
+shared-library comparisons only.
 
 ## Workloads and units
 

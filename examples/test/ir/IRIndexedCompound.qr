@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(bool ok, string message) {
+    if (!ok) {
+        throw "TEST-FAILURE", message;
+    }
+}
+
+list<int> sub makeValues(int count) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        push values, i + 1;
+    }
+    return values;
+}
+
+sub mutateRef(reference<list<int>> values, int index) {
+    values[index] += 7;
+}
+
+our list<int> sharedValues = makeValues(2);
+
+class IndexedMember {
+    public {
+        list<int> values = makeValues(2);
+    }
+    change(int index) {
+        values[index] += 4;
+    }
+}
+
+sub checks(int index) {
+    list<int> deliberately_long_local_name_for_indexed_mutation = makeValues(3);
+    list<int> alias = deliberately_long_local_name_for_indexed_mutation;
+    int result = (deliberately_long_local_name_for_indexed_mutation[index] += 5);
+    expect(result == index + 6, "compound result");
+    expect(alias[index] == index + 1, "copy-on-write preserves alias");
+    mutateRef(\deliberately_long_local_name_for_indexed_mutation, index);
+    expect(deliberately_long_local_name_for_indexed_mutation[index] == index + 13, "reference root");
+    deliberately_long_local_name_for_indexed_mutation[-1] *= 3;
+    expect(deliberately_long_local_name_for_indexed_mutation[2] == 9, "negative index");
+    bool negative_error = False;
+    try {
+        deliberately_long_local_name_for_indexed_mutation[-9] += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        negative_error = ex.err == "NEGATIVE-LIST-INDEX";
+    }
+    expect(negative_error, "invalid negative index");
+
+    list<float> floats = (1.5, 2.5);
+    floats[index] *= 2.0;
+    expect(floats[index] == 3.0 + 2.0 * index, "non-integer elements");
+
+    list<int> captured = makeValues(2);
+    code<int(int)> update = int sub (int i) { return captured[i] += 3; };
+    expect(update(index) == index + 4, "captured local");
+    expect(captured[index] == index + 4, "captured mutation visible");
+
+    *list<int> empty;
+    empty[index] += 4;
+    expect(empty[index] == 4, "auto-vivification");
+    bool zero_error = False;
+    try {
+        empty[index] /= 0;
+    } catch (hash<ExceptionInfo> ex) {
+        zero_error = ex.err == "DIVISION-BY-ZERO";
+    }
+    expect(zero_error && empty[index] == 4, "exception leaves element intact");
+
+    IndexedMember member();
+    member.change(index);
+    expect(member.values[index] == index + 5, "member root");
+
+    # A longer path must retain the general navigation path.
+    hash<string, list<int>> nested = {"values": makeValues(2)};
+    nested.values[index] += 9;
+    expect(nested.values[index] == index + 10, "nested fallback");
+}
+
+sub parallelChecks() {
+    Counter done(2);
+    # The same IR path is called with different dynamic indices concurrently.
+    code<nothing(int)> worker = sub (int index) {
+        on_exit done.dec();
+        for (int i = 0; i < 1000; ++i) {
+            sharedValues[index] += 1;
+        }
+    };
+    background worker(0);
+    background worker(1);
+    done.waitForZero();
+    expect(sharedValues[0] == 1001 && sharedValues[1] == 1002, "shared path stays immutable");
+}
+
+checks(0);
+checks(1);
+parallelChecks();
+printf("indexed-compound: ok\n");

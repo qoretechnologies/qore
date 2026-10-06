@@ -121,12 +121,15 @@ python3 bench/runtime-comparison/run.py --modes qore-ir \
     --forks 3 --warmup 3 --samples 5 --time-ms 300
 ```
 
-## Prioritized follow-up work
+## Original prioritized follow-up work
 
 These are profile-backed targets, not implemented optimizations or predicted
 speedups. Profiles were collected separately from measurements with macOS
 `sample` at 1 ms intervals for five seconds. Counts below exclude the idle
 signal-wait thread and use leaf samples, avoiding recursive double counting.
+
+The cancellation and path-metadata portions were subsequently implemented;
+see the measured follow-up below. The original profiling rationale is retained here.
 
 ### 1. Lower AOT cancellation polling cost
 
@@ -201,3 +204,145 @@ tracing regression has four cases and 41 assertions covering unset, enabled,
 empty, and zero values plus later environment changes. It fails on all four
 cases against the saved old library, confirming the intended behavioral
 difference. See [AUDIT.md](AUDIT.md) for the complete pre-commit audit.
+
+## Measured runtime follow-up (2026-10-06)
+
+The baseline for this follow-up is `125ca95e48cb648460397bcf6f1ed891d2b94ede`,
+which already includes the tracing-cache optimization above. These percentages
+must not be added to the earlier tracing results. The platform, release build,
+kernel computations, and shared-workstation caveats are unchanged. Java was
+used to prioritize the work; unchanged Qore is the before/after control.
+
+Each candidate's library and compatible tools were saved before the next edit.
+IR and AOT before/after jobs are shuffled and interleaved. The harness compiles
+an AOT executable with each library and runs it against that same library, so
+the baseline never receives the candidate compiler's optimizations. Each mode
+passes 120 independent reference checks before timing; steady-state timings
+exclude build, startup and setup. Reported reductions are `100 * (1 - after/before)`.
+
+### Retained changes
+
+1. **Inactive cancellation checks:** a conservative sequentially consistent
+   process-wide pending-interrupt count skips manager/context resolution when
+   zero. Thread cancellation and deferral still run first. A nonzero count
+   uses full governing-manager lookup. Every existing cancellation point and
+   blocking-wait handshake is preserved. This also skips lookup for a sandboxed
+   context with no pending interruption, although these kernel timings are
+   unsandboxed. No cancellation-latency speedup is claimed.
+2. **Native indexed compound mutation:** the JIT/AOT helper passes a stack-local
+   index override for a two-step root/index path instead of copying vectors and
+   root strings. The existing navigation still handles references, locks, COW,
+   auto-vivification, negative indices, type checks and exception cleanup. It is
+   not an unchecked direct write into a list.
+
+### Isolated experiments and rejected candidates
+
+The cancellation-only experiment used three forks per mode/kernel, three warmup
+and five measured 300 ms windows, with 1024 elements per invocation:
+
+|!Kernel/mode|!Before ns/element|!Cancellation only|!Time reduction
+|arithmetic AOT|6.92|3.83|44.7%
+|direct_call AOT|6.93|3.84|44.6%
+|method_call AOT|7.12|4.02|43.5%
+|list_read AOT|8.53|5.28|38.1%
+|list_mutate AOT|197.63|192.81|2.4%
+|direct_call IR|368.21|368.31|-0.03%
+
+An initial indexed-path candidate applied the shortcut in both IR and native
+execution. Against the cancellation-only runtime it reduced `list_mutate`
+from 196.30 to 180.16 ns/element in IR (8.2%) and 189.10 to 165.01 in AOT
+(12.7%), using the same three-fork settings. However, a five-fork cumulative
+repeat found several IR controls slower: arithmetic 96.64 to 99.95 (3.4%),
+list reads 208.26 to 219.07 (5.2%), temporary lists 368.69 to 381.61 (3.5%),
+and temporary hashes 674.45 to 694.80 (3.0%). The interpreter specialization
+was therefore removed and the narrower native change remeasured. Code-layout
+effects are plausible, but the exact cause of those control regressions was
+not established; they are not dismissed as noise.
+
+A bounded integer-pair scalar-replacement prototype was also rejected. It
+initially changed a full-width boxed integer result to zero after a statement
+temporary drain: `NativeInt` does not prove reference-free storage in Qore.
+Restricting elements to proven inline integer ranges passed all-mode semantic
+checks, but the available facts could not prove the benchmark's elements safe,
+so its list was still materialized (`scalar-lists=0`). No scalarizer change is
+committed. `IRBoundedPair.qr` retains the edge cases. The next step is sound
+range/lifetime propagation or explicit scalar ownership, not merely a bounded
+index check. Dynamic hash scalarization and IR frame reuse also remain future work.
+
+### Final retained revision
+
+Five independent processes per mode/kernel, three warmup and five measured
+300 ms windows per process, 1024 elements per batch (160 jobs, 800 timing
+samples, 480 reference checks). Values are medians of process means in
+ns/element; positive reductions mean less time.
+
+|!Kernel|!IR before|!IR after|!IR reduction|!AOT before|!AOT after|!AOT reduction
+|arithmetic|99.53|93.25|6.3%|7.02|3.83|45.4%
+|direct_call|366.76|364.07|0.7%|7.00|3.86|44.9%
+|method_call|422.89|420.22|0.6%|7.17|4.03|43.8%
+|list_read|208.59|205.91|1.3%|8.47|5.28|37.6%
+|list_build|295.43|289.26|2.1%|103.15|96.99|6.0%
+|list_mutate|205.66|184.73|10.2%|198.48|173.47|12.6%
+|temporary_list|366.90|366.02|0.2%|132.54|128.51|3.0%
+|temporary_hash|673.88|676.17|-0.3%|315.91|315.66|0.1%
+
+The largest AOT gains are clearly separated across processes: arithmetic
+ranged from 6.93-7.11 before versus 3.79-3.84 after; list reads from 8.38-8.99
+versus 5.21-5.36; list mutation from 197.77-201.77 versus 169.92-174.84.
+IR list mutation ranged from 202.78-208.77 versus 181.92-189.47. These are
+cumulative measurements of the retained runtime, not proof that every IR gain
+comes from the native-only path shortcut. The interpreter's private path copy
+is unchanged.
+
+IR direct/method calls and temporary-list/hash differences have overlapping
+process ranges and do not establish a benefit. Temporary hashes were essentially
+unchanged in both modes at this batch size; the larger-batch result below is less favorable.
+Startup was also effectively unchanged: IR 33.26 to 33.09 ms, AOT 29.60 to
+29.60 ms. These are warm-cache launch-to-exit measurements, not cold-start claims.
+
+### Larger-batch confirmation
+
+At 4096 elements, three forks and the same 300 ms windows (48 jobs, 240 timing
+samples, 480 reference checks):
+
+|!Kernel|!IR before|!IR after|!IR reduction|!AOT before|!AOT after|!AOT reduction
+|arithmetic|97.27|91.80|5.6%|6.64|3.43|48.3%
+|list_read|206.19|200.61|2.7%|8.11|4.92|39.3%
+|list_mutate|206.51|182.57|11.6%|196.11|171.31|12.6%
+|temporary_hash|687.35|671.41|2.3%|306.45|313.84|-2.4%
+
+The AOT hash result prompted a focused repeat at 4096 elements with five forks
+and longer 500 ms windows. That repeat was 307.40 before versus 305.72 after
+(0.5% less time), with broad overlapping ranges: 300.33-319.11 before and
+303.62-316.30 after. Thus the data show neither a consistent hash improvement
+nor a consistently reproduced regression. The 2.4% slower observation is retained
+in the evidence; allocation-heavy hash workloads still need dedicated profiling.
+
+The practical result is a substantial reduction in tight-loop AOT overhead and
+about 10-12% lower IR / 13% lower AOT time for this list-mutation workload.
+It is not a general 45% Qore speedup. Application-level measurements, sandboxed
+throughput/latency measurements and other platforms remain necessary before
+extrapolating these results.
+
+Reproduce after saving a compatible baseline library as described in the README:
+
+```sh
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --baseline-libdir /path/to/saved-library \
+    --forks 5 --warmup 3 --samples 5 --time-ms 300
+python3 bench/runtime-comparison/run.py --modes qore-ir qore-aot \
+    --kernels arithmetic list_read list_mutate temporary_hash \
+    --baseline-libdir /path/to/saved-library --count 4096 \
+    --forks 3 --warmup 3 --samples 5 --time-ms 300
+python3 bench/runtime-comparison/run.py --modes qore-aot \
+    --kernels temporary_hash --baseline-libdir /path/to/saved-library \
+    --count 4096 --forks 5 --warmup 3 --samples 5 --time-ms 500
+```
+
+[results-followup-macos-arm64.json](results-followup-macos-arm64.json) contains
+all six comparison experiments: source/library/executable hashes, settings,
+startup samples, raw timing samples and process summaries, without local paths
+or environment values. Full local commands/output remain in the runner's build
+directories. [FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md) records the complete
+`audit-changes` checklist, 175 passing QUnit cases (746 assertions), four
+standalone regression scripts, and the measurement/validation scope.
