@@ -1389,11 +1389,47 @@ public class DpqlCompletionProvider {
         return binary_to_string(binary(text).substr(start, len), "UTF-8");
     }
 
-    #! Returns True if a byte is part of a bare field name or key: ASCII letters, digits and \c _, or any byte of
-    #! a non-ASCII UTF-8 character (a letter of another script)
-    private static bool isFieldNameByte(int b) {
-        return b >= 0x80 || (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a)
-            || b == 0x5f;
+    #! Returns the number of bytes of the character at a byte offset if it can be part of a bare field name or key
+    /** The rule is the tokenizer's (see @ref DpqlTokenizer::isBareFieldName()): a letter of any script, a combining
+        mark, a digit or \c _; any other character, such as punctuation or a symbol, ends the name.
+
+        @param bytes the UTF-8 bytes of the text
+        @param pos the byte offset of the character
+
+        @return the number of bytes of the character, or 0 if it cannot be part of a bare name or if there is no
+        complete UTF-8 character at \a pos
+    */
+    private static int fieldNameCharBytes(binary bytes, int pos) {
+        if (pos >= bytes.size()) {
+            return 0;
+        }
+        int b = bytes[pos];
+        if (b < 0x80) {
+            return ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || b == 0x5f)
+                ? 1
+                : 0;
+        }
+        int n = (b & 0xe0) == 0xc0 ? 2 : ((b & 0xf0) == 0xe0 ? 3 : ((b & 0xf8) == 0xf0 ? 4 : 0));
+        if (!n || pos + n > bytes.size()) {
+            return 0;
+        }
+        for (int i = pos + 1; i < pos + n; ++i) {
+            if ((bytes[i] & 0xc0) != 0x80) {
+                return 0;
+            }
+        }
+        return binary_to_string(bytes.substr(pos, n), "UTF-8") =~ /^[\p{L}\p{M}\p{N}_]$/ ? n : 0;
+    }
+
+    #! Returns the byte offset after the bare field name or key that starts at a byte offset
+    private static int scanFieldName(binary bytes, int pos) {
+        while (True) {
+            int n = fieldNameCharBytes(bytes, pos);
+            if (!n) {
+                return pos;
+            }
+            pos += n;
+        }
     }
 
     #! Extracts field path from text ending before/inside an opening brace
@@ -1435,6 +1471,8 @@ public class DpqlCompletionProvider {
         if (pos >= text.size()) {
             return NOTHING;
         }
+        # the text is scanned by bytes; a name's characters are read from its bytes
+        binary bytes = binary(text);
 
         string field_name;
         if (chr(text.getByte(pos)) == '"') {
@@ -1456,9 +1494,7 @@ public class DpqlCompletionProvider {
             # as accessors (matches eval semantics where @record.address traverses
             # field "record" then key "address", not a single field "record.address")
             int start = pos;
-            while (pos < text.size() && isFieldNameByte(text.getByte(pos))) {
-                ++pos;
-            }
+            pos = scanFieldName(bytes, pos);
             field_name = byteSubstr(text, start, pos - start);
         }
 
@@ -1518,9 +1554,7 @@ public class DpqlCompletionProvider {
                 # Dot accessor - next identifier becomes a key accessor
                 ++pos;
                 int start = pos;
-                while (pos < text.size() && isFieldNameByte(text.getByte(pos))) {
-                    ++pos;
-                }
+                pos = scanFieldName(bytes, pos);
                 if (pos > start) {
                     string key = byteSubstr(text, start, pos - start);
                     accessors += {"type": DP_FUNC_KEY, "key_list": (key,)};

@@ -258,6 +258,12 @@ public class DpqlTest inherits QUnit::Test {
             # a key after a field preceded by non-ASCII text
             items = DataProvider::getDpqlCompletions('@größe > 1 && @adresse{', 23, fields);
             assertEq(("ort", "straße"), sort(map $1.label, items), "the keys of the hash field");
+            # a character that is not a letter, mark, digit or _ ends a name, whether ASCII or not, as in the
+            # tokenizer
+            foreach string text in ('@adresse%{', '@adresse€{', '@adresse…{') {
+                items = DataProvider::getDpqlCompletions(text, text.length(), fields);
+                assertEq(("ort", "straße"), sort(map $1.label, items), text + ": the name ends before the symbol");
+            }
         }
     }
 
