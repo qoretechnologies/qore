@@ -24,6 +24,7 @@ class EmptyPartitionDropTest inherits QUnit::Test {
         addTestCase("nested partitions rejected", \nestedTest());
         addTestCase("direct and routed writers exclude drop", \writerTest());
         addTestCase("fresh snapshot after waiting for writer", \snapshotTest());
+        addTestCase("foreign-key leaves detach atomically without weakening references", \foreignKeyTest());
         set_return_value(main());
     }
 
@@ -66,6 +67,46 @@ class EmptyPartitionDropTest inherits QUnit::Test {
         f.ds.execRaw("drop schema " + f.schema + " cascade");
         f.ds.commit();
         assertFalse(exists f.ds.selectRow("select 1 from pg_catalog.pg_namespace where nspname = %v", f.schema));
+        f.ds.commit();
+    }
+
+    private foreignKeyTest() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("alter table " + f.schema + ".parent add primary key (id)");
+        f.ds.execRaw("create table " + f.schema + ".newer partition of " + f.schema
+            + ".parent for values from (100) to (200)");
+        f.ds.execRaw("create table " + f.schema + ".child (id int references " + f.schema + ".parent(id))");
+        f.ds.execRaw("insert into " + f.schema + ".parent values (101)");
+        f.ds.execRaw("insert into " + f.schema + ".child values (101)");
+        f.ds.commit();
+        f.ds.beginTransaction();
+        assertTrue(f.table.dropEmptyPartition(f.pi));
+        f.ds.rollback();
+        assertTrue(exists f.table.getPartition(f.pi.name), "rollback restores both partition and attachment");
+        f.ds.commit();
+        assertTrue(f.table.dropEmptyPartitionCommit(f.pi));
+        assertEq(1, f.ds.selectRow("select count(*) as n from " + f.schema + ".child").n);
+        f.ds.commit();
+        assertThrows("DBI:PGSQL:ERROR", sub() {
+            f.ds.execRaw("insert into " + f.schema + ".child values (102)");
+        });
+        f.ds.rollback();
+        assertThrows("DBI:PGSQL:ERROR", sub() {
+            f.ds.execRaw("delete from " + f.schema + ".parent where id = 101");
+        });
+        f.ds.rollback();
+        # A direct reference to the leaf is not an inherited dependency: it must reject the whole operation.
+        f.ds.execRaw("create table " + f.schema + ".third partition of " + f.schema
+            + ".parent for values from (200) to (300)");
+        f.ds.execRaw("create table " + f.schema + ".direct (id int references " + f.schema + ".third(id))");
+        f.ds.commit();
+        hash<PartitionInfo> third = f.table.getPartition(f.schema + ".third");
+        f.ds.commit();
+        assertThrows("DBI:PGSQL:ERROR", sub() { f.table.dropEmptyPartitionCommit(third); });
+        assertTrue(exists f.table.getPartition(third.name), "failed DROP rolls back the preceding detach");
+        f.ds.execRaw("insert into " + f.schema + ".parent values (201)");
+        f.ds.execRaw("insert into " + f.schema + ".direct values (201)");
         f.ds.commit();
     }
 

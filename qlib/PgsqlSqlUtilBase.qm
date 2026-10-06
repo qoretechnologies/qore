@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.11";
+    version = "1.12";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,11 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
+    - atomic empty-partition removal now detaches the leaf in the same transaction before dropping it;
+      foreign keys referencing the partitioned parent remain enforced, and a failed drop restores attachment
+    - direct dependencies on the leaf still reject removal without cascading changes
 
     @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.11
     - supports atomic empty-partition removal through SqlUtil; parent and leaf locks exclude routed and direct
@@ -4968,6 +4973,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         if (ds.selectRow("select 1 as present from " + actual.sql_name + " limit 1")) {
             return False;
         }
+        # Referencing partitioned tables have internal FK dependencies on every target leaf, even when
+        # the leaf is empty. Transactional detach removes only those inherited dependencies while retaining
+        # the parent FK. A direct external dependency still prevents DROP; rollback restores attachment.
+        # Keep both locks and the same transaction through detach and drop; never use CONCURRENTLY/CASCADE.
+        ds.execRaw("alter table " + getSqlName() + " detach partition " + actual.sql_name);
         ds.execRaw("drop table " + actual.sql_name);
         return True;
     }

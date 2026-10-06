@@ -466,6 +466,7 @@
     @parblock
     SqlUtil can now remove an empty PostgreSQL partition while excluding concurrent inserts. The operation
     verifies the original physical partition, uses bounded lock waits, and preserves nonempty partitions.
+    Referencing foreign keys remain enforced; removal and partition detachment roll back together on error.
     Applications can check driver support before scheduling this maintenance; see
     @ref SqlUtil::AbstractTable::dropEmptyPartition() "dropEmptyPartition()".
     @endparblock
