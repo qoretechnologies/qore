@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
+    lists, matching the interpreter. A conditionally assigned list inside an outer
+    loop could previously crash when no assignment occurred before iteration.
+    Recompile existing AOT artifacts to apply this compiler fix.
+
     Runtime instance, self, static, and callable-method lookups no longer acquire exclusive Program
     parse ownership, including on first calls that construct lazy AOT execution contexts.
     Concurrent module initialization can wait for those readers without deadlocking

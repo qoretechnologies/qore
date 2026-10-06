@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class AOTTypedForeachNothingTest
+
+#! Regression for #5476: hoisting a typed list's data must not dereference NOTHING.
+class AOTTypedForeachNothingTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        const Expected = "int:6:aabaaa:RUNTIME-TYPE-ERROR;EXPECTED;\n"
+            + "float:6:aabaaa:RUNTIME-TYPE-ERROR;EXPECTED;\n"
+            + "bool:6:aabaaa:RUNTIME-TYPE-ERROR;EXPECTED;\n"
+            + "string:6:aabaaa:RUNTIME-TYPE-ERROR;EXPECTED;\n";
+    }
+
+    constructor() : QUnit::Test("AOTTypedForeachNothingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("conditional typed locals agree across execution tiers", \testTiers());
+        addTestCase("source-stripped AOT executables preserve NOTHING", \testExecutables());
+        addTestCase("source-stripped AOT module preserves NOTHING", \testModule());
+        set_return_value(main());
+    }
+
+    private write(string path, string source) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write(source);
+    }
+
+    private string functions(string access = "") {
+        string source;
+        foreach string type in (("int", "float", "bool", "string")) {
+            string first = type == "int" ? "7" : type == "float" ? "1.5"
+                : type == "bool" ? "True" : "\"alpha\"";
+            string second = type == "int" ? "9" : type == "float" ? "2.5"
+                : type == "bool" ? "False" : "\"beta\"";
+            source += sprintf("%sstring sub check_%s(list<int> entities) {
+    int count = 0;
+    string seen = \"\";
+    string errors = \"\";
+    foreach int entity in (entities) {
+        list<%s> targets;
+        if (entity == 1) {
+            targets = (%s,);
+        } else if (entity == 2 || entity == 7) {
+            targets = (%s, %s);
+        } else if (entity == 3) {
+            targets = ();
+        } else if (entity == 4) {
+            targets = (%s,);
+            remove targets;
+        } else if (entity == 5) {
+            targets = (%s,);
+            delete targets;
+        } else if (entity == 6) {
+            targets = (%s,);
+            targets[2] = %s;
+        }
+        try {
+            foreach %s target in (targets) {
+                ++count;
+                seen += target === %s ? \"a\" : target === %s ? \"b\" : \"invalid\";
+                if (entity == 7) {
+                    throw \"EXPECTED\", \"loop cleanup\";
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += ex.err + \";\";
+        }
+    }
+    return sprintf(\"%%d:%%s:%%s\", count, seen, errors);
+}
+", access, type, type, first, first, second, first, first, first, second,
+                type, first, second);
+        }
+        return source;
+    }
+
+    private string calls() {
+        string source = "list<int> entities = (0, 1, 0, 2, 0, 3, 4, 5, 6, 7, 0, 1, 0);\n";
+        foreach string type in (("int", "float", "bool", "string")) {
+            source += sprintf("printf(\"%s:%%s\\n\", check_%s(entities));\n", type, type);
+        }
+        return source;
+    }
+
+    private string run(string command) {
+        int status;
+        string output = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1",
+            libqore_dir, libqore_dir, command), \status);
+        assertEq(0, status, "child process exit status: " + command + "\n" + output);
+        return output;
+    }
+
+    testTiers() {
+        TmpDir tmp("qore-typed-foreach-nothing-");
+        string script = tmp.path + "/case.qr";
+        write(script, "%modern\n" + functions() + calls());
+        foreach string mode in (("ast", "ir", "tiered", "jit")) {
+            assertEq(Expected, run(sprintf("%s -b --enable-debug --exec-mode=%s %s",
+                qore_bin, mode, script)), mode);
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-typed-foreach-nothing-exe-");
+        string script = tmp.path + "/case.qr";
+        write(script, "%modern\n" + functions() + calls());
+        # Exercise the guard before and after LLVM optimization, plus the in-loop fetch.
+        foreach int variant in ((0, 1, 2)) {
+            string exe = tmp.path + "/case-" + string(variant);
+            string output = run(sprintf("%s%s -O%d --strip-source -o %s %s",
+                variant == 2 ? "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST=1 " : "",
+                qcc_bin, variant == 0 ? 0 : 3, exe, script));
+            assertTrue(is_file(exe), "AOT compile: " + output);
+            assertEq(Expected, run(exe + " -b --enable-debug"), "AOT variant " + string(variant));
+        }
+    }
+
+    testModule() {
+        TmpDir tmp("qore-typed-foreach-nothing-module-");
+        string source = tmp.path + "/ForeachNothing.qm";
+        string compiled = tmp.path + "/ForeachNothing.qmod";
+        write(source, "%modern\nmodule ForeachNothing {\n"
+            + "    version = \"1.0\";\n    author = \"Qore Technologies\";\n"
+            + "    desc = \"Typed foreach NOTHING regression\";\n"
+            + "    license = \"MIT\";\n}\n" + functions("public "));
+        string output = run(sprintf("%s -b --enable-debug --compile-module --strip-source --output %s %s",
+            qore_bin, compiled, source));
+        assertTrue(is_file(compiled), "AOT module compile: " + output);
+        # Make source fallback impossible when loading the module.
+        unlink(source);
+        string script = tmp.path + "/run.qr";
+        write(script, "%modern\n%requires ./ForeachNothing.qmod\n" + calls());
+        assertEq(Expected, run(sprintf("%s -b --enable-debug %s", qore_bin, script)), "AOT module");
+    }
+}

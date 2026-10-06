@@ -23554,10 +23554,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (direct_typed_list_read_sources.count(inst->operands[0].id)
                     && qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST")) {
+                // A declared list can still be NOTHING before assignment or after
+                // remove/delete. ListSize returns zero for it, so only fetch the
+                // hoisted data pointer on the nonempty path, just as an in-loop
+                // fetch is protected by the bounds check. Empty inputs never read
+                // the null pointer merged below.
+                llvm::BasicBlock* size_block = builder->GetInsertBlock();
+                llvm::BasicBlock* data_block = llvm::BasicBlock::Create(
+                    ctx, "typed_input.nonempty", llvm_func);
+                llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(
+                    ctx, "typed_input.ready", llvm_func);
+                builder->CreateCondBr(builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0)), data_block, merge_block);
+                builder->SetInsertPoint(data_block);
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
-                typed_list_data_ptrs[inst->operands[0].id] =
-                    builder->CreateCall(data_helper, {list_boxed}, "typed_input_data");
+                llvm::Value* data = builder->CreateCall(data_helper, {list_boxed}, "typed_input_data");
+                builder->CreateBr(merge_block);
+                builder->SetInsertPoint(merge_block);
+                llvm::PHINode* data_phi = builder->CreatePHI(ptr_type, 2, "typed_input_data_or_null");
+                data_phi->addIncoming(llvm::ConstantPointerNull::get(
+                    llvm::PointerType::get(ctx, 0)), size_block);
+                data_phi->addIncoming(data, data_block);
+                typed_list_data_ptrs[inst->operands[0].id] = data_phi;
             }
             // Result is native i64, not nanboxed
             return true;

@@ -237,6 +237,15 @@ assigned before its first write and becomes NOTHING again after remove/delete;
 reference parameters retain reference assignment semantics while value reads
 use the declared target type.
 
+The LLVM `ListSize` lowering hoists typed-list data pointers only on the
+nonempty path. A declared list may still be `NOTHING`, including a local that
+is conditionally assigned inside an outer loop. The zero-size path carries a
+null data pointer, which the loop's bounds check prevents from being read.
+This preserves zero-iteration behavior without adding a check to each element
+read. `AOTTypedForeachNothing.qtest` covers these locals, removed/deleted lists,
+empty and populated lists, and sparse-list type errors across execution tiers
+and source-stripped AOT artifacts.
+
 `QoreIRAnalysis` provides normalized SSA-operand and normal-successor visitors,
 plus reusable reachability, predecessor/successor, dominator, and natural-loop
 analysis. Generic operands carry phi inputs and dynamic lvalue-path and slice
