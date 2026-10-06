@@ -108,8 +108,8 @@
           "message": "Якщо true, порожні рядки ігноруватимуться"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Якщо `true`, порожні рядки ігноруватимуться"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "Якщо `true`, порожні рядки пропускаються; якщо `false` (типово), порожній рядок читається як запис і спричиняє помилку, якщо специфікація не має відповідного типу запису"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

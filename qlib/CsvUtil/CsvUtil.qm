@@ -353,6 +353,13 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools
+      and agents learn the reader from the action catalog and the data provider index: the defaults of
+      \c ignore_empty, \c ignore_whitespace (both \c true) and \c header_lines (\c 0) are declared, common
+      values of \c encoding, \c separator, \c quote and \c eol are listed (other values are still accepted;
+      see @ref CsvUtil::CsvReadDataProvider::CsvEncodingValues "CsvEncodingValues" and related constants), and the
+      interactions of options with each other are declared as
+      @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction" metadata
     - added @ref CsvUtil::CsvProfiler "CsvProfiler", which detects the separator, encoding, byte order mark, and
       line ending of delimited text data and profiles its layout and column types with
       @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action

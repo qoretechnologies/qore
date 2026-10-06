@@ -108,8 +108,8 @@
           "message": "true인 경우 빈 줄을 무시합니다."
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "`true`인 경우 빈 줄은 무시됩니다."
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "`true`이면 빈 줄을 건너뛰고, `false`(기본값)이면 빈 줄을 레코드로 읽으며 사양에 일치하는 레코드 유형이 없으면 실패합니다"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

@@ -72,8 +72,96 @@
           "message": "입력 파일의 문자 인코딩"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽으며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽히며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다. Qore가 지원하는 모든 문자 인코딩을 지정할 수 있으며, 허용되는 값에는 일반적인 인코딩이 나열됩니다"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8, 기본값이며 대부분의 최신 시스템이 내보내는 형식입니다"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "*유니코드 텍스트* 내보내기에서 쓰는 바이트 순서 표시가 있는 Unicode UTF-16"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 리틀 엔디언"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "바이트 순서 표시가 없는 Unicode UTF-16 리틀 엔디언"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 빅 엔디언"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "바이트 순서 표시가 없는 Unicode UTF-16 빅 엔디언"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows 서유럽어(1252)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "서유럽 Windows 시스템에서 Excel *CSV* 내보내기가 쓰는 Windows 코드 페이지 1252이며, `ISO-8859-1`과 달리 `€`와 인쇄용 따옴표가 있습니다"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows 중앙 유럽어(1250)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Windows 시스템에서 체코어, 폴란드어, 슬로바키아어, 헝가리어 및 기타 중앙 유럽 언어에 사용하는 Windows 코드 페이지 1250"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows 키릴 자모(1251)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Windows 시스템에서 키릴 문자 언어에 사용하는 Windows 코드 페이지 1251"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "서유럽 언어용 ISO Latin-1, `€`가 없습니다"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "중앙 유럽 언어용 ISO Latin-2"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, `€`가 포함된 Latin-1"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7비트 ASCII"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -86,6 +174,30 @@
         "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "줄 끝 문자입니다. 지정하지 않으면 줄 끝 문자가 자동으로 감지됩니다."
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Linux와 macOS에서처럼 줄 바꿈"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Windows에서처럼 캐리지 리턴과 줄 바꿈"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "클래식 Mac OS에서처럼 캐리지 리턴"
         },
         "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -108,8 +220,8 @@
           "message": "파일의 헤더 줄 수"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "파일의 헤더 줄 수"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "입력 시작 부분에서 건너뛸 헤더 줄 수입니다. `header_names`가 `true`이고 이 옵션이 설정되지 않으면 헤더 줄 하나로 간주합니다"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -144,8 +256,8 @@
           "message": "true인 경우 빈 줄을 무시합니다."
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "`true`인 경우 빈 줄은 무시됩니다."
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "`true`(기본값)이면 빈 줄을 건너뛰고, `false`이면 빈 줄을 값이 없는 레코드로 반환합니다"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -156,8 +268,8 @@
           "message": "true인 경우 따옴표로 묶이지 않은 필드에서 앞뒤 공백을 제거합니다."
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "`true`인 경우 따옴표로 묶이지 않은 필드에서 앞뒤 공백이 제거됩니다."
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "`true`(기본값)이면 따옴표로 묶이지 않은 필드의 앞뒤 공백이 제거되며, 따옴표로 묶인 필드는 변경되지 않습니다"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -180,8 +292,24 @@
           "message": "따옴표 문자"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "필드 따옴표 문자(기본값: `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "필드 따옴표 문자(기본값: `\"`)이며, 따옴표로 묶인 필드 안의 따옴표는 두 번 써서 이스케이프합니다"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "큰따옴표"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "큰따옴표(`\"`), 기본값"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "작은따옴표"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "작은따옴표 / 아포스트로피(`'`)"
         },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -194,6 +322,38 @@
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "파일 내 필드를 구분하는 문자열(기본값: `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "쉼표"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "쉼표(`,`), 기본값"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "세미콜론"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "소수점으로 쉼표를 사용하는 로캘의 스프레드시트 내보내기에서 쓰는 세미콜론(`;`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "탭"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "탭으로 구분된 값(TSV)용 탭 문자"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "세로 막대"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "세로 막대(`|`)"
         },
         "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -288,8 +448,96 @@
           "message": "입력 파일의 문자 인코딩"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽으며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "입력 파일, 스트림 또는 바이너리 `data`의 문자 인코딩입니다. 텍스트 `data`는 자체 인코딩으로 읽히며, 이 인코딩이 출력 데이터의 인코딩이기도 합니다. Qore가 지원하는 모든 문자 인코딩을 지정할 수 있으며, 허용되는 값에는 일반적인 인코딩이 나열됩니다"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8, 기본값이며 대부분의 최신 시스템이 내보내는 형식입니다"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "*유니코드 텍스트* 내보내기에서 쓰는 바이트 순서 표시가 있는 Unicode UTF-16"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 리틀 엔디언"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "바이트 순서 표시가 없는 Unicode UTF-16 리틀 엔디언"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 빅 엔디언"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "바이트 순서 표시가 없는 Unicode UTF-16 빅 엔디언"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows 서유럽어(1252)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "서유럽 Windows 시스템에서 Excel *CSV* 내보내기가 쓰는 Windows 코드 페이지 1252이며, `ISO-8859-1`과 달리 `€`와 인쇄용 따옴표가 있습니다"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows 중앙 유럽어(1250)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Windows 시스템에서 체코어, 폴란드어, 슬로바키아어, 헝가리어 및 기타 중앙 유럽 언어에 사용하는 Windows 코드 페이지 1250"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows 키릴 자모(1251)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Windows 시스템에서 키릴 문자 언어에 사용하는 Windows 코드 페이지 1251"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "서유럽 언어용 ISO Latin-1, `€`가 없습니다"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "중앙 유럽 언어용 ISO Latin-2"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, `€`가 포함된 Latin-1"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7비트 ASCII"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -302,6 +550,30 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "줄 끝 문자입니다. 지정하지 않으면 줄 끝 문자가 자동으로 감지됩니다."
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Linux와 macOS에서처럼 줄 바꿈"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Windows에서처럼 캐리지 리턴과 줄 바꿈"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "클래식 Mac OS에서처럼 캐리지 리턴"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -324,8 +596,8 @@
           "message": "파일의 헤더 줄 수"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "파일의 헤더 줄 수"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "입력 시작 부분에서 건너뛸 헤더 줄 수입니다. `header_names`가 `true`이고 이 옵션이 설정되지 않으면 헤더 줄 하나로 간주합니다"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -360,8 +632,8 @@
           "message": "true인 경우 빈 줄을 무시합니다."
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "`true`인 경우 빈 줄은 무시됩니다."
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "`true`(기본값)이면 빈 줄을 건너뛰고, `false`이면 빈 줄을 값이 없는 레코드로 반환합니다"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -372,8 +644,8 @@
           "message": "true인 경우 따옴표로 묶이지 않은 필드에서 앞뒤 공백을 제거합니다."
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "`true`인 경우 따옴표로 묶이지 않은 필드에서 앞뒤 공백이 제거됩니다."
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "`true`(기본값)이면 따옴표로 묶이지 않은 필드의 앞뒤 공백이 제거되며, 따옴표로 묶인 필드는 변경되지 않습니다"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -396,8 +668,24 @@
           "message": "따옴표 문자"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "필드 따옴표 문자(기본값: `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "필드 따옴표 문자(기본값: `\"`)이며, 따옴표로 묶인 필드 안의 따옴표는 두 번 써서 이스케이프합니다"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "큰따옴표"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "큰따옴표(`\"`), 기본값"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "작은따옴표"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "작은따옴표 / 아포스트로피(`'`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -410,6 +698,38 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "파일 내 필드를 구분하는 문자열(기본값: `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "쉼표"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "쉼표(`,`), 기본값"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "세미콜론"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "소수점으로 쉼표를 사용하는 로캘의 스프레드시트 내보내기에서 쓰는 세미콜론(`;`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "탭"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "탭으로 구분된 값(TSV)용 탭 문자"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "세로 막대"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "세로 막대(`|`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",

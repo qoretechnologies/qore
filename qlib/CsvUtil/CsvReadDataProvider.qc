@@ -40,6 +40,132 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
             "expressions": AbstractDataProvider::GenericExpressions,
         };
 
+        #! Common character encodings of CSV input; any encoding supported by Qore can be used
+        /** @since CsvUtil 1.12
+        */
+        const CsvEncodingValues = (
+            <AllowedValueInfo>{
+                "value": "UTF-8",
+                "display_name": "UTF-8",
+                "desc": "Unicode UTF-8; the default, and what most current systems export",
+            },
+            <AllowedValueInfo>{
+                "value": "UTF-16",
+                "display_name": "UTF-16",
+                "desc": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+            },
+            <AllowedValueInfo>{
+                "value": "UTF-16LE",
+                "display_name": "UTF-16 Little Endian",
+                "desc": "Unicode UTF-16, little-endian, without a byte order mark",
+            },
+            <AllowedValueInfo>{
+                "value": "UTF-16BE",
+                "display_name": "UTF-16 Big Endian",
+                "desc": "Unicode UTF-16, big-endian, without a byte order mark",
+            },
+            <AllowedValueInfo>{
+                "value": "WINDOWS-1252",
+                "display_name": "Windows Western European (1252)",
+                "desc": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows "
+                    "systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+            },
+            <AllowedValueInfo>{
+                "value": "WINDOWS-1250",
+                "display_name": "Windows Central European (1250)",
+                "desc": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European "
+                    "languages on Windows systems",
+            },
+            <AllowedValueInfo>{
+                "value": "WINDOWS-1251",
+                "display_name": "Windows Cyrillic (1251)",
+                "desc": "Windows code page 1251, for Cyrillic languages on Windows systems",
+            },
+            <AllowedValueInfo>{
+                "value": "ISO-8859-1",
+                "display_name": "Latin-1 (ISO-8859-1)",
+                "desc": "ISO Latin-1 for Western European languages; has no `€`",
+            },
+            <AllowedValueInfo>{
+                "value": "ISO-8859-2",
+                "display_name": "Latin-2 (ISO-8859-2)",
+                "desc": "ISO Latin-2 for Central European languages",
+            },
+            <AllowedValueInfo>{
+                "value": "ISO-8859-15",
+                "display_name": "Latin-9 (ISO-8859-15)",
+                "desc": "ISO Latin-9, Latin-1 with `€`",
+            },
+            <AllowedValueInfo>{
+                "value": "US-ASCII",
+                "display_name": "ASCII",
+                "desc": "7-bit ASCII",
+            },
+        );
+
+        #! Common CSV field separators; any string can be used
+        /** @since CsvUtil 1.12
+        */
+        const CsvSeparatorValues = (
+            <AllowedValueInfo>{
+                "value": ",",
+                "display_name": "Comma",
+                "desc": "Comma (`,`); the default",
+            },
+            <AllowedValueInfo>{
+                "value": ";",
+                "display_name": "Semicolon",
+                "desc": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+            },
+            <AllowedValueInfo>{
+                "value": "\t",
+                "display_name": "Tab",
+                "desc": "Tab character, for tab-separated values (TSV)",
+            },
+            <AllowedValueInfo>{
+                "value": "|",
+                "display_name": "Pipe",
+                "desc": "Vertical bar (`|`)",
+            },
+        );
+
+        #! Common CSV quote characters; any character can be used
+        /** @since CsvUtil 1.12
+        */
+        const CsvQuoteValues = (
+            <AllowedValueInfo>{
+                "value": "\"",
+                "display_name": "Double Quote",
+                "desc": "Double quote (`\"`); the default",
+            },
+            <AllowedValueInfo>{
+                "value": "'",
+                "display_name": "Single Quote",
+                "desc": "Single quote / apostrophe (`'`)",
+            },
+        );
+
+        #! Common CSV end-of-line sequences; the end of line is detected if none is given
+        /** @since CsvUtil 1.12
+        */
+        const CsvEolValues = (
+            <AllowedValueInfo>{
+                "value": "\n",
+                "display_name": "LF",
+                "desc": "Line feed, as on Linux and macOS",
+            },
+            <AllowedValueInfo>{
+                "value": "\r\n",
+                "display_name": "CR LF",
+                "desc": "Carriage return and line feed, as on Windows",
+            },
+            <AllowedValueInfo>{
+                "value": "\r",
+                "display_name": "CR",
+                "desc": "Carriage return, as on classic Mac OS",
+            },
+        );
+
         #! Constructor options
         const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
@@ -75,14 +201,33 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                     "group__date__and__time__functions.html#date_mask) for more information on this option "
                     "(ex: `DD/MM/YYYY HH:mm:SS`)",
                 "example_value": "DD/MM/YYYY HH:mm:SS",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Requires,
+                        "option": "fields",
+                        "desc": "applies only to fields that `fields` gives the `date` type; fields are strings by default",
+                    },),
+                },
             },
             "encoding": <DataProviderOptionInfo>{
                 "display_name": "Input Character Encoding",
                 "short_desc": "The Character encoding for the input file",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Character encoding of the input file, stream, or binary `data`; text `data` is read in "
-                    "its own encoding, which is also the encoding of the output data",
+                    "its own encoding, which is also the encoding of the output data.  Any character encoding "
+                    "supported by Qore can be given; the allowed values list common ones",
                 "default_value": "UTF-8",
+                "allowed_values": CsvEncodingValues,
+                "allowed_values_creatable": True,
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Ignored,
+                        "option": "data",
+                        "value_type": "string",
+                        "desc": "text given in `data` is read in its own encoding; `encoding` applies only to a "
+                            "file, a stream, or bytes in `data`",
+                    },),
+                },
             },
             "eol": <DataProviderOptionInfo>{
                 "display_name": "End Of Line Chars",
@@ -90,6 +235,8 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The end of line character(s); if not specified, then the end-of-line characters will be "
                     "auto detected",
+                "allowed_values": CsvEolValues,
+                "allowed_values_creatable": True,
             },
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Descriptions",
@@ -123,7 +270,18 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Number of Header Lines",
                 "short_desc": "The number of headers lines in the file",
                 "type": AbstractDataProviderTypeMap."softint",
-                "desc": "The number of headers lines in the file",
+                "desc": "The number of header lines skipped at the start of the input; if `header_names` is `true` "
+                    "and this option is not set, one header line is assumed",
+                "default_value": 0,
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Default,
+                        "option": "header_names",
+                        "value": True,
+                        "default_value": 1,
+                        "desc": "when `header_names` is `true`, one header line is assumed",
+                    },),
+                },
             },
             "header_names": <DataProviderOptionInfo>{
                 "display_name": "Automatically Detect Headers",
@@ -132,6 +290,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "if `true` then the object will parse the header names from the first header row, in this "
                     "case if `header_lines` is not set explicitly, it will be assumed to be `1`",
                 "default_value": False,
+                "has_dependents": True,
             },
             "header_reorder": <DataProviderOptionInfo>{
                 "display_name": "Enforce Header Order",
@@ -140,6 +299,20 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "If `true` (the default) then if `headers` are provided, then data fields are reordered to "
                     "follow headers",
                 "default_value": True,
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Requires,
+                        "option": "headers",
+                        "desc": "fields are reordered only to follow header names, given in `headers` or read from "
+                            "the input with `header_names`",
+                    }, <DataProviderOptionInteraction>{
+                        "kind": OI_Requires,
+                        "option": "header_names",
+                        "value": True,
+                        "desc": "fields are reordered only to follow header names, given in `headers` or read from "
+                            "the input with `header_names`",
+                    }),
+                },
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Header Names",
@@ -147,18 +320,30 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(new Type("softlist<string>")),
                 "desc": "List of header / column names for the data iterated; if this is present, then "
                     "`header_names` must be `false`",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Conflicts,
+                        "option": "header_names",
+                        "value": True,
+                        "desc": "`headers` cannot be given when `header_names` is `true`",
+                    },),
+                },
             },
             "ignore_empty": <DataProviderOptionInfo>{
                 "display_name": "Ignore Empty Lines",
                 "short_desc": "If true, empty lines will be ignored",
                 "type": AbstractDataProviderTypeMap."softbool",
-                "desc": "If `true`, empty lines will be ignored",
+                "desc": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a "
+                    "record without values",
+                "default_value": True,
             },
             "ignore_whitespace": <DataProviderOptionInfo>{
                 "display_name": "Ignore Leading and Trailing Whitespace",
                 "short_desc": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
                 "type": AbstractDataProviderTypeMap."softbool",
-                "desc": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+                "desc": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted "
+                    "fields; quoted fields are never changed",
+                "default_value": True,
             },
             "number_format": <DataProviderOptionInfo>{
                 "display_name": "Number Format",
@@ -168,13 +353,23 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                     "separator character followed by the decimal separator character (ex: `.,` for "
                     "continental-European-style numbers)",
                 "example_value": ".,",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Requires,
+                        "option": "fields",
+                        "desc": "applies only to fields that `fields` gives the `int`, `float` or `number` type; fields are strings by default",
+                    },),
+                },
             },
             "quote": <DataProviderOptionInfo>{
                 "display_name": "Quote Char(s)",
                 "short_desc": "The quote character(s)",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The field quote character (default: `\"`)",
+                "desc": "The field quote character (default: `\"`); a quote character in a quoted field is "
+                    "escaped by doubling it",
                 "default_value": "\"",
+                "allowed_values": CsvQuoteValues,
+                "allowed_values_creatable": True,
             },
             "separator": <DataProviderOptionInfo>{
                 "display_name": "Field Separator",
@@ -182,6 +377,8 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "the string separating the fields in the file (default: `,`)",
                 "default_value": ",",
+                "allowed_values": CsvSeparatorValues,
+                "allowed_values_creatable": True,
             },
             "timezone": <DataProviderOptionInfo>{
                 "display_name": "Timezone Region",
@@ -190,6 +387,13 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see "
                     "[TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
                 "example_value": "Europe/Prague",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Requires,
+                        "option": "fields",
+                        "desc": "applies only to fields that `fields` gives the `date` type; the default is the current time zone",
+                    },),
+                },
             },
             "tolwr": <DataProviderOptionInfo>{
                 "display_name": "Convert Headers to Lower Case",

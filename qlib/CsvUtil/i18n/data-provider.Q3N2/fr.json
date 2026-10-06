@@ -72,8 +72,96 @@
           "message": "L'encodage de caractères pour le fichier d'entrée"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "Encodage des caractères du fichier d'entrée, du flux ou des `data` binaires ; les `data` texte sont lues dans leur propre encodage, qui est aussi celui des données de sortie"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "Encodage des caractères du fichier d'entrée, du flux ou des `data` binaires ; le texte dans `data` est lu dans son propre encodage, qui est aussi l'encodage des données de sortie.  Tout encodage de caractères pris en charge par Qore peut être indiqué ; les valeurs autorisées listent les plus courants"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8 ; la valeur par défaut, et ce qu'exportent la plupart des systèmes actuels"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "Unicode UTF-16 avec indicateur d'ordre des octets, tel qu'écrit par les exports *Texte Unicode*"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 petit-boutiste"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16, petit-boutiste, sans indicateur d'ordre des octets"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 gros-boutiste"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16, gros-boutiste, sans indicateur d'ordre des octets"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows Europe occidentale (1252)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Page de codes Windows 1252, telle qu'écrite par les exports *CSV* d'Excel sur les systèmes Windows d'Europe occidentale ; contrairement à `ISO-8859-1`, elle contient `€` et les guillemets typographiques"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows Europe centrale (1250)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Page de codes Windows 1250, pour le tchèque, le polonais, le slovaque, le hongrois et les autres langues d'Europe centrale sur les systèmes Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows cyrillique (1251)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Page de codes Windows 1251, pour les langues cyrilliques sur les systèmes Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "ISO Latin-1 pour les langues d'Europe occidentale ; ne contient pas `€`"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "ISO Latin-2 pour les langues d'Europe centrale"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, Latin-1 avec `€`"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "ASCII 7 bits"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -86,6 +174,30 @@
         "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "Le ou les caractères de fin de ligne ; s'ils ne sont pas spécifiés, les caractères de fin de ligne seront détectés automatiquement"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Saut de ligne, comme sous Linux et macOS"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Retour chariot et saut de ligne, comme sous Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "Retour chariot, comme sous l'ancien Mac OS"
         },
         "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -108,8 +220,8 @@
           "message": "Le nombre de lignes d'en-tête dans le fichier"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "Le nombre de lignes d'en-tête dans le fichier"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "Le nombre de lignes d'en-tête ignorées au début de l'entrée ; si `header_names` vaut `true` et que cette option n'est pas définie, une ligne d'en-tête est supposée"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -144,8 +256,8 @@
           "message": "Si true, les lignes vides seront ignorées"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Si `true`, les lignes vides seront ignorées"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "Si `true` (par défaut), les lignes vides sont ignorées ; si `false`, une ligne vide est renvoyée comme un enregistrement sans valeurs"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -156,8 +268,8 @@
           "message": "Si true, les espaces de début et de fin des champs non cités sont supprimés"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Si `true`, les espaces de début et de fin seront supprimés des champs non entre guillemets"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "Si `true` (par défaut), les espaces en début et en fin des champs sans guillemets sont supprimés ; les champs entre guillemets ne sont jamais modifiés"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -180,8 +292,24 @@
           "message": "Le ou les caractères de guillemet"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "Le caractère de guillemet de champ (par défaut : `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "Le caractère de guillemet des champs (par défaut : `\"`) ; un guillemet dans un champ entre guillemets est échappé en le doublant"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "Guillemet double"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "Guillemet double (`\"`) ; la valeur par défaut"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "Guillemet simple"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "Guillemet simple / apostrophe (`'`)"
         },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -194,6 +322,38 @@
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "La chaîne séparant les champs dans le fichier (par défaut : `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "Virgule"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "Virgule (`,`) ; la valeur par défaut"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "Point-virgule"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "Point-virgule (`;`), tel qu'écrit par les exports de tableurs dans les paramètres régionaux qui utilisent une virgule décimale"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "Tabulation"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "Caractère de tabulation, pour les valeurs séparées par des tabulations (TSV)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "Barre verticale"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "Barre verticale (`|`)"
         },
         "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -288,8 +448,96 @@
           "message": "L'encodage de caractères pour le fichier d'entrée"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "Encodage des caractères du fichier d'entrée, du flux ou des `data` binaires ; les `data` texte sont lues dans leur propre encodage, qui est aussi celui des données de sortie"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "Encodage des caractères du fichier d'entrée, du flux ou des `data` binaires ; le texte dans `data` est lu dans son propre encodage, qui est aussi l'encodage des données de sortie.  Tout encodage de caractères pris en charge par Qore peut être indiqué ; les valeurs autorisées listent les plus courants"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8 ; la valeur par défaut, et ce qu'exportent la plupart des systèmes actuels"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "Unicode UTF-16 avec indicateur d'ordre des octets, tel qu'écrit par les exports *Texte Unicode*"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 petit-boutiste"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16, petit-boutiste, sans indicateur d'ordre des octets"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 gros-boutiste"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16, gros-boutiste, sans indicateur d'ordre des octets"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows Europe occidentale (1252)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Page de codes Windows 1252, telle qu'écrite par les exports *CSV* d'Excel sur les systèmes Windows d'Europe occidentale ; contrairement à `ISO-8859-1`, elle contient `€` et les guillemets typographiques"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows Europe centrale (1250)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Page de codes Windows 1250, pour le tchèque, le polonais, le slovaque, le hongrois et les autres langues d'Europe centrale sur les systèmes Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows cyrillique (1251)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Page de codes Windows 1251, pour les langues cyrilliques sur les systèmes Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "ISO Latin-1 pour les langues d'Europe occidentale ; ne contient pas `€`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "ISO Latin-2 pour les langues d'Europe centrale"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, Latin-1 avec `€`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "ASCII 7 bits"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -302,6 +550,30 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "Le ou les caractères de fin de ligne ; s'ils ne sont pas spécifiés, les caractères de fin de ligne seront détectés automatiquement"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Saut de ligne, comme sous Linux et macOS"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Retour chariot et saut de ligne, comme sous Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "Retour chariot, comme sous l'ancien Mac OS"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -324,8 +596,8 @@
           "message": "Le nombre de lignes d'en-tête dans le fichier"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "Le nombre de lignes d'en-tête dans le fichier"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "Le nombre de lignes d'en-tête ignorées au début de l'entrée ; si `header_names` vaut `true` et que cette option n'est pas définie, une ligne d'en-tête est supposée"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -360,8 +632,8 @@
           "message": "Si true, les lignes vides seront ignorées"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Si `true`, les lignes vides seront ignorées"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "Si `true` (par défaut), les lignes vides sont ignorées ; si `false`, une ligne vide est renvoyée comme un enregistrement sans valeurs"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -372,8 +644,8 @@
           "message": "Si true, les espaces de début et de fin des champs non cités sont supprimés"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Si `true`, les espaces de début et de fin seront supprimés des champs non entre guillemets"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "Si `true` (par défaut), les espaces en début et en fin des champs sans guillemets sont supprimés ; les champs entre guillemets ne sont jamais modifiés"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -396,8 +668,24 @@
           "message": "Le ou les caractères de guillemet"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "Le caractère de guillemet de champ (par défaut : `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "Le caractère de guillemet des champs (par défaut : `\"`) ; un guillemet dans un champ entre guillemets est échappé en le doublant"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "Guillemet double"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "Guillemet double (`\"`) ; la valeur par défaut"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "Guillemet simple"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "Guillemet simple / apostrophe (`'`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -410,6 +698,38 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "La chaîne séparant les champs dans le fichier (par défaut : `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "Virgule"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "Virgule (`,`) ; la valeur par défaut"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "Point-virgule"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "Point-virgule (`;`), tel qu'écrit par les exports de tableurs dans les paramètres régionaux qui utilisent une virgule décimale"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "Tabulation"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "Caractère de tabulation, pour les valeurs séparées par des tabulations (TSV)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "Barre verticale"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "Barre verticale (`|`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",

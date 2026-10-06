@@ -108,8 +108,8 @@
           "message": "若為 true，空行將會被忽略"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "若為 `true`，空行將會被忽略"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "若為 `true`，會略過空白行；若為 `false`（預設），空白行會以記錄讀取，除非規格中有相符的記錄類型，否則會失敗"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

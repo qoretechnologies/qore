@@ -1409,6 +1409,11 @@ fetch
       and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
       "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
       argument types, so that expressions saved before still run
+    - added @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction" and
+      @ref DataProvider::AbstractDataProvider::getOptionInteractions() "AbstractDataProvider::getOptionInteractions()"
+      to describe how an option interacts with other options (a conflict, a default that depends on another option,
+      an option that is ignored or needs another option) in the option's \c metadata, which is carried into action
+      options and the data provider index
     - the \c contains and \c contains-any expressions are @ref True "True" for an empty substring, such as
       <tt>contains(\@name, "")</tt>, following <tt>string::contains()</tt> in %Qore 3.0, in generic and columnar
       evaluation alike (columnar evaluation of a \c DataFrame was already @ref True "True")

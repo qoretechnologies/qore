@@ -181,6 +181,7 @@ class Test inherits QUnit::Test {
 
     constructor() : QUnit::Test("FixedLengthUtil", "1.0", \ARGV) {
         addTestCase("data provider", \dataProviderTest());
+        addTestCase("read option defaults", \readOptionDefaultTest());
         addTestCase("FixedLengthUtil basic tests", \basicTests());
         addTestCase("FixedLengthUtil padding test #1", \test_padding_1());
         addTestCase("FixedLengthUtil padding test #2", \test_padding_2());
@@ -190,6 +191,42 @@ class Test inherits QUnit::Test {
         addTestCase("FixedLengthUtil tabs-to-spaces reader tests", \test_reading_data_with_tabs());
         addTestCase("FixedLengthUtil tabs-to-spaces writer tests", \test_writing_data_with_tabs());
         set_return_value(main());
+    }
+
+    #! declared read option defaults behave like leaving the option out
+    readOptionDefaultTest() {
+        string file = tmp_location() + sprintf("/fixed-length-defaults-%d.txt", getpid());
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("ab\n\ncd\n");
+        f.close();
+        on_exit unlink(file);
+        hash<auto> spec = {"r": {"c": {"length": 2, "type": "string"}}};
+        code<auto(*hash<auto>)> read = auto sub (*hash<auto> opts) {
+            try {
+                FixedLengthReadDataProvider prov({"path": file, "spec": spec} + opts);
+                list<hash<auto>> rv = ();
+                foreach hash<auto> rec in (prov.searchRecords()) {
+                    push rv, rec;
+                }
+                return rv;
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        };
+        int checked = 0;
+        foreach hash<auto> i in (FixedLengthReadDataProvider::ConstructorOptions.pairIterator()) {
+            if (!exists i.value.default_value) {
+                continue;
+            }
+            assertEq(read(), read({i.key: i.value.default_value}), i.key);
+            ++checked;
+        }
+        assertEq(2, checked);
+        assertFalse(FixedLengthReadDataProvider::ConstructorOptions.ignore_empty.default_value);
+        # the empty line fails by default and is skipped with ignore_empty
+        assertEq("FIXED-LENGTH-UTIL-NON-MATCHING-TYPE", read());
+        assertEq(2, read({"ignore_empty": True}).size());
     }
 
     dataProviderTest() {

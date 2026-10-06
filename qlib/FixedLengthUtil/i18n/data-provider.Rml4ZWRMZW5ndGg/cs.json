@@ -108,8 +108,8 @@
           "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "Pokud je `true`, prázdné řádky se přeskakují; pokud je `false` (výchozí), prázdný řádek se čte jako záznam a selže, pokud specifikace nemá typ záznamu, který mu odpovídá"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

@@ -227,6 +227,75 @@ public hashdecl IndexedDataProviderOptionInfo inherits DataProviderOptionBaseInf
     softlist<hash<DataTypeInfo>> type_info;
 }
 
+/** @defgroup option_interaction_kinds Option Interaction Kinds
+    The kinds of @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction"
+
+    @since %DataProvider 3.9
+*/
+#/@{
+#! The option must not be set when the other option has the given value (or any value if none is given)
+public const OI_Conflicts = "conflicts";
+#! The option's default is \c default_value when the other option has the given value
+public const OI_Default = "default";
+#! The option has no effect when the other option has the given value or value type
+public const OI_Ignored = "ignored";
+#! The option has an effect only when the other option has the given value (or any value if none is given)
+public const OI_Requires = "requires";
+#/@}
+
+#! The key in the \c metadata of an option that holds its interactions with other options
+/** The value is a list of @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction"
+    hashes; see @ref DataProvider::AbstractDataProvider::getOptionInteractions()
+
+    @since %DataProvider 3.9
+*/
+public const OptionInteractionsKey = "interactions";
+
+#! A machine-readable interaction of an option with another option of the same data provider or action
+/** Interactions are kept in the option's \c metadata under @ref OptionInteractionsKey, so they are carried
+    unchanged into action options and the data provider index without changing the option hashdecls.  They
+    describe what the code does when options are combined, such as a default that depends on another option, so
+    that tools and agents do not have to derive it from the option descriptions.
+
+    @par Example
+    @code{.py}
+"header_lines": <DataProviderOptionInfo>{
+    ...
+    "default_value": 0,
+    "metadata": {
+        OptionInteractionsKey: (<DataProviderOptionInteraction>{
+            "kind": OI_Default,
+            "option": "header_names",
+            "value": True,
+            "default_value": 1,
+            "desc": "when `header_names` is `true`, one header line is assumed",
+        },),
+    },
+},
+    @endcode
+
+    @since %DataProvider 3.9
+*/
+public hashdecl DataProviderOptionInteraction {
+    #! The kind of interaction; see @ref option_interaction_kinds
+    string kind;
+
+    #! The name of the other option
+    string option;
+
+    #! The value of the other option that the interaction applies to; no value means any value
+    auto value;
+
+    #! The type of the other option's value that the interaction applies to (ex: \c "string"), if any
+    *string value_type;
+
+    #! The default value of this option, for @ref OI_Default
+    auto default_value;
+
+    #! A description of the interaction in markdown
+    string desc;
+}
+
 #! Data provider summary info
 public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     #! The name of the provider type
@@ -6198,6 +6267,19 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             }
         }
         return True;
+    }
+
+    #! Returns the interactions of an option with other options
+    /** @param option_info the option info as a @ref DataProvider::DataProviderOptionInfo "DataProviderOptionInfo",
+        an @ref DataProvider::ActionOptionInfo "ActionOptionInfo", or a plain hash from the data provider index
+
+        @return the option's interactions from its \c metadata (see @ref OptionInteractionsKey), or an empty list
+
+        @since %DataProvider 3.9
+    */
+    static list<hash<DataProviderOptionInteraction>> getOptionInteractions(*hash<auto> option_info) {
+        return map cast<hash<DataProviderOptionInteraction>>($1), option_info.metadata{OptionInteractionsKey}
+            ?? ();
     }
 
     #! Pre-processes an expression tree for repeated evaluation

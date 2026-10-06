@@ -95,7 +95,9 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
                 "display_name": "Ignore Empty Lines",
                 "short_desc": "If true, empty lines will be ignored",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If `true`, empty lines will be ignored",
+                "desc": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a "
+                    "record and fails unless the specification has a record type that matches it",
+                "default_value": False,
             },
             "number_format": <DataProviderOptionInfo>{
                 "display_name": "Number Format",

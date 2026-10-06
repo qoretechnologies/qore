@@ -72,8 +72,96 @@
           "message": "Kódování znaků pro vstupní soubor"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "Kódování znaků vstupního souboru, proudu nebo binárních dat `data`; textová data `data` se čtou v jejich vlastním kódování, které je zároveň kódováním výstupních dat"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "Kódování znaků vstupního souboru, proudu nebo binárních dat `data`; textová `data` se čtou ve vlastním kódování, které je zároveň kódováním výstupních dat.  Lze zadat jakékoli kódování znaků podporované Qore; povolené hodnoty uvádějí běžná kódování"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8; výchozí hodnota, kterou exportuje většina současných systémů"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "Unicode UTF-16 se značkou pořadí bajtů, jak jej zapisují exporty *Text v kódování Unicode*"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 little-endian"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16, little-endian, bez značky pořadí bajtů"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 big-endian"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16, big-endian, bez značky pořadí bajtů"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows západoevropské (1252)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Kódová stránka Windows 1252, jak ji zapisují exporty Excelu do *CSV* v západoevropských systémech Windows; na rozdíl od `ISO-8859-1` obsahuje `€` a typografické uvozovky"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows středoevropské (1250)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Kódová stránka Windows 1250 pro češtinu, polštinu, slovenštinu, maďarštinu a další středoevropské jazyky v systémech Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows cyrilice (1251)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Kódová stránka Windows 1251 pro jazyky psané cyrilicí v systémech Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "ISO Latin-1 pro západoevropské jazyky; neobsahuje `€`"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "ISO Latin-2 pro středoevropské jazyky"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, Latin-1 se znakem `€`"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7bitové ASCII"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -86,6 +174,30 @@
         "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "Znaky konce řádku; pokud nejsou zadány, budou automaticky detekovány"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Odřádkování, jako v Linuxu a macOS"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Návrat vozíku a odřádkování, jako ve Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "Návrat vozíku, jako v klasickém Mac OS"
         },
         "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -108,8 +220,8 @@
           "message": "Počet řádků záhlaví v souboru"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "Počet řádků záhlaví v souboru"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "Počet řádků záhlaví přeskočených na začátku vstupu; pokud je `header_names` `true` a tato volba není nastavena, předpokládá se jeden řádek záhlaví"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -144,8 +256,8 @@
           "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "Pokud je `true` (výchozí), prázdné řádky se přeskakují; pokud je `false`, prázdný řádek se vrátí jako záznam bez hodnot"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -156,8 +268,8 @@
           "message": "Při hodnotě true se odstraní úvodní a koncové mezery z neuvozených polí"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Pokud je `true`, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "Pokud je `true` (výchozí), z polí bez uvozovek se odstraní úvodní a koncové mezery; pole v uvozovkách se nikdy nemění"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -180,8 +292,24 @@
           "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "Znak uvozovek pole (výchozí: `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "Znak uvozovky pole (výchozí: `\"`); uvozovka v poli v uvozovkách se zapisuje zdvojením"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "Dvojitá uvozovka"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "Dvojitá uvozovka (`\"`); výchozí hodnota"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "Jednoduchá uvozovka"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "Jednoduchá uvozovka / apostrof (`'`)"
         },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -194,6 +322,38 @@
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "Řetězec oddělující pole v souboru (výchozí: `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "Čárka"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "Čárka (`,`); výchozí hodnota"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "Středník"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "Středník (`;`), jak jej zapisují exporty tabulek v národních prostředích s desetinnou čárkou"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "Tabulátor"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "Znak tabulátoru pro hodnoty oddělené tabulátory (TSV)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "Svislá čára"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "Svislá čára (`|`)"
         },
         "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -288,8 +448,96 @@
           "message": "Kódování znaků pro vstupní soubor"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "Kódování znaků vstupního souboru, proudu nebo binárních dat `data`; textová data `data` se čtou v jejich vlastním kódování, které je zároveň kódováním výstupních dat"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "Kódování znaků vstupního souboru, proudu nebo binárních dat `data`; textová `data` se čtou ve vlastním kódování, které je zároveň kódováním výstupních dat.  Lze zadat jakékoli kódování znaků podporované Qore; povolené hodnoty uvádějí běžná kódování"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8; výchozí hodnota, kterou exportuje většina současných systémů"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "Unicode UTF-16 se značkou pořadí bajtů, jak jej zapisují exporty *Text v kódování Unicode*"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 little-endian"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16, little-endian, bez značky pořadí bajtů"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 big-endian"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16, big-endian, bez značky pořadí bajtů"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows západoevropské (1252)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Kódová stránka Windows 1252, jak ji zapisují exporty Excelu do *CSV* v západoevropských systémech Windows; na rozdíl od `ISO-8859-1` obsahuje `€` a typografické uvozovky"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows středoevropské (1250)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Kódová stránka Windows 1250 pro češtinu, polštinu, slovenštinu, maďarštinu a další středoevropské jazyky v systémech Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows cyrilice (1251)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Kódová stránka Windows 1251 pro jazyky psané cyrilicí v systémech Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "ISO Latin-1 pro západoevropské jazyky; neobsahuje `€`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "ISO Latin-2 pro středoevropské jazyky"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9, Latin-1 se znakem `€`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7bitové ASCII"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -302,6 +550,30 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "Znaky konce řádku; pokud nejsou zadány, budou automaticky detekovány"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "Odřádkování, jako v Linuxu a macOS"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "Návrat vozíku a odřádkování, jako ve Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "Návrat vozíku, jako v klasickém Mac OS"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -324,8 +596,8 @@
           "message": "Počet řádků záhlaví v souboru"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "Počet řádků záhlaví v souboru"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "Počet řádků záhlaví přeskočených na začátku vstupu; pokud je `header_names` `true` a tato volba není nastavena, předpokládá se jeden řádek záhlaví"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -360,8 +632,8 @@
           "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "Pokud je `true` (výchozí), prázdné řádky se přeskakují; pokud je `false`, prázdný řádek se vrátí jako záznam bez hodnot"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -372,8 +644,8 @@
           "message": "Při hodnotě true se odstraní úvodní a koncové mezery z neuvozených polí"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Pokud je `true`, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "Pokud je `true` (výchozí), z polí bez uvozovek se odstraní úvodní a koncové mezery; pole v uvozovkách se nikdy nemění"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -396,8 +668,24 @@
           "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "Znak uvozovek pole (výchozí: `\"`)"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "Znak uvozovky pole (výchozí: `\"`); uvozovka v poli v uvozovkách se zapisuje zdvojením"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "Dvojitá uvozovka"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "Dvojitá uvozovka (`\"`); výchozí hodnota"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "Jednoduchá uvozovka"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "Jednoduchá uvozovka / apostrof (`'`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -410,6 +698,38 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "Řetězec oddělující pole v souboru (výchozí: `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "Čárka"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "Čárka (`,`); výchozí hodnota"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "Středník"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "Středník (`;`), jak jej zapisují exporty tabulek v národních prostředích s desetinnou čárkou"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "Tabulátor"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "Znak tabulátoru pro hodnoty oddělené tabulátory (TSV)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "Svislá čára"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "Svislá čára (`|`)"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",

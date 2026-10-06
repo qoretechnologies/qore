@@ -108,8 +108,8 @@
           "message": "Se true, le righe vuote verranno ignorate"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Se `true`, le righe vuote verranno ignorate"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "Se `true`, le righe vuote vengono saltate; se `false` (predefinito), una riga vuota viene letta come record e genera un errore a meno che la specifica non abbia un tipo di record corrispondente"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

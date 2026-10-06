@@ -72,8 +72,96 @@
           "message": "輸入檔案的字元編碼"
         },
         "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼。可指定 Qore 支援的任何字元編碼；允許的值列出常用的編碼"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8；預設值，也是大多數現行系統匯出的編碼"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "含位元組順序標記的 Unicode UTF-16，由 *Unicode 文字* 匯出所寫入"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 小端序"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16，小端序，不含位元組順序標記"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 大端序"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16，大端序，不含位元組順序標記"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows 西歐（1252）"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Windows 字碼頁 1252，由西歐 Windows 系統上的 Excel *CSV* 匯出所寫入；與 `ISO-8859-1` 不同，含 `€` 與印刷用引號"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows 中歐（1250）"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Windows 字碼頁 1250，用於 Windows 系統上的捷克文、波蘭文、斯洛伐克文、匈牙利文及其他中歐語言"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows 斯拉夫字母（1251）"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Windows 字碼頁 1251，用於 Windows 系統上的斯拉夫字母語言"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "適用於西歐語言的 ISO Latin-1；不含 `€`"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "適用於中歐語言的 ISO Latin-2"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9，含 `€` 的 Latin-1"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7 位元 ASCII"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -86,6 +174,30 @@
         "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "換行字元；若未指定，將自動偵測換行字元"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "換行，如 Linux 與 macOS"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "歸位與換行，如 Windows"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "歸位，如傳統 Mac OS"
         },
         "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -108,8 +220,8 @@
           "message": "檔案中的標頭行數"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "檔案中的標頭行數"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "在輸入開頭略過的標頭行數；若 `header_names` 為 `true` 且未設定此選項，則假設有一行標頭"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -144,8 +256,8 @@
           "message": "若為 true，空行將會被忽略"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "若為 `true`，空行將會被忽略"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "若為 `true`（預設），會略過空白行；若為 `false`，空白行會以沒有值的記錄傳回"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -156,8 +268,8 @@
           "message": "若為 true，非引號包圍的欄位的前置與後置空白字元將會被去除"
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "若為 `true`，非引號包圍的欄位的前置與後置空白字元將會被去除"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "若為 `true`（預設），會移除未加引號欄位的前後空白；加引號的欄位不會變更"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -180,8 +292,24 @@
           "message": "引號字元"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "欄位引號字元（預設值：`\"`）"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "欄位引號字元（預設：`\"`）；加引號欄位中的引號以重複兩次的方式跳脫"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "雙引號"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "雙引號（`\"`）；預設值"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "單引號"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "單引號 / 撇號（`'`）"
         },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -194,6 +322,38 @@
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "檔案中分隔欄位的字串（預設值：`,`）"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "逗號"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "逗號（`,`）；預設值"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "分號"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "分號（`;`），由使用小數逗號的地區設定中的試算表匯出所寫入"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "定位字元"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "定位字元，用於定位字元分隔值（TSV）"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "直線符號"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "直線符號（`|`）"
         },
         "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -288,8 +448,96 @@
           "message": "輸入檔案的字元編碼"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
-          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data",
-          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼"
+          "source": "Character encoding of the input file, stream, or binary `data`; text `data` is read in its own encoding, which is also the encoding of the output data.  Any character encoding supported by Qore can be given; the allowed values list common ones",
+          "message": "輸入檔案、串流或二進位 `data` 的字元編碼；文字 `data` 以其本身的編碼讀取，該編碼也是輸出資料的編碼。可指定 Qore 支援的任何字元編碼；允許的值列出常用的編碼"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "Unicode UTF-8; the default, and what most current systems export",
+          "message": "Unicode UTF-8；預設值，也是大多數現行系統匯出的編碼"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "Unicode UTF-16 with a byte order mark, as written by *Unicode Text* exports",
+          "message": "含位元組順序標記的 Unicode UTF-16，由 *Unicode 文字* 匯出所寫入"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.display_name": {
+          "source": "UTF-16 Little Endian",
+          "message": "UTF-16 小端序"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkxF.desc": {
+          "source": "Unicode UTF-16, little-endian, without a byte order mark",
+          "message": "Unicode UTF-16，小端序，不含位元組順序標記"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.display_name": {
+          "source": "UTF-16 Big Endian",
+          "message": "UTF-16 大端序"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNkJF.desc": {
+          "source": "Unicode UTF-16, big-endian, without a byte order mark",
+          "message": "Unicode UTF-16，大端序，不含位元組順序標記"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.display_name": {
+          "source": "Windows Western European (1252)",
+          "message": "Windows 西歐（1252）"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1Mg.desc": {
+          "source": "Windows code page 1252, as written by Excel *CSV* exports on Western European Windows systems; has `€` and typographic quotes, unlike `ISO-8859-1`",
+          "message": "Windows 字碼頁 1252，由西歐 Windows 系統上的 Excel *CSV* 匯出所寫入；與 `ISO-8859-1` 不同，含 `€` 與印刷用引號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.display_name": {
+          "source": "Windows Central European (1250)",
+          "message": "Windows 中歐（1250）"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MA.desc": {
+          "source": "Windows code page 1250, for Czech, Polish, Slovak, Hungarian and other Central European languages on Windows systems",
+          "message": "Windows 字碼頁 1250，用於 Windows 系統上的捷克文、波蘭文、斯洛伐克文、匈牙利文及其他中歐語言"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.display_name": {
+          "source": "Windows Cyrillic (1251)",
+          "message": "Windows 斯拉夫字母（1251）"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOldJTkRPV1MtMTI1MQ.desc": {
+          "source": "Windows code page 1251, for Cyrillic languages on Windows systems",
+          "message": "Windows 字碼頁 1251，用於 Windows 系統上的斯拉夫字母語言"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "Latin-1 (ISO-8859-1)",
+          "message": "Latin-1 (ISO-8859-1)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO Latin-1 for Western European languages; has no `€`",
+          "message": "適用於西歐語言的 ISO Latin-1；不含 `€`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.display_name": {
+          "source": "Latin-2 (ISO-8859-2)",
+          "message": "Latin-2 (ISO-8859-2)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO Latin-2 for Central European languages",
+          "message": "適用於中歐語言的 ISO Latin-2"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.display_name": {
+          "source": "Latin-9 (ISO-8859-15)",
+          "message": "Latin-9 (ISO-8859-15)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE1.desc": {
+          "source": "ISO Latin-9, Latin-1 with `€`",
+          "message": "ISO Latin-9，含 `€` 的 Latin-1"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "ASCII",
+          "message": "ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "7-bit ASCII",
+          "message": "7 位元 ASCII"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -302,6 +550,30 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
           "message": "換行字元；若未指定，將自動偵測換行字元"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.display_name": {
+          "source": "LF",
+          "message": "LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOgo.desc": {
+          "source": "Line feed, as on Linux and macOS",
+          "message": "換行，如 Linux 與 macOS"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.display_name": {
+          "source": "CR LF",
+          "message": "CR LF"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0K.desc": {
+          "source": "Carriage return and line feed, as on Windows",
+          "message": "歸位與換行，如 Windows"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.display_name": {
+          "source": "CR",
+          "message": "CR"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.allowed-value.c3RyaW5nOg0.desc": {
+          "source": "Carriage return, as on classic Mac OS",
+          "message": "歸位，如傳統 Mac OS"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
           "source": "Field Descriptions",
@@ -324,8 +596,8 @@
           "message": "檔案中的標頭行數"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
-          "source": "The number of headers lines in the file",
-          "message": "檔案中的標頭行數"
+          "source": "The number of header lines skipped at the start of the input; if `header_names` is `true` and this option is not set, one header line is assumed",
+          "message": "在輸入開頭略過的標頭行數；若 `header_names` 為 `true` 且未設定此選項，則假設有一行標頭"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
@@ -360,8 +632,8 @@
           "message": "若為 true，空行將會被忽略"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "若為 `true`，空行將會被忽略"
+          "source": "If `true` (the default), empty lines are skipped; if `false`, an empty line is returned as a record without values",
+          "message": "若為 `true`（預設），會略過空白行；若為 `false`，空白行會以沒有值的記錄傳回"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
           "source": "Ignore Leading and Trailing Whitespace",
@@ -372,8 +644,8 @@
           "message": "若為 true，非引號包圍的欄位的前置與後置空白字元將會被去除"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
-          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "若為 `true`，非引號包圍的欄位的前置與後置空白字元將會被去除"
+          "source": "If `true` (the default), leading and trailing whitespace is stripped from non-quoted fields; quoted fields are never changed",
+          "message": "若為 `true`（預設），會移除未加引號欄位的前後空白；加引號的欄位不會變更"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
@@ -396,8 +668,24 @@
           "message": "引號字元"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
-          "source": "The field quote character (default: `\"`)",
-          "message": "欄位引號字元（預設值：`\"`）"
+          "source": "The field quote character (default: `\"`); a quote character in a quoted field is escaped by doubling it",
+          "message": "欄位引號字元（預設：`\"`）；加引號欄位中的引號以重複兩次的方式跳脫"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.display_name": {
+          "source": "Double Quote",
+          "message": "雙引號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOiI.desc": {
+          "source": "Double quote (`\"`); the default",
+          "message": "雙引號（`\"`）；預設值"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.display_name": {
+          "source": "Single Quote",
+          "message": "單引號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.allowed-value.c3RyaW5nOic.desc": {
+          "source": "Single quote / apostrophe (`'`)",
+          "message": "單引號 / 撇號（`'`）"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
@@ -410,6 +698,38 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
           "source": "the string separating the fields in the file (default: `,`)",
           "message": "檔案中分隔欄位的字串（預設值：`,`）"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.display_name": {
+          "source": "Comma",
+          "message": "逗號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOiw.desc": {
+          "source": "Comma (`,`); the default",
+          "message": "逗號（`,`）；預設值"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.display_name": {
+          "source": "Semicolon",
+          "message": "分號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOjs.desc": {
+          "source": "Semicolon (`;`), as written by spreadsheet exports in locales that use a decimal comma",
+          "message": "分號（`;`），由使用小數逗號的地區設定中的試算表匯出所寫入"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.display_name": {
+          "source": "Tab",
+          "message": "定位字元"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOgk.desc": {
+          "source": "Tab character, for tab-separated values (TSV)",
+          "message": "定位字元，用於定位字元分隔值（TSV）"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.display_name": {
+          "source": "Pipe",
+          "message": "直線符號"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.allowed-value.c3RyaW5nOnw.desc": {
+          "source": "Vertical bar (`|`)",
+          "message": "直線符號（`|`）"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",

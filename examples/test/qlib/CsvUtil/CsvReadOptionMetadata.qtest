@@ -1,0 +1,194 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The option metadata of the CSV reader is what tools and agents learn the reader from (through the action catalog
+# and the data provider index), so it must match what the reader does: a declared default must behave exactly like
+# leaving the option out, and a declared interaction must be what the reader does when the options are combined.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvReadOptionMetadataTest
+
+public class CsvReadOptionMetadataTest inherits QUnit::Test {
+    public {
+        #! Input that every option with a default changes when it is given another value
+        /** header line, an empty line, whitespace around unquoted and inside quoted fields, a non-ASCII value, a
+            `;` and a `'` that only count as a separator and quote when chosen, and a short row
+        */
+        const Sample = binary("Name,City;Code\n\n  Müller , \"Plzeň \",'7';x\nBob,Brno\n");
+
+        #! A value other than the default for each option with a default, which the sample must react to
+        const OtherValues = {
+            "encoding": "ISO-8859-1",
+            "header_names": True,
+            "header_lines": 1,
+            "ignore_empty": False,
+            "ignore_whitespace": False,
+            "quote": "'",
+            "separator": ";",
+            "verify_columns": True,
+        };
+    }
+
+    constructor() : Test("CsvReadOptionMetadataTest", "1.0") {
+        addTestCase("declared defaults match the reader", \defaultTest());
+        addTestCase("declared interactions match the reader", \interactionTest());
+        addTestCase("allowed values", \allowedValueTest());
+        addTestCase("action options carry the metadata", \actionTest());
+        set_return_value(main());
+    }
+
+    #! Returns the records read with the given options, or the exception
+    private auto read(*hash<auto> opts, auto data = Sample) {
+        try {
+            CsvReadDataProvider prov({"data": data} + opts);
+            # the key order is part of the result (header_reorder)
+            list<hash<auto>> rv = ();
+            foreach hash<auto> rec in (prov.searchRecords()) {
+                push rv, {"keys": keys rec, "record": rec};
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    private defaultTest() {
+        auto plain = read();
+        int checked = 0;
+        foreach hash<auto> i in (CsvReadDataProvider::ConstructorOptions.pairIterator()) {
+            if (!exists i.value.default_value) {
+                continue;
+            }
+            assertEq(plain, read({i.key: i.value.default_value}), sprintf("%s: leaving the option out is the same "
+                "as its declared default %y", i.key, i.value.default_value));
+            ++checked;
+            # the sample must react to the option, or the comparison above proves nothing
+            if (exists OtherValues{i.key}) {
+                assertNeq(plain, read({i.key: OtherValues{i.key}}), sprintf("%s: the sample reacts to %y", i.key,
+                    OtherValues{i.key}));
+            }
+        }
+        # header_reorder and tolwr only show with header names
+        hash<auto> named = {"header_names": True};
+        assertEq(read(named), read(named + {"header_reorder": True}));
+        assertEq(read(named), read(named + {"tolwr": False}));
+        assertNeq(read(named), read(named + {"tolwr": True}));
+        hash<auto> headers = {"headers": ("b", "a"), "fields": {"a": "string", "b": "string"}};
+        assertEq(read(headers), read(headers + {"header_reorder": True}));
+        assertNeq(read(headers), read(headers + {"header_reorder": False}));
+
+        # every option with a default in the reader code declares it
+        assertEq(("encoding", "header_lines", "header_names", "header_reorder", "ignore_empty", "ignore_whitespace",
+            "quote", "separator", "tolwr", "verify_columns"),
+            sort(keys (map {$1.key: True}, CsvReadDataProvider::ConstructorOptions.pairIterator(),
+                exists $1.value.default_value)));
+        assertEq(10, checked);
+    }
+
+    private interactionTest() {
+        hash<string, list<hash<DataProviderOptionInteraction>>> interactions = map {
+            $1.key: AbstractDataProvider::getOptionInteractions($1.value),
+        }, CsvReadDataProvider::ConstructorOptions.pairIterator(),
+            AbstractDataProvider::getOptionInteractions($1.value);
+
+        # every interaction refers to an option of the reader
+        foreach hash<auto> i in (interactions.pairIterator()) {
+            foreach hash<DataProviderOptionInteraction> ia in (i.value) {
+                assertTrue(CsvReadDataProvider::ConstructorOptions.hasKey(ia.option),
+                    sprintf("%s: interaction with %y", i.key, ia.option));
+                assertTrue(inlist(ia.kind, (OI_Conflicts, OI_Default, OI_Ignored, OI_Requires)));
+            }
+        }
+
+        # header_lines defaults to 1 with header_names
+        hash<DataProviderOptionInteraction> ia = interactions.header_lines[0];
+        assertEq((OI_Default, "header_names", True, 1), (ia.kind, ia.option, ia.value, ia.default_value));
+        assertEq(read({"header_names": True}), read({"header_names": True, "header_lines": 1}));
+        # 0 is the same as leaving it out; more header lines skip more lines
+        assertEq(read({"header_names": True}), read({"header_names": True, "header_lines": 0}));
+        assertNeq(read({"header_names": True}), read({"header_names": True, "header_lines": 3}));
+
+        # headers conflicts with header_names = true, but not with header_names = false
+        ia = interactions.headers[0];
+        assertEq((OI_Conflicts, "header_names", True), (ia.kind, ia.option, ia.value));
+        assertRegex("header_names", read({"header_names": True, "headers": ("a", "b")}));
+        assertEq(read({"headers": ("a", "b")}), read({"header_names": False, "headers": ("a", "b")}));
+
+        # encoding is ignored for text data
+        ia = interactions.encoding[0];
+        assertEq((OI_Ignored, "data", "string"), (ia.kind, ia.option, ia.value_type));
+        string text = Sample.toString("UTF-8");
+        assertEq(read(NOTHING, text), read({"encoding": "ISO-8859-1"}, text));
+
+        # date_format, number_format and timezone apply only to typed fields
+        foreach string opt in ("date_format", "number_format", "timezone") {
+            ia = interactions{opt}[0];
+            assertEq((OI_Requires, "fields"), (ia.kind, ia.option), opt);
+        }
+        binary typed = binary("2026-10-06,1.234,5\n");
+        assertEq(read(NOTHING, typed), read({"date_format": "DD.MM.YYYY", "number_format": ".,",
+            "timezone": "Asia/Tokyo"}, typed));
+        assertNeq(read({"fields": {"0": "date", "1": "string"}}, typed),
+            read({"fields": {"0": "date", "1": "string"}, "date_format": "YYYY-DD-MM"}, typed));
+
+        # header_reorder needs header names
+        list<string> requires = map $1.option, interactions.header_reorder;
+        assertEq(("headers", "header_names"), requires);
+        assertEq(read(), read({"header_reorder": False}));
+    }
+
+    private allowedValueTest() {
+        foreach string opt in ("encoding", "separator", "quote", "eol") {
+            hash<DataProviderOptionInfo> info = CsvReadDataProvider::ConstructorOptions{opt};
+            assertTrue(info.allowed_values_creatable, opt + " accepts other values");
+            foreach hash<AllowedValueInfo> v in (info.allowed_values) {
+                assertTrue(v.display_name.val(), opt + " display name");
+                assertTrue(v.desc.val(), opt + " description");
+            }
+        }
+        # the default is one of the allowed values
+        foreach string opt in ("encoding", "separator", "quote") {
+            hash<DataProviderOptionInfo> info = CsvReadDataProvider::ConstructorOptions{opt};
+            assertTrue(inlist(info.default_value, map $1.value, info.allowed_values), opt);
+        }
+        # every listed encoding is supported, and reads the sample
+        foreach hash<AllowedValueInfo> v in (CsvReadDataProvider::CsvEncodingValues) {
+            assertEq(Type::List, read({"encoding": v.value}, binary("a,b\n")).type(), v.value);
+        }
+        # every listed separator, quote and end of line is read as such
+        foreach hash<AllowedValueInfo> v in (CsvReadDataProvider::CsvSeparatorValues) {
+            assertEq({"0": "a", "1": "b"}, read({"separator": v.value}, binary("a" + v.value + "b\n"))[0].record,
+                "separator " + v.desc);
+        }
+        foreach hash<AllowedValueInfo> v in (CsvReadDataProvider::CsvQuoteValues) {
+            assertEq({"0": "a,b", "1": "c"}, read({"quote": v.value},
+                binary(v.value + "a,b" + v.value + ",c\n"))[0].record, "quote " + v.desc);
+        }
+        foreach hash<AllowedValueInfo> v in (CsvReadDataProvider::CsvEolValues) {
+            assertEq(2, read({"eol": v.value}, binary("a,b" + v.value + "c,d" + v.value)).size(), "eol " + v.desc);
+        }
+        # values that are not listed are still accepted
+        assertEq({"0": "a", "1": "b"}, read({"separator": "~"}, binary("a~b\n"))[0].record);
+    }
+
+    private actionTest() {
+        foreach string action in ("read", "read-data") {
+            hash<auto> opts = DataProviderActionCatalog::getAppActionEx("Csv", action).options;
+            assertTrue(opts.ignore_empty.default_value, action);
+            assertTrue(opts.ignore_whitespace.default_value, action);
+            assertEq(0, opts.header_lines.default_value, action);
+            assertTrue(opts.encoding.allowed_values_creatable, action);
+            assertEq(CsvReadDataProvider::CsvSeparatorValues.size(), opts.separator.allowed_values.size(), action);
+            assertEq(OI_Default, AbstractDataProvider::getOptionInteractions(opts.header_lines)[0].kind, action);
+            assertEq(OI_Conflicts, AbstractDataProvider::getOptionInteractions(opts.headers)[0].kind, action);
+        }
+    }
+}

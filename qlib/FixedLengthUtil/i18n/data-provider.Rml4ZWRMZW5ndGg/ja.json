@@ -108,8 +108,8 @@
           "message": "true の場合、空行は無視されます"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "`true` の場合、空行は無視されます"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "`true` の場合、空行はスキップされます。`false`（デフォルト）の場合、空行はレコードとして読み取られ、仕様に一致するレコードタイプがなければ失敗します"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",

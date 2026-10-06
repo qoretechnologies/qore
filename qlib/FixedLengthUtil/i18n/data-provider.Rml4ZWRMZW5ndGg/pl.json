@@ -108,8 +108,8 @@
           "message": "Jeśli wartość to true, puste linie będą ignorowane"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
-          "source": "If `true`, empty lines will be ignored",
-          "message": "Jeśli `true`, puste linie będą ignorowane"
+          "source": "If `true`, empty lines are skipped; if `false` (the default), an empty line is read as a record and fails unless the specification has a record type that matches it",
+          "message": "Jeśli `true`, puste wiersze są pomijane; jeśli `false` (domyślnie), pusty wiersz jest odczytywany jako rekord i powoduje błąd, chyba że specyfikacja zawiera pasujący typ rekordu"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
           "source": "Number Format",
