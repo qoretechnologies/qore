@@ -45,6 +45,8 @@ BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: git
 BuildRequires: python3 >= 3.11
+# LLVM emits indexed DWARF5 forms that debugedit 5.0 cannot rewrite.
+BuildRequires: debugedit >= 5.1
 %if %{with tests}
 BuildRequires: gdb
 %endif
@@ -436,6 +438,7 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 
 %changelog
 * Wed Oct 07 2026 David Nichols <david@qore.org> - 3.0.0-22
+- Require indexed DWARF5 support before starting the core RPM build.
 - Backport tested SDK peer-documentation passes and installed asset resolution.
 - Advertise the documentation capability required by current AMQP sources.
 - Complete debug sources after automatic RPM extraction to avoid duplicate copies.

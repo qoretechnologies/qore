@@ -112,6 +112,41 @@ class SpecMetadataTest(unittest.TestCase):
         self.assertIn("-DQORE_REQUIRE_ONNXRUNTIME=ON", output)
         self.assertIn("-DCMAKE_DISABLE_FIND_PACKAGE_CUDAToolkit=ON", output)
 
+    def test_indexed_dwarf_reader_is_an_unconditional_build_dependency(self):
+        for options in ([], ["--without", "docs", "--without", "tests"]):
+            requirements = subprocess.check_output([
+                "rpmspec", *options, "-q", "--buildrequires", str(SPEC)], text=True).splitlines()
+            self.assertIn("debugedit >= 5.1", requirements)
+        for requirements in self.requirements().values():
+            self.assertFalse(any(value.startswith("debugedit") for value in requirements))
+
+    @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
+                         "requires the target build dependency image")
+    def test_indexed_dwarf_build_dependency_resolves_to_installed_tool(self):
+        import tempfile
+        requirements = subprocess.check_output([
+            "rpmspec", "-q", "--buildrequires", str(SPEC)], text=True).splitlines()
+        requirement, = [value for value in requirements if value.startswith("debugedit ")]
+        with tempfile.TemporaryDirectory() as directory:
+            spec = Path(directory) / "probe.spec"
+            for dependency, valid in [(requirement, True), ("debugedit >= 999", False)]:
+                spec.write_text("Name: qore-debugedit-dependency-probe\nVersion: 1\nRelease: 1\n"
+                                "Summary: Indexed DWARF dependency probe\nLicense: MIT\n"
+                                f"BuildRequires: {dependency}\n"
+                                "%description\nIndexed DWARF dependency probe.\n%prep\n:\n%files\n"
+                                "%changelog\n* Wed Oct 07 2026 Qore <info@qore.org> - 1-1\n"
+                                "- Require a supported debug information reader.\n")
+                result = subprocess.run([
+                    "rpmbuild", "-bp", "--define", f"_topdir {directory}",
+                    "--define", "_buildhost qore-rpm-builder", str(spec)],
+                    capture_output=True, text=True)
+                if valid:
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    self.assertNotIn("warning:", result.stderr.lower())
+                else:
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("Failed build dependencies", result.stderr)
+
     @unittest.skipUnless(os.environ.get("QORE_RPM_VERIFY_INSTALLED_DEPS") == "1",
                          "requires the target build dependency image")
     def test_llvm_sdk_dependency_selects_the_compiled_header_major(self):

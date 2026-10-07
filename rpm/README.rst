@@ -39,6 +39,12 @@ debug files. Unsupported dwz processing is disabled for AOT packages, and
 LLVM's existing ``.debug_names`` index is retained without asking GDB to
 generate a second index.
 
+The core build requires debugedit 5.1 or later to rewrite LLVM's indexed
+DWARF5 strings correctly. Version 5.0 can report an unsupported form while
+returning success, so a successful RPM command alone does not establish
+valid debug-source paths. This build requirement also applies when the
+optional documentation and test builds are disabled.
+
 Run helper checks with Python, GCC, binutils, cpio and rpm-build installed::
 
     python3 -B -W error -m unittest discover -s rpm/tests -v
