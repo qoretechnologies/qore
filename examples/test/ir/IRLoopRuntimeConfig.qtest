@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRLoopRuntimeConfigTest
+
+class IRLoopRuntimeConfigTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("compiled loop runtime context", "1.0", \ARGV) {
+        addTestCase("live cancellation and deferred cleanup in all modes", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int rc;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/IRLoopRuntimeConfig.qr";
+        string expected = "loop-runtime-config: ok\n";
+        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
+            }
+        }
+        TmpDir dir("qore-loop-runtime-config-");
+        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/fixture";
+                string generated = run((qcc, level, "--strip-source", "-o", exe, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool explicit_context = !prefix.startsWith("QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG");
+                assertEq(explicit_context, generated.find("qore_rt_check_cancel_v2") >= 0,
+                    "versioned polling helper selection");
+                assertEq(explicit_context, generated.find("qore_rt_get_loop_runtime_config") >= 0,
+                    "entry context acquisition selection");
+                assertEq(expected, run((exe,)), "AOT " + level);
+            }
+        }
+    }
+}

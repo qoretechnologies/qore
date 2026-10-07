@@ -272,6 +272,10 @@ private:
     // the explicit-context callback ABI; never shared between invocations.
     llvm::Value* fast_runtime_config = nullptr;
 
+    // Optional live view for cancellation; null at runtime retains the legacy
+    // teardown behavior. Distinct from the non-null callback ABI's context.
+    llvm::Value* loop_runtime_config = nullptr;
+
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
@@ -1315,6 +1319,10 @@ private:
     // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
     llvm::Value* boxValue(llvm::Value* val, uint32_t id,
         bool allow_dynamic_inline = true);
+
+    // Poll cancellation using one borrowed live context acquired at function entry.
+    void emitCancellationCheck(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, const char* operation);
 
     // Emit exception check: if xsink has exception, branch to exception_target
     // unless the caller requests the function-level error path.

@@ -9529,6 +9529,31 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, const char* operation) {
+    llvm::Value* label = builder->CreateGlobalString(operation, "cancel_operation");
+    if (std::getenv("QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG")) {
+        auto check = module.getOrInsertFunction("qore_rt_check_cancel",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+        builder->CreateCall(check, {xsink_arg, label});
+    } else {
+        if (!loop_runtime_config) {
+            // Acquire only after the native stack guard, in the logical entry
+            // that dominates every loop and handler. The view reads live thread
+            // state even after nested calls enter/leave other Programs.
+            llvm::BasicBlock& entry = *block_map.at(current_ir_func->blocks.front().get());
+            llvm::IRBuilder<> eb(&entry, entry.getFirstInsertionPt());
+            auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
+                llvm::FunctionType::get(ptr_type, {}, false));
+            loop_runtime_config = eb.CreateCall(acquire, {}, "loop_runtime_config");
+        }
+        auto check = module.getOrInsertFunction("qore_rt_check_cancel_v2",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(check, {xsink_arg, label, loop_runtime_config});
+    }
+    emitExceptionCheck(module, llvm_func, inst);
+}
+
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, bool force_function_error) {
     // For deferred exception checking (init functions): skip per-instruction checks
@@ -10622,6 +10647,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_allocas.clear();
     aot_call_target_contexts.clear();
     fast_runtime_config = nullptr;
+    loop_runtime_config = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();
@@ -15642,11 +15668,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             if (br->target && br->target->is_loop_header) {
-                auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                llvm::Value* operation = builder->CreateGlobalString("IR loop", "loop_cancel_operation");
-                builder->CreateCall(check_cancel, {xsink_arg, operation});
-                emitExceptionCheck(module, llvm_func, inst);
+                emitCancellationCheck(module, llvm_func, inst, "IR loop");
             }
             builder->CreateBr(it->second);
             return true;
@@ -33071,12 +33093,7 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     builder->CreateCondBr(builder->CreateICmpEQ(next_checkpoint, zero), checkpoint_bb, load_bb);
 
     builder->SetInsertPoint(checkpoint_bb);
-    auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-    llvm::Value* operation = builder->CreateGlobalString(
-        "fused map/foldl loop", "fused_fold_cancel_operation");
-    builder->CreateCall(check_cancel, {xsink_arg, operation});
-    emitExceptionCheck(module, llvm_func, inst);
+    emitCancellationCheck(module, llvm_func, inst, "fused map/foldl loop");
     llvm::BasicBlock* checkpoint_end = builder->GetInsertBlock();
     builder->CreateBr(load_bb);
 

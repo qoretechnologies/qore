@@ -807,6 +807,16 @@ void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_bits,
 //! Acquire a borrowed RuntimeConfig for this native invocation, on this thread only.
 RuntimeConfig* qore_rt_get_fast_runtime_config();
 
+//! Acquire an optional borrowed live context for generated loop cancellation checks.
+//! @return nullptr after thread-data teardown; only valid within this thread's invocation
+RuntimeConfig* qore_rt_get_loop_runtime_config();
+//! Preserve normal cancellation semantics; a null context selects the legacy TLS path.
+//! @param xsink optional sink receiving a cancellation or interruption exception
+//! @param operation diagnostic operation name
+//! @param rc optional borrowed context from qore_rt_get_loop_runtime_config()
+//! @return 1 if cancelled or interrupted, otherwise 0
+int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const char* operation, RuntimeConfig* rc);
+
 //! Return 1 after an attempted native call (also on exception), 0 for generic fallback.
 //! Scalar arguments/results are native, borrowed, and bool uses a 0/1 int64_t carrier.
 #define QORE_DECLARE_TYPED_FUNCREF_RESULT(NAME, TYPE) \

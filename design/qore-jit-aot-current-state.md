@@ -189,6 +189,25 @@ function/reference, accessed after thread teardown, or moved to another thread.
 Ordinary compatibility entry points continue to refresh the legacy snapshot
 fields with `rc_get_current_ref()`.
 
+Generated JIT/AOT loop polls also use the live view. A function containing a
+poll acquires an optional borrowed pointer once in its logical entry, after
+the stack guard, and calls `qore_rt_check_cancel_v2` at the existing poll sites.
+`qore_rt_get_loop_runtime_config` returns null when thread data is unavailable,
+without accessing possibly destroyed TLS RuntimeConfig state. A null pointer
+selects the ordinary TLS poll; it is not a cached proof that cancellation is
+impossible. Non-null views must not outlive the same thread's invocation.
+
+Both polling paths share the same implementation. Deferral precedes thread
+cancellation; pending thread requests retain their Program-scope check and
+priority over Program interruption. The global pending-interrupt load remains
+seq_cst, and actual pending requests still resolve the governing context.
+Exception construction, manager lookup and the optional TLS fallback are
+outlined so their register saves do not burden the common no-pending poll.
+No request state, manager identity or deferral state is cached, and polling
+frequency is unchanged for ordinary and fused loops. The compiler comparison
+switch is `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG`. The new helper symbols are
+additive: old artifacts work on the updated runtime; new artifacts require it.
+
 The native frame helper performs the existing Program-call-context,
 closure-environment, local/closure-frame-boundary, diagnostic-frame, and
 location/parse-option save/restore through that explicit state. It retains

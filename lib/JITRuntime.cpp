@@ -429,6 +429,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_bind_function_call_ref_typed_v1",
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v1) },
     { "qore_rt_get_fast_runtime_config", reinterpret_cast<void*>(&qore_rt_get_fast_runtime_config) },
+    { "qore_rt_get_loop_runtime_config", reinterpret_cast<void*>(&qore_rt_get_loop_runtime_config) },
+    { "qore_rt_check_cancel_v2", reinterpret_cast<void*>(&qore_rt_check_cancel_v2) },
 #define QORE_TYPED_FUNCREF_SYMBOL(NAME, ARG) \
     { "qore_rt_try_funcref_" #NAME "_" #ARG "_v1", \
         reinterpret_cast<void*>(&qore_rt_try_funcref_##NAME##_##ARG##_v1) }, \
@@ -1163,6 +1165,23 @@ extern "C" DLLEXPORT __attribute__((pure)) int64_t qore_rt_has_exception(Excepti
 
 extern "C" DLLEXPORT int64_t qore_rt_check_cancel(ExceptionSink* xsink, const char* operation) {
     return qore_check_cancel(xsink, operation) ? 1 : 0;
+}
+
+extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_loop_runtime_config() {
+    return RuntimeConfigNativeAccess::tryGetCurrent();
+}
+
+// Keep the optional TLS fallback out of the explicit-context hot path, including
+// its register saves in single-compilation-unit builds.
+static __attribute__((noinline)) int64_t check_cancel_without_context(ExceptionSink* xsink,
+        const char* operation) {
+    return qore_check_cancel(xsink, operation) ? 1 : 0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const char* operation,
+        RuntimeConfig* rc) {
+    return rc ? (RuntimeConfigNativeAccess::checkCancel(*rc, xsink, operation) ? 1 : 0)
+        : check_cancel_without_context(xsink, operation);
 }
 
 // --- JIT deopt flag ---

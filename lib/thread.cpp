@@ -1936,6 +1936,18 @@ RuntimeConfig& RuntimeConfigNativeAccess::getCurrent() {
     return rc;
 }
 
+RuntimeConfig* RuntimeConfigNativeAccess::tryGetCurrent() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        // Static-namespace cleanup can run after thread data has been destroyed.
+        // Do not access a possibly destroyed TLS RuntimeConfig in that case.
+        return nullptr;
+    }
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.impl->native_thread_data = td;
+    return &rc;
+}
+
 QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
     return getThreadData(rc)->current_pgm;
 }
@@ -4751,8 +4763,40 @@ static bool check_cancel_in_scope(int tid) {
     return false;
 }
 
-bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
-    ThreadData* td = thread_data.get();
+// Keep exception construction and manager lookup out of the no-pending poll.
+// Otherwise their stack frames/register saves are paid on every loop iteration.
+static __attribute__((noinline)) bool raise_thread_cancel(int tid, ExceptionSink* xsink, const char* operation) {
+    if (xsink) {
+        // Hold a reference while formatting: another requester can replace the reason.
+        ReferenceHolder<QoreStringNode> reason(thread_list.getCancelReasonRef(tid), nullptr);
+        if (reason) {
+            xsink->raiseException("THREAD-CANCELLED",
+                new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
+        } else {
+            xsink->raiseException("THREAD-CANCELLED",
+                new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
+        }
+    }
+    return true;
+}
+
+static __attribute__((noinline)) bool check_pending_program_interrupt(ExceptionSink* xsink, const char* operation) {
+    // Resolve the actual governing manager, including enclosing callers and
+    // captured async contexts. Policy barriers do not suppress interruption.
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        if (xsink) {
+            if (smh->checkIOInterrupt(xsink, operation)) {
+                return true;
+            }
+        } else if (smh->isInterruptRequested()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
     // after the deferral scope ends raises it with the original reason and scope
@@ -4765,19 +4809,7 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     // been destroyed, in which case q_gettid() reports TID 0, which is never cancel-requested
     int tid = td ? td->tid : 0;
     if (thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid)) {
-        if (xsink) {
-            // hold a reference while formatting; a concurrent cancelThread() call would otherwise
-            // be able to replace and free the string between the read and its use
-            ReferenceHolder<QoreStringNode> reason(thread_list.getCancelReasonRef(tid), nullptr);
-            if (reason) {
-                xsink->raiseException("THREAD-CANCELLED",
-                    new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
-            } else {
-                xsink->raiseException("THREAD-CANCELLED",
-                    new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
-            }
-        }
-        return true;
+        return raise_thread_cancel(tid, xsink, operation);
     }
 
     // No manager can report an interrupt if the global conservative count is zero.
@@ -4788,20 +4820,16 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         return false;
     }
 
-    // An interrupt exists somewhere; resolve the actual governing manager, including
-    // enclosing callers and captured async contexts. Policy barriers do not suppress it.
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        if (xsink) {
-            if (smh->checkIOInterrupt(xsink, operation)) {
-                return true;
-            }
-        } else if (smh->isInterruptRequested()) {
-            return true;
-        }
-    }
+    return check_pending_program_interrupt(xsink, operation);
+}
 
-    return false;
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel_intern(thread_data.get(), xsink, operation);
+}
+
+bool RuntimeConfigNativeAccess::checkCancel(const RuntimeConfig& rc, ExceptionSink* xsink,
+        const char* operation) {
+    return qore_check_cancel_intern(getThreadData(rc), xsink, operation);
 }
 
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {

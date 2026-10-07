@@ -229,6 +229,15 @@ release operation. `QORE_IR_OPT_STATS=1` reports the number of inserted guards.
 This trades additional native code for fewer runtime cleanup calls; compare
 code size and compilation time as well as steady-state performance.
 
+`QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1` at compilation selects legacy TLS
+polling for generated JIT/AOT loops. The enabled path acquires a nullable,
+borrowed live `RuntimeConfig*` once per invocation and passes it to
+`qore_rt_check_cancel_v2`. Null selects the legacy path, including during
+thread-data teardown. Polling frequency, deferral, cancellation priority,
+Program scope and atomic ordering are unchanged. Uncommon exception/manager
+work is outlined for both polling paths; this switch isolates context passing,
+not that shared runtime improvement. Old AOT artifacts remain supported.
+
 `QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1`
 at compilation selects the original typed callback helpers instead of v2,
 which acquires an explicit live execution context once per generated invocation.

@@ -110,10 +110,19 @@ class RuntimeConfigNativeAccess {
 public:
     //! Acquire the live thread view once for a generated function invocation.
     DLLLOCAL static RuntimeConfig& getCurrent();
+    //! Acquire an optional live view without touching RuntimeConfig after thread-data teardown.
+    //! @return a borrowed same-thread invocation view, or nullptr if thread data is unavailable
+    DLLLOCAL static RuntimeConfig* tryGetCurrent();
     //! Read the live Program, not a snapshot that a nested call could refresh.
     DLLLOCAL static QoreProgram* getProgram(const RuntimeConfig& rc);
     //! Preserve the normal stack guard without looking up TLS again.
     DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
+    //! Perform the normal cancellation check using the live thread view, not TLS snapshots.
+    //! @param rc same-thread invocation view from tryGetCurrent()
+    //! @param xsink optional sink receiving a cancellation or interruption exception
+    //! @param operation diagnostic operation name
+    //! @return true when cancellation or interruption applies
+    DLLLOCAL static bool checkCancel(const RuntimeConfig& rc, ExceptionSink* xsink, const char* operation);
     static ThreadData* getThreadData(const RuntimeConfig& rc) {
         assert(rc.impl && rc.impl->native_thread_data);
         return rc.impl->native_thread_data;

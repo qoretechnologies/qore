@@ -1374,3 +1374,80 @@ plus standalone scripts, old-AOT compatibility, baseline fixtures and the
 10 harness tests. No full-suite, sanitizer, Linux validation or Qore allocation
 count claim is made. The audit added compiler cancellation and explicit
 code-generation coverage; measurements narrowed the optimization's scope.
+
+## Live context for cancellation polling (2026-10-07)
+
+Baseline: `51b9d37c5`. Generated JIT/AOT loops acquire a nullable borrowed
+`RuntimeConfig*` once per invocation and pass the live view to the versioned
+polling helper. The legacy and explicit paths share cancellation logic.
+Exception construction, manager lookup and optional TLS fallback are outlined.
+Deferral, thread-cancellation priority, Program scope, atomic ordering and
+polling frequency are unchanged. This does not remove cancellation checks.
+
+Five forks, 1024 elements, three warmups and five 300 ms samples per fork:
+
+|!Kernel|!AOT before ns/element|!AOT after ns/element|!Java JIT ns/element
+|Arithmetic|4.080|2.604|0.884
+|Direct call|4.078|2.614|0.875
+|Retained callback|21.463|20.012|1.664
+
+Direct-call loop time falls **35.9%**, with nonoverlapping fork-mean ranges
+4.064-4.151 versus 2.604-2.620 ns. Callbacks improve **6.8%**, with ranges
+21.313-21.476 versus 19.891-20.334 ns. Java remains about **3.0x faster** for
+the direct-call loop and **12.0x faster** for the retained callback. Direct
+calls add almost nothing over Qore's arithmetic control: this gain primarily
+reduces loop-poll overhead, not an isolated direct-call latency.
+
+The initial explicit-context-only trial improved direct loops 17.4%; outlining
+uncommon work produced the final result above. Both trial datasets are retained.
+Interpreter ranges overlap; their small changes are not established gains.
+
+A three-fork repeat at 4096 elements checks the wider execution workload:
+
+|!Kernel|!AOT before ns/element|!AOT after ns/element
+|Retained callback|20.95|19.47
+|Arithmetic|3.42|1.95
+|Direct call|3.46|1.96
+|Final method|3.48|2.01
+|Dispatch control|5.35|2.22
+|List read|4.89|3.43
+|Polymorphic method|268.81|263.11
+|List build|82.57|78.30
+|List mutation|157.26|155.18
+|Temporary list|120.03|121.27
+|Temporary hash|306.31|327.44
+
+The allocation-heavy hash result initially regressed **6.9%**. An additional
+five-fork repeat did **not** reproduce it: 302.59 before versus 301.30 after,
+with overlapping ranges 294.21-312.97 and 289.35-307.11. Temporary-list ranges
+also overlap (118.62 versus 119.43 median); callbacks again improve **7.6%**
+(20.91 to 19.32). Both runs are retained, with no samples discarded. Allocation
+results remain variable; no allocation-kernel improvement or universal
+regression-free claim is made.
+
+Native text grows from 51112 to 51648 bytes (**1.0%**); executable size grows
+192 bytes. Single compilation observations were 235.53 ms before and 234.81 ms
+after, not a compile-time distribution. Separate five-second sampling still
+finds native frame setup/restoration, closure markers, validation and stack
+checks prominent. The next bounded experiment is the empty closure-marker push.
+
+Validation: **356 release cases / 12792 assertions**, five standalone scripts;
+**124 debug cases / 11830 assertions**, four standalone scripts. The new fixture
+covers AST/IR/JIT/tiered, AOT O0/O3, disabled context passing and native EH.
+Native tests compare live, legacy and null-context paths through nested
+Programs, deferral, cancellation priority, racing requests and foreign-thread
+registration/teardown. Old AOT's 165 records match; 10 harness tests pass.
+
+One existing wrapper rejects a default-target macOS linker warning. The saved
+baseline compiler reproduces that warning; baseline and final release/debug
+AOT fixtures execute successfully when invoked explicitly. The warning-rejecting
+wrapper is not reported as passing. Some older debug wrappers do not set
+DYLD_LIBRARY_PATH for children; explicit library selection is verified in the
+new wrappers/manual checks. No full-suite, sanitizer or Linux claim is made.
+
+[Sanitized evidence](results-loop-runtime-context-macos-arm64.json) retains all
+four experiments, **246 jobs / 1230 samples**, hashes and recomputed medians.
+[Full audit](FOLLOWUP-AUDIT.md#loop-runtime-context-audit-2026-10-07) records
+every audit-changes checklist item and the validation limitations. Audit review
+kept the borrowed context nullable at teardown and added direct semantic
+coverage; no pending-state snapshot or weaker ordering was introduced.

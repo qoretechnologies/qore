@@ -3,6 +3,9 @@
  */
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+struct QoreAOTContext;
+struct QoreTypeParamInstantiation;
+#include <qore/intern/JITRuntime.h>
 
 #ifdef NDEBUG
 #undef NDEBUG
@@ -12,12 +15,22 @@
 #include <thread>
 
 static void check(ExceptionSink& xsink, const char* error = nullptr) {
-    assert(qore_check_cancel(&xsink, "interrupt fast-path test") == (error != nullptr));
-    assert(static_cast<bool>(xsink) == (error != nullptr));
-    if (error) {
-        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal(error));
-        xsink.clear();
+    // Capture once, before entering the nested Programs below. This must be a
+    // live view rather than a snapshot of the initial manager/deferral state.
+    static thread_local RuntimeConfig* loop_context = qore_rt_get_loop_runtime_config();
+    assert(loop_context);
+    for (unsigned path = 0; path < 3; ++path) {
+        bool cancelled = path == 1 ? qore_check_cancel(&xsink, "interrupt fast-path test")
+            : qore_rt_check_cancel_v2(&xsink, "interrupt fast-path test", path ? nullptr : loop_context);
+        assert(cancelled == (error != nullptr));
+        assert(static_cast<bool>(xsink) == (error != nullptr));
+        if (error) {
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal(error));
+            xsink.clear();
+        }
     }
+    assert(static_cast<bool>(qore_rt_check_cancel_v2(nullptr, "sinkless native poll", loop_context))
+        == (error != nullptr));
 }
 
 static void checkContexts() {
@@ -127,10 +140,29 @@ static void checkRacingRequests() {
     check(xsink);
 }
 
+static void checkForeignLifecycle() {
+    std::thread worker([]() {
+        assert(!qore_rt_get_loop_runtime_config());
+        assert(!qore_rt_check_cancel_v2(nullptr, "unregistered thread", nullptr));
+        {
+            QoreForeignThreadHelper foreign;
+            RuntimeConfig* context = qore_rt_get_loop_runtime_config();
+            assert(context);
+            assert(!qore_rt_check_cancel_v2(nullptr, "registered thread", context));
+        }
+        // The borrowed context above is no longer valid. Reacquiring must return
+        // null rather than touching TLS context state after thread-data teardown.
+        assert(!qore_rt_get_loop_runtime_config());
+        assert(!qore_rt_check_cancel_v2(nullptr, "unregistered again", nullptr));
+    });
+    worker.join();
+}
+
 int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     checkContexts();
     checkRacingRequests();
+    checkForeignLifecycle();
     qore_cleanup();
     std::puts("program-interrupt-fast-path: ok");
 }

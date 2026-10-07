@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub spin(int kind, Counter ready) {
+    int i = 0;
+    int value = 7;
+    ready.dec();
+    # A finite bound also lets a broken polling implementation terminate.
+    if (kind == 0) {
+        while (i < 50000000) { value = (value * 33 + 17) & 65535; ++i; }
+    } else if (kind == 1) {
+        for (; i < 50000000; ++i) { value = (value * 33 + 17) & 65535; }
+    } else {
+        do { value = (value * 33 + 17) & 65535; ++i; } while (i < 50000000);
+    }
+    return value;
+}
+
+int sub cleanupWork() {
+    int total = 0;
+    for (int i = 0; i < 1000; ++i) { total += i; }
+    return total;
+}
+
+sub checkLoop(int kind) {
+    Counter ready(1);
+    Counter done(1);
+    int tid;
+    string error = "NO-CANCELLATION";
+    int cleaned = 0;
+    int resumed = 0;
+    bool pending = False;
+    background sub () {
+        on_exit done.dec();
+        tid = gettid();
+        try {
+            spin(kind, ready);
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex.err;
+            cleaned = defer_thread_cancel(\cleanupWork());
+            pending = thread_cancelled();
+            clear_thread_cancel();
+            resumed = cleanupWork();
+        }
+    }();
+    if (ready.waitForZero(30s)) { throw "LOOP-CONTEXT-TEST", "worker did not start"; }
+    cancel_thread(tid, "compiled loop context");
+    if (done.waitForZero(30s)) { throw "LOOP-CONTEXT-TEST", "worker did not finish"; }
+    if (error != "THREAD-CANCELLED" || cleaned != 499500 || resumed != 499500 || !pending) {
+        throw "LOOP-CONTEXT-TEST", sprintf("kind=%d error=%s cleanup=%d resumed=%d pending=%y",
+            kind, error, cleaned, resumed, pending);
+    }
+}
+
+for (int kind = 0; kind < 3; ++kind) { checkLoop(kind); }
+printf("loop-runtime-config: ok\n");
