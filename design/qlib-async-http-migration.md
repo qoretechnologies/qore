@@ -81,3 +81,6 @@ The limitations found during the migration are fixed:
 - **FileLocationHandler stream readers** decode text in the encoding determined from the response, like text reads.
 - **Token without OAuth2 grant options**: a token that is given is used by both clients when options required to
   acquire a token with the grant type are missing; the grant type is then not used.
+- **Concurrent Haltian token rejection**: `RestClientIo::refreshTokenForRequest()` passes the rejected request's
+  prepared headers to the client. `EmpathicBuildingRestClientIo` compares them with the current token under its
+  login lock, so a delayed rejection of an old token reuses the new token without invalidating retries in flight.

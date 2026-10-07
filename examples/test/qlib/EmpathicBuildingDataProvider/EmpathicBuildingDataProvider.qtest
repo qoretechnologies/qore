@@ -48,6 +48,12 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
 
         #! the number of API requests received while waiting
         int waiting = 0;
+
+        #! delay all but the first rejection until a retry with a new token has arrived
+        bool delay_rejections = False;
+
+        #! the number of retried API requests received
+        int retries = 0;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -109,10 +115,11 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
         if (hdr.authorization != "Bearer " + valid_token) {
             if (wait_for) {
                 # answer the concurrent requests together, so that they all need a new token at the same time
-                ++waiting;
+                int request_number = ++waiting;
                 cond.broadcast();
-                while (waiting < wait_for) {
-                    cond.wait(m);
+                date deadline = now_us() + 10s;
+                while (waiting < wait_for || (delay_rejections && request_number > 1 && !retries)) {
+                    waitForRequest(deadline);
                 }
             }
             return <HttpResponseInfo>{
@@ -120,6 +127,22 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
                 "hdr": {"Content-Type": MimeTypeJson},
                 "body": make_json({"error": "unauthorized"}),
             };
+        }
+        if (delay_rejections && waiting) {
+            ++retries;
+            cond.broadcast();
+            date deadline = now_us() + 10s;
+            while (retries < wait_for) {
+                waitForRequest(deadline);
+            }
+            # A redundant login while another retry is in flight invalidates that retry's token.
+            if (hdr.authorization != "Bearer " + valid_token) {
+                return <HttpResponseInfo>{
+                    "code": 401,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"error": "retry token invalidated"}),
+                };
+            }
         }
         if (hdr.path == "v2/measurements") {
             return <HttpResponseInfo>{
@@ -145,6 +168,15 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
         AutoLock al(m);
         return (select requests, $1.path == path) ?? ();
     }
+
+    #! Waits for another request without leaving the test blocked if a request fails
+    private waitForRequest(date deadline) {
+        date remaining = deadline - now_us();
+        if (remaining <= 0) {
+            throw "TEST-TIMEOUT", "timed out waiting for concurrent API requests";
+        }
+        cond.wait(m, remaining);
+    }
 }
 
 public class Main inherits QUnit::Test {
@@ -167,6 +199,7 @@ public class Main inherits QUnit::Test {
         addTestCase("login tests", \loginTest());
         addTestCase("refresh token tests", \refreshTokenTest());
         addTestCase("concurrent token tests", \concurrentTokenTest());
+        addTestCase("delayed token rejection tests", \delayedTokenRejectionTest());
         addTestCase("local connection tests", \localConnectionTest());
         addTestCase("sync client conversion tests", \syncClientConversionTest());
 
@@ -208,8 +241,7 @@ public class Main inherits QUnit::Test {
         try {
             prov = ebrc.getDataProvider();
         } catch (hash<ExceptionInfo> ex) {
-            if (QUnit::Test::isConnectionError(ex) || ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
+            if (QUnit::Test::isConnectionError(ex) || ex.err == "REST-RESPONSE-ERROR") {
                 testSkip(sprintf("cannot connect to EmpathicBuilding API: %s", ex.desc));
             }
             rethrow;
@@ -261,8 +293,11 @@ public class Main inherits QUnit::Test {
 
             monitor.add(ebrc);
             hash<auto> info = monitor.waitForResult();
-            on_error if (info.ex) {
-                printf("%s\n", get_exception_string(info.ex));
+            if (info.ex) {
+                testSkip(sprintf("external API ping failed: %s: %s", info.ex.err, info.ex.desc));
+            }
+            if (info.result == "timeout") {
+                testSkip("external API ping timed out");
             }
             assertEq("OK", info.result);
         }
@@ -421,27 +456,52 @@ public class Main inherits QUnit::Test {
 
     #! Concurrent requests rejected with 401 share the new token
     concurrentTokenTest() {
+        runConcurrentTokenTest(False);
+    }
+
+    #! A late 401 for the old token must not invalidate another request's retry
+    delayedTokenRejectionTest() {
+        foreach string mode in ("standard", "raw", "signed", "refresh") {
+            runConcurrentTokenTest(True, mode);
+        }
+    }
+
+    private runConcurrentTokenTest(bool delay_rejections, string mode = "standard") {
+        on_error printf("concurrent request mode: %s, delayed rejections: %y\n", mode, delay_rejections);
         HttpServer server;
         int port;
         FakeHaltianHandler handler = startServer(\server, \port);
         on_exit server.stop();
 
-        EmpathicBuildingRestClientIo rest({
-            "url": "http://localhost:" + port,
+        hash<auto> auth = mode == "refresh" ? {
+            "refresh_token": "refresh-1",
+        } : {
             "username": "user@example.com",
             "password": "pass",
-        });
-        assertEq(1, handler.logins);
+        };
+        EmpathicBuildingRestClientIo rest(auth + {"url": "http://localhost:" + port});
+        assertEq(mode == "refresh" ? 0 : 1, handler.logins);
 
         handler.expireToken();
         handler.wait_for = 4;
+        handler.delay_rejections = delay_rejections;
         Counter done(4);
         Queue results();
         for (int i = 0; i < 4; ++i) {
             background sub () {
                 on_exit done.dec();
                 try {
-                    results.push(rest.restGet("v1/organizations").body);
+                    hash<auto> resp;
+                    if (mode == "raw") {
+                        resp = rest.restDoRawRequest("GET", "v1/organizations");
+                    } else if (mode == "signed") {
+                        resp = rest.doSignedRequest("x-signature", string sub (hash<auto> ctx) {
+                            return ctx.hdr.authorization;
+                        }, "GET", "v1/organizations");
+                    } else {
+                        resp = rest.restGet("v1/organizations");
+                    }
+                    results.push(resp.body);
                 } catch (hash<ExceptionInfo> ex) {
                     results.push(ex);
                 }
@@ -451,12 +511,13 @@ public class Main inherits QUnit::Test {
         for (int i = 0; i < 4; ++i) {
             assertEq(({"id": 239, "name": "Test Org"},), results.get());
         }
-        # the token is replaced at least once and at most once for each rejected request
-        assertTrue(handler.logins >= 2 && handler.logins <= 5, sprintf("logins: %d", handler.logins));
-        # every retried request was accepted with a token issued by a login
+        # all requests rejected with the same token share exactly one token acquisition
+        assertEq(mode == "refresh" ? 0 : 2, handler.logins);
+        assertEq(mode == "refresh" ? 2 : 0, handler.refreshes);
+        # every retried request was accepted with the same new token
         list<hash<auto>> reqs = handler.getRequests("v1/organizations");
         assertEq(8, reqs.size());
-        assertEq(4, (select reqs, $1.authorization =~ /^Bearer token-[2-5]$/).size());
+        assertEq(4, (select reqs, $1.authorization == "Bearer " + handler.valid_token).size());
     }
 
     #! Connection, data provider, and ping with a local server

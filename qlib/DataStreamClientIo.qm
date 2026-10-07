@@ -302,7 +302,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         # 401 retry for OAuth2
         if (raw.status_code == 401 && canRetryAuth()) {
             try {
-                getNewTokenIntern();
+                refreshTokenForRequest(hdr);
             } catch () {
                 return buildAndWrapResponse(raw, prepared, method, path, hdr);
             }

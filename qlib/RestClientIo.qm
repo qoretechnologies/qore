@@ -2413,7 +2413,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 4. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw_resp.status_code == 401 && canRetryAuth()) {
                 try {
-                    getNewTokenIntern();
+                    refreshTokenForRequest(hdr);
                 } catch () {
                     # If refresh fails, return the original 401 response
                     return buildResponse(raw_resp, prepared.error_passthru,
@@ -2443,7 +2443,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # payload when the token has expired; refresh and retry once
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
-                    getNewTokenIntern();
+                    refreshTokenForRequest(hdr);
                 } catch () {
                     return resp;
                 }
@@ -2465,6 +2465,16 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         private string getAuthHeaderName() {
             AutoReadLock al(config_lock);
             return token_api_key_header_val.val() ? token_api_key_header_val : "authorization";
+        }
+
+        #! Refreshes authentication after a request is rejected
+        /** Subclasses can compare the credentials actually sent with the current token to reuse a token
+            acquired by another request while this request was in flight.
+
+            @param hdr the prepared headers of the rejected request, with lowercase names
+        */
+        private refreshTokenForRequest(*hash<auto> hdr) {
+            getNewTokenIntern();
         }
 
         #! Returns True if the response matches the configured body-level auth error pattern
@@ -3238,7 +3248,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 5. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw.status_code == 401 && canRetryAuth()) {
                 try {
-                    getNewTokenIntern();
+                    refreshTokenForRequest(hdr);
                 } catch () {
                     return buildResponse(raw, prepared.error_passthru,
                         prepared.allow_any_response, method, path, hdr,
@@ -3265,7 +3275,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 7. Body-level auth error retry (see restDoRequest)
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
-                    getNewTokenIntern();
+                    refreshTokenForRequest(hdr);
                 } catch () {
                     return resp;
                 }
