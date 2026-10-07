@@ -4473,6 +4473,8 @@ while (*binary chunk = input.read(65536)) {
       under a debugger. Timeouts remain failed tests and the runner proceeds to the next test.
     - Fixed parallel binary-module documentation builds reading unfinished core tags, abstract-method
       parameters disappearing from generated documentation, and MIME wildcards opening nested comments.
+      MIME wildcards and URL paths now render literally in prose and code/verbatim examples; escaped
+      command names preserve documentation, with linear Unicode scanning for long comment lines.
 
     - Fixed concurrent dereferences repeatedly rescanning a cycle with an obsolete reference-count snapshot,
       which could stall HTTP streaming callback workers and prevent subsequent requests from completing.
