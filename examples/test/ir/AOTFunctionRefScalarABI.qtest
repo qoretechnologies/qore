@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FunctionRefScalarABITest
+
+class FunctionRefScalarABITest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        const Expected = "scalar-abi: ok\n";
+    }
+    constructor() : Test("prepared callback scalar signatures", "1.0", \ARGV) {
+        addTestCase("zero and unary scalar ABI with generic fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTFunctionRefScalarABI.qr";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-scalar-abi-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ", "QORE_AOT_EH=1 ",
+                "QORE_AOT_NO_DEBUG_INFO=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", exe, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                string version = prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG") ? "v1"
+                    : prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET") ? "v2" : "v3";
+                foreach string result in (("int", "float", "bool")) {
+                    foreach string arg in (("0", "int", "float", "bool")) {
+                        string base = "@qore_rt_try_funcref_" + result + "_" + arg;
+                        assertEq(True, ir.find("call i32 " + base + "_" + version + "(") >= 0,
+                            "scalar helper ABI: " + base + "_" + version);
+                        string target = "target_" + result + "_" + (arg == "0" ? "zero" : arg);
+                        bool native = result != "bool" && (arg == "0" || result == arg)
+                            && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY");
+                        assertEq(native,
+                            regex(ir, target + "[^\n]*funcref_typed_v1"), "native callee: " + target);
+                    }
+                }
+                assertEq(Expected, run((exe,)), "AOT " + level);
+                assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "runtime fallback");
+            }
+        }
+    }
+}

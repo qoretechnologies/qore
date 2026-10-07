@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Opaque typed references exercise every zero/unary scalar helper signature.
+# Constants deliberately include values outside the immediate NaN-box payload.
+# Integer/float identity and zero-argument targets have native adapters. The
+# unused-input cross-type and boolean targets currently retain generic entry.
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "SCALAR-ABI-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub target_int_zero() { return -9223372036854775807 - 1; }
+auto sub generic_int_zero() { return -9223372036854775807 - 1; }
+int sub invoke_int_zero(code<int()> fn) {
+    int result = fn();
+    return result;
+}
+int sub target_int_int(int arg) { return arg; }
+auto sub generic_int_int(int arg) { return -9223372036854775807 - 1; }
+int sub invoke_int_int(code<int(int)> fn, int arg) {
+    int result = fn(arg);
+    return result;
+}
+int sub target_int_float(float arg) { return -9223372036854775807 - 1; }
+auto sub generic_int_float(float arg) { return -9223372036854775807 - 1; }
+int sub invoke_int_float(code<int(float)> fn, float arg) {
+    int result = fn(arg);
+    return result;
+}
+int sub target_int_bool(bool arg) { return -9223372036854775807 - 1; }
+auto sub generic_int_bool(bool arg) { return -9223372036854775807 - 1; }
+int sub invoke_int_bool(code<int(bool)> fn, bool arg) {
+    int result = fn(arg);
+    return result;
+}
+float sub target_float_zero() { return -3.0e307; }
+auto sub generic_float_zero() { return -3.0e307; }
+float sub invoke_float_zero(code<float()> fn) {
+    float result = fn();
+    return result;
+}
+float sub target_float_int(int arg) { return -3.0e307; }
+auto sub generic_float_int(int arg) { return -3.0e307; }
+float sub invoke_float_int(code<float(int)> fn, int arg) {
+    float result = fn(arg);
+    return result;
+}
+float sub target_float_float(float arg) { return arg; }
+auto sub generic_float_float(float arg) { return -3.0e307; }
+float sub invoke_float_float(code<float(float)> fn, float arg) {
+    float result = fn(arg);
+    return result;
+}
+float sub target_float_bool(bool arg) { return -3.0e307; }
+auto sub generic_float_bool(bool arg) { return -3.0e307; }
+float sub invoke_float_bool(code<float(bool)> fn, bool arg) {
+    float result = fn(arg);
+    return result;
+}
+bool sub target_bool_zero() { return True; }
+auto sub generic_bool_zero() { return True; }
+bool sub invoke_bool_zero(code<bool()> fn) {
+    bool result = fn();
+    return result;
+}
+bool sub target_bool_int(int arg) { return True; }
+auto sub generic_bool_int(int arg) { return True; }
+bool sub invoke_bool_int(code<bool(int)> fn, int arg) {
+    bool result = fn(arg);
+    return result;
+}
+bool sub target_bool_float(float arg) { return True; }
+auto sub generic_bool_float(float arg) { return True; }
+bool sub invoke_bool_float(code<bool(float)> fn, float arg) {
+    bool result = fn(arg);
+    return result;
+}
+bool sub target_bool_bool(bool arg) { return arg; }
+auto sub generic_bool_bool(bool arg) { return True; }
+bool sub invoke_bool_bool(code<bool(bool)> fn, bool arg) {
+    bool result = fn(arg);
+    return result;
+}
+
+for (int round = 0; round < 30; ++round) {
+    expect(-9223372036854775807 - 1, invoke_int_zero(\target_int_zero()));
+    expect(-9223372036854775807 - 1, invoke_int_zero(\generic_int_zero()));
+    expect(-9223372036854775807 - 1, invoke_int_int(\target_int_int(), -9223372036854775807 - 1));
+    expect(-9223372036854775807 - 1, invoke_int_int(\generic_int_int(), 1125899906842624));
+    expect(-9223372036854775807 - 1, invoke_int_float(\target_int_float(), -6.0e307));
+    expect(-9223372036854775807 - 1, invoke_int_float(\generic_int_float(), -6.0e307));
+    expect(-9223372036854775807 - 1, invoke_int_bool(\target_int_bool(), False));
+    expect(-9223372036854775807 - 1, invoke_int_bool(\generic_int_bool(), False));
+    expect(-3.0e307, invoke_float_zero(\target_float_zero()));
+    expect(-3.0e307, invoke_float_zero(\generic_float_zero()));
+    expect(-3.0e307, invoke_float_int(\target_float_int(), 1125899906842624));
+    expect(-3.0e307, invoke_float_int(\generic_float_int(), 1125899906842624));
+    expect(-3.0e307, invoke_float_float(\target_float_float(), -3.0e307));
+    expect(-3.0e307, invoke_float_float(\generic_float_float(), -6.0e307));
+    expect(-3.0e307, invoke_float_bool(\target_float_bool(), False));
+    expect(-3.0e307, invoke_float_bool(\generic_float_bool(), False));
+    expect(True, invoke_bool_zero(\target_bool_zero()));
+    expect(True, invoke_bool_zero(\generic_bool_zero()));
+    expect(True, invoke_bool_int(\target_bool_int(), 1125899906842624));
+    expect(True, invoke_bool_int(\generic_bool_int(), 1125899906842624));
+    expect(True, invoke_bool_float(\target_bool_float(), -6.0e307));
+    expect(True, invoke_bool_float(\generic_bool_float(), -6.0e307));
+    expect(True, invoke_bool_bool(\target_bool_bool(), True));
+    expect(False, invoke_bool_bool(\target_bool_bool(), False));
+    expect(True, invoke_bool_bool(\generic_bool_bool(), False));
+}
+print("scalar-abi: ok\n");

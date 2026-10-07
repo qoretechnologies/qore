@@ -2610,3 +2610,72 @@ Keep generic fallback/NOTHING behavior, sink and stack checks, live Program/
 debugger/body/readiness guards, owned cache cleanup and diagnostic frame
 publication. Inspect generated code for removal of the result-slot stores/
 reload before measuring; do not assume it explains or fixes this regression.
+
+## Rejected register-return calling convention (2026-10-07)
+
+Baseline: `61345f823`. Two additive helper-v4 experiments returned native
+payload and handled status in registers, retaining the prepared-v3 cache and
+all older entry points. Target selection occurred after the AOT target layout
+was known, restricted to 64-bit Darwin/Linux AArch64/x86-64; other targets kept
+v3. No admission, ownership, readiness, stack or observer guard was removed.
+
+**Both variants rejected and reverted.** Five shuffled forks, three warmup and
+five 300 ms samples per fork, 4096 elements. Medians below include loop,
+computation and checksum work; they are not isolated call latency.
+
+|!Variant|!Kernel|!Before ns/element|!Candidate ns/element|!Time change
+|Integer-register payload/status|indirect_wide|8.93278|8.94969|+0.19%
+|Integer-register payload/status|indirect_float|9.21309|9.79966|+6.37%
+|Same runtime, v3 control|indirect_wide|8.90537|8.93815|+0.37%
+|Same runtime, v3 control|indirect_float|9.19544|9.17024|-0.27%
+|FP-register float payload/status|indirect_wide|8.87308|8.96673|+1.06%
+|FP-register float payload/status|indirect_float|9.17281|9.23937|+0.73%
+|FP-register float payload/status|indirect_tagged_float|9.16733|9.07699|-0.99%
+|FP-register float payload/status|indirect_branch_float|9.25740|9.25645|-0.01%
+
+Only the first variant's float regression has separated fork-mean ranges.
+All other ranges overlap. Returning through registers did not establish a
+useful overall gain. There was no fresh Java timing in this pilot; the earlier
+retained-call gap remains unresolved.
+
+Native C++/LLVM ABI probes pass on macOS arm64, including signed zero, NaN
+payloads, infinity and tag-colliding doubles. Cross-target IR/object inspection
+covers Linux AArch64/x86-64 and Darwin x86-64, not foreign runtime execution.
+The first float helper returns through an FP-to-integer move and its caller
+moves the value back; the second uses a homogeneous double pair in d0/d1.
+These are assembly observations, not a proven cause of the timing changes.
+
+Runtime text grows from 13876284 to 13917584/13917724 bytes; AOT text from
+91320 to 91352/91472. The first integer/float helper frames are 256/272 bytes;
+the second float frame is 288 bytes. Smaller caller result traffic alone is
+not evidence of improved throughput.
+
+[Evidence](results-rejected-register-return-macos-arm64.json) retains both
+production diffs and hashes and **80 jobs / 400 samples**, with independently
+recomputed medians. No build, test, profile or documentation validator
+overlapped timings. Every timed implementation passes 270 independent
+reference checks; ten Python harness tests also pass.
+
+The first candidate passes the 554-assertion release continuation wrapper,
+472-assertion release scalar-ABI wrapper, and 40-assertion debug native-host
+overflow wrapper (plus native assertions, exercising v3/v4 on main and
+foreign threads). The FP variant passes 472 scalar-ABI assertions per build
+and 592 release continuation assertions, including v4-disabled control.
+These are focused tests, not a full selected matrix, full suite or sanitizer
+claim. Initial test-only trim syntax and missing-newline errors were fixed.
+
+The reusable `AOTFunctionRefScalarABI` fixture is retained without any v4
+dependency. It covers all 12 zero/unary int/float/bool signatures, emitted
+native integer/float zero/same-type callees and generic counterparts, full-width integers and tag-colliding
+float results, AST/IR/JIT/tiered, O0/O3, helper v1/v2/v3, older callee controls,
+stripped source, exception handling, no debug information and split compilation.
+Unused-input cross-type and boolean targets are explicitly checked to stay
+generic: this fixture has four native callee shapes, not twelve. The final
+audit caught these existing admission limits and added this distinction.
+The [62-check audit](FOLLOWUP-AUDIT.md#rejected-register-return-audit-2026-10-07)
+records final validation and the production rollback.
+
+Next: test removing the redundant middle stack guard only for pure,
+non-reentrant callee-v3 entries. Keep the helper-entry and live callee-entry
+guards, diagnostic publication, visible variable markers and reader handshake;
+validate native overflow boundaries before isolated timing.
