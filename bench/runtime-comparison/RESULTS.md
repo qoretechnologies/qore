@@ -2528,3 +2528,85 @@ evidence. No full-suite, sanitizer or Linux runtime claim.
 Next: prove whether empty local/closure markers can be deferred for a
 non-reentrant pure scalar v3 body, materializing them before exception work.
 The diagnostic frame and its cross-thread reader handshake must remain.
+
+## Rejected deferred variable markers (2026-10-07)
+
+Baseline: `2bbe36d72`. The experiment deferred empty local/closure markers
+until overflow materialized the context of a proven non-reentrant scalar v3
+callee. Published diagnostic frames, reader synchronization and live checks
+remained. Partial marker allocation and constructor exceptions had rollback.
+
+**Rejected and production code reverted.** Integer callbacks improved, but
+float callbacks regressed substantially. Five-fork medians are ns/element,
+including loop, computation and checksum work, not isolated call latency.
+
+|!Kernel|!1024 before|!1024 candidate|!Time change
+|indirect_call|9.94625|8.39650|-15.58%
+|indirect_wide|9.93811|8.29585|-16.52%
+|indirect_affine_wide|9.82258|8.29644|-15.54%
+|indirect_float|10.20828|14.40049|+41.07%
+|indirect_tagged_float|10.27602|16.43320|+59.92%
+|indirect_branch_float|10.18637|15.28241|+50.03%
+
+All six callback ranges separate. Arithmetic/direct controls move +0.66%/
+-0.96%, with overlapping ranges. The 4096 repeat confirms wide-int improvement
+(8.88007 to 7.18744, -19.06%) and float regression (9.21077 to 13.90116,
++50.92%), both with separated ranges.
+
+A second variant outlines only materialized exception cleanup. Its 4096 pilot
+improves wide-int 8.91443 to 7.38669 (-17.14%), but float still regresses
+9.16534 to 10.98306 (+19.83%); both ranges separate. This variant is rejected
+too. No integer-only gain is presented as an overall callback improvement.
+
+Initial runtime text changes 13876284 to 13876436 (+152 bytes); the cleanup
+variant is 13870060 (-6224 versus baseline). The float helper frame stays
+272 bytes in both variants; the initial integer helper is also 272 bytes.
+A separate initial-candidate float profile has 2906
+top-of-stack helper samples, 661 caller samples and 119 callee samples.
+The machine-level cause of the float penalty is not established; profiling
+and smaller code do not establish a speedup or a causal explanation.
+
+[Evidence](results-rejected-lazy-markers-macos-arm64.json) retains both
+production diffs, hashes and **160 jobs / 800 samples** from `run-grsv7ilr`,
+`run-bycbw6if` and `run-er_ogh53`, with independently recomputed medians.
+No build, test, profile or documentation validator overlapped timings.
+Each measured implementation passes 270 independent checksum checks.
+Java retained-call medians in the primary run remain 1.64-1.68 ns/element;
+neither rejected variant establishes parity.
+
+### Retained overflow coverage and next experiment
+
+The initial candidate passes 159 cases / 15369 assertions in 27 wrappers plus
+11 standalones per release/debug build, and ten Python harness tests. Older
+callee-v2/v3 artifacts match 225/270 records. This matrix preceded the final
+strengthening of the native host fixture; it is not a full-suite claim.
+
+The retained `NativeLeafContext` host extension keeps 0-70 owned caller
+strings and 1-71 captured integers live while sweeping the native stack limit.
+Parsed callers explicitly use AST mode to put those values on TLS; the leaf
+remains an actually bound AOT native entry. It validates overflow traces,
+caller Program, locals, captures and successful recovery on the main thread
+and three foreign-thread registrations, with O0/O3 and v3/eager controls.
+The existing wrapper still reports 28 assertions; additional checks are
+native C++ assertions. Final fixture checks pass saved-baseline and restored
+release/debug runtimes.
+
+Separate debugger runs prove local- and closure-block growth before exception
+construction: position 64 becomes 1 in a new block, and both frame counts
+increase from 0 to 1. Both runs continue to successful completion. The local
+proof used the earlier single-capture fixture; the closure proof used the
+expanded capture fixture. Early fixture errors (closure syntax, missing parse
+lock, and callers using native rather than TLS locals) were corrected, not
+counted as runtime failures. Allocation-failure injection was not performed.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#rejected-marker-deferral-audit-2026-10-07)
+keeps the stronger test and negative evidence while reverting all runtime and
+architecture-document edits. No full-suite, sanitizer or Linux runtime claim.
+
+Next experiment: an additive prepared-call register-return convention for
+value bits plus handled status, with old helpers retained. First verify the
+C++/LLVM ABI on supported targets, then compare against the restored baseline.
+Keep generic fallback/NOTHING behavior, sink and stack checks, live Program/
+debugger/body/readiness guards, owned cache cleanup and diagnostic frame
+publication. Inspect generated code for removal of the result-slot stores/
+reload before measuring; do not assume it explains or fixes this regression.

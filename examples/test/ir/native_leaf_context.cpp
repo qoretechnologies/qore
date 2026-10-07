@@ -17,6 +17,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <thread>
 
 #if defined(__aarch64__)
@@ -25,9 +26,72 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <qore/macros-x86_64.h>
 #endif
 
+struct LeafInvocation {
+    uint64_t bits = 0;
+    QorePreparedFunctionRefV3* cache = nullptr;
+};
+
+// Invoked by parsed callers whose owned locals/closures are on the TLS stacks.
+// The leaf remains an actually bound native entry from the script aggregate.
+static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
+    const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    int64_t result = 0;
+    QoreProgram* caller = qore_get_call_program_context();
+    size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+#if defined(__aarch64__) || defined(__x86_64__)
+    if (limit) {
+        const size_t saved_limit = *limit;
+        unsigned published = 0;
+        for (unsigned gap = 0; gap < 4096; gap += 16) {
+            *limit = get_stack_pos() - gap;
+            int handled = qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, invocation.cache);
+            *limit = saved_limit;
+            assert(handled == 1 && qore_get_call_program_context() == caller);
+            if (*xsink) {
+                assert(xsink->getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink->getExceptionInfo(), xsink);
+                assert(!*xsink);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    assert(frame);
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    if (name && std::strstr(name->c_str(), "nativeLeafProbe")) {
+                        ++published;
+                    }
+                    if (!(i % 100)) {
+                        assert(!qore_check_cancel(xsink, "padded native leaf stack inspection"));
+                    }
+                }
+            } else {
+                assert(result == 24);
+            }
+            if (!(gap % 160)) {
+                assert(!qore_check_cancel(xsink, "padded native leaf guard sweep"));
+            }
+        }
+        assert(published);
+    }
+#else
+    assert(!limit);
+#endif
+    assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, invocation.cache) == 1);
+    assert(!*xsink && result == 24);
+    return QoreValue(result);
+}
+
 static void check(bool inline_entry) {
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
+    LeafInvocation invocation;
+    {
+        ProgramRuntimeExternalParseContextHelper parse_context(*program);
+        assert(parse_context);
+        program->getRootNS()->addBuiltinVariant(&invocation, "runLeafSweep", paddedSweep,
+            QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
+    }
     qore_aot_script_begin_batch(*program);
     init_NATIVE_LEAF_CONTEXT_qo(*program);
     assert(!qore_aot_script_end_batch(*program));
@@ -106,6 +170,55 @@ static void check(bool inline_entry) {
     for (unsigned i = 0; i < 20; ++i) {
         assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == i + 17);
+    }
+    invocation.bits = bits;
+    invocation.cache = &cache;
+    // Keep parsed callers' variables on TLS, independently of the native leaf.
+    program->setExecMode(QEM_AST, true);
+    // Vary both live locals and captures over a complete marker block, verifying
+    // that caller values and both variable stacks survive materialized failures.
+    std::string source = "%modern\n";
+    for (unsigned padding = 0; padding <= 70; ++padding) {
+        source += "int sub padded" + std::to_string(padding) + "(int seed) {\n";
+        for (unsigned local = 0; local < padding; ++local) {
+            source += "string pad" + std::to_string(local) + " = string(seed);\n";
+        }
+        for (unsigned capture = 0; capture <= padding; ++capture) {
+            source += "int captured" + std::to_string(capture) + " = seed;\n";
+        }
+        source += "code<int()> closure = int sub() { return captured0";
+        for (unsigned capture = 1; capture <= padding; ++capture) {
+            source += " + captured" + std::to_string(capture);
+        }
+        source += "; };\nint total = runLeafSweep();\nif (closure() != seed * "
+            + std::to_string(padding + 1) + ") { throw \"LEAF-CONTEXT\", \"closure changed\"; }\n";
+        for (unsigned local = 0; local < padding; ++local) {
+            source += "if (pad" + std::to_string(local)
+                + " != string(seed)) { throw \"LEAF-CONTEXT\", \"local changed\"; }\n"
+                "total += pad" + std::to_string(local) + ".size();\n";
+        }
+        source += "return total;\n}\n";
+    }
+    {
+        ProgramRuntimeExternalParseContextHelper parse_context(*program);
+        assert(parse_context);
+        program->parse(source.c_str(), "native-leaf-padded", &xsink);
+    }
+    if (xsink) {
+        xsink.handleExceptions();
+        assert(false && "padded caller source must parse");
+    }
+    assert(!xsink);
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push(QoreValue(int64_t(7)), &xsink);
+    assert(!xsink);
+    for (unsigned padding = 0; padding <= 70; ++padding) {
+        std::string name = "padded" + std::to_string(padding);
+        ValueHolder actual(program->callFunction(name.c_str(), *args, &xsink), &xsink);
+        assert(!xsink && actual->getAsBigInt() == 24 + padding);
+        if (!(padding % 10)) {
+            assert(!qore_check_cancel(&xsink, "native leaf padded callers"));
+        }
     }
     QoreValue owner;
     std::memcpy(&owner, &cache.owner, sizeof(owner));
