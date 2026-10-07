@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The C++ <tt>DateTime::add()</tt> API now adds the right operand correctly when the left
+    operand is an absolute date. Previously an implicit pointer conversion caused that operand
+    to be ignored. Both pointer and reference overloads preserve their inputs and return an owned sum.
+    Relative elapsed-time components now normalize opposite signs across zero-valued units, so
+    mathematically equal durations such as <tt>-24h + 999999us</tt> and
+    <tt>-23h - 59m - 59s - 1us</tt> compare equal.
+
     Out-of-tree builds now record the lexer source at its correct location in debug information,
     allowing RPM debug-source extraction and debugger source lookup to find <tt>lib/scanner.lpp</tt>.
 

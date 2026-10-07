@@ -855,6 +855,24 @@ protected:
         // normalize hours from minutes
         normalize_units<int, int>(hour, minute, 60);
 
+        // Align elapsed-time signs across zero-valued intervening units. Pairwise
+        // normalization alone leaves e.g. -24h + 1us unchanged because both
+        // minutes and seconds are zero. Lower units are now bounded to less
+        // than one hour; borrowing moves hour toward zero without overflow.
+        int64 time_us = static_cast<int64>(minute) * MICROSECS_PER_MINUTE
+            + static_cast<int64>(second) * MICROSECS_PER_SEC + us;
+        if (hour < 0 && time_us > 0) {
+            ++hour;
+            time_us -= MICROSECS_PER_HOUR;
+        } else if (hour > 0 && time_us < 0) {
+            --hour;
+            time_us += MICROSECS_PER_HOUR;
+        }
+        minute = static_cast<int>(time_us / MICROSECS_PER_MINUTE);
+        time_us %= MICROSECS_PER_MINUTE;
+        second = static_cast<int>(time_us / MICROSECS_PER_SEC);
+        us = static_cast<int>(time_us % MICROSECS_PER_SEC);
+
         // only normalize hours to days and days to months if we are comparing
         // we use an average year length of 365 days and an maximum month length of 31 days
         if (for_comparison) {
@@ -1208,7 +1226,7 @@ protected:
     bool relative;
 
 public:
-    DLLLOCAL qore_date_private(bool r = false) : relative(r) {
+    DLLLOCAL explicit qore_date_private(bool r = false) : relative(r) {
         if (r)
             d.rel.zero();
         else

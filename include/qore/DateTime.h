@@ -277,7 +277,26 @@ public:
    DLLEXPORT bool checkValidity() const;
    DLLEXPORT bool isEqual(const DateTime* dt) const;
    DLLEXPORT bool isEqual(const DateTime& dt) const;
+   //! returns a newly allocated sum without modifying either operand
+   /** @param dt non-null pointer to the date/time value to add
+       @return the sum, owned by the caller; equivalent to add(*dt)
+       @throw std::bad_alloc if allocating the result fails
+       @see add(const DateTime&) const
+   */
    DLLEXPORT DateTime* add(const DateTime* dt) const;
+   //! returns a newly allocated sum without modifying either operand
+   /** @param dt the absolute or relative date/time value to add
+       @return the sum, owned by the caller; absolute if either operand is absolute
+       @throw std::bad_alloc if allocating the result fails
+       @note Relative calendar components use the absolute operand's time zone. Two absolute
+       values add their UTC epoch offsets and express the result in the current default time zone.
+       @par Example
+       @code{.cpp}
+       DateTime invoice_time(nullptr, "2026-10-07T09:00:00Z");
+       std::unique_ptr<DateTime> payment_period(DateTime::makeRelative(0, 1, 0));
+       std::unique_ptr<DateTime> due_date(invoice_time.add(*payment_period));
+       @endcode
+   */
    DLLEXPORT DateTime* add(const DateTime& dt) const;
    DLLEXPORT DateTime* subtractBy(const DateTime* dt) const;
    DLLEXPORT DateTime* subtractBy(const DateTime& dt) const;
