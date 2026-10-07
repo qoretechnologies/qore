@@ -9,6 +9,21 @@ int sub step(int value) {
     return (value * 33 + 17) & 65535;
 }
 
+int sub wideStep(int value) {
+    return ((value * 33 + 17) & 65535) | 1125899906842624;
+}
+float sub floatStep(float value) {
+    return 65535.0 - value;
+}
+# Keep a generic-dispatch control: float comparisons are not currently admitted
+# by the whole-body native callback summary.
+float sub branchFloatStep(float value) {
+    return value > 32767.0 ? value - 32767.0 : value + 17.0;
+}
+float sub taggedFloatStep(float value) {
+    return -9.0e307 - value;
+}
+
 final class Stepper {
     int next(int value) {
         return (value * 33 + 17) & 65535;
@@ -31,6 +46,36 @@ int sub indirectCall(int count, int seed, code<int(int)> callback) {
     for (int i = 0; i < count; ++i) {
         seed = callback(seed);
         sum += seed;
+    }
+    return sum;
+}
+
+int sub wideIndirectCall(int count, int seed, code<int(int)> callback) {
+    int value = seed | 1125899906842624;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += value & 65535;
+    }
+    return sum;
+}
+
+int sub floatIndirectCall(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub taggedFloatIndirectCall(int count, int seed, code<float(float)> callback) {
+    float value = seed & 1 ? -3.0e307 : -6.0e307;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += value < -4.5e307 ? 6 : 3;
     }
     return sum;
 }
@@ -148,12 +193,18 @@ int sub temporaryHash(int count, int seed) {
 }
 
 int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver,
-        code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c) {
+        code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c,
+        code<int(int)> wideCallback, code<float(float)> floatCallback, code<float(float)> taggedCallback,
+        code<float(float)> branchCallback) {
     switch (name) {
         case "arithmetic": return arithmetic(count, seed);
         case "direct_call": return directCall(count, seed);
         case "method_call": return methodCall(count, seed, receiver);
         case "indirect_call": return indirectCall(count, seed, callback);
+        case "indirect_wide": return wideIndirectCall(count, seed, wideCallback);
+        case "indirect_float": return floatIndirectCall(count, seed, floatCallback);
+        case "indirect_branch_float": return floatIndirectCall(count, seed, branchCallback);
+        case "indirect_tagged_float": return taggedFloatIndirectCall(count, seed, taggedCallback);
         case "polymorphic_call": return polymorphicCall(count, seed, a, b, c);
         case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
@@ -184,6 +235,10 @@ sub main() {
     if (ARGV.size() == 1 && ARGV[0] == "check") {
         Stepper receiver();
         code<int(int)> callback = \step();
+        code<int(int)> wideCallback = \wideStep();
+        code<float(float)> floatCallback = \floatStep();
+        code<float(float)> taggedCallback = \taggedFloatStep();
+        code<float(float)> branchCallback = \branchFloatStep();
         DynamicStep a();
         DynamicStepB b();
         DynamicStepC c();
@@ -191,10 +246,12 @@ sub main() {
             list<int> data = makeData(count, 7);
             foreach int seed in ((0, 7, 65535)) {
                 foreach string name in (("arithmetic", "direct_call", "method_call", "indirect_call",
+                        "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                         "polymorphic_call", "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
-                        dispatch(name, count, seed, data, receiver, callback, a, b, c));
+                        dispatch(name, count, seed, data, receiver, callback, a, b, c,
+                            wideCallback, floatCallback, taggedCallback, branchCallback));
                 }
             }
         }
@@ -212,6 +269,10 @@ sub main() {
     list<int> data = makeData(count, 7);
     Stepper receiver();
     code<int(int)> callback = \step();
+    code<int(int)> wideCallback = \wideStep();
+    code<float(float)> floatCallback = \floatStep();
+    code<float(float)> taggedCallback = \taggedFloatStep();
+    code<float(float)> branchCallback = \branchFloatStep();
     DynamicStep a();
     DynamicStepB b();
     DynamicStepC c();
@@ -222,7 +283,8 @@ sub main() {
         int elapsed;
         do {
             seed = (seed + 1) & 65535;
-            checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c);
+            checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c,
+                wideCallback, floatCallback, taggedCallback, branchCallback);
             ++calls;
             elapsed = clock_get_monotonic_us() - start;
         } while (elapsed < duration_us);

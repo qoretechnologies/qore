@@ -22,6 +22,7 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
+           "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
            "dispatch_control", "list_read", "list_build",
            "list_mutate", "temporary_list", "temporary_hash")
 MODES = ("qore-ir", "qore-aot", "java-int", "java-jit")
@@ -77,6 +78,17 @@ def reference(name, count, seed):
         return result
     result = 0
     for index in range(count):
+        if name == "indirect_float":
+            seed = 65535 - seed
+            result += seed
+            continue
+        if name == "indirect_branch_float":
+            seed = seed - 32767 if seed > 32767 else seed + 17
+            result += seed
+            continue
+        if name == "indirect_tagged_float":
+            result += 6 if (seed + index) & 1 else 3
+            continue
         increment = (17, 19, 23)[index % 3] if name in ("polymorphic_call", "dispatch_control") else 17
         seed = (seed * 33 + increment) & 65535
         result += seed

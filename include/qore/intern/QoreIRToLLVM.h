@@ -365,6 +365,15 @@ private:
     std::unordered_set<uint32_t> fixed_typed_list_outputs;
     std::unordered_set<uint32_t> reserve_typed_list_outputs;
     std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
+    // Single-use callback results assigned to an exact native scalar local.
+    // The boxed value remains the fallback's owned result (NOTHING on the native
+    // edge); only the proven StoreLocal consumer may read this side channel.
+    std::unordered_map<uint32_t, const QoreTypeInfo*> native_funcref_store_types;
+    struct NativeFunctionRefResult {
+        llvm::Value* handled;
+        llvm::Value* value;
+    };
+    std::unordered_map<uint32_t, NativeFunctionRefResult> native_funcref_results;
     std::unordered_set<uint32_t> direct_typed_list_read_sources;
     std::unordered_set<uint32_t> elided_typed_foreach_refself_values;
     std::unordered_set<uint32_t> reusable_hashdecl_literal_values;

@@ -67,6 +67,10 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |direct_call|Same recurrence through a small function
 |method_call|Same recurrence through a method on a final class; receiver created outside timing
 |indirect_call|Typed Qore function reference / Java LongUnaryOperator; callback created outside timing
+|indirect_wide|Same low-bit recurrence with bit 50 retained across the callback boundary; checksum uses low 16 bits
+|indirect_float|Double callback with bounded addition/subtraction and an integer checksum
+|indirect_tagged_float|Double callback alternating -3e307 and -6e307, which require heap encoding when boxed in Qore
+|indirect_branch_float|Comparison/branching float target that retains generic Qore dispatch; fallback control
 |polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
@@ -75,8 +79,9 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |temporary_list|Construct two elements per iteration and select with a runtime index
 |temporary_hash|Construct a two-key hash per iteration and select with a runtime key
 
-Qore integers are compared to Java `long`; the recurrence keeps values in
-0..65535 and all checksums fit signed 64-bit integers. A changing seed prevents
+Qore integers are compared to Java `long`; the original recurrence keeps values in
+0..65535, while the wide callback retains bit 50. All intermediates and checksums
+fit signed 64-bit integers. A changing seed prevents
 constant inputs across invocations. The loop-carried recurrence also avoids
 the trivial closed-form sum used by some older loop benchmarks.
 
@@ -99,7 +104,7 @@ it does not isolate an exact virtual-call cost.
 
 ## Measurement contract
 
-- All four modes first pass 165 checks: every kernel at sizes 0, 1, 17, 1024,
+- Each selected mode first passes 225 checks: every kernel at sizes 0, 1, 17, 1024,
   and 4096, each with seeds 0, 7, and 65535. Python independently computes the
   expected results. Missing, duplicate, extra, or incorrect records fail.
 - Kernel definitions are identical between Qore IR and AOT. There are no
@@ -209,7 +214,27 @@ for the conservative scalar-body eligibility and remaining fallbacks.
 zero/one-argument scalar ABI while retaining the boxed adapter and cached
 signature metadata. References constructed before parse finalization are not
 cached. Runtime state and actual argument types remain guarded. The typed ABI
-does not remove diagnostic frames or make the caller's merged result unboxed.
+does not remove diagnostic frames. Exact native-local consumers can additionally
+use the unboxed continuation below.
+
+`QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1` at compilation disables the
+single-use callback-result continuation into an exact same-typed native scalar
+local. The enabled native edge carries its result without boxing; the generic
+edge retains owned boxed values and full assignment checking. Optional/soft,
+captured/reference and multiple-use destinations keep ordinary lowering, as do
+invoke-form calls. This changes AOT code generation only, not the runtime ABI.
+The `indirect_wide` kernel keeps values above int48 range, `indirect_float`
+uses exactly representable bounded doubles, and `indirect_tagged_float`
+alternates large negative doubles requiring heap encoding when boxed in Qore.
+The latter uses subtraction and a threshold checksum so rounding around the
+decimal constants does not change the intended alternating checksum.
+`indirect_branch_float` retains generic dispatch as a fallback control. Their
+Java targets use DONT_INLINE like the original `indirect_call`; checksums are
+validated independently before timing. These are separate workloads, not
+interchangeable measurements of one call latency. Native-local argument loads
+reuse the existing assigned-state proof instead of boxing values solely to
+recheck their tags; this also removes the old int48-only bottleneck for wide
+arguments. Generic immediate scalar returns keep their inline assignment guard.
 
 `QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1` at compilation disables inline
 assignment checks for matching immediate values stored into exact native

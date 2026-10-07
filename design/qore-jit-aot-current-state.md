@@ -113,15 +113,22 @@ explicit AOT context and exception sink; boolean arguments/results use an
 handled flag and write the native result through an output pointer. Rejection
 leaves the general call responsible for invocation and ownership. Attachment
 validates the signature against the immutable reference metadata.
+Native float adapters also consume the complete `FloatBinary` leaf summary
+for add, subtract, and multiply. The float-expression builder intentionally
+does not duplicate that summary; ignoring it previously left these simple
+bodies on generic dispatch. Division and comparison/branch bodies are not
+admitted by this addition. The existing context-independence and full-body
+proof still exclude TLS locals, captures, generic reentry, and throwing work.
 
 Ordinary AOT call sites with a typed callable use this route after proving or
 checking the argument representation. Unassigned values, container holes,
 non-matching signatures and references without a typed entry fall back. The
-caller reboxes the successful result at the merge with generic dispatch so
-that fallback results, including NOTHING, retain their original semantics.
+caller normally reboxes the successful result at the merge with generic
+dispatch so that fallback results, including NOTHING, retain their original semantics.
 Arguments remain borrowed through execution and consumed temporaries are
 released afterward. Invoke-form calls retain the previous dispatch. Thus this
-is a native scalar call boundary, not yet a fully unboxed callback loop.
+is a native scalar call boundary; exact native-local assignments can also
+retain an unboxed continuation as described below.
 Assignments from boxed results to exact native `int`, `float`, and `bool`
 locals now check the immediate value tag and unpack matching values inline.
 That path skips type-path resolution, general assignment coercion, and the
@@ -144,6 +151,37 @@ including O0: JIT/IR do not emit the typed native callback helpers that select
 the pass. There is no runtime ABI change; it is not a general
 proof that non-pointer tags need no cleanup. The comparison switch is
 `QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD`, and code-size growth remains a tradeoff.
+
+AOT now identifies callback results whose only IR consumer is a normal,
+non-reference, non-closure StoreLocal into an exact same-typed native `int`,
+`float`, or `bool` local. Such calls carry the helper's native payload and a
+handled flag alongside the ordinary boxed fallback result. The native edge
+puts NOTHING in the boxed cleanup slot, avoiding result boxing even for wide
+integers and tag-colliding doubles. At assignment the handled edge uses the
+payload directly; the generic edge retains full assignment checking and
+conversion. The callback's declared type alone is never proof of its actual
+fallback return. Cleanup-slot reuse, exception checks, and assignment location
+updates stay in their original order. No runtime helper or serialized ABI changes.
+Generic immediate scalars retain the inline assignment guard; a declined
+native call does not force them through general coercion.
+
+For arguments loaded from exact native locals, typed callback lowering also
+reuses the existing flow-sensitive native-local assigned-state proof. This
+avoids boxing a wide native integer only to reject it at the int48 tag guard
+when flow-insensitive producer facts still say boxed/maybe-NOTHING. The local
+must be proven safe from unassigned/lvalue-invalidated reads, non-reference,
+non-closure, and an exact type match with an actual native LLVM carrier.
+Boxed sources, unassigned locals and container holes retain representation
+checks. This is a compile-time proof reuse, not a new runtime assumption.
+
+Multiple-use results, boxed/optional/soft destinations, outer or captured
+variables, weak/reference stores, and non-matching destination types retain
+ordinary lowering. Invoke-form callbacks still use the generic call path.
+JIT and the IR interpreter are unchanged. The compile-time comparison switch
+is `QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION`; the focused
+`IRNativeFunctionRefContinuation` test covers O0/O3, disabled paths, EH,
+source stripping, split codegen, wide values, NaNs, owned rejected returns,
+cleanup reuse, foreign Programs, and captured callbacks.
 
 Parallel AOT code generation recovers native PC/source-location maps from
 each partition before the partial link. This matters on Mach-O, where `ld -r`
@@ -240,10 +278,11 @@ prepared. Initial materialization retains the normal Program-call context.
 This is an incremental explicit-context boundary, not a completed replacement
 of TLS throughout the runtime. Shared thread state is still published for
 compatibility and inspection; v1, generic callbacks, and other native helpers
-retain their current conventions. Callback results still merge boxed with
-generic fallback, and adapter eligibility remains non-throwing/context-independent.
-The next stages are adapter PC/source metadata, compiler-visible unboxed
-callback continuation, and guarded native method dispatch. Those require
+retain their current conventions. Callback results outside the exact native
+assignment proof still merge boxed with generic fallback, and adapter
+eligibility remains non-throwing/context-independent.
+The next stages are cheaper observable native frames, extending unboxed
+continuations to other proven consumers, and guarded native method dispatch. Those require
 separate semantic tests and retained-call measurements before expanding scope.
 
 `IRFunctionRefCalls` additionally tests repeated local/foreign-Program calls

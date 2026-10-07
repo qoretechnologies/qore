@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongUnaryOperator;
+import java.util.function.DoubleUnaryOperator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.CompilerControl;
@@ -28,6 +29,8 @@ public class RuntimeBench {
     private ArrayList<Long> data;
     private Stepper receiver;
     private LongUnaryOperator callback;
+    private LongUnaryOperator wideCallback;
+    private DoubleUnaryOperator floatCallback, taggedCallback, branchCallback;
     private DynamicStep a, b, c;
 
     @Setup
@@ -35,6 +38,10 @@ public class RuntimeBench {
         data = makeData(count, 7);
         receiver = new Stepper();
         callback = RuntimeBench::boundaryStep;
+        wideCallback = RuntimeBench::wideStep;
+        floatCallback = RuntimeBench::floatStep;
+        taggedCallback = RuntimeBench::taggedFloatStep;
+        branchCallback = RuntimeBench::branchFloatStep;
         a = new DynamicStep();
         b = new DynamicStepB();
         c = new DynamicStepC();
@@ -55,6 +62,23 @@ public class RuntimeBench {
         return (value * 33 + 17) & 65535;
     }
 
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long wideStep(long value) {
+        return ((value * 33 + 17) & 65535) | 1125899906842624L;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double floatStep(double value) {
+        return 65535.0 - value;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double branchFloatStep(double value) {
+        return value > 32767.0 ? value - 32767.0 : value + 17.0;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double taggedFloatStep(double value) {
+        return -9.0e307 - value;
+    }
+
     static class DynamicStep {
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 17) & 65535; }
@@ -73,6 +97,36 @@ public class RuntimeBench {
         for (int i = 0; i < count; ++i) {
             seed = callback.applyAsLong(seed);
             sum += seed;
+        }
+        return sum;
+    }
+
+    static long wideIndirectCall(int count, long seed, LongUnaryOperator callback) {
+        long value = seed | 1125899906842624L;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsLong(value);
+            sum += value & 65535;
+        }
+        return sum;
+    }
+
+    static long floatIndirectCall(int count, long seed, DoubleUnaryOperator callback) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsDouble(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long taggedFloatIndirectCall(int count, long seed, DoubleUnaryOperator callback) {
+        double value = (seed & 1) != 0 ? -3.0e307 : -6.0e307;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsDouble(value);
+            sum += value < -4.5e307 ? 6 : 3;
         }
         return sum;
     }
@@ -200,6 +254,10 @@ public class RuntimeBench {
     @Benchmark public long direct_call() { return directCall(count, nextSeed()); }
     @Benchmark public long method_call() { return methodCall(count, nextSeed(), receiver); }
     @Benchmark public long indirect_call() { return indirectCall(count, nextSeed(), callback); }
+    @Benchmark public long indirect_wide() { return wideIndirectCall(count, nextSeed(), wideCallback); }
+    @Benchmark public long indirect_float() { return floatIndirectCall(count, nextSeed(), floatCallback); }
+    @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
+    @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
     @Benchmark public long polymorphic_call() { return polymorphicCall(count, nextSeed(), a, b, c); }
     @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
     @Benchmark public long list_read() { return listRead(data, nextSeed()); }
@@ -218,15 +276,22 @@ public class RuntimeBench {
         }
         Stepper receiver = new Stepper();
         LongUnaryOperator callback = RuntimeBench::boundaryStep;
+        LongUnaryOperator wideCallback = RuntimeBench::wideStep;
+        DoubleUnaryOperator floatCallback = RuntimeBench::floatStep, taggedCallback = RuntimeBench::taggedFloatStep;
+        DoubleUnaryOperator branchCallback = RuntimeBench::branchFloatStep;
         DynamicStep a = new DynamicStep(), b = new DynamicStepB(), c = new DynamicStepC();
         for (int count : new int[] {0, 1, 17, 1024, 4096}) {
             ArrayList<Long> values = makeData(count, 7);
             for (long seed : new long[] {0, 7, 65535}) {
                 String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
+                    "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                     "polymorphic_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
                     methodCall(count, seed, receiver), indirectCall(count, seed, callback),
+                    wideIndirectCall(count, seed, wideCallback), floatIndirectCall(count, seed, floatCallback),
+                    taggedFloatIndirectCall(count, seed, taggedCallback),
+                    floatIndirectCall(count, seed, branchCallback),
                     polymorphicCall(count, seed, a, b, c), dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed)};

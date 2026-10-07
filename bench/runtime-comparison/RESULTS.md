@@ -1523,3 +1523,127 @@ identity and independently recomputed medians.
 [Full audit](FOLLOWUP-AUDIT.md#native-marker-audit-2026-10-07) records all 62
 checklist items. The audit strengthened block-boundary/reuse coverage and kept
 the existing marker contents, ownership, frame eligibility and publication.
+
+## Native callback continuations and scalar admission (2026-10-07)
+
+The executed plan was to preserve the current build (`408affc4a`), remove
+callback-result boxing where the consumer proves it unnecessary, measure the
+result, then audit and commit only validated improvements. Inspection and the
+first measurement identified two additional compiler-side gaps, addressed in
+the same focused change:
+
+1. A callback result with one normal StoreLocal consumer can carry its native
+   payload directly into an exact native scalar local. The boxed cleanup slot
+   owns only generic fallback results; the native edge stores NOTHING there.
+2. Native-local argument loads reuse the existing flow-sensitive assignment
+   proof. Previously, conservative producer facts caused wide native arguments
+   to be boxed and then rejected by an int48-only guard.
+3. Simple float add/subtract/multiply bodies reuse their complete FloatBinary
+   leaf summary for native-entry admission. The expression-summary builder
+   intentionally does not duplicate that summary. Division and comparison/
+   branching targets remain outside this addition.
+
+Current Program, debugger attachment, target-entry identity, observable frames,
+source locations, stack protection, ownership and cancellation remain guarded.
+No runtime helper ABI, serialization or IR-interpreter implementation changes.
+
+### Rejected initial experiment
+
+Result continuation alone was insufficient. Wide callbacks remained near
+108 ns/element because arguments still fell back; generic float calls regressed
+from 130.394 to 151.870 ns/element (**16.5% more time**) when continuation
+lowering bypassed the existing immediate-scalar assignment shortcut. The final
+implementation preserves that shortcut on generic returns.
+
+The initial float targets used comparisons and therefore did not receive native
+entries. Final native-float workloads use subtraction; the original branching
+float target is retained as `indirect_branch_float`, a generic-dispatch control.
+Before and after in each final run use identical revised sources. Do not compare
+differently defined float kernels across experiments. The rejected run and its
+source/compiler hashes remain in the evidence; no samples were discarded.
+
+### Final before/after and Java comparison
+
+macOS arm64, release Qore AOT, Temurin 25.0.2 / JMH 1.37. Five independent
+forks, three warmups and five 300 ms measurements per fork, shuffled jobs,
+1024 elements. Values are medians of fork means in ns/element, including the
+loop, computation and checksum. Java callback targets retain DONT_INLINE.
+
+|!Kernel|!AOT before|!AOT after|!Java JIT|!Qore time reduction
+|Arithmetic control|2.859|2.853|0.892|No material change
+|Direct call|2.863|2.880|0.893|No material change
+|Small-integer callback|19.890|19.295|1.671|3.0%
+|Wide-integer callback|107.641|19.306|1.673|82.1%
+|Native float callback|123.593|19.580|1.643|84.2%
+|Heap-encoded float callback|197.871|19.701|1.637|90.0%
+|Generic branching float control|130.917|127.026|1.648|3.0%
+
+Wide/native-float improvements repeat with nonoverlapping fork-mean ranges at
+4096 elements: **106.480 to 18.352**, **122.996 to 18.688**, and
+**196.159 to 18.535** respectively (82.8%, 84.8%, and 90.6% less time).
+The small-integer repeat improves only **1.0%**, with overlapping ranges:
+18.764 to 18.572. Treat its benefit as modest, not a large call-overhead win.
+The generic float control improves 3.9% in the repeat, so the rejected
+fallback regression is resolved. Arithmetic, direct-call, polymorphic and
+temporary-hash controls have overlapping ranges; no general throughput
+improvement is claimed for them.
+
+Native text shrinks from **76416 to 75452 bytes** in both final runs. Recorded
+compilation and startup observations are retained but are not evidence of
+compile/startup speedups. Profiling was separate from timings, as were builds
+and tests.
+
+### Remaining bottleneck and next optimization plan
+
+Wide integers and native floats now reach approximately the same cost as the
+existing small-integer native callback path. They still take **11.5-12.0x
+Java's time** in this comparison. Direct-call loop throughput is about 3.2x
+Java, with effectively no extra cost versus the Qore arithmetic control.
+These are retained-call workloads, not isolated call-latency measurements or
+a claim about all Java/Qore programs.
+
+A separate final wide-callback profile no longer places general boxing/
+coercion on the per-iteration hot path. It still finds native-frame construction/
+restoration, typed-reference validation, stack checks and cancellation.
+Sampling is qualitative; counts are not additive cost attribution.
+
+The next staged work should therefore be:
+
+1. Prepare immutable callback target/signature facts in an invocation-scoped
+   descriptor, with explicit ownership and invalidation. Keep current Program,
+   debugger and compiled-entry identity checks live; preserve lazy materialization.
+2. Design a compiler-visible compact native frame and end-to-end RuntimeConfig
+   entry ABI. Preserve the concurrent-reader publication/pop handshake, source
+   metadata, policy context and empty-frame boundaries. Consolidate stack checks
+   only with a proven stack-budget contract, not by deleting guards.
+3. Extend whole-body expression summaries to additional non-throwing float
+   consumers/branches, then guarded method dispatch. Measure each independently
+   against the retained-call and generic controls before widening admission.
+
+The first two target the remaining native-call overhead; the third addresses
+the much slower generic paths. This change establishes neither Java parity nor
+that parity is impossible under Qore's runtime contracts.
+
+### Validation and evidence
+
+Final selected release and debug runs each pass **107 cases / 11931 assertions**
+across 19 wrappers, plus **four standalone scripts**. The new continuation
+wrapper contributes 170 assertions per build and checks native float adapter
+selection as well as division exclusion. It covers AST/IR/JIT/tiered, AOT O0/O3,
+disabled paths, v1/v2 helpers, EH, stripped source/debug info, split codegen,
+unassigned/deleted inputs, wide values, NaNs, alternating native/generic results,
+owned rejection cleanup, captured callbacks and foreign Programs. Its fixture
+also passes on the saved baseline in all four modes and AOT O0/O3.
+
+All 165 records from a pre-change AOT artifact remain identical on the new
+runtime; every selected final benchmark implementation passes 225 independent
+reference checks. The ten Python harness tests pass.
+
+[Sanitized evidence](results-native-continuation-macos-arm64.json) retains
+**285 jobs / 1425 samples**, including the rejected initial candidate, source/
+library/compiler hashes, startup observations and independently checked medians.
+[Full audit](FOLLOWUP-AUDIT.md#native-continuation-audit-2026-10-07) records all
+62 checklist items. The audit added the explicit outer-scope exclusion,
+unassigned/deleted-input coverage, and the generic-fallback performance control.
+No full-suite, sanitizer, Linux or allocation-count claim is made; previously
+recorded correctness and toolchain limitations remain separate.

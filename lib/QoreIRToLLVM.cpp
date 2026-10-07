@@ -444,6 +444,14 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
             }
         }
     } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat
+            && info->scalar_leaf.kind == AOTScalarLeafKind::FloatBinary) {
+        // Simple float binary bodies have a complete scalar-leaf summary, so
+        // the general float-expression builder deliberately does not duplicate
+        // it. Reuse that proof for these non-throwing native operations only.
+        QoreIROpcode opcode = static_cast<QoreIROpcode>(info->scalar_leaf.opcode);
+        nothrow_scalar = opcode == QoreIROpcode::AddFloat
+            || opcode == QoreIROpcode::SubFloat || opcode == QoreIROpcode::MulFloat;
+    } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat
             && info->float_expression
             && info->float_expression.nodes.size() <= QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
         nothrow_scalar = true;
@@ -598,6 +606,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     if (!ret_kind || (nargs && !arg_kind)) {
         return nullptr;
     }
+    auto native_store = native_funcref_store_types.find(inst->result.id);
+    bool native_continuation = native_store != native_funcref_store_types.end()
+        && native_store->second == callable->getReturnType();
     llvm::Value* arg = nullptr;
     llvm::Value* compatible = llvm::ConstantInt::getTrue(ctx);
     if (nargs) {
@@ -607,8 +618,25 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
             return nullptr;
         }
         const QoreIRValueFacts* facts = current_ir_func->getValueFacts(inst->operands[1]);
-        bool assigned_native = !nanboxed_values.count(id) && !native_boxed_sources.count(id)
-            && facts && (facts->assigned_state == QoreIRAssignedState::Assigned || facts->never_nothing)
+        // Native local selection already runs a flow-sensitive assigned-state
+        // proof. Reuse it for loads whose flow-insensitive value facts still
+        // describe the callback producer as boxed/maybe-NOTHING. Otherwise a
+        // wide native int is boxed only to fail the int48 argument guard.
+        bool native_local = false;
+        auto definition = value_definitions.find(id);
+        if (definition != value_definitions.end()
+                && definition->second->opcode == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(definition->second);
+            const void* key = load->local;
+            native_local = load->local && !load->is_ref && !load->is_closure
+                && assigned_non_nothing_locals.count(key)
+                && specializeType(load->local->getTypeInfoForLValue()) == callable->getParamTypes()[0]
+                && ((arg_kind == 1 && native_int_locals.count(key) && arg->getType() == i64_type)
+                    || (arg_kind == 2 && native_float_locals.count(key) && arg->getType() == double_type)
+                    || (arg_kind == 3 && native_bool_locals.count(key) && arg->getType() == i1_type));
+        }
+        bool fact_native = facts
+            && (facts->assigned_state == QoreIRAssignedState::Assigned || facts->never_nothing)
             && facts->type_info == callable->getParamTypes()[0]
             && ((arg_kind == 1 && arg->getType() == i64_type
                     && facts->representation == QoreIRValueRepresentation::NativeInt)
@@ -616,6 +644,8 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
                     && facts->representation == QoreIRValueRepresentation::NativeFloat)
                 || (arg_kind == 3 && arg->getType() == i1_type
                     && facts->representation == QoreIRValueRepresentation::NativeBool));
+        bool assigned_native = !nanboxed_values.count(id) && !native_boxed_sources.count(id)
+            && (native_local || fact_native);
         if (!assigned_native) {
             llvm::Value* boxed = boxValue(arg, id);
             if (arg_kind == 1) {
@@ -683,7 +713,11 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     // The reference's *actual* return is not statically fixed on the fallback:
     // preserve NOTHING and arbitrary boxed results there, rather than coercing
     // them merely because the reference has a typed declaration.
-    llvm::Value* fast_result = ret_kind == 1 ? boxIntInline(native_result)
+    // A sole, exact native StoreLocal can consume the native value without an
+    // allocation even for wide integers and tag-colliding doubles. Its ordinary
+    // boxed cleanup tracks only the fallback value, never this side channel.
+    llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
+        : ret_kind == 1 ? boxIntInline(native_result)
         : ret_kind == 2 ? boxFloat(native_result)
         : boxBool(builder->CreateICmpNE(native_result, llvm::ConstantInt::get(i64_type, 0)));
     if (has_cleanups) {
@@ -724,6 +758,17 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     auto* result = builder->CreatePHI(i64_type, 2, "typed_funcref_boxed_result");
     result->addIncoming(fast_result, fast);
     result->addIncoming(slow_result, fallback);
+    if (native_continuation) {
+        auto* used_native = builder->CreatePHI(i1_type, 2, "typed_funcref_native_handled");
+        used_native->addIncoming(llvm::ConstantInt::getTrue(ctx), fast);
+        used_native->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback);
+        auto* payload = builder->CreatePHI(result_type, 2, "typed_funcref_native_value");
+        payload->addIncoming(native_result, fast);
+        payload->addIncoming(llvm::Constant::getNullValue(result_type), fallback);
+        llvm::Value* value = ret_kind == 3
+            ? builder->CreateICmpNE(payload, llvm::ConstantInt::get(i64_type, 0)) : payload;
+        native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{used_native, value});
+    }
     return result;
 }
 
@@ -10637,6 +10682,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     fixed_typed_list_outputs.clear();
     reserve_typed_list_outputs.clear();
     native_call_result_kinds.clear();
+    native_funcref_store_types.clear();
+    native_funcref_results.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
     reusable_hashdecl_literal_values.clear();
@@ -11220,6 +11267,52 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // All operands of non-DotEval instructions are non-DotEval uses
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
+                }
+            }
+        }
+    }
+    if (aot_mode && !std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION")) {
+        size_t candidate_count = 0;
+        for (const auto& [local, stores] : local_store_instructions) {
+            if (candidate_count++ && !(candidate_count % 100)
+                    && qore_check_cancel(nullptr, "LLVM native callback continuation analysis")) {
+                error = "cancelled during LLVM native callback continuation analysis";
+                return false;
+            }
+            const void* key = local;
+            // Match StoreLocal's outer-scope guard: that path publishes a
+            // boxed value directly to the runtime instead of this native local.
+            if (pre_instantiated_locals && !pre_instantiated_locals->count(key)
+                    && !entry_locals_set.count(key) && !current_body_locals.count(key)
+                    && !block_scoped_locals.count(key)) {
+                continue;
+            }
+            const QoreTypeInfo* type = specializeType(local->getTypeInfoForLValue());
+            if (!((type == bigIntTypeInfo && native_int_locals.count(key))
+                    || (type == floatTypeInfo && native_float_locals.count(key))
+                    || (type == boolTypeInfo && native_bool_locals.count(key)))) {
+                continue;
+            }
+            for (const QoreIRLocalInstruction* store : stores) {
+                if (candidate_count++ && !(candidate_count % 100)
+                        && qore_check_cancel(nullptr, "LLVM native callback continuation analysis")) {
+                    error = "cancelled during LLVM native callback continuation analysis";
+                    return false;
+                }
+                if (store->opcode != QoreIROpcode::StoreLocal || store->is_ref || store->is_closure
+                        || store->mode != AssignmentMode::Normal || store->redundant_store
+                        || store->operands.size() != 1) {
+                    continue;
+                }
+                uint32_t id = store->operands[0].id;
+                auto uses = operand_remaining_uses.find(id);
+                auto def = value_definitions.find(id);
+                if (uses == operand_remaining_uses.end() || uses->second != 1
+                        || def == value_definitions.end()) {
+                    continue;
+                }
+                if (def->second->opcode == QoreIROpcode::CallClosureDirect) {
+                    native_funcref_store_types.emplace(id, type);
                 }
             }
         }
@@ -14561,9 +14654,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto check_native_local_value = [&]() -> llvm::Value* {
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
+                auto continuation = native_funcref_results.find(inst->operands[0].id);
                 if (!QoreTypeInfo::hasType(local_type) || !nanboxed_values.count(inst->operands[0].id)
-                        || !qore_ir_return_needs_coercion(local_type, current_ir_func
-                            ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr)) {
+                        || (continuation == native_funcref_results.end()
+                            && !qore_ir_return_needs_coercion(local_type, current_ir_func
+                                ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr))) {
                     return nullptr;
                 }
                 llvm::Function* func = builder->GetInsertBlock()->getParent();
@@ -14589,6 +14684,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         immediate = builder->CreateOr(native_immediate, builder->CreateICmpEQ(val,
                             llvm::ConstantInt::get(i64_type, VAL_FALSE)));
                     }
+                }
+                if (continuation != native_funcref_results.end()) {
+                    // Preserve the immediate-scalar shortcut on generic calls
+                    // too. Only other fallback values require full assignment
+                    // checking (NOTHING, owned nodes, mismatched returns).
+                    llvm::Value* handled = continuation->second.handled;
+                    native_immediate = immediate
+                        ? builder->CreateSelect(handled, continuation->second.value, native_immediate)
+                        : continuation->second.value;
+                    immediate = immediate ? builder->CreateOr(handled, immediate) : handled;
                 }
                 llvm::BasicBlock* immediate_bb = builder->GetInsertBlock();
                 llvm::BasicBlock* merge_bb = nullptr;

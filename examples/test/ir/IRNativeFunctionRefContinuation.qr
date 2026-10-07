@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "NATIVE-CONTINUATION-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub intIdentity(int value) { return value; }
+float sub floatIdentity(float value) { return value; }
+float sub floatAdd(float value) { return value + 0.5; }
+float sub floatMul(float value) { return value * -1.0; }
+float sub floatSub(float value) { return -9.0e307 - value; }
+float sub floatDivide(float value) { return 1.0 / value; }
+bool sub boolIdentity(bool value) { return value; }
+int sub zeroInt() { return 1125899906842624; }
+float sub zeroFloat() { return -3.0e307; }
+bool sub zeroBool() { return True; }
+int sub divide(int value) { return 10 / value; }
+
+# Opaque arguments prevent direct-call specialization. Both initial assignment
+# and loop-carried assignment consume exactly one callback result.
+int sub assignedInt(code<int(int)> fn, int value) {
+    int result = fn(value);
+    for (int i = 0; i < 10; ++i) { result = fn(result); }
+    return result;
+}
+float sub assignedFloat(code<float(float)> fn, float value) {
+    float result = fn(value);
+    for (int i = 0; i < 10; ++i) { result = fn(result); }
+    return result;
+}
+bool sub assignedBool(code<bool(bool)> fn, bool value) {
+    bool result = fn(value);
+    for (int i = 0; i < 10; ++i) { result = fn(result); }
+    return result;
+}
+int sub assignedZeroInt(code<int()> fn) { int result = fn(); return result; }
+float sub assignedZeroFloat(code<float()> fn) { float result = fn(); return result; }
+bool sub assignedZeroBool(code<bool()> fn) { bool result = fn(); return result; }
+int sub assignmentExpression(code<int(int)> fn, int value) {
+    int result = 0;
+    return (result = fn(value)) + result;
+}
+# These consumers must retain the ordinary boxed representation.
+auto sub boxedConsumer(code<int(int)> fn, int value) { return fn(value); }
+auto sub optionalConsumer(code<int(int)> fn, int value) { *int result = fn(value); return result; }
+softint sub softConsumer(code<int(int)> fn, int value) { softint result = fn(value); return result; }
+int sub branchAssigned(code<int(int)> fn, bool assign) {
+    int value;
+    if (assign) { value = 1125899906842624; }
+    int result = fn(value);
+    return result;
+}
+int sub deletedArgument(code<int(int)> fn, int value) {
+    delete value;
+    int result = fn(value);
+    return result;
+}
+float sub missingFloat(code<float(float)> fn) { float value; float result = fn(value); return result; }
+bool sub missingBool(code<bool(bool)> fn) { bool value; bool result = fn(value); return result; }
+
+thread_local auto unexpectedValue;
+thread_local int called = 0;
+thread_local int destroyed = 0;
+class Owned {
+    destructor() { ++destroyed; }
+}
+auto sub unexpected(int value) { ++called; return unexpectedValue; }
+auto sub unexpectedFloat(float value) { ++called; return unexpectedValue; }
+auto sub unexpectedBool(bool value) { ++called; return unexpectedValue; }
+auto sub ownedResult(int value) { ++called; return new Owned(); }
+
+sub checkFallback(code<int(int)> fn, auto value, string error) {
+    unexpectedValue = value;
+    int before = called;
+    try {
+        assignedInt(fn, 7);
+        throw "NATIVE-CONTINUATION-TEST", "expected assignment rejection";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(error, ex.err);
+    }
+    expect(before + 1, called);
+    unexpectedValue = NOTHING;
+}
+
+sub alternatingCallbacks(code<int(int)> native, code<int(int)> generic, code<int(int)> invalid) {
+    int value = 1125899906842624;
+    int before = destroyed;
+    int errors = 0;
+    unexpectedValue = value;
+    # This call is outside a try scope: typed native lowering is enabled here.
+    # Reuse the boxed cleanup slot while alternating heap results and native
+    # payloads at the same call site.
+    for (int i = 0; i < 60; ++i) {
+        code<int(int)> fn = i & 1 ? native : generic;
+        value = fn(value);
+        expect(1125899906842624, value);
+    }
+    for (int i = 0; i < 90; ++i) {
+        code<int(int)> fn = i % 3 == 0 ? native : i % 3 == 1 ? generic : invalid;
+        try {
+            value = fn(value);
+        } catch (hash<ExceptionInfo> ex) {
+            expect("RUNTIME-TYPE-ERROR", ex.err);
+            ++errors;
+        }
+        expect(1125899906842624, value);
+    }
+    expect(30, errors);
+    expect(before + 30, destroyed);
+    unexpectedValue = NOTHING;
+}
+
+for (int round = 0; round < 30; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, -140737488355328,
+            140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, assignedInt(\intIdentity(), value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.0e308, -3.0e307, -6.0e307, 1.0e308)) {
+        expect(value, assignedFloat(\floatIdentity(), value));
+    }
+    expect(True, assignedFloat(\floatIdentity(), @nan@).nanp());
+    expect(True, assignedFloat(\floatIdentity(), -@nan@).nanp());
+    expect(6.75, assignedFloat(\floatAdd(), 1.25));
+    expect(3.0e307, assignedFloat(\floatMul(), -3.0e307));
+    expect(True, assignedFloat(\floatSub(), -3.0e307) < -4.5e307);
+    expect(True, assignedBool(\boolIdentity(), True));
+    expect(False, assignedBool(\boolIdentity(), False));
+    expect(1125899906842624, assignedZeroInt(\zeroInt()));
+    expect(-3.0e307, assignedZeroFloat(\zeroFloat()));
+    expect(True, assignedZeroBool(\zeroBool()));
+    expect(2251799813685248, assignmentExpression(\intIdentity(), 1125899906842624));
+    # A typed declaration does not constrain the fallback's actual return.
+    foreach auto invalid in ((NOTHING, "not an int", (1, 2), True, 1.25)) {
+        checkFallback(\unexpected(), invalid, "RUNTIME-TYPE-ERROR");
+    }
+    checkFallback(\ownedResult(), NOTHING, "RUNTIME-TYPE-ERROR");
+    expect(round + 1, destroyed);
+    unexpectedValue = NOTHING;
+    expect(NOTHING, boxedConsumer(\unexpected(), 7));
+    expect(NOTHING, optionalConsumer(\unexpected(), 7));
+    unexpectedValue = "42";
+    expect(42, softConsumer(\unexpected(), 7));
+    unexpectedValue = 1125899906842624;
+    expect(1125899906842624, assignedInt(\unexpected(), 7));
+    unexpectedValue = NOTHING;
+    try {
+        assignedInt(\divide(), 0);
+        throw "NATIVE-CONTINUATION-TEST", "expected callback exception";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("DIVISION-BY-ZERO", ex.err);
+    }
+    expect(7, assignedInt(\intIdentity(), 7));
+    try {
+        assignedFloat(\floatDivide(), 0.0);
+        throw "NATIVE-CONTINUATION-TEST", "float division must retain its throwing path";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("DIVISION-BY-ZERO", ex.err);
+    }
+}
+alternatingCallbacks(\intIdentity(), \unexpected(), \ownedResult());
+unexpectedValue = 7;
+expect(7.0, assignedFloat(\unexpectedFloat(), 1.0));
+unexpectedValue = True;
+expect(True, assignedBool(\unexpectedBool(), False));
+foreach auto invalid in ((NOTHING, "wrong", (1, 2))) {
+    unexpectedValue = invalid;
+    try {
+        assignedFloat(\unexpectedFloat(), 1.0);
+        throw "NATIVE-CONTINUATION-TEST", "expected float assignment rejection";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("RUNTIME-TYPE-ERROR", ex.err);
+    }
+    try {
+        assignedBool(\unexpectedBool(), False);
+        throw "NATIVE-CONTINUATION-TEST", "expected bool assignment rejection";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("RUNTIME-TYPE-ERROR", ex.err);
+    }
+}
+unexpectedValue = NOTHING;
+expect(1125899906842624, branchAssigned(\intIdentity(), True));
+foreach code<auto()> invalidCall in ((
+        auto sub () { return branchAssigned(\intIdentity(), False); },
+        auto sub () { return deletedArgument(\intIdentity(), 1125899906842624); },
+        auto sub () { return missingFloat(\floatIdentity()); },
+        auto sub () { return missingBool(\boolIdentity()); })) {
+    try {
+        invalidCall();
+        throw "NATIVE-CONTINUATION-TEST", "unassigned argument must not become native zero";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(True, ex.err =~ /^RUNTIME-(TYPE|OVERLOAD)-ERROR$/);
+    }
+}
+
+# Captured callbacks and foreign Programs always retain generic dispatch.
+int captured = 5;
+code<int(int)> closure = int sub (int value) { return value + captured; };
+expect(62, assignedInt(closure, 7));
+Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nint sub identity(int value) { return value; }\n"
+    "code<int(int)> sub callback() { return \\identity(); }", "native-continuation-foreign");
+code<int(int)> foreignRef = foreign.callFunction("callback");
+expect(1125899906842624, assignedInt(foreignRef, 1125899906842624));
+printf("native-funcref-continuation: ok\n");

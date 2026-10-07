@@ -28,6 +28,13 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(8450, run.reference("temporary_list", 2, 7))
         self.assertEqual(8450, run.reference("temporary_hash", 2, 7))
         self.assertEqual(8449, run.reference("indirect_call", 2, 7))
+        self.assertEqual(8449, run.reference("indirect_wide", 2, 7))
+        self.assertEqual(65535, run.reference("indirect_float", 2, 7))
+        self.assertEqual(0, run.reference("indirect_float", 1, 65535))
+        self.assertEqual(65, run.reference("indirect_branch_float", 2, 7))
+        self.assertEqual(32769, run.reference("indirect_branch_float", 2, 65535))
+        self.assertEqual(6, run.reference("indirect_tagged_float", 1, 7))
+        self.assertEqual(12, run.reference("indirect_tagged_float", 3, 0))
         self.assertEqual(8451, run.reference("polymorphic_call", 2, 7))
         self.assertEqual(8451, run.reference("dispatch_control", 2, 7))
 
