@@ -10098,17 +10098,23 @@ static int tryTypedFunctionRef(uint64_t ref_bits, Result* result, ExceptionSink*
 // is filled by that helper before another thread can reach this frame.
 class QoreExplicitFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
-    QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc, const FunctionCallReferenceNode* ref,
+    __attribute__((always_inline)) QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc,
+            const FunctionCallReferenceNode* ref,
             const UserVariantBase* uvb, ExceptionSink* xsink)
         : name(ref->getFunction()->getNameStr()), statements(uvb->getStatementBlock()), pgm(ref->getProgram()),
           helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
               uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
-    QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache,
+    __attribute__((always_inline)) QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc,
+            const QorePreparedFunctionRefV3& cache,
             ExceptionSink* xsink)
         : name(*cache.name), statements(cache.statements), pgm(cache.pgm),
           helper(rc, this, loc, cache.parse_loc, cache.uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
+    // Otherwise inlining the publishing helper can merely move the outline
+    // boundary to this enclosing frame instead of exposing its state to the
+    // typed entry's register allocator. Destruction still waits for readers.
+    __attribute__((always_inline)) ~QoreExplicitFunctionRefStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
     bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
@@ -10128,15 +10134,11 @@ extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
 }
 
-static bool prepareTypedFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, uint32_t signature,
+// A miss is uncommon for a retained native callback. Keep reference decoding,
+// ownership replacement and metadata extraction out of the positive-hit frame.
+static __attribute__((noinline)) bool prepareTypedFunctionRefMiss(RuntimeConfig& rc,
+        uint64_t ref_bits, uint32_t signature,
         QorePreparedFunctionRefV3& cache, ExceptionSink* xsink) {
-    if (cache.owner && cache.owner == ref_bits) {
-        // No argument/type/RTTI decoding on a positive hit. These three facts
-        // are NOT immutable and must still be checked on every call.
-        return cache.pgm == RuntimeConfigNativeAccess::getProgram(rc)
-            && !qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
-            && cache.ref->getNormalEntry() == cache.uvb->getCachedAOTFunction();
-    }
     const auto* ref = getTypedFunctionRef(ref_bits, signature, RuntimeConfigNativeAccess::getProgram(rc));
     if (!ref) {
         // Do not retain generic callbacks: captures and object-method references
@@ -10156,6 +10158,18 @@ static bool prepareTypedFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, uint32
     // It has only a weak Program dependency; no user destructor can run here.
     old.discard(xsink);
     return true;
+}
+
+static bool prepareTypedFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, uint32_t signature,
+        QorePreparedFunctionRefV3& cache, ExceptionSink* xsink) {
+    if (cache.owner && cache.owner == ref_bits) {
+        // No argument/type/RTTI decoding on a positive hit. These three facts
+        // are NOT immutable and must still be checked on every call.
+        return cache.pgm == RuntimeConfigNativeAccess::getProgram(rc)
+            && !qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
+            && cache.ref->getNormalEntry() == cache.uvb->getCachedAOTFunction();
+    }
+    return prepareTypedFunctionRefMiss(rc, ref_bits, signature, cache, xsink);
 }
 
 template <typename Result, uint32_t Signature, typename... Args>

@@ -1732,3 +1732,93 @@ context restoration and stack-reader handshakes. Then revisit the end-to-end
 RuntimeConfig entry ABI and compact observable-frame design. Java parity is
 not reached, and the unchanged generic float-branch path still needs a separate
 whole-body proof extension.
+
+## Native frame and cache-hit inlining (2026-10-07)
+
+This iteration changes C++ inlining boundaries, not the native helper ABI.
+Prepared-target misses are outlined; positive-hit guards and native-frame
+construction/restoration are visible to the typed helper's register allocator.
+The enclosing diagnostic frame is included: a development disassembly showed
+that hinting only its publishing member merely moved the out-of-line boundary.
+That unmeasured prototype was refined and all tests rerun before timing.
+
+All guards, stack checks, empty-frame markers, policy restoration and stack-reader
+synchronization remain. Implementation-only hints retain ordinary out-of-line
+symbols for split-compilation builds. Results below use the default
+single-compilation-unit Clang build; split-build/GCC performance is unmeasured.
+
+### Before/after measurements
+
+Baseline is `1faf357d1`, including prepared targets. Identical sources, five
+shuffled forks, three warmup/five measurement windows at 300 ms; ns/element
+includes loop/computation/checksum. Java is Temurin 25.0.2/JMH 1.37 with
+DONT_INLINE targets. Builds, tests and profiles did not overlap timing.
+
+Count 1024 (`run-01xe0msk`):
+
+|!Kernel|!Before|!After|!Reduction|!Java
+|arithmetic|2.878|2.869|0.3%|0.890
+|direct_call|2.890|2.882|0.3%|0.898
+|indirect_call|15.797|13.342|15.5%|1.669
+|indirect_wide|15.782|13.557|14.1%|1.684
+|indirect_float|16.060|13.384|16.7%|1.648
+|indirect_tagged_float|16.034|13.517|15.7%|1.651
+|indirect_branch_float|127.886|128.923|-0.8%|1.657
+
+Count 4096 repeat (`run-whu_tuy9`):
+
+|!Kernel|!Before|!After|!Reduction
+|arithmetic|2.036|2.033|0.2%
+|direct_call|2.032|2.040|-0.4%
+|indirect_call|14.878|12.556|15.6%
+|indirect_wide|14.921|12.568|15.8%
+|indirect_float|15.134|12.474|17.6%
+|indirect_tagged_float|15.260|12.589|17.5%
+|indirect_branch_float|127.722|129.700|-1.5%
+|polymorphic_call|273.566|271.914|0.6%
+|temporary_hash|310.694|307.122|1.1%
+
+All four native callback ranges are nonoverlapping in both runs: **14-18%
+less time** incrementally. Arithmetic/direct-call controls overlap. Generic
+branch-float medians are 0.8-1.5% slower with overlapping ranges; other generic
+controls are noisy and overlap. These observations do not establish zero
+regression on generic paths. Native callbacks still take **8.0-8.2x Java's
+time** at count 1024; this is not isolated call latency or Java parity.
+
+AOT native text stays **77592 bytes**. Runtime-library text grows **13837892
+to 13859680 bytes**, about 22 KB / 0.16%. Compilation/startup observations are
+retained, not claimed as improvements.
+
+### Validation and next measured target
+
+Release/debug each pass **107 cases / 11969 assertions** in 19 wrappers plus
+four standalone scripts, including stack exhaustion, debugger attach/detach,
+concurrent walkers, cancellation, Program interruption, ownership and caught
+exception reuse. A pre-change v3 AOT executable matches all 225 checksum records.
+Every timed implementation passes the independent 225-record check; all ten
+Python harness tests pass.
+
+[Evidence](results-native-frame-inline-macos-arm64.json) retains **195 jobs /
+975 samples**, independently recomputed medians and library/source/inspection
+hashes. [Full audit](FOLLOWUP-AUDIT.md#native-frame-inlining-audit-2026-10-07)
+covers all 62 checks. Audit/disassembly verified that the frame member ordering,
+reader handshake and out-of-line compatibility symbols remain intact.
+
+Separate five-second callback and arithmetic profiles did not overlap any
+build/test/timing work or each other. Callback bookkeeping now samples inside
+the typed helper, with no out-of-line frame/cache-hit layer in disassembly.
+The arithmetic profile is dominated by the cancellation helper and its call
+stub. Sample counts are qualitative, not additive time attribution.
+
+The next priority is therefore an inline no-pending cancellation fast path at
+every existing generated loop checkpoint. It must read live thread-cancel and
+Program-interrupt flags with their existing seq_cst ordering, use the full
+helper for pending requests or unavailable thread context, preserve deferral/
+scope/priority and shutdown behavior, and never lower polling frequency.
+After that, continue end-to-end RuntimeConfig callee entry work, then broader
+non-throwing float-branch summaries and guarded method calls. No runtime
+guarantee is to be traded away to claim Java-level speed.
+
+No full-suite, sanitizer or Linux validation claim. Previously documented
+legacy debug-wrapper selection, recursive-JIT-capture, nested AOT source-line
+and default-target linker-warning limitations remain separate.

@@ -284,6 +284,17 @@ reader-visible fields, including the caller location, are initialized before
 publication and remain alive until readers finish. Stack protection and
 cancellation points are unchanged. The callee still uses its own AOT context.
 
+The native frame helper and enclosing diagnostic-frame constructors/destructor
+carry inlining hints so the C++ runtime compiler can allocate their save/restore
+state together with the typed-call helper. The publishing helper's hints are
+on its implementation only: default single-compilation-unit builds can inline
+it, while split builds retain ordinary out-of-line symbols. The small positive
+target-cache lookup stays inline; reference decoding, ownership replacement
+and metadata extraction are outlined as the miss path. None of the guards,
+frame markers, policy restoration or reader handshakes is removed. This is a
+runtime inlining boundary change, not an end-to-end RuntimeConfig callee ABI
+or a new compact-frame representation.
+
 The admitted scalar leaf cannot instantiate TLS locals or reenter generic
 execution. Its local-variable marker therefore uses a specialized push/pop pair:
 it retains the ordinary marker and frame count for inspection, but does not

@@ -1960,7 +1960,11 @@ int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink
 #endif
 }
 
-RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
+// Keep native-leaf save/restore visible to the caller's register allocator when
+// this definition is available (the normal single-compilation-unit build).
+// Applying the hint only here retains ordinary out-of-line symbols for split
+// builds; no frame boundary, guard or reader handshake is omitted.
+__attribute__((always_inline)) RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
         const QoreProgramLocation* parse_loc, const QoreParseOptions& po,
         QoreProgram* pgm, ExceptionSink* xsink)
@@ -1987,7 +1991,7 @@ RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
     }
 }
 
-RuntimeConfigNativeCallHelper::~RuntimeConfigNativeCallHelper() {
+__attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNativeCallHelper() {
     if (swapped) {
         td->runtime_statement = old_stmt;
         td->runtime_loc = old_loc;
