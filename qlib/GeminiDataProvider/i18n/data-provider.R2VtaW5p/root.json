@@ -592,8 +592,72 @@
           "message": "Controls randomness in generation"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
-          "message": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
+          "message": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "Thinking Config"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "Control reasoning depth and cost"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "Include Thoughts"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "Include reasoning summaries in the response"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "Set `True` to include thought summaries for inspecting the model's reasoning."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "Thinking Budget"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Legacy reasoning token budget for Gemini 2.5"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "Thinking Level"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Reasoning effort for Gemini 3 models"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "Minimal"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "Medium"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "High"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.display_name": {
           "source": "Top K",
@@ -604,8 +668,8 @@
           "message": "Top-K sampling parameter"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "The maximum number of tokens to consider when sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.display_name": {
           "source": "Top P",
@@ -616,8 +680,8 @@
           "message": "Nucleus sampling parameter"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
-          "message": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
           "source": "Safety Settings",
@@ -787,6 +851,70 @@
           "source": "The role of the message author (default: `user`)",
           "message": "The role of the message author (default: `user`)"
         },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "Thinking Config"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "Control reasoning depth and cost"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5."
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "Include Thoughts"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "Include reasoning summaries in the response"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "Set `True` to include thought summaries for inspecting the model's reasoning."
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "Thinking Budget"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Legacy reasoning token budget for Gemini 2.5"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent."
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "Thinking Level"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Reasoning effort for Gemini 3 models"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5."
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "Minimal"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "Medium"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "High"
+        },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Temperature"
@@ -796,8 +924,8 @@
           "message": "Controls randomness in generation"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
-          "message": "Controls the randomness of the output. Values range from `0.0` to `2.0`"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`",
+          "message": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.display_name": {
           "source": "Top P",
@@ -808,8 +936,8 @@
           "message": "Nucleus sampling parameter"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling",
-          "message": "The maximum cumulative probability of tokens to consider when sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.display_name": {
           "source": "Top K",
@@ -820,8 +948,8 @@
           "message": "Top-K sampling parameter"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "The maximum number of tokens to consider when sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.display_name": {
           "source": "Max Output Tokens",
@@ -1100,8 +1228,72 @@
           "message": "Controls randomness in generation"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
-          "message": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
+          "message": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "Thinking Config"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "Control reasoning depth and cost"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "Include Thoughts"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "Include reasoning summaries in the response"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "Set `True` to include thought summaries for inspecting the model's reasoning."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "Thinking Budget"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Legacy reasoning token budget for Gemini 2.5"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "Thinking Level"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Reasoning effort for Gemini 3 models"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5."
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "Minimal"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "Low"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "Medium"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "High"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.display_name": {
           "source": "Top K",
@@ -1112,8 +1304,8 @@
           "message": "Top-K sampling parameter"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "The maximum number of tokens to consider when sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.display_name": {
           "source": "Top P",
@@ -1124,8 +1316,8 @@
           "message": "Nucleus sampling parameter"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
-          "message": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
+          "message": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.display_name": {
           "source": "Safety Settings",

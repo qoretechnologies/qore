@@ -160,6 +160,7 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("OpenAI tool_choice maps to toolConfig", \toolChoiceConversionTest());
         addTestCase("complete() helper",                  \completeTest());
         addTestCase("chatStream streams streamGenerateContent events", \chatStreamTest());
+        addTestCase("Gemini 3 streaming generation config", \generationConfigStreamTest());
         addTestCase("streamed tool call is collected once", \streamToolCallTest());
         addTestCase("streaming error response raises", \streamErrorTest());
         addTestCase("live Vertex AI streaming (VERTEX_SA_JSON)", \liveStreamTest());
@@ -397,6 +398,29 @@ public class VertexAiTest inherits QUnit::Test {
         assertEq("Hello from Vertex", resp.choices[0].message.content);
         assertEq("stop", resp.choices[0].finish_reason);
         assertEq(12, resp.usage.total_tokens);
+    }
+
+    private generationConfigStreamTest() {
+        GcpAuth::clearTokenCache();
+        handler.stream_chunks = ({"candidates": ({"content": {"parts": ({"text": "classified"},)},
+            "finishReason": "STOP"},)},);
+        on_exit handler.stream_chunks = ();
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        string text;
+        p.chatStream((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "invoice"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) { text += e.delta; }, NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"model": "gemini-3.5-flash", "reasoning_effort": "low",
+                "reasoning_token_budget": 0, "temperature": 0.2});
+        assertEq("classified", text);
+        assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
+            handler.last_body.generationConfig);
+        p.chatStream((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "invoice"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) { text += e.delta; }, NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"model": "gemini-3.5-flash", "body_options": {
+                "generationConfig": {"temperature": 0.2, "top_p": 0.8, "topK": 20,
+                    "thinkingConfig": {"thinkingBudget": 256, "thinkingLevel": "HIGH"}},
+            }});
+        assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "HIGH"}}, handler.last_body.generationConfig);
     }
 
     private streamToolCallTest() {

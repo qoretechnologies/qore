@@ -90,7 +90,7 @@ public class GeminiGenerateContentDataProvider inherits GeminiDataProviderBase {
             req.tools = ({"file_search": {"file_search_store_names": (store,)}},);
         }
         string path = buildModelPath(model, "generateContent");
-        return doRestCommand("POST", path, req).body;
+        return doRestCommand("POST", path, GeminiBodyShape::normalizeGenerationConfig(model, req)).body;
     }
 
     #! Returns the description of a successful request message, if any

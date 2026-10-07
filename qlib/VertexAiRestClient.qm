@@ -172,6 +172,8 @@ provider.deleteCachedContent(cache.name);
     @section vertexairestclientrelnotes Release Notes
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
+    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
+      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
     - explicit prompt caching with Vertex AI \c cachedContents resources: create, get, refresh and delete, and
       requests that reference a cache
@@ -587,6 +589,7 @@ public class VertexAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "supports_structured_output": True,
             "supports_multimodal": True,
             "supports_reasoning_token_budget": True,
+            "supports_reasoning_effort": True,
             "prefers_narrow_tool_catalogue": True,
             "preferred_max_tool_count": 8,
             "prefers_single_tool_dispatch": True,

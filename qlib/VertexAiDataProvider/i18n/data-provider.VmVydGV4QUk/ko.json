@@ -396,8 +396,8 @@
           "message": "생성 설정"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
-          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
-          "message": "생성 매개변수: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`"
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x) or `thinkingConfig.thinkingBudget` (Gemini 2.5). Gemini 3.x omits sampling parameters and numeric thinking budgets. Use an explicit thinking level to control reasoning depth and cost.",
+          "message": "생성 매개변수: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x), `thinkingConfig.thinkingBudget` (Gemini 2.5). Gemini 3.x에서는 샘플링 매개변수와 숫자 사고 예산이 생략됩니다. 추론 깊이와 비용을 제어하려면 사고 수준을 명시적으로 설정하세요."
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
           "source": "Tools",

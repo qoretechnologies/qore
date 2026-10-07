@@ -396,8 +396,8 @@
           "message": "Parametry generování"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
-          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
-          "message": "Parametry generování: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`"
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x) or `thinkingConfig.thinkingBudget` (Gemini 2.5). Gemini 3.x omits sampling parameters and numeric thinking budgets. Use an explicit thinking level to control reasoning depth and cost.",
+          "message": "Parametry generování: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x), `thinkingConfig.thinkingBudget` (Gemini 2.5). Gemini 3.x vynechává parametry vzorkování a číselné rozpočty uvažování. Pro řízení hloubky a nákladů uvažování nastavte konkrétní úroveň."
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
           "source": "Tools",

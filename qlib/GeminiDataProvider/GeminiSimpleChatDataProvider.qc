@@ -77,10 +77,21 @@ public class GeminiSimpleChatDataProvider inherits GeminiDataProviderBase {
 
         # Add generation config if any generation params are set
         hash<auto> gen_config;
-        if (exists req.temperature) gen_config.temperature = remove req.temperature;
-        if (exists req.topP) gen_config.topP = remove req.topP;
-        if (exists req.topK) gen_config.topK = remove req.topK;
-        if (exists req.maxOutputTokens) gen_config.maxOutputTokens = remove req.maxOutputTokens;
+        if (exists req.temperature) {
+            gen_config.temperature = remove req.temperature;
+        }
+        if (exists req.topP) {
+            gen_config.topP = remove req.topP;
+        }
+        if (exists req.topK) {
+            gen_config.topK = remove req.topK;
+        }
+        if (exists req.maxOutputTokens) {
+            gen_config.maxOutputTokens = remove req.maxOutputTokens;
+        }
+        if (exists req.thinkingConfig) {
+            gen_config.thinkingConfig = remove req.thinkingConfig;
+        }
         if (gen_config) {
             body.generationConfig = gen_config;
         }
@@ -93,7 +104,8 @@ public class GeminiSimpleChatDataProvider inherits GeminiDataProviderBase {
         }
 
         string path = buildModelPath(model, "generateContent");
-        hash<auto> resp = doRestCommand("POST", path, body).body;
+        hash<auto> resp = doRestCommand("POST", path,
+            GeminiBodyShape::normalizeGenerationConfig(model, body)).body;
 
         # Flatten the response to simple fields
         hash<auto> rv = {};

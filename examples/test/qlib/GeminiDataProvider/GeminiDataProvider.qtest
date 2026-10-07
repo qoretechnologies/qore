@@ -1,16 +1,17 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. — MIT License
 
 %modern
 %exec-class GeminiDataProviderTest
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires GeminiDataProvider
-%requires GeminiRestClient
-%requires RestClientIo
-%requires HttpClientIo
-%requires ConnectionProvider
-%requires DataProvider
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/GeminiDataProvider
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/DataProvider
 
 %requires json
 
@@ -67,6 +68,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
         addTestCase("action effects", \actionEffectsTest());
         addTestCase("data types", \dataTypesTest());
         addTestCase("generate content", \generateContentTest());
+        addTestCase("Gemini 3 generation config", \generationConfigTest());
         addTestCase("simple chat", \simpleChatTest());
         addTestCase("embed content", \embedContentTest());
         addTestCase("batch embed", \batchEmbedTest());
@@ -197,6 +199,35 @@ class GeminiDataProviderTest inherits QUnit::Test {
         GeminiDataProvider::GeminiStreamEventDataType stream_evt();
         assertEq(True, stream_evt.getFields().hasKey("type"));
         assertEq(True, stream_evt.getFields().hasKey("event"));
+    }
+
+    generationConfigTest() {
+        hash<auto> config = {"temperature": 0.2, "topP": 0.9, "topK": 20, "maxOutputTokens": 256,
+            "thinkingConfig": {"thinkingLevel": "LOW", "thinkingBudget": 1024, "includeThoughts": True}};
+        AbstractDataProvider generate = dp.getChildProviderEx("generate-content");
+        AbstractDataProvider simple = dp.getChildProviderEx("simple-chat");
+        foreach string model in (("gemini-3.5-flash", "gemini-2.5-flash")) {
+            if (model == "gemini-2.5-flash") {
+                delete config.thinkingConfig.thinkingLevel;
+            }
+            generate.doRequest({"model": model, "prompt": "Classify this invoice", "generationConfig": config});
+            hash<auto> expected = model == "gemini-3.5-flash"
+                ? {"maxOutputTokens": 256, "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": True}}
+                : config;
+            assertEq(expected, fake.last_request.generationConfig);
+            simple.doRequest({"model": model, "content": "Classify this invoice"} + config);
+            assertEq(expected, fake.last_request.generationConfig);
+        }
+        AbstractDataProvider stream = dp.getChildProviderEx("stream-content");
+        assertThrows("RUNTIME-TYPE-ERROR", \stream.doRequest(), ({
+            "model": "gemini-3.5-flash", "prompt": "Classify this invoice",
+            "generationConfig": {"thinkingConfig": {"thinkingLevel": "invalid"}},
+        },));
+        assertTrue(GeminiDataProvider::GeminiThinkingConfigType.getFields().hasKey("thinkingLevel"));
+        GeminiDataProvider::GeminiGenerationConfigDataType generation();
+        assertTrue(generation.getFields().hasKey("thinkingConfig"));
+        GeminiDataProvider::GeminiSimpleChatRequestDataType simple_type();
+        assertTrue(simple_type.getFields().hasKey("thinkingConfig"));
     }
 
     generateContentTest() {

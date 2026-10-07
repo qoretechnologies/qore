@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Gemini and Vertex AI generation requests now use model-specific reasoning controls. Gemini 3.x omits
+    deprecated sampling parameters and numeric thinking budgets, including values supplied in request body
+    overrides. Set <tt>reasoning_effort</tt> or native <tt>thinkingConfig.thinkingLevel</tt> to control reasoning;
+    without a level, the model default applies. Numeric budgets, including zero and -1, are not converted to
+    levels. Gemini 2.5 retains its sampling and budget controls. The same rules apply to chat, completion,
+    streaming, and data-provider generation actions; Gemini data-provider types now expose thinking options.
+
     AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
     lists, matching the interpreter. A conditionally assigned list inside an outer
     loop could previously crash when no assignment occurred before iteration.

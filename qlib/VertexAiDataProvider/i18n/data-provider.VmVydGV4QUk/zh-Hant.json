@@ -396,8 +396,8 @@
           "message": "生成控制參數"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
-          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
-          "message": "生成參數：`temperature`、`topP`、`topK`、`maxOutputTokens`、`responseMimeType`、`responseSchema`、`thinkingConfig.thinkingBudget`"
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x) or `thinkingConfig.thinkingBudget` (Gemini 2.5). Gemini 3.x omits sampling parameters and numeric thinking budgets. Use an explicit thinking level to control reasoning depth and cost.",
+          "message": "生成參數：`temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingLevel` (Gemini 3.x), `thinkingConfig.thinkingBudget` (Gemini 2.5)。Gemini 3.x 會省略取樣參數與數值思考預算。請明確設定思考層級，以控制推理深度與成本。"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
           "source": "Tools",
