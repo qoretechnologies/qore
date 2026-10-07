@@ -799,6 +799,10 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/Verifier.h>
 #include <limits>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <cstdio>
 #include <cstring>
@@ -1010,6 +1014,128 @@ size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
         call->eraseFromParent();
     }
     return dead_calls.size();
+}
+
+// Cleanup slots can merge owned fallback values with immediates. Keep the ownership operation at its
+// original point, but expose the scalar no-op to LLVM so it can eliminate empty cleanup traffic.
+// Run after the main optimization pipeline: otherwise inlining and loop unrolling duplicate
+// the guards throughout cold fallback/cleanup paths and cause disproportionate code growth.
+static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& error,
+        size_t& guards) {
+    std::vector<llvm::CallInst*> calls;
+    bool has_native_scalar_callback = false;
+    size_t checked = 0;
+    for (llvm::BasicBlock& block : *function) {
+        for (llvm::Instruction& inst : block) {
+            if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM scalar cleanup analysis")) {
+                error = "cancelled during LLVM scalar cleanup analysis";
+                return false;
+            }
+            auto* call = llvm::dyn_cast<llvm::CallInst>(&inst);
+            if (!call || !call->getCalledFunction() || call->isMustTailCall()) {
+                continue;
+            }
+            llvm::StringRef name = call->getCalledFunction()->getName();
+            if (name.starts_with("qore_rt_try_funcref_")) {
+                has_native_scalar_callback = true;
+            }
+            if (name == "qore_rt_decref" || name == "qore_rt_decref_nothrow") {
+                calls.push_back(call);
+            }
+        }
+    }
+    // Native scalar callback results merge with owned generic fallbacks, leaving
+    // cleanup traffic on the common scalar edge. Target those callers: guarding
+    // arbitrary functions grew cold cleanup code and regressed direct-call loops.
+    if (!has_native_scalar_callback) {
+        return true;
+    }
+    // Reverse order avoids repeatedly moving a long block suffix when it contains many cleanup calls.
+    checked = 0;
+    for (auto it = calls.rbegin(); it != calls.rend(); ++it) {
+        if (++checked % 10 == 0 && qore_check_cancel(nullptr, "LLVM scalar cleanup guards")) {
+            error = "cancelled during LLVM scalar cleanup guards";
+            return false;
+        }
+        llvm::CallInst* call = *it;
+        llvm::IRBuilder<> guard(call);
+        guard.SetCurrentDebugLocation(call->getDebugLoc());
+        llvm::Value* value = call->getArgOperand(0);
+        llvm::Type* type = value->getType();
+        llvm::Value* tag = guard.CreateAnd(value, llvm::ConstantInt::get(type, TAG_MASK));
+        llvm::Value* trivial = guard.CreateOr(
+            guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_NOTHING)),
+            guard.CreateICmpEQ(tag, llvm::ConstantInt::get(type, TAG_INT48)));
+        trivial = guard.CreateOr(trivial, guard.CreateOr(
+            guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_FALSE)),
+            guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_TRUE))));
+        if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(trivial)) {
+            if (constant->isOne()) {
+                call->eraseFromParent();
+            }
+            continue;
+        }
+        // Deliberately exclude opaque references, heap-encoded numbers and plugin representations.
+        // In particular, a non-standard tag is NOT proof that the value has no owned payload.
+        llvm::Instruction* then_term = llvm::SplitBlockAndInsertIfThen(
+            guard.CreateNot(trivial, "needs_scalar_cleanup"), call, false);
+        call->moveBefore(*then_term->getParent(), then_term->getIterator());
+        ++guards;
+    }
+    return true;
+}
+
+bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) {
+    if (std::getenv("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD")) {
+        return true;
+    }
+    size_t guards = 0, checked = 0;
+    std::vector<llvm::Function*> changed;
+    for (llvm::Function& function : module) {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM scalar cleanup functions")) {
+            error = "cancelled during LLVM scalar cleanup function analysis";
+            return false;
+        }
+        if (function.isDeclaration()) {
+            continue;
+        }
+        size_t before = guards;
+        if (!qore_ir_guard_scalar_decrefs(&function, error, guards)) {
+            return false;
+        }
+        if (guards != before) {
+            changed.push_back(&function);
+        }
+    }
+    // Fold proven-immediate edges and adjacent cleanup guards without running
+    // the inliner or loop unroller again. Fresh analyses avoid stale CFG state.
+    llvm::LoopAnalysisManager lam;
+    llvm::FunctionAnalysisManager fam;
+    llvm::CGSCCAnalysisManager cgam;
+    llvm::ModuleAnalysisManager mam;
+    llvm::PassBuilder pb;
+    pb.registerModuleAnalyses(mam);
+    pb.registerCGSCCAnalyses(cgam);
+    pb.registerFunctionAnalyses(fam);
+    pb.registerLoopAnalyses(lam);
+    pb.crossRegisterProxies(lam, fam, cgam, mam);
+    llvm::FunctionPassManager passes;
+    passes.addPass(llvm::InstCombinePass());
+    passes.addPass(llvm::SimplifyCFGPass());
+    passes.addPass(llvm::InstCombinePass());
+    checked = 0;
+    for (llvm::Function* function : changed) {
+        if (++checked % 10 == 0 && qore_check_cancel(nullptr, "LLVM scalar cleanup simplification")) {
+            error = "cancelled during LLVM scalar cleanup simplification";
+            return false;
+        }
+        passes.run(*function, fam);
+    }
+    if (std::getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-guards=%zu\n", guards);
+    }
+    llvm::raw_string_ostream diagnostic(error);
+    return !llvm::verifyModule(module, &diagnostic);
 }
 
 static bool qore_ir_generic_fast_entry_matches(

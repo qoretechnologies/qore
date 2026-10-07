@@ -1276,3 +1276,101 @@ recomputed summaries. [Full audit](FOLLOWUP-AUDIT.md#native-scalar-assignment-au
 records release/debug validation, code-generation checks, baseline parity,
 old-AOT compatibility and limitations. The audit added explicit generated-guard
 checks and kept non-strict destinations and owned heap values on the slow path.
+
+## Native callback scalar cleanup (2026-10-07)
+
+Baseline: `ebe191d30`, including the preceding native assignment guards.
+The accepted change inserts immediate int48/bool/NOTHING cleanup guards only
+in AOT functions containing typed native callback helpers, after the main
+LLVM pipeline. Only local simplification follows. Heap and opaque values keep
+their release calls, ordering and exception sinks. IR and ordinary JIT do not
+emit these typed helpers and are unchanged by the final pass.
+
+The five-fork, 1024-element comparison used shuffled sequential jobs, three
+warmups and five 300 ms samples per fork. Units include loop, computation and
+checksum, not isolated call latency. Java retains the callback target through
+JMH's DONT_INLINE annotation. Builds, tests and profiling were separate from
+timing; ordinary host activity and light inspection were not eliminated.
+
+|!Kernel|!AOT before ns/element|!AOT after ns/element|!Java JIT ns/element
+|Retained callback|27.74|21.74|1.67
+|Arithmetic control|4.10|4.09|0.89
+|Direct call|4.12|4.13|0.89
+|Dispatch control|5.48|5.60|0.92
+|Polymorphic method|272.25|268.96|2.53
+
+The callback takes **21.7% less time**, with nonoverlapping fork-mean ranges:
+27.39-28.08 ns before and 21.67-21.90 ns after. Java remains **13.0x faster**
+on this retained-call kernel. Direct-call and dispatch-control ranges overlap;
+their small median changes are not gains or established regressions. Direct
+calls add little over Qore's own arithmetic control, but Qore's loop throughput
+still trails Java. This is not a Java-parity result.
+
+A separate three-fork, 4096-element run repeats the callback benefit and
+checks the other kernels:
+
+|!Kernel|!AOT before ns/element|!AOT after ns/element
+|Retained callback|26.74|21.04
+|Arithmetic|3.44|3.46
+|Direct call|3.47|3.46
+|Final method|3.51|3.50
+|Polymorphic method|269.75|269.45
+|Dispatch control|5.38|5.40
+|List read|4.94|4.92
+|List build|81.26|81.60
+|List mutation|159.99|157.00
+|Temporary list|119.76|120.08
+|Temporary hash|316.80|304.93
+
+The repeated callback reduction is **21.3%**. Unchanged kernels are controls,
+not attributed improvements; the final pass does not transform their bodies.
+In particular, the earlier direct-call regression is absent in both final runs.
+
+### Rejected variants and code-size tradeoff
+
+Two broader implementations were measured, then rejected:
+
+|!Variant|!Native text bytes|!Finding
+|Baseline|49856|Reference implementation
+|Before the main LLVM pipeline|160500|Callback 28.19 to 21.70 ns, but 3.2x native text
+|After the pipeline, all functions|93180|Callback improvement retained, but wider run regressed direct calls 16.6% and dispatch control 14.3%
+|After the pipeline, typed callback callers only|51112|Accepted; callback improvement retained, direct-call controls restored
+
+The final native-text increase is **2.5%**. Whole executable sizes were
+129872 and 129864 bytes, effectively unchanged at Mach-O page granularity.
+One final-run compilation took 218.01 ms versus 216.52 ms for the baseline;
+these are single observations, not a compile-time performance distribution.
+All rejected and accepted samples are retained in the evidence file.
+
+### Correctness and remaining work
+
+Code growth in the first trial exposed a pre-existing parallel-codegen source
+location bug: Mach-O `ld -r` discarded the DWARF line tables before Qore built
+its PC maps. The saved baseline reproduces the forced-split failure (line 30
+instead of line 33 in IRFunctionRefCalls). The fix accumulates maps, including
+literal inlined-callee locations, before the partial link. The final object
+still carries the standard linker-surviving section and trailer. Forced-split
+tests now pass with and without the cleanup optimization.
+
+A separate five-second sampling run finds little scalar cleanup traffic in
+the callback loop. Callable validation, frame setup/restoration, closure frame
+markers, stack checks and cancellation remain. Next: use explicit live runtime
+context for cancellation polling without weakening its frequency or scope,
+then evaluate native result propagation and frame costs. Sampling is qualitative.
+
+Two baseline correctness findings remain distinct from this change: the
+previously recorded recursive JIT capture issue, and nested direct-call AOT
+exceptions reporting caller lines 7/10 instead of throwing line 4. The latter
+reproduces on baseline and final O0/O3, with single-part, source/debug-stripped
+compilation; its complete reproducer is retained in the evidence. Neither is
+counted as a passing regression or used to broaden native-call eligibility.
+
+[Sanitized evidence](results-callback-cleanup-macos-arm64.json) contains five
+experiments, all 357 jobs / 1785 samples, source/library hashes, rejected
+variants and independently recomputed medians.
+[Full audit](FOLLOWUP-AUDIT.md#native-callback-cleanup-audit-2026-10-07) records
+330 release cases / 12616 assertions and 34 debug cases / 11484 assertions,
+plus standalone scripts, old-AOT compatibility, baseline fixtures and the
+10 harness tests. No full-suite, sanitizer, Linux validation or Qore allocation
+count claim is made. The audit added compiler cancellation and explicit
+code-generation coverage; measurements narrowed the optimization's scope.

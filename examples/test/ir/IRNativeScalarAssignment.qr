@@ -16,6 +16,7 @@ softint sub storeSoftInt(auto source) { softint value = source; return value; }
 softfloat sub storeSoftFloat(auto source) { softfloat value = source; return value; }
 softbool sub storeSoftBool(auto source) { softbool value = source; return value; }
 timeout sub storeTimeout(auto source) { timeout value = source; return value; }
+int sub typedIdentity(int value) { return value; }
 
 thread_local int destroyed = 0;
 class Owned {
@@ -24,8 +25,11 @@ class Owned {
 
 # Reuse each cleanup slot across immediate, allocated, converted, and rejected
 # values, including normal and exceptional block exits within the same function.
-sub mixedStores(list<auto> input) {
+sub mixedStores(list<auto> input, code<int(int)> fn) {
     foreach auto source in (input) {
+        # Exercise guarded scalar cleanup in a native callback caller that also
+        # owns heap values and catches failed assignment conversions.
+        expect(10, fn(10));
         try {
             int value = source;
             expect(storeInt(source), value);
@@ -75,7 +79,8 @@ for (int round = 0; round < 100; ++round) {
         }
     }
     mixedStores((7, 140737488355328, -140737488355329, 1.25, -1.0e308, -3.0e307, -6.0e307,
-        True, False, NOTHING, "short", "a long string requiring node ownership", new Owned(), 8));
+        True, False, NOTHING, "short", "a long string requiring node ownership", new Owned(), 8),
+        \typedIdentity());
     expect((round + 1) * 4, destroyed);
 }
 printf("native-scalar-assignment: ok\n");

@@ -32,20 +32,28 @@ class IRNativeScalarAssignmentTest inherits QUnit::Test {
     private check() {
         string source = get_script_dir() + "/IRNativeScalarAssignment.qr";
         string expected = "native-scalar-assignment: ok\n";
-        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ",
+                "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ")) {
             foreach string mode in (("ast", "ir", "jit", "tiered")) {
                 assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
             }
         }
         TmpDir dir("qore-native-scalar-assignment-");
-        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ", "QORE_AOT_EH=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ",
+                "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ", "QORE_AOT_EH=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string generated = run((qcc, level, "--strip-source", "-o", executable, source),
-                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    prefix + "QORE_DUMP_LLVM_IR=1 QORE_IR_OPT_STATS=1 ");
                 assertEq(!prefix.startsWith("QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD"),
                     generated.find("native_assign_value") >= 0, "inline scalar guard selection");
                 assertRegex("qore_rt_coerce_value_by_type_path_aot", generated, "coercion fallback retained");
+                assertEq(!prefix.startsWith("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD"),
+                    generated.find("scalar-cleanup-guards=") >= 0, "scalar cleanup guard selection");
+                if (!prefix.startsWith("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD")) {
+                    assertRegex("scalar-cleanup-guards=[1-9][0-9]*", generated,
+                        "callback caller receives nonempty cleanup guards");
+                }
                 assertEq(expected, run((executable,)), "AOT " + level);
             }
         }

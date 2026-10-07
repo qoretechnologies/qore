@@ -43,7 +43,9 @@ class IRFunctionRefCallsTest inherits QUnit::Test {
         TmpDir dir("qore-function-references-");
         foreach string disabled in (("", "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ",
                 "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ", "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
-                "QORE_AOT_NO_DEBUG_INFO=1 ", "QORE_AOT_EH=1 ")) {
+                "QORE_AOT_NO_DEBUG_INFO=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ")) {
             string executable = dir.path + "/fixture";
             run((qcc, "-O3", "--strip-source", "-o", executable, source), disabled);
             assertEq(expected, run((executable,)), "AOT");

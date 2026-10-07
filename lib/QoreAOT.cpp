@@ -21473,15 +21473,25 @@ struct TimeTraceRAII {
 //! loc-index+1 (see QoreIRToLLVM::setDebugLocation); EndSequence/col==0 rows are
 //! skipped, and consecutive rows with the same active loc-index are collapsed since
 //! lookup uses the largest offset <= pc.
-static void buildAOTPcLocMaps(const std::string& path,
-        std::vector<AOTCompiledFuncWithSlots>& func_slots) {
+//! append retains maps from earlier codegen partitions (all offsets are function-relative).
+//! Returns false on cancellation; unreadable debug information retains the best-effort behavior.
+static bool buildAOTPcLocMaps(const std::string& path,
+        std::vector<AOTCompiledFuncWithSlots>& func_slots, std::string& error, bool append = false) {
+    size_t checked = 0;
+    auto cancelled = [&]() {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "AOT source-location recovery")) {
+            error = "operation cancelled during AOT source-location recovery";
+            return true;
+        }
+        return false;
+    };
     bool dbg = getenv("QORE_AOT_LOC_DEBUG");
     auto buf_or = llvm::MemoryBuffer::getFile(path);
     if (!buf_or) {
         if (dbg) {
             fprintf(stderr, "AOT-LOC: cannot read object %s\n", path.c_str());
         }
-        return;
+        return true;
     }
     auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
     if (!obj_or) {
@@ -21489,7 +21499,7 @@ static void buildAOTPcLocMaps(const std::string& path,
         if (dbg) {
             fprintf(stderr, "AOT-LOC: createObjectFile failed for %s\n", path.c_str());
         }
-        return;
+        return true;
     }
 
     // Mach-O prefixes a leading '_' on every symbol, but func_slots[].llvm_symbol holds
@@ -21501,6 +21511,9 @@ static void buildAOTPcLocMaps(const std::string& path,
     // Function symbols (addr, name) sorted by addr for enclosing-function lookup.
     std::vector<std::pair<uint64_t, std::string>> funcs;
     for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
+        if (cancelled()) {
+            return false;
+        }
         auto ty = sym.getType();
         if (!ty) { llvm::consumeError(ty.takeError()); continue; }
         if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
@@ -21532,10 +21545,16 @@ static void buildAOTPcLocMaps(const std::string& path,
     std::unordered_map<std::string, size_t> sym_to_fws;
     sym_to_fws.reserve(func_slots.size());
     for (size_t i = 0; i < func_slots.size(); ++i) {
+        if (cancelled()) {
+            return false;
+        }
         if (!func_slots[i].llvm_symbol.empty()) {
             sym_to_fws[func_slots[i].llvm_symbol] = i;
         }
-        func_slots[i].pc_loc_map.clear();
+        if (!append) {
+            func_slots[i].pc_loc_map.clear();
+            func_slots[i].pc_extra_locs.clear();
+        }
     }
 
     // Module-wide index of every function's serialized locations, keyed by start line.  Used to
@@ -21544,7 +21563,13 @@ static void buildAOTPcLocMaps(const std::string& path,
     // and end line are recovered exactly instead of being approximated from the line table alone.
     std::unordered_map<int32_t, std::vector<const AOTCompiledFuncWithSlots::AOTLocEntry*>> locs_by_line;
     for (const auto& fws : func_slots) {
+        if (cancelled()) {
+            return false;
+        }
         for (const auto& loc : fws.aot_locs) {
+            if (cancelled()) {
+                return false;
+            }
             if (loc.start_line > 0) {
                 locs_by_line[loc.start_line].push_back(&loc);
             }
@@ -21554,13 +21579,20 @@ static void buildAOTPcLocMaps(const std::string& path,
     std::unordered_map<size_t, std::unordered_map<std::string, uint32_t>> extra_index;
 
     std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
-    size_t rows = 0, mapped = 0, inlined = 0;
+    size_t rows = 0, mapped = 0, inlined = 0, units = 0;
     for (const auto& unit : dctx->compile_units()) {
+        if (++units % 10 == 0 && qore_check_cancel(nullptr, "AOT DWARF line-table recovery")) {
+            error = "operation cancelled during AOT DWARF line-table recovery";
+            return false;
+        }
         const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
         if (!lt) {
             continue;
         }
         for (const auto& row : lt->Rows) {
+            if (cancelled()) {
+                return false;
+            }
             ++rows;
             if (row.EndSequence || row.Column == 0) {
                 continue;
@@ -21609,6 +21641,9 @@ static void buildAOTPcLocMaps(const std::string& path,
                 if (li != locs_by_line.end() && !li->second.empty()) {
                     if (!row_file.empty()) {
                         for (const auto* cand : li->second) {
+                            if (cancelled()) {
+                                return false;
+                            }
                             if (qore_aot_map_source_path(cand->file.c_str()) == row_file) {
                                 match = cand;
                                 break;
@@ -21617,6 +21652,9 @@ static void buildAOTPcLocMaps(const std::string& path,
                         if (!match) {
                             const std::string row_base = baseName(row_file);
                             for (const auto* cand : li->second) {
+                                if (cancelled()) {
+                                    return false;
+                                }
                                 if (baseName(cand->file) == row_base) {
                                     match = cand;
                                     break;
@@ -21660,10 +21698,16 @@ static void buildAOTPcLocMaps(const std::string& path,
     // loc-index (lookup uses largest offset <= pc, so redundant runs add no info).
     size_t total_entries = 0;
     for (auto& fws : func_slots) {
+        if (cancelled()) {
+            return false;
+        }
         auto& m = fws.pc_loc_map;
         std::sort(m.begin(), m.end());
         std::vector<std::pair<uint32_t, uint32_t>> compact;
         for (const auto& e : m) {
+            if (cancelled()) {
+                return false;
+            }
             if (!compact.empty() && compact.back().second == e.second) {
                 continue;
             }
@@ -21698,6 +21742,7 @@ static void buildAOTPcLocMaps(const std::string& path,
         fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu mapped (%zu inlined), %zu compacted entries, "
             "%zu funcs\n", path.c_str(), rows, mapped, inlined, total_entries, func_slots.size());
     }
+    return true;
 }
 
 //! Serialize the per-function PC->loc maps from `func_slots` and append them as a
@@ -22273,7 +22318,8 @@ private:
 // defeating parallelism). The final .qmod/exe link controls symbol visibility, so the locals
 // SplitModule externalizes do not leak into the artifact's exported (dynamic) symbol table.
 static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string& triple,
-        const std::string& out_o, std::string& error, bool debug_opt) {
+        const std::string& out_o, std::string& error, bool debug_opt,
+        std::vector<AOTCompiledFuncWithSlots>& func_slots, bool& pc_locs_built) {
     auto makeTM = [&triple]() -> llvm::TargetMachine* {
         std::string terr;
 #if LLVM_VERSION_MAJOR >= 21
@@ -22427,6 +22473,25 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
                 error = "parallel codegen failed for part " + std::to_string(i) + ": " + werr[i];
             }
         }
+    }
+    if (all) {
+        // ld64's relocatable link drops the partitions' DWARF line tables. Recover
+        // the maps BEFORE linking, using all functions' original location tables
+        // so inlined callees still resolve to their exact source locations. Native
+        // offsets are function-relative and remain valid after the partial link.
+        // Accumulate on this thread only; no worker mutates the shared descriptors.
+        for (size_t i = 0; i < objs.size(); ++i) {
+            if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT split source locations")) {
+                all = false;
+                error = "operation cancelled during AOT split source-location recovery";
+                break;
+            }
+            if (!buildAOTPcLocMaps(objs[i], func_slots, error, i != 0)) {
+                all = false;
+                break;
+            }
+        }
+        pc_locs_built = all;
     }
     if (all) {
         // Partial-link the parts into one relocatable object (sections, including
@@ -22866,6 +22931,10 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         }
     }
 
+    if (!QoreIRToLLVM::guardScalarDecrefs(module, error)) {
+        delete tm;
+        return false;
+    }
     size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
     if (pruned_calls && getenv("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",
@@ -22937,8 +23006,10 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
             do_split = false;
         }
     }
+    bool pc_locs_built = false;
     bool cg_ok = do_split
-        ? codegenModuleSplit(module, aot_jobs, triple, tmp_path, error, debug_opt)
+        ? codegenModuleSplit(module, aot_jobs, triple, tmp_path, error, debug_opt,
+            *func_slots, pc_locs_built)
         : codegenModuleToObject(module, tm, tmp_path, error, debug_opt);
     if (!cg_ok) {
         remove(tmp_path.c_str());
@@ -22966,8 +23037,10 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // a fragile line-match. The map drives lazy on-throw source-location recovery,
     // replacing the eager per-line updater. Only runs when func_slots is supplied
     // (the main per-program emit site); a no-op for glue/cross-compile objects.
-    if (func_slots && !func_slots->empty()) {
-        buildAOTPcLocMaps(path, *func_slots);
+    if (func_slots && !func_slots->empty() && !pc_locs_built
+            && !buildAOTPcLocMaps(path, *func_slots, error)) {
+        delete tm;
+        return false;
     }
 
     // Carry the PC->loc map in a linker-surviving ELF section on EVERY emitted object

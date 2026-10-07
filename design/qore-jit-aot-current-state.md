@@ -133,6 +133,26 @@ reuse on either edge; the slow edge still registers owned coercion results.
 This applies to JIT and AOT lowering, not the IR interpreter.
 `QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD` selects the previous checks at
 compilation for comparison. No callback ABI or runtime eligibility is changed.
+After the main LLVM optimization pipeline, native scalar callback callers
+receive inline int48, bool and NOTHING cleanup guards. Other functions are
+left unchanged: a broader pass regressed direct-call and dispatch-control
+loops. Only local instruction/CFG simplification follows, avoiding the
+substantial code growth observed when the full inliner
+and loop unroller processed these guards. Heap-backed and opaque values keep
+the original release helper, ordering and exception sink. This targets AOT,
+including O0: JIT/IR do not emit the typed native callback helpers that select
+the pass. There is no runtime ABI change; it is not a general
+proof that non-pointer tags need no cleanup. The comparison switch is
+`QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD`, and code-size growth remains a tradeoff.
+
+Parallel AOT code generation recovers native PC/source-location maps from
+each partition before the partial link. This matters on Mach-O, where `ld -r`
+drops the DWARF line tables. Function-relative maps and literal inlined-callee
+locations accumulate on the compiler thread and are serialized into the final
+object's linker-surviving section and trailer. Single-part fallback still
+recovers maps after emission. Forced-split, source-stripped regression tests
+check exact exception lines; compiler cancellation propagates during recovery.
+
 `QORE_DISABLE_AOT_TYPED_FUNCREF_CALL` suppresses both typed-entry attachment and
 typed caller lowering at compile time, leaving the boxed adapter available.
 The ABI is additive and does not change serialized descriptors; old artifacts
