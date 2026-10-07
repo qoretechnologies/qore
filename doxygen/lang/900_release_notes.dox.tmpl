@@ -4399,6 +4399,9 @@ while (*binary chunk = input.read(65536)) {
       borrowed immutable diagnostic names and an explicit runtime-context
       callback boundary with specialized empty-frame bookkeeping for proven scalar leaves, retaining stack frames,
       policy overrides, and generic dispatch for other reference kinds
+    - Removed a redundant middle stack check from prepared calls to proven pure native scalar leaves;
+      helper-entry and callee-entry stack guards, overflow diagnostics, visible variable markers,
+      concurrent stack inspection, and cancellation behavior are preserved
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

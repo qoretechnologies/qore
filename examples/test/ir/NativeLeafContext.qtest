@@ -29,7 +29,9 @@ class NativeLeafContextTest inherits QUnit::Test {
         file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
         file.write("%modern\n"
             "int sub nativeLeafProbe(int value) { return (value + 17) & 65535; }\n"
-            "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n");
+            "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n"
+            "float sub nativeLeafFloatProbe(float value) { return value + 0.5; }\n"
+            "code<float(float)> sub makeFloatProbe() { return \\nativeLeafFloatProbe(); }\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);

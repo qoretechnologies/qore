@@ -2679,3 +2679,82 @@ Next: test removing the redundant middle stack guard only for pure,
 non-reentrant callee-v3 entries. Keep the helper-entry and live callee-entry
 guards, diagnostic publication, visible variable markers and reader handshake;
 validate native overflow boundaries before isolated timing.
+## Redundant middle stack guard (2026-10-07)
+
+Retained a small runtime-only optimization: prepared calls to proven pure
+callee-v3 bodies omit the duplicate guard in the deferred diagnostic-frame
+constructor. The enclosing prepared helper and callee still check their live
+stack positions. Deferred context is published before entering the callee;
+overflow materializes it before constructing the exception. Older eager guards,
+local/closure markers, concurrent-reader synchronization, mutable Program/
+debugger/body/readiness checks and cancellation checkpoints are unchanged.
+No native ABI, cache layout, serializer or compiler admission rule changed.
+
+Baseline `089aaf452` (its preceding binary is runtime-equivalent; the commit
+added only tests/evidence), Apple M4 Pro/macOS arm64. Five independent forks,
+three warmups and five 300 ms measurements, randomized implementation/kernel
+order. Numbers are medians of fork means in ns/element, including computation,
+loop and checksum work: they are not isolated call latency. Every timed
+implementation passed 270 independent reference checks before timing.
+
+At 1024 elements, with fresh Java JIT measurements (`run-mgexvmrc`):
+
+|!Kernel|!Before|!After|!Change|!Java
+|arithmetic|2.205|2.187|-0.83%|0.881
+|direct_call|2.232|2.193|-1.72%|0.897
+|indirect_call|9.852|9.644|-2.11%|1.670
+|indirect_wide|9.891|9.573|-3.22%|1.680
+|indirect_float|10.111|10.116|0.04%|1.628
+|indirect_tagged_float|10.161|10.023|-1.36%|1.641
+|indirect_branch_float|10.243|10.183|-0.59%|1.651
+|indirect_affine_wide|9.784|9.605|-1.84%|1.629
+
+The bounded and wide integer callback ranges separate in this run; all other
+Qore before/after ranges overlap. Qore's retained scalar callbacks remain
+roughly 5.7–6.2 times Java's measured kernels, so this is not Java-speed parity.
+
+At 4096 elements, the initial four-kernel pilot (`run-w722b3l5`) shows wide
+integer 8.867 → 8.493 (-4.21%), float 9.118 → 8.927 (-2.09%), tagged float
+9.045 → 8.924 (-1.34%) and branch float 9.234 → 9.114 (-1.30%); all four
+ranges separate. The broader repeat (`run-z_14qjji`) shows bounded integer
+8.920 → 8.671 (-2.79%), wide 8.937 → 8.655 (-3.15%), affine wide
+8.904 → 8.683 (-2.49%) and tagged float 9.190 → 9.009 (-1.97%), with
+separated ranges. Ordinary/branch float improve 1.22%/2.03%, but ranges overlap.
+Arithmetic, direct-call and polymorphic controls also overlap.
+
+The unfavorable control is retained explicitly: temporary hash slowed
+303.753 → 313.806 (+3.31%) in that repeat, with before/after ranges
+303.550–315.044 and 303.345–315.450. A seven-fork repeat with 500 ms windows
+and a different shuffle (`run-f69t66yk`) again has a slower hash median,
+315.119 → 319.498 (+1.39%), ranges 301.975–321.464 and 312.019–344.418.
+Its wide callback improves 9.045 → 8.628 (-4.62%), but ranges overlap.
+The hash kernel has no native scalar callback in its loop; nevertheless,
+code layout effects or a small indirect regression are not ruled out by these
+noisy data. Do not interpret overlapping ranges as proof of equivalence.
+
+The eager-callee control (`run-4utlvldx`,
+`QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1`) has no median regression:
+integer callbacks improve roughly 2.8–3.6%, while floating results overlap;
+hash improves 312.953 → 310.052 (-0.93%), also overlapping. Because eager
+calls do not execute the removed check, part of the gain can come from compiler
+layout/register allocation: these results do not isolate the check's own cost.
+The decision retains the repeated integer benefit while recording the unresolved
+hash-control risk and nonuniform float benefit for subsequent iterations.
+
+Runtime text shrinks 13876284 → 13875264 bytes (-1020); AOT text remains
+91320 bytes and both inspected scalar helper frames remain 272 bytes.
+Release/debug selected matrices each pass 39 files: 160 QUnit cases / 15899
+assertions plus 11 standalone tests. The subsequent float boundary-test extension
+passes saved baseline/release/debug (28 wrapper assertions each plus C++ asserts),
+including eager/inline entries, tag-colliding recovery and foreign-thread
+registration. Old v2/v3 artifacts match 225/270 records; ten Python harness
+tests pass. No full-suite, sanitizer, allocation-failure or Linux runtime claim.
+
+[Sanitized evidence](results-middle-guard-macos-arm64.json) retains the exact
+runtime diff/hash, library and executable hashes, settings and all 358 jobs /
+1790 samples; medians were recomputed independently. No build, test, profiler or
+documentation validator overlapped timing. The
+[62-check audit](FOLLOWUP-AUDIT.md#middle-stack-guard-audit-2026-10-07) records
+the safety review and final validation. Next: acquire the invocation's stable
+thread-data pointer once, keeping mutable fields live, and measure that isolated
+change against this version before considering broader calling-convention work.

@@ -367,6 +367,14 @@ statement/location, parse-option and saved-SP fields untouched. Empty variable
 frame markers and the independent diagnostic frame are still pushed/published
 on every call, with the existing reader handshake and caller location.
 
+This pure-leaf path keeps the prepared helper's entry stack check and the
+callee-v3 live stack check (including its full v2 fallback). The intermediate
+diagnostic-frame constructor does not repeat the check: it publishes the
+deferred context before entering the guarded callee, so an overflow still
+materializes the target context before exception construction. Sink checks,
+eager legacy-frame guards and every cancellation point remain. This contract
+does not permit unguarded or reentrant bodies to use the deferred helper.
+
 A same-thread invocation-local pointer identifies the deferred helper. Before
 constructing a stack-overflow exception (including the IA-64 register-stack
 case), the full guard materializes the original context exactly once. It reads

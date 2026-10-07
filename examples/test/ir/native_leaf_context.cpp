@@ -82,6 +82,76 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
     return QoreValue(result);
 }
 
+// Check the FP helper's independently compiled frame/return path as well as
+// the integer path below. Keep this before switching parsed callers to AST.
+static void checkFloat(QoreProgram* program, bool inline_entry) {
+    ExceptionSink xsink;
+    ValueHolder ref(program->callFunction("makeFloatProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && ref->getType() == NT_FUNCREF);
+    const auto* node = ref->get<const ResolvedCallReferenceNode>();
+    const auto* target = static_cast<const FunctionCallReferenceNode*>(node);
+    assert(target->getTypedEntry(10));
+    assert((target->getTypedInlineStackEntry(10) != nullptr) == inline_entry);
+    QoreExternalProgramContextHelper context(&xsink, node->getProgram());
+    assert(!xsink);
+    uint64_t bits;
+    std::memcpy(&bits, &*ref, sizeof(bits));
+    QorePreparedFunctionRefV3 cache{};
+    QoreValue empty;
+    std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    double result = 0;
+    assert(qore_rt_try_funcref_float_float_v3(bits, 1.25, &result, &xsink, rc, &cache) == 1);
+    assert(!xsink && result == 1.75 && cache.owner == bits && cache.ref == target);
+    QoreProgram* caller = qore_get_call_program_context();
+    size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+#if defined(__aarch64__) || defined(__x86_64__)
+    if (limit) {
+        const size_t saved_limit = *limit;
+        unsigned observed_leaf = 0;
+        unsigned observed_early = 0;
+        for (unsigned gap = 0; gap < 4096; ++gap) {
+            *limit = get_stack_pos() - gap;
+            int handled = qore_rt_try_funcref_float_float_v3(bits, 1.25, &result, &xsink, rc, &cache);
+            *limit = saved_limit;
+            assert(handled == 1 && qore_get_call_program_context() == caller);
+            if (xsink) {
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                assert(!xsink);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                bool leaf = false;
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    assert(frame);
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    leaf |= name && std::strstr(name->c_str(), "nativeLeafFloatProbe");
+                    if (!(i % 100)) {
+                        assert(!qore_check_cancel(&xsink, "float leaf stack inspection"));
+                    }
+                }
+                ++(leaf ? observed_leaf : observed_early);
+            } else {
+                assert(result == 1.75);
+            }
+            if (!(gap % 10)) {
+                assert(!qore_check_cancel(&xsink, "float leaf guard sweep"));
+            }
+        }
+        assert(observed_leaf && observed_early);
+    }
+#else
+    assert(!limit);
+#endif
+    assert(qore_rt_try_funcref_float_float_v3(bits, -3.0e307, &result, &xsink, rc, &cache) == 1);
+    assert(!xsink && result == -3.0e307);
+    QoreValue owner;
+    std::memcpy(&owner, &cache.owner, sizeof(owner));
+    owner.discard(&xsink);
+    assert(!xsink);
+}
+
 static void check(bool inline_entry) {
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
@@ -171,6 +241,7 @@ static void check(bool inline_entry) {
         assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == i + 17);
     }
+    checkFloat(*program, inline_entry);
     invocation.bits = bits;
     invocation.cache = &cache;
     // Keep parsed callers' variables on TLS, independently of the native leaf.

@@ -167,6 +167,9 @@ struct QorePreparedFunctionRefV3;
     cannot read or change the deferred context, allocate, or reenter Qore.
     Empty local/closure markers and stack publication are always retained.
     The full stack guard materializes context before constructing an exception.
+    Requires the prepared helper's entry guard and a guarded callee-v3 entry:
+    this middle publication frame does not repeat their stack checks. The sink
+    parameter is retained for internal constructor compatibility, but not used.
     All pointers belong to the current invocation/thread, including the cache.
 */
 class RuntimeConfigNativeLeafCallHelper {

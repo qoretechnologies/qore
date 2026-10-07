@@ -2050,7 +2050,7 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-        const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
+        const QorePreparedFunctionRefV3& cache, ExceptionSink*)
         : td(RuntimeConfigNativeAccess::getThreadData(rc)), tlpd(td->tlpd), cache(cache),
           previous(td->native_leaf_context) {
     assert(td->current_pgm == cache.pgm);
@@ -2059,11 +2059,12 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
-#ifdef QORE_MANAGE_STACK
-    if (cache.parse_loc) {
-        check_stack_intern(xsink, td);
-    }
-#endif
+    // The prepared helper has already checked its entry stack. The only body
+    // admitted here is callee-v3, whose first operation checks its own live
+    // stack (or enters the complete v2 guard on unsupported targets). It cannot
+    // execute scalar work before that check. Publish the deferred context now
+    // so a callee overflow materializes it before constructing the exception;
+    // repeating the caller-side check in this middle frame is unnecessary.
 }
 
 // Never pull exception-only context traffic back into the successful call path.
