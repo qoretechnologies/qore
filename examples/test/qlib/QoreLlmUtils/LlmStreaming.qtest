@@ -990,11 +990,12 @@ public class LlmStreamingTest inherits QUnit::Test {
         server.script((reply, reply, reply, reply));
         LlmBackend llm = mistralBackend();
         hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
-            "reasoning_effort": "high", "temperature": 0};
+            "reasoning_effort": "high", "temperature": 0, "prompt_cache_key": "design-123"};
         hash<auto> response = llm.chatCompletions(body);
         assertEq("391", response.choices[0].message.content);
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens);
+        assertEq("design-123", server.requests[0].body.prompt_cache_key);
         assertEq(1, server.requests[0].body.top_p);
         assertEq("high", server.requests[0].body.reasoning_effort);
         body = parse_json(make_json(body));
@@ -1044,8 +1045,9 @@ public class LlmStreamingTest inherits QUnit::Test {
         LlmBackend llm = mistralBackend();
         list<hash<auto>> chunks = ();
         hash<auto> response = llm.chatCompletionsStream(
-            {"messages": ({"role": "user", "content": "multiply"},)},
+            {"messages": ({"role": "user", "content": "multiply"},), "prompt_cache_key": "design-123"},
             sub (hash<auto> chunk) { push chunks, chunk; });
+        assertEq("design-123", server.requests[0].body.prompt_cache_key);
         assertEq("391", response.choices[0].message.content);
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens, "usage after terminal preserved");
