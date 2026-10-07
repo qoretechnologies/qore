@@ -211,6 +211,14 @@ signature metadata. References constructed before parse finalization are not
 cached. Runtime state and actual argument types remain guarded. The typed ABI
 does not remove diagnostic frames or make the caller's merged result unboxed.
 
+`QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1`
+at compilation selects the original typed callback helpers instead of v2,
+which acquires an explicit live execution context once per generated invocation.
+Use separate shuffled runs with the same settings to measure this switch;
+do not combine disabled-path measurements with before/after library labels.
+V2 preserves diagnostic frames, policy overrides, stack-reader synchronization,
+and lazy context materialization. It is not an end-to-end TLS-free native ABI.
+
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`
 directly. Arguments are `KERNEL COUNT WARMUP SAMPLES MS SEED`:
 

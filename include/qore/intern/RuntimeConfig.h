@@ -48,6 +48,7 @@
  * nullptr gracefully or fall back to TLS-based lookups when needed.
  */
 class ExceptionSink;
+class ThreadData;
 
 class RuntimeConfig::Impl {
 public:
@@ -87,6 +88,12 @@ public:
     //! Current closure environment
     const QoreClosureBase* closure_env = nullptr;
 
+    // Live thread-state view, acquired only at a native invocation boundary.
+    // Appended to preserve the hot snapshot fields' existing offsets. Unlike
+    // those snapshots, this observes nested compatibility calls directly.
+    // Never use it beyond the acquiring thread's invocation.
+    ThreadData* native_thread_data = nullptr;
+
     //! Check if this RuntimeConfig has valid thread-local program data
     bool hasThreadLocalData() const {
         return tlpd != nullptr;
@@ -96,6 +103,49 @@ public:
     bool isValid() const {
         return pgm != nullptr;
     }
+};
+
+//! Internal native-call access; no public RuntimeConfig layout or ABI change.
+class RuntimeConfigNativeAccess {
+public:
+    //! Acquire the live thread view once for a generated function invocation.
+    DLLLOCAL static RuntimeConfig& getCurrent();
+    //! Read the live Program, not a snapshot that a nested call could refresh.
+    DLLLOCAL static QoreProgram* getProgram(const RuntimeConfig& rc);
+    //! Preserve the normal stack guard without looking up TLS again.
+    DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
+    static ThreadData* getThreadData(const RuntimeConfig& rc) {
+        assert(rc.impl && rc.impl->native_thread_data);
+        return rc.impl->native_thread_data;
+    }
+};
+
+//! Native same-Program frame with explicit execution state and normal publication.
+/** Keep this as the LAST member of a fully initialized QoreStackLocation subclass.
+    Construction fills call_loc before publishing; destruction waits for stack
+    observers before any of the enclosing location's members are destroyed.
+    The caller has checked the stack and prepared its callee's AOT context.
+*/
+class RuntimeConfigNativeCallHelper {
+public:
+    DLLLOCAL RuntimeConfigNativeCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const QoreProgramLocation* parse_loc,
+        const QoreParseOptions& po, QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL ~RuntimeConfigNativeCallHelper();
+    RuntimeConfigNativeCallHelper(const RuntimeConfigNativeCallHelper&) = delete;
+    RuntimeConfigNativeCallHelper& operator=(const RuntimeConfigNativeCallHelper&) = delete;
+
+private:
+    ThreadData* td;
+    ThreadLocalProgramData* tlpd;
+    QoreProgram* old_call_pgm;
+    const QoreClosureBase* old_closure;
+    const QoreStackLocation* old_stack;
+    const AbstractStatement* old_stmt;
+    const QoreProgramLocation* old_loc;
+    QoreParseOptions old_po;
+    uintptr_t old_sp;
+    bool swapped;
 };
 
 /**

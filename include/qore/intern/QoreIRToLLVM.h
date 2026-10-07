@@ -262,6 +262,10 @@ private:
     // expression slot. The context mapping is immutable during an invocation.
     std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
 
+    // Borrowed live execution context, acquired once only in functions using
+    // the explicit-context callback ABI; never shared between invocations.
+    llvm::Value* fast_runtime_config = nullptr;
+
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>

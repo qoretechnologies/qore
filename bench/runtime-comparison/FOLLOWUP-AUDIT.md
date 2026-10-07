@@ -895,3 +895,156 @@ Evidence validation passed for four phased experiments, 119 jobs and 595
 measured samples: unique jobs, expected fork/sample counts, finite positive
 timings, recomputed medians, benchmark source hashes and final library identity.
 Metadata is allowlisted and excludes inherited environment values.
+
+## Explicit callback execution-context audit (2026-10-07)
+
+Pre-commit `audit-changes` review on `feature/performance` against
+1501146e732f52835bcf88a872b588bf09354b88. The main agent read the complete
+skill, module-structure, sandboxing and cooperative-cancellation guides.
+No delegation was used. All applicable checks pass in the retained scope.
+
+Scope: additive typed-callback helper ABI v2, an invocation-scoped live
+thread-state view in RuntimeConfig's private implementation, combined native
+frame/context save/restore, acquire-guarded lazy AOT readiness, regression
+coverage, documentation and benchmark evidence. No parser, QPP, installed
+module, qlib source, public object layout, or serialized AOT format changes.
+This does not complete the runtime-wide TLS migration or expand native adapter
+eligibility. Existing v1 entry points remain available.
+
+The initial prepared-executor refactor was removed after mixed IR results and
+slower polymorphic controls. The retained view is appended to the private
+implementation, preserving the existing fields' offsets. The narrowed change
+was rebuilt and all listed release/debug tests rerun. The experiment does not
+attribute the initial control shift to either edit individually. The larger
+final run also had a slower IR polymorphic control; a longer, differently
+shuffled repeat did not reproduce it. No IR speedup or universal no-regression
+claim is made. See RESULTS.md for every retained and rejected measurement.
+
+### Registration, structure, and tests
+
+|!Check|!Status|!Evidence
+|New module entry in 120_modules.dox.tmpl|N/A|No .qm module added
+|New module release-note entry|N/A|No .qm module; existing runtime optimization note updated
+|qore_user_module or qore_external_user_module registration|N/A|No installed module added
+|CMake QMOD list registration|N/A|No QMOD added
+|First lowercase module intro section|N/A|No .qm file
+|Module %modern and redundant directives|N/A|No .qm file
+|No parse directives in separated .qc files|N/A|No .qc file
+|No deprecated %include usage|Pass|No added source uses %include
+|Copyright 2026 on new files|Pass|New evidence JSON has a 2026 notice and MIT identifier; modified code/tests retain notices
+|Multi-file module directory layout|N/A|No module added
+|No duplicate top-level .qm entry point|N/A|No .qm file
+|QPP namespace matches namespace constructor|N/A|No QPP class
+|Test %modern directive|Pass|Both modified IRFunctionRefCalls files use %modern
+|Test executable permission|Pass|Both modified test files retain mode 100755
+|Module path precedes %requires|Pass|Wrapper prepends in-repo qlib before QUnit and FsUtil; fixture needs no modules
+|External modules use %try-module|N/A|Only Qore-delivered QUnit and FsUtil are required
+
+### Sandboxing and cancellation
+
+|!Check|!Status|!Evidence
+|No unchecked C++ filesystem operations|Pass|No filesystem access added
+|No unchecked C++ network operations|Pass|No network access added
+|QoreSandboxManagerHelper around filesystem/network operations|N/A|No such operation added
+|Qore File, Dir, Socket, HTTPClient usage justified|Pass|No new I/O in fixture; existing trusted wrapper uses quoted subprocess arguments and FsUtil temporary directories
+|C++ loops over 100 iterations check cancellation|Pass|No C++ loop added; the prepared-executor refactor is absent
+|Use qore_check_cancel, not deprecated qore_check_io_interrupt|Pass|No cancellation implementation or call site changed
+|Cancellation frequency of 100 tight or 10 expensive iterations|N/A|No new C++ loop; Qore fixture loops retain runtime polling
+|No uncancellable blocking operation|Pass|No new runtime blocking operation; existing stack-walker handshake is preserved; fixture counter waits have 10-second bounds
+
+Program ownership, current Program and debugger checks still run for opaque
+references. The helper reads live ThreadData through the acquired view, not a
+RuntimeConfig Program snapshot that a nested compatibility call can refresh.
+It preserves call_program_context separately from current_pgm, applies the
+normal runtime parse-option override on entry and restoration, and restores
+closure environment, frame boundaries, source location and innermost-frame
+marker. The same stack publication and reader-completion handshake is used.
+No sandbox resolution, policy barrier, cancellation point, or stack guard is
+removed. Policy-barrier, sandbox, cancellation and debugger tests pass.
+
+### DataProvider checklist
+
+|!Check|!Status|!Evidence
+|Action display_name, short_desc, desc|N/A|No action registration
+|Action options from getActionOptionFromFields|N/A|No action registration
+|Typed action output_type|N/A|No action registration
+|DPAT_API supports_request and doRequestImpl|N/A|No provider
+|DPAT_FIND SearchOptions and getRecordTypeImpl|N/A|No provider
+|Scheme app actions use path without cls|N/A|No app registration
+|Single-key hash slices have trailing comma|N/A|No hash slice added
+|Request/response HashDataType classes, Fields, addQoreFields, public constants|N/A|No DataProvider types
+|Input Fields public|N/A|No DataProvider types
+|Output Fields private|N/A|No DataProvider types
+|Field display_name, type, desc|N/A|No DataProvider fields
+|Input example_value where useful|N/A|No DataProvider fields
+|Finite values use AllowedValueInfo value/display_name|N/A|No DataProvider fields
+|Secret fields use sensitive=True|N/A|No credential fields
+|AppGroup enum for app groups|N/A|No app registration
+|Separate logo loaded in module-level Priv namespace|N/A|No app registration
+|App description includes capabilities, website, business value|N/A|No app registration
+|Friendly app display_name|N/A|No app registration
+|Plain-text short_desc below 80 characters|N/A|No action/app descriptions
+|Markdown desc formatting and caveats|N/A|No action/app descriptions
+|Business language explains why/when|N/A|No action/app descriptions
+|Backticks around True, False, NOTHING in desc|N/A|No action/app descriptions
+|Backticks around field/option names in desc|N/A|No action/app descriptions
+|Long descriptions use section headings and lists|N/A|No action/app descriptions
+|FactoryMap cross-repository registration|N/A|No DataProvider factory
+|Exact getRecordTypeImpl signature|N/A|No provider override
+|JNI dependency JARs committed|N/A|No JNI change
+|JAR install rules in CMake|N/A|No Java installation change
+
+### Code review
+
+|!Check|!Status|!Evidence
+|No workarounds, TODOs, FIXMEs or stubs|Pass|Complete bounded v2 helper path; rejected prepared executor removed, not left disabled in production
+|Exception safety|Pass|Result initialized before attempted call; materialization and frame setup checked through xsink; QoreJITException caught with RAII restoration; argument/result ownership remains in existing caller lowering
+|Thread safety|Pass|Native view is thread-local and reacquired per invocation; no reference/function stores it; diagnostic fields initialized before release publication; last-member helper waits for readers before destruction
+|Type safety|Pass|Existing exact-node, scalar signature and normal-entry identity guards preserved; new callbacks use code<int(int)>; no C-style cast added
+|Performance|Pass|AOT callback benefit repeats in interleaved measurements; controls, rejected prototype and mixed IR movements retained without an IR improvement claim
+|Error handling|Pass|Generic fallback remains for foreign Programs, debugger attachment, closures/methods and incompatible values; lazy preparation still happens at invocation, not unused-reference construction
+|Public Doxygen params, returns, throws, examples, caveats|N/A|No public method added; RuntimeConfig gains only an internal friend declaration
+|Documentation and release notes|Pass|Internal helper ABI, live-view lifetime, acquisition point, compatibility, disabled path and remaining TLS/boxing limitations documented; existing release note updated
+|QPP CONSTANT and RET_VALUE_ONLY flags|N/A|No QPP change
+|Security|Pass|No user-controlled formats, unchecked new indexing or credentials; borrowed state is confined to native invocations on its acquiring thread
+|Correctness and edge cases|Pass|All scalar signature combinations, wide integers, NOTHING, sparse slots, wrong types, defaults, overloads, references, ownership, captures, recursion, foreign Programs, disabled paths and concurrent stack inspection covered
+
+The stack helper is the final member of a fully initialized diagnostic frame;
+its output caller location is assigned before publication. AOT context and
+PC-map readiness use the existing acquire/release protocol. The slow initial
+materialization path still establishes Program-call context. The view is
+acquired in the generated logical entry after the stack guard, not before it,
+and reset in the lowerer's per-function state. Native entries and output
+boxing retain v1 semantics; only the surrounding helper ABI changes.
+
+Test development found that asserting nonempty names/positive eager locations
+for every AOT frame was invalid on the saved baseline too. The concurrent
+fixture therefore validates its known named frames and allows builtin eager
+locations, while the existing exact exception-line test remains unchanged.
+It does not require probabilistic sampling of the short native leaf.
+
+### Verification
+
+Final commands used `DYLD_LIBRARY_PATH` and `QORE_LIBDIR` pointing at the
+corresponding build, with `build/qore --exec-mode=ir TEST` (or build-debug).
+No qlib source changed, so no qmod rebuild was required.
+
+|!Verification|!Result
+|Release/debug builds|Pass; cmake --build build and build-debug --target qore qcc -j3
+|IRFunctionRefCalls release/debug|Pass; each 1 case / 48 wrapper assertions plus the child semantic matrix; AST/IR/JIT/tiered, disabled fast paths, v1/v2 AOT helpers, stripped source/debug and experimental EH
+|IR/AOT release regressions|Pass; AOTQoLinkNativeSymbols, IRCallFrameReuse, IRExecModeSmoke, IRExceptionTrace, IRReturnBorrowedSlot, JitDebugStep, StackGuardCompiled, AOTRuntimeLocationCache, AOTLazyFunctionContext
+|Policy, cancellation, debugger and stack tests|Pass; policy-barrier, sandbox-manager, thread-cancel, test-debug, concurrent-call-stacks, get-call-stack
+|Debug subset|Pass; IRFunctionRefCalls, IRCallFrameReuse, IRReturnBorrowedSlot, StackGuardCompiled, concurrent-call-stacks
+|Pre-change AOT executable on final runtime|Pass; all 165 reference records byte-identical to saved baseline output
+|Harness unit tests|Pass; 10 tests
+|Generated native code inspection|Pass; callback loop calls v2 helper and acquires RuntimeConfig once after its entry stack guard
+|Benchmark evidence integrity|Pass; seven experiments, 289 jobs / 1445 measured samples; unique jobs, sample counts, finite values and medians recomputed; runtime/library identities recorded; metadata excludes inherited environment and absolute user paths
+|Program-boundary controls|Pass; 30 reference checks per mode; slower overlapping medians reported without an IR benefit claim
+|Separate sampling|Pass; five-second profile confirms v2 dispatch and remaining frame/stack-guard work; qualitative only
+|Strict documentation tables and git diff --check|Pass
+
+Release: 311 QUnit cases / 13223 assertions plus the standalone AOT location
+script. Debug: 13 cases / 11279 assertions. Fixture-internal expectations and
+benchmark reference checks are additional. No full-suite, sanitizer or
+allocation-count run was performed. Timing, compilation, regression tests and
+sampling were separate; ordinary workstation activity was not eliminated.

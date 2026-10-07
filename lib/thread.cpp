@@ -1927,6 +1927,66 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
     AutoLocker al(td->stack_walk_lck);
 }
 
+RuntimeConfig& RuntimeConfigNativeAccess::getCurrent() {
+    // Native helpers consume only this live view, never the legacy snapshot
+    // fields. Compatibility entry points refresh those with rc_get_current_ref().
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.impl->native_thread_data = thread_data.get();
+    assert(rc.impl->native_thread_data);
+    return rc;
+}
+
+QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
+    return getThreadData(rc)->current_pgm;
+}
+
+int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack_intern(xsink, getThreadData(rc));
+#else
+    return 0;
+#endif
+}
+
+RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QoreProgramLocation* parse_loc, const QoreParseOptions& po,
+        QoreProgram* pgm, ExceptionSink* xsink)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), tlpd(td->tlpd),
+          old_call_pgm(td->call_program_context), old_closure(td->closure_rt_env),
+          old_stmt(td->runtime_statement), old_loc(td->runtime_loc), old_po(td->runtime_po),
+          old_sp(td->runtime_loc_sp), swapped(parse_loc != nullptr) {
+    assert(td->current_pgm == pgm);
+    td->call_program_context = pgm;
+    td->closure_rt_env = nullptr;
+    tlpd->lvstack.pushFrameBoundary();
+    tlpd->cvstack.pushFrameBoundary();
+    call_loc = old_loc ? old_loc : parse_loc;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+    if (swapped) {
+        td->runtime_statement = nullptr;
+        td->runtime_loc = parse_loc;
+        td->runtime_po = apply_runtime_po_override(td, po);
+#ifdef QORE_MANAGE_STACK
+        check_stack_intern(xsink, td);
+#endif
+    }
+}
+
+RuntimeConfigNativeCallHelper::~RuntimeConfigNativeCallHelper() {
+    if (swapped) {
+        td->runtime_statement = old_stmt;
+        td->runtime_loc = old_loc;
+        td->runtime_po = apply_runtime_po_override(td, old_po);
+    }
+    td->runtime_loc_sp = old_sp;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popFrameBoundary();
+    tlpd->cvstack.popFrameBoundary();
+    td->closure_rt_env = old_closure;
+    td->call_program_context = old_call_pgm;
+}
+
 // called when pushing a new location on the stack
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {

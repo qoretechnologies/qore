@@ -649,8 +649,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     builder->CreateCondBr(compatible, attempt, fallback);
     builder->SetInsertPoint(attempt);
     const char* names[] = {"0", "int", "float", "bool"};
+    bool explicit_context = !std::getenv("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG");
     std::string helper_name = std::string("qore_rt_try_funcref_") + names[ret_kind] + "_"
-        + names[arg_kind] + "_v1";
+        + names[arg_kind] + (explicit_context ? "_v2" : "_v1");
     std::vector<llvm::Type*> types{i64_type};
     std::vector<llvm::Value*> args{ref_boxed};
     if (arg) {
@@ -659,6 +660,20 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     }
     types.insert(types.end(), {ptr_type, ptr_type});
     args.insert(args.end(), {result_slot, xsink_arg});
+    if (explicit_context) {
+        if (!fast_runtime_config) {
+            // The logical entry follows the native stack guard and dominates
+            // callbacks in loops and handlers, like hoisted callee contexts.
+            // Do not acquire before checking a deeply recursive native frame.
+            llvm::BasicBlock& entry = *block_map.at(current_ir_func->blocks.front().get());
+            llvm::IRBuilder<> eb(&entry, entry.getFirstInsertionPt());
+            auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
+                llvm::FunctionType::get(ptr_type, {}, false));
+            fast_runtime_config = eb.CreateCall(acquire, {}, "runtime_config");
+        }
+        types.push_back(ptr_type);
+        args.push_back(fast_runtime_config);
+    }
     auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
     llvm::Value* handled = builder->CreateCall(helper, args);
     builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)), fast, fallback);
@@ -10480,6 +10495,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
     aot_call_target_contexts.clear();
+    fast_runtime_config = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();

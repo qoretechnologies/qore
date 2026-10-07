@@ -138,6 +138,53 @@ function alive, and stack_helper remains the last member so the frame is
 unpublished before any name storage can disappear. No frame, location update,
 debugger fallback, exception boundary or policy check is removed.
 
+### Explicit execution context
+
+Typed callback-helper ABI v2 adds a borrowed `RuntimeConfig*` after the v1
+arguments. Generated functions acquire it once in their logical entry, after
+the native stack guard, and reuse it for their callback sites. The callee's
+scalar entry ABI and its `QoreAOTContext*` metadata argument do not change.
+`QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG` selects v1 helpers at compilation.
+Both versions remain exported and registered; serialized metadata and the
+public RuntimeConfig object layout are unchanged.
+
+`RuntimeConfigNativeAccess` provides a live, invocation-scoped thread-state
+view within the existing PIMPL. It is not a copied Program/object snapshot:
+nested generic calls may refresh the TLS RuntimeConfig and enter another
+Program. Native helpers read current state through the live view, so neither
+that refresh nor a subsequent return makes the view stale. The pointer is
+reacquired for each generated invocation and never attached to a shared
+function/reference, accessed after thread teardown, or moved to another thread.
+Ordinary compatibility entry points continue to refresh the legacy snapshot
+fields with `rc_get_current_ref()`.
+
+The native frame helper performs the existing Program-call-context,
+closure-environment, local/closure-frame-boundary, diagnostic-frame, and
+location/parse-option save/restore through that explicit state. It retains
+the runtime parse-option override and the normal stack-reader publication/pop
+handshake. The helper is the last member of the diagnostic location; all
+reader-visible fields, including the caller location, are initialized before
+publication and remain alive until readers finish. Stack protection and
+cancellation points are unchanged. The callee still uses its own AOT context.
+
+Context and PC-map readiness use their existing acquire-published state before
+calling the slow materialization helpers. Materialization remains lazy: an
+unused reference cannot start failing earlier just because its target was
+prepared. Initial materialization retains the normal Program-call context.
+
+This is an incremental explicit-context boundary, not a completed replacement
+of TLS throughout the runtime. Shared thread state is still published for
+compatibility and inspection; v1, generic callbacks, and other native helpers
+retain their current conventions. Callback results still merge boxed with
+generic fallback, and adapter eligibility remains non-throwing/context-independent.
+The next stages are adapter PC/source metadata, compiler-visible unboxed
+callback continuation, and guarded native method dispatch. Those require
+separate semantic tests and retained-call measurements before expanding scope.
+
+`IRFunctionRefCalls` additionally tests repeated local/foreign-Program calls
+inside one invocation, captured state after native calls, both helper versions,
+and concurrent stack walks over shared callbacks.
+
 ## Tiered Execution
 
 Tiered mode starts functions on AST and promotes by call count:

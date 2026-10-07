@@ -64,6 +64,20 @@ int sub recursive(int depth) {
     return depth ? invokeInt(\recursive(), depth - 1) + 1 : 0;
 }
 
+# One generated invocation retains its execution-state view while compatibility
+# calls enter another Program and refresh the TLS RuntimeConfig snapshot.
+int sub alternatingPrograms(code<int(int)> local, code<int(int)> other) {
+    int value = 0;
+    int depth = get_thread_call_stack().size();
+    for (int i = 0; i < 20; ++i) {
+        value = local(value);
+        value = other(value);
+        value = local(value);
+    }
+    expect(depth, get_thread_call_stack().size());
+    return value;
+}
+
 thread_local int destroyed = 0;
 thread_local int division_line = 0;
 class Marker {
@@ -180,6 +194,8 @@ foreach auto mode in ((EM_AST, EM_IR, EM_TIERED)) {
 }
 expect(5, invokeInt(\increment(), 4));
 
+expect(2040, alternatingPrograms(\increment(), foreignRef));
+
 # Share the same immutable descriptor and compiled entry between threads.
 code<int(int)> shared = \increment_with_a_diagnostic_name_longer_than_the_small_string_buffer();
 Counter pending(4);
@@ -204,4 +220,66 @@ code<int(int)> captured = int sub (int value) { return value + offset; };
 expect(6, invokeInt(captured, 4));
 offset = 3;
 expect(7, invokeInt(captured, 4));
+code<int(int)> nestedCapture = int sub (int value) {
+    int before = offset;
+    int result = invokeInt(shared, value);
+    expect(before, offset);
+    return result + offset;
+};
+expect(8, nestedCapture(4));
+offset = 5;
+expect(10, nestedCapture(4));
+
+# Observe native callback frames from another thread while they are pushed and
+# popped. A bounded controller keeps workers live throughout the walks; exact
+# leaf-frame sampling is deliberately not required for a deterministic test.
+sub checkConcurrentFrames(code<int(int)> shared) {
+    Counter walkersReady(2);
+    Counter walkersRunning(1);
+    Counter walkersDone(2);
+    Queue<auto> walkOutcomes();
+    for (int worker = 0; worker < 2; ++worker) {
+        background sub () {
+            on_exit walkersDone.dec();
+            walkersReady.dec();
+            try {
+                int value = 0;
+                while (walkersRunning.getCount()) {
+                    for (int j = 0; j < 64; ++j) {
+                        value = shared(value);
+                    }
+                }
+                walkOutcomes.push(value >= 0);
+            } catch (hash<ExceptionInfo> ex) {
+                walkOutcomes.push(ex.err);
+            }
+        }();
+    }
+    {
+        on_exit {
+            walkersRunning.dec();
+            expect(0, walkersDone.waitForZero(10000));
+        }
+        expect(0, walkersReady.waitForZero(10000));
+        for (int i = 0; i < 100; ++i) {
+            hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+            expect(True, stacks.size() >= 3);
+            foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+                foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                    # Ordinary AOT frames can have empty names in the baseline.
+                    # Inspect this optimization's borrowed named frame only.
+                    if (frame.function == "increment_with_a_diagnostic_name_longer_than_the_small_string_buffer") {
+                        expect("user", frame.type);
+                        # A lazy native caller may still have a builtin eager
+                        # location; exception PC resolution is tested above.
+                        expect(True, frame.line >= -1);
+                    }
+                }
+            }
+        }
+    }
+    expect(True, walkOutcomes.get(1000));
+    expect(True, walkOutcomes.get(1000));
+}
+checkConcurrentFrames(shared);
 printf("function-references: ok (%d)\n", division_line);

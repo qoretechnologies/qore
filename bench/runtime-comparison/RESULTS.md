@@ -1068,3 +1068,84 @@ activity and lightweight inspection were not eliminated.
 records integration recovery and 338 release cases / 13333 assertions plus five
 standalone AOT scripts, 15 debug cases / 11317 assertions and ten harness tests.
 No full-suite, sanitizer or production performance claim is made.
+
+## Explicit RuntimeConfig callback context (2026-10-07)
+
+Measured against the saved Release runtime/compiler at 1501146e7. The retained
+change adds a v2 typed-callback helper that receives RuntimeConfig explicitly.
+Generated functions acquire its live thread-state view once, after their entry
+stack guard, and reuse it at callback sites. Frame/context setup then accesses
+that state directly. Existing acquire/release readiness flags bypass repeated
+slow AOT-context and PC-map helpers once ready; first materialization remains
+lazy. Program, debugger, signature, stack, diagnostic and ownership safeguards
+remain. Old v1 helpers and previously compiled AOT executables remain supported.
+
+Same Apple M4 Pro / arm64 / macOS 27.0.1 host, LLVM 22.1.8, Release -O3
+-DNDEBUG. Five independent forks, count 1024, three warmups and five 300 ms
+measurement windows, with before/after and freshly measured Java jobs
+interleaved in a shuffled schedule. Values are median fork means in ns/element,
+including loop/checksum work, not isolated call latency. Java callback and
+polymorphic targets retain DONT_INLINE controls.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|indirect_call|229.11|225.07|61.65|53.98|1.66
+|arithmetic|96.22|95.48|4.08|4.08|0.87
+|polymorphic_call|425.06|420.44|293.39|292.98|2.53
+
+The AOT callback uses 12.4% less time. Its before fork means span
+61.07-62.02 ns and after means 52.53-54.99 ns, without overlap. A three-fork
+count-4096 repeat gives 61.06 -> 53.60 ns, a 12.2% reduction. The IR callback
+changes (229.11 -> 225.07 and 223.64 -> 223.02 ns) have overlapping fork
+ranges; this change does not establish an IR speedup.
+
+Controls were mixed. In the count-4096 repeat, IR polymorphic calls were
+416.26 -> 427.83 ns (2.8% slower). A longer, differently shuffled five-fork
+500 ms repeat gave 415.53 -> 412.40 ns (0.8% faster), while IR arithmetic
+was 93.64 -> 94.89 ns (1.3% slower). The polymorphic slowdown was therefore
+not consistently reproduced; no universal no-regression claim is made.
+The five-fork IR Program-boundary probe gave 217.82 -> 219.90 ns/call within
+one Program and 334.73 -> 339.96 across Programs: 1.0% and 1.6% slower,
+respectively, with overlapping fork ranges. Neither probe uses the new AOT
+helper; these are controls, not evidence of accelerated Program crossings.
+
+An earlier combined prototype also refactored the generic fast executor to
+consume prepared reference metadata. Its five-fork callback results were
+225.90 -> 226.59 ns for IR and 62.09 -> 54.87 ns for AOT; IR polymorphic
+controls were 417.62 -> 430.12 ns. A count-4096 repeat gave IR callbacks
+222.28 -> 216.10 ns, AOT callbacks 60.03 -> 54.04 ns, and IR polymorphic
+calls 412.64 -> 427.29 ns. Given the mixed IR benefit and slower controls,
+the executor refactor was removed. The retained RuntimeConfig field was also
+moved to the end of its private implementation, preserving existing offsets.
+The combined experiment cannot attribute the control shift to either edit
+individually. Raw results for both rejected runs and the initial baseline
+are retained, not discarded as outliers.
+
+AOT callbacks remain 32.6 times the matched Java result. This is not a full
+TLS migration or a fully unboxed/inlinable callback loop. A separate five-second,
+1 ms sampling run still shows frame/context construction and destruction,
+local/closure frame-boundary bookkeeping, and generated callee stack guards.
+Sampling is qualitative, not a per-component cost or allocation count.
+The next stages are compiler-produced diagnostic/frame metadata, an unboxed
+compiler-visible callback path, and guarded native method dispatch; broader
+adapter eligibility must preserve exception, debugger and ownership semantics.
+
+Reproduce with run.py --modes qore-ir qore-aot java-jit --kernels indirect_call
+arithmetic polymorphic_call --forks 5 --time-ms 300 and the saved 1501146e7
+library as --baseline-libdir. Repeat without Java using --count 4096 --forks 3.
+The longer IR control run selects polymorphic_call arithmetic, --count 4096
+--forks 5 --time-ms 500 --order-seed 20261007. Program controls use program_calls.py
+--forks 5 --time-ms 300. Each AOT comparison compiles separately against its
+selected runtime. QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 at compilation
+selects the v1 typed helper for functional isolation.
+
+[Sanitized raw evidence](results-explicit-context-macos-arm64.json) contains
+seven experiments, 289 jobs / 1445 measured samples, source/library hashes
+and process-level dispersion. Every suite mode passed 165 independent checks;
+Program probes passed 30 per mode. All forks are retained. Compilation,
+regression testing and profiling were separate from timing; ordinary host
+activity and lightweight inspection were not eliminated.
+[Full audit](FOLLOWUP-AUDIT.md#explicit-callback-execution-context-audit-2026-10-07)
+records 311 release cases / 13223 assertions plus the standalone AOT location
+script, 13 debug cases / 11279 assertions, ten harness unit tests, old-AOT
+compatibility and generated-code inspection. No full-suite, sanitizer or
+production-performance claim is made.
