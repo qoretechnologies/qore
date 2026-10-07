@@ -114,13 +114,21 @@ can allocate while Qore's small integers are inline. A compiler may eliminate
 temporary aggregates; this is an intended optimization opportunity. Do not
 interpret a temporary-pair result as a general list throughput measurement.
 
-The original direct/final-method kernels permit inlining. The new indirect and
-polymorphic kernels retain calls in Qore AOT; Java's target methods explicitly
-use JMH `CompilerControl(DONT_INLINE)`. These are retained-call comparisons,
-not a claim that default HotSpot would leave the calls uninlined. A Qore typed
+The original direct/final-method kernels permit inlining. Indirect callbacks
+retain calls in Qore AOT, as did the earlier polymorphic baselines. Java's indirect
+and polymorphic target methods explicitly use JMH `CompilerControl(DONT_INLINE)`;
+this is not a claim that default HotSpot would leave the calls uninlined. A Qore typed
 call reference and a Java functional interface have different runtime contracts.
 The polymorphic control measures the selection/recurrence work, but subtracting
 it does not isolate an exact virtual-call cost.
+
+With assigned receiver-class facts reused by guarded AOT method entry selection,
+the exact base-class case in `polymorphic_call` may inline its arithmetic summary;
+the two derived cases still dispatch normally. Such results measure partial
+devirtualization, not three retained native calls. Java's three target methods
+still have `DONT_INLINE`. Use `QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY=1` at
+compilation as a broad diagnostic control for this guarded path. Compiler changes
+must use paired compilation, not `--reuse-aot-for-baseline`.
 
 The float-branch callback now qualifies for a complete native comparison/select
 summary; older compilers dispatch it generically. Its checksum and input are

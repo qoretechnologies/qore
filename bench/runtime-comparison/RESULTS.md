@@ -3080,3 +3080,130 @@ entry and evaluate explicit AOT method parameters/boxed-local lowering. Scalar
 callbacks separately need a measured versioned reusable-frame/fast-entry
 experiment; removing caller-frame construction requires preserving per-call
 publication, reader completion, live guards, overflow and fallback semantics.
+
+## Assigned receiver classes and guarded AOT calls (2026-10-08)
+
+Baseline `132d53ad3`, macOS arm64, M4 Pro. Compiler diagnostics found that the
+polymorphic caller failed just one guarded fast-entry condition: its receiver
+class had been widened to generic `object`. Assignment/non-NOTHING, callee,
+signature, argument-binding, context-independence and native-entry checks passed.
+The exact boxed-local analysis already retains the enforced declared class in a
+separate map; normal and exception-routed call lowering now consult that proof.
+No receiver-validity or exact-class guard is removed.
+
+### Correctness correction before retention
+
+The first admission-only prototype improved the pilot from 235.82354 to
+176.92699 ns/element (-24.97%), but the audit found a correctness failure.
+Qore permits a subclass to change the base method's return contract. A probe
+returned `36:null` in AST and baseline AOT but `36:0` with the prototype:
+the existing speculative merge unboxed the subclass's NOTHING as an integer.
+That prototype and its performance claim were rejected, despite its then-passing
+selected regression matrix. Its wide-callback control also worsened 2.55% with
+separated ranges. Both its pilot and disabled-control samples remain in the
+evidence; they are not measurements of the retained code.
+
+The corrected implementation keeps subclass fallback results boxed and boxes
+native fast-hit results before merging. It does not apply the base method's
+non-NOTHING or local-effect summary across an unknown subclass fallback. Native
+integer/float ownership, boolean representation and exception routing remain.
+Final/non-speculative targets retain their previous return convention. The
+expanded regression covers NOTHING and owned-string overrides, captured-local
+mutation, wide integers, tagged floats, booleans and throwing overrides, in
+addition to absent/deleted receivers and missing required arguments.
+
+### Corrected measurements
+
+All runs use separate before/after AOT compilation against the compatible saved
+and candidate runtimes, not a shared executable. Each implementation passes 270
+independent reference records before timing. Jobs run sequentially in randomized
+implementation/kernel/fork order, with three warmups and five measurement windows
+per fork. Values are medians of independent fork means, ns/element including
+receiver selection/assignment, computation, loop and checksum work—not isolated
+call latency. No build, test, profile or validator overlaps timing.
+
+Primary `run-46n9due0`: 1024 elements, five forks, 300 ms windows, fresh Java.
+
+|!Kernel|!Before|!After|!Change|!Java
+|polymorphic_call|237.44773|196.31836|-17.32%|2.53664
+|method_call|2.46234|2.47240|0.41%|0.89591
+|dispatch_control|2.35537|2.36144|0.26%|0.98407
+|indirect_wide|8.13353|8.13235|-0.01%|1.67551
+|indirect_float|10.06452|9.98807|-0.76%|1.64831
+|indirect_tagged_float|10.03941|10.03628|-0.03%|1.64442
+|indirect_branch_float|10.12531|10.18003|0.54%|1.65929
+|temporary_hash|309.96777|311.93200|0.63%|15.55374
+
+Polymorphic ranges separate: 234.71978–238.82010 before versus
+194.50403–198.00686 after. Every other before/after range overlaps. Unfavorable
+control medians and all outliers are retained; overlap is not proof of equivalence.
+The earlier corrected 4096-element pilot `run-4aja5scf` changes
+232.47944 → 193.87794 (-16.60%), also separated (231.76085–235.46894 versus
+192.99123–195.20590). Its control ranges all overlap.
+
+The corrected diagnostic control `run-4c264f9v` applies
+`QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY=1` to both compilation and runtime
+(4096 elements, seven forks, 500 ms). The polymorphic benefit disappears:
+235.01543 → 237.13949 (+0.90%), with overlapping ranges. Wide callbacks change
+7.20890 → 7.19322 (-0.22%), also overlapping. This broad disable supports the
+guarded-entry mechanism; it does not isolate individual costs or control layout.
+
+Native disassembly confirms partial devirtualization: the exact base-class hit
+imports its arithmetic, while the two derived cases retain runtime dispatch.
+Java still uses `DONT_INLINE` on all three targets, so this is not a comparison
+of three retained Qore calls against three retained Java calls. The primary
+polymorphic workload remains roughly 77 times Java; wide callbacks remain about
+4.9 times Java. Neither parity nor a universal performance improvement is claimed.
+
+The longer repeat `run-l1c4klht` uses 4096 elements, seven forks and 500 ms
+windows. It confirms the polymorphic benefit; all control ranges overlap.
+
+|!Kernel|!Before|!After|!Change|!Before range|!After range
+|polymorphic_call|234.92371|195.96261|-16.58%|233.38585–236.63413|192.14767–196.75914
+|indirect_wide|7.18281|7.17496|-0.11%|6.95810–7.28870|7.09742–7.23714
+|indirect_float|8.94952|9.03583|0.96%|8.92286–9.02658|8.98632–10.00923
+|temporary_hash|309.07476|310.36051|0.42%|303.22095–313.19131|305.25508–331.78548
+
+The high float/hash after-forks remain included. Float and hash medians are
+unfavorable in this repeat; these are not hidden or presented as improvements.
+The initial rejected wide-callback slowdown did not repeat in the corrected
+primary or long repeat. Separate inspection of that rejected pilot found the
+same wide-callback instruction sequence after address/literal-pool normalization,
+but different placement. This suggests layout sensitivity, not isolated proof of
+its cause or equivalence.
+
+### Validation, audit and next work
+
+Release/debug qore/qcc builds and the corrected selected matrix pass 51 files
+per build: 33 QUnit wrappers with 168 cases / 16041 assertions plus 18 standalone
+tests. The new regression has 98 assertions and proves guarded LLVM entry
+selection for six normal/invoke/integer/float/boolean call sites. AST, IR, JIT,
+tiered, -O0/-O3, source-stripped AOT, native EH and disabled-method-entry controls
+agree. Expanded semantic checks also pass the saved baseline's AST and AOT.
+The baseline fails the intended new guarded-code-generation assertion.
+
+Old v2/v3 AOT artifacts retain byte-identical 225/270 reference records. Eleven
+Python harness tests, standalone release syntax for `QoreIRToLLVM.cpp`, strict
+Qore tables, source/binary hashes and whitespace checks pass. Runtime text grows
+13873068 → 13873380 bytes (+312). No full-suite, sanitizer, allocation-failure
+injection, Linux runtime or full split-runtime-build claim. Native artifacts
+must be recompiled to acquire the changed code generation.
+
+The [full 62-check audit](FOLLOWUP-AUDIT.md#assigned-method-fast-entry-audit-2026-10-08)
+records the failure, correction and final review. [Sanitized evidence](results-assigned-method-macos-arm64.json)
+retains exact compiler/test diffs, hashes, settings and all six runs: 352 jobs /
+1760 samples. Mode/kernel/fork completeness, uniqueness, finite values, startup
+sample counts and medians were independently checked. The admission-only
+prototype's two runs are explicitly rejected; the corrected implementation has
+264 jobs / 1320 samples across its pilot, disable control, primary and repeat.
+
+The goal remains active. The actual native polymorphic loop still performs
+receiver assignment filtering, runtime variable synchronization and ownership /
+reload tracking; two of three receiver classes still enter generic method
+runtime dispatch with TLS parameters. Next, investigate whether already-enforced
+receiver types can safely remove repeated assignment filtering, retaining weak
+reference evaluation, assignment errors and ownership. Separately, a versioned
+native method-parameter entry could reuse resolved polymorphic targets; the
+existing four-slot cache already avoids repeated name resolution. Any such
+entry must preserve actual override return contracts, live Program/debugger/body
+checks and diagnostic/stack/cancellation semantics.

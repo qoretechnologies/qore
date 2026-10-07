@@ -9244,6 +9244,26 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
     }
+    // An exact-class miss can dispatch a subclass with a different return
+    // contract (including NOTHING). Preserve that boxed result instead of
+    // coercing it to the speculative target's native return type.
+    BatchCalleeReturnKind merged_return_kind = require_exact_object_class
+        ? BatchCalleeReturnKind::Boxed : callee_info.return_kind;
+    if (require_exact_object_class) {
+        switch (callee_info.return_kind) {
+            case BatchCalleeReturnKind::NativeInt:
+                fast_result = boxIntInline(fast_result);
+                break;
+            case BatchCalleeReturnKind::NativeFloat:
+                fast_result = boxFloat(fast_result);
+                break;
+            case BatchCalleeReturnKind::NativeBool:
+                fast_result = boxBool(fast_result);
+                break;
+            case BatchCalleeReturnKind::Boxed:
+                break;
+        }
+    }
     if (has_arg_cleanups) {
         emitArgCleanupClear(
             module, arg_cleanups, nargs, summary_nothrow);
@@ -9318,7 +9338,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             fallback_result = builder->CreateCall(helper, fallback_args);
         }
     }
-    if (callee_info.return_kind == BatchCalleeReturnKind::NativeInt) {
+    if (merged_return_kind == BatchCalleeReturnKind::NativeInt) {
         auto to_int = module.getOrInsertFunction("qore_rt_to_int",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
         llvm::Value* boxed_result = fallback_result;
@@ -9326,7 +9346,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         auto decref = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref, {boxed_result, xsink_arg});
-    } else if (callee_info.return_kind == BatchCalleeReturnKind::NativeFloat) {
+    } else if (merged_return_kind == BatchCalleeReturnKind::NativeFloat) {
         auto to_float = module.getOrInsertFunction("qore_rt_to_float",
             llvm::FunctionType::get(double_type, {i64_type}, false));
         llvm::Value* boxed_result = fallback_result;
@@ -9334,7 +9354,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         auto decref = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref, {boxed_result, xsink_arg});
-    } else if (callee_info.return_kind == BatchCalleeReturnKind::NativeBool) {
+    } else if (merged_return_kind == BatchCalleeReturnKind::NativeBool) {
         auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
         llvm::Value* boxed_result = fallback_result;
@@ -21815,11 +21835,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "QORE_DISABLE_AOT_OBJECT_METHOD_SUMMARY_IMPORT")) {
                     aot_object_summary_callee = &it->second;
                 }
+                // Exact boxed-local analysis records the enforced declared
+                // class separately from the coarser object representation fact.
+                // Retain the assignment proof and runtime receiver/class guard.
                 if (base_facts
                         && base_facts->assigned_state == QoreIRAssignedState::Assigned
                         && base_facts->never_nothing
-                        && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
-                            == direct_inst->qc
+                        && QoreTypeInfo::getUniqueReturnClass(
+                            qore_ir_value_input_type(*current_ir_func,
+                                inst->operands[0])) == direct_inst->qc
                         && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
@@ -22389,14 +22413,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    if (std::getenv(
-                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                    if (aot_object_batch_requires_exact_class
+                            || std::getenv(
+                                "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        // The subclass fallback is not covered by the
+                        // speculative base method's local-effect summary.
                         call_may_modify_runtime_locals = true;
                     } else {
                         call_may_modify_runtime_locals = false;
                         call_effect_info = aot_object_batch_callee;
                     }
-                    call_return_kind = aot_object_batch_callee->return_kind;
+                    call_return_kind = aot_object_batch_requires_exact_class
+                        ? BatchCalleeReturnKind::Boxed
+                        : aot_object_batch_callee->return_kind;
                     result_needs_cleanup = call_return_kind
                         == BatchCalleeReturnKind::Boxed;
                 } else if (!call_result) {
@@ -22589,7 +22618,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!object_summary) {
                 object_summary = aot_object_batch_callee;
             }
-            if (object_summary && object_summary->never_returns_nothing) {
+            if (object_summary && object_summary->never_returns_nothing
+                    && (object_summary != aot_object_batch_callee
+                        || !aot_object_batch_requires_exact_class)) {
                 known_not_nothing_values.insert(inst->result.id);
             }
             if (call_may_throw) {
@@ -22710,11 +22741,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && !QoreTypeInfo::parseAcceptsReturns(
                             return_type, NT_NOTHING);
                 }
+                // Exact boxed-local analysis records the enforced declared
+                // class separately from the coarser object representation fact.
+                // Retain the assignment proof and runtime receiver/class guard.
                 if (base_facts
                         && base_facts->assigned_state == QoreIRAssignedState::Assigned
                         && base_facts->never_nothing
-                        && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
-                            == invoke_inst->qc
+                        && QoreTypeInfo::getUniqueReturnClass(
+                            qore_ir_value_input_type(*current_ir_func,
+                                inst->operands[0])) == invoke_inst->qc
                         && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
@@ -23137,14 +23172,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    if (std::getenv(
-                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                    if (aot_object_batch_requires_exact_class
+                            || std::getenv(
+                                "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        // The subclass fallback is not covered by the
+                        // speculative base method's local-effect summary.
                         call_may_modify_runtime_locals = true;
                     } else {
                         call_may_modify_runtime_locals = false;
                         call_effect_info = aot_object_batch_callee;
                     }
-                    call_return_kind = aot_object_batch_callee->return_kind;
+                    call_return_kind = aot_object_batch_requires_exact_class
+                        ? BatchCalleeReturnKind::Boxed
+                        : aot_object_batch_callee->return_kind;
                     result_needs_cleanup = call_return_kind
                         == BatchCalleeReturnKind::Boxed;
                 } else {
@@ -23328,7 +23368,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? aot_object_compound_get : aot_object_set_get
                 ? aot_object_set_get : aot_object_getter
                     ? aot_object_getter : aot_object_batch_callee;
-            if (object_summary && object_summary->never_returns_nothing) {
+            if (object_summary && object_summary->never_returns_nothing
+                    && (object_summary != aot_object_batch_callee
+                        || !aot_object_batch_requires_exact_class)) {
                 known_not_nothing_values.insert(inst->result.id);
             }
             releaseDotEvalBaseIfCurrentUseIsLast(inst, module);

@@ -73,6 +73,31 @@ private members, explicit self, closures, recursion, nested contexts, argv,
 object-argument destruction and exception recovery against source, qmod and
 disabled-cache/context controls. No method entry or serialized ABI changes.
 
+### Guarded AOT method entries after typed assignment
+
+Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while
+recording only the generic object representation in its value facts. Its separate
+`exact_assigned_boxed_local_types` map retains the enforced declared class.
+Normal and exception-routed dot-eval fast-entry selection consult that type via
+`qore_ir_value_input_type`, rather than losing the class proof at this boundary.
+The assignment/non-NOTHING proof, target/signature/body eligibility, no-binding
+argument proof and runtime receiver-validity/exact-class guards remain required.
+
+This only expands admission to the existing context-independent native method
+entry; it changes neither its ABI nor runtime dispatch. An overridable target's
+exact-class hit may import its arithmetic summary, but other receiver classes
+still use normal dispatch. Their return contract can differ from the base's,
+so speculative merges preserve the fallback's boxed result and do not propagate
+the base's non-NOTHING or local-effect summary across that fallback. Native
+fast-hit results are boxed with their normal ownership before merging.
+Missing/deleted receivers and unassigned arguments retain the checked fallback.
+`AOTAssignedMethodFastEntry.qtest` checks both
+normal and exception-routed code generation, subclass/throwing overrides,
+optional and changed return contracts, captured-variable mutation, full-width
+scalar ownership, missing receiver/argument behavior, and disabled-fast-entry controls.
+Existing AOT artifacts must be recompiled to use the changed guards and result
+merging; runtime ABI compatibility does not rewrite their native code.
+
 ## Opaque Function-Reference Calls
 
 IR/JIT/AOT runtime dispatch can bypass `QoreListNode` and dynamic binding for a

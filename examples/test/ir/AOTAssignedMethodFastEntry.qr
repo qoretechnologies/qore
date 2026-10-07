@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class AssignedBase {
+    int value(int left, int right) {
+        return left * 2 + right;
+    }
+}
+
+class AssignedDerived inherits AssignedBase {
+    int value(int left, int right) {
+        return 100 + left * 3 + right;
+    }
+}
+
+class AssignedThrowing inherits AssignedBase {
+    int value(int left, int right) {
+        throw "ASSIGNED-METHOD-ERROR", "derived method";
+    }
+}
+
+class AssignedOptional inherits AssignedBase {
+    *int value(int left, int right) { return NOTHING; }
+}
+
+class AssignedString inherits AssignedBase {
+    string value(int left, int right) { return "subclass-result"; }
+}
+
+class AssignedEffect inherits AssignedBase {
+    private {
+        code<int()> callback;
+    }
+    constructor(code<int()> callback) { self.callback = callback; }
+    int value(int left, int right) { return callback(); }
+}
+
+class AssignedFloatBase {
+    float value(float input) { return input + input; }
+}
+class AssignedFloatOptional inherits AssignedFloatBase {
+    *float value(float input) { return NOTHING; }
+}
+class AssignedBoolBase {
+    bool value(bool input) { return !input; }
+}
+class AssignedBoolOptional inherits AssignedBoolBase {
+    *bool value(bool input) { return NOTHING; }
+}
+
+auto sub assignedReturn(AssignedBase input, int left, int right) {
+    AssignedBase receiver = input;
+    return receiver.value(left, right);
+}
+
+auto sub assignedReturnInvoke(AssignedBase input, int left, int right) {
+    AssignedBase receiver = input;
+    try {
+        return receiver.value(left, right);
+    } catch (hash<ExceptionInfo> e) {
+        rethrow;
+    }
+}
+
+*float sub assignedFloat(AssignedFloatBase input, float value) {
+    AssignedFloatBase receiver = input;
+    return receiver.value(value);
+}
+
+*bool sub assignedBool(AssignedBoolBase input, bool value) {
+    AssignedBoolBase receiver = input;
+    try {
+        return receiver.value(value);
+    } catch (hash<ExceptionInfo> e) {
+        rethrow;
+    }
+}
+
+int sub assignedEffects() {
+    int observed = 5;
+    code<int()> callback = int sub () { observed += 3; return 1; };
+    AssignedEffect derived(callback);
+    AssignedBase base();
+    int total = 0;
+    for (int i = 0; i < 4; ++i) {
+        AssignedBase receiver = (i & 1) ? derived : base;
+        total += receiver.value(i, 0);
+        total += observed;
+    }
+    return total;
+}
+
+# A successful typed assignment proves the receiver's declared class. Exact
+# boxed-local analysis also records the coarser object representation separately.
+int sub assignedDirect(int count, AssignedBase left, AssignedBase right) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        AssignedBase receiver = (i & 1) ? right : left;
+        sum += receiver.value(i, 7);
+    }
+    return sum;
+}
+
+int sub assignedInvoke(int count, AssignedBase left, AssignedBase right) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        AssignedBase receiver = (i & 1) ? right : left;
+        try {
+            sum += receiver.value(i, 7);
+        } catch (hash<ExceptionInfo> e) {
+            if (e.err != "ASSIGNED-METHOD-ERROR") {
+                rethrow;
+            }
+            sum += 1000;
+        }
+    }
+    return sum;
+}
+
+string sub missingReceiver(bool assign) {
+    AssignedBase receiver;
+    if (assign) {
+        receiver = new AssignedBase();
+        delete receiver;
+    }
+    try {
+        return string(receiver.value(2, 7));
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+
+string sub missingArgument(AssignedBase receiver) {
+    int missing;
+    try {
+        return string(receiver.value(missing, 7));
+    } catch (hash<ExceptionInfo> e) {
+        # AST overload selection and compiled parameter binding use different
+        # existing errors; both must reject the unassigned required argument.
+        return e.err == "RUNTIME-OVERLOAD-ERROR" || e.err == "RUNTIME-TYPE-ERROR"
+            ? "REJECTED-ARGUMENT" : e.err;
+    }
+}
+
+AssignedBase base();
+AssignedDerived derived();
+AssignedThrowing throwing();
+printf("%d:%d:%d:%d:%d:%s:%s:%s\n",
+    assignedDirect(0, base, derived), assignedDirect(1, base, derived),
+    assignedDirect(6, base, derived), assignedInvoke(6, base, derived),
+    assignedInvoke(6, base, throwing), missingReceiver(False),
+    missingReceiver(True), missingArgument(base));
+
+AssignedOptional optional();
+AssignedString text_result();
+AssignedFloatBase float_base();
+AssignedFloatOptional float_optional();
+AssignedBoolBase bool_base();
+AssignedBoolOptional bool_optional();
+for (int i = 0; i < 8; ++i) {
+    # Overrides need not preserve the speculative base's return type or its
+    # non-NOTHING proof. Neither normal nor exception-routed merging may coerce
+    # their result; full-width and tagged floating fast results must stay owned.
+    if (exists assignedReturn(optional, 2, 7)
+            || exists assignedReturnInvoke(optional, 2, 7)
+            || assignedReturn(text_result, 2, 7) != "subclass-result"
+            || assignedReturnInvoke(text_result, 2, 7) != "subclass-result"
+            || assignedReturn(base, 1125899906842624, 7) != 2251799813685255
+            || assignedReturnInvoke(base, 1125899906842624, 7) != 2251799813685255
+            || exists assignedFloat(float_optional, -3e307)
+            || assignedFloat(float_base, -3e307) != -6e307
+            || exists assignedBool(bool_optional, False)
+            || assignedBool(bool_base, False) !== True
+            || assignedEffects() != 38) {
+        throw "ASSIGNED-RETURN-CONTRACT", "speculative method fallback changed semantics";
+    }
+}
+printf("assigned-return-contracts: ok\n");
