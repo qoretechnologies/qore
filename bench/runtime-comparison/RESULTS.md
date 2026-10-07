@@ -2089,3 +2089,80 @@ branch laziness, explicit semantic oracles and child-library selection.
 No full-suite, sanitizer or Linux claim; previously documented limitations
 remain. Next: measure a smaller prepared-target-backed observable frame,
 retaining live checks, state restoration and stack-reader synchronization.
+
+## Compact prepared-call observable frame (2026-10-07)
+
+Baseline: `0f3791786`, saved before editing. The v3 diagnostic frame now
+borrows name, statement-block and Program metadata from the invocation-local
+prepared descriptor instead of copying those three pointers on every call.
+Caller location stays local; the state-saving helper is unchanged and remains
+the last member. The exact scalar leaf cannot reenter or replace its cache.
+The existing pop/walker handshake completes before any later descriptor
+replacement or cleanup. V2 keeps the previous frame; no helper ABI, cache
+layout, live guard, marker, policy or stack/cancellation check changes.
+
+### Measurements and tradeoffs
+
+Two isolated, shuffled five-fork experiments use the same contract as above.
+Values are ns/element; negative time change is an improvement, not an isolated
+call-latency measurement.
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_call|11.85653|11.69596|-1.35%|10.90207|10.92073|0.17%
+|indirect_wide|12.02387|11.86649|-1.31%|10.89817|10.75328|-1.33%
+|indirect_float|12.29293|11.95272|-2.77%|11.30442|11.05103|-2.24%
+|indirect_tagged_float|12.17142|11.83242|-2.79%|11.20197|10.96094|-2.15%
+|indirect_branch_float|12.41799|12.01120|-3.28%|11.29143|11.15981|-1.17%
+
+The ordinary and tag-colliding float improvements have **nonoverlapping fork
+ranges in both experiments**: a reproducible **2.15-2.79%** reduction. Other
+callback improvements are less conclusive: integer ranges overlap, the small
+integer median reverses direction in the repeat, and the branch-float ranges
+overlap at 4096. This is not a universal call-speedup claim.
+
+Arithmetic/direct medians move +0.77%/+1.13% at 1024 and +0.80%/+0.29% at
+4096, all with overlapping ranges. Polymorphic/temporary-hash medians move
++0.42%/+0.43% in the repeat, also overlapping. The 18.63990 wide-callback fork
+and all noisy controls are retained, not filtered. No build, test, profile or
+documentation validator overlapped either timing run.
+
+The 1024-element Java callback medians are 1.63941-1.67317; these Qore
+callbacks still take **7.0-7.3x** as long. Java parity is not achieved.
+[Evidence](results-compact-frame-macos-arm64.json) retains all **195 jobs /
+975 samples**, hashes and independently recomputed medians from
+`run-gasvhm51` and `run-98kuce3r`.
+
+Disassembly confirms the integer helper's stack allocation shrinks **272 to
+256 bytes**. A compile-time size assertion also requires the new frame to be
+smaller than v2's. AOT text remains **82972 bytes**; runtime text grows
+**13868224 to 13869316 bytes** (+1092) for the separate descriptor-backed class.
+This small code-size cost accompanies the measured float improvement, not an
+assumption that fewer source-level copies always improve performance.
+
+A separate five-second wide-callback profile still finds helper/frame work
+dominant (2631 top-of-stack samples versus 735 in the caller, 87 in the callee
+and 84 in the callee stack helper). Sampling is qualitative; it does not
+isolate additive costs.
+
+### Validation and next experiment
+
+Release/debug each pass **156 cases / 13403 assertions** in 24 wrappers plus
+11 standalone checks. The new 72-assertion wrapper runs four callers and two
+readers, with 400 all-thread snapshots per reader. Callers alternate cache-hit
+batches with target-replacement batches and repeatedly destroy invocation
+caches. The fixture checks leaf and enclosing frame names, types, locations
+and callback checksums. It covers AST/IR/JIT/tiered, O0/O3, v2, generic fallback,
+EH and split AOT; its pre-change IR and AOT O3 runs also pass.
+
+Old AOT output matches 225 records; each benchmark implementation passes
+225 independent checks, and ten Python harness tests pass. Existing ownership,
+foreign-Program, debugger, exception, stack-exhaustion and cancellation tests
+remain in the selected matrix. The [full audit](FOLLOWUP-AUDIT.md#compact-prepared-frame-audit-2026-10-07)
+covers all 62 checks and specifically reviews borrowed descriptor lifetime
+against the pop/walker handshake. No full-suite, sanitizer or Linux claim.
+
+Next: evaluate an additive scalar callee entry with an inline live stack-limit
+check. Keep prior entries and the full check on failure, unavailable state or
+unsupported targets. This aims to remove the remaining out-of-line callee
+guard cost without removing stack protection; it is not yet implemented or
+measured in this section.

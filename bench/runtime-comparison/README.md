@@ -308,6 +308,12 @@ word participates in persistent boxed cleanup and clearing it invalidates the
 descriptor. Old v1/v2 artifacts remain supported; new v3 artifacts require the
 updated runtime. Measure this switch separately from before/after library runs.
 
+The v3 diagnostic frame borrows name, statement and Program metadata from that
+descriptor, reducing per-call copies. The non-reentrant scalar-body proof and
+existing reader handshake keep the borrowed descriptor valid until the frame
+has been unpublished and readers finish. Caller location, state restoration,
+live guards and the versioned descriptor layout are unchanged.
+
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`
 directly. Arguments are `KERNEL COUNT WARMUP SAMPLES MS SEED`:
 

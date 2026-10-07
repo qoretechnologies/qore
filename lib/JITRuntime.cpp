@@ -10127,12 +10127,6 @@ public:
           helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
               uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
-    __attribute__((always_inline)) QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc,
-            const QorePreparedFunctionRefV3& cache,
-            ExceptionSink* xsink)
-        : name(*cache.name), statements(cache.statements), pgm(cache.pgm),
-          helper(rc, this, loc, cache.parse_loc, cache.uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
-    }
     // Otherwise inlining the publishing helper can merely move the outline
     // boundary to this enclosing frame instead of exposing its state to the
     // typed entry's register allocator. Destruction still waits for readers.
@@ -10151,6 +10145,33 @@ private:
     const QoreProgramLocation* loc = nullptr;
     RuntimeConfigNativeCallHelper helper;
 };
+
+// The prepared target already owns the metadata that stack observers need.
+// Borrow that descriptor instead of copying its name/statements/Program on
+// every call. This exact scalar leaf cannot reenter or replace its own cache;
+// popping the frame waits for observers before the caller can change/clear it.
+class QorePreparedFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    __attribute__((always_inline)) QorePreparedFunctionRefStackLocation(RuntimeConfig& rc,
+            const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
+        : cache(cache), helper(rc, this, loc, cache.parse_loc,
+              cache.uvb->getParseOptions(cache.pgm->getParseOptions()), cache.pgm, xsink) {
+    }
+    __attribute__((always_inline)) ~QorePreparedFunctionRefStackLocation() override = default;
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return *cache.name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return cache.pgm; }
+    const AbstractStatement* getStatement() const override { return cache.statements; }
+
+private:
+    const QorePreparedFunctionRefV3& cache;
+    const QoreProgramLocation* loc = nullptr;
+    // LAST: unpublish and wait before any observable member is destroyed.
+    RuntimeConfigNativeCallHelper helper;
+};
+static_assert(sizeof(QorePreparedFunctionRefStackLocation) < sizeof(QoreExplicitFunctionRefStackLocation));
 
 extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
@@ -10262,7 +10283,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         }
         qore_aot_ensure_pc_loc_map(ctx);
     }
-    QoreExplicitFunctionRefStackLocation frame(rc, cache, xsink);
+    QorePreparedFunctionRefStackLocation frame(rc, cache, xsink);
     if (*xsink) {
         return 1;
     }

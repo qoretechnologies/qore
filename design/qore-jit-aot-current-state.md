@@ -341,6 +341,17 @@ frame markers, policy restoration or reader handshakes is removed. This is a
 runtime inlining boundary change; inlining itself does not alter the callee
 ABI or introduce a new compact-frame representation.
 
+Prepared v3 calls now use a smaller diagnostic frame that borrows the prepared
+descriptor for its name, statement block and Program instead of copying those
+three pointers. The caller location remains frame-local. The exact scalar leaf
+cannot reenter generic execution or replace the descriptor while it is
+published; the existing pop handshake waits for readers before any subsequent
+replacement or invocation cleanup. The state-saving helper remains the last
+member and is unchanged. V2 keeps its original frame; no cache layout, helper
+ABI, guard, marker or restoration behavior changes. A dedicated concurrent
+reader fixture checks cache hits, alternating targets and repeated invocation
+cleanup under native and generic execution.
+
 The admitted scalar leaf cannot instantiate TLS locals or reenter generic
 execution. Its local-variable marker therefore uses a specialized push/pop pair:
 it retains the ordinary marker and frame count for inspection, but does not
