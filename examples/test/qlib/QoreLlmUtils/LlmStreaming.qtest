@@ -14,6 +14,7 @@
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires OpenAiRestClient
+%requires DeepSeekRestClient
 %requires MistralRestClient
 %requires AzureOpenAiRestClient
 %requires GeminiBodyShape
@@ -223,6 +224,8 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Mistral: reasoning responses and history", \mistralReasoningResponseTest());
         addTestCase("Mistral: mixed reasoning and text streams", \mistralReasoningStreamTest());
         addTestCase("Mistral: strict JSON projection retains reasoning", \mistralReasoningStrictTest());
+        addTestCase("DeepSeek: reasoning-only frames and native history", \deepseekReasoningTest());
+        addTestCase("DeepSeek: rejected strict output retains billable usage", \deepseekRejectedUsageTest());
         set_return_value(main());
     }
 
@@ -999,6 +1002,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         assertEq(1, server.requests[0].body.top_p);
         assertEq("high", server.requests[0].body.reasoning_effort);
         body = parse_json(make_json(body));
+        body = parse_json(make_json(body));
         push body.messages, response.choices[0].message;
         push body.messages, {"role": "user", "content": "again"};
         body.temperature = 0.7;
@@ -1104,6 +1108,86 @@ public class LlmStreamingTest inherits QUnit::Test {
         assertEq({"answer": 391}, parse_json(response.choices[0].message.content));
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens);
+    }
+
+    deepseekReasoningTest() {
+        hash<FakeReply> reply = openAiReply((
+            {"created": 1791363040, "choices": ({"delta": {"reasoning_content": "private "}},)},
+            {"choices": ({"delta": {"reasoning_content": "reasoning"}},)},
+            {"choices": ({"delta": {"content": "391"}, "finish_reason": "stop"},)},
+            {"choices": (), "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120,
+                "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20,
+                "completion_tokens_details": {"reasoning_tokens": 17}}},
+        ));
+        hash<auto> raw = {"created": 1791363040, "choices": ({"message": {"content": "391",
+            "reasoning_content": "private reasoning"}, "finish_reason": "stop"},), "usage": {"total_tokens": 120}};
+        server.script((reply, errorReply(200, make_json(raw)), errorReply(200, make_json(raw))));
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+            "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0});
+        list<hash<auto>> chunks;
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "reasoning_effort": "low", "user_id": "project_1", "prompt_cache_key": "not_supported"};
+        hash<auto> response = llm.chatCompletionsStream(body, sub (hash<auto> chunk) { push chunks, chunk; });
+        assertEq("391", response.choices[0].message.content);
+        assertEq(({"type": "deepseek_reasoning", "text": "private reasoning"},),
+            response.choices[0].message.reasoning_blocks);
+        assertEq(1791363040, response.created);
+        assertEq(80, LlmTelemetry::normalizeUsage(response.usage).cached_input_tokens);
+        assertEq(17, LlmTelemetry::normalizeUsage(response.usage).reasoning_tokens);
+        assertEq(("391", NOTHING), map $1.choices[0].delta.content, chunks);
+        assertEq("project_1", server.requests[0].body.user_id);
+        assertFalse(exists server.requests[0].body.prompt_cache_key);
+        body = parse_json(make_json(body));
+        push body.messages, response.choices[0].message;
+        push body.messages, {"role": "user", "content": "again"};
+        response = llm.chatCompletions(body);
+        assertEq("private reasoning", server.requests[1].body.messages[1].reasoning_content);
+        assertEq(1791363040, response.created);
+        body.messages[1] = {"role": "assistant", "content": "391", "reasoning_content": ""};
+        llm.chatCompletions(body);
+        assertEq("", server.requests[2].body.messages[1].reasoning_content);
+    }
+
+    deepseekRejectedUsageTest() {
+        hash<auto> usage = {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120,
+            "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20,
+            "completion_tokens_details": {"reasoning_tokens": 17}};
+        string invalid = "{\"answer\":\"invalid\"}";
+        hash<FakeReply> sync = errorReply(200, make_json({"created": 1791363040,
+            "model": "deepseek-flash", "choices": ({"message": {"content": invalid},
+                "finish_reason": "stop"},), "usage": usage}));
+        server.script((sync, openAiReply((
+            {"created": 1791363040, "model": "deepseek-flash",
+                "choices": ({"delta": {"content": invalid}, "finish_reason": "stop"},)},
+            {"choices": (), "usage": usage},
+        )), sync));
+        list<hash<LlmTelemetryEvent>> errors;
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+            "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0,
+            "telemetry_observer": <LlmTelemetryObserver>{
+                "error_callback": sub (hash<LlmTelemetryEvent> event) { push errors, event; }}});
+        hash<auto> schema = {"type": "object", "properties": {"answer": {"type": "integer"}},
+            "required": ("answer",), "additionalProperties": False};
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "answer", "strict": True, "schema": schema}}};
+        int deltas = 0;
+        foreach int operation in ((0, 1, 2)) {
+            assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", NOTHING, sub () {
+                if (operation == 0) { llm.chatCompletions(body); }
+                else if (operation == 1) {
+                    llm.chatCompletionsStream(body, sub (hash<auto> chunk) { ++deltas; });
+                } else { llm.complete("Calculate", "multiply", schema); }
+            });
+            assertEq(operation + 1, errors.size());
+            assertEq(usage, errors[-1].raw_usage);
+            assertEq(120, errors[-1].usage.total_tokens);
+            assertEq(80, errors[-1].usage.cached_input_tokens);
+            assertEq(17, errors[-1].usage.reasoning_tokens);
+            assertEq(20, errors[-1].usage.output_tokens);
+        }
+        assertEq(0, deltas);
+        assertEq(3, server.requests.size(), "validation errors never retry paid calls");
     }
 
     private LlmBackend mistralBackend() {

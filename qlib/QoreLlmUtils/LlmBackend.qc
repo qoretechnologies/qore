@@ -831,7 +831,13 @@ public class LlmBackend {
             });
             return response;
         } catch (hash<ExceptionInfo> ex) {
+            *hash<auto> rejected_usage;
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
+                rejected_usage = ex.arg._qore_llm_response.usage;
+            }
             notifyTelemetry(observer, "error", "complete", opts, {
+                "raw_usage": rejected_usage,
+                "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
                 "request": request,
                 "status": "error",
                 "latency_ms": elapsedMs(started),
@@ -878,7 +884,13 @@ public class LlmBackend {
             });
             return response;
         } catch (hash<ExceptionInfo> ex) {
+            *hash<auto> rejected_usage;
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
+                rejected_usage = ex.arg._qore_llm_response.usage;
+            }
             notifyTelemetry(observer, "error", "chat", opts, {
+                "raw_usage": rejected_usage,
+                "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
                 "request": request,
                 "status": "error",
                 "latency_ms": elapsedMs(started),
@@ -991,7 +1003,13 @@ llm.chatStream(
                     : NOTHING,
             });
         } catch (hash<ExceptionInfo> ex) {
+            *hash<auto> rejected_usage;
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
+                rejected_usage = ex.arg._qore_llm_response.usage;
+            }
             notifyTelemetry(observer, "error", "chat_stream", opts, {
+                "raw_usage": rejected_usage,
+                "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
                 "request": request,
                 "status": "error",
                 "latency_ms": elapsedMs(started),
@@ -1426,6 +1444,10 @@ if (resp.stop_reason == "tool_use") {
             if (msg.reasoning_blocks.typeCode() == NT_LIST
                     && msg.reasoning_blocks) {
                 out_h.reasoning_blocks = msg.reasoning_blocks;
+            } else if (msg.reasoning_content.typeCode() == NT_STRING) {
+                # DeepSeek requires this opaque channel on assistant history
+                # for tool conversations, including an explicitly empty value.
+                out_h.reasoning_blocks = ({"type": "deepseek_reasoning", "text": msg.reasoning_content},);
             }
             push messages, out_h;
         }
@@ -1536,6 +1558,9 @@ if (resp.stop_reason == "tool_use") {
         }
         if (response.provider_diagnostics.typeCode() == NT_HASH) {
             rv.provider_diagnostics = response.provider_diagnostics;
+        }
+        if (response.raw.created.typeCode() == NT_INT) {
+            rv.created = response.raw.created;
         }
         if (response.raw.service_tier.typeCode() == NT_STRING) {
             rv.service_tier = response.raw.service_tier;
@@ -2056,6 +2081,9 @@ if (resp.stop_reason == "tool_use") {
     private list<hash<auto>> updateStreamState(reference<hash<auto>> state,
             hash<ChatStreamEvent> event) {
         if (event.raw) {
+            if (event.raw.created.typeCode() == NT_INT) {
+                state.created = event.raw.created;
+            }
             provider.updateOpenAiStreamStateFromRaw(\state, event.raw);
         }
         list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
@@ -2116,6 +2144,9 @@ if (resp.stop_reason == "tool_use") {
         }
         if (state.usage) {
             rv.usage = state.usage;
+        }
+        if (state.created.typeCode() == NT_INT) {
+            rv.created = state.created;
         }
         if (state.service_tier.typeCode() == NT_STRING) {
             rv.service_tier = state.service_tier;
@@ -2243,6 +2274,9 @@ if (resp.stop_reason == "tool_use") {
         }
         if (state.provider_diagnostics.typeCode() == NT_HASH) {
             rv.provider_diagnostics = state.provider_diagnostics;
+        }
+        if (state.created.typeCode() == NT_INT) {
+            rv.created = state.created;
         }
         if (state.service_tier.typeCode() == NT_STRING) {
             rv.service_tier = state.service_tier;

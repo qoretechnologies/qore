@@ -48,7 +48,7 @@ public class LlmChatModelOptionTest inherits QUnit::Test {
             "vertex-ai": "gemini-2.0-flash",
             "grok": "grok-3",
             "perplexity": "sonar",
-            "deepseek": "deepseek-v4-flash",
+            "deepseek": "deepseek-flash",
             "mistral": "mistral-large-latest",
             "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
             "fireworks": "accounts/fireworks/models/gpt-oss-120b",
@@ -63,7 +63,7 @@ public class LlmChatModelOptionTest inherits QUnit::Test {
             "AnthropicRestClient::AnthropicLlmProvider": "claude-opus-5",
             "GrokRestClient::GrokLlmProvider": "grok-3",
             "PerplexityRestClient::PerplexityLlmProvider": "sonar",
-            "DeepSeekRestClient::DeepSeekLlmProvider": "deepseek-v4-flash",
+            "DeepSeekRestClient::DeepSeekLlmProvider": "deepseek-flash",
             "MistralRestClient::MistralLlmProvider": "mistral-large-latest",
             "TogetherRestClient::TogetherLlmProvider":
                 "meta-llama/Llama-3.3-70B-Instruct-Turbo",

@@ -141,6 +141,8 @@ printf("Structured output: %s\n", result.content);
     @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
+    - Preserve provider request timestamps and DeepSeek reasoning history through the OpenAI-compatible facade.
+    - Recognize DeepSeek's native cached-input usage counter without adding cached or reasoning tokens twice.
     - initial release
     - @ref QoreLlmUtils::LlmTelemetry::normalizeUsage() "LlmTelemetry::normalizeUsage()" sets
       \c reasoning_in_output, so cost calculations add the reasoning tokens to the output tokens only when the
