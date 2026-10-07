@@ -4402,6 +4402,11 @@ while (*binary chunk = input.read(65536)) {
     - Removed a redundant middle stack check from prepared calls to proven pure native scalar leaves;
       helper-entry and callee-entry stack guards, overflow diagnostics, visible variable markers,
       concurrent stack inspection, and cancellation behavior are preserved
+    - Deferred thread-private empty variable markers for prepared pure integer/bool-result native callbacks
+      until stack-overflow handling; floating results retain eager markers. Diagnostic frames, live runtime
+      guards, concurrent stack inspection, and cancellation remain active; partial marker allocation is rolled back
+    - Reused validated immutable scalar signatures when selecting entries from prepared callback caches;
+      generic signature checks and live Program, debugger, compiled-body, and readiness guards remain
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

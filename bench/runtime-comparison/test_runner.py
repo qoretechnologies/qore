@@ -5,7 +5,9 @@
 
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 import run
 import thread_pool
@@ -70,6 +72,43 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(2, run.summarize([3, 1, 2])["median"])
         self.assertEqual(0, run.summarize([3])["stdev"])
 
+    def test_aot_build_modes(self):
+        for have_baseline, reuse in ((False, False), (True, False), (True, True)):
+            with self.subTest(baseline=have_baseline, reuse=reuse), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                qcc = output / "qcc"
+                qcc.write_bytes(b"mock compiler")
+                calls = []
+                baseline_env = {"library-path": "baseline"} if have_baseline else None
+
+                def compile_mock(command, label, timeout, environment=None):
+                    calls.append((label, environment, timeout))
+                    Path(command[3]).write_bytes(label.encode("ascii"))
+                    return "", 12.5
+
+                commands, metadata = run.build_aot_pair(qcc, output / "kernels.qr", output,
+                                                        compile_mock, baseline_env, reuse)
+                self.assertEqual(("qcc", None, 600), calls[0])
+                self.assertEqual(run.digest(qcc), metadata["qcc_sha256"])
+                self.assertEqual(12.5, metadata["aot_compile_ms"])
+                self.assertEqual([str(output / "kernels-aot")], commands["qore-aot"])
+                self.assertEqual(2 if have_baseline and not reuse else 1, len(calls))
+                if have_baseline:
+                    self.assertEqual(reuse, metadata["baseline_aot_reused"])
+                    self.assertEqual(reuse, commands["qore-aot"] == commands["qore-aot-before"])
+                    self.assertEqual(reuse, metadata["aot_sha256"] == metadata["baseline_aot_sha256"])
+                    if reuse:
+                        self.assertNotIn("baseline_aot_compile_ms", metadata)
+                        self.assertFalse((output / "kernels-aot-before").exists())
+                    else:
+                        self.assertEqual(("qcc-before", baseline_env, 600), calls[1])
+                        self.assertEqual(12.5, metadata["baseline_aot_compile_ms"])
+                else:
+                    self.assertNotIn("qore-aot-before", commands)
+                    self.assertNotIn("baseline_aot_sha256", metadata)
+        with self.assertRaises(ValueError):
+            run.build_aot_pair(None, None, None, None, reuse_aot=True)
+
     def test_pool_checks(self):
         checks = "".join(f"CHECK\t{name}\t{batch * sum(range(2, count + 2))}\n"
                          for name, _, count, batch in thread_pool.SCENARIOS)
@@ -116,6 +155,9 @@ class RunnerTest(unittest.TestCase):
         for arguments in (("--samples", "0"), ("--count", "0"), ("--count", "1000001"),
                           ("--warmup", "-1"), ("--time-ms", "0"),
                           ("--modes", "qore-ir", "qore-ir"),
+                          ("--reuse-aot-for-baseline",),
+                          ("--reuse-aot-for-baseline", "--modes", "qore-ir",
+                           "--baseline-libdir", str(run.HERE)),
                           ("--baseline-libdir", str(run.HERE))):
             with self.subTest(arguments=arguments):
                 result = subprocess.run([sys.executable, str(run.HERE / "run.py"), *arguments],

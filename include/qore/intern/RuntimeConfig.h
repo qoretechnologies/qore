@@ -165,24 +165,37 @@ struct QorePreparedFunctionRefV3;
 /** Keep as the last member of its published stack location. The callee can
     only evaluate native scalar operations or enter the full stack guard; it
     cannot read or change the deferred context, allocate, or reenter Qore.
-    Empty local/closure markers and stack publication are always retained.
-    The full stack guard materializes context before constructing an exception.
+    Diagnostic stack publication is always retained. Empty local/closure
+    markers are private to this thread and unobservable by the pure body. The
+    integer-result path materializes them before any stack exception; floating
+    results retain eager markers after measured regressions from deferring them.
     Requires the prepared helper's entry guard and a guarded callee-v3 entry:
     this middle publication frame does not repeat their stack checks. The sink
-    parameter is retained for internal constructor compatibility, but not used.
+    parameter is retained for the common helper construction signature, but not used.
     All pointers belong to the current invocation/thread, including the cache.
 */
 class RuntimeConfigNativeLeafCallHelper {
 public:
-    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
-        const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink);
-    DLLLOCAL ~RuntimeConfigNativeLeafCallHelper();
+    //! Install variable markers and original context before stack-overflow exception work; idempotent.
+    /** @throws std::bad_alloc if a deferred variable-marker block cannot be allocated.
+        A failed closure-marker allocation rolls back the local marker before unwinding.
+    */
+    DLLLOCAL void materialize();
     RuntimeConfigNativeLeafCallHelper(const RuntimeConfigNativeLeafCallHelper&) = delete;
     RuntimeConfigNativeLeafCallHelper& operator=(const RuntimeConfigNativeLeafCallHelper&) = delete;
-    //! Install the original context before any stack-overflow exception work; idempotent.
-    DLLLOCAL void materialize();
+
+protected:
+    // Construct only through the policy-specific RAII wrapper below.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink,
+        bool defer_markers);
+    ~RuntimeConfigNativeLeafCallHelper() = default;
+    DLLLOCAL void restoreEager();
+    DLLLOCAL void restoreDeferred();
 
 private:
+    //! Exception-only restoration after both variable markers and context exist.
+    DLLLOCAL void restoreMaterialized();
     ThreadData* td;
     ThreadLocalProgramData* tlpd;
     const QorePreparedFunctionRefV3& cache;
@@ -195,7 +208,35 @@ private:
     const QoreProgramLocation* old_loc;
     QoreParseOptions old_po;
     uintptr_t old_sp;
-    bool materialized = false;
+    enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
+    ContextState state;
+};
+
+//! Compile-time marker policy keeps eager floating cleanup free of a runtime policy branch.
+template <bool DeferMarkers>
+class RuntimeConfigNativeLeafCallHelperFor final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    /** Publish the invocation's diagnostic frame with the selected marker policy.
+        @param rc the current thread's runtime context
+        @param stack_loc fully initialized diagnostic frame; this helper must be its last member
+        @param call_loc caller-location slot, initialized before publication
+        @param cache owned prepared target, unchanged until frame removal and reader completion
+        @param xsink retained for the common helper signature; neither read nor modified here
+        @throws std::bad_alloc if an eager variable-marker block cannot be allocated
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
+            QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, cache, xsink, DeferMarkers) {
+    }
+    //! Restore installed state and unpublish the frame, waiting for diagnostic readers before it dies.
+    __attribute__((always_inline)) ~RuntimeConfigNativeLeafCallHelperFor() {
+        if constexpr (DeferMarkers) {
+            restoreDeferred();
+        } else {
+            restoreEager();
+        }
+    }
 };
 
 /**

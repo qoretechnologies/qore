@@ -232,6 +232,14 @@ Program identity, debugger attachment, normal compiled-entry identity, context
 readiness and PC-map readiness remain live checks on every call. No body is
 materialized merely to prepare a reference.
 
+Each slot belongs to one native signature. Population validates that the actual
+reference has that signature; its bindings are immutable after publication.
+Prepared-only v2/v3 callee-entry accessors therefore use debug assertions rather
+than repeat the signature comparison on release calls. Non-prepared accessors
+retain their checks. Wrong-signature references and NOTHING still fail admission
+before entry selection: they neither populate an empty slot nor invalidate an
+existing valid target. The fixed-signature cache and native helper ABI are unchanged.
+
 The descriptor's first word is an owned boxed reference and its validity token.
 It starts as NOTHING and participates in the existing persistent invocation
 cleanup, including exception exits; clearing that word invalidates all borrowed
@@ -277,8 +285,9 @@ or throwing expression is newly admitted. Adapters do not inherit the creating
 caller's debug scope; the existing published frame and lazy callee PC context
 remain responsible for observation and stack-failure diagnostics.
 `QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG` suppresses the new binding as
-an independent compilation control. All caller/frame/callee stack checks,
-live guards, empty-frame markers and observer synchronization remain intact.
+an independent compilation control. On these eager callee-v2 paths, all
+caller/frame/callee stack checks, live guards, empty-frame markers and observer
+synchronization remain intact. Pure callee-v3 calls use the deferred contract below.
 
 Optional callee-entry v3 appends a borrowed live stack-limit address to v2.
 Helper v2/v3 prefers it when present; prior callee entries and helper ABIs are
@@ -363,9 +372,20 @@ Prepared calls to the re-emitted callee v3 use a deferred variant of this
 helper. Their complete scalar-body proof permits only native arithmetic/select
 operations and the full stack-guard edge: no TLS context access, allocation or
 generic reentry. Successful calls therefore leave Program-call, closure,
-statement/location, parse-option and saved-SP fields untouched. Empty variable
-frame markers and the independent diagnostic frame are still pushed/published
-on every call, with the existing reader handshake and caller location.
+statement/location, parse-option and saved-SP fields untouched. The independent
+diagnostic frame is still published on every call, with the existing reader
+handshake and caller location. Integer/bool-result entries also defer empty
+local/closure markers: these stacks are thread-private, and the proven body
+cannot inspect them or reenter Qore. Floating-result entries retain eager
+markers after measured regressions from deferring them. A compile-time cleanup
+policy avoids a runtime marker-policy branch in successful floating calls.
+Both deferred markers are installed before overflow exception work; failed
+closure-marker allocation rolls back the local marker, and closure frame counts
+are committed only after successful insertion. A three-state enum records eager
+markers, deferred markers, or fully materialized context. Successful deferred
+calls only restore the previous helper and unpublish their diagnostic frame;
+materialized calls restore context and pop both markers in the original order.
+Neither the exported native helper/cache ABI nor serialized metadata changes.
 
 This pure-leaf path keeps the prepared helper's entry stack check and the
 callee-v3 live stack check (including its full v2 fallback). The intermediate
@@ -395,9 +415,10 @@ semantics are unchanged. The publishing helper's hints are
 on its implementation only: default single-compilation-unit builds can inline
 it, while split builds retain ordinary out-of-line symbols. The small positive
 target-cache lookup stays inline; reference decoding, ownership replacement
-and metadata extraction are outlined as the miss path. None of the guards,
-frame markers, policy restoration or reader handshakes is removed. This is a
-runtime inlining boundary change; inlining itself does not alter the callee
+and metadata extraction are outlined as the miss path. Inlining itself removes
+none of the guards, frame markers, policy restoration or reader handshakes;
+pure-leaf deferral is the separate policy described above. This is a runtime
+inlining boundary change; inlining itself does not alter the callee
 ABI or introduce a new compact-frame representation.
 
 Prepared v3 calls now use a smaller diagnostic frame that borrows the prepared
@@ -406,19 +427,23 @@ three pointers. The caller location remains frame-local. The exact scalar leaf
 cannot reenter generic execution or replace the descriptor while it is
 published; the existing pop handshake waits for readers before any subsequent
 replacement or invocation cleanup. The state-saving helper remains the last
-member and is unchanged. V2 keeps its original frame; no cache layout, helper
-ABI, guard, marker or restoration behavior changes. A dedicated concurrent
+member; its deferred policy is described above. V2 keeps its original frame;
+the compact representation alone changes no cache layout, helper ABI, guard,
+marker or restoration behavior. A dedicated concurrent
 reader fixture checks cache hits, alternating targets and repeated invocation
 cleanup under native and generic execution.
 
 The admitted scalar leaf cannot instantiate TLS locals or reenter generic
-execution. Its local-variable marker therefore uses a specialized push/pop pair:
-it retains the ordinary marker and frame count for inspection, but does not
+execution. Where markers are installed (eager calls or overflow materialization),
+its local-variable marker uses a specialized push/pop pair: it retains the
+ordinary marker and frame count for inspection, but does not
 append a variable-cleanup record to the local marker vector. Both local and
 closure markers are popped directly as empty frames. The native closure-marker
 push writes the same null/zero/non-owner entry inline when the current block
 has space. Only full-block growth/reuse calls an outlined helper, which uses
-the original insertion path; frame counts and publication order are unchanged.
+the original insertion path. Entry contents are unchanged; the closure frame
+count is committed only after insertion succeeds. Diagnostic publication order
+is unchanged.
 Debug assertions verify
 the top marker and unassigned local slot. Ordinary calls still use the general
 cleanup path, including cleanup of residual variables. This relies on the

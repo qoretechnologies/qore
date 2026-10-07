@@ -2825,3 +2825,137 @@ regression gate. Preserve per-call publication/pop reader synchronization and
 overflow-time variable/context visibility. Boolean identity/constant native
 admission is a separate coverage opportunity, not evidence that the existing
 retained-call overhead has reached Java's level.
+
+## Prepared marker deferral and signature reuse (2026-10-07)
+
+Baseline `cb1abb16e`, macOS arm64, M4 Pro. The retained runtime change combines
+two independently examined mechanisms:
+
+- Prepared pure integer/bool-result callee-v3 callbacks defer thread-private
+  empty local/closure markers until stack-overflow materialization. Floating
+  results keep eager markers. A compile-time cleanup policy and three-state
+  enum avoid adding a successful floating-call policy branch.
+- Prepared-only entry accessors reuse the immutable signature validated at
+  cache population. Debug assertions check the invariant; non-prepared accessors
+  still validate signatures. Program identity, debugger, normal-body identity
+  and readiness remain live checks on every hit.
+
+Diagnostic publication and its reader handshake remain per-call. Entry/callee
+stack guards, exception context, cancellation and owned cache lifetime are
+unchanged. A failed closure-marker allocation rolls back the local marker;
+closure frame counts commit only after successful insertion. No exported native
+helper, cache layout or serialized ABI changes. Native tests now reject
+wrong-signature references and NOTHING on both cold and populated slots, then
+verify valid reuse, for integer/float and eager/inline providers.
+
+### Final combined measurements
+
+Final runtime comparisons use the new `--reuse-aot-for-baseline` option:
+one identical AOT executable runs against both compatible libraries. This
+holds caller code fixed, not runtime-library layout or host state. Each mode
+passes 270 independent reference records before timing. Default paired compiler
+builds remain available and are required when measuring compiler changes.
+
+Primary `run-cqfsxcbl`: 1024 elements, five forks, three warmups, five 300 ms
+windows per fork, shuffled order, fresh Java retained-call run. Medians of fork
+means, ns/element, include loop, scalar computation and checksum work; these
+are not isolated call latencies.
+
+|!Kernel|!Before|!After|!Change|!Java retained call
+|arithmetic|2.23146|2.23841|+0.31%|0.89334
+|direct_call|2.24910|2.25296|+0.17%|0.89300
+|indirect_call|9.68725|8.27113|-14.62%|1.67575
+|indirect_wide|9.62485|8.11854|-15.65%|1.67812
+|indirect_float|10.06777|9.96438|-1.03%|1.65351
+|indirect_tagged_float|10.07319|10.00968|-0.63%|1.64608
+|indirect_branch_float|10.10630|10.11061|+0.04%|1.66090
+|indirect_affine_wide|9.66591|8.16501|-15.53%|1.63987
+|polymorphic_call|271.39105|272.16248|+0.28%|2.54271
+|temporary_hash|316.39910|319.31831|+0.92%|15.49549
+
+All three integer callback before/after fork ranges separate; all other primary
+ranges overlap. The 4096-element repeat `run-8iahrd1r` (same five-fork/window
+settings, new shuffle) confirms bounded/wide/affine-wide medians
+8.54922 → 7.24827 (-15.22%), 8.57693 → 7.13542 (-16.81%) and
+8.62027 → 7.17575 (-16.76%), again with separated ranges. Float changes are
++0.16%, -1.25% and -1.37%, all overlapping.
+
+The repeat's polymorphic/hash medians are slower: 270.34603 → 277.14904
+(+2.52%) and 309.66234 → 317.36946 (+2.49%). Their ranges overlap:
+268.7497–272.9617 versus 265.7616–277.8918, and
+301.7065–319.7815 versus 306.5108–322.9149. A longer seven-fork/500 ms
+control repeat `run-k2il8efl` retains the wide benefit
+8.57978 → 7.22991 (-15.73%, separated); polymorphic changes
+267.31611 → 269.46801 (+0.80%), with ranges 264.0030–270.3298 versus
+266.8103–278.7339, and hash 313.93776 → 314.25455 (+0.10%), ranges
+299.9178–322.5188 versus 301.3040–320.6589. These controls do not use the
+optimized scalar callback path, but an indirect/layout regression is not ruled
+out. Overlapping ranges are not equivalence; all unfavorable samples remain.
+
+The final eager-callee-v2 control `run-k7qob947` uses
+`QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1`, 4096 elements and seven
+500 ms forks. Bounded/wide change 11.33899 → 11.39579 (+0.50%) and
+11.34140 → 11.28534 (-0.49%), with overlapping ranges. Float/tagged/branch
+improve 2.40%/2.32%/2.46%, with separated ranges. The earlier marker-only
+eager integer slowdown below is not reproduced by the combined candidate;
+this does not establish neutrality on every legacy workload.
+
+### Rejected and intermediate variants
+
+All stages, including unsuccessful results, are in the evidence. Earlier
+paired compilations are not silently relabeled as identical-artifact runs.
+
+|!Variant|!Run(s)|!Decision/evidence
+|All-result marker deferral|run-yscj99s7|Wide improves 17.49%; ordinary/branch float regress 36.96%/34.38%, separated; rejected
+|Integer markers, shared runtime cleanup|run-01dievdh|Wide improves 16.98%; float/tagged regress 4.78%/4.13%, separated; rejected
+|Compile-time cleanup, two booleans|run-qlpj5if5; run-bkz6o6x4|Integer gains repeat; tagged primary median worsens 15.52%, with candidate forks 10.048–11.586; provisional only
+|Same-artifact control for that policy|run-bcx00__a|Wide improves 16.57%, separated; floating ranges overlap
+|Cross both earlier artifacts with both runtimes|marker-cross-px8j3ho_|Tagged runtime changes -0.16%/+1.95% depending on artifact; ranges overlap, candidate slow forks remain with both artifacts
+|Single enum before unused-constructor removal|run-s2k9v876|Wide improves 17.07%, separated; floating changes approximately +0.01%/-0.12%/-0.18%, overlapping
+|Marker-only final cleanup|run-nnowuyr7; run-trrpr1v3|Integer modern gains repeat; broader floating/control ranges overlap; held for eager control
+|Marker-only eager control and repeat|run-b5nx9_0z; run-mnfsp34d|Bounded/wide about 3% slower; initial bounded ranges separate, longer repeat overlaps; not retained alone
+|Signature-accessor increment vs saved marker candidate|run-rlb53iq_; run-2s5fd7un|Eager bounded/wide improve 1.43%/3.25%, overlapping; modern wide worsens 2.43%, overlapping; not a uniform gain
+
+The crossed-artifact experiment does not establish that separate compilation
+caused the earlier tagged-float anomaly: candidate slow forks of 11.529 and
+10.900 ns occur with both artifacts. The final combined primary/repeat use
+identical artifacts and retain all outliers. Likewise, the incremental signature
+results compare against the saved marker candidate, not the original baseline;
+only the final combined runs establish the reported production improvement.
+
+### Validation, remaining gap and next work
+
+Runtime text decreases 13875264 → 13872648 bytes (-2616); both inspected
+integer/float native helper frames remain 272 bytes. Release/debug selected
+matrices each pass 39 files: 160 QUnit cases / 15899 assertions plus 11 standalone
+tests. Extended native admission tests also pass the saved original and
+marker-only baselines. Old v2/v3 artifacts retain byte-identical 225/270 check
+records. Eleven Python harness tests, standalone release syntax checks for both
+implementation units, strict documentation tables and whitespace checks pass.
+No full-suite, sanitizer, allocation-failure injection, Linux runtime or full
+split-runtime-build claim.
+
+[Sanitized evidence](results-prepared-markers-macos-arm64.json) retains exact
+prototype/final runtime and test diffs/hashes, binary hashes, settings and every
+1156 timing jobs / 5780 samples, including the 20-job crossed-artifact diagnostic.
+Counts, uniqueness, finite samples and medians were checked independently. No
+build, test, profile or documentation validator overlapped timing. The
+[62-check audit](FOLLOWUP-AUDIT.md#prepared-markers-and-signatures-audit-2026-10-07)
+records the complete checklist and limitations.
+
+Java parity is **not** reached. At 1024 elements Qore integer callbacks take
+about 8.1–8.3 ns/element versus Java 1.64–1.68 (roughly 4.8–5.0 times);
+floating callbacks remain around 10 ns versus 1.65–1.66. Polymorphic calls
+remain about 272 versus 2.54 ns, a much larger gap.
+
+Separate five-second samples of the actual polymorphic workload find an
+existing method-dispatch cache, followed by value/type/refcount traffic, TLS
+lookups, statement-location changes and parameter setup. The AOT fast-method
+branch still installs parameters in TLS before `execCachedFunction`; only the
+eligible IR branch uses direct parameters. Counts are qualitative, not additive
+time attribution. Next: examine explicit/native AOT method-parameter entry and
+boxed/native local lowering on that real path, preserving receiver lifetime,
+private defining-class context, overrides, cross-Program and debugger semantics.
+For scalar calls, invocation-owned diagnostic metadata and exception-only
+saved-state initialization remain hypotheses; do not remove the per-call reader
+handshake, native guards or generic fallback merely to match Java's number.

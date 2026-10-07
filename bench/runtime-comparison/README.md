@@ -55,6 +55,15 @@ and executable hashes and both compile times are recorded. Preserve the tools
 too if a future change makes them incompatible; this option is for compatible
 shared-library comparisons only.
 
+For compatible **runtime-only** changes, add `--reuse-aot-for-baseline` with
+`--modes qore-aot --baseline-libdir /path/to/saved-library`. This compiles once
+and runs the identical executable against both libraries, holding caller code
+fixed without eliminating runtime-library layout or host variation. Both modes still pass the full
+reference checks before timing. Metadata records `baseline_aot_reused: true`,
+identical executable hashes and only one compile time. Do not use this option
+to measure compiler optimizations or when the new executable requires symbols
+or an ABI absent from the saved runtime; a failed baseline check aborts the run.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit
@@ -73,7 +82,7 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |indirect_affine|Integer callback adding 17, exercising the simple scalar-leaf summary
 |indirect_affine_wide|The same callback with values above the inline 48-bit integer range; checksum uses low 16 bits
 |indirect_branch_int|Integer comparison selecting one of two affine expressions
-|indirect_branch_float|Comparison/branching float target that retains generic Qore dispatch; fallback control
+|indirect_branch_float|Float comparison selecting between two affine expressions through a retained callback
 |polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
@@ -322,8 +331,12 @@ callee-entry stack protection and overflow diagnostics remain.
 Prepared calls to this re-emitted pure callee v3 defer same-thread context
 save/restore until a stack guard actually fails. The full guard materializes
 Program/closure/location/policy state before exception construction; successful
-scalar bodies cannot access or mutate it. Published diagnostic frames, empty
-local/closure markers and their reader handshake remain active on every call.
+scalar bodies cannot access or mutate it. Published diagnostic frames and their
+reader handshake remain active on every call. For integer/bool-result entries,
+thread-private empty local/closure markers are also deferred until overflow
+materialization; floating-result entries retain eager markers. The pure body
+cannot observe these variable stacks or reenter Qore. Both markers are installed
+before exception construction, with rollback if closure-marker allocation fails.
 Older callee entries and helper v2 keep eager setup; disabling callee v3 tests
 that path. This is not permission to defer context for generic or reentrant
 callees. The prepared helper and callee each retain their entry stack guard;
@@ -331,7 +344,7 @@ only the redundant middle check during deferred-frame publication is omitted.
 The frame is published before the callee checks the live limit, so overflow
 still materializes context before exception construction. Eager legacy guards,
 sink checks and cancellation frequency remain unchanged.
-Compiler-proven scalar leaves retain their local/closure frame markers but
+When local/closure markers are installed, compiler-proven scalar leaves
 avoid general variable-cleanup bookkeeping for those empty frames. The native
 closure-marker push handles an available slot inline and outlines full-block
 growth/reuse; the entry fields and publication ordering are unchanged. V1 remains
@@ -340,7 +353,12 @@ available as a functional control; this does not broaden native eligibility.
 `QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1` at compilation selects v2 instead
 of v3's invocation-local prepared target. V3 caches immutable facts behind an
 owned reference; Program/debugger/compiled-entry and lazy-readiness checks stay
-live. It retains neither generic callbacks nor captured objects. Its first
+live. A prepared slot belongs to one native signature, checked when its target
+is populated. Prepared-only entry accessors assert that immutable fact in debug
+builds instead of repeating the signature comparison on every release call.
+Generic and non-prepared entry accessors retain their checks; a rejected target
+or NOTHING leaves the prior valid prepared target available for later reuse.
+It retains neither generic callbacks nor captured objects. Its first
 word participates in persistent boxed cleanup and clearing it invalidates the
 descriptor. Old v1/v2 artifacts remain supported; new v3 artifacts require the
 updated runtime. Measure this switch separately from before/after library runs.

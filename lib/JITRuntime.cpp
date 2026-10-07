@@ -10166,7 +10166,7 @@ private:
 // Borrow that descriptor instead of copying its name/statements/Program on
 // every call. This exact scalar leaf cannot reenter or replace its own cache;
 // popping the frame waits for observers before the caller can change/clear it.
-template <bool Deferred = false>
+template <bool Deferred = false, bool DeferredMarkers = false>
 class QorePreparedFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
     __attribute__((always_inline)) QorePreparedFunctionRefStackLocation(RuntimeConfig& rc,
@@ -10174,7 +10174,7 @@ public:
         // The selector must not reintroduce a call around the inlined helper.
         : cache(cache), helper([&]() __attribute__((always_inline)) {
             if constexpr (Deferred) {
-                return RuntimeConfigNativeLeafCallHelper(rc, this, loc, cache, xsink);
+                return RuntimeConfigNativeLeafCallHelperFor<DeferredMarkers>(rc, this, loc, cache, xsink);
             } else {
                 return RuntimeConfigNativeCallHelper(rc, this, loc, cache.parse_loc,
                     cache.uvb->getParseOptions(cache.pgm->getParseOptions()), cache.pgm, xsink);
@@ -10193,7 +10193,8 @@ private:
     const QorePreparedFunctionRefV3& cache;
     const QoreProgramLocation* loc = nullptr;
     // LAST: unpublish and wait before any observable member is destroyed.
-    std::conditional_t<Deferred, RuntimeConfigNativeLeafCallHelper, RuntimeConfigNativeCallHelper> helper;
+    std::conditional_t<Deferred, RuntimeConfigNativeLeafCallHelperFor<DeferredMarkers>,
+        RuntimeConfigNativeCallHelper> helper;
 };
 static_assert(sizeof(QorePreparedFunctionRefStackLocation<>) < sizeof(QoreExplicitFunctionRefStackLocation));
 
@@ -10311,8 +10312,10 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         }
         qore_aot_ensure_pc_loc_map(ctx);
     }
-    if (auto inline_entry = cache.ref->getTypedInlineStackEntry(Signature)) {
-        QorePreparedFunctionRefStackLocation<true> frame(rc, cache, xsink);
+    // Population validated this immutable signature; the slot belongs to one
+    // signature and retains that exact reference. Mutable guards stay live above.
+    if (auto inline_entry = cache.ref->getPreparedTypedInlineStackEntry(Signature)) {
+        QorePreparedFunctionRefStackLocation<true, !std::is_floating_point_v<Result>> frame(rc, cache, xsink);
         if (*xsink) {
             return 1;
         }
@@ -10332,7 +10335,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(cache.entry);
     try {
-        if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
+        if (auto explicit_entry = cache.ref->getPreparedTypedRuntimeConfigEntry(Signature)) {
             using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
             *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
         } else {

@@ -364,6 +364,17 @@ public:
         return typed_signature == signature ? typed_runtime_config_entry : nullptr;
     }
 
+    //! Read a v2 entry after a prepared target has validated its immutable signature.
+    /** @param signature the signature validated when populating this invocation's owned cache
+        @return the optional v2 entry, or nullptr if only the legacy entry was bound
+        @note Only for a prepared slot belonging to this exact reference and signature.
+    */
+    DLLLOCAL QoreFunctionRefTypedEntry getPreparedTypedRuntimeConfigEntry(
+            [[maybe_unused]] uint32_t signature) const {
+        assert(typed_signature == signature);
+        return typed_runtime_config_entry;
+    }
+
     // Optional v3 callee ABI appends a borrowed live stack-limit address to v2.
     // A null address requires the complete v2 stack check, never an unchecked call.
     DLLLOCAL void setTypedInlineStackEntry(QoreFunctionRefTypedEntry entry) {
@@ -372,6 +383,17 @@ public:
 
     DLLLOCAL QoreFunctionRefTypedEntry getTypedInlineStackEntry(uint32_t signature) const {
         return typed_signature == signature ? typed_inline_stack_entry : nullptr;
+    }
+
+    //! Read a v3 entry after a prepared target has validated its immutable signature.
+    /** @param signature the signature validated when populating this invocation's owned cache
+        @return the optional v3 entry, or nullptr if only an older entry was bound
+        @note Bindings are immutable after publication; live Program/debugger/body checks remain required.
+    */
+    DLLLOCAL QoreFunctionRefTypedEntry getPreparedTypedInlineStackEntry(
+            [[maybe_unused]] uint32_t signature) const {
+        assert(typed_signature == signature);
+        return typed_inline_stack_entry;
     }
 
 protected:

@@ -144,6 +144,27 @@ def summarize(values):
             "stdev": statistics.stdev(values) if len(values) > 1 else 0.0}
 
 
+def build_aot_pair(qcc, source, output, run_command, baseline_env=None, reuse_aot=False):
+    """Build both compiler variants, or hold the executable fixed for runtime-only comparisons."""
+    if reuse_aot and baseline_env is None:
+        raise ValueError("reusing AOT requires a baseline runtime environment")
+    executable = output / "kernels-aot"
+    _, compile_ms = run_command([qcc, "-O3", "-o", executable, source], "qcc", timeout=600)
+    metadata = {"aot_compile_ms": compile_ms, "qcc_sha256": digest(qcc),
+                "aot_sha256": digest(executable)}
+    commands = {"qore-aot": [str(executable)]}
+    if baseline_env is not None:
+        metadata["baseline_aot_reused"] = reuse_aot
+        baseline_executable = executable if reuse_aot else output / "kernels-aot-before"
+        if not reuse_aot:
+            _, compile_ms = run_command([qcc, "-O3", "-o", baseline_executable, source],
+                                        "qcc-before", timeout=600, environment=baseline_env)
+            metadata["baseline_aot_compile_ms"] = compile_ms
+        metadata["baseline_aot_sha256"] = digest(baseline_executable)
+        commands["qore-aot-before"] = [str(baseline_executable)]
+    return commands, metadata
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--qore", default=str(ROOT / "build/qore"))
@@ -151,6 +172,8 @@ def main():
     parser.add_argument("--java", default="java")
     parser.add_argument("--javac", default="javac")
     parser.add_argument("--baseline-libdir", help="also run selected Qore modes against a saved compatible libqore")
+    parser.add_argument("--reuse-aot-for-baseline", action="store_true",
+                        help="run one identical AOT executable against both compatible libraries (runtime-only changes)")
     parser.add_argument("--output-root", type=Path, default=ROOT / "build/bench-runtime-comparison")
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--kernels", nargs="+", choices=KERNELS, default=list(KERNELS))
@@ -172,6 +195,8 @@ def main():
         parser.error("count must be in 1..1000000")
     if len(set(args.modes)) != len(args.modes) or len(set(args.kernels)) != len(args.kernels):
         parser.error("duplicate modes/kernels")
+    if args.reuse_aot_for_baseline and (not args.baseline_libdir or "qore-aot" not in args.modes):
+        parser.error("reuse-aot-for-baseline requires baseline-libdir and the qore-aot mode")
     if args.baseline_libdir:
         args.baseline_libdir = str(Path(args.baseline_libdir).resolve())
         qore_modes = [mode for mode in args.modes if mode.startswith("qore-")]
@@ -240,19 +265,10 @@ def main():
             metadata["baseline_libraries"] = {str(p.resolve()): digest(p) for p in libraries}
             metadata["baseline_library_path"] = baseline_env[library_var]
     if "qore-aot" in args.modes:
-        executable = output / "kernels-aot"
-        _, compile_ms = run([qcc, "-O3", "-o", executable, output / "kernels.qr"], "qcc", timeout=600)
-        metadata["aot_compile_ms"] = compile_ms
-        metadata["qcc_sha256"] = digest(qcc)
-        metadata["aot_sha256"] = digest(executable)
-        base["qore-aot"] = [str(executable)]
-        if args.baseline_libdir:
-            baseline_executable = output / "kernels-aot-before"
-            _, compile_ms = run([qcc, "-O3", "-o", baseline_executable, output / "kernels.qr"],
-                                "qcc-before", timeout=600, environment=baseline_env)
-            metadata["baseline_aot_compile_ms"] = compile_ms
-            metadata["baseline_aot_sha256"] = digest(baseline_executable)
-            base["qore-aot-before"] = [str(baseline_executable)]
+        aot_commands, aot_metadata = build_aot_pair(qcc, output / "kernels.qr", output, run,
+            baseline_env if args.baseline_libdir else None, args.reuse_aot_for_baseline)
+        base.update(aot_commands)
+        metadata.update(aot_metadata)
     classpath = ""
     java = shutil.which(args.java)
     if any(mode.startswith("java-") for mode in args.modes):

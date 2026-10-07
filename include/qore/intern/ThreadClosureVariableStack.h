@@ -298,13 +298,14 @@ public:
         popNativeLeafFrameBoundary(). Marker contents and frame count are unchanged.
     */
     DLLLOCAL void pushNativeLeafFrameBoundary() {
-        ++frame_count;
         if (curr->pos == QORE_THREAD_STACK_BLOCK) {
             pushNativeLeafFrameBoundarySlow();
-            return;
+        } else {
+            assert(curr->pos >= 0 && curr->pos < QORE_THREAD_STACK_BLOCK);
+            curr->var[curr->pos++] = ClosureStackEntry(nullptr, 0, false);
         }
-        assert(curr->pos >= 0 && curr->pos < QORE_THREAD_STACK_BLOCK);
-        curr->var[curr->pos++] = ClosureStackEntry(nullptr, 0, false);
+        // Block allocation may throw: commit the frame count only on success.
+        ++frame_count;
     }
 
     //! Pair with pushNativeLeafFrameBoundary() for a compiler-proven TLS-independent native leaf.

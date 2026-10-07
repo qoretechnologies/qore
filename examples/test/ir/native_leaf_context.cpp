@@ -17,6 +17,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <string>
 #include <thread>
 
@@ -30,6 +31,35 @@ struct LeafInvocation {
     uint64_t bits = 0;
     QorePreparedFunctionRefV3* cache = nullptr;
 };
+
+// Rejected signatures and NOTHING must neither populate an empty slot nor
+// invalidate its existing valid target. Every slot still belongs to one ABI.
+template <typename Call, typename Arg, typename Result>
+static void checkPreparedMisses(QoreProgram* program, const char* other_factory, Call call,
+        uint64_t valid_bits, QorePreparedFunctionRefV3& cache, RuntimeConfig* rc,
+        Arg arg, Result expected, uint32_t signature, ExceptionSink* xsink) {
+    ValueHolder other(program->callFunction(other_factory, nullptr, xsink), xsink);
+    assert(!*xsink && other->getType() == NT_FUNCREF);
+    const auto* node = static_cast<const FunctionCallReferenceNode*>(other->get<const ResolvedCallReferenceNode>());
+    assert(node->getProgram() == cache.pgm && !node->getTypedEntry(signature));
+    uint64_t other_bits;
+    std::memcpy(&other_bits, &*other, sizeof(other_bits));
+    QoreValue empty;
+    uint64_t empty_bits;
+    std::memcpy(&empty_bits, &empty, sizeof(empty_bits));
+    QorePreparedFunctionRefV3 cold{};
+    cold.owner = empty_bits;
+    const auto* saved_ref = cache.ref;
+    for (uint64_t invalid : {other_bits, empty_bits}) {
+        Result result = 123;
+        assert(call(invalid, arg, &result, xsink, rc, &cold) == 0);
+        assert(!*xsink && result == 123 && cold.owner == empty_bits);
+        assert(call(invalid, arg, &result, xsink, rc, &cache) == 0);
+        assert(!*xsink && result == 123 && cache.owner == valid_bits && cache.ref == saved_ref);
+        assert(call(valid_bits, arg, &result, xsink, rc, &cache) == 1);
+        assert(!*xsink && result == expected && cache.owner == valid_bits && cache.ref == saved_ref);
+    }
+}
 
 // Invoked by parsed callers whose owned locals/closures are on the TLS stacks.
 // The leaf remains an actually bound native entry from the script aggregate.
@@ -103,6 +133,8 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
     double result = 0;
     assert(qore_rt_try_funcref_float_float_v3(bits, 1.25, &result, &xsink, rc, &cache) == 1);
     assert(!xsink && result == 1.75 && cache.owner == bits && cache.ref == target);
+    checkPreparedMisses(program, "makeProbe", qore_rt_try_funcref_float_float_v3,
+        bits, cache, rc, 1.25, 1.75, 10, &xsink);
     QoreProgram* caller = qore_get_call_program_context();
     size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
 #if defined(__aarch64__) || defined(__x86_64__)
@@ -188,6 +220,8 @@ static void check(bool inline_entry) {
     assert(qore_rt_try_funcref_int_int_v3(bits, 7, &result, &xsink, rc, &cache) == 1);
     assert(!xsink && result == 24);
     assert(cache.owner == bits && cache.ref == target);
+    checkPreparedMisses(*program, "makeFloatProbe", qore_rt_try_funcref_int_int_v3,
+        bits, cache, rc, int64_t{7}, int64_t{24}, 5, &xsink);
     QoreProgram* caller = qore_get_call_program_context();
     size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
 #if defined(__aarch64__) || defined(__x86_64__)

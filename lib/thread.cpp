@@ -2050,12 +2050,21 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-        const QorePreparedFunctionRefV3& cache, ExceptionSink*)
-        : td(RuntimeConfigNativeAccess::getThreadData(rc)), tlpd(td->tlpd), cache(cache),
-          previous(td->native_leaf_context) {
+        const QorePreparedFunctionRefV3& cache, ExceptionSink*, bool defer_markers)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), cache(cache),
+          previous(td->native_leaf_context),
+          state(defer_markers ? ContextState::DeferredMarkers : ContextState::EagerMarkers) {
     assert(td->current_pgm == cache.pgm);
-    tlpd->lvstack.pushNativeLeafFrameBoundary();
-    tlpd->cvstack.pushNativeLeafFrameBoundary();
+    if (!defer_markers) {
+        tlpd = td->tlpd;
+        tlpd->lvstack.pushNativeLeafFrameBoundary();
+        try {
+            tlpd->cvstack.pushNativeLeafFrameBoundary();
+        } catch (...) {
+            tlpd->lvstack.popNativeLeafFrameBoundary();
+            throw;
+        }
+    }
     call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
@@ -2069,8 +2078,21 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
 
 // Never pull exception-only context traffic back into the successful call path.
 __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
-    if (materialized) {
+    if (state == ContextState::Materialized) {
         return;
+    }
+    // Cross-thread observers inspect the published diagnostic chain, not these
+    // thread-private variable stacks. The pure body cannot observe them or
+    // reenter Qore. Install both markers before exception/context construction.
+    if (state == ContextState::DeferredMarkers) {
+        tlpd = td->tlpd;
+        tlpd->lvstack.pushNativeLeafFrameBoundary();
+        try {
+            tlpd->cvstack.pushNativeLeafFrameBoundary();
+        } catch (...) {
+            tlpd->lvstack.popNativeLeafFrameBoundary();
+            throw;
+        }
     }
     old_call_pgm = td->call_program_context;
     old_closure = td->closure_rt_env;
@@ -2078,7 +2100,7 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     old_loc = td->runtime_loc;
     old_po = td->runtime_po;
     old_sp = td->runtime_loc_sp;
-    materialized = true;
+    state = ContextState::Materialized;
     td->call_program_context = cache.pgm;
     td->closure_rt_env = nullptr;
     if (cache.parse_loc) {
@@ -2088,8 +2110,9 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     }
 }
 
-__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::~RuntimeConfigNativeLeafCallHelper() {
-    if (materialized) {
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreEager() {
+    assert(state != ContextState::DeferredMarkers);
+    if (state == ContextState::Materialized) {
         if (cache.parse_loc) {
             td->runtime_statement = old_stmt;
             td->runtime_loc = old_loc;
@@ -2101,10 +2124,36 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::~RuntimeConfig
     publish_popped_stack_location(td, old_stack);
     tlpd->lvstack.popNativeLeafFrameBoundary();
     tlpd->cvstack.popNativeLeafFrameBoundary();
-    if (materialized) {
+    if (state == ContextState::Materialized) {
         td->closure_rt_env = old_closure;
         td->call_program_context = old_call_pgm;
     }
+}
+
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreDeferred() {
+    if (state == ContextState::Materialized) {
+        restoreMaterialized();
+        return;
+    }
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    assert(state == ContextState::DeferredMarkers);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreMaterialized() {
+    assert(state == ContextState::Materialized);
+    if (cache.parse_loc) {
+        td->runtime_statement = old_stmt;
+        td->runtime_loc = old_loc;
+        td->runtime_po = apply_runtime_po_override(td, old_po);
+    }
+    td->runtime_loc_sp = old_sp;
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
+    td->closure_rt_env = old_closure;
+    td->call_program_context = old_call_pgm;
 }
 
 // called when pushing a new location on the stack
