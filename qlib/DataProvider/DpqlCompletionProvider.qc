@@ -557,7 +557,7 @@ public class DpqlCompletionProvider {
         }
 
         # Check if last token was a field reference
-        if (trimmed =~ /@[a-zA-Z0-9_."]+\s*$/) {
+        if (trimmed =~ /@[\p{L}\p{M}\p{N}_."]+\s*$/) {
             return {
                 "ctx": DPQL_CTX_AFTER_FIELD,
                 "prefix": prefix,
@@ -792,7 +792,7 @@ public class DpqlCompletionProvider {
 
                 # Determine if field name needs quoting
                 string insert_text;
-                if (field_name =~ /[^a-zA-Z0-9_.]/ || field_name =~ /^[0-9]/) {
+                if (!DpqlTokenizer::isBareFieldName(field_name)) {
                     insert_text = '@"' + replace(field_name, '"', '\\"') + '"';
                 } else {
                     insert_text = "@" + field_name;
@@ -1379,6 +1379,59 @@ public class DpqlCompletionProvider {
         return items;
     }
 
+    #! Returns the part of a UTF-8 string between two byte offsets
+    /** The completion scans text by bytes; a name cut out of it is cut by bytes too, so that a name after
+        non-ASCII text, or one holding non-ASCII letters, is cut where it is. */
+    private static string byteSubstr(string text, int start, int len) {
+        if (len <= 0) {
+            return "";
+        }
+        return binary_to_string(binary(text).substr(start, len), "UTF-8");
+    }
+
+    #! Returns the number of bytes of the character at a byte offset if it can be part of a bare field name or key
+    /** The rule is the tokenizer's (see @ref DpqlTokenizer::isBareFieldName()): a letter of any script, a combining
+        mark, a digit or \c _; any other character, such as punctuation or a symbol, ends the name.
+
+        @param bytes the UTF-8 bytes of the text
+        @param pos the byte offset of the character
+
+        @return the number of bytes of the character, or 0 if it cannot be part of a bare name or if there is no
+        complete UTF-8 character at \a pos
+    */
+    private static int fieldNameCharBytes(binary bytes, int pos) {
+        if (pos >= bytes.size()) {
+            return 0;
+        }
+        int b = bytes[pos];
+        if (b < 0x80) {
+            return ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || b == 0x5f)
+                ? 1
+                : 0;
+        }
+        int n = (b & 0xe0) == 0xc0 ? 2 : ((b & 0xf0) == 0xe0 ? 3 : ((b & 0xf8) == 0xf0 ? 4 : 0));
+        if (!n || pos + n > bytes.size()) {
+            return 0;
+        }
+        for (int i = pos + 1; i < pos + n; ++i) {
+            if ((bytes[i] & 0xc0) != 0x80) {
+                return 0;
+            }
+        }
+        return binary_to_string(bytes.substr(pos, n), "UTF-8") =~ /^[\p{L}\p{M}\p{N}_]$/ ? n : 0;
+    }
+
+    #! Returns the byte offset after the bare field name or key that starts at a byte offset
+    private static int scanFieldName(binary bytes, int pos) {
+        while (True) {
+            int n = fieldNameCharBytes(bytes, pos);
+            if (!n) {
+                return pos;
+            }
+            pos += n;
+        }
+    }
+
     #! Extracts field path from text ending before/inside an opening brace
     /** @param text the text up to cursor position
         @return hash with "field_name" and "accessors" list, or NOTHING if not a valid path
@@ -1418,6 +1471,8 @@ public class DpqlCompletionProvider {
         if (pos >= text.size()) {
             return NOTHING;
         }
+        # the text is scanned by bytes; a name's characters are read from its bytes
+        binary bytes = binary(text);
 
         string field_name;
         if (chr(text.getByte(pos)) == '"') {
@@ -1432,17 +1487,15 @@ public class DpqlCompletionProvider {
                 }
             }
             # Unescape the field name to match actual field names in schema
-            field_name = unescapeString(substr(text, start, pos - start));
+            field_name = unescapeString(byteSubstr(text, start, pos - start));
             ++pos;  # Skip closing quote
         } else {
             # Unquoted field name: stop at first '.' so nested segments are handled
             # as accessors (matches eval semantics where @record.address traverses
             # field "record" then key "address", not a single field "record.address")
             int start = pos;
-            while (pos < text.size() && chr(text.getByte(pos)) =~ /[a-zA-Z0-9_]/) {
-                ++pos;
-            }
-            field_name = substr(text, start, pos - start);
+            pos = scanFieldName(bytes, pos);
+            field_name = byteSubstr(text, start, pos - start);
         }
 
         if (!field_name) {
@@ -1468,7 +1521,7 @@ public class DpqlCompletionProvider {
                 # Only add accessor if it was properly closed
                 if (depth == 0) {
                     # We've consumed the closing ], so content is bracket_start to pos-1
-                    string content = substr(text, bracket_start, pos - 1 - bracket_start);
+                    string content = byteSubstr(text, bracket_start, pos - 1 - bracket_start);
                     # Simplified: treat as INDEX for type traversal
                     accessors += {"type": DP_FUNC_INDEX, "content": content};
                 }
@@ -1489,7 +1542,7 @@ public class DpqlCompletionProvider {
                 # Only add accessor if it was properly closed
                 if (depth == 0) {
                     # Extract keys from content
-                    string content = substr(text, brace_start, pos - 1 - brace_start);
+                    string content = byteSubstr(text, brace_start, pos - 1 - brace_start);
                     list<string> key_list = parseKeyList(content);
                     accessors += {"type": DP_FUNC_KEY, "key_list": key_list};
                 }
@@ -1501,11 +1554,9 @@ public class DpqlCompletionProvider {
                 # Dot accessor - next identifier becomes a key accessor
                 ++pos;
                 int start = pos;
-                while (pos < text.size() && chr(text.getByte(pos)) =~ /[a-zA-Z0-9_]/) {
-                    ++pos;
-                }
+                pos = scanFieldName(bytes, pos);
                 if (pos > start) {
-                    string key = substr(text, start, pos - start);
+                    string key = byteSubstr(text, start, pos - start);
                     accessors += {"type": DP_FUNC_KEY, "key_list": (key,)};
                 }
             } else {

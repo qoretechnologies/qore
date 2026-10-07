@@ -229,16 +229,19 @@ public class DpqlTokenizer {
     private {
         #! Input text
         string input;
+        #! The input's UTF-8 bytes, for reading a whole character at a byte position
+        binary input_bytes;
         #! Current position (byte index)
         /** Switched from a character index to a byte index in %Qore 3.0 to
             eliminate the O(N) UTF-8 walk that @c input[pos] performed on
             every call.  Hot paths use @ref Qore::zzz8stringzzz9::getByte()
-            (O(1)).  DPQL source is ASCII for tokens; UTF-8 inside string
-            literals is preserved byte-for-byte through the scan. */
+            (O(1)).  Operators, keywords and function names are ASCII; a field name may hold any letter (see
+            @ref isBareFieldName()), read a whole character at a time with @ref currentCodePoint(); UTF-8 inside
+            string literals is preserved byte-for-byte through the scan. */
         int pos = 0;
         #! Current line number (1-based)
         int line = 1;
-        #! Current column number (1-based)
+        #! Current column number (1-based), in characters: a UTF-8 continuation byte does not count
         int column = 1;
         #! Input length in bytes
         int len;
@@ -260,7 +263,85 @@ public class DpqlTokenizer {
     */
     constructor(string text) {
         input = text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8");
+        input_bytes = binary(input);
         len = input.size();
+    }
+
+    #! Returns True if a field name can be written without quotes after \c @
+    /** A bare field name starts with a letter (any script) or \c _, and goes on with letters, combining marks,
+        digits and \c _; dots separate its segments, each non-empty: \c @menge_bestätigt, \c @größe and
+        \c @order.id are bare; a name with spaces or other characters, or one starting with a digit, is written
+        <tt>\@\"...\"</tt>.
+
+        @param name the field name
+
+        @return True if the name can be written as \c @name
+
+        @since DataProvider 3.9
+    */
+    static bool isBareFieldName(string name) {
+        return name =~ /^[\p{L}_][\p{L}\p{M}\p{N}_]*(?:\.[\p{L}\p{M}\p{N}_]+)*$/;
+    }
+
+    #! Returns True if a character can start a bare field name (a letter of any script, or \c _)
+    private static bool isFieldStartChar(*string ch) {
+        return exists ch && ch =~ /^[\p{L}_]$/;
+    }
+
+    #! Returns True if a character can continue a bare field name (a letter, combining mark, digit, or \c _)
+    private static bool isFieldChar(*string ch) {
+        return exists ch && ch =~ /^[\p{L}\p{M}\p{N}_]$/;
+    }
+
+    #! Returns the number of bytes of the UTF-8 character whose lead byte is given
+    /** A byte that cannot start a UTF-8 character counts as one byte. */
+    private static int utf8CharBytes(int b) {
+        if (b < 0x80) {
+            return 1;
+        }
+        if ((b & 0xe0) == 0xc0) {
+            return 2;
+        }
+        if ((b & 0xf0) == 0xe0) {
+            return 3;
+        }
+        if ((b & 0xf8) == 0xf0) {
+            return 4;
+        }
+        return 1;
+    }
+
+    #! Returns the whole character at the current position, or NOTHING at the end of the input
+    /** A character of several UTF-8 bytes is returned whole, so that it can be tested as a letter and said in a
+        message; a byte that is not valid UTF-8 is returned as \c U+FFFD, never as a broken string.
+    */
+    private:internal *string currentCodePoint() {
+        *int b = input.getByte(pos);
+        if (!exists b) {
+            return NOTHING;
+        }
+        if (b < 0x80) {
+            return chr(b);
+        }
+        int n = utf8CharBytes(b);
+        if (n == 1 || pos + n > len) {
+            return "\ufffd";
+        }
+        try {
+            return binary_to_string(input_bytes.substr(pos, n), "UTF-8");
+        } catch (hash<ExceptionInfo> ex) {
+            return "\ufffd";
+        }
+    }
+
+    #! Returns the number of bytes of the character at the current position
+    private:internal int currentCodePointBytes() {
+        *int b = input.getByte(pos);
+        if (!exists b) {
+            return 0;
+        }
+        int n = utf8CharBytes(b);
+        return pos + n > len ? 1 : n;
     }
 
     #! Returns True if at end of input
@@ -402,7 +483,8 @@ public class DpqlTokenizer {
             if (b == 0x0a) {
                 ++line;
                 column = 1;
-            } else {
+            } else if ((b & 0xc0) != 0x80) {
+                # a UTF-8 continuation byte is part of the character before it
                 ++column;
             }
             ++pos;
@@ -691,8 +773,8 @@ public class DpqlTokenizer {
             return scanTemplateRef();
         }
 
-        # Identifier (function names, keywords)
-        if (c =~ /[a-zA-Z_]/) {
+        # Identifier (function names, keywords, and an accessor's key after a dot, which may be in any script)
+        if (c =~ /[a-zA-Z_]/ || isFieldStartChar(currentCodePoint())) {
             # Only reset field-ref context if NOT in an accessor chain (i.e., not after a dot)
             # This allows expressions like "@data[0].user.name" to keep context across "user"
             string prev = prevNonWhitespaceChar();
@@ -702,11 +784,12 @@ public class DpqlTokenizer {
             return scanIdentifier();
         }
 
-        # Unknown character
-        advance();
-        addError(sprintf("Unexpected character '%s'", c), "DPQL-E001",
+        # Unknown character: the whole character, never one byte of it, so that the message is valid text
+        string ch = currentCodePoint() ?? c;
+        advance(currentCodePointBytes());
+        addError(sprintf("Unexpected character '%s'", ch), "DPQL-E001",
             start_line, start_column, line, column);
-        return makeToken(DPQL_TOK_ERROR, c, start_line, start_column);
+        return makeToken(DPQL_TOK_ERROR, ch, start_line, start_column);
     }
 
     #! Scans a field reference (\c \@field or <tt>\@\"quoted\"</tt>)
@@ -758,19 +841,20 @@ public class DpqlTokenizer {
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
 
-        # Unquoted field name (identifier)
-        if (c =~ /[a-zA-Z_]/) {
+        # Unquoted field name: letters of any script, combining marks, digits, _ and dots (isBareFieldName()),
+        # read a whole character at a time
+        if (isFieldStartChar(currentCodePoint())) {
             while (pos < len) {
-                c = currentChar();
-                if (c !~ /[a-zA-Z0-9_.]/) {
+                string ch = currentCodePoint();
+                if (ch != "." && !isFieldChar(ch)) {
                     break;
                 }
                 # Don't allow consecutive dots (e.g., @user..name)
-                if (c == "." && value.size() > 0 && value[value.size() - 1] == ".") {
+                if (ch == "." && value.size() > 0 && value[value.size() - 1] == ".") {
                     break;
                 }
-                value += c;
-                advance();
+                value += ch;
+                advance(currentCodePointBytes());
             }
             # Strip trailing dots - they are not part of the field name
             # (e.g., "@user." should tokenize as field "@user" followed by dot)
@@ -783,7 +867,8 @@ public class DpqlTokenizer {
         }
 
         # Invalid field reference
-        addError(sprintf("Invalid field reference: expected identifier or quoted string after '@', got '%s'", c),
+        addError(sprintf("Invalid field reference: expected identifier or quoted string after '@', got '%s'",
+                currentCodePoint() ?? c),
             "DPQL-E003", start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
@@ -1064,6 +1149,10 @@ public class DpqlTokenizer {
             if (c =~ /[a-zA-Z0-9_]/) {
                 value += c;
                 advance();
+            } else if (input.getByte(pos) >= 0x80 && isFieldChar(currentCodePoint())) {
+                # a letter of another script, read whole
+                value += currentCodePoint();
+                advance(currentCodePointBytes());
             } else if (c == "-" && pos + 1 < len && chr(input.getByte(pos + 1)) =~ /[a-zA-Z]/) {
                 # Hyphenated identifier: treat '-' followed by a letter as part of the name
                 value += c;
