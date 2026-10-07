@@ -2466,3 +2466,65 @@ checks. No full-suite, sanitizer or Linux runtime claim. Next: separately
 measure outlining uncommon readiness/eager-compatibility/variable-stack growth
 paths from the retained-call helper, preserving all live checks and observer
 semantics. The independent qmod metadata limitation remains out of scope.
+
+## Rejected call-helper cold-path outlining (2026-10-07)
+
+Baseline: `3519bad4f`. The experiment outlined lazy AOT context readiness,
+legacy eager entry invocation and native local-stack marker block growth.
+It preserved checks, state and frame publication but changed C++ boundaries.
+
+**Rejected and production code reverted.** Smaller code did not produce a
+repeatable retained-call benefit, and callee-v2 controls regressed. Five-fork
+medians below are ns/element including loop/computation/checksum work.
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_call|9.92514|9.74530|-1.81%|8.90424|8.78893|-1.30%
+|indirect_wide|9.92538|9.79170|-1.35%|8.86876|8.86165|-0.08%
+|indirect_float|10.19365|10.19575|0.02%|9.15847|9.15780|-0.01%
+|indirect_tagged_float|10.23261|10.18163|-0.50%|9.20536|9.20969|0.05%
+|indirect_branch_float|10.31248|10.18980|-1.19%|9.26220|9.23823|-0.26%
+|indirect_affine_wide|9.84094|9.77420|-0.68%|8.81903|8.83913|0.23%
+
+Only `indirect_wide` separates in the primary run (-1.35%); every callback
+range overlaps in the larger-loop repeat. Arithmetic/direct controls move
++0.06%/+0.19% at 1024 and +0.29%/+0.07% at 4096; generic polymorphic/hash
+repeat medians move -1.13%/-2.02%. All these control ranges overlap.
+
+A separate isolated run with
+`QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1` forces older callee-v2 entries.
+Wide integer calls regress **11.71155 to 12.26196 (+4.70%)** and float calls
+**11.84773 to 12.51261 (+5.61%)**, both with separated ranges. The added
+compatibility-call boundary is therefore not acceptable for this experiment.
+
+AOT text stays 91320 bytes; runtime text shrinks 13876284 to 13868632 (-7652),
+and the helper frame shrinks 272 to 256 bytes. Those code-size benefits do not
+establish a speedup. Java retained-call gap stays about 5.8-6.2x in the primary
+run; parity remains open.
+
+[Evidence](results-rejected-call-cold-macos-arm64.json) retains the rejected
+production diff, hashes and **240 jobs / 1200 samples** from `run-q21s3e47`,
+`run-lkb1vbju` and `run-qlh5thbu`. All medians are independently recomputed.
+No build/test/profile/docs validator overlapped any timing run.
+
+### Retained validation and next experiment
+
+The candidate passes **159 cases / 15369 assertions** in 27 wrappers plus
+11 standalones per release/debug build, ten Python tests, 270 independent
+checks per timed implementation, and old callee-v2/v3 artifacts (225/270
+records). Correctness passes did not override the performance rejection.
+
+The new 40-assertion marker-boundary wrapper is retained. It exercises 0-70
+live caller locals, thirteen native calls per caller and repeated entries,
+through AST/IR/JIT/tiered and AOT O0/O3, v3/eager and runtime fallbacks.
+It passes both final candidate builds and the saved baseline.
+An initial direct-caller fixture kept locals in native slots and did not
+reach block growth. Generic outer invocation fixes that; a separate debugger
+run stops in the growth routine under native callback `padded53`, then
+finishes successfully. This is explicit path evidence, not inferred coverage.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#rejected-cold-path-audit-2026-10-07)
+requires reverting the unhelpful production diff while preserving the raw
+evidence. No full-suite, sanitizer or Linux runtime claim.
+Next: prove whether empty local/closure markers can be deferred for a
+non-reentrant pure scalar v3 body, materializing them before exception work.
+The diagnostic frame and its cross-thread reader handshake must remain.

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeMarkerGrowthTest
+
+class NativeMarkerGrowthTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        const Expected = "native-marker-growth: ok\n";
+    }
+    constructor() : Test("native leaf marker block growth", "1.0", \ARGV) {
+        addTestCase("live caller locals across block growth and reuse", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-native-marker-growth-");
+        string source = dir.path + "/fixture.qr";
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub markerLeaf(int value) { return (value + 17) & 65535; }\n");
+        # Generic callback entry materializes the padded caller's TLS locals;
+        # a direct Approach-B call could keep them entirely in native slots.
+        # Consecutive local counts cross every slot of a 64-entry stack block.
+        # Owned strings remain live across all thirteen calls, including reuse
+        # of the block first allocated for an empty native marker.
+        for (int padding = 0; padding <= 70; ++padding) {
+            file.write(sprintf("int sub padded%d(int seed, code<int(int)> fn) {\n", padding));
+            for (int local = 0; local < padding; ++local) {
+                file.write(sprintf("string pad%d = string(seed);\n", local));
+            }
+            file.write("int total = 0;\nfor (int i = 0; i < 13; ++i) { total += fn(seed); }\n");
+            for (int local = 0; local < padding; ++local) {
+                file.write(sprintf("if (pad%d != string(seed)) { throw \"MARKER-GROWTH\", \"caller local changed\"; }\n"
+                    "total += pad%d.size();\n", local, local));
+            }
+            file.write("return total;\n}\n");
+        }
+        file.write("int sub callPadded(code<int(int, code<int(int)>)> fn, code<int(int)> cb) { return fn(7, cb); }\n"
+            "code<int(int)> callback = \\markerLeaf();\n");
+        for (int round = 0; round < 2; ++round) {
+            for (int padding = 0; padding <= 70; ++padding) {
+                file.write(sprintf("if (callPadded(\\padded%d(), callback) != %d) { throw \"MARKER-GROWTH\", \"incorrect sum\"; }\n",
+                    padding, 13 * 24 + padding));
+            }
+        }
+        file.write("printf(\"native-marker-growth: ok\\n\");\n");
+        file.close();
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", exe, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("qore_rt_try_funcref_int_int_v3", ir, "prepared native calls");
+                assertRegex("markerLeaf[^\n]*funcref_typed_v2", ir, "native leaf binding");
+                assertEq(prefix.empty(), regex(ir, "markerLeaf[^\n]*funcref_typed_v3"), "inline or eager entry");
+                assertEq(Expected, run((exe,)), "AOT " + level);
+                assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "runtime fallback");
+            }
+        }
+    }
+}

@@ -2832,3 +2832,92 @@ sandboxing and cooperative-cancellation guides. No qlib source edit.
 The skill required explicit native admission evidence, opcode exclusion and
 signed-edge validation. No ABI/metadata change, sanitizer, full-suite or Linux
 runtime claim. Java parity remains open.
+
+## Rejected cold-path audit (2026-10-07)
+
+Final scope: new executable `AOTNativeMarkerGrowth.qtest`, rejected-experiment
+results and JSON evidence. The C++ outlining experiment failed the performance
+gate and was completely reverted. Applied audit-changes with module-structure,
+sandboxing and cooperative-cancellation guides; no qlib edit.
+
+|!Check|!Status|!Findings
+|Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Module added to QMOD list in CMakeLists.txt|N/A|No shipped module, QPP, DataProvider or JNI change.
+|.qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|%modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No %include usage (deprecated for modules)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Copyright 2026 on all new files|Pass|New executable wrapper and JSON evidence carry 2026/MIT notices.
+|Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No shipped module, QPP, DataProvider or JNI change.
+|ns=Qore::XX matches the QoreNamespace constructor path|N/A|No shipped module, QPP, DataProvider or JNI change.
+|%modern directive present|Pass|Wrapper and generated fixture use %modern.
+|Executable permission set (chmod +x)|Pass|New qtest is executable.
+|Uses %prepend-module-path  before %requires for in-repo modules|Pass|Repository qlib prepend precedes QUnit/FsUtil requirements.
+|External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only Qore-delivered QUnit/FsUtil dependencies.
+|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|Production experiment reverted; no committed C++ I/O change.
+|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|Production experiment reverted; no committed C++ I/O change.
+|If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|Production experiment reverted; no committed C++ I/O change.
+|No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|File/TmpDir/subprocess use is scoped to generating, compiling and executing temporary test artifacts.
+|All for/while loops that could iterate >100 times have qore_check_cancel() checks|N/A|No committed C++ change. Test loops use Qore cancellation; largest individual loop has 71 iterations. Existing interruptible subprocess execution.
+|Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No committed C++ change. Test loops use Qore cancellation; largest individual loop has 71 iterations. Existing interruptible subprocess execution.
+|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No committed C++ change. Test loops use Qore cancellation; largest individual loop has 71 iterations. Existing interruptible subprocess execution.
+|No blocking operations without cancellation support|N/A|No committed C++ change. Test loops use Qore cancellation; largest individual loop has 71 iterations. Existing interruptible subprocess execution.
+|Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No shipped module, QPP, DataProvider or JNI change.
+|DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No shipped module, QPP, DataProvider or JNI change.
+|DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash<string, AbstractDataField>|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Response/output types use private Fields|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Password/secret fields have "sensitive": True|N/A|No shipped module, QPP, DataProvider or JNI change.
+|groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No shipped module, QPP, DataProvider or JNI change.
+|App logo stored as separate file, loaded at module level in Priv namespace|N/A|No shipped module, QPP, DataProvider or JNI change.
+|App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No shipped module, QPP, DataProvider or JNI change.
+|display_name is user-friendly ("Apache Avro" not "avro")|N/A|No shipped module, QPP, DataProvider or JNI change.
+|short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No shipped module, QPP, DataProvider or JNI change.
+|desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No bare field/option names in prose — must use backticks|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No shipped module, QPP, DataProvider or JNI change.
+|getRecordTypeImpl() signature: must be private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) — NOT returning *AbstractDataProviderType|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No shipped module, QPP, DataProvider or JNI change.
+|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No shipped module, QPP, DataProvider or JNI change.
+|No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|No production workaround retained. Rejected optimization fully reverted; complete new regression and evidence only.
+|Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|Production ownership/error paths unchanged after revert. Test uses scoped TmpDir and checks every subprocess status.
+|Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|No committed shared runtime state change. Prior frame publication, reader synchronization and variable-marker lifetime retained.
+|Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Typed code<int(int)> and typed two-argument outer callable force intended generic-to-native boundary. Strongly typed local strings stay live.
+|Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Experiment fails repeated speed-benefit gate and regresses callee-v2 control 4.70-5.61%; reverted rather than accepted on code-size evidence.
+|Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Nonzero child status and incorrect output fail the wrapper. Runtime failures, fallback behavior and stack checks are unchanged after revert.
+|Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Results/evidence record rejected diff, complete samples, control regression, code size and next proof obligation. No public API added.
+|QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No shipped module, QPP, DataProvider or JNI change.
+|Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Arguments are shell-quoted, generated sources are fixed test data, artifacts scoped to TmpDir. No credentials; measurement metadata allowlisted.
+|Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Candidate release/debug matrix and saved-baseline final boundary test pass. Debugger proves growth under padded53; corrected initial fixture did not exercise that path. Restored builds revalidated before commit.
+
+### Verification
+
+|!Check|!Outcome
+|Candidate matrix|159 cases / 15369 assertions in 27 wrappers plus 11 standalones per release/debug build; ten Python tests
+|Final boundary fixture|40 assertions each on candidate release/debug and saved baseline; AST/IR/JIT/tiered, O0/O3, v3/eager and runtime fallback
+|Actual growth path|Debugger stopped in outlined growth under native call from padded53; then fixture completed successfully
+|Coverage correction|Initial direct callers used native locals and did not hit growth; generic outer invocation forces TLS locals in final fixture
+|Old artifacts / reference|225/270 old v2/v3 records match; 270 independent checks per measured implementation
+|Timing integrity|240 unique jobs / 1200 finite positive samples; independently recomputed medians; no tests/builds/profile/docs checks during timings
+|Performance gate|Failed: repeat callback ranges overlap; callee-v2 wide/float regress 4.70%/5.61% with separated ranges
+|Resolution|Rejected C++ diff reverted; evidence and regression retained
+|Final source/build checks|No production diff; release/debug restored builds and final regression checked
+|Documentation / JSON|Strict qpp tables, valid evidence JSON and staged whitespace check
+
+The skill caused rejection of the unproven optimization, retaining the
+measurements and strengthening actual-path regression coverage. No full-suite,
+sanitizer or Linux runtime claim; Java parity remains open.
