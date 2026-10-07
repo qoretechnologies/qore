@@ -211,6 +211,13 @@ signature metadata. References constructed before parse finalization are not
 cached. Runtime state and actual argument types remain guarded. The typed ABI
 does not remove diagnostic frames or make the caller's merged result unboxed.
 
+`QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1` at compilation disables inline
+assignment checks for matching immediate values stored into exact native
+`int`, `float`, or `bool` locals. The enabled JIT/AOT path avoids general
+coercion/type resolution for those values, including boxed callback results.
+Nonmatching and heap-encoded values still use the original coercion path;
+typed callable declarations alone are not accepted as proof of actual results.
+
 `QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1`
 at compilation selects the original typed callback helpers instead of v2,
 which acquires an explicit live execution context once per generated invocation.

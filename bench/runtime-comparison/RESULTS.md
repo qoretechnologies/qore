@@ -1226,3 +1226,53 @@ Test development also found a pre-existing recursive per-frame capture failure
 in JIT mode, reproduced on the saved baseline and final runtime while AST/IR
 pass. It is not fixed here; the evidence retains the complete reproducer and
 the audit explains the distinction from the passing mixed-frame regression.
+
+## Exact native scalar assignment guards (2026-10-07)
+
+Baseline: 1e974dc50, including the native leaf-frame optimization above.
+The new LLVM lowering accepts matching immediate values directly when assigning
+boxed results to exact native int/float/bool locals. Other values retain the
+original coercion, ownership and exception behavior. This optimizes callback
+continuations and other dynamic scalar assignments; it does not change the
+IR interpreter or the callback ABI.
+
+Five-fork matched results, count 1024, three warmup and five measured 300 ms
+windows per fork; ns/element includes loop, call and checksum:
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!AOT time reduction|!Java JIT
+|indirect_call|226.39|225.63|50.25|27.91|44.4%|1.67
+|arithmetic|95.24|95.94|4.13|4.12|0.2%|0.89
+|polymorphic_call|425.11|411.04|295.56|273.30|7.5%|2.53
+
+The callback fork-mean ranges are 49.66–50.43 ns before and 27.48–28.10 ns
+after, with no overlap. Java's callback target still uses DONT_INLINE; Qore's
+native callback remains an indirect call. The remaining workload ratio is
+16.69x, not Java parity and not an isolated call-latency ratio.
+
+A second matched three-fork run at count 4096 confirms AOT callback
+49.79 → 27.08 ns (45.6% less time) and polymorphic calls 290.14 → 272.15 ns
+(6.2% less time). Arithmetic is effectively unchanged, 3.450 → 3.456 ns.
+IR callbacks are 220.72 → 224.64 ns in this repeat, with overlapping ranges;
+IR arithmetic is 94.09 → 94.43 ns and polymorphic calls 425.68 → 414.29 ns.
+No interpreter speedup is attributed to this LLVM-only change; the IR controls
+also reflect host variation and whole-library layout effects.
+
+A fresh pre-edit baseline run is retained separately and is not used for
+the improvement percentages. Before/after jobs are shuffled and sequential;
+each AOT artifact is compiled and executed with its matching library. No
+outliers were removed. Builds, tests and the five-second sampling run are
+separate from timing; ordinary host activity and light inspection remain
+uncontrolled. Platform and harness match the preceding experiment.
+
+The new sample no longer shows general coercion as a major cost in the
+callback loop. It still shows native frame/context publication, reference
+recognition, scalar cleanup calls, stack checks and per-iteration cancellation.
+These are the next optimization targets; samples are qualitative, not precise
+per-component cost or allocation counts.
+
+[Sanitized evidence](results-scalar-assignment-macos-arm64.json) retains all
+138 jobs / 690 samples across three experiments, source/library hashes and
+recomputed summaries. [Full audit](FOLLOWUP-AUDIT.md#native-scalar-assignment-audit-2026-10-07)
+records release/debug validation, code-generation checks, baseline parity,
+old-AOT compatibility and limitations. The audit added explicit generated-guard
+checks and kept non-strict destinations and owned heap values on the slow path.

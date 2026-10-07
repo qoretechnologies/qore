@@ -14403,8 +14403,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // A native local holds a value of its own type.  A NaN-boxed operand that is not known to be accepted
             // unchanged is checked and converted like an assignment to a boxed local, so an unsuitable value raises
-            // an error instead of being converted silently; returns the converted NaN-boxed value, or nullptr if
-            // the operand needs no check
+            // an error instead of being converted silently; returns the checked native value, or nullptr if
+            // the operand needs no check. Exact immediate scalars need neither type-path resolution nor
+            // assignment coercion; all other representations retain the full assignment contract.
             auto check_native_local_value = [&]() -> llvm::Value* {
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
@@ -14419,6 +14420,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "native_check_cleanup");
                 alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
                 clear_cleanup_before_reuse(cleanup);
+                llvm::Value* immediate = nullptr;
+                llvm::Value* native_immediate = nullptr;
+                if (!std::getenv("QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD")) {
+                    if (local_type == bigIntTypeInfo) {
+                        immediate = emitIsBoxedInt48(val);
+                        native_immediate = builder->CreateAShr(builder->CreateShl(val,
+                            llvm::ConstantInt::get(i64_type, 16)), llvm::ConstantInt::get(i64_type, 16));
+                    } else if (local_type == floatTypeInfo) {
+                        immediate = emitIsBoxedFloat(val);
+                        native_immediate = builder->CreateBitCast(builder->CreateSub(val,
+                            llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET)), double_type);
+                    } else if (local_type == boolTypeInfo) {
+                        native_immediate = builder->CreateICmpEQ(val,
+                            llvm::ConstantInt::get(i64_type, VAL_TRUE));
+                        immediate = builder->CreateOr(native_immediate, builder->CreateICmpEQ(val,
+                            llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+                    }
+                }
+                llvm::BasicBlock* immediate_bb = builder->GetInsertBlock();
+                llvm::BasicBlock* merge_bb = nullptr;
+                if (immediate) {
+                    auto* coerce_bb = llvm::BasicBlock::Create(ctx, "native_assign_coerce", llvm_func);
+                    merge_bb = llvm::BasicBlock::Create(ctx, "native_assign_merge", llvm_func);
+                    builder->CreateCondBr(immediate, merge_bb, coerce_bb);
+                    builder->SetInsertPoint(coerce_bb);
+                }
                 llvm::Value* checked;
                 if (aot_mode) {
                     // the type is passed by path: a native local has no runtime slot to resolve it from
@@ -14441,7 +14468,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (block_scoped_locals.count(key)) {
                     local_cleanup_allocas[key].push_back(cleanup);
                 }
-                return checked;
+                // Convert only after the slow assignment check has succeeded. Do not cache this under the
+                // input SSA id: coercion may change its value, and this edge does not dominate other uses.
+                auto convert_ft = llvm::FunctionType::get(is_native_float ? double_type : i64_type,
+                    {i64_type}, false);
+                const char* convert_name = is_native_float ? "qore_rt_to_float"
+                    : is_native_bool ? "qore_rt_to_bool" : "qore_rt_to_int";
+                llvm::Value* native_checked = builder->CreateCall(
+                    module.getOrInsertFunction(convert_name, convert_ft), {checked});
+                if (is_native_bool) {
+                    native_checked = builder->CreateICmpNE(native_checked, llvm::ConstantInt::get(i64_type, 0));
+                }
+                if (!merge_bb) {
+                    return native_checked;
+                }
+                llvm::BasicBlock* checked_bb = builder->GetInsertBlock();
+                builder->CreateBr(merge_bb);
+                builder->SetInsertPoint(merge_bb);
+                auto* result = builder->CreatePHI(native_checked->getType(), 2, "native_assign_value");
+                result->addIncoming(native_immediate, immediate_bb);
+                result->addIncoming(native_checked, checked_bb);
+                return result;
             };
 
             // Native int local: store native i64 directly (no boxing)
@@ -14449,10 +14496,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
                 llvm::Value* checked = check_native_local_value();
-                llvm::Value* native_val = checked
-                    ? builder->CreateCall(module.getOrInsertFunction("qore_rt_to_int",
-                        llvm::FunctionType::get(i64_type, {i64_type}, false)), {checked})
-                    : QoreTypeInfo::equal(
+                llvm::Value* native_val = checked ? checked : QoreTypeInfo::equal(
                         local_type, timeoutTypeInfo)
                     ? ensureTimeoutTypeInline(val, inst->operands[0].id)
                     : ensureIntTypeInline(val, inst->operands[0].id);
@@ -14468,10 +14512,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Native float local: store native double directly (no boxing)
             if (is_native_float) {
                 llvm::Value* checked = check_native_local_value();
-                llvm::Value* native_val = checked
-                    ? builder->CreateCall(module.getOrInsertFunction("qore_rt_to_float",
-                        llvm::FunctionType::get(double_type, {i64_type}, false)), {checked})
-                    : ensureFloatType(val, inst->operands[0].id, module);
+                llvm::Value* native_val = checked ? checked : ensureFloatType(val, inst->operands[0].id, module);
                 builder->CreateStore(native_val, it->second);
                 markLocalCacheFresh(key, llvm_func);
                 if (inst->result.isValid()) {
@@ -14486,7 +14527,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* checked = check_native_local_value();
                 llvm::Value* native_val = checked ? checked : val;
                 if (native_val->getType() != i1_type) {
-                    llvm::Value* boxed = checked ? checked : boxValue(val, inst->operands[0].id);
+                    llvm::Value* boxed = boxValue(val, inst->operands[0].id);
                     auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     native_val = builder->CreateICmpNE(

@@ -122,6 +122,17 @@ that fallback results, including NOTHING, retain their original semantics.
 Arguments remain borrowed through execution and consumed temporaries are
 released afterward. Invoke-form calls retain the previous dispatch. Thus this
 is a native scalar call boundary, not yet a fully unboxed callback loop.
+Assignments from boxed results to exact native `int`, `float`, and `bool`
+locals now check the immediate value tag and unpack matching values inline.
+That path skips type-path resolution, general assignment coercion, and the
+out-of-line scalar conversion. It does not assume that a typed callable's
+fallback returns its declared type: NOTHING, mismatched values, wide integers,
+heap-encoded floats, weak references, and soft/timeout destinations retain the
+existing coercion and exception handling. Cleanup slots are cleared before
+reuse on either edge; the slow edge still registers owned coercion results.
+This applies to JIT and AOT lowering, not the IR interpreter.
+`QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD` selects the previous checks at
+compilation for comparison. No callback ABI or runtime eligibility is changed.
 `QORE_DISABLE_AOT_TYPED_FUNCREF_CALL` suppresses both typed-entry attachment and
 typed caller lowering at compile time, leaving the boxed adapter available.
 The ABI is additive and does not change serialized descriptors; old artifacts

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "SCALAR-ASSIGNMENT-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+int sub storeInt(auto source) { int value = source; return value; }
+float sub storeFloat(auto source) { float value = source; return value; }
+bool sub storeBool(auto source) { bool value = source; return value; }
+softint sub storeSoftInt(auto source) { softint value = source; return value; }
+softfloat sub storeSoftFloat(auto source) { softfloat value = source; return value; }
+softbool sub storeSoftBool(auto source) { softbool value = source; return value; }
+timeout sub storeTimeout(auto source) { timeout value = source; return value; }
+
+thread_local int destroyed = 0;
+class Owned {
+    destructor() { ++destroyed; }
+}
+
+# Reuse each cleanup slot across immediate, allocated, converted, and rejected
+# values, including normal and exceptional block exits within the same function.
+sub mixedStores(list<auto> input) {
+    foreach auto source in (input) {
+        try {
+            int value = source;
+            expect(storeInt(source), value);
+        } catch (hash<ExceptionInfo> ex) {
+            expect("RUNTIME-TYPE-ERROR", ex.err);
+        }
+        try {
+            float value = source;
+            expect(storeFloat(source), value);
+        } catch (hash<ExceptionInfo> ex) {
+            expect("RUNTIME-TYPE-ERROR", ex.err);
+        }
+        try {
+            bool value = source;
+            expect(storeBool(source), value);
+        } catch (hash<ExceptionInfo> ex) {
+            expect("RUNTIME-TYPE-ERROR", ex.err);
+        }
+    }
+}
+
+for (int round = 0; round < 100; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, -140737488355328,
+            140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, storeInt(value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.0e308, -1.5e307, -3.0e307, -6.0e307, 1.0e308)) {
+        expect(value, storeFloat(value));
+    }
+    expect(True, storeFloat(@nan@).nanp());
+    expect(True, storeFloat(-@nan@).nanp());
+    expect(True, storeBool(True));
+    expect(False, storeBool(False));
+    expect(7.0, storeFloat(7));
+    expect(42, storeSoftInt("42"));
+    expect(2.5, storeSoftFloat("2.5"));
+    expect(False, storeSoftBool(""));
+    expect(1000, storeTimeout(1s));
+    foreach code<auto(auto)> assign in ((\storeInt(), \storeFloat(), \storeBool())) {
+        foreach auto invalid in ((NOTHING, "wrong", (1, 2), new Owned())) {
+            try {
+                assign(invalid);
+                throw "SCALAR-ASSIGNMENT-TEST", "invalid assignment must throw";
+            } catch (hash<ExceptionInfo> ex) {
+                expect("RUNTIME-TYPE-ERROR", ex.err);
+            }
+        }
+    }
+    mixedStores((7, 140737488355328, -140737488355329, 1.25, -1.0e308, -3.0e307, -6.0e307,
+        True, False, NOTHING, "short", "a long string requiring node ownership", new Owned(), 8));
+    expect((round + 1) * 4, destroyed);
+}
+printf("native-scalar-assignment: ok\n");
