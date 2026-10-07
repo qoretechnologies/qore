@@ -4,6 +4,9 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Out-of-tree builds now record the lexer source at its correct location in debug information,
+    allowing RPM debug-source extraction and debugger source lookup to find <tt>lib/scanner.lpp</tt>.
+
     Gemini and Vertex AI generation requests now use model-specific reasoning controls. Gemini 3.x omits
     deprecated sampling parameters and numeric thinking budgets, including values supplied in request body
     overrides. Set <tt>reasoning_effort</tt> or native <tt>thinkingConfig.thinkingLevel</tt> to control reasoning;

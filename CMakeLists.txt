@@ -1606,7 +1606,10 @@ if(BISON_VERSION VERSION_GREATER_EQUAL 3.0)
 else()
     bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 endif()
-flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
+# Flex line directives must identify the source independently of the compiler's
+# build-directory working directory, including in separate RPM debug sources.
+flex_target(qorescanner "${CMAKE_CURRENT_SOURCE_DIR}/lib/scanner.lpp"
+    ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
 # Enforce the parser grammar conflict budget (0 shift/reduce, 1 reduce/reduce).  Re-runs whenever
