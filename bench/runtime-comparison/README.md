@@ -276,6 +276,14 @@ closure-marker push handles an available slot inline and outlines full-block
 growth/reuse; the entry fields and publication ordering are unchanged. V1 remains
 available as a functional control; this does not broaden native eligibility.
 
+`QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1` at compilation selects v2 instead
+of v3's invocation-local prepared target. V3 caches immutable facts behind an
+owned reference; Program/debugger/compiled-entry and lazy-readiness checks stay
+live. It retains neither generic callbacks nor captured objects. Its first
+word participates in persistent boxed cleanup and clearing it invalidates the
+descriptor. Old v1/v2 artifacts remain supported; new v3 artifacts require the
+updated runtime. Measure this switch separately from before/after library runs.
+
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`
 directly. Arguments are `KERNEL COUNT WARMUP SAMPLES MS SEED`:
 

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 %modern
 %no-child-restrictions
+%allow-debugger
 
 sub expect(auto expected, auto actual) {
     if (expected !== actual) {
@@ -10,6 +11,8 @@ sub expect(auto expected, auto actual) {
     }
 }
 int sub intIdentity(int value) { return value; }
+int sub plusOne(int value) { return value + 1; }
+int sub minusOne(int value) { return value - 1; }
 float sub floatIdentity(float value) { return value; }
 float sub floatAdd(float value) { return value + 0.5; }
 float sub floatMul(float value) { return value * -1.0; }
@@ -163,6 +166,25 @@ for (int round = 0; round < 30; ++round) {
     }
 }
 alternatingCallbacks(\intIdentity(), \unexpected(), \ownedResult());
+
+# Each iteration creates a fresh reference. A cached pointer must retain its
+# owner, replace it on identity changes, and never confuse recycled addresses.
+# Catching a separate exception can drain invocation cleanups: a cleared owner
+# must invalidate every borrowed field before the next call-site hit.
+sub replacedNativeTargets() {
+    int value = 1125899906842624;
+    for (int i = 0; i < 300; ++i) {
+        code<int(int)> fn = i & 1 ? \minusOne() : \plusOne();
+        value = fn(value);
+        delete fn;
+        expect(1125899906842624 + (i & 1 ? 0 : 1), value);
+        if (i % 3 == 0) {
+            try { throw "PREPARED-REF-CATCH", "cleanup and resume"; }
+            catch (hash<ExceptionInfo> ex) { expect("PREPARED-REF-CATCH", ex.err); }
+        }
+    }
+}
+replacedNativeTargets();
 unexpectedValue = 7;
 expect(7.0, assignedFloat(\unexpectedFloat(), 1.0));
 unexpectedValue = True;
@@ -207,4 +229,46 @@ foreign.parse("%modern\nint sub identity(int value) { return value; }\n"
     "code<int(int)> sub callback() { return \\identity(); }", "native-continuation-foreign");
 code<int(int)> foreignRef = foreign.callFunction("callback");
 expect(1125899906842624, assignedInt(foreignRef, 1125899906842624));
+
+sub replacedForeignTargets(code<int(int)> local, code<int(int)> foreignRef) {
+    int value = 7;
+    for (int i = 0; i < 90; ++i) {
+        code<int(int)> fn = i % 3 == 0 ? local : foreignRef;
+        value = fn(value);
+        expect(7 + (i / 3 + 1), value);
+    }
+}
+replacedForeignTargets(\plusOne(), foreignRef);
+
+thread_local bool recordingCallback = False;
+class CallbackDebugger inherits DebugProgram {
+    public { int entries = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int block, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        if (recordingCallback) { ++entries; }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+sub debuggerAfterCacheHit(code<int(int)> fn) {
+    CallbackDebugger dbg();
+    ProgramControl pc = ProgramControl::getProgram();
+    int value = 0;
+    for (int i = 0; i < 8; ++i) {
+        if (i == 2) { dbg.addProgram(pc); }
+        if (i == 5) { dbg.removeProgram(pc); }
+        recordingCallback = True;
+        value = fn(value);
+        recordingCallback = False;
+    }
+    expect(8, value);
+    expect(3, dbg.entries);
+}
+debuggerAfterCacheHit(\plusOne());
 printf("native-funcref-continuation: ok\n");

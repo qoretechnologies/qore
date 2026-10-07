@@ -209,6 +209,35 @@ debugger fallback, exception boundary or policy check is removed.
 
 ### Explicit execution context
 
+Typed callback-helper ABI v3 adds a per-call-site, invocation-local prepared
+target descriptor after v2's RuntimeConfig argument. On the first eligible
+call it retains the exact FunctionCallReferenceNode and caches only immutable
+binding, signature, name and source-metadata pointers. A positive hit bypasses
+boxed type decoding, exact RTTI and repeated metadata extraction. Current
+Program identity, debugger attachment, normal compiled-entry identity, context
+readiness and PC-map readiness remain live checks on every call. No body is
+materialized merely to prepare a reference.
+
+The descriptor's first word is an owned boxed reference and its validity token.
+It starts as NOTHING and participates in the existing persistent invocation
+cleanup, including exception exits; clearing that word invalidates all borrowed
+fields even when a catch resumes execution. A different eligible reference
+replaces the owner. Keeping the old reference alive until replacement prevents
+allocator address reuse from producing false identity hits. Ineligible values
+are never retained: captures, method-reference object lifetimes and generic
+callback destruction timing stay unchanged. Exact function references have no
+captures, user destructor or weak-reference semantics and retain only their
+existing weak Program dependency. Slots never escape their native invocation
+or cross threads. Frame publication and stack/cancellation checks are unchanged.
+
+The descriptor layout and helper names are versioned native ABI, not serialized
+AOT metadata. The compiler describes pointers using the target LLVM layout for
+cross compilation. Existing v1/v2 helpers remain available; new v3 artifacts
+require the updated runtime. `QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET` selects
+v2 at compilation, independently of the v1 RuntimeConfig comparison switch.
+The continuation regression additionally checks target replacement, foreign
+targets, caught-exception reuse and debugger attach/detach after cache warm-up.
+
 Typed callback-helper ABI v2 adds a borrowed `RuntimeConfig*` after the v1
 arguments. Generated functions acquire it once in their logical entry, after
 the native stack guard, and reuse it for their callback sites. The callee's

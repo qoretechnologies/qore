@@ -435,7 +435,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_funcref_" #NAME "_" #ARG "_v1", \
         reinterpret_cast<void*>(&qore_rt_try_funcref_##NAME##_##ARG##_v1) }, \
     { "qore_rt_try_funcref_" #NAME "_" #ARG "_v2", \
-        reinterpret_cast<void*>(&qore_rt_try_funcref_##NAME##_##ARG##_v2) },
+        reinterpret_cast<void*>(&qore_rt_try_funcref_##NAME##_##ARG##_v2) }, \
+    { "qore_rt_try_funcref_" #NAME "_" #ARG "_v3", \
+        reinterpret_cast<void*>(&qore_rt_try_funcref_##NAME##_##ARG##_v3) },
 #define QORE_TYPED_FUNCREF_RESULT_SYMBOLS(NAME) \
     QORE_TYPED_FUNCREF_SYMBOL(NAME, 0) \
     QORE_TYPED_FUNCREF_SYMBOL(NAME, int) \
@@ -10102,6 +10104,11 @@ public:
           helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
               uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
+    QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache,
+            ExceptionSink* xsink)
+        : name(*cache.name), statements(cache.statements), pgm(cache.pgm),
+          helper(rc, this, loc, cache.parse_loc, cache.uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
+    }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
     bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
@@ -10119,6 +10126,36 @@ private:
 
 extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
+}
+
+static bool prepareTypedFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, uint32_t signature,
+        QorePreparedFunctionRefV3& cache, ExceptionSink* xsink) {
+    if (cache.owner && cache.owner == ref_bits) {
+        // No argument/type/RTTI decoding on a positive hit. These three facts
+        // are NOT immutable and must still be checked on every call.
+        return cache.pgm == RuntimeConfigNativeAccess::getProgram(rc)
+            && !qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
+            && cache.ref->getNormalEntry() == cache.uvb->getCachedAOTFunction();
+    }
+    const auto* ref = getTypedFunctionRef(ref_bits, signature, RuntimeConfigNativeAccess::getProgram(rc));
+    if (!ref) {
+        // Do not retain generic callbacks: captures and object-method references
+        // have observable destruction timing. Do not materialize a body here.
+        return false;
+    }
+    QoreValue old = fromBits(cache.owner);
+    cache.owner = toBits(fromBits(ref_bits).refSelf());
+    cache.ref = ref;
+    cache.uvb = ref->getFastCallMetadata().uvb;
+    cache.pgm = ref->getProgram();
+    cache.entry = ref->getTypedEntry(signature);
+    cache.name = &ref->getFunction()->getNameStr();
+    cache.statements = cache.uvb->getStatementBlock();
+    cache.parse_loc = cache.uvb->getUserSignature()->getParseLocation();
+    // The old owner, if present, is also an exact non-capturing function ref.
+    // It has only a weak Program dependency; no user destructor can run here.
+    old.discard(xsink);
+    return true;
 }
 
 template <typename Result, uint32_t Signature, typename... Args>
@@ -10161,6 +10198,43 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     return 1;
 }
 
+template <typename Result, uint32_t Signature, typename... Args>
+static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& cache,
+        uint64_t ref_bits, Result* result, ExceptionSink* xsink, Args... args) {
+    if (!prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
+        return 0;
+    }
+    *result = Result{};
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        return 1;
+    }
+    // Context readiness remains live; preserve v2's lazy failure timing and
+    // Program context setup on first use, including stripped source artifacts.
+    QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
+    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+        ProgramCallContextHelper pcch(cache.pgm);
+        if (!ctx) {
+            if (!cache.uvb->ensureAOTContext(cache.name->c_str(), xsink)) {
+                return 1;
+            }
+            ctx = cache.uvb->getCachedAOTContext();
+        }
+        qore_aot_ensure_pc_loc_map(ctx);
+    }
+    QoreExplicitFunctionRefStackLocation frame(rc, cache, xsink);
+    if (*xsink) {
+        return 1;
+    }
+    using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
+    auto entry = reinterpret_cast<Entry>(cache.entry);
+    try {
+        *result = entry(args..., ctx, xsink);
+    } catch (const QoreJITException&) {
+        // The sink already owns the exception; the frame restores all state.
+    }
+    return 1;
+}
+
 #define QORE_TYPED_FUNCREF_UNARY(NAME, TYPE, RET_KIND, ARG_NAME, ARG_TYPE, ARG_KIND) \
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v1( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink) { \
@@ -10169,6 +10243,11 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v2( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, ref, result, xsink, arg); \
+    } \
+    extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
+            uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
+            QorePreparedFunctionRefV3* cache) { \
+        return tryPreparedFunctionRef<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, *cache, ref, result, xsink, arg); \
     }
 #define QORE_TYPED_FUNCREF_RESULT(NAME, TYPE, KIND) \
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_0_v1( \
@@ -10178,6 +10257,11 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_0_v2( \
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, KIND>(*rc, ref, result, xsink); \
+    } \
+    extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_0_v3( \
+            uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
+            QorePreparedFunctionRefV3* cache) { \
+        return tryPreparedFunctionRef<TYPE, KIND>(*rc, *cache, ref, result, xsink); \
     } \
     QORE_TYPED_FUNCREF_UNARY(NAME, TYPE, KIND, int, int64_t, 1) \
     QORE_TYPED_FUNCREF_UNARY(NAME, TYPE, KIND, float, double, 2) \

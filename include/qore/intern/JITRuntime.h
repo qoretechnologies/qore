@@ -43,6 +43,34 @@ class QoreValue;
 class QoreVarInfo;
 class UserVariantBase;
 class RuntimeConfig;
+class FunctionCallReferenceNode;
+class QoreProgram;
+class StatementBlock;
+class QoreProgramLocation;
+
+//! Invocation-local, positive-only cache for the v3 typed callback helpers.
+/** The generated caller initializes owner to NOTHING and registers that first
+    word with its persistent boxed-value cleanup. All other fields are borrowed
+    from owner and valid only when owner is non-NOTHING. Clearing owner on any
+    cleanup invalidates the entire cache, including across caught exceptions.
+    Only exact FunctionCallReferenceNode objects (no captures, user destructor,
+    or weak-reference semantics) are retained. A slot belongs to one signature
+    and one native invocation; it must never be shared across threads.
+
+    This is a versioned native helper ABI, not serialized AOT metadata. Keep the
+    layout stable for existing v3 artifacts; extend via a new helper version.
+*/
+struct QorePreparedFunctionRefV3 {
+    uint64_t owner;
+    const FunctionCallReferenceNode* ref;
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    void (*entry)();
+    const std::string* name;
+    const StatementBlock* statements;
+    const QoreProgramLocation* parse_loc;
+};
+static_assert(offsetof(QorePreparedFunctionRefV3, owner) == 0);
 
 struct QoreJITRuntimeSymbolInfo {
     const char* name;
@@ -827,7 +855,11 @@ int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const char* operation, Run
     int qore_rt_try_funcref_##NAME##_0_v2(uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
     int qore_rt_try_funcref_##NAME##_int_v2(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
     int qore_rt_try_funcref_##NAME##_float_v2(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
-    int qore_rt_try_funcref_##NAME##_bool_v2(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc);
+    int qore_rt_try_funcref_##NAME##_bool_v2(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
+    int qore_rt_try_funcref_##NAME##_0_v3(uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_int_v3(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_float_v3(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_bool_v3(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache);
 QORE_DECLARE_TYPED_FUNCREF_RESULT(int, int64_t)
 QORE_DECLARE_TYPED_FUNCREF_RESULT(float, double)
 QORE_DECLARE_TYPED_FUNCREF_RESULT(bool, int64_t)

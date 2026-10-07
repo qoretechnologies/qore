@@ -1647,3 +1647,88 @@ library/compiler hashes, startup observations and independently checked medians.
 unassigned/deleted-input coverage, and the generic-fallback performance control.
 No full-suite, sanitizer, Linux or allocation-count claim is made; previously
 recorded correctness and toolchain limitations remain separate.
+
+## Prepared callback targets (2026-10-07)
+
+The next iteration caches immutable target/signature facts in an owned,
+invocation-local descriptor. Its owner word is also its validity token and
+participates in persistent exit/exception cleanup. Exact non-capturing function
+references only are retained; generic callback destruction timing is unchanged.
+Program/debugger/compiled-entry and lazy context/PC-map readiness remain live.
+This adds v3 helpers without changing v1/v2 or serialized AOT metadata.
+
+### Controlled before/after results
+
+Baseline is `75d26dde3`. Identical benchmark sources and five shuffled forks
+use three warmup and five measurement windows of 300 ms. Values below are
+median fork means, ns/element including loop/computation/checksum, not isolated
+call latency. Java is Temurin 25.0.2/JMH 1.37 with retained DONT_INLINE targets.
+No builds, tests or profiles ran alongside either timing experiment.
+
+Count 1024 (`run-pvs_rt7k`):
+
+|!Kernel|!Before|!After|!Reduction|!Java
+|arithmetic|2.868|2.878|-0.3%|0.911
+|direct_call|2.888|2.892|-0.1%|0.893
+|indirect_call|19.381|15.849|18.2%|1.676
+|indirect_wide|19.456|15.829|18.6%|1.678
+|indirect_float|19.600|16.006|18.3%|1.649
+|indirect_tagged_float|19.648|16.307|17.0%|1.642
+|indirect_branch_float|127.201|129.103|-1.5%|1.659
+
+Count 4096 repeat (`run-wrwqxgwx`):
+
+|!Kernel|!Before|!After|!Reduction
+|arithmetic|2.034|2.033|0.0%
+|direct_call|2.040|2.043|-0.2%
+|indirect_call|18.635|14.896|20.1%
+|indirect_wide|18.625|14.950|19.7%
+|indirect_float|18.471|15.206|17.7%
+|indirect_tagged_float|18.529|15.409|16.8%
+|indirect_branch_float|125.102|126.640|-1.2%
+|polymorphic_call|272.337|274.841|-0.9%
+|temporary_hash|304.948|318.005|-4.3%
+
+All four native callback fork ranges are nonoverlapping in both runs:
+**17-20% less time**. Arithmetic/direct-call controls overlap. Generic
+branch-float medians are 1.2-1.5% slower, with overlapping ranges in both runs;
+that small consistent cost is retained, not presented as an improvement.
+Polymorphic and temporary-hash controls also overlap; temporary-hash's 4.3%
+median increase is noisy (after 302.4-322.1 versus before 300.4-305.7 ns).
+No generic speedup or proof of zero regression is claimed.
+
+Native text grows **75452 to 77592 bytes** (2.8%); the stack-local descriptor
+and its cleanup trade code/stack space for less repeated validation. Compilation
+and startup observations are retained but are not speedup evidence.
+Native retained callbacks still take **9.4-9.9x Java's time** at count 1024.
+
+### Validation, audit and next iteration
+
+Release and debug each pass **107 cases / 11969 assertions** in 19 wrappers
+plus four standalone scripts. Added cases cover fresh target replacement,
+caught-exception reuse, mixed local/foreign targets, and debugger attach/detach
+after warm-up. The strengthened fixture also passes the saved baseline.
+A pre-change AOT artifact's 225 records match the new runtime byte-for-byte;
+each benchmark implementation passes all 225 independent reference checks.
+Ten Python harness tests pass.
+
+[Evidence](results-prepared-target-macos-arm64.json) retains **195 jobs /
+975 samples**, all finite and positive with independently recomputed medians,
+source/library/compiler hashes, inspection hashes and known limitations.
+[Full audit](FOLLOWUP-AUDIT.md#prepared-target-audit-2026-10-07) reports all
+62 checks. The audit specifically checked ownership, cache invalidation,
+target pointer layout, live debugger guards and unchanged publication order.
+No full-suite, sanitizer, Linux or allocation-count claim.
+
+A separate five-second profile removes repeated boxed type/RTTI work from the
+retained-callback hot path. Frame construction/restoration dominates; the
+cache-hit function is still outlined. The first diagnostic profile overlapped
+a qcc inspection, so it was discarded and repeated alone; neither overlapped
+benchmark timings. Sampling is qualitative, not additive cost attribution.
+
+Next, measure inlining the native frame helper and keeping the positive cache
+hit inline while outlining cache misses. Preserve all stack guards, markers,
+context restoration and stack-reader handshakes. Then revisit the end-to-end
+RuntimeConfig entry ABI and compact observable-frame design. Java parity is
+not reached, and the unchanged generic float-branch path still needs a separate
+whole-body proof extension.

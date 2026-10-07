@@ -37,6 +37,7 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
         }
         TmpDir dir("qore-native-continuation-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ",
                 "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ", "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ", "QORE_AOT_EH=1 ",
@@ -49,6 +50,10 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
                     && !prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL");
                 assertEq(enabled, generated.find("typed_funcref_native_value") >= 0,
                     "native continuation selection");
+                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")
+                        && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG")
+                        && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET"),
+                    generated.find("qore_rt_try_funcref_int_int_v3") >= 0, "prepared target selection");
                 assertEq(!prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")
                         && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY"),
                     generated =~ /floatAdd[^\n]*funcref_typed_v1/, "float leaf adapter selection");

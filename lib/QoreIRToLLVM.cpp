@@ -33,6 +33,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRToLLVM.h"
+#include "qore/intern/JITRuntime.h"
 
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
@@ -680,8 +681,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     builder->SetInsertPoint(attempt);
     const char* names[] = {"0", "int", "float", "bool"};
     bool explicit_context = !std::getenv("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG");
+    bool prepared_target = explicit_context && !std::getenv("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
     std::string helper_name = std::string("qore_rt_try_funcref_") + names[ret_kind] + "_"
-        + names[arg_kind] + (explicit_context ? "_v2" : "_v1");
+        + names[arg_kind] + (prepared_target ? "_v3" : explicit_context ? "_v2" : "_v1");
     std::vector<llvm::Type*> types{i64_type};
     std::vector<llvm::Value*> args{ref_boxed};
     if (arg) {
@@ -703,6 +705,21 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
         }
         types.push_back(ptr_type);
         args.push_back(fast_runtime_config);
+    }
+    if (prepared_target) {
+        // A positive-only owned descriptor per call site and native invocation.
+        // The first word is its ownership/validity token. Ordinary temp drains
+        // leave it alone; all exit/EH cleanup paths clear it to NOTHING, which
+        // also prevents stale-pointer hits if a catch resumes this invocation.
+        // Describe the ABI with target-sized pointers (not host sizeof) so AOT
+        // cross compilation uses the destination layout.
+        auto* cache_type = llvm::StructType::get(ctx,
+            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type});
+        auto* cache = entry_builder.CreateAlloca(cache_type, nullptr, "prepared_funcref");
+        entry_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cache);
+        registerPersistentCleanupAlloca(cache);
+        types.push_back(ptr_type);
+        args.push_back(cache);
     }
     auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
     llvm::Value* handled = builder->CreateCall(helper, args);
