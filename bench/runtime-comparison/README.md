@@ -70,6 +70,9 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |indirect_wide|Same low-bit recurrence with bit 50 retained across the callback boundary; checksum uses low 16 bits
 |indirect_float|Double callback with bounded addition/subtraction and an integer checksum
 |indirect_tagged_float|Double callback alternating -3e307 and -6e307, which require heap encoding when boxed in Qore
+|indirect_affine|Integer callback adding 17, exercising the simple scalar-leaf summary
+|indirect_affine_wide|The same callback with values above the inline 48-bit integer range; checksum uses low 16 bits
+|indirect_branch_int|Integer comparison selecting one of two affine expressions
 |indirect_branch_float|Comparison/branching float target that retains generic Qore dispatch; fallback control
 |polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
@@ -109,9 +112,20 @@ throwing or side-effecting branches remain on the ordinary path. Polymorphic
 dispatch and temporary hashes remain controls. `QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT`
 disables this summary optimization at compilation.
 
+Integer native callbacks also consume complete scalar-leaf summaries: six
+nonthrowing binary operations, affine compositions and integer branch/select
+bodies. Previously these summaries suppressed the general integer-expression
+proof but were not used by native callback admission. Division, modulo and
+side effects remain excluded. The affine/wide-affine/branch-int workloads
+measure this admission gap using identical sources with both compilers.
+`QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE` retains the typed v1 adapter but
+disables re-emission of these leaves into callee v2/v3. Disabling compact CFG
+summaries instead allows the existing general-expression proof to handle
+eligible branch bodies; it is not a blanket native-callback disable.
+
 ## Measurement contract
 
-- Each selected mode first passes 225 checks: every kernel at sizes 0, 1, 17, 1024,
+- Each selected mode first passes 270 checks: every kernel at sizes 0, 1, 17, 1024,
   and 4096, each with seeds 0, 7, and 65535. Python independently computes the
   expected results. Missing, duplicate, extra, or incorrect records fail.
 - Kernel definitions are identical between Qore IR and AOT. There are no

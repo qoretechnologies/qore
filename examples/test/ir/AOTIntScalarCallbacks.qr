@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub scalarAdd(int value) { return value + 17; }
+int sub scalarSub(int value) { return 17 - value; }
+int sub scalarMul(int value) { return value * 3; }
+int sub scalarAnd(int value) { return value & 255; }
+int sub scalarOr(int value) { return value | 256; }
+int sub scalarXor(int value) { return value ^ 255; }
+int sub scalarAffine(int value) { return scalarAdd(value) * 3 - 5; }
+int sub scalarMin(int value) { if (value < 17) { return value; } return 17; }
+int sub scalarMax(int value) { if (value < 17) { return 17; } return value; }
+int sub scalarEq(int value) { if (value == 17) { return value + 2; } return value - 3; }
+int sub scalarNe(int value) { if (value != 17) { return value + 2; } return value - 3; }
+int sub scalarLt(int value) { if (value < 17) { return value + 2; } return value - 3; }
+int sub scalarLe(int value) { if (value <= 17) { return value + 2; } return value - 3; }
+int sub scalarGt(int value) { if (value > 17) { return value + 2; } return value - 3; }
+int sub scalarGe(int value) { if (value >= 17) { return value + 2; } return value - 3; }
+int sub scalarRight(int value) { if (17 > value) { return value * 2; } return 5 - value; }
+int sub scalarBranch(int value) {
+    if (value > 32767) { return value - 32767; }
+    return value + 17;
+}
+int sub scalarDivision(int value) { return 100 / value; }
+int sub scalarModulo(int value) { return 100 % value; }
+our int scalarEffects = 0;
+int sub scalarEffect(int value) { ++scalarEffects; return value + 17; }
+int sub scalarConditionalDivision(int value) { return value == 0 ? 7 : 100 / value; }
+int sub scalarTwo(int a, int b) { return a + b; }
+
+int sub scalarInvoke(code<int(int)> fn, int value) { return fn(value); }
+int sub scalarInvokeTwo(code<int(int, int)> fn, int a, int b) { return fn(a, b); }
+sub scalarExpect(int expected, int actual) {
+    if (expected !== actual) {
+        throw "INT-SCALAR-TEST", sprintf("expected %d, got %d", expected, actual);
+    }
+}
+sub scalarRow(int value, int eq, int ne, int lt, int le, int gt, int ge) {
+    scalarExpect(eq, scalarInvoke(\scalarEq(), value));
+    scalarExpect(ne, scalarInvoke(\scalarNe(), value));
+    scalarExpect(lt, scalarInvoke(\scalarLt(), value));
+    scalarExpect(le, scalarInvoke(\scalarLe(), value));
+    scalarExpect(gt, scalarInvoke(\scalarGt(), value));
+    scalarExpect(ge, scalarInvoke(\scalarGe(), value));
+}
+sub scalarCheck() {
+    scalarExpect(24, scalarInvoke(\scalarAdd(), 7));
+    scalarExpect(10, scalarInvoke(\scalarSub(), 7));
+    scalarExpect(21, scalarInvoke(\scalarMul(), 7));
+    scalarExpect(7, scalarInvoke(\scalarAnd(), 263));
+    scalarExpect(263, scalarInvoke(\scalarOr(), 7));
+    scalarExpect(248, scalarInvoke(\scalarXor(), 7));
+    scalarExpect(67, scalarInvoke(\scalarAffine(), 7));
+    scalarExpect(7, scalarInvoke(\scalarMin(), 7));
+    scalarExpect(17, scalarInvoke(\scalarMin(), 27));
+    scalarExpect(17, scalarInvoke(\scalarMax(), 7));
+    scalarExpect(27, scalarInvoke(\scalarMax(), 27));
+    scalarRow(16, 13, 18, 18, 18, 13, 13);
+    scalarRow(17, 19, 14, 14, 19, 14, 19);
+    scalarRow(18, 15, 20, 15, 15, 20, 20);
+    scalarExpect(14, scalarInvoke(\scalarRight(), 7));
+    scalarExpect(-22, scalarInvoke(\scalarRight(), 27));
+    scalarExpect(32768, scalarInvoke(\scalarBranch(), 65535));
+    scalarExpect(32784, scalarInvoke(\scalarBranch(), 32767));
+    scalarExpect(20, scalarInvoke(\scalarDivision(), 5));
+    scalarExpect(2, scalarInvoke(\scalarModulo(), 7));
+    scalarExpect(7, scalarInvoke(\scalarConditionalDivision(), 0));
+    scalarExpect(20, scalarInvoke(\scalarConditionalDivision(), 5));
+    int before = scalarEffects;
+    scalarExpect(24, scalarInvoke(\scalarEffect(), 7));
+    scalarExpect(before + 1, scalarEffects);
+    scalarExpect(24, scalarInvokeTwo(\scalarTwo(), 7, 17));
+    # Full signed width, wrapping arithmetic, and values that require boxing.
+    int maximum = 9223372036854775807;
+    int minimum = -9223372036854775807 - 1;
+    scalarExpect(minimum + 16, scalarInvoke(\scalarAdd(), maximum));
+    scalarExpect(minimum + 17, scalarInvoke(\scalarSub(), minimum));
+    scalarExpect(maximum - 2, scalarInvoke(\scalarMul(), maximum));
+    scalarExpect(minimum, scalarInvoke(\scalarMul(), minimum));
+    scalarExpect(minimum + 43, scalarInvoke(\scalarAffine(), maximum));
+    scalarExpect(minimum + 46, scalarInvoke(\scalarAffine(), minimum));
+    scalarExpect(minimum, scalarInvoke(\scalarMin(), minimum));
+    scalarExpect(maximum, scalarInvoke(\scalarMax(), maximum));
+    scalarExpect(1125899906842641, scalarInvoke(\scalarAdd(), 1125899906842624));
+    scalarExpect(1125899906842641, scalarInvokeTwo(\scalarTwo(), 1125899906842624, 17));
+    foreach code<int(int)> fn in ((\scalarDivision(), \scalarModulo())) {
+        bool caught = False;
+        try { scalarInvoke(fn, 0); }
+        catch (hash<auto> ex) { caught = ex.err == "DIVISION-BY-ZERO"; }
+        if (!caught) { throw "INT-SCALAR-TEST", "division/modulo exception missing"; }
+    }
+}
+for (int round = 0; round < 30; ++round) { scalarCheck(); }
+printf("int-scalar-callbacks: ok\n");

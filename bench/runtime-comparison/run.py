@@ -23,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
            "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
+           "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",
            "list_mutate", "temporary_list", "temporary_hash")
 MODES = ("qore-ir", "qore-aot", "java-int", "java-jit")
@@ -82,9 +83,13 @@ def reference(name, count, seed):
             seed = 65535 - seed
             result += seed
             continue
-        if name == "indirect_branch_float":
+        if name in ("indirect_branch_float", "indirect_branch_int"):
             seed = seed - 32767 if seed > 32767 else seed + 17
             result += seed
+            continue
+        if name in ("indirect_affine", "indirect_affine_wide"):
+            seed += 17
+            result += seed & 65535 if name == "indirect_affine_wide" else seed
             continue
         if name == "indirect_tagged_float":
             result += 6 if (seed + index) & 1 else 3

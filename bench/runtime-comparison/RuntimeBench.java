@@ -30,6 +30,7 @@ public class RuntimeBench {
     private Stepper receiver;
     private LongUnaryOperator callback;
     private LongUnaryOperator wideCallback;
+    private LongUnaryOperator affineCallback, branchIntCallback;
     private DoubleUnaryOperator floatCallback, taggedCallback, branchCallback;
     private DynamicStep a, b, c;
 
@@ -39,6 +40,8 @@ public class RuntimeBench {
         receiver = new Stepper();
         callback = RuntimeBench::boundaryStep;
         wideCallback = RuntimeBench::wideStep;
+        affineCallback = RuntimeBench::affineStep;
+        branchIntCallback = RuntimeBench::branchIntStep;
         floatCallback = RuntimeBench::floatStep;
         taggedCallback = RuntimeBench::taggedFloatStep;
         branchCallback = RuntimeBench::branchFloatStep;
@@ -65,6 +68,15 @@ public class RuntimeBench {
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     static long wideStep(long value) {
         return ((value * 33 + 17) & 65535) | 1125899906842624L;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long affineStep(long value) {
+        return value + 17;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long branchIntStep(long value) {
+        if (value > 32767) { return value - 32767; }
+        return value + 17;
     }
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     static double floatStep(double value) {
@@ -255,6 +267,9 @@ public class RuntimeBench {
     @Benchmark public long method_call() { return methodCall(count, nextSeed(), receiver); }
     @Benchmark public long indirect_call() { return indirectCall(count, nextSeed(), callback); }
     @Benchmark public long indirect_wide() { return wideIndirectCall(count, nextSeed(), wideCallback); }
+    @Benchmark public long indirect_affine() { return indirectCall(count, nextSeed(), affineCallback); }
+    @Benchmark public long indirect_affine_wide() { return wideIndirectCall(count, nextSeed(), affineCallback); }
+    @Benchmark public long indirect_branch_int() { return indirectCall(count, nextSeed(), branchIntCallback); }
     @Benchmark public long indirect_float() { return floatIndirectCall(count, nextSeed(), floatCallback); }
     @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
     @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
@@ -277,6 +292,7 @@ public class RuntimeBench {
         Stepper receiver = new Stepper();
         LongUnaryOperator callback = RuntimeBench::boundaryStep;
         LongUnaryOperator wideCallback = RuntimeBench::wideStep;
+        LongUnaryOperator affineCallback = RuntimeBench::affineStep, branchIntCallback = RuntimeBench::branchIntStep;
         DoubleUnaryOperator floatCallback = RuntimeBench::floatStep, taggedCallback = RuntimeBench::taggedFloatStep;
         DoubleUnaryOperator branchCallback = RuntimeBench::branchFloatStep;
         DynamicStep a = new DynamicStep(), b = new DynamicStepB(), c = new DynamicStepC();
@@ -285,6 +301,7 @@ public class RuntimeBench {
             for (long seed : new long[] {0, 7, 65535}) {
                 String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
                     "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
+                    "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                     "polymorphic_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -292,6 +309,8 @@ public class RuntimeBench {
                     wideIndirectCall(count, seed, wideCallback), floatIndirectCall(count, seed, floatCallback),
                     taggedFloatIndirectCall(count, seed, taggedCallback),
                     floatIndirectCall(count, seed, branchCallback),
+                    indirectCall(count, seed, affineCallback), wideIndirectCall(count, seed, affineCallback),
+                    indirectCall(count, seed, branchIntCallback),
                     polymorphicCall(count, seed, a, b, c), dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed)};

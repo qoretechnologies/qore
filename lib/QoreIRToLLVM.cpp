@@ -415,6 +415,7 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
     // proved to be non-throwing scalar expressions may omit the normal entry.
     // These bounded summaries describe the whole body, not just its return.
     bool nothrow_scalar = false;
+    bool scalar_leaf_body = false;
     if ((info->return_kind == BatchCalleeReturnKind::NativeInt
                 || info->return_kind == BatchCalleeReturnKind::NativeBool)
             && info->int_expression
@@ -444,6 +445,33 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
                     break;
             }
         }
+    } else if (info->return_kind == BatchCalleeReturnKind::NativeInt
+            && info->scalar_leaf.kind != AOTScalarLeafKind::None) {
+        // The integer-expression builder skips bodies with a complete scalar
+        // leaf summary. Reuse that proof, as for FloatBinary below, without
+        // admitting division, context-dependent operations or unknown kinds.
+        QoreIROpcode opcode = static_cast<QoreIROpcode>(info->scalar_leaf.opcode);
+        switch (info->scalar_leaf.kind) {
+            case AOTScalarLeafKind::IntBinary:
+                nothrow_scalar = opcode == QoreIROpcode::AddInt
+                    || opcode == QoreIROpcode::SubInt || opcode == QoreIROpcode::MulInt
+                    || opcode == QoreIROpcode::AndInt || opcode == QoreIROpcode::OrInt
+                    || opcode == QoreIROpcode::XorInt;
+                break;
+            case AOTScalarLeafKind::IntAffine:
+                nothrow_scalar = true;
+                break;
+            case AOTScalarLeafKind::IntSelectLhsIfTrue:
+            case AOTScalarLeafKind::IntSelectRhsIfTrue:
+            case AOTScalarLeafKind::IntAffineSelect:
+                nothrow_scalar = opcode == QoreIROpcode::EqInt || opcode == QoreIROpcode::NeInt
+                    || opcode == QoreIROpcode::LtInt || opcode == QoreIROpcode::LeInt
+                    || opcode == QoreIROpcode::GtInt || opcode == QoreIROpcode::GeInt;
+                break;
+            default:
+                break;
+        }
+        scalar_leaf_body = nothrow_scalar;
     } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat
             && info->scalar_leaf.kind == AOTScalarLeafKind::FloatBinary) {
         // Simple float binary bodies have a complete scalar-leaf summary, so
@@ -452,6 +480,7 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
         QoreIROpcode opcode = static_cast<QoreIROpcode>(info->scalar_leaf.opcode);
         nothrow_scalar = opcode == QoreIROpcode::AddFloat
             || opcode == QoreIROpcode::SubFloat || opcode == QoreIROpcode::MulFloat;
+        scalar_leaf_body = nothrow_scalar;
     } else if (info->return_kind == BatchCalleeReturnKind::NativeFloat
             && info->float_expression
             && info->float_expression.nodes.size() <= QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
@@ -690,7 +719,7 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
             }
             bool proven_nothrow = false;
             llvm::Value* result = nullptr;
-            if (ret_kind == 2 && info->scalar_leaf.kind == AOTScalarLeafKind::FloatBinary) {
+            if (scalar_leaf_body) {
                 result = emitAOTScalarLeaf(*info, args);
                 proven_nothrow = result != nullptr;
             } else if (ret_kind == 2) {

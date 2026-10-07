@@ -2392,3 +2392,77 @@ Next: extend native callback admission to existing nonthrowing scalar integer
 summaries, which currently bypass integer-expression admission. Add equivalent
 affine/branch workloads and prove correctness and actual fast-path selection
 before measuring. This is separate from the unresolved qmod metadata case.
+
+## Scalar-integer callback admission (2026-10-07)
+
+Baseline: `761bedbc0`, saved before editing. The integer-expression builder
+deliberately skips functions with a complete scalar-leaf summary, but native
+callback admission previously ignored those summaries. Simple arithmetic,
+affine compositions and branch-return bodies consequently fell back to
+generic dispatch despite already having a complete proof.
+
+NativeInt admission now accepts the six nonthrowing binary opcodes, affine
+summaries and six integer comparisons selecting integer/affine results.
+Callee v2/v3 reuse the existing operand/type-checked scalar-leaf emitter;
+division/modulo, effects, unknown kinds and context-dependent bodies remain
+excluded. All runtime guards, frame semantics, ownership and ABI are unchanged.
+No serialized metadata change. The two-argument boxed adapter also benefits;
+the unboxed ABI remains limited to zero/one argument.
+
+### Measurements
+
+Three new equivalent Qore/Java/Python workloads run against both compilers
+from identical sources. Values do not overflow in these benchmarks; signed
+wrapping is covered separately by regression tests. Five-fork medians below
+are ns/element including loop/computation/checksum, not isolated call latency.
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_affine|114.56219|9.80514|-91.44%|114.32776|8.91374|-92.20%
+|indirect_affine_wide|185.36084|9.87230|-94.67%|182.08436|8.86793|-95.13%
+|indirect_branch_int|118.37036|9.86507|-91.67%|115.56476|8.93997|-92.26%
+
+All three target fork ranges separate in both runs: **91.44-95.13% less time**
+(11.7-20.5x throughput). This closes an admission gap; it does not speed up
+callbacks that were already native. At 1024, arithmetic/direct/native-int/
+native-float controls move +0.02%/+0.74%/-0.10%/+0.29%; at 4096 they move
+-0.51%/+0.25%/+0.58%/-0.34%. Polymorphic/hash repeat controls move
++0.71%/-2.42%. All control fork ranges overlap and every sample is retained.
+
+Java retained-call medians for the three targets are 1.64980-1.66860
+ns/element; Qore remains **5.9-6.0x** slower. Parity is not achieved.
+[Evidence](results-int-scalar-callbacks-macos-arm64.json) retains **195 jobs /
+975 samples**, source/binary hashes and independently recomputed medians from
+`run-964n2atc` and `run-t4x3z52b`. No builds, tests, profiling or documentation
+validation overlapped either timing run.
+
+With the same expanded benchmark sources, AOT text grows **90404 to 91320**
+bytes (+916) and runtime text **13876148 to 13876284** (+136). The native
+integer helper frame remains 272 bytes. A separate five-second sample places
+2628 top-of-stack samples in the helper, 849 in the caller and 129 in the
+affine callee; this is qualitative evidence, not an additive cost model.
+
+### Validation, audit and next experiment
+
+Each release/debug build passes **158 cases / 15329 assertions** in 26 wrappers
+plus 11 standalone checks, and ten Python harness tests pass. The new wrapper
+has 1372 assertions and verifies emitted native entries, not just outputs.
+It covers AST/IR/JIT/tiered, O0/O3, eleven AOT configurations (summary/entry
+controls, EH, stripped debug and split compilation), runtime fallback,
+all arithmetic/bitwise and comparison cases, composed affine wrapping at
+signed limits, wide boxed values, division/modulo exceptions and side effects.
+Two-argument native boxed entry creation is checked separately.
+
+Initial ternary cases already had general-expression admission, so the final
+fixture explicitly uses branch-return bodies for compact CFG summaries.
+Disabling that summary lets the existing general-expression proof take over;
+the test checks that distinct behavior. The final fixture passes saved-baseline
+AOT too. Each benchmark implementation now passes **270** independent checks.
+New artifacts on the saved runtime and saved-compiler artifacts on the new
+runtime each match 270 records; older callee-v2/v3 artifacts match 225 each.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#scalar-integer-callback-audit-2026-10-07)
+drove explicit opcode exclusions, signed-edge coverage and actual admission
+checks. No full-suite, sanitizer or Linux runtime claim. Next: separately
+measure outlining uncommon readiness/eager-compatibility/variable-stack growth
+paths from the retained-call helper, preserving all live checks and observer
+semantics. The independent qmod metadata limitation remains out of scope.

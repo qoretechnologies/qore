@@ -113,6 +113,13 @@ explicit AOT context and exception sink; boolean arguments/results use an
 handled flag and write the native result through an output pointer. Rejection
 leaves the general call responsible for invocation and ownership. Attachment
 validates the signature against the immutable reference metadata.
+Native integer adapters also reuse complete scalar-leaf summaries instead of
+requiring a duplicate integer-expression proof: add/subtract/multiply and
+bitwise and/or/xor, affine compositions, and integer comparison/select bodies.
+The opcode allowlist excludes throwing operations and unknown kinds. Re-emitted
+callee v2/v3 bodies use the existing checked scalar-leaf emitter, including
+operand/type validation and summary-disable controls. Signed arithmetic wraps
+without LLVM no-overflow promises. No runtime guard or serialized format changes.
 Native float adapters also consume the complete `FloatBinary` leaf summary
 for add, subtract, and multiply. The float-expression builder intentionally
 does not duplicate that summary; ignoring it previously left these simple
