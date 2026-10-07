@@ -175,6 +175,7 @@ resp = rc.restGet("/api/data");
     - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
       jittered backoff, cancellation, and safe retry observers (issue 5475)
     - call-local timeout requests now cancel unfinished I/O when their deadline expires
+    - preserve fractional milliseconds in response waits so nested retry budgets do not send an extra request
     - async request and SSE startup timeouts retain their completion error when the controller aborts I/O
     - initial release
 */
@@ -2252,6 +2253,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             Synchronous request preparation is deducted from the response budget; credential providers
             must enforce their own acquisition timeouts.
 
+            Positive fractional milliseconds are rounded up for the response wait, so conversion to the
+            Future's millisecond granularity cannot expire the request early. This can extend the wait
+            by less than one millisecond.
+
             @param method HTTP method
             @param path request path
             @param body request body
@@ -2276,7 +2281,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(
                 string method, string path, auto body, *hash<auto> hdr,
                 int timeout_ms) {
-            int started = clock_get_monotonic_us();
+            int started = requestNow();
             if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
                 throw "RESTCLIENTIO-OPTION-ERROR",
                     "timeout_ms must be positive and fit a monotonic deadline";
@@ -2284,11 +2289,13 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             int deadline = started + timeout_ms * 1000;
             RestFuture future = restDoRequestAsync(method, path, body, hdr);
             try {
-                int remaining = (deadline - clock_get_monotonic_us()) / 1000;
-                if (remaining <= 0) {
+                int remaining_us = deadline - requestNow();
+                if (remaining_us <= 0) {
                     throw "HTTPCLIENT-TIMEOUT", "REST request deadline exhausted";
                 }
-                return future.get(remaining);
+                # Do not truncate again after RestRetryPolicy has bounded the request: two round-downs
+                # can leave a whole millisecond for a spurious retry. Subtract first to avoid overflow.
+                return future.get(1 + (remaining_us - 1) / 1000);
             } catch (hash<ExceptionInfo> ex) {
                 defer_thread_cancel(sub () { future.cancel(); });
                 if (ex.err == "FUTURE-TIMEOUT") {
@@ -2296,6 +2303,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
                 rethrow;
             }
+        }
+
+        #! Monotonic request clock, overridable for deterministic deadline tests
+        private int requestNow() {
+            return clock_get_monotonic_us();
         }
 
         #! Sends a generic REST request whose response body is limited to the given size

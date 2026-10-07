@@ -2605,6 +2605,8 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref restclientiointro "RestClientIo" module
+      - fixed nested request deadlines rounding response waits down twice and allowing an extra retry just
+        before the total timeout; positive fractional milliseconds are retained for REST and signed AWS waits
       - fixed initial OAuth2 login with an \c update_options token-persistence callback raising
         \c RUNTIME-TYPE-ERROR when no previous token or token type is set; this also fixes
         Pinecone Admin connection pings using \c client_credentials without a refresh token
