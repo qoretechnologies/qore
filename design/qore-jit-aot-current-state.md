@@ -373,7 +373,10 @@ prepared-descriptor layout changes.
 
 The native frame helper and enclosing diagnostic-frame constructors/destructor
 carry inlining hints so the C++ runtime compiler can allocate their save/restore
-state together with the typed-call helper. The publishing helper's hints are
+state together with the typed-call helper. The compile-time eager/deferred
+selector lambda carries the same hint: an outlined selector otherwise restores
+a wrapper boundary even when its selected helper is inline. State and lifetime
+semantics are unchanged. The publishing helper's hints are
 on its implementation only: default single-compilation-unit builds can inline
 it, while split builds retain ordinary out-of-line symbols. The small positive
 target-cache lookup stays inline; reference decoding, ownership replacement

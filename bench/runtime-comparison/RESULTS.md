@@ -2338,3 +2338,57 @@ of restoration order, full exception materialization and observer lifetime.
 No full-suite, sanitizer or Linux runtime claim. Next: measure explicit
 inlining of the constructor-selection wrapper, retaining all state semantics;
 then assess missing affine-integer admission with dedicated workloads.
+
+## Inlined frame-helper selector (2026-10-07)
+
+Baseline: `16efc2046`, saved before editing. The compile-time selector lambda
+inside the already-inline diagnostic-frame constructor was still outlined by
+the C++ compiler. An explicit inlining attribute removes that wrapper boundary
+without changing context, publication, lifetime, admission, checks or ABI.
+
+### Measurements
+
+Isolated shuffled five-fork medians in ns/element, including loop/computation/
+checksum work, not isolated call latency:
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_call|10.44586|9.74940|-6.67%|9.55752|8.85431|-7.36%
+|indirect_wide|10.45421|9.67573|-7.45%|9.52998|8.82455|-7.40%
+|indirect_float|10.82925|9.91949|-8.40%|9.92955|9.07715|-8.58%
+|indirect_tagged_float|10.72821|9.95037|-7.25%|9.78668|9.09964|-7.02%
+|indirect_branch_float|10.87642|10.02585|-7.82%|9.94822|9.12434|-8.28%
+
+All five callback fork ranges separate in both runs: **6.67-8.58% less time**.
+Arithmetic moves +1.16%/-0.41% and direct call -0.18%/+1.83% at 1024/4096.
+Polymorphic/hash repeat medians move +0.64%/+1.56%. All control ranges overlap;
+these are not claimed as general execution gains. Every sample is retained.
+
+Java retained-call medians at 1024 are 1.63602-1.67007 ns/element. Qore still
+takes **5.8-6.1x** as long; parity remains open.
+[Evidence](results-frame-factory-macos-arm64.json) retains **195 jobs / 975
+samples**, hashes and independently recomputed medians from `run-gnltzner`
+and `run-jtqw56xx`. No build, test, profile or documentation validation
+overlapped either timing run.
+
+The integer helper frame shrinks **304 to 272 bytes**. AOT text stays 83548
+bytes; runtime text grows 13865792 to 13876148 bytes (+10356). A separate
+five-second sample no longer has the selector frame: top-of-stack counts are
+2429 in the helper, 945 in the caller and 212 in the scalar callee. Disassembly
+also confirms removal of the lambda call. Sampling is qualitative, not an
+additive cost model.
+
+### Validation and next step
+
+Each release/debug build passes **157 cases / 13957 assertions** in 25 wrappers
+plus 11 standalone checks; ten Python harness tests pass. Older callee-v2 and
+callee-v3 artifacts each reproduce 225 records, and every timed implementation
+passes 225 independent checks. Native overflow/materialization, concurrent
+readers, fallback, replacement, policy, debugging and cancellation coverage is
+unchanged. No full-suite, sanitizer or Linux runtime claim.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#frame-helper-selector-audit-2026-10-07)
+requires preserving all frame/state semantics and recording code-size cost.
+Next: extend native callback admission to existing nonthrowing scalar integer
+summaries, which currently bypass integer-expression admission. Add equivalent
+affine/branch workloads and prove correctness and actual fast-path selection
+before measuring. This is separate from the unresolved qmod metadata case.

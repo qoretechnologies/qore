@@ -10171,7 +10171,8 @@ class QorePreparedFunctionRefStackLocation : public QoreStackLocation, public Qo
 public:
     __attribute__((always_inline)) QorePreparedFunctionRefStackLocation(RuntimeConfig& rc,
             const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
-        : cache(cache), helper([&]() {
+        // The selector must not reintroduce a call around the inlined helper.
+        : cache(cache), helper([&]() __attribute__((always_inline)) {
             if constexpr (Deferred) {
                 return RuntimeConfigNativeLeafCallHelper(rc, this, loc, cache, xsink);
             } else {
