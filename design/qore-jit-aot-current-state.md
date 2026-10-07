@@ -241,10 +241,30 @@ targets, caught-exception reuse and debugger attach/detach after cache warm-up.
 Typed callback-helper ABI v2 adds a borrowed `RuntimeConfig*` after the v1
 arguments. Generated functions acquire it once in their logical entry, after
 the native stack guard, and reuse it for their callback sites. The callee's
-scalar entry ABI and its `QoreAOTContext*` metadata argument do not change.
+original scalar entry ABI and its `QoreAOTContext*` metadata argument remain.
 `QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG` selects v1 helpers at compilation.
 Both versions remain exported and registered; serialized metadata and the
 public RuntimeConfig object layout are unchanged.
+
+Typed callee-entry ABI v2 is separate from the helper version: it appends a
+borrowed RuntimeConfig pointer after the AOT context and sink. V2/v3 helpers
+prefer this optional entry; legacy v1 helpers and references compiled without
+it still use callee-entry v1. Both bindings are immutable after publication.
+The new binder requires the validated v1 signature and matching normal-body
+identity. Rebinding v1 clears the optional v2 adapter so it cannot name a stale
+body. The prepared-target v3 descriptor layout and old helper ABIs are unchanged.
+
+The compiler re-emits only the already admitted complete, bounded, non-throwing
+scalar summary, with a mandatory `qore_rt_check_stack_v2` entry guard using the
+explicit context. It does not call the old fast entry, whose guard would still
+look up TLS. Boolean carriers are normalized; summary-disable controls retain
+the old adapter. No reference/capture, generic reentry, allocating expression
+or throwing expression is newly admitted. Adapters do not inherit the creating
+caller's debug scope; the existing published frame and lazy callee PC context
+remain responsible for observation and stack-failure diagnostics.
+`QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG` suppresses the new binding as
+an independent compilation control. All caller/frame/callee stack checks,
+live guards, empty-frame markers and observer synchronization remain intact.
 
 `RuntimeConfigNativeAccess` provides a live, invocation-scoped thread-state
 view within the existing PIMPL. It is not a copied Program/object snapshot:
@@ -311,8 +331,8 @@ it, while split builds retain ordinary out-of-line symbols. The small positive
 target-cache lookup stays inline; reference decoding, ownership replacement
 and metadata extraction are outlined as the miss path. None of the guards,
 frame markers, policy restoration or reader handshakes is removed. This is a
-runtime inlining boundary change, not an end-to-end RuntimeConfig callee ABI
-or a new compact-frame representation.
+runtime inlining boundary change; inlining itself does not alter the callee
+ABI or introduce a new compact-frame representation.
 
 The admitted scalar leaf cannot instantiate TLS locals or reenter generic
 execution. Its local-variable marker therefore uses a specialized push/pop pair:

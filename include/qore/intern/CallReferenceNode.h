@@ -342,6 +342,8 @@ public:
     DLLLOCAL void setTypedEntry(QoreFunctionRefTypedEntry entry, uint32_t signature,
             uint64_t (*normal)(QoreAOTContext*, ExceptionSink*)) {
         typed_entry = entry;
+        // A replacement v1 binding cannot keep an adapter for a previous body.
+        typed_runtime_config_entry = nullptr;
         typed_signature = signature;
         normal_entry = normal;
     }
@@ -350,12 +352,23 @@ public:
         return typed_signature == signature ? typed_entry : nullptr;
     }
 
+    // Additive entry ABI: the same native signature with RuntimeConfig* after
+    // the AOT context and sink. Bound only after v1, before publication.
+    DLLLOCAL void setTypedRuntimeConfigEntry(QoreFunctionRefTypedEntry entry) {
+        typed_runtime_config_entry = entry;
+    }
+
+    DLLLOCAL QoreFunctionRefTypedEntry getTypedRuntimeConfigEntry(uint32_t signature) const {
+        return typed_signature == signature ? typed_runtime_config_entry : nullptr;
+    }
+
 protected:
     QoreProgram* pgm;
     QoreFunctionRefNativeEntry native_entry = nullptr;
     uint64_t (*normal_entry)(QoreAOTContext*, ExceptionSink*) = nullptr;
     QoreFunctionRefCallMetadata fast_call;
     QoreFunctionRefTypedEntry typed_entry = nullptr;
+    QoreFunctionRefTypedEntry typed_runtime_config_entry = nullptr;
     uint32_t typed_signature = 0;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);

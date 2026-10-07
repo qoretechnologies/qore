@@ -587,6 +587,82 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
         llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
     builder->CreateCall(typed_bind, {ref, normal.getCallee(), typed,
         llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))});
+
+    if (std::getenv("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG")) {
+        return;
+    }
+    std::string explicit_name = info->fast_name + "_funcref_typed_v2";
+    llvm::Function* explicit_entry = module.getFunction(explicit_name);
+    if (!explicit_entry) {
+        // Re-emit only the complete non-throwing scalar proof admitted above.
+        // Calling fast_fn here would retain its TLS-based stack-check entry.
+        // Keep v1 as a separate compatibility entry, never change its signature.
+        std::vector<llvm::Type*> params;
+        if (arg_kind) {
+            params.push_back(arg_kind == 2 ? double_type : i64_type);
+        }
+        params.insert(params.end(), {ptr_type, ptr_type, ptr_type});
+        llvm::Type* result_type = ret_kind == 2 ? double_type : i64_type;
+        explicit_entry = llvm::Function::Create(llvm::FunctionType::get(result_type, params, false),
+            llvm::GlobalValue::InternalLinkage, explicit_name, module);
+        explicit_entry->addFnAttr("frame-pointer", "all");
+        llvm::IRBuilder<>::InsertPointGuard ip_guard(*builder);
+        // Do not attach the reference-creation site's debug scope to a new
+        // function. The guard restores it when resuming the enclosing function.
+        builder->SetCurrentDebugLocation(llvm::DebugLoc());
+        auto* entry = llvm::BasicBlock::Create(ctx, "entry", explicit_entry);
+        auto* body = llvm::BasicBlock::Create(ctx, "body", explicit_entry);
+        auto* overflow = llvm::BasicBlock::Create(ctx, "stack_overflow", explicit_entry);
+        builder->SetInsertPoint(entry);
+        auto stack_check = module.getOrInsertFunction("qore_rt_check_stack_v2",
+            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+        llvm::Value* error = builder->CreateCall(stack_check,
+            {explicit_entry->getArg(info->num_params + 1), explicit_entry->getArg(info->num_params + 2)});
+        builder->CreateCondBr(builder->CreateICmpEQ(error, llvm::ConstantInt::get(i32_type, 0)),
+            body, overflow);
+        builder->SetInsertPoint(overflow);
+        builder->CreateRet(llvm::Constant::getNullValue(result_type));
+        builder->SetInsertPoint(body);
+        std::vector<llvm::Value*> args;
+        if (arg_kind) {
+            llvm::Value* arg = explicit_entry->getArg(0);
+            if (arg_kind == 3) {
+                arg = builder->CreateZExt(builder->CreateICmpNE(arg,
+                    llvm::ConstantInt::get(i64_type, 0)), i64_type);
+            }
+            args.push_back(arg);
+        }
+        bool proven_nothrow = false;
+        llvm::Value* result = nullptr;
+        if (ret_kind == 2 && info->scalar_leaf.kind == AOTScalarLeafKind::FloatBinary) {
+            result = emitAOTScalarLeaf(*info, args);
+            proven_nothrow = result != nullptr;
+        } else if (ret_kind == 2) {
+            result = emitAOTFloatExpression(*info, args, nullptr, &proven_nothrow);
+        } else {
+            result = emitAOTIntExpression(*info, args, module, nullptr, &proven_nothrow);
+        }
+        if (result && result->getType() == i1_type && ret_kind != 2) {
+            result = builder->CreateZExt(result, i64_type);
+        }
+        if (result && result->getType() == i64_type && ret_kind == 3) {
+            result = builder->CreateZExt(builder->CreateICmpNE(result,
+                llvm::ConstantInt::get(i64_type, 0)), i64_type);
+        }
+        if (!result || !proven_nothrow || result->getType() != result_type) {
+            // A disabled/unavailable summary leaves the original entry intact.
+            explicit_entry->eraseFromParent();
+            explicit_entry = nullptr;
+        } else {
+            builder->CreateRet(result);
+        }
+    }
+    if (explicit_entry) {
+        auto explicit_bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_typed_v2",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
+        builder->CreateCall(explicit_bind, {ref, normal.getCallee(), explicit_entry,
+            llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))});
+    }
 }
 
 llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* inst,

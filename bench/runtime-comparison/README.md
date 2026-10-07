@@ -280,6 +280,13 @@ Use separate shuffled runs with the same settings to measure this switch;
 do not combine disabled-path measurements with before/after library labels.
 V2 preserves diagnostic frames, policy overrides, stack-reader synchronization,
 and lazy context materialization. It is not an end-to-end TLS-free native ABI.
+An optional typed callee entry now receives RuntimeConfig after the AOT context
+and exception sink, allowing its stack guard to avoid TLS lookup. It is emitted
+only from the same complete non-throwing scalar summaries used for admission;
+unavailable/disabled summaries keep the old entry. The original typed entry is
+always retained. `QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1` suppresses
+this additive entry at compilation, independently of the helper-version switch.
+V2/v3 helpers prefer it when present; v1 helpers still use the original entry.
 Compiler-proven scalar leaves retain their local/closure frame markers but
 avoid general variable-cleanup bookkeeping for those empty frames. The native
 closure-marker push handles an available slot inline and outlines full-block

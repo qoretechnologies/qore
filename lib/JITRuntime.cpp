@@ -116,6 +116,7 @@
 
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
+    { "qore_rt_check_stack_v2", reinterpret_cast<void*>(&qore_rt_check_stack_v2) },
     { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
@@ -428,6 +429,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_native) },
     { "qore_rt_bind_function_call_ref_typed_v1",
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v1) },
+    { "qore_rt_bind_function_call_ref_typed_v2",
+        reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v2) },
     { "qore_rt_get_fast_runtime_config", reinterpret_cast<void*>(&qore_rt_get_fast_runtime_config) },
     { "qore_rt_get_loop_runtime_config", reinterpret_cast<void*>(&qore_rt_get_loop_runtime_config) },
     { "qore_rt_get_cancel_poll_state_v1", reinterpret_cast<void*>(&qore_rt_get_cancel_poll_state_v1) },
@@ -673,6 +676,10 @@ extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #else
     return 0;
 #endif
+}
+
+extern "C" DLLEXPORT int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc) {
+    return RuntimeConfigNativeAccess::checkStack(*rc, xsink);
 }
 
 // --- Forward declarations for Phase 5 fast-call builtins ---
@@ -3253,6 +3260,20 @@ extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_b
     unsigned return_kind = qore_function_ref_scalar_kind(ret);
     if (return_kind == (signature & 3)) {
         ref->setTypedEntry(entry, signature, normal);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_typed_v2(uint64_t ref_bits,
+        AotFunctionPtr normal, QoreFunctionRefTypedEntry entry, uint32_t signature) {
+    QoreValue value = fromBits(ref_bits);
+    auto* ref = value.hasNode()
+        ? dynamic_cast<FunctionCallReferenceNode*>(value.getInternalNode()) : nullptr;
+    // The v1 binder has already validated scalar types and normal-body identity.
+    // Require that exact binding; never infer a callable type from a name.
+    if (ref && entry && normal && ref->getTypedEntry(signature)
+            && ref->getNormalEntry() == normal
+            && ref->getFastCallMetadata().uvb->getCachedAOTFunction() == normal) {
+        ref->setTypedRuntimeConfigEntry(entry);
     }
 }
 
@@ -10206,7 +10227,12 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(ref->getTypedEntry(Signature));
     try {
-        *result = entry(args..., ctx, xsink);
+        if (auto explicit_entry = ref->getTypedRuntimeConfigEntry(Signature)) {
+            using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+            *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
+        } else {
+            *result = entry(args..., ctx, xsink);
+        }
     } catch (const QoreJITException&) {
         // The sink already owns the exception; the frame restores all state.
     }
@@ -10243,7 +10269,12 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(cache.entry);
     try {
-        *result = entry(args..., ctx, xsink);
+        if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
+            using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+            *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
+        } else {
+            *result = entry(args..., ctx, xsink);
+        }
     } catch (const QoreJITException&) {
         // The sink already owns the exception; the frame restores all state.
     }

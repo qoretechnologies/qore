@@ -128,6 +128,12 @@ extern "C" {
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
 
+//! Check the same native stack guard using a non-null, same-thread live context.
+//! @param xsink sink receiving STACK-LIMIT-EXCEEDED on failure
+//! @param rc borrowed context, valid only for the current native invocation
+//! @return zero on success, nonzero on stack exhaustion
+int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc);
+
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 
 //! Signal that the outlined helper is executing an in-region `return`;
@@ -850,6 +856,15 @@ void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
 
 //! Bind a versioned zero/unary scalar ABI; only before publishing a new reference.
 void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Bind an optional scalar entry with a trailing RuntimeConfig* argument.
+//! @param ref_bits newly created reference, not yet published
+//! @param normal normal entry identifying the same compiled body as the v1 binding
+//! @param entry native zero/unary scalar ABI, followed by AOT context, sink and live RuntimeConfig*
+//! @param signature same scalar signature as an already validated v1 binding
+//! @note Does not replace v1; older callers and disabled controls keep that entry.
+void qore_rt_bind_function_call_ref_typed_v2(uint64_t ref_bits,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
 
 //! Acquire a borrowed RuntimeConfig for this native invocation, on this thread only.

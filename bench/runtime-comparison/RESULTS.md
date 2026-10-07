@@ -1905,3 +1905,97 @@ then revisit compact frames and generic float-branch admission.
 No full-suite, sanitizer or Linux claim. Legacy debug-wrapper child-library
 selection and the previously recorded recursive-JIT-capture, nested-AOT-line
 and default-target-linker-warning limitations remain separate.
+
+## RuntimeConfig-aware typed callee entry (2026-10-07)
+
+An optional typed callee-entry v2 appends RuntimeConfig after the native
+arguments, AOT context and exception sink. Helper v2/v3 prefers it; older
+helpers/references retain the original entry. The compiler reuses the complete
+non-throwing scalar summary and emits the same mandatory stack guard through
+`qore_rt_check_stack_v2`. Calling the old fast entry would have kept its TLS
+lookup, so the bounded body is re-emitted instead. Unsupported or disabled
+summaries retain v1. No callback eligibility, RuntimeConfig layout, serialized
+metadata or prepared-target descriptor is widened or changed.
+
+### Controlled measurements
+
+Baseline is `23434f6c8`, including inline cancellation polling. Same sources,
+five shuffled forks, three warmup and five measurement windows of 300 ms.
+Values are median fork means in ns/element including loop/computation/checksum,
+not isolated call latency. Java is Temurin 25.0.2/JMH 1.37, retained DONT_INLINE
+targets.
+
+Count 1024 (`run-_4n7bg4q`):
+
+|!Kernel|!Before|!After|!Reduction|!Java
+|arithmetic|2.093|2.101|-0.4%|0.888
+|direct_call|2.080|2.090|-0.5%|0.890
+|indirect_call|12.522|11.982|4.3%|1.670
+|indirect_wide|12.382|11.975|3.3%|1.682
+|indirect_float|12.771|12.258|4.0%|1.642
+|indirect_tagged_float|12.664|12.225|3.5%|1.640
+|indirect_branch_float|127.217|126.374|0.7%|1.665
+
+Count 4096 isolated repeat (`run-nquraq8x`):
+
+|!Kernel|!Before|!After|!Reduction
+|arithmetic|1.270|1.275|-0.5%
+|direct_call|1.262|1.269|-0.6%
+|indirect_call|11.640|11.081|4.8%
+|indirect_wide|11.699|11.121|4.9%
+|indirect_float|11.833|11.379|3.8%
+|indirect_tagged_float|11.785|11.276|4.3%
+|indirect_branch_float|126.660|126.712|-0.0%
+|polymorphic_call|271.078|271.639|-0.2%
+|temporary_hash|303.605|305.849|-0.7%
+
+Native callback loops take **3.3-5.0% less time**, with nonoverlapping fork
+ranges in both primary experiments. Arithmetic/direct medians are 0.4-0.6%
+slower, with overlapping ranges. Generic controls also overlap; no generic
+gain or proof of zero regression is claimed. Native callbacks still take
+**7.1-7.5x Java's time** at count 1024.
+
+The first 4096 repeat, `run-v0zgbvbz`, briefly overlapped two qpp documentation
+checks near job 55/90. Its 90 jobs / 450 samples are retained as diagnostic
+data, not used above. The entire repeat was rerun in isolation. Neither primary
+experiment overlapped a build, test or profile.
+
+AOT native text grows **81864 to 82344 bytes** (+480 / 0.6%); runtime text grows
+**13861796 to 13865396 bytes** (+3600). Startup and compilation observations
+are retained but not used as speedup evidence.
+
+### Validation, audit and remaining work
+
+Release/debug each pass **109 cases / 12280 assertions** in 21 wrappers plus
+seven standalone checks. The expanded callback wrapper has 400 assertions
+covering entry/summary disable controls, O0/O3, split/EH/stripped compilation,
+zero/unary scalar values, ownership, foreign Program fallback, target
+replacement and debugger attachment. A new native fixture exhausts the stack
+through both guards, clears the sink, verifies recovery and repeats on a
+foreign thread after re-registration. An old AOT executable matches all 225
+records; every benchmark implementation passes 225 independent checks and ten
+Python harness tests pass.
+
+[Evidence](results-callee-runtime-config-macos-arm64.json) retains **285 jobs /
+1425 samples**, including **195 primary jobs / 975 primary samples** and the
+diagnostic run. Medians were independently recomputed.
+[Full audit](FOLLOWUP-AUDIT.md#typed-callee-runtimeconfig-audit-2026-10-07)
+covers all 62 checks. Review additionally cleared optional v2 bindings when v1
+is rebound and removed the creating caller's debug scope from the generated
+adapter before final tests/measurements.
+
+A separate five-second profile and disassembly confirm the callee guard no
+longer looks up TLS. Call-helper/frame bookkeeping remains dominant; all
+caller/frame/callee checks, parse-option restoration and stack-reader handshakes
+remain. Sampling is qualitative, not additive cost attribution.
+
+Next, extend complete float summaries to non-throwing comparison/select
+bodies, which still use generic dispatch at roughly 126 ns/element here.
+Preserve ordered/unordered NaN comparisons, signed zero, branch laziness for
+throwing/side-effecting operations and imported-summary validation. Then revisit
+compact observable frames and guarded call-site invariants. Java parity remains
+an active, incomplete goal, not a conclusion of these microbenchmarks.
+
+No full-suite, sanitizer or Linux claim; previously documented debug-wrapper
+selection, recursive-JIT-capture, nested-AOT-location and default-target-linker
+limitations remain separate.

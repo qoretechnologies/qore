@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeStackRuntimeConfigTest
+
+class NativeStackRuntimeConfigTest inherits QUnit::Test {
+    constructor() : Test("native stack runtime context", "1.0", \ARGV) {
+        addTestCase("explicit and legacy guards reject stack exhaustion", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-native-stack-context-");
+        string executable = dir.path + "/guard-test";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/native_stack_runtime_config.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + quote(executable) + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertEq("native-stack-runtime-config: ok\n", output);
+    }
+}
