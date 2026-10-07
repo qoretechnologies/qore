@@ -112,11 +112,11 @@ module BitbucketDataProvider {
     @section bitbucketdataproviderintro BitbucketDataProvider Introduction
 
     The %BitbucketDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [Bitbucket Cloud](https://bitbucket.org).
+    <a href="https://bitbucket.org">Bitbucket Cloud</a>.
 
     @section bitbucketdataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from Bitbucket's own OpenAPI 3 description** by
+    The actions this application exports are <b>generated from Bitbucket's own OpenAPI 3 description</b> by
     the @ref restschemaactionsintro "RestSchemaActions" module.  What a schema cannot say is which of an
     operation's fields a user should see first, or which identifiers should be selectable rather than
     typed; those come from an application-owned manifest and UX overlay in
@@ -128,7 +128,7 @@ module BitbucketDataProvider {
     alter the contract of an action that existing workflows already call.  It is imported with
     \c tools/rest-schema-import.qr from \c qlib/BitbucketDataProvider/bitbucket-import.yaml.
 
-    **The committed document is repaired before it is pruned.**  Bitbucket documents \c page and
+    <b>The committed document is repaired before it is pruned.</b>  Bitbucket documents \c page and
     \c pagelen on a shared pagination page rather than per endpoint, and declares them on 3 of the 331
     operations in its description - so without the repair a generated listing could not ask for the second
     page of anything, and every dropdown would be stuck on Bitbucket's default page of ten records.  The
@@ -149,23 +149,23 @@ module BitbucketDataProvider {
     |Workspaces|workspaces, their members and their projects
 
     Identifier options are dropdowns wherever the application exports an operation that can list the
-    values, and everything below a workspace or a repository is **scoped by the one the user chose**.
+    values, and everything below a workspace or a repository is <b>scoped by the one the user chose</b>.
 
     @section bitbucketdataprovider_crossworkspace Bitbucket Withdrew Its Cross-Workspace Listings
 
     Bitbucket removed every endpoint that listed anything across workspaces - \c "GET /2.0/workspaces",
-    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer **410 Gone**,
+    \c "GET /2.0/repositories" and the \c "/2.0/user/permissions/..." family all answer <b>410 Gone</b>,
     \c "CHANGE-2770 - Functionality has been deprecated".  There is one replacement, and only one:
     \c "GET /2.0/user/workspaces".
 
     That matters here because a workspace scopes every other dropdown this application offers, so without a
-    way to list workspaces none of them could be filled.  **List Workspaces** keeps its action ID and now
+    way to list workspaces none of them could be filled.  <b>List Workspaces</b> keeps its action ID and now
     calls the replacement; a record wraps its workspace and carries no display name, so a workspace is
     identified by its slug.
 
-    The action that listed public repositories across Bitbucket is **withdrawn**, because nothing replaces
-    it: Atlassian's own guidance is to list the workspaces and then ask each one.  **List Workspace
-    Repositories** is what to use, and it is what the repository dropdown has always been filled from.
+    The action that listed public repositories across Bitbucket is <b>withdrawn</b>, because nothing replaces
+    it: Atlassian's own guidance is to list the workspaces and then ask each one.  <b>List Workspace
+    Repositories</b> is what to use, and it is what the repository dropdown has always been filled from.
 
     @section bitbucketdataprovider_flat Branches and Reviewers
 
@@ -186,16 +186,16 @@ module BitbucketDataProvider {
     \c pullrequest-comments and \c commit-comments for record-based reading and writing, and \c workspaces,
     \c workspace-members, \c commits and \c branches for reading.
 
-    The last four are **read only**: Bitbucket creates none of them through these paths - a commit arrives
+    The last four are <b>read only</b>: Bitbucket creates none of them through these paths - a commit arrives
     by pushing it - and this application exports no write for any of them, so those tables declare none
     rather than offering an action that could only fail.  \c workspaces and \c workspace-members publish
-    **memberships**, which carry the workspace and the user as nested objects, as Bitbucket returns them.
+    <b>memberships</b>, which carry the workspace and the user as nested objects, as Bitbucket returns them.
 
     Each table takes the standard search expressions.  Where a table's API publishes a filter expression
     language the whole expression is rendered into it and the service does the searching, and that table
     declares \c supports_native_search; where it does not, what the listing's own arguments can express is
     sent and the rest is evaluated against each record as it arrives.  Either way the listing is paged until
-    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+    the caller's \c limit is met <b>by matching records</b>, so a search never silently under-returns.
 
     \c repositories and \c commit-comments render a search into Bitbucket Query Language and Bitbucket
     evaluates it; the pull request listing does not declare \c q in Bitbucket's published description, so
@@ -207,8 +207,8 @@ module BitbucketDataProvider {
     @section bitbucketdataprovider_events Events
 
     Three polling events are offered: a new commit, a new deployment and a new pull request.  Bitbucket's
-    REST API has no event stream a credential can read, so these poll - but they poll with a **timestamp
-    cursor** rather than a bounded in-memory set of delivered identities, so a restart resumes where it
+    REST API has no event stream a credential can read, so these poll - but they poll with a <b>timestamp
+    cursor</b> rather than a bounded in-memory set of delivered identities, so a restart resumes where it
     left off instead of re-delivering the first page.
 
     Each event is scoped to one repository, which is a required option.

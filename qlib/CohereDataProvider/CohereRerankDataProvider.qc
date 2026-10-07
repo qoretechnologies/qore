@@ -23,7 +23,7 @@
 */
 
 public namespace CohereDataProvider {
-#! Data provider for Cohere's `/v2/rerank` endpoint
+#! Data provider for Cohere's <tt>/v2/rerank</tt> endpoint
 public class CohereRerankDataProvider inherits CohereDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

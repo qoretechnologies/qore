@@ -2,7 +2,12 @@
 
 /** @page krb5releasenotes Release Notes
 
-    @section krb5releasenotes_unreleased Unreleased
+    @section krb5releasenotes3_0 krb5 Module Version 3.0
+
+    Initial release, shipped with %Qore 3.0.
+
+    - Kerberos credential acquisition, cache and keytab management, GSSAPI client/server
+      authentication, and message protection.
 
     - Added structured Kerberos environment checks with strict readiness
       options for service keytabs, TGTs, and default credential caches.
@@ -15,11 +20,4 @@
     - Added fail-closed handling for KDC-contacting operations when MIT
       Kerberos/GSSAPI network I/O cannot enforce an active fine-grained
       network sandbox policy.
-    - Clarified cooperative cancellation semantics for MIT Kerberos/GSSAPI
-      calls.
-    - Clarified that @ref Qore::Krb5::GssCredential::impersonateName()
-      returns a GSS credential, not a @ref Qore::Krb5::Krb5Credentials
-      evidence ticket for the low-level S4U2Proxy API.
-    - Expanded unit and KDC integration coverage for diagnostics, sandboxing,
-      cancellation, S4U helper behavior, and credential cache maintenance.
 */

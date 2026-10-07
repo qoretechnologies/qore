@@ -31,7 +31,7 @@ public namespace RestSchemaActions {
 
     It is not true of an API whose data plane is sharded per object.  Pinecone's control plane lives at
     \c api.pinecone.io and describes indexes; the 24 operations that actually read and write vectors go to
-    a **per-index** host that only the control plane knows - its own description declares the data-plane
+    a <b>per-index</b> host that only the control plane knows - its own description declares the data-plane
     server as the template \c "https://{index_host}".  The host is therefore a function of one of the
     request's own options, and cannot be known when the connection is made.
 
@@ -41,7 +41,7 @@ public namespace RestSchemaActions {
     connection's credentials, headers and validator all carry over unchanged.
 
     @par Security
-    A host taken from a response is a host the **server** chose, and the request that follows carries the
+    A host taken from a response is a host the <b>server</b> chose, and the request that follows carries the
     connection's credentials to it.  @ref allowed_host_suffixes is therefore not optional: a resolved host
     that does not match one of the declared suffixes is refused and no request is made, and the scheme is
     taken from @ref scheme rather than from the response, so that a server cannot downgrade a request to
@@ -61,7 +61,7 @@ public hashdecl RestSchemaHostSourceInfo {
     */
     string action;
 
-    #! The option of the **calling** action supplying the lookup key
+    #! The option of the <b>calling</b> action supplying the lookup key
     /** Every action naming this host source must declare it, which is checked when the action set is
         built.  Pair it with
         @ref RestSchemaActions::RestSchemaFieldOverlayInfo::ref_data "ref_data" naming the same collection,
@@ -123,7 +123,7 @@ public hashdecl RestSchemaHostSourceInfo {
 }
 
 #! Resolves and caches the per-host REST clients an action set's host sources need
-/** One client per **host**, not per endpoint: every action routed to the same resolved host shares one,
+/** One client per <b>host</b>, not per endpoint: every action routed to the same resolved host shares one,
     and each is a copy of the connection's own client made with
     @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()", so it keeps the connection's
     configuration - tokens, default headers, validator, OAuth2 state - and shares its connection manager,
@@ -138,7 +138,7 @@ public hashdecl RestSchemaHostSourceInfo {
     the most out of it; an application that constructs one per data provider instance still gets a correct
     result, only more lookups.
 
-    @note This class is thread-safe.  A resolution is performed **outside** the lock, because it is a
+    @note This class is thread-safe.  A resolution is performed <b>outside</b> the lock, because it is a
     network call and holding a lock across one would serialize every thread using the router behind the
     slowest lookup.  Two threads racing for the same key may therefore both resolve it; the first to
     finish wins and the loser discards its copy, which costs one redundant lookup and keeps the invariant

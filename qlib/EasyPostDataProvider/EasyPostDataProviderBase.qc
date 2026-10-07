@@ -335,7 +335,7 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         }
     }
 
-    #! Fetches the live `/carrier_types` list from EasyPost (returns NOTHING on error or no client)
+    #! Fetches the live <tt>/carrier_types</tt> list from EasyPost (returns NOTHING on error or no client)
     *list<hash<auto>> fetchCarrierTypes() {
         if (!rest) {
             return;
@@ -348,8 +348,8 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         }
     }
 
-    #! Returns available carrier names (the `readable` form, e.g. `UPS`) as reference data
-    /** Distinct from `carrier_types` which returns the account-class name (e.g. `UpsAccount`).
+    #! Returns available carrier names (the <tt>readable</tt> form, e.g. <tt>UPS</tt>) as reference data
+    /** Distinct from <tt>carrier_types</tt> which returns the account-class name (e.g. <tt>UpsAccount</tt>).
         Use this when an API field expects the carrier *name* string used on shipments/trackers. */
     private *list<hash<AllowedValueInfo>> getReferenceCarrierNames() {
         list<hash<AllowedValueInfo>> rv = ();
@@ -387,7 +387,7 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         return rv;
     }
 
-    #! Fetches the `type` (e.g. `UpsAccount`) of a given carrier account by ID; returns NOTHING on error
+    #! Fetches the <tt>type</tt> (e.g. <tt>UpsAccount</tt>) of a given carrier account by ID; returns NOTHING on error
     *string fetchCarrierAccountType(string carrier_account_id) {
         if (!rest) {
             return;
@@ -402,9 +402,9 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         }
     }
 
-    #! Builds a typed `HashDataType` from a carrier_types field-spec sub-hash (`credentials` or `test_credentials`)
-    /** @param type_name the carrier type name (e.g. `UpsAccount`)
-        @param specs the field-spec hash (`credentials` or `test_credentials`); each key maps to `{visibility, label}`
+    #! Builds a typed <tt>HashDataType</tt> from a carrier_types field-spec sub-hash (<tt>credentials</tt> or <tt>test_credentials</tt>)
+    /** @param type_name the carrier type name (e.g. <tt>UpsAccount</tt>)
+        @param specs the field-spec hash (<tt>credentials</tt> or <tt>test_credentials</tt>); each key maps to <tt>{visibility, label}</tt>
 
         @return a typed HashDataType, or NOTHING if the sub-hash is empty
     */
@@ -680,7 +680,7 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         return rv;
     }
 
-    #! Returns carrier names from a pickup's `pickup_rates` (cascades from `pickup_id`)
+    #! Returns carrier names from a pickup's <tt>pickup_rates</tt> (cascades from <tt>pickup_id</tt>)
     private *list<hash<AllowedValueInfo>> getReferencePickupCarriers(*hash<auto> action_opts) {
         *string pickup_id = action_opts.pickup_id;
         if (!pickup_id.val()) {
@@ -710,7 +710,7 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
         return rv;
     }
 
-    #! Returns carrier names from an order's `rates` (cascades from `order_id`)
+    #! Returns carrier names from an order's <tt>rates</tt> (cascades from <tt>order_id</tt>)
     private *list<hash<AllowedValueInfo>> getReferenceOrderCarriers(*hash<auto> action_opts) {
         *string order_id = action_opts.order_id;
         if (!order_id.val()) {

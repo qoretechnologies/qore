@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `tracker.created` webhook events
+#! Watches for <tt>tracker.created</tt> webhook events
 public class EasyPostWatchTrackerCreatedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

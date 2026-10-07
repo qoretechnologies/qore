@@ -47,7 +47,7 @@ public const XeroMaxPollPages = 10;
     @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider" and send that
     cursor upstream as \c If-Modified-Since, so a cycle reads only what has changed since the last one.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to
     the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation as
@@ -898,7 +898,7 @@ public class XeroEventsDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

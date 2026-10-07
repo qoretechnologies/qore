@@ -272,7 +272,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         of the downloaded file.
 
         This method uses the client's raw request path instead, where the caller owns both the body
-        and the \c Content-Type and no codec runs.  Note that it does **not** work to call
+        and the \c Content-Type and no codec runs.  Note that it does <b>not</b> work to call
         \c setSerialization("bin") around the request: that mutates client-wide state, and the client
         is shared between provider objects and threads, so a concurrent JSON call would be silently
         serialized as binary.

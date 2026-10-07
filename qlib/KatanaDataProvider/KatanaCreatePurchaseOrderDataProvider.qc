@@ -16,7 +16,7 @@ public class KatanaCreatePurchaseOrderDataProvider inherits KatanaDataProviderBa
 
         static KatanaCreatePurchaseOrderRequestDataType RequestType();
 
-        #! Fields submittable only when `entity_type` is `outsourced`
+        #! Fields submittable only when <tt>entity_type</tt> is <tt>outsourced</tt>
         const OutsourcedOnlyFields = ("tracking_location_id",);
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}

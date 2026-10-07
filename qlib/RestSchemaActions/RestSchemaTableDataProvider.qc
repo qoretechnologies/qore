@@ -26,7 +26,7 @@
 public namespace RestSchemaActions {
 #! A record-based table backed by actions the application's manifest already exports
 /** A record table is not a second implementation of the API.  Its collection, its single-record read and its
-    writes are **actions from the manifest**, executed through
+    writes are <b>actions from the manifest</b>, executed through
     @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider", so the paths, the
     request contracts, the percent-encoding, the wire codecs and the published response shapes are the
     schema's and are described in exactly one place.
@@ -39,7 +39,7 @@ public namespace RestSchemaActions {
     @section restschematable_search How a Search Is Answered
 
     Every table declares
-    @ref DataProvider::DataProviderInfo::supports_search_expressions "supports_search_expressions", so a
+    @ref DataProvider::DataProviderBaseInfo::supports_search_expressions "supports_search_expressions", so a
     search arrives as an expression tree whatever the caller wrote, and is answered in three steps:
 
     -# @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" splits the tree into the part
@@ -50,7 +50,7 @@ public namespace RestSchemaActions {
        @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator", over a lazy
        @ref RestSchemaActions::RestSchemaRecordPageIterator "RestSchemaRecordPageIterator".
 
-    The order of the last two is the whole contract.  A \c limit counts **matching** records, so it has to be
+    The order of the last two is the whole contract.  A \c limit counts <b>matching</b> records, so it has to be
     applied after the filter and not before it; because the page iterator is lazy, applying it afterwards
     reads exactly as many pages as the search needs and no more.  Truncating the fetch at the limit first and
     filtering afterwards is the way to get this wrong, and it under-returns silently: asked for 10 closed
@@ -58,12 +58,12 @@ public namespace RestSchemaActions {
 
     @section restschematable_native What "Native Search" Means Here
 
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search" is declared only by a
-    table whose API takes a filter **expression** - Xero's \c where, Bitbucket's BBQL - and can therefore
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" is declared only by a
+    table whose API takes a filter <b>expression</b> - Xero's \c where, Bitbucket's BBQL - and can therefore
     evaluate a whole tree.  A table that can only narrow a listing with a handful of query arguments declares
     it @ref False, however many arguments it has, because a caller reading that flag is asking whether the
     search happens on the server and for such a table the answer is "partly, and which part depends on what
-    you asked".  @ref DataProvider::DataProviderExpressionInfo::supports_pushdown "supports_pushdown" is where
+    you asked".  @ref DataProvider::DataProviderExpressionBaseInfo::supports_pushdown "supports_pushdown" is where
     that per-operator detail is published.
 
     @section restschematable_write Updating and Deleting
@@ -75,7 +75,7 @@ public namespace RestSchemaActions {
 
     Where the predicate is exactly an equality on the table's identity field, that search is skipped and the
     write is issued directly, because the caller has already said which record it means.  Otherwise the
-    matching records are **collected before the first write is issued**, rather than being written as the
+    matching records are <b>collected before the first write is issued</b>, rather than being written as the
     collection is walked: a paged collection that is being modified while it is read returns a different set
     of pages, and records would be skipped or repeated.
 */
@@ -302,7 +302,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     }
 
     #! Checks that every path a table reads or writes a record through resolves against the response
-    /** A path that does not resolve fails **silently**: a single read whose record path names a wrapper
+    /** A path that does not resolve fails <b>silently</b>: a single read whose record path names a wrapper
         the action already unwrapped reads one record as nothing at all, and no test that only searches
         will ever notice.  That is what Paddle's tables did - the manifest unwraps \c data on a single
         read, so unwrapping it again in the table left \c readOne() and \c searchSingleRecord() returning
@@ -373,11 +373,11 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     #! Returns the fields a type describes, reading through a collection to the type of its elements
     /** The element type is preferred and the type's own fields are the fallback, because a description does
         not always say that a collection is a collection: GitLab declares the 200 response of every listing
-        it publishes as a **single** entity rather than an array of them, though the body it returns is an
+        it publishes as a <b>single</b> entity rather than an array of them, though the body it returns is an
         array.  Reading the entity's fields is right in both cases - it is the record either way - and it is
         the only thing that works for the second.
 
-        A hash type reports its **value** type as its element type, which describes no fields, so the
+        A hash type reports its <b>value</b> type as its element type, which describes no fields, so the
         fallback is what answers for one of those.
 
         @param type the type to read
@@ -507,7 +507,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     /** The schema's own description of the record is what the table publishes, so a table that has not
         declared a projection of its own cannot drift from the contract its actions use.
 
-        **A listing returns a projection; reading one record returns the record.**  A vendor describes both,
+        <b>A listing returns a projection; reading one record returns the record.</b>  A vendor describes both,
         and the two rarely agree: GitLab describes a project with 24 fields in its listing and 161 in its
         single read.  The richer of the two is therefore the one published, because an under-declared column
         is not cosmetic - the framework rejects a search on a column the table does not declare before the
@@ -722,7 +722,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
     }
 
     #! Reads one record by its identity
-    /** A search that names a record the service does not have matches **nothing**; it is not an error.
+    /** A search that names a record the service does not have matches <b>nothing</b>; it is not an error.
         Every API in this family answers a single read of an unknown identity with a 404, so that answer is
         turned into an empty result rather than an exception - otherwise a search for a record that has been
         deleted, or an @ref updateRecords() naming one, would throw where it should report that nothing
@@ -824,7 +824,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         cannot carry: an identity and its timestamps are the service's to assign, and a column the service
         will accept on an update it will not always accept on a create.
 
-        So a write sends the columns the write action **declares**, and nothing else.  A mapper hands over a
+        So a write sends the columns the write action <b>declares</b>, and nothing else.  A mapper hands over a
         whole row, and the alternative to narrowing it is a request the schema rejects for carrying a value
         the caller never chose to send.  @ref RestSchemaRecordTableInfo::read_only_fields is the same rule
         stated by hand, for a column the action does declare but the service will not accept.
@@ -952,7 +952,7 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
 
     #! Returns the listing options the caller chose, as opposed to the ones the table defaulted for it
     /** A default is what the table sends when the caller has not said otherwise, and a predicate on the same
-        field **is** the caller saying otherwise - so a predicate may replace a defaulted option, and may not
+        field <b>is</b> the caller saying otherwise - so a predicate may replace a defaulted option, and may not
         replace one the caller set.
 
         Without the distinction a table could not push down a predicate on any field whose option carries a

@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `insurance.purchased` webhook events
+#! Watches for <tt>insurance.purchased</tt> webhook events
 public class EasyPostWatchInsurancePurchasedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

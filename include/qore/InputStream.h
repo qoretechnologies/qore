@@ -46,10 +46,10 @@ class InputStream : public StreamBase {
 public:
    /**
       * @brief Helper method that checks that the current thread is the same as when the instance was created,
-      * calls read() and wraps the read data to Qore's `binary` value.
+      * calls read() and wraps the read data to Qore's <tt>binary</tt> value.
       * @param limit the maximum number of bytes to read
       * @param xsink the exception sink
-      * @return the `binary` wrapping the read data or `NOTHING` if the end of the stream has been reached
+      * @return the <tt>binary</tt> wrapping the read data or <tt>NOTHING</tt> if the end of the stream has been reached
       */
     DLLLOCAL BinaryNode *readHelper(int64 limit, ExceptionSink *xsink) {
         if (!check(xsink)) {
@@ -69,9 +69,9 @@ public:
 
    /**
       * @brief Helper method that checks that the current thread is the same as when the instance was created,
-      * calls peek() and wraps the result to Qore's `int` value.
+      * calls peek() and wraps the result to Qore's <tt>int</tt> value.
       * @param xsink the exception sink
-      * @return the `int` wrapping the result or `NOTHING` if the end of the stream has been reached
+      * @return the <tt>int</tt> wrapping the result or <tt>NOTHING</tt> if the end of the stream has been reached
       */
     DLLLOCAL QoreValue peekHelper(ExceptionSink *xsink) {
         if (!check(xsink)) {
@@ -82,7 +82,7 @@ public:
     }
 
     /**
-      * @brief Reads up to `limit` bytes from the input stream.
+      * @brief Reads up to <tt>limit</tt> bytes from the input stream.
       * @param ptr the destination buffer to read data into
       * @param limit the maximum number of bytes to read, must be &gt; 0
       * @param xsink the exception sink

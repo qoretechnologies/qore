@@ -26,8 +26,8 @@
 public namespace GorgiasDataProvider {
 
 #! Data type for customer references in ticket creation/updates
-/** Used when associating a customer with a ticket. Provide either `id` to reference
-    an existing customer, or `email` to match/create by email address.
+/** Used when associating a customer with a ticket. Provide either <tt>id</tt> to reference
+    an existing customer, or <tt>email</tt> to match/create by email address.
 */
 public class GorgiasCustomerRefDataType inherits HashDataType {
     public {
@@ -64,8 +64,8 @@ public class GorgiasCustomerRefDataType inherits HashDataType {
 }
 
 #! Data type for message sender/receiver references
-/** Used when specifying the sender or receiver of a message. Provide `id` for a Gorgias
-    user (agent) or `email` for a customer.
+/** Used when specifying the sender or receiver of a message. Provide <tt>id</tt> for a Gorgias
+    user (agent) or <tt>email</tt> for a customer.
 */
 public class GorgiasSenderReceiverDataType inherits HashDataType {
     public {
@@ -208,7 +208,7 @@ public class GorgiasRoleDataType inherits HashDataType {
 }
 
 #! Data type for assignee (user or team) references
-/** Used when assigning a user or team to a ticket. Provide `{"id": <user_id>}`.
+/** Used when assigning a user or team to a ticket. Provide <tt>{"id": &lt;user_id&gt;}</tt>.
 */
 public class GorgiasAssigneeRefDataType inherits HashDataType {
     public {
@@ -232,7 +232,7 @@ public class GorgiasAssigneeRefDataType inherits HashDataType {
 }
 
 #! Data type for message attachment objects
-/** Used when specifying attachments on a message. Each attachment requires a `url`
+/** Used when specifying attachments on a message. Each attachment requires a <tt>url</tt>
     pointing to the file location.
 */
 public class GorgiasAttachmentDataType inherits HashDataType {

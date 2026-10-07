@@ -216,7 +216,7 @@ string explicit_method = mapper.convert<string>(2, target: "two");
 string static_value = Mapper<int>::choose<string>(3, "three");
     @endcode
 
-    The receiver type in <tt>Factory&lt;int&gt;::make(...)</tt> supplies the
+    The receiver type in <tt>Factory&lt;int&gt;\::make(...)</tt> supplies the
     concrete type argument used for argument checking, local declarations, and
     return checking inside the static method body. Qore can also infer class
     type arguments at expression sites:

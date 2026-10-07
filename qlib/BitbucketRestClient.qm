@@ -51,7 +51,7 @@ module BitbucketRestClient {
     @section bitbucketrestclientintro BitbucketRestClient Introduction
 
     The %BitbucketRestClient module provides an API for calling
-    [Bitbucket Cloud](https://bitbucket.org)'s REST API services.
+    <a href="https://bitbucket.org">Bitbucket Cloud</a>'s REST API services.
 
     To use this module, use \c "%requires BitbucketRestClient" in your code.
 
@@ -65,7 +65,7 @@ module BitbucketRestClient {
     - @ref BitbucketRestClient::BitbucketRestConnection "BitbucketRestConnection": a connection object to
       Bitbucket (based on the @ref connectionproviderintro "ConnectionProvider" module)
 
-    @note This module targets **Bitbucket Cloud**.  Bitbucket Data Center is a different product with a
+    @note This module targets <b>Bitbucket Cloud</b>.  Bitbucket Data Center is a different product with a
     different API (\c /rest/api/1.0 rather than \c /2.0) and is not supported here.
 
     @section bitbucketrestclient_auth Authentication
@@ -74,7 +74,7 @@ module BitbucketRestClient {
 
     |!Credential|!Set|!Notes
     |An access token|\c token|A repository, project or workspace access token, or an OAuth2 access token; sent as a bearer token. The narrowest option, and the one to prefer
-    |An app password|\c username and \c password|Sent as HTTP basic authentication. The username is the **Atlassian account username**, not the email address
+    |An app password|\c username and \c password|Sent as HTTP basic authentication. The username is the <b>Atlassian account username</b>, not the email address
     |The OAuth2 authorization code flow|\c oauth2_client_id and \c oauth2_client_secret|From an OAuth consumer created in workspace settings; this is what an interactive integration uses
 
     The application this module was written for supported only the OAuth2 flow, which forces a workspace

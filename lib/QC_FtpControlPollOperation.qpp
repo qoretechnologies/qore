@@ -653,7 +653,7 @@ QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink
 
 //! FTP control channel poll operation for async I/O
 /** This class implements the FTP control channel protocol as a non-blocking
-    poll operation suitable for use with the @ref Qore::Thread::AsyncIoController.
+    poll operation suitable for use with the @ref Qore::AsyncIoController.
 
     It handles:
     - TCP connection to the FTP server

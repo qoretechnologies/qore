@@ -1,0 +1,16 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_encoding_resultguide Encoding Result Fields
+
+    @tableofcontents
+
+    All encoding methods return a hash with the following fields:
+
+    |!Field|!Type|!Description
+    |\c input_ids|list\<int\>|Token IDs
+    |\c token_type_ids|list\<int\>|Segment IDs (0 for first text, 1 for second)
+    |\c attention_mask|list\<int\>|1 for real tokens, 0 for padding
+    |\c tokens|list\<string\>|String representation of each token
+    |\c offset_mapping|list\<list\<int\>\>|Byte-level (start, end) offsets in original text
+    |\c special_tokens_mask|list\<int\>|1 for special tokens, 0 for content tokens
+*/

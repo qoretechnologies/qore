@@ -248,10 +248,10 @@ public class CrossEncoderReranker {
         @param passages list of candidate passages
         @param top_k number of top results to return
         @return list of @ref RerankerScoredHit in descending score order, truncated to
-        \a top_k entries.  For HTTP backends using the `{"scores": [...]}` response
+        \a top_k entries.  For HTTP backends using the <tt>{"scores": [...]}</tt> response
         format and for ONNX backends, the \c score is the model's raw output (subject
         to the configured activation function); for HTTP backends using the
-        `{"results": [{"relevance_score": ...}]}` format it is the provider's
+        <tt>{"results": [{"relevance_score": ...}]}</tt> format it is the provider's
         \c relevance_score; for SGLang backends it is the server's per-document
         \c score.
     */
@@ -566,10 +566,10 @@ public class CrossEncoderReranker {
         The tokenizer configuration and the activation function applied around the model are not
         part of this identity and must be bound separately by the producer that applies them.
 
-        @return an @ref ML::OnnxContentIdentity hash, or @ref nothing in HTTP and SGLang modes,
+        @return an @ref Qore::ML::OnnxContentIdentity hash, or @ref nothing in HTTP and SGLang modes,
             where there is no local model content to identify
 
-        @see @ref ML::OnnxModel::getContentIdentity()
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
     *hash<ML::OnnxContentIdentity> getContentIdentity() {
         if (mode != "onnx" || !onnx_model) {

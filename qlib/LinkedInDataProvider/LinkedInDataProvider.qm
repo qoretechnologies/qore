@@ -408,11 +408,11 @@ module LinkedInDataProvider {
     @section linkedindataproviderintro LinkedInDataProvider Introduction
 
     The %LinkedInDataProvider module provides a data provider API for
-    [LinkedIn](https://www.linkedin.com) member content through LinkedIn's versioned
-    [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api),
-    [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api)
+    <a href="https://www.linkedin.com">LinkedIn</a> member content through LinkedIn's versioned
+    <a href="https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api">Posts</a>,
+    <a href="https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api">Images</a>
     and
-    [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api)
+    <a href="https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api">Videos</a>
     APIs.
 
     The following classes are provided:
@@ -428,13 +428,13 @@ module LinkedInDataProvider {
     \c LinkedIn-Version header on every call; see @ref linkedinrestclient_versions.
 
     That change also fixes a defect the legacy shape hides.  A versioned write answers \c 201 with an
-    **empty body** and returns the created post's URN in the \c x-restli-id response header only, so
+    <b>empty body</b> and returns the created post's URN in the \c x-restli-id response header only, so
     an implementation that reads \c "id" out of the response body — as the \c ugcPosts endpoint
     allowed — gets nothing back, silently, because the call itself succeeded.
 
     @section linkedindataprovider_mentions Mentions and Hashtags
 
-    Mentions are written **inline** in the post text rather than as a separate list of offsets:
+    Mentions are written <b>inline</b> in the post text rather than as a separate list of offsets:
 
     @verbatim
 Delighted to be working with @[Qore Technologies](urn:li:organization:2414183) on this #integration
@@ -445,7 +445,7 @@ Delighted to be working with @[Qore Technologies](urn:li:organization:2414183) o
 
     @section linkedindataprovider_timestamps Timestamps
 
-    LinkedIn reports every timestamp as **milliseconds** since the epoch.  Each one is converted to a
+    LinkedIn reports every timestamp as <b>milliseconds</b> since the epoch.  Each one is converted to a
     %Qore date on the way out, so a consumer never has to know the unit.
 
     @section linkedindataproviderrelnotes Release Notes

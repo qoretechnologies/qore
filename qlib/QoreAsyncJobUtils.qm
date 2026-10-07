@@ -130,7 +130,7 @@ public class AsyncJobPoller {
         @param terminal closure invoked with each status hash;
             returns @c True when the status represents a terminal state
             (success or failure) at which point @ref poll() returns
-        @param label human-readable identifier for the job kind
+        @param lbl human-readable identifier for the job kind
             (used in timeout error messages); defaults to "async job"
         @param exception_class exception class raised when the overall
             timeout expires before a terminal status is observed;

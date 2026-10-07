@@ -56,8 +56,8 @@ module QoreMediaUtils {
     Each comes with a factory + registry pair mirroring the
     QoreRagUtils / QoreSpeechUtils pattern.  Provider modules register
     their factories on module load; callers select a backend by name
-    via @ref ImageGeneratorConfig::backend and
-    @ref VideoGeneratorConfig::backend, and the registry lazy-loads
+    via @ref QoreMediaUtils::ImageGeneratorConfig::backend and
+    @ref QoreMediaUtils::VideoGeneratorConfig::backend, and the registry lazy-loads
     the providing module on first lookup.
 
     @par Example: generate an image via Stability AI
@@ -695,7 +695,7 @@ public class MediaProviderRegistry {
     }
 
     #! Constructs an image generator for the given @ref ImageGeneratorConfig
-    /** @throw MEDIA-CONFIG-ERROR @ref ImageGeneratorConfig::backend is missing or unknown
+    /** @throw MEDIA-CONFIG-ERROR @ref QoreMediaUtils::ImageGeneratorConfig::backend is missing or unknown
     */
     static AbstractImageGenerator createImageGenerator(
             hash<ImageGeneratorConfig> config) {
@@ -707,7 +707,7 @@ public class MediaProviderRegistry {
     }
 
     #! Constructs a video generator for the given @ref VideoGeneratorConfig
-    /** @throw MEDIA-CONFIG-ERROR @ref VideoGeneratorConfig::backend is missing or unknown
+    /** @throw MEDIA-CONFIG-ERROR @ref QoreMediaUtils::VideoGeneratorConfig::backend is missing or unknown
     */
     static AbstractVideoGenerator createVideoGenerator(
             hash<VideoGeneratorConfig> config) {

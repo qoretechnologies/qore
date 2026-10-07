@@ -416,8 +416,8 @@ module LinkedInOrganizationsDataProvider {
     @section linkedinorganizationsdataproviderintro LinkedInOrganizationsDataProvider Introduction
 
     The %LinkedInOrganizationsDataProvider module provides a data provider API for
-    [LinkedIn](https://www.linkedin.com) organization pages through the
-    [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview),
+    <a href="https://www.linkedin.com">LinkedIn</a> organization pages through the
+    <a href="https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview">Pages Data Portability APIs</a>,
     which LinkedIn provides in response to the EU Digital Markets Act so that Page administrators
     can retrieve the data their organization has generated on the platform.
 
@@ -428,7 +428,7 @@ module LinkedInOrganizationsDataProvider {
     @section linkedinorganizationsdataprovider_access Access
 
     Every action requires the \c r_dma_admin_pages_content permission, which comes from a LinkedIn
-    developer application **approved for the Pages Data Portability API product**.  That approval is
+    developer application <b>approved for the Pages Data Portability API product</b>.  That approval is
     requested from the application's \c Products tab and takes several business days; it is separate
     from the products the member-facing %LinkedInDataProvider application uses.
 
@@ -449,9 +449,9 @@ module LinkedInOrganizationsDataProvider {
     The DMA finders page with an opaque \c paginationCursor rather than an offset.  Two properties
     matter:
 
-    - a page can be **shorter than requested** while more items remain, so only the presence of a
+    - a page can be <b>shorter than requested</b> while more items remain, so only the presence of a
       cursor says the listing continues;
-    - the cursor reports the position in a listing sorted **newest first**, so following it walks
+    - the cursor reports the position in a listing sorted <b>newest first</b>, so following it walks
       *backwards* through history.  It is therefore not a "resume where we left off" token in the
       way a delta feed's cursor is; see
       @ref LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider
@@ -464,7 +464,7 @@ module LinkedInOrganizationsDataProvider {
     @section linkedinorganizationsdataprovider_privacy Member Data
 
     A LinkedIn member controls whether their identity and their interactions with a Page are shared
-    through these APIs, and the setting is **off by default**.  Where a member has not opted in,
+    through these APIs, and the setting is <b>off by default</b>.  Where a member has not opted in,
     LinkedIn omits the fields naming them: a follower arrives with only a timestamp, and a comment
     arrives without its author *and without its text*.  Every affected field in this module's types
     is optional and documented as such.

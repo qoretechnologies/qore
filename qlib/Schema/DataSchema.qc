@@ -64,7 +64,7 @@ public class DataSchema inherits AbstractVersionedSchema {
         *hash<auto> expanded_tables;
 
         #! Columns with \c populate expressions that need backfill after DDL alignment.
-        #! Keyed by table name → column name → \c {populate: <expr>, notnull: bool}.
+        #! Keyed by table name → column name → <tt>{populate: &lt;expr&gt;, notnull: bool}</tt>.
         #! Populated by \c extractPopulateColumns() in \c getTablesImpl(); consumed by
         #! \c executePopulateBackfill() in \c doPostAlignment().
         *hash<string, hash<string, hash<auto>>> pending_populates;
@@ -380,7 +380,7 @@ public class DataSchema inherits AbstractVersionedSchema {
     #! Executes backfill and NOT NULL re-application for columns with populate attributes
     /** For each table/column in \c pending_populates:
         1. Renders the populate expression to a SQL UPDATE
-        2. Executes \c UPDATE ... SET col = <expr> WHERE col IS NULL
+        2. Executes <tt>UPDATE ... SET col = &lt;expr&gt; WHERE col IS NULL</tt>
         3. If the column was originally NOT NULL: \c ALTER TABLE ... ALTER COLUMN ... SET NOT NULL
 
         @param table_cache the table cache from alignment
@@ -430,7 +430,7 @@ public class DataSchema inherits AbstractVersionedSchema {
     #! Renders a populate expression to a complete UPDATE SQL statement
     /** Supports 4 forms:
         - \c {field: col} — field reference: \c UPDATE t SET new_col = col WHERE new_col IS NULL
-        - literal scalar — \c UPDATE t SET col = <literal> WHERE col IS NULL
+        - literal scalar — <tt>UPDATE t SET col = &lt;literal&gt; WHERE col IS NULL</tt>
         - \c {exp: name, args: [...]} — DPQL expression rendered via the SqlUtil expression map
           when possible, otherwise evaluated client-side as a bind value
         - \c {sql: {driver: "..."}} — raw per-driver SQL expression embedded in the UPDATE
@@ -524,7 +524,7 @@ public class DataSchema inherits AbstractVersionedSchema {
     /** Field references (\c {field: ...}) and nested expressions (\c {exp: ..., args: [...]}) are
         represented as plain hashes when a schema is loaded from YAML or JSON.  The SqlUtil
         expression engine matches arguments by their concrete hashdecl type
-        (@ref DataProviderFieldReference / @ref DataProviderExpression), so this converts those
+        (@ref DataProvider::DataProviderFieldReference / @ref DataProvider::DataProviderExpression), so this converts those
         plain hashes to the typed form, recursing into nested expression arguments.  Any other value
         (literal scalar, list, or hash without an \c "exp"/"field" key) is returned unchanged.
 

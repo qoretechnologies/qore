@@ -4,6 +4,26 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Out-of-tree builds now record the lexer source at its correct location in debug information,
+    allowing RPM debug-source extraction and debugger source lookup to find <tt>lib/scanner.lpp</tt>.
+
+    External module documentation locates shared HTML assets beside the installed
+    SDK template, independently of the module's installation prefix. Custom SDK
+    data directories and paths containing spaces are supported.
+    Dependent modules resolve published documentation indexes through the SDK.
+    Documentation template generation publishes output only after successful conversion
+    and reruns when qpp changes, preventing partial files from surviving failed builds.
+    Native module landing pages list companion user modules with links to their introductions
+    and reuse available data-provider app icons. Two-phase documentation builds generate
+    indexes first, then render cross-references in both directions without rewriting indexes
+    while other documentation targets read them.
+    User-module reference pages now include documentation-only peer indexes and fully qualified
+    native symbols. Function comments follow their declarations, parameter descriptions match
+    their signatures, and literal markup remains readable. The language reference excludes the
+    obsolete Doxygen configuration template from its page inputs.
+    MIME types and wildcard paths in generated module documentation retain their literal
+    characters in prose, code examples and verbatim blocks.
+
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
     waiting indefinitely after the descriptor has been removed from the event loop.
@@ -718,7 +738,7 @@ val = "string";      # OK
       the automatic @ref new-style "%new-style" bits selectively
 
     <b>Note:</b> This change only affects scripts loaded via the command-line binary and
-    @ref Qore::Program::parseFile "Program::parseFile()". Module loading via @ref Qore::load_module
+    the C++ \c QoreProgram::parseFile() API. Module loading via @ref Qore::load_module
     "load_module()" or @ref requires "%requires" is unaffected — modules continue to control their own parse options
     through directives inside the <tt>.qm</tt> file.
     @endparblock
@@ -1472,9 +1492,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
       @ref Qore::SocketPollOperationBase "SocketPollOperationBase<T>"
     - generic result hashdecls such as
-      @ref Qore::Thread::QueueTryResult "QueueTryResult<T>",
-      @ref Qore::Thread::ChannelTryResult "ChannelTryResult<T>", and
-      @ref Qore::KeyValueInfo "KeyValueInfo<T>"
+      @ref Qore::Thread::QueueTryResult<T> "QueueTryResult<T>",
+      @ref Qore::Thread::ChannelTryResult<T> "ChannelTryResult<T>", and
+      @ref Qore::KeyValueInfo<V> "KeyValueInfo<T>"
 
     @code{.py}
 Queue<int> q();
@@ -1543,7 +1563,7 @@ int echoed = child.echo(value);
 
     The following also apply to source-defined generics; see @ref generic_classes "Generic Classes" and
     @ref hashdecl_generic "Generic Hashdecls" for the complete rules:
-    - parameterized static receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
+    - parameterized static receivers such as <tt>Factory&lt;int&gt;\::make(...)</tt>, and
       @ref hashdecl_generic "hashdecls" with type parameters for typed result records such as
       <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
     - wildcard type arguments with <tt>?</tt>, <tt>? extends Type</tt>, and <tt>? super Type</tt>
@@ -2896,7 +2916,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref awss3dataproviderintro "AwsS3DataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/s3/">Amazon S3</a> object
-        storage and S3-compatible services, including a file API for `conn://` locations
+        storage and S3-compatible services, including a file API for <tt>conn://</tt> locations
 
     - @ref awstextractdataproviderintro "AwsTextractDataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/textract/">AWS Textract</a> document AI
@@ -2963,9 +2983,9 @@ while (*binary chunk = input.read(65536)) {
       - include FLUX.2, FLUX 3 video, image/video editing tools, LoRA beta inference, credit reads, and licensed usage reports
 
     - @ref bflrestclientintro "BflRestClient" module
-      - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
+      - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with <tt>x-key</tt> header authentication
       - authenticate credit ping, preserve regional routes, and validate per-job deadlines and credential-free media downloads
-      - retire the unsupported `flux-1.1-pro-video` alias; select the current `flux-3-video` model explicitly
+      - retire the unsupported <tt>flux-1.1-pro-video</tt> alias; select the current <tt>flux-3-video</tt> model explicitly
 
     - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
       - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
@@ -3113,7 +3133,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref dropboxdataproviderintro "DropboxDataProvider" module
       - new module providing a data provider API for <a href="https://www.dropbox.com">Dropbox</a> cloud file
-        storage, including a file API for `conn://` locations
+        storage, including a file API for <tt>conn://</tt> locations
 
     - @ref dropboxrestclientintro "DropboxRestClient" module
       - new module providing a REST client for <a href="https://www.dropbox.com">Dropbox</a> with OAuth2
@@ -3254,7 +3274,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref googledrivedataproviderintro "GoogleDriveDataProvider" module
       - new module providing a data provider API for <a href="https://www.google.com/drive/">Google Drive</a>
-        cloud file storage, including a file API for `conn://` locations
+        cloud file storage, including a file API for <tt>conn://</tt> locations
 
     - @ref gorgiasdataproviderintro "GorgiasDataProvider" module
       - new module providing a data provider API for <a href="https://www.gorgias.com/">Gorgias</a> helpdesk
@@ -3538,7 +3558,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref openapi3intro "OpenApi3" module
       - preserves combined and alternative document security requirements, including anonymous alternatives;
-        @ref OpenApi3Schema::security is now a list of requirement hashes rather than a flattened hash
+        \c OpenApi3Schema::security is now a list of requirement hashes rather than a flattened hash
       - preserve positional arrays, boolean item constraints, response direction, and native serialization
       - retains enumeration labels and descriptions through schema adaptation and serialization,
         while preserving typed wire values and keeping code-generation symbols out of forms
@@ -3557,7 +3577,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref opensearchdataproviderintro "OpenSearchDataProvider" module
       - new module providing document, index, pipeline, bulk, aggregation, scroll search, k-NN search, neural
-        search, hybrid search, vector-index creation, a @ref qoreragtypesintro "QoreRagTypes" `opensearch` vector-store backend, and
+        search, hybrid search, vector-index creation, a @ref qoreragtypesintro "QoreRagTypes" <tt>opensearch</tt> vector-store backend, and
         search app-action support for <a href="https://opensearch.org/">OpenSearch</a> servers
 
     - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender" module
@@ -4376,9 +4396,9 @@ while (*binary chunk = input.read(65536)) {
       from an lvalue now runs the destructor after the lvalue locks are released, and a scan recognizes a
       write lock already held by the scanning thread as the exclusive access it needs.
     - Fixed @ref delete "delete" on a list element or a list slice not running the deleted objects'
-      destructors when the code was run by the IR, JIT or AOT engines. `delete` ran the destructor
-      immediately for a variable, a hash key and an object member, but for `list[i]`, `list[i,j]` and
-      `list[i..j]` it only cleared the slots, leaving each object to be destroyed whenever its last
+      destructors when the code was run by the IR, JIT or AOT engines. <tt>delete</tt> ran the destructor
+      immediately for a variable, a hash key and an object member, but for <tt>list[i]</tt>, <tt>list[i,j]</tt> and
+      <tt>list[i..j]</tt> it only cleared the slots, leaving each object to be destroyed whenever its last
       remaining reference happened to go away - so a destructor with side effects ran late, or not at all
       while anything else still referenced the object. The AST engine was not affected.
     - Fixed reference cycles never being collected after the references that blocked them went away. The
@@ -4709,7 +4729,7 @@ while (*binary chunk = input.read(65536)) {
         which binds no ordinary lvalue, and now takes an untyped reference
       - fixed two parameters that share a name and a schema sharing one another's documentation.  A schema
         object is interned by its content, so \c limit declared as an integer on two listings is one object;
-        its derived **field** was then cached under the parameter name alone, although a field also carries
+        its derived <b>field</b> was then cached under the parameter name alone, although a field also carries
         what the use supplies - the parameter's own description and default value.  Whichever operation was
         registered second therefore published the first one's description and default, silently and
         depending only on registration order.  The cached field is still shared - it is also the cut that
@@ -6369,7 +6389,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     @subsection qore_1_0_10_bug_fixes Bug Fixes in Qore
     - fixed a bug in calculating abstract overrides in child classes that could cause spurious errors
       (<a href="https://github.com/qoretechnologies/qore/issues/4338">issue 4338</a>)
-    - implemented the @ref Qore::parse_url(string, *int) variant to allow for percent decoding in URL strings
+    - implemented the @ref Qore::parse_url() "parse_url(string, *int)" variant to allow for percent decoding in URL strings
       (<a href="https://github.com/qoretechnologies/qore/issues/4332">issue 4332</a>)
     - fixed C++ foreign thread registration APIs to support TID reuse to provide thread affinity for language
       modules such as Python and Java with successive rapid transitions into %Qore in callbacks
@@ -7369,7 +7389,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - the @ref cast "cast<>" operator can now cast directly to "or nothing" types: ex:
       @code{.py} *list<int> l = cast<*list<int>>(getList()); @endcode
       (<a href="https://github.com/qoretechnologies/qore/issues/3331">issue 3331</a>)
-    - fixed detecting invalid input in @ref Qore::date(string, string) "date(string, string)
+    - fixed detecting invalid input in @ref Qore::date(string, string) "date(string, string)"
       (<a href="https://github.com/qoretechnologies/qore/issues/3239">issue 3239</a>)
 
     @section qore_0933 Qore 0.9.3.3
@@ -7560,7 +7580,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       (<a href="https://github.com/qoretechnologies/qore/issues/3509">issue 3509</a>)
     - fixed bugs importing user modules with an injected API in an existing @ref Qore::Program "Program" container
       (<a href="https://github.com/qoretechnologies/qore/issues/3504">issue 3504</a>)
-    - fixed a memory leak in @ref Qore::Serializable::deserialize(string, *int) "Serializable::deserialize(string)"
+    - fixed a memory leak in @ref Qore::Serializable::deserialize() "Serializable::deserialize(string)"
     - fixed a memory leak (crash in debug mode) related to @ref garbage_collection "deterministic garbage collection"
       (<a href="https://github.com/qoretechnologies/qore/issues/3481">issue 3481</a>)
     - fixed a bug where HTTP redirect messages with a simple path and not a full URL were not processed correctly
@@ -9554,7 +9574,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - fixed a bug where a @ref Qore::Socket "Socket" operation attempted in another thread while a callback operation on the same socket was in progress would result in a confusing error message (<a href="https://github.com/qoretechnologies/qore/issues/530">issue 530</a>)
     - fixed a bug where local variable declarations in class member initialization expressions caused a crash (<a href="https://github.com/qoretechnologies/qore/issues/574">issue 574</a>)
     - fixed a bug where HTTP data in HTTP socket events was modified even though it was shared which caused data consistency problems and crashes in the worst case (<a href="https://github.com/qoretechnologies/qore/issues/576">issue 576</a>)
-    - fixed a bug where the `+=` operator handled NOTHING values incorrectly (<a href="https://github.com/qoretechnologies/qore/issues/582">issue 582</a>)
+    - fixed a bug where the <tt>+=</tt> operator handled NOTHING values incorrectly (<a href="https://github.com/qoretechnologies/qore/issues/582">issue 582</a>)
     - fixed a bug where a non-numeric define specified on the command line could cause a crash (<a href="https://github.com/qoretechnologies/qore/issues/583">issue 583</a>)
     - fixed a bug where the @ref Qore::SQL::SQLStatement::describe() method would not grab the transation lock even when statements were implicitly executed (<a href="https://github.com/qoretechnologies/qore/issues/591">issue 591</a>)
     - fixed the order of initialization of class members (<a href="https://github.com/qoretechnologies/qore/issues/42">issue 42</a>)
@@ -10069,7 +10089,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - @ref smtpclientintro "SmtpClient" module improvements:
       - added automatic recognition and support of the \c "STARTTLS" command when connecting to an ESMTP server; this way
         the class will automatically upgrade the connection to a secure TLS/SSL connection if the server supports it
-      - added support for SMTP server schemes in the URL in the constructor (ex: \c "esmtptls://user@password:smtp.example.com")
+      - added support for SMTP server schemes in the URL in the constructor (ex: <tt>esmtptls://user:password\@smtp.example.com</tt>)
       - added support for the deprecated (but still in use) \c "smtps" scheme with a default port of 465
       - when throwing an exception when a Message cannot be sent because it is incomplete, the reason for the error is also included
         in the exception (previously the exception message was generic making problems with the Message object harder to debug)
@@ -10326,7 +10346,7 @@ class MyConcreteClass inherits MyAbstractClass {
     @par Text File Parsing Enhancements
     The following improvements were made in qore to support more flexible file parsing:
     - the @ref Qore::ReadOnlyFile class was added as a parent class of @ref Qore::File to allow for a more convenient API for reading files (the @ref Qore::File class's API remains the same as it publically inherits  @ref Qore::ReadOnlyFile)
-    - the @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" method (formerlly a method of the @ref Qore::File class) was enhanced to accept 2 optional arguments, allowing the end of line character(s) to be stripped from the line returned, and also to allow the end of line characters to be specified.  If no end of line characters are specified, then the method automatically determines the end of line characters (can be \c "\n", \c "\r", or \c "\r\n"; the last one only if the underlying file is not a TTY in order to avoid stalling I/O on an interactive TTY)
+    - the @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" method (formerlly a method of the @ref Qore::File class) was enhanced to accept 2 optional arguments, allowing the end of line character(s) to be stripped from the line returned, and also to allow the end of line characters to be specified.  If no end of line characters are specified, then the method automatically determines the end of line characters (can be <tt>\\n</tt>, <tt>\\r</tt>, or <tt>\\r\\n</tt>; the last one only if the underlying file is not a TTY in order to avoid stalling I/O on an interactive TTY)
     - the @ref file_stat_constants were moved from the @ref Qore::File class to the @ref Qore::ReadOnlyFile class
     - added a new @ref Qore::FileLineIterator "FileLineIterator" iterator class
     - added a new optional parameter to @ref <string>::split() "<string>::split(string, string, bool)" and Qore::split(string, string, string, bool) to allow for automatic stripping unquoted fields of leading and trailing whitespace (the default is the old behavior; i.e. leave the whitespace as it is read)
@@ -10463,7 +10483,7 @@ class MyAbstractInterface {
     @par Other Minor Improvements and Changes
     - qpp updated to support abstract methods and multiple inheritance (+ other minor qpp enhancements)
     - improved the \c QOREADDRINFO-GETINFO-ERROR exception description by adding information about the arguments passed
-    - added a string argument to @ref Qore::chr(softint, *string) "char(softint, *string)" to accept an output encoding
+    - added a string argument to @ref Qore::chr() "chr(softint, *string)" to accept an output encoding
     - added a @ref Qore::int(string, int) "int(string, int)" variant to parse a string as a number and give the base
     - added a new parameter to parse_url() and parseURL() to allow for any [] in the hostname to be included in the \c "host" output key for indicating that the <a href="http://wikipedia.org/wiki/IPv6">ipv6</a> protocol be used
     - added the following pseudo-methods:
@@ -10705,7 +10725,7 @@ our int i1;
     - fixed Qore::File::getchar() to always retrieve 1 character (even for multi-byte character encodings)
     - fixed string evaluation in a boolean context to return @ref True "True" with floating-point numbers between -1.0 and 1.0 exclusive
     - printf formatting fix: output YAML-style \c "null" for @ref nothing with %%y
-    - scanner fix: accept \c "\r" as whitespace to allow better parsing of sources with Windows EOL markers
+    - scanner fix: accept <tt>\\r</tt> as whitespace to allow better parsing of sources with Windows EOL markers
     - fixed parse-time type processing/checks for the keys, + and * operators
     - foreach statement fix: unconditionally evaluate the hash when iterating as otherwise it could change during iteration which could cause a crash
     - fixed another parse-time variant matching bug where the variant-matching algorithm was too aggressive and excluded possible matches at parse time which could result in a false parse-time definitive match even though a better match could be available at runtime

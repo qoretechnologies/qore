@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SalesforceRestDataProvider module definition
 
-/** SalesforceRestDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** SalesforceRestDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -126,7 +126,7 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
         *SalesforceRestClient::SalesforceRestConnection conn;
 
         #! The REST client object, as supplied; targets the org host
-        /** This is the **async** client, so every Salesforce REST action runs on the async socket
+        /** This is the <b>async</b> client, so every Salesforce REST action runs on the async socket
             I/O controller rather than blocking a thread per request.
 
             REST calls are not made on this client directly but on @ref getApiRest(), which is
@@ -140,7 +140,7 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
             tree -- which the UI does merely to list children -- must not perform I/O, and a
             provider built from a client that never reaches a server must still be constructible.
 
-            This is memoization only, and is deliberately **not** lock-protected.  A data provider
+            This is memoization only, and is deliberately <b>not</b> lock-protected.  A data provider
             is constructed in the context of whichever module reached it, and a child module runs
             under restricted parse options that forbid constructing thread classes -- a \c Mutex
             member here makes the \c pubsub child provider unresolvable with

@@ -56,6 +56,7 @@ set(SSHUTIL_CPP_SRC
 
 set(QORE_DOX_SSHUTIL_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 qore_wrap_qpp_value(SSHUTIL_QPP_SOURCES DOXLIST _dox_src ${SSHUTIL_QPP_SRC})
@@ -66,7 +67,8 @@ set(sshutil_module_name "sshutil")
 add_library(${sshutil_module_name} MODULE ${SSHUTIL_CPP_SRC} ${SSHUTIL_QPP_SOURCES})
 add_dependencies(${sshutil_module_name} libqore SSHUTIL_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/sshutil/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/sshutil/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/sshutil/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${sshutil_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

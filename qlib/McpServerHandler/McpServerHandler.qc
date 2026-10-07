@@ -25,7 +25,7 @@
 #! the %McpServerHandler namespace holds all public definitions in the %McpServerHandler module
 public namespace McpServerHandler {
 #! Takes the handler's read lock unless the calling thread already holds the write lock
-/** Qore's @ref Qore::RWLock "RWLock" raises \c LOCK-ERROR when a thread that holds the write
+/** Qore's @ref Qore::Thread::RWLock "RWLock" raises \c LOCK-ERROR when a thread that holds the write
     lock asks for a read lock.  A server that mutates its tool, resource, or prompt catalog
     under the handler's write lock — the natural pattern, since those maps are guarded by that
     same lock — would therefore be unable to announce the change from inside the critical
@@ -270,7 +270,7 @@ public hashdecl McpToolInfo {
     */
     code<auto(auto)> tool;
 
-    #! MCP Apps metadata; see @ref registerUiTool()
+    #! MCP Apps metadata; see @ref McpServerHandler::McpServerHandler::registerUiTool()
     /** Reported to clients that negotiated the
         @ref McpClient::MCP_ExtensionUi "MCP Apps extension" as the tool's \c _meta.ui.
     */
@@ -299,7 +299,7 @@ public hashdecl McpResourceInfo {
     */
     *code<auto(hash<auto>, string)> reader;
 
-    #! MCP Apps metadata; see @ref registerUiResource()
+    #! MCP Apps metadata; see @ref McpServerHandler::McpServerHandler::registerUiResource()
     /** Returned as the \c _meta.ui member of the \c resources/read content entry.
     */
     *hash<McpUiResourceMeta> ui;
@@ -752,7 +752,7 @@ handler.registerToolWithTypeInfo("set-customer-address", "Sets a customer's addr
 
     #! Registers an MCP Apps user interface resource
     /** Declares an interactive HTML interface that a tool registered with
-        @ref registerUiTool() can reference.  The resource is served through the normal
+        @ref McpServerHandler::McpServerHandler::registerUiTool() can reference.  The resource is served through the normal
         resource machinery, with the URI scheme and MIME type the
         @ref mcp_apps "MCP Apps extension" requires, and with the interface's Content
         Security Policy and permission requests attached as \c _meta.ui.
@@ -783,7 +783,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             neither a string nor callable
 
         @see
-        - @ref registerUiTool()
+        - @ref McpServerHandler::McpServerHandler::registerUiTool()
         - @ref clientSupportsUi()
     */
     registerUiResource(string uri, string name, string desc, auto html,
@@ -817,7 +817,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Registers a tool that renders its results in an MCP Apps user interface
     /** Identical to @ref registerTool() except that the tool declares \c _meta.ui referencing
-        a \c ui:// resource registered with @ref registerUiResource().  A host that negotiated
+        a \c ui:// resource registered with @ref McpServerHandler::McpServerHandler::registerUiResource().  A host that negotiated
         the @ref mcp_apps "MCP Apps extension" fetches that resource and renders the tool's
         results in a sandboxed iframe; every other client sees an ordinary tool.
 
@@ -831,7 +831,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param input the input type of the tool
         @param tool the code implementing the tool
         @param ui the MCP Apps metadata; \c resourceUri is required and must name a resource
-            registered with @ref registerUiResource()
+            registered with @ref McpServerHandler::McpServerHandler::registerUiResource()
         @param input_initialized if the input type has been fully initialized
         @param extra extra free-form info to store for the tool
         @param prov an optional data provider backing the tool
@@ -839,7 +839,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @throw MCP-SERVER-ARG-ERROR \c resourceUri is missing, does not use the \c ui:// scheme,
             names a resource that is not registered, or \c visibility contains an unknown value
 
-        @see @ref registerUiResource()
+        @see @ref McpServerHandler::McpServerHandler::registerUiResource()
     */
     registerUiTool(string name, string desc, *AbstractDataProviderType input, code<auto(auto)> tool,
             hash<McpUiToolMeta> ui, *bool input_initialized, *hash<auto> extra,
@@ -1788,7 +1788,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         and the session's SSE map — and then delegates to the base implementation.
 
         This bookkeeping lives here rather than in
-        @ref ServerSentEventHandler::deregisterConnectionImpl() deliberately.  That
+        @ref ServerSentEventHandler::ServerSentEventHandler::deregisterConnectionImpl() deliberately.  That
         method is the documented "called when the connection terminates" hook whose
         base implementation does nothing, so a subclass is invited to override it —
         and an override that declares a narrower parameter type becomes a separate
@@ -2971,6 +2971,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param params the original request parameters
         @param ttl optional TTL in milliseconds (defaults to defaultTaskTtl)
         @param requestId optional request ID from the original request
+        @param clientOperationId optional client operation ID for correlating progress and completion
         @return the new task info
     */
     private hash<McpTaskInfo> createTask(string sessionId, string method, *hash<auto> params, *int ttl,
@@ -3090,7 +3091,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param sessionId the session ID
         @param taskId the task ID
         @param result optional result (for successful completion)
-        @param error optional error (for failure)
+        @param error_info optional error (for failure)
     */
     private reportTaskResult(string sessionId, string taskId, *hash<auto> result, *hash<auto> error_info) {
         try {
@@ -3857,7 +3858,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         result storage safe if the session is removed mid-execution).  May also be
         called directly for explicit, application-driven teardown.
 
-        Acquires the @ref rwl write lock internally, so it must be called \b before
+        Acquires the \c rwl write lock internally, so it must be called \b before
         (not nested inside) any caller-held write lock.
 
         @param sessionId the session ID
@@ -4417,7 +4418,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param info the tool being called
 
         @throw MCP-TASK-ERROR the client did not declare the tasks extension, or the tool
-            declares @ref MCP_TaskSupportForbidden
+            declares @ref McpClient::MCP_TaskSupportForbidden
 
         @see @ref shouldCreateTask() for the server-side policy applied when the client sends
             no augmentation
@@ -4438,15 +4439,15 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Decides whether a modern request with no task augmentation should run as a task
     /** This is the server's own policy, applied only when the client did not ask for task
         execution itself.  The default creates a task when the client declared the extension
-        and the tool declares \c execution.taskSupport as @ref MCP_TaskSupportRequired;
+        and the tool declares \c execution.taskSupport as @ref McpClient::MCP_TaskSupportRequired;
         reimplement in subclasses to apply a different policy, for example to also use tasks
-        for @ref MCP_TaskSupportOptional tools, or to decide from the arguments how long the
+        for @ref McpClient::MCP_TaskSupportOptional tools, or to decide from the arguments how long the
         call will take.
 
         A client that sends the \c task augmentation is honored regardless of what this
         method returns, so narrowing the policy in a subclass cannot refuse a task the client
         legitimately requested; declare \c execution.taskSupport as
-        @ref MCP_TaskSupportForbidden to forbid tasks for a tool.
+        @ref McpClient::MCP_TaskSupportForbidden to forbid tasks for a tool.
 
         @param cx the request context
         @param info the tool being called

@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Receipt Issued
-/** Fires whenever A receipt is issued for an order (BaseLinker journal `log_type` 8).
+/** Fires whenever A receipt is issued for an order (BaseLinker journal <tt>log_type</tt> 8).
 */
 public class BaseLinkerWatchReceiptIssuedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

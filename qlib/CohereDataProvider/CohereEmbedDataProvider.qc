@@ -23,7 +23,7 @@
 */
 
 public namespace CohereDataProvider {
-#! Data provider for Cohere's `/v2/embed` endpoint
+#! Data provider for Cohere's <tt>/v2/embed</tt> endpoint
 public class CohereEmbedDataProvider inherits CohereDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{
@@ -47,9 +47,9 @@ public class CohereEmbedDataProvider inherits CohereDataProviderCommon {
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
-    #! Forwards the embedding request to Cohere's `/v2/embed` endpoint
-    /** Cohere v2 requires `embedding_types`; if not supplied, defaults to
-        `["float"]` so the response uses `embeddings.float`.
+    #! Forwards the embedding request to Cohere's <tt>/v2/embed</tt> endpoint
+    /** Cohere v2 requires <tt>embedding_types</tt>; if not supplied, defaults to
+        <tt>["float"]</tt> so the response uses <tt>embeddings.float</tt>.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         return getSchemaProvider("embed").doRequest(req, request_options);

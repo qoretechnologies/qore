@@ -1,0 +1,142 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframe_dataprovider_pipelinesguide DataProvider Pipeline Integration
+
+    @tableofcontents
+
+    The companion \c DataProviderDataFrame user module wraps a DataFrame as a
+    DataProvider and lets DataFrames flow through
+    <a href="../../DataProvider/html/class_data_provider_1_1_data_provider_pipeline.html">DataProviderPipeline</a> in
+    \c DataFrameBlock shape.
+    DataFrames can also be submitted as ColumnarResult values, which the
+    pipeline treats as
+    \c BufferColumns shape.
+    DataFrame-aware processors can keep DataFrameBlock representation,
+    dense-column processors can keep BufferColumns representation, and other
+    bulk-aware processors receive a hash-of-lists or row conversion.
+
+    @code{.py}
+%requires DataProviderDataFrame
+
+hash<DataProviderExpression> expr = <DataProviderExpression>{
+    "exp": ">=",
+    "args": (<DataProviderFieldReference>{"field": "salary"}, 90000.0),
+};
+
+list<hash<auto>> selected;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "senior-compensation",
+    "output_callback": sub (auto row) {
+        push selected, row;
+    },
+});
+
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+pipeline.submit(employees);
+pipeline.waitDone();
+    @endcode
+
+    QoreFilterRecordsProcessor compiles supported DPQL/DataProvider
+    expressions to DataFrame row masks or dense ColumnarResult boolean masks
+    when possible, including computed comparisons, arithmetic and scalar
+    function calls, \c between, \c in / \c notIn, structured strict
+    equality/inequality, \c containsAny and other string predicates, list
+    membership predicates, list/hash accessors, ternary computed values, null
+    checks, and boolean combinations. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
+    QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
+    QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
+    for simple top-level fields; with ColumnarResult input they rebuild
+    projected or updated blocks from referenced column containers. Analytics
+    processors, including the full AbstractAnalyticsProcessor family plus
+    correlation and cross-correlation processors, accept DataFrameBlock and
+    BufferColumns input and preserve those shapes for rectangular event blocks,
+    including flush-time output from partial windows;
+    top-level configured fields are read from selected columns directly instead
+    of materializing full input blocks as hash-of-lists data.
+    Supported compiled filter forms include \c &&, \c ||, \c !,
+    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
+    scalar comparisons over top-level fields, expression-to-expression
+    comparisons such as \c \@amount \c >= \c \@target or
+    \c \@amount \c + \c \@tax \c >= \c \@limit, scalar functions including
+    \c abs(), \c round(), \c floor(), \c ceil(), \c lwr(), \c upr(),
+    \c trim(), \c ltrim(), \c rtrim(), \c concat(), \c coalesce(),
+    \c nullif(), and date-part functions such as \c get_year() and
+    \c get_month(), row-independent scalar expressions such as
+    \c 2026-04-01T00:00:00Z \c - \c days(60), truthy field checks,
+    \c between, \c inRange, \c in, \c not \c in,
+    \c isNull and \c isNotNull checks, case-sensitive \c contains,
+    \c containsAny, \c starts-with, and \c ends-with string predicates,
+    \c listContains and \c listContainsAny membership predicates, list index,
+    slice, and hash key accessors such as \c \@scores[0] and
+    \c \@payload{region}, structured ternary expressions, and BufferColumns
+    \c like, \c =~, and \c !~ pattern predicates. Unsupported expressions,
+    including expressions whose semantics require row materialization, fall
+    back to generic row evaluation and rebuild the negotiated output shape when
+    possible.
+
+    @code{.py}
+ColumnarResult dense_columns = employees.toColumnarResult();
+hash<DataProviderExpression> high_value = DataProvider::parseDpqlExpression(
+    "round(@salary * 1.05) >= 90000.0 && trim(@status) == \"active\""
+        + " && @created >= 2026-04-01T00:00:00Z - days(60)");
+
+DataProviderPipeline dense_pipeline(<PipelineOptionInfo>{
+    "name": "dense-filter",
+    "output_callback": sub (auto row) {
+        printf("%y\n", row);
+    },
+});
+dense_pipeline.append(new QoreFilterRecordsProcessor({"where_cond": high_value}));
+dense_pipeline.submit(dense_columns);
+dense_pipeline.waitDone();
+    @endcode
+
+    CSV option hashes can also be typed explicitly:
+
+    @code{.py}
+hash<DataFrame::CsvOptions> options = {
+    "separator": "\t",
+    "header": True,
+    "null_string": "NULL",
+};
+
+DataFrame::DataFrame tsv = DataFrame::DataFrame::readCSV("employees.tsv", options);
+tsv.writeCSV("employees-copy.tsv", options);
+    @endcode
+
+    Parquet I/O accepts typed option hashes for projection, row-group reads,
+    predicate filters, compression, and writer tuning:
+
+    @code{.py}
+hash<DataFrame::ParquetReadOptions> read_options = {
+    "columns": ("id", "dept", "salary"),
+    "filters": ({
+        "column": "dept",
+        "op": "==",
+        "value": "sales",
+    }, {
+        "column": "salary",
+        "op": ">=",
+        "value": 90000.0,
+    }),
+    "use_threads": True,
+};
+DataFrame::DataFrame salary = DataFrame::DataFrame::readParquet(
+    "employees.parquet", read_options);
+
+hash<DataFrame::ParquetWriteOptions> write_options = {
+    "compression": "zstd",
+    "row_group_size": 100000,
+    "use_dictionary": True,
+    "write_statistics": True,
+};
+salary.writeParquet("employees-filtered.parquet", write_options);
+    @endcode
+
+    Filter predicates are ANDed. Equality and range predicates on primitive,
+    decimal128, and logical timestamp/date columns use Parquet row-group
+    statistics when available and when the comparison value can be represented
+    in the Parquet logical storage unit without ambiguity. Every filter is still
+    applied exactly after reading, so predicates that cannot be pushed down
+    remain correct.
+*/

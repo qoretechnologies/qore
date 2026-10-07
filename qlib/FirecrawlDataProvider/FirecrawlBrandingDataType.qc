@@ -415,8 +415,8 @@ public class FirecrawlBrandingImagesDataType inherits HashDataType {
 
 #! Branding result type for Firecrawl scrape responses
 /** Contains branding information extracted from the scraped page, including colors,
-    fonts, typography, spacing, and component styles. Available when `branding` is
-    in the `formats` list.
+    fonts, typography, spacing, and component styles. Available when <tt>branding</tt> is
+    in the <tt>formats</tt> list.
 */
 public class FirecrawlBrandingDataType inherits HashDataType {
     public {

@@ -43,7 +43,7 @@ public namespace ConfluenceDataProvider {
 
     @section confluencemanifest_id_twice The ID Appears Twice
 
-    Confluence's update operations declare the identity of the object being changed in **both** the URL
+    Confluence's update operations declare the identity of the object being changed in <b>both</b> the URL
     and a required \c id body property, and the two must always be equal.  Asking for it twice would let
     a user get it wrong; dropping the body one would produce a request Confluence rejects.  The body
     property therefore declares
@@ -52,14 +52,14 @@ public namespace ConfluenceDataProvider {
 
     @section confluencemanifest_version Updating Needs the Current Version
 
-    Confluence uses optimistic locking: an update must carry \c version.number **one greater** than the
+    Confluence uses optimistic locking: an update must carry \c version.number <b>one greater</b> than the
     version it is changing, or it is rejected with a conflict.  So an update is always read-modify-write -
     fetch the page, add one to \c version.number, send it back.  That is Confluence's contract, not a
     presentation choice, and the option documents it rather than hiding it.
 
     @section confluencemanifest_pagination Pagination
 
-    A Confluence v2 collection returns \c {results, _links}, and \c _links.next is a **relative** URL
+    A Confluence v2 collection returns \c {results, _links}, and \c _links.next is a <b>relative</b> URL
     carrying an opaque cursor.  There is no total and no page number: page by taking the \c cursor argument
     out of that URL and passing it to the same action.
 */

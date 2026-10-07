@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker inventories collection data provider (`getInventories`)
+#! BaseLinker inventories collection data provider (<tt>getInventories</tt>)
 /** Returns the (small) list of configured inventories/catalogs. No pagination. */
 public class BaseLinkerInventoriesDataProvider inherits BaseLinkerDataProviderBase {
     public {

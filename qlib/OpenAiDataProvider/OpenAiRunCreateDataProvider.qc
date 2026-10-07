@@ -26,7 +26,7 @@
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
 /** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `responses/create` data provider with the `conversation` field set instead
+    use the <tt>responses/create</tt> data provider with the <tt>conversation</tt> field set instead
 */
 public class OpenAiRunCreateDataProvider inherits OpenAiDataProviderCommon {
     public {

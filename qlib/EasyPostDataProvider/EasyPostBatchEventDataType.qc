@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Batch event payload (`batch.created` / `batch.updated`)
+#! Batch event payload (<tt>batch.created</tt> / <tt>batch.updated</tt>)
 public class EasyPostBatchEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

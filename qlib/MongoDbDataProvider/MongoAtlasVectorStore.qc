@@ -33,8 +33,8 @@ public namespace QoreRagUtils {
     @ref VectorStoreConfig fields:
 
     - \c collection (required): the MongoDB collection name
-    - \c url (required): the MongoDB connection URI (`mongodb://...` or
-      `mongodb+srv://...`)
+    - \c url (required): the MongoDB connection URI (<tt>mongodb://...</tt> or
+      <tt>mongodb+srv://...</tt>)
     - \c options.database (required): the MongoDB database name
     - \c options.index_name (required): the Atlas Vector Search index name
       on the collection
@@ -50,7 +50,7 @@ public namespace QoreRagUtils {
     @par Atlas index setup (out-of-band)
 
     The target collection MUST have an Atlas Vector Search index created
-    before this adapter is used.  Example via `mongosh`:
+    before this adapter is used.  Example via <tt>mongosh</tt>:
 
     @verbatim
 db.embeddings.createSearchIndex(

@@ -53,7 +53,7 @@ module LlamaParseRestClient {
     @section llamaparserestclientintro LlamaParseRestClient Introduction
 
     The %LlamaParseRestClient module provides a REST client for
-    [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started),
+    <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a>,
     LlamaIndex's document platform: parsing documents into markdown, text and
     structured items, extracting structured data against a schema, classifying
     documents against rules, and splitting a document that holds many.
@@ -70,7 +70,7 @@ module LlamaParseRestClient {
 
     @par Which API version
 
-    \c parseDocument() runs against the **v2** parse API.  Earlier versions of this
+    \c parseDocument() runs against the <b>v2</b> parse API.  Earlier versions of this
     module posted the document URL as a JSON body to the v1
     \c /api/parsing/upload endpoint, which that endpoint does not accept - it
     wants a multipart form - so every call failed with
@@ -97,8 +97,8 @@ module LlamaParseRestClient {
 
     See @ref qoreragutilsintro "QoreRagUtils"'s @c LlamaParseChunker
     (lazy-loaded via the @c "llama-parse" chunker strategy) for the
-    RAG-pipeline adapter that wraps `parseDocument()` and splits the
-    returned markdown into `ChunkInfo` records.
+    RAG-pipeline adapter that wraps <tt>parseDocument()</tt> and splits the
+    returned markdown into <tt>ChunkInfo</tt> records.
 
     @section LlamaParseRestClientRelnotes Release Notes
 
@@ -220,7 +220,7 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
     }
 
     #! Parses a document end-to-end: submit → poll job → return the content
-    /** Runs against the **v2** parse API.  Earlier versions of this module posted the document URL
+    /** Runs against the <b>v2</b> parse API.  Earlier versions of this module posted the document URL
         as a JSON body to the v1 \c /api/parsing/upload endpoint, which that endpoint does not
         accept - it wants a multipart form - so every call failed with
         \c "Either file, input_url, or input_s3_path must be provided".  The v2 API takes the URL in
@@ -331,7 +331,7 @@ public class LlamaParseRestClientIo inherits RestClientIo::RestClientIo, LlamaPa
         @param poll_interval_ms how long to wait between polls
 
         @return the final job status hash from
-            \c GET /job/<id> (terminal state)
+            \c GET /job/&lt;id&gt; (terminal state)
 
         @throw LLAMAPARSE-ERROR overall timeout exceeded
     */
@@ -578,10 +578,10 @@ public class LlamaParseRestConnection inherits RestClient::RestConnection {
 
 public namespace QoreRagUtils {
 #! LlamaParse-backed chunker — extracts a document via LlamaParse, then splits
-/** Accepts a URL in the @ref chunk() `content` parameter, sends it to
+/** Accepts a URL in the @ref chunk() <tt>content</tt> parameter, sends it to
     LlamaParse for extraction, and splits the returned markdown into
-    @ref ChunkInfo records at section-header boundaries (`# `, `## `,
-    `### `).
+    @ref ChunkInfo records at section-header boundaries (<tt># </tt>, <tt>## </tt>,
+    <tt>### </tt>).
 
     @par Configuration
 
@@ -595,16 +595,16 @@ public namespace QoreRagUtils {
     - \c options.parsing_instruction (optional) — natural-language hint
       passed to LlamaParse
     - \c options.language (optional) — document language hint
-    - \c options.result_type (optional) — `markdown` (default), `text`,
-      or `json`
+    - \c options.result_type (optional) — <tt>markdown</tt> (default), <tt>text</tt>,
+      or <tt>json</tt>
     - \c options.poll_interval_ms (optional) — polling interval in ms
     - \c options.job_timeout (optional) — overall job timeout
 
     @par Input modes
 
-    - URL — `content` starts with \c http:// or \c https:// → sent to
+    - URL — <tt>content</tt> starts with \c http:// or \c https:// → sent to
       LlamaParse for extraction
-    - Inline — `content` is treated as already-extracted markdown; split
+    - Inline — <tt>content</tt> is treated as already-extracted markdown; split
       directly without calling LlamaParse.  Useful when callers already
       have markdown they want to chunk with the same section-aware logic
 */

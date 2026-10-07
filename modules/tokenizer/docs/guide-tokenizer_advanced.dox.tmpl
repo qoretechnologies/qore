@@ -1,0 +1,42 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_advancedguide Advanced Encoding with Truncation and Padding
+
+    @tableofcontents
+
+    For model inference, sequences must be fixed-length. Use \c encodeAdvanced()
+    with truncation and padding options:
+
+    @par Truncation — limit sequence length:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("A very long sentence that needs truncation...", {
+    "max_length": 8,              # maximum total length including special tokens
+    "truncation": "longest_first", # strategy: "longest_first", "only_first", "only_second"
+});
+printf("IDs (len=%d): %y\n", enc.input_ids.size(), enc.input_ids);
+# Exactly 8 tokens: [CLS] a very long sentence that [SEP]
+    @endcode
+
+    @par Padding — pad to fixed length:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("hi", {
+    "max_length": 10,
+    "truncation": "longest_first",
+    "padding": "max_length",       # pad to max_length with [PAD] tokens
+});
+printf("IDs:  %y\n", enc.input_ids);
+# (101, 7632, 102, 0, 0, 0, 0, 0, 0, 0)
+printf("Mask: %y\n", enc.attention_mask);
+# (1, 1, 1, 0, 0, 0, 0, 0, 0, 0)  — 0 for padding positions
+    @endcode
+
+    @par Sentence pair with truncation:
+    @code{.py}
+hash<auto> enc = tok.encodeAdvanced("premise text", {
+    "text_pair": "hypothesis text",
+    "max_length": 12,
+    "truncation": "longest_first",  # trims the longer sequence first
+    "padding": "max_length",
+});
+    @endcode
+*/

@@ -58,6 +58,9 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Nested conditionals", \testNestedConditionals());
         addTestCase("Format parse diagnostics", \testFormatParseDiagnostics());
         addTestCase("Doc prose containing \"/*\" survives", \testDocProseWithBlockCommentChars());
+        addTestCase("Comment markers render literally in prose and examples", \testDocCommentLiteralRendering());
+        addTestCase("Escaped literal commands preserve documentation", \testEscapedDocCommands());
+        addTestCase("Unicode documentation retains literal boundaries", \testUnicodeDocLiterals());
         addTestCase("A real block comment still ends collection", \testNonDocBlockCommentStops());
         set_return_value(main());
     }
@@ -249,6 +252,101 @@ class Demo {
 
     private static string shellQuote(string value) {
         return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    testDocCommentLiteralRendering() {
+        if (system("command -v doxygen >/dev/null 2>&1")) {
+            testSkip("doxygen is required for rendered comment tests");
+        }
+        string output = processCode('/** @mainpage Literal comment markers
+PROSE multipart/* and <tt>/v1/*</tt> and image/*.
+
+@code
+string mime = "audio/*";
+@endcode
+
+@verbatim
+/raw/*
+@endverbatim
+
+INLINE @code string mime = "font/*"; @endcode application/*.
+
+\code
+string mime = "text/*";
+\endcode
+
+\verbatim
+/escaped/*
+\endverbatim
+
+AFTER */
+class LiteralTransport { }
+');
+        assertTrue(output.find('"audio/*"') >= 0, "code example bytes are preserved");
+        assertTrue(output.find("/raw/*") >= 0, "verbatim example bytes are preserved");
+        TmpDir dir();
+        string input = dir.path + "/literals.h";
+        string config = dir.path + "/Doxyfile";
+        string log = dir.path + "/doxygen.log";
+        {
+            File f();
+            f.open2(input, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(output);
+        }
+        {
+            File f();
+            f.open2(config, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("INPUT = \"%s\"\nOUTPUT_DIRECTORY = \"%s\"\n"
+                "GENERATE_HTML = YES\nGENERATE_LATEX = NO\nQUIET = YES\n"
+                "MARKDOWN_SUPPORT = NO\nEXTRACT_ALL = YES\n", input, dir.path));
+        }
+        int rc = system("doxygen " + shellQuote(config) + " >" + shellQuote(log) + " 2>&1");
+        string diagnostics = ReadOnlyFile::readTextFile(log);
+        assertEq(0, rc, diagnostics);
+        assertEq("", diagnostics, "nested comment markers produce no Doxygen diagnostics");
+        string html = ReadOnlyFile::readTextFile(dir.path + "/html/index.html");
+        string text = regex_subst(html, "<[^>]*>", "");
+        foreach string literal in (("multipart/*", "/v1/*", "image/*", "audio/*", "/raw/*",
+                "font/*", "application/*", "text/*", "/escaped/*")) {
+            assertTrue(text.find(literal) >= 0, sprintf("HTML displays %y literally", literal));
+        }
+        assertTrue(text.find("AFTER") >= 0, "content after both literal block forms survives");
+        assertFalse(text.find("&#42;") >= 0 || text.find("&amp;#42;") >= 0,
+            "numeric entity text is never substituted for the star");
+        assertFalse(text.find("&lt;!--") >= 0, "HTML separators do not leak into code examples");
+    }
+
+    testUnicodeDocLiterals() {
+        string prefix = "";
+        for (int i = 0; i < 4096; ++i) {
+            prefix += "α漢🙂";
+        }
+        string output = processCode("/** @mainpage Unicode literal boundaries\n" + prefix
+            + ' \@code image/*'
+            + "\n@code\nstring value = \"α漢🙂/*\";\n@endcode\n"
+            + "AFTER λ/*\n*/\nclass UnicodeTransport { }\n");
+        assertTrue(output.find(prefix) >= 0, "all multibyte characters survive the scan");
+        assertTrue(output.find('image/<!-- -->*') >= 0, "escaped commands leave prose mode active");
+        assertTrue(output.find('"α漢🙂/*"') >= 0, "Unicode code examples are unchanged");
+        assertTrue(output.find('AFTER λ/<!-- -->*') >= 0, "the literal block ends after multibyte text");
+        assertTrue(output.find("class UnicodeTransport") >= 0, "the following declaration survives");
+        foreach string suffix in (("\\", "@", "α", "🙂", "@codeword", "\\verbatimword")) {
+            output = processCode("/** @mainpage Unicode boundary\nλ " + suffix
+                + "\n*/\nclass UnicodeBoundary { }\n");
+            assertTrue(output.find("@mainpage Unicode boundary") >= 0,
+                sprintf("trailing sequence %y does not change literal state", suffix));
+        }
+    }
+
+    testEscapedDocCommands() {
+        foreach string command in (('\@code', '\@endcode', '\@verbatim', '\@endverbatim',
+                '\\code', '\\endcode', '\\verbatim', '\\endverbatim', '@codeword', '@verbatimword')) {
+            string output = processCode(sprintf("/** @mainpage Escaped commands\n"
+                "Literal command <tt>%s</tt> and image/* prose.\n*/\nclass EscapedTransport { }\n", command));
+            assertTrue(output.find("@mainpage Escaped commands") >= 0,
+                sprintf("escaped or longer command %y does not unbalance the comment collector", command));
+            assertTrue(output.find("class EscapedTransport") >= 0, "the following declaration survives");
+        }
     }
 
     testNestedNamespaces() {

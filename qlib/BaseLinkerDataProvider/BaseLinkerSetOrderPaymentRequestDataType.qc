@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `setOrderPayment` method
+#! Request type for the BaseLinker <tt>setOrderPayment</tt> method
 public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
     public {
         const Fields = {

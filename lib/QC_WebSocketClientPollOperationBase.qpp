@@ -767,7 +767,7 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     pure C++, enabling the AsyncIoController I/O thread to drive the poll
     without Qore interpreter overhead.
 
-    Key differences from the server-side @ref HttpWebSocketPollOperationBase:
+    Key differences from the server-side @ref HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" :
     - ALL outgoing frames use client masking per RFC 6455 Section 5.3
     - RSV bits are included in recv_queue frame hashes for extension processing
     - @ref setHasExtensions() controls RSV bit validation
@@ -911,7 +911,7 @@ hash<auto> WebSocketClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] 
 
     @param text the UTF-8 text to send
 
-    @note Does NOT apply extension transforms. Use @ref sendRaw() for
+    @note Does NOT apply extension transforms. Use @ref sendRawFrame() for
     pre-encoded frames with extension transforms already applied.
 */
 nothing WebSocketClientPollOperationBase::sendText(string text) [flags=NAMED_ARGS] {
@@ -924,7 +924,7 @@ nothing WebSocketClientPollOperationBase::sendText(string text) [flags=NAMED_ARG
 
     @param data the binary data to send
 
-    @note Does NOT apply extension transforms. Use @ref sendRaw() for
+    @note Does NOT apply extension transforms. Use @ref sendRawFrame() for
     pre-encoded frames with extension transforms already applied.
 */
 nothing WebSocketClientPollOperationBase::sendBinary(binary data) [flags=NAMED_ARGS] {
@@ -1152,7 +1152,7 @@ nothing WebSocketClientPollOperationBase::setHeartbeat(int heartbeat_interval_ms
 
 //! Sets the idle timeout in milliseconds (0 = disabled)
 /** When set to a positive value, the client closes the connection with
-    code @ref WSCC_GoingAway and reason @c "idle timeout" if no data
+    code @c WSCC_GoingAway and reason @c "idle timeout" if no data
     has been received for this many milliseconds.  Combine with
     @ref setHeartbeat() to detect peers that silently went away: the
     heartbeat sends PINGs and this timer catches the absence of any

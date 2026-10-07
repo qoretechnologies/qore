@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker order returns collection data provider (`getOrderReturns`)
+#! BaseLinker order returns collection data provider (<tt>getOrderReturns</tt>)
 public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderBase {
     public {
         #! Provider info

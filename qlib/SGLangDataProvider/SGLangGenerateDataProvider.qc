@@ -24,13 +24,13 @@
 
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
-#! Data provider for SGLang's native `/generate` endpoint with constrained decoding
-/** Calls the `POST /generate` endpoint (not `/v1/*`).  This is SGLang's native
+#! Data provider for SGLang's native <tt>/generate</tt> endpoint with constrained decoding
+/** Calls the <tt>POST /generate</tt> endpoint (not <tt>/v1/*</tt>).  This is SGLang's native
     interface and the one that enables constrained decoding: the model is
     guaranteed to emit output matching a JSON schema, regex, or EBNF grammar.
 
-    The provider accepts flattened convenience fields (`temperature`, `max_new_tokens`,
-    `json_schema`, `regex`, `ebnf`) and merges them into the `sampling_params` hash
+    The provider accepts flattened convenience fields (<tt>temperature</tt>, <tt>max_new_tokens</tt>,
+    <tt>json_schema</tt>, <tt>regex</tt>, <tt>ebnf</tt>) and merges them into the <tt>sampling_params</tt> hash
     before dispatching, so callers can set them at the top level in action forms
     without having to build the nested structure manually.
 */
@@ -55,7 +55,7 @@ public class SGLangGenerateDataProvider inherits SGLangDataProviderCommon {
         #! Response type
         static SGLangGenerateResponseDataType ResponseType = new SGLangGenerateResponseDataType();
 
-        #! Flattened sampling parameter keys merged into `sampling_params`
+        #! Flattened sampling parameter keys merged into <tt>sampling_params</tt>
         const FlatSamplingKeys = ("temperature", "max_new_tokens", "json_schema", "regex", "ebnf");
     }
 
@@ -88,8 +88,8 @@ public class SGLangGenerateDataProvider inherits SGLangDataProviderCommon {
     }
 
     #! Makes a request and returns the response
-    /** Merges any flattened sampling-parameter convenience fields into `sampling_params`
-        before dispatching.  The `/generate` endpoint does not take a `model` field —
+    /** Merges any flattened sampling-parameter convenience fields into <tt>sampling_params</tt>
+        before dispatching.  The <tt>/generate</tt> endpoint does not take a <tt>model</tt> field —
         the server serves exactly one model, so there is nothing to override per-request.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

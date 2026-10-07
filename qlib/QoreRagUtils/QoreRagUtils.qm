@@ -80,7 +80,7 @@ module QoreRagUtils {
 
     Concrete backends are pluggable: callers can use a built-in
     implementation, register their own subclass, or pass a fully-constructed
-    object directly into @ref RagPipeline.
+    object directly into @ref QoreRagUtils::RagPipeline.
 
     @par Design rationale
 
@@ -176,7 +176,7 @@ public namespace QoreRagUtils {
     The pipeline itself is backend-agnostic and does not inspect the hash —
     callers pass backend-native payload predicates (Qdrant filter clauses,
     pgvector \c WHERE fragments, etc.) that the concrete store understands.
-    When a @ref fallback_stores "fallback vector store chain" is configured,
+    When a fallback vector store chain is configured,
     the same filter is forwarded to every store in the chain until one
     returns results.
 */
@@ -442,7 +442,7 @@ RagPipeline pipe(
         4. When a reranker is configured, the vector-search K is
            @ref RagPipelineOptions::pre_rerank_top_k "pre_rerank_top_k"
            (when set) or \c initial_retrieval_k (the default); the reranker
-           is always fed the **original** \a query, not the transformer
+           is always fed the <b>original</b> \a query, not the transformer
            output, to keep score semantics stable.
     */
     list<hash<RetrievalHit>> retrieve(string query, *int k, *hash<auto> filter) {

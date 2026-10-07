@@ -208,7 +208,6 @@ public class GraphQLValidator {
     #! validates a selection set against the type in scope, collecting variable usages
     /** @param typeDef the composite type in scope
         @param selectionSet the selection set
-        @param usedVars (in/out) collects variable names used in arguments/directives
         @param visited fragment names on the current spread path (cycle guard)
     */
     private validateSelectionSet(hash<GraphQLTypeDef> typeDef, hash<GraphQLSelectionSet> selectionSet,

@@ -44,7 +44,7 @@ public const GitLabDefaultPollInterval = 60;
     and a busy repository could push an item out of the set and deliver it twice.
 
     @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider" positions the
-    feed by \c created_at instead, keeps only the identities recorded **at exactly** the cursor timestamp to
+    feed by \c created_at instead, keeps only the identities recorded <b>at exactly</b> the cursor timestamp to
     break ties, and makes the cursor durable when the host supplies persistence - so delivery is
     at-least-once across restarts rather than best-effort. It also dispatches in ascending order and only
     advances the cursor after an item has been delivered successfully, so a consumer that throws gets the
@@ -53,7 +53,7 @@ public const GitLabDefaultPollInterval = 60;
     Every provider filters server-side on the cursor where GitLab offers a filter for it, so a poll costs
     one small request rather than a walk through the whole collection.
 
-    @note The watch base is inherited **first**, deliberately.  Both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately.  Both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to the
     first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation as
@@ -101,7 +101,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
         *GitLabRestClient::GitLabRestClientIo rest;
 
         #! The project being watched, as given
-        /** Optional here rather than required, because the provider is also constructed as a **template**
+        /** Optional here rather than required, because the provider is also constructed as a <b>template</b>
             when the application's children are enumerated, before anybody has chosen a project.  It is
             required to subscribe, which is checked in @ref observersReady().
         */
@@ -180,7 +180,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
 
         @return every record the listing returned
 
-        @note GitLab reports paging in response **headers** rather than in the body, and the body is the
+        @note GitLab reports paging in response <b>headers</b> rather than in the body, and the body is the
         bare array, so paging ends when a page comes back shorter than the page size.
     */
     private list<hash<auto>> getAllPages(string path, *hash<auto> params) {
@@ -220,7 +220,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
     }
 
     #! Returns the event this provider raises, and the shape of what it carries
-    /** The type is the **schema's own** record type for the listing the provider polls, taken from the
+    /** The type is the <b>schema's own</b> record type for the listing the provider polls, taken from the
         action set this application already ships.  An event that carried an untyped hash would make a
         consumer guess at the fields, and a second hand-written copy of the record shape would drift from
         the schema the actions use.
@@ -729,7 +729,7 @@ public class GitLabEventsDataProvider inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.  That is why the project is not required to
         construct one - see @ref GitLabDataProvider::GitLabWatchDataProviderBase "GitLabWatchDataProviderBase".
     */

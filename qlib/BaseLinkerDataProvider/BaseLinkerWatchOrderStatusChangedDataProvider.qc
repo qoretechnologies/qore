@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Status Changed
-/** Fires whenever The status of an order changes (BaseLinker journal `log_type` 18).
+/** Fires whenever The status of an order changes (BaseLinker journal <tt>log_type</tt> 18).
 */
 public class BaseLinkerWatchOrderStatusChangedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

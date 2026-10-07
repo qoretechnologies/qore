@@ -5,10 +5,10 @@
 public namespace BaseLinkerDataProvider {
 
 #! Courier label payload (from getLabel)
-/** BaseLinker returns `label` as a base64-encoded file whose format is given by
-    `extension`. The raw API response is transformed before being exposed so
-    that `label` is a @ref DataProvider::FileDataType with `name`, `content`
-    (base64), and `mime_type` already populated.
+/** BaseLinker returns <tt>label</tt> as a base64-encoded file whose format is given by
+    <tt>extension</tt>. The raw API response is transformed before being exposed so
+    that <tt>label</tt> is a @ref DataProvider::FileDataType with <tt>name</tt>, <tt>content</tt>
+    (base64), and <tt>mime_type</tt> already populated.
 */
 public class BaseLinkerCourierLabelDataType inherits HashDataType {
     public {

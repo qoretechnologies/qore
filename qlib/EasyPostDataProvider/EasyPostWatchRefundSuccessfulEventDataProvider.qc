@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `refund.successful` webhook events
+#! Watches for <tt>refund.successful</tt> webhook events
 public class EasyPostWatchRefundSuccessfulEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

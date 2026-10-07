@@ -23,7 +23,7 @@
 */
 
 public namespace TogetherDataProvider {
-#! Data provider for the Together AI `/v1/images/generations` endpoint
+#! Data provider for the Together AI <tt>/v1/images/generations</tt> endpoint
 /** Generates one or more images from a text prompt using a Together-hosted
     diffusion model (FLUX, Stable Diffusion XL).
 */
@@ -70,8 +70,8 @@ public class TogetherImageGenerationDataProvider inherits TogetherDataProviderCo
     }
 
     #! Generates images from a text prompt and returns the response
-    /** Converts Together's Unix-seconds `created` field to a Qore date on
-        the response to match the typed `*date` field in the response schema.
+    /** Converts Together's Unix-seconds <tt>created</tt> field to a Qore date on
+        the response to match the typed <tt>*date</tt> field in the response schema.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         auto body = getSchemaProvider("generate-image").doRequest(req, request_options);

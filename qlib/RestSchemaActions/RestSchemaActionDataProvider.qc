@@ -57,7 +57,7 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         RestSchemaRequestDataProvider req_dp;
 
         #! Resolves and caches the per-host clients an action with a host source needs
-        /** The resolved-host cache **is** mutable state, which is why it is not held here: the router owns
+        /** The resolved-host cache <b>is</b> mutable state, which is why it is not held here: the router owns
             it and synchronizes it internally, so this object still holds none of its own and the invariant
             above is unchanged.
 
@@ -132,7 +132,7 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     #! Makes the API call, holding back any value that is already in wire form from the type check
     /** A @ref RestSchemaActions::RestSchemaRawValue "RestSchemaRawValue" carries a value the caller has
         already rendered into what the API takes - a record table's filter expression - and the option's
-        published type describes the **curated** shape the action offers instead, so validating one against
+        published type describes the <b>curated</b> shape the action offers instead, so validating one against
         the other would reject exactly the value that is correct.
 
         Every other value is checked as before, and the wire-form values are put back afterwards so that
@@ -244,7 +244,7 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     }
 
     #! Resolves the host for one lookup key by executing the host source's lookup action
-    /** The lookup runs on the **connection's** client, never on a routed one: a host source's action is
+    /** The lookup runs on the <b>connection's</b> client, never on a routed one: a host source's action is
         refused if it takes its own host from a host source, so this cannot recurse.
 
         @param hs the host source declaration
@@ -288,7 +288,7 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         the action was never supposed to carry.
 
         Taking it from the client's default headers is what makes \c ignore mean what it says.  An
-        optional header the client does not supply is left out; a **required** one is reported here,
+        optional header the client does not supply is left out; a <b>required</b> one is reported here,
         naming the connection option that supplies it, because the alternative is a schema type error
         about a value the user never saw and could not have set on the action.
 

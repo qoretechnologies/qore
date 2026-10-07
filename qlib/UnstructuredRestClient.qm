@@ -52,7 +52,7 @@ module UnstructuredRestClient {
     @section unstructuredrestclientintro UnstructuredRestClient Introduction
 
     The %UnstructuredRestClient module provides a REST client for
-    [Unstructured.io](https://unstructured.io) — a document partitioning
+    <a href="https://unstructured.io">Unstructured.io</a> — a document partitioning
     service that breaks PDFs, docx, HTML, images, and other formats into
     a typed element tree (Title, NarrativeText, ListItem, Table, Image,
     ...) suitable for RAG ingestion.
@@ -63,15 +63,15 @@ module UnstructuredRestClient {
     @par Choosing the URL
 
     An Unstructured API key is issued for exactly one deployment and is
-    rejected with a `401` by all the others, and no Unstructured API
+    rejected with a <tt>401</tt> by all the others, and no Unstructured API
     reports which deployment a key belongs to.  A key sent to the wrong
-    deployment is reported as `API key is invalid` and one of the wrong
-    shape entirely as `API key is malformed`, so an authentication error
+    deployment is reported as <tt>API key is invalid</tt> and one of the wrong
+    shape entirely as <tt>API key is malformed</tt>, so an authentication error
     here usually means the URL is wrong rather than the key.
 
-    The default is `https://api.transform.unstructured.io`, Unstructured's
+    The default is <tt>https://api.transform.unstructured.io</tt>, Unstructured's
     current deployment.  A connection does not have to be configured for
-    an account on the older `https://api.unstructuredapp.io` deployment:
+    an account on the older <tt>https://api.unstructuredapp.io</tt> deployment:
     @ref UnstructuredRestClient::UnstructuredRestConnection "UnstructuredRestConnection"
     tries the alternatives when the configured deployment rejects the key
     and moves itself to whichever one accepts it — see
@@ -81,7 +81,7 @@ module UnstructuredRestClient {
 
     @par The Platform API
 
-    Unstructured's **Platform API** (connectors, workflows and their runs)
+    Unstructured's <b>Platform API</b> (connectors, workflows and their runs)
     is a different service on a different host, with no partition endpoint
     and a versioned base path, so a Platform API base URL will not work as
     the connection URL.
@@ -92,20 +92,20 @@ module UnstructuredRestClient {
     derives the Platform host from the configured partition host and
     returns an
     @ref UnstructuredRestClient::UnstructuredPlatformRestClientIo "UnstructuredPlatformRestClientIo"
-    that carries the same API key and the `/api/v1` base path — including
+    that carries the same API key and the <tt>/api/v1</tt> base path — including
     when the connection has moved itself to another deployment.  A
     deployment whose Platform host cannot be derived (a self-hosted one,
-    say) is configured explicitly with the `platform_url` connection
+    say) is configured explicitly with the <tt>platform_url</tt> connection
     option.
 
     @par Submission shapes
 
     The v1 client supports two submission shapes via the
-    `/general` endpoint:
+    <tt>/general</tt> endpoint:
 
-    - `partitionFile(filename, content_type, body)` — multipart upload
+    - <tt>partitionFile(filename, content_type, body)</tt> — multipart upload
       of arbitrary binary content (PDF, docx, etc.)
-    - `partitionText(text, *options)` — synthesizes a `text/plain`
+    - <tt>partitionText(text, *options)</tt> — synthesizes a <tt>text/plain</tt>
       multipart upload from a string (useful when the caller has
       already extracted text from elsewhere)
 
@@ -116,8 +116,8 @@ module UnstructuredRestClient {
     @par Companion chunker
 
     @ref QoreRagUtils::UnstructuredChunker (lazy-loaded via the
-    @c "unstructured" chunker strategy) wraps `partitionText()` and
-    collapses the returned element tree into flat `ChunkInfo` records.
+    @c "unstructured" chunker strategy) wraps <tt>partitionText()</tt> and
+    collapses the returned element tree into flat <tt>ChunkInfo</tt> records.
 
     @section UnstructuredRestClientRelnotes Release Notes
 
@@ -142,7 +142,7 @@ public class UnstructuredRestClientBase {
         };
     }
 
-    #! Unstructured uses the `unstructured-api-key` header
+    #! Unstructured uses the <tt>unstructured-api-key</tt> header
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto!> rv;
         rv += DefaultOptions + opts;
@@ -167,9 +167,9 @@ public class UnstructuredRestClient inherits RestClient::RestClient, Unstructure
 }
 
 #! REST client for Unstructured.io using multiplexed HTTP connections (async)
-/** Provides `partition()` (multipart-aware), `partitionFile()`, and
-    `partitionText()` helpers that wrap the
-    `POST /general/v0/general` endpoint.
+/** Provides <tt>partition()</tt> (multipart-aware), <tt>partitionFile()</tt>, and
+    <tt>partitionText()</tt> helpers that wrap the
+    <tt>POST /general/v0/general</tt> endpoint.
 */
 public class UnstructuredRestClientIo inherits RestClientIo::RestClientIo, UnstructuredRestClientBase {
     public {
@@ -599,8 +599,8 @@ public namespace QoreRagUtils {
     - \c options.api_key (required) — Unstructured.io API key
     - \c options.url (optional) — override the default Unstructured URL
     - \c options.unstructured_options (optional) — passthrough hash of
-      Unstructured-specific fields (`strategy`, `languages`, `coordinates`,
-      `chunking_strategy`, etc.) sent on every request
+      Unstructured-specific fields (<tt>strategy</tt>, <tt>languages</tt>, <tt>coordinates</tt>,
+      <tt>chunking_strategy</tt>, etc.) sent on every request
 
     @par Element-tree flattening
 

@@ -384,7 +384,7 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
 
     #! Returns an enriched error description that includes the Systeme.io API error message if available
     /** Systeme.io uses the RFC 7807 \c application/problem+json envelope:
-        \c {"type": "<uri>", "title": "<generic>", "status": <int>, "detail": "<specific>"}. Built
+        \c {"type": "<uri>", "title": "<generic>", "status": &lt;int&gt;, "detail": "<specific>"}. Built
         on Symfony's API Platform, validation failures additionally populate a \c violations list
         with \c {"propertyPath", "message", "code"} entries for field-level errors.
 

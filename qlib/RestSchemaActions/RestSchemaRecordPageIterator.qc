@@ -25,7 +25,7 @@
 #! contains all public definitions in the RestSchemaActions module
 public namespace RestSchemaActions {
 #! Walks a record table's collection one page at a time, fetching each page only when it is reached
-/** Laziness is the whole point of this class.  A record search counts the caller's limit in **matching**
+/** Laziness is the whole point of this class.  A record search counts the caller's limit in <b>matching</b>
     records, and a predicate the API cannot evaluate is applied to each record as it arrives, so how far into
     a collection a search has to read is not known before it runs.
 

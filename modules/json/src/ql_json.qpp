@@ -641,7 +641,7 @@ namespace Qore::Json;
 
     @note According to <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> JSON strings can only be in UTF-8, UTF-16, or UTF-32 encoding, but this function will allow any encoding to be used to generate JSON strings
 
-    @see @ref jsonserialization
+    @see @ref jsonserializationguide
 
     @since json 1.5 as a replacement for deprecated camel-case makeJSONString() and makeFormattedJSONString()
 */
@@ -661,7 +661,7 @@ string make_json(auto data, *int format, *string encoding) [flags=RET_VALUE_ONLY
 
     @deprecated use make_json(); camel-case function names were deprecated in json 1.5
 
-    @see @ref jsonserialization
+    @see @ref jsonserializationguide
 */
 string makeJSONString(auto data, *string encoding) [flags=RET_VALUE_ONLY,DEPRECATED] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_UTF8;
@@ -679,7 +679,7 @@ string makeJSONString(auto data, *string encoding) [flags=RET_VALUE_ONLY,DEPRECA
 
     @deprecated use make_json(); camel-case function names were deprecated in json 1.5
 
-    @see @ref jsonserialization
+    @see @ref jsonserializationguide
 */
 string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONLY,DEPRECATED] {
     const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_UTF8;
@@ -697,7 +697,7 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     @par Example:
     @code auto data = parse_json(json); @endcode
 
-    @see @ref jsonserialization
+    @see @ref jsonserializationguide
 
     @since json 1.5 as a replacement for deprecated camel-case parseJSON()
  */
@@ -719,7 +719,7 @@ nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
-    @see @ref jsonserialization
+    @see @ref jsonserializationguide
 
     @deprecated use parse_json(); camel-case function names were deprecated in json 1.5
  */
@@ -754,8 +754,8 @@ namespace Qore::Json;
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string make_jsonrpc_request(string method_name, auto version, auto id, auto request_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (!version.isNullOrNothing()) {
@@ -786,8 +786,8 @@ string make_jsonrpc_request(string method_name, auto version, auto id, auto requ
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeJSONRPCRequestString(string method_name, auto version, auto id, auto request_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -818,8 +818,8 @@ string makeJSONRPCRequestString(string method_name, auto version, auto id, auto 
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeFormattedJSONRPCRequestString(string method_name, auto version, auto id, auto request_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -854,8 +854,8 @@ string makeFormattedJSONRPCRequestString(string method_name, auto version, auto 
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string make_jsonrpc_response(auto version, auto id, auto response_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (!version.isNullOrNothing()) {
@@ -884,8 +884,8 @@ string make_jsonrpc_response(auto version, auto id, auto response_msg, *int form
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeJSONRPCResponseString(auto version, auto id, auto response_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -914,8 +914,8 @@ string makeJSONRPCResponseString(auto version, auto id, auto response_msg) [flag
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeFormattedJSONRPCResponseString(auto version, auto id, auto response_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -950,8 +950,8 @@ string makeFormattedJSONRPCResponseString(auto version, auto id, auto response_m
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string make_jsonrpc_error(auto version, auto id, auto error_msg, *int format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (!version.isNullOrNothing()) {
@@ -980,8 +980,8 @@ string make_jsonrpc_error(auto version, auto id, auto error_msg, *int format) [f
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -1010,8 +1010,8 @@ string makeJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_
     @note do not use the \c version argument for strict JSON-RPC 1.0 compatibility (send as \c NOTHING)
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeFormattedJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     if (!version.isNullOrNothing()) {
@@ -1046,8 +1046,8 @@ string makeFormattedJSONRPCErrorString(auto version, auto id, auto error_msg) [f
     @deprecated do not use; support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string make_jsonrpc11_error(softint code, string error, auto id, auto error_msg, *int format) [flags=RET_VALUE_ONLY,DEPRECATED] {
     return make_jsonrpc11_error(code, error, id, error_msg, format, xsink);
@@ -1067,8 +1067,8 @@ string make_jsonrpc11_error(softint code, string error, auto id, auto error_msg,
     @deprecated do not use; camel-case function names were deprecated in json 1.5, and support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeJSONRPC11ErrorString(softint code, string error, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     return make_jsonrpc11_error(code, error, id, error_msg, 0, xsink);
@@ -1088,8 +1088,8 @@ string makeJSONRPC11ErrorString(softint code, string error, auto id, auto error_
     @deprecated do not use; camel-case function names were deprecated in json 1.5, and support for the non-published JSON-RPC 1.1 protocol was dropped in json 1.7
 
     @see
-    - @ref jsonserialization
-    - @ref JSONRPC
+    - @ref jsonserializationguide
+    - @ref JSONRPCguide
  */
 string makeFormattedJSONRPC11ErrorString(softint code, string error, auto id, auto error_msg) [flags=RET_VALUE_ONLY,DEPRECATED] {
     return make_jsonrpc11_error(code, error, id, error_msg, JGF_ADD_FORMATTING, xsink);

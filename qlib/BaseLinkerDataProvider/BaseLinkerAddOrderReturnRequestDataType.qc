@@ -4,9 +4,9 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `addOrderReturn` method
+#! Request type for the BaseLinker <tt>addOrderReturn</tt> method
 /** Only delivery address fields are supported — invoice addresses, payment
-    methods, and pickup-point fields are not accepted by `addOrderReturn`.
+    methods, and pickup-point fields are not accepted by <tt>addOrderReturn</tt>.
 */
 public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
     public {

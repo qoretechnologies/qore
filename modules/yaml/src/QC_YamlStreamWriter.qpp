@@ -38,11 +38,11 @@ YamlStreamWriter writer(sos, opts);
     @endcode
 
     @see YamlStreamWriter
-    @see @ref yaml_option_constants
+    @see @ref yaml_emitter_option_constants
 
     @since yaml 1.1
 */
-hashdecl YamlStreamWriterOptions {
+hashdecl Qore::YAML::YamlStreamWriterOptions {
     //! Output flags combining YAML formatting constants
     /** Use bitwise OR to combine multiple flags:
         - @ref YAML::BlockStyle - use block style for sequences and mappings

@@ -25,7 +25,7 @@
 #! Contains all public definitions in the WooCommerceDataProvider module
 public namespace WooCommerceDataProvider {
 
-#! WooCommerce downloadable file data type (used on `downloads` for downloadable products)
+#! WooCommerce downloadable file data type (used on <tt>downloads</tt> for downloadable products)
 public class WooCommerceProductDownloadDataType inherits HashDataType {
     public {
         #! Field definitions

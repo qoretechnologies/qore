@@ -53,8 +53,8 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         };
 
         #! whether the wrapped type implements its own value conversion
-        /** A user-defined [Type](../../reflection/html/classQore_1_1Reflection_1_1Type.html) subclass overrides
-            [Type::acceptsValue()](../../reflection/html/classQore_1_1Reflection_1_1Type.html) to implement conversion semantics
+        /** A user-defined @ref Qore::Reflection::Type "Type" subclass overrides
+            @ref Qore::Reflection::Type::acceptsValue "Type::acceptsValue()" to implement conversion semantics
             that the generic string conversion in this class does not know about; ex: the \c SoftBool*StringType
             classes used by REST data providers to render a boolean as the string \c "true" or \c "false" for a
             query argument
@@ -80,10 +80,10 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         custom_type_conversion = QoreStringDataTypeBase::hasCustomConversion(type);
     }
 
-    #! Returns @ref True "True" if the given type overrides [Type::acceptsValue()](../../reflection/html/classQore_1_1Reflection_1_1Type.html)
+    #! Returns @ref True "True" if the given type overrides @ref Qore::Reflection::Type::acceptsValue "Type::acceptsValue()"
     /** @param type the wrapped type to check
 
-        @return @ref True "True" if a class other than the base [Type](../../reflection/html/classQore_1_1Reflection_1_1Type.html) class declares
+        @return @ref True "True" if a class other than the base @ref Qore::Reflection::Type "Type" class declares
         \c acceptsValue(), meaning that the type implements its own value conversion
     */
     private:internal static bool hasCustomConversion(Type type) {

@@ -23,7 +23,7 @@ public class EasyPostShipmentInvoiceResultType inherits HashDataType {
     }
 }
 
-#! Shipment invoice event payload (`shipment.invoice.created`)
+#! Shipment invoice event payload (<tt>shipment.invoice.created</tt>)
 public class EasyPostShipmentInvoiceEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

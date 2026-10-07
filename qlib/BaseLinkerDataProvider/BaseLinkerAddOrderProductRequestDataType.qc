@@ -4,8 +4,8 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `addOrderProduct` method
-/** Combines the target `order_id` with the shared
+#! Request type for the BaseLinker <tt>addOrderProduct</tt> method
+/** Combines the target <tt>order_id</tt> with the shared
     @ref BaseLinkerOrderProductDataType line-item fields.
 */
 public class BaseLinkerAddOrderProductRequestDataType inherits HashDataType {

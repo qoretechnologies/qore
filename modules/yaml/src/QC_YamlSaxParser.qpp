@@ -136,7 +136,7 @@ parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
 
     @since yaml 1.1
 */
-hashdecl YamlSaxEvent {
+hashdecl Qore::YAML::YamlSaxEvent {
     //! Event type
     /** One of the @ref YamlSaxEventType enum values:
         - @ref YamlSaxEventType::StreamStart - YAML stream begins

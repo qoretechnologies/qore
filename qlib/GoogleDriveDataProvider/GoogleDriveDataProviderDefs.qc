@@ -58,7 +58,7 @@ public const DefaultPageSize = 100;
 public const MaxPageSize = 1000;
 
 #! Maximum page size accepted by the Drive shared-drive collection endpoint
-/** The \c drives.list endpoint caps its page size at `100`, unlike \c files.list
+/** The \c drives.list endpoint caps its page size at <tt>100</tt>, unlike \c files.list
 */
 public const MaxDrivePageSize = 100;
 
@@ -123,7 +123,7 @@ public const ExportFormatValues = (
 );
 
 #! Collections searched when listing files
-/** A listing normally covers only the files the user has access to in their own `My Drive`; reaching content
+/** A listing normally covers only the files the user has access to in their own <tt>My Drive</tt>; reaching content
     held on a shared drive requires naming the collection to search explicitly
 */
 public const CorporaValues = (

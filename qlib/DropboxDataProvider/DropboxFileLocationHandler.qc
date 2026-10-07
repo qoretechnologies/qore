@@ -30,11 +30,11 @@ public namespace DropboxDataProvider {
     through the application's request/response actions.
 
     Two things this gains over the declarative application file API:
-    - **writing does not buffer the file.**
+    - <b>writing does not buffer the file.</b>
       @ref getOutputStreamImpl() "getOutputStreamForLocation()" drives a Dropbox upload session from the stream
       itself, sending each chunk as it is written.  Going through the \c upload-file action instead requires the
       whole file in memory, base64-encoded, before the first byte is sent
-    - **reading does not inflate the file.**  The bytes arrive as the response body rather than base64-encoded
+    - <b>reading does not inflate the file.</b>  The bytes arrive as the response body rather than base64-encoded
       into a JSON field, so nothing is encoded, buffered, and decoded again
 */
 public class DropboxFileLocationHandler inherits FileLocationHandler::AbstractFileLocationHandler {
@@ -100,7 +100,7 @@ public class DropboxFileLocationHandler inherits FileLocationHandler::AbstractFi
 
         @return a poll operation whose output is the file's content
 
-        @note The read goes to the Dropbox **content** host with its arguments in the \c Dropbox-API-Arg
+        @note The read goes to the Dropbox <b>content</b> host with its arguments in the \c Dropbox-API-Arg
         header, exactly as the blocking read does; a download addressed to the RPC host answers with a JSON
         error rather than with the file
     */

@@ -216,7 +216,7 @@ public class DataSchemaLoader {
     public const SharedDefinitionKey = "$use";
 
     #! Resolves a table's shared column and index references
-    /** A schema may declare `columns` and `indexes` at the top level: definitions named once and
+    /** A schema may declare <tt>columns</tt> and <tt>indexes</tt> at the top level: definitions named once and
         drawn from by any table, so that a column used in nine tables is described in one place. A
         table's entry draws from one with @ref SharedDefinitionKey, and any key it sets alongside
         overrides the shared value:

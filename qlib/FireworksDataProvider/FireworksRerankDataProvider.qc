@@ -45,7 +45,7 @@ public class FireworksRerankDataProvider inherits FireworksDataProviderCommon {
     }
 
     #! Returns the stable action name
-    /** @return `rerank` */
+    /** @return <tt>rerank</tt> */
     string getName() { return "rerank"; }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

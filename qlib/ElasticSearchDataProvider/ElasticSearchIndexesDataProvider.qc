@@ -141,7 +141,7 @@ public class ElasticSearchIndexesDataProvider inherits ElasticSearchDataProvider
         context via \c "request-uri" / \c "response-code" / \c "response-body" keys (populated
         from @ref RestClient::RestClient::get() "RestClient::get()"'s \a info reference param).
         The async @ref RestClientIo::RestClientIo "RestClientIo" transport instead throws
-        @ref RestClient::REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
+        @c REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
         in \c ex.arg; translate to the legacy shape so callers do not need to change.
     */
     private static hash<auto> mapRestErrorInfo(hash<ExceptionInfo> ex) {

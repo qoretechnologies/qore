@@ -1,0 +1,99 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jsontoonserializationguide TOON Serialization and Deserialization
+
+    @tableofcontents
+
+    <a href="https://github.com/toon-format/spec">TOON</a> (Token-Oriented Object Notation) is a line-oriented,
+    indentation-based text encoding of the JSON data model.  It is deterministic and minimally quoted, and is
+    particularly compact for arrays of uniform objects, which it encodes in a tabular form (the field names are
+    declared once in a header rather than repeated on every row).  TOON is commonly used to encode structured data
+    for LLM prompt context.
+
+    TOON is a regular, fully supported feature of the json module (this implementation targets the TOON Core Profile
+    of TOON specification version 3.0).  Key folding and path expansion are not enabled; dotted keys (ex:
+    \c user.name) are treated as single literal keys, which is the specification default.
+
+    <b>TOON Serialization (@ref Qore::Json::make_toon() "make_toon()")</b>
+
+    Values outside the strict JSON data model are normalized exactly as @ref Qore::Json::make_json() "make_json()"
+    does, so that \c parse_toon(make_toon(x)) matches \c parse_json(make_json(x)):
+
+    |!%Qore Type|!TOON Representation|!Description
+    |\c string|string|quoted only when required by the TOON specification (§7.2)
+    |\c int|number|canonical decimal
+    |\c float|number|canonical decimal (no exponent, no trailing zeros); \c \@nan\@ / \c \@inf\@ are serialized as \
+        \c null
+    |\c number|number|canonical decimal; non-ordinary values (\c \@nan\@, \c \@inf\@) are serialized as \c null
+    |\c bool|boolean|direct conversion
+    |\c date|string|absolute dates as ISO-8601 datetime strings; relative dates (durations) as ISO-8601 duration \
+        strings
+    |\c binary|string|base64-encoded string
+    |\c list|array|inline primitive arrays, tabular arrays of uniform objects, or expanded list form
+    |\c hash|object|indentation-based key nesting
+    |\c NOTHING or \c NULL|null|direct conversion
+    |all others|n/a|All other types cause a \c TOON-SERIALIZATION-ERROR to be raised (as with \
+        @ref Qore::Json::make_json() "make_json()"); a string containing a control character that standard TOON \
+        cannot represent is likewise rejected
+
+    @ref Qore::Json::make_toon() "make_toon()" accepts an optional \c options hash:
+    - \c indent: (int, default \c 2) number of spaces per indentation level
+    - \c tabular_arrays: (bool, default \c True) when \c True, lists of uniform objects (same key set, all
+      primitive values) are serialized in TOON tabular form
+    - \c sort_keys: (bool, default \c False) when \c True, object keys and tabular field names are sorted
+      lexically for deterministic output; otherwise insertion order is preserved
+
+    <b>TOON Deserialization (@ref Qore::Json::parse_toon() "parse_toon()")</b>
+
+    |!TOON Type|!%Qore Type|!Description
+    |string|\c string|direct conversion
+    |number|\c int or \c float|integer tokens become \c int, tokens with a fractional or exponent part become \
+        \c float (consistent with @ref Qore::Json::parse_json() "parse_json()")
+    |boolean|\c bool|direct conversion
+    |array|\c list|inline, tabular, and expanded forms are all supported
+    |object|\c hash|duplicate keys follow last-value-wins semantics (consistent with \
+        @ref Qore::Json::parse_json() "parse_json()")
+    |null|\c NOTHING|direct conversion
+
+    @ref Qore::Json::parse_toon() "parse_toon()" accepts an optional \c options hash:
+    - \c strict: (bool, default \c True) when \c True, enforce TOON strict-mode validation: declared array/row
+      counts must match, tabular row widths must match the field count, indentation must be an exact multiple of
+      the indent width, and blank lines are not allowed inside arrays/tabular blocks
+    - \c indent: (int, default \c 2) number of spaces per indentation level used to compute nesting depth
+
+    Tabs are never permitted in indentation.  Syntax errors raise \c TOON-PARSE-ERROR with the line (and column
+    where available).
+
+    TOON is always UTF-8 (TOON specification §1.2, §18.2): @ref Qore::Json::make_toon() "make_toon()" always
+    produces a UTF-8 string, and @ref Qore::Json::parse_toon() "parse_toon()" transcodes non-UTF-8 input to UTF-8
+    before parsing and returns UTF-8-encoded strings.
+
+    <b>Functions For TOON Serialization and Deserialization</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_toon() "make_toon()"|Serializes %Qore data into a TOON string
+    |@ref Qore::Json::parse_toon() "parse_toon()"|Parses a TOON string and returns the corresponding %Qore data \
+        structure
+
+    @par Example
+    @code{.py}
+hash<auto> data = {
+    "users": ({
+        "id": 1,
+        "name": "Alice",
+        "role": "admin",
+    }, {
+        "id": 2,
+        "name": "Bob",
+        "role": "user",
+    }),
+};
+
+string toon = make_toon(data);
+# toon =
+#   users[2]{id,name,role}:
+#     1,Alice,admin
+#     2,Bob,user
+
+hash<auto> parsed = parse_toon(toon);
+    @endcode
+*/

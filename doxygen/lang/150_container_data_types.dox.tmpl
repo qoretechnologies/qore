@@ -683,7 +683,7 @@ hash<string, int> h(("key1": 2, "key2": 3));
     @anchor hash_key_presence
     @subsection hash_key_presence_tests Testing for Key Presence
 
-    Three different tests are commonly used on a hash key, and they answer three different questions.  Reading a key that is not present returns @ref nothing, so a truth test cannot distinguish a missing key from a key whose value is empty or @ref nothing:
+    Three different tests are commonly used on a hash key, and they answer three different questions.  Reading a key that is not present returns @ref nothing, so a truth test cannot distinguish a missing key from a key whose value is empty or @ref nothing "nothing" :
     |!Key state|!Truth test <tt>h.k</tt>|!<tt>exists h.k</tt>|!<tt>h.hasKey("k")</tt>
     |present, non-empty value|@ref True|@ref True|@ref True
     |present, value is an empty hash or list|@ref False|@ref True|@ref True

@@ -102,7 +102,7 @@ public class KitWatchDataProviderBase inherits KitDataProviderBase,
     }
 
     #! Returns the timestamp field to use for deduplication
-    /** Override in subclasses that use `updated_after` instead of `created_after` */
+    /** Override in subclasses that use <tt>updated_after</tt> instead of <tt>created_after</tt> */
     private string getTimestampField() {
         return "created_at";
     }

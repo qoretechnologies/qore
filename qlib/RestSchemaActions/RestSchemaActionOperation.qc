@@ -95,14 +95,14 @@ public class RestSchemaActionOperation {
         #! The fixed values that envelope carries beside the lifted body
         list<hash<RestSchemaRequestWrapValueInfo>> request_wrap_fixed = ();
 
-        #! The operation declares a **required** object body whose properties were flattened into options
+        #! The operation declares a <b>required</b> object body whose properties were flattened into options
         /** An operation can declare a required body every property of which is optional, and then the
             minimal valid request carries an empty object rather than no body at all: Pinecone's index
             statistics take an optional metadata filter and nothing else, so the ordinary call - "how
             many records are in this index" - supplies no option and must still send \c {}.
 
             Sending nothing there fails the schema's own request validation before the request is made,
-            which reads as the action being broken.  An **optional** body is unaffected and still sends
+            which reads as the action being broken.  An <b>optional</b> body is unaffected and still sends
             nothing when nothing is supplied.
         */
         bool body_required_object = False;
@@ -816,7 +816,7 @@ public class RestSchemaActionOperation {
 
     #! Adds the option naming the object whose host the request goes to, for an action that has a host source
     /** The option is synthesized rather than derived, because the operation does not describe it: an API
-        that shards its data plane per object addresses the object with the **host**, so its description
+        that shards its data plane per object addresses the object with the <b>host</b>, so its description
         declares no parameter for it anywhere.  Without this the action would offer no way to say which
         object it is for, and the host could never be resolved.
 

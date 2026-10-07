@@ -84,7 +84,7 @@ public class SearchIndexDataProviderBase inherits DataProvider::AbstractDataProv
 #! Common REST client helper methods for search-index providers
 public class SearchIndexRestUtil {
     #! Creates or adapts a REST client from constructor options
-    /** @param options constructor options with `restclient`, `url`, or `restclient_options`
+    /** @param options constructor options with <tt>restclient</tt>, <tt>url</tt>, or <tt>restclient_options</tt>
         @param backend_name user-facing backend name used in validation errors
         @return REST client for backend requests
         @throw CONSTRUCTOR-ERROR no REST connection information is provided
@@ -115,7 +115,7 @@ public class SearchIndexRestUtil {
     #! Moves selected request fields into URI query parameters
     /** @param uri base URI
         @param req request hash reference; consumed query fields are removed
-        @param query_args list of query argument names; a `_query` suffix is stripped from emitted parameter names
+        @param query_args list of query argument names; a <tt>_query</tt> suffix is stripped from emitted parameter names
         @return URI with encoded query parameters appended
     */
     static public string moveQueryOptions(string uri, reference<hash<auto>> req, list<string> query_args) {
@@ -145,14 +145,14 @@ public class SearchIndexSoftBoolStringType inherits Qore::Reflection::Type {
 
     #! Returns the coerced REST query value
     /** @param value value to coerce with @ref Qore::parse_boolean() "parse_boolean()"
-        @return `"true"` or `"false"`
+        @return <tt>"true"</tt> or <tt>"false"</tt>
     */
     auto acceptsValue(auto value) {
         return parse_boolean(value) ? "true" : "false";
     }
 
     #! Returns the default value
-    /** @return `"false"` */
+    /** @return <tt>"false"</tt> */
     auto getDefaultValue() {
         return "false";
     }
@@ -167,7 +167,7 @@ public const AbstractDataProviderType SoftBoolDataProviderStringType = AbstractD
 #! Common NDJSON helpers for search-index bulk APIs
 public class SearchIndexBulkUtil {
     #! Formats explicit bulk operation hashes as newline-delimited JSON
-    /** @param operations list of operation hashes with `action` and optional document metadata
+    /** @param operations list of operation hashes with <tt>action</tt> and optional document metadata
         @param error_prefix error prefix to use when validation fails
         @return NDJSON request body
         @throw *-BULK-ERROR invalid operation or missing JSON support
@@ -237,7 +237,7 @@ public class SearchIndexBulkUtil {
     #! Formats column-oriented record buffers as newline-delimited JSON
     /** @param records column-oriented record buffer from @ref DataProvider::AbstractDataProviderBulkOperation
         @param index target index
-        @param action bulk action, normally `index`, `create`, `update`, or `delete`
+        @param action bulk action, normally <tt>index</tt>, <tt>create</tt>, <tt>update</tt>, or <tt>delete</tt>
         @param error_prefix error prefix to use when JSON support is unavailable
         @return NDJSON request body
         @throw *-BULK-ERROR missing JSON support

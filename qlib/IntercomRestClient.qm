@@ -50,7 +50,7 @@ module IntercomRestClient {
 
     @section intercomrestclientintro IntercomRestClient Introduction
 
-    The %IntercomRestClient module provides an API for calling [Intercom](https://www.intercom.com)'s REST
+    The %IntercomRestClient module provides an API for calling <a href="https://www.intercom.com">Intercom</a>'s REST
     API services.
 
     To use this module, use \c "%requires IntercomRestClient" in your code.
@@ -71,7 +71,7 @@ module IntercomRestClient {
     request that sends no header rides that default - which means the same integration can behave
     differently in two workspaces, and can change behaviour when somebody edits the app package.
 
-    So this client **always** sends the header, and sends the revision the
+    So this client <b>always</b> sends the header, and sends the revision the
     @ref intercomdataproviderintro "IntercomDataProvider" module's pinned description describes.  The two
     move together: adopting a newer revision is a re-import of the description, not an edit here.
 

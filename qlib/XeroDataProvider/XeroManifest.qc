@@ -223,7 +223,7 @@ public class XeroManifest {
         };
 
         #! The dropdowns the projects document produces
-        /** The contact dropdown is **not** here: contacts are declared in the accounting document, and the
+        /** The contact dropdown is <b>not</b> here: contacts are declared in the accounting document, and the
             projects set reaches it as a peer.  Declaring a second one here would mean a second listing to
             keep in step with the first.
         */

@@ -84,7 +84,7 @@ hashdecl Qore::SocketPollOperationInfo {
     /** This allows multiple operations to share a single result Queue for easier coordination.
 
         If neither a Queue nor an @ref AbstractPollOperation::onComplete() "onComplete()" override
-        is provided, a new Queue is created and returned from @ref submit().
+        is provided, a new Queue is created and returned from @ref Qore::AsyncIoController::submit().
     */
     *Queue<hash<SocketPollResultInfo>> resultQueue;
 
@@ -139,7 +139,7 @@ hashdecl Qore::SocketPollResultInfo {
     (epoll on Linux, kqueue on macOS/BSD) via the EventLoop class.
 
     The controller runs a dedicated I/O thread that processes socket events and drives poll
-    operations through their state machines. Operations are submitted via @ref submit(),
+    operations through their state machines. Operations are submitted via @ref Qore::AsyncIoController::submit(),
     and results are delivered via callback.
 
     The controller supports:
@@ -236,7 +236,7 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
 }
 
 //! Executes an async I/O operation on the global singleton and waits for its result
-/** This is the blocking companion to @ref submit(). It uses the controller event loop
+/** This is the blocking companion to @ref Qore::AsyncIoController::submit(). It uses the controller event loop
     for the actual I/O operation, then waits on the operation's result Queue.
 
     @param operation_info the operation info hash

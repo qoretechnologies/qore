@@ -210,7 +210,7 @@ module SGLangDataProvider {
     @section sglangdataproviderintro SGLangDataProvider Introduction
 
     The %SGLangDataProvider module provides a data provider API for
-    [SGLang](https://github.com/sgl-project/sglang) model servers — fast
+    <a href="https://github.com/sgl-project/sglang">SGLang</a> model servers — fast
     serving infrastructure for large language models.
 
     The following data providers are exposed:

@@ -23,7 +23,7 @@
 */
 
 public namespace TogetherDataProvider {
-#! Data provider for the Together AI `/v1/chat/completions` endpoint
+#! Data provider for the Together AI <tt>/v1/chat/completions</tt> endpoint
 public class TogetherChatCompletionDataProvider inherits TogetherDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

@@ -12,7 +12,7 @@
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires astparser @endcode
+    @code{.py} %requires astparser @endcode
 
     Classes provided by this module:
     - @ref astparser::AstParser "AstParser"
@@ -21,29 +21,12 @@
 
     @section astparserreleasenotes astparser Module Release Notes
 
-    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+    @subpage astparserreleasehistory
 
-    @subsection astparser_3_0 astparser Module Version 3.0
-    - supports brace-delimited match, substitution, transliteration and extraction expressions,
-      including nested and escaped braces, multiline contents and operation-specific modifiers
-    - rejects unterminated brace expressions and comments between substitution/transliteration parts,
-      matching the runtime scanner
-    - recognizes regex prefixes only in regex contexts, preserving ordinary hash access such as
-      \c m{"key"} and \c s{"key"}
+    @section astparserqlibmodules Qore User Modules
 
-    For example, source passed to @ref astparser::AstParser may contain:
-    @code{.py}
-string path = "https://example.org/service///";
-path =~ s{/+$}{};
-bool valid = "aaa" =~ m{^a{3}$};
-    @endcode
+    - @ref qoreapimetadataintro "QoreApiMetadata" — structured API metadata extraction for Qore
+    - @ref qorecodeformatintro "QoreCodeFormat" — canonical code formatter for Qore (like gofmt)
+    - @ref qdxintro "Qdx" — support for documentation generation with doxygen
 
-    @subsection astparser_2_2 astparser Module Version 2.2
-    - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"
-      for scope-aware symbol completion
-    - added \c ADK_Typedef constant for typedef declarations
-    - added \c ASYK_TypeAlias constant for typedef symbol kind
-    - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds
-    - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
-      (now returns 0-indexed values consistent with LSP convention)
 */

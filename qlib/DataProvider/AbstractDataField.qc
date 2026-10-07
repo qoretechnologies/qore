@@ -70,7 +70,7 @@ public hashdecl DataFieldInfo {
 public class AbstractDataField inherits Qore::Serializable {
     public {
         #! The width a derived short description is capped at, in display columns
-        /** A short description is a **one-line summary** shown beside a field, so it has to fit on one line.
+        /** A short description is a <b>one-line summary</b> shown beside a field, so it has to fit on one line.
             @ref getShortDescription() takes the first sentence of a long description, and a first sentence
             is very often longer than a line: an API's own parameter documentation regularly opens with a
             sentence of 150 characters or more, and every one of those became a short description that no
@@ -177,7 +177,7 @@ public class AbstractDataField inherits Qore::Serializable {
         );
 
         #! Capitalization convention that capitalizes every word but a function word in the middle
-        /** Value returned by [I18n::get_capitalization_style()](../../i18n/html/index.html) for languages using title case
+        /** Value returned by @ref Qore::I18n::get_capitalization_style "I18n::get_capitalization_style()" for languages using title case
 
             @since DataProvider 3.8
         */

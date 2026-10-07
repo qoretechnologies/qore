@@ -43,7 +43,7 @@ public hashdecl ConnectServerMethodInfo {
 }
 
 #! Connect RPC server handler for HttpServer
-/** Integrates with HttpServer as an @ref AbstractHttpRequestHandler.
+/** Integrates with HttpServer as an @ref HttpServer::AbstractHttpRequestHandler.
     Routes requests by URL path (<tt>/{service}/{method}</tt>) and dispatches
     to registered handler closures.
 

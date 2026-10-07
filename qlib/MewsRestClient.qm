@@ -107,7 +107,8 @@ public namespace MewsRestClient {
     @ref MewsRestClientIo (multiplexed RestClientIo-backed transport) via
     multi-inheritance.
 
-    Each transport subclass also holds its own thin @ref preprocessRequestBody()
+    Each transport subclass also holds its own thin
+    @ref MewsRestClient::preprocessRequestBody() "preprocessRequestBody()"
     override that injects these fields into every outgoing request body —
     duplicated on both subclasses because Qore's multi-inheritance method
     resolution order prefers the leftmost parent (the REST client), which would
@@ -497,7 +498,7 @@ public class MewsRestClientIo inherits RestClientIo::RestClientIo, MewsRestClien
     }
 
     #! Returns a copy of the options with Mews-specific keys removed
-    /** Mirrors @ref AwsRestClient::AwsRestClientIo::stripAwsOptions() — strips
+    /** Strips
         \c client_token, \c access_token, and \c client before forwarding the
         option hash to the strict @ref RestClientIo::RestClientIo constructor.
     */

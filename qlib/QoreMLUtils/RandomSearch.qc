@@ -98,16 +98,16 @@ public class RandomSearch {
 
     #! Creates a RandomSearch instance
     /** @param options a hash with the following keys:
-        - \c model_factory (code): closure `(hash params, list X_train, list y_train) -> model`
-        - \c predictor (code): closure `(object model, list X_test) -> list`
+        - \c model_factory (code): closure <tt>(hash params, list X_train, list y_train) -&gt; model</tt>
+        - \c predictor (code): closure <tt>(object model, list X_test) -&gt; list</tt>
         - \c param_distributions (hash): maps parameter names to lists of candidate values to
-          sample from, e.g. `{"max_depth": (3, 5, 7, 10), "criterion": ("gini", "entropy")}`
-        - \c scorer (code): closure `(list y_true, list y_pred) -> float` where higher is better
-        - \c n_iter (int): number of random parameter combinations to try (default: `10`)
-        - \c n_folds (int): number of cross-validation folds (default: `5`)
-        - \c shuffle (bool): whether to shuffle data before splitting (default: `True`)
-        - \c seed (int): random seed for reproducibility (default: `0` = random)
-        - \c stratify (bool): if `True`, use stratified k-fold for classification (default: `False`)
+          sample from, e.g. <tt>{"max_depth": (3, 5, 7, 10), "criterion": ("gini", "entropy")}</tt>
+        - \c scorer (code): closure <tt>(list y_true, list y_pred) -&gt; float</tt> where higher is better
+        - \c n_iter (int): number of random parameter combinations to try (default: <tt>10</tt>)
+        - \c n_folds (int): number of cross-validation folds (default: <tt>5</tt>)
+        - \c shuffle (bool): whether to shuffle data before splitting (default: <tt>True</tt>)
+        - \c seed (int): random seed for reproducibility (default: <tt>0</tt> = random)
+        - \c stratify (bool): if <tt>True</tt>, use stratified k-fold for classification (default: <tt>False</tt>)
 
         @throw RANDOM-SEARCH-ERROR if required options are missing
     */

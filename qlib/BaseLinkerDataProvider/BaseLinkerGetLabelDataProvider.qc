@@ -5,11 +5,11 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `getLabel` action data provider
+#! BaseLinker <tt>getLabel</tt> action data provider
 /** Returns the courier label file for a given package. The raw BaseLinker
-    response (`label` = base64 string, `extension` = file format) is transformed
-    into a @ref DataProvider::FileDataType wrapper with `content`, `name`, and
-    `mime_type` populated.
+    response (<tt>label</tt> = base64 string, <tt>extension</tt> = file format) is transformed
+    into a @ref DataProvider::FileDataType wrapper with <tt>content</tt>, <tt>name</tt>, and
+    <tt>mime_type</tt> populated.
 */
 public class BaseLinkerGetLabelDataProvider inherits BaseLinkerDataProviderBase {
     public {
@@ -23,7 +23,7 @@ public class BaseLinkerGetLabelDataProvider inherits BaseLinkerDataProviderBase 
 
         const ConstructorOptions = BaseConstructorOptions;
 
-        #! Map of BaseLinker `extension` values to IANA MIME types
+        #! Map of BaseLinker <tt>extension</tt> values to IANA MIME types
         const ExtensionMimeMap = {
             "pdf": "application/pdf",
             "html": "text/html",

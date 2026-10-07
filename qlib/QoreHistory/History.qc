@@ -290,7 +290,7 @@ public class History {
 
     #! Loads history from a file, replacing any existing entries
     /** Automatically detects the file format:
-        - New format: lines starting with \c #<epoch> mark entry boundaries
+        - New format: lines starting with <tt>#&lt;epoch&gt;</tt> mark entry boundaries
           with timestamps (epoch-microseconds for new files, epoch-seconds for
           older files)
         - Legacy format: one entry per line (no timestamp markers)

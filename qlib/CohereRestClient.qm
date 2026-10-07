@@ -57,10 +57,10 @@ module CohereRestClient {
     @section cohererestclientintro CohereRestClient Introduction
 
     The %CohereRestClient module provides an API for calling
-    [Cohere](https://cohere.com) REST services — chat (Command R/R+),
+    <a href="https://cohere.com">Cohere</a> REST services — chat (Command R/R+),
     embeddings, and reranking.
 
-    Connection pings call `POST /v1/check-api-key` and require a boolean `valid: true`
+    Connection pings call <tt>POST /v1/check-api-key</tt> and require a boolean <tt>valid: true</tt>
     response. This verifies credentials even after a trial key exhausts its monthly inference
     quota. A successful ping verifies authentication, not remaining inference quota. Cohere
     currently documents this endpoint as deprecated; it remains the dedicated key check.
@@ -74,9 +74,9 @@ module CohereRestClient {
     @endcode
 
     Cohere exposes:
-    - `/v2/chat` — chat completions (Command R, Command R+)
-    - `/v2/embed` — embedding models (embed-v3.0, multilingual variants)
-    - `/v2/rerank` — reranker models (rerank-v3.5, multilingual variants)
+    - <tt>/v2/chat</tt> — chat completions (Command R, Command R+)
+    - <tt>/v2/embed</tt> — embedding models (embed-v3.0, multilingual variants)
+    - <tt>/v2/rerank</tt> — reranker models (rerank-v3.5, multilingual variants)
 
     This module closes the cloud-reranker gap in
     @ref qoreragutilsintro "QoreRagUtils" alongside Voyage and Jina,
@@ -300,7 +300,7 @@ public class CohereRestConnection inherits RestClient::RestConnection {
 
     #! Requires an affirmative key-check response, including for HTTP 200 responses
     /** @param body raw or deserialized JSON returned by the key-check endpoint
-        @throw REST-PING-ERROR the response is malformed or does not contain boolean `valid: true`
+        @throw REST-PING-ERROR the response is malformed or does not contain boolean <tt>valid: true</tt>
     */
     validatePingResponse(auto body) {
         try {
@@ -354,11 +354,11 @@ public class CohereRestConnection inherits RestClient::RestConnection {
 }
 
 #! LLM provider for Cohere chat (Command R/R+)
-/** Cohere's `/v2/chat` endpoint uses an OpenAI-shape-adjacent message
+/** Cohere's <tt>/v2/chat</tt> endpoint uses an OpenAI-shape-adjacent message
     schema (role + content), but the response shape differs (single
-    `message` not `choices[]`, `content` as a typed array of parts).
-    This provider translates between Qore's neutral @ref ChatMessage /
-    @ref ChatResponse hashdecls and Cohere's wire format.
+    <tt>message</tt> not <tt>choices[]</tt>, <tt>content</tt> as a typed array of parts).
+    This provider translates between Qore's neutral @ref QoreLlmUtils::ChatMessage /
+    @ref QoreLlmUtils::ChatResponse hashdecls and Cohere's wire format.
 
     @par Configuration
 
@@ -627,7 +627,7 @@ public class CohereLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
 }
 
 public namespace QoreRagUtils {
-#! Cohere-backed embedder — calls the Cohere `/v2/embed` endpoint
+#! Cohere-backed embedder — calls the Cohere <tt>/v2/embed</tt> endpoint
 public class CohereEmbedder inherits AbstractEmbedder {
     public {
         const DefaultModel = CohereRestClient::CohereRestClientBase::DefaultEmbeddingModel;
@@ -786,7 +786,7 @@ public class CohereEmbedderFactory inherits AbstractEmbedderFactory {
     }
 }
 
-#! Cohere-backed reranker — calls the Cohere `/v2/rerank` endpoint
+#! Cohere-backed reranker — calls the Cohere <tt>/v2/rerank</tt> endpoint
 public class CohereReranker inherits AbstractReranker {
     public {
         const DefaultModel = CohereRestClient::CohereRestClientBase::DefaultRerankModel;

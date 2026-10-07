@@ -52,11 +52,15 @@ different roots and verifies identical installed ELF files, retained AOT
 trailers, separate debug information and packaged source files.
 
 LLVM emits synthetic ``<aot>`` compilation units for Qore modules, so RPM's
-``debugedit`` cannot discover their Qore input files. Call
+``debugedit`` does not enumerate every Qore input file. Call
 ``%qore_install_aot_sources qlib`` in ``%install`` to include those inputs in
 the same debug-source directory. The helper preserves their paths and
 timestamps, excludes generated binaries, and rejects paths outside the source
 tree or build root.
+The core package supplements its debug-source tree after RPM's automatic
+extraction. This preserves inputs absent from DWARF without asking cpio to
+copy files over an already populated tree. A real RPM regression checks both
+source categories and rejects copy diagnostics.
 
 The integration test creates and extracts real runtime and debuginfo RPMs and
 checks both the retained metadata and separated ELF debug sections. Run it in
@@ -117,3 +121,28 @@ source distribution. License data contains the complete leading notices from
 linenoise and wcwidth, without implementation source. Build environment helpers
 are sourced shell fragments, so they have neither execute permission nor a
 shebang. Snapshot compatibility capabilities obsolete only older versions.
+
+The SDK provides ``qore-devel(module-doc-peers) = 1`` when the installed CMake
+helpers support final documentation passes for both native and peer user
+modules. For example, AMQP's AmqpUtil and AmqpDataProvider pages can link to
+each other without imposing circular compile dependencies. SDK assets are
+resolved beside the installed template, and imported indexes resolve explicit
+links without adding unrelated pages to a module's navigation.
+
+This RPM backport retains the existing external-module installation manifest;
+it does not enable the separate upstream change that automatically installs
+native module tag files. Modules may continue to request tag installation
+explicitly with ``qore_install_module_doxygen_tag()``.
+
+Scanner debug-source regression
+------------------------------
+
+The Flex input uses an absolute source path so its generated line directives
+remain correct when the C++ compiler runs in the build directory. With CMake,
+Flex, a C++ compiler, debugedit and Valgrind installed, run::
+
+    python3 -B -W error rpm/tests/test_flex_source_paths.py -v
+
+The test builds in a path containing spaces, verifies all extracted DWARF
+source paths exist, checks empty, numeric, word and UTF-8 input, and exercises
+scanner teardown under Valgrind. It requires no Qore installation.

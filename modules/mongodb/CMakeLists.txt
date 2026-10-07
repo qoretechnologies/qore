@@ -110,6 +110,7 @@ set(MONGODB_CPP_SRC
 
 set(QORE_DOX_MONGODB_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 # Process QPP files
@@ -123,7 +124,11 @@ add_library(${mongodb_module_name} MODULE ${MONGODB_CPP_SRC} ${MONGODB_QPP_SOURC
 
 target_link_libraries(${mongodb_module_name} ${MONGODB_LIBRARIES})
 add_dependencies(${mongodb_module_name} libqore MONGODB_QPP_GENERATED_FILES)
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/mongodb/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/mongodb/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/mongodb/release-notes.dox ${_dox_src})
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/MongoDbDataProvider/mongodb-logo.svg"
+)
 qore_binary_module_qore(${mongodb_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

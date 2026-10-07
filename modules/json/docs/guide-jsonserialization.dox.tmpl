@@ -1,0 +1,45 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jsonserializationguide Automatic JSON Serialization and Deserialization
+
+    @tableofcontents
+
+    <b>JSON Serialization</b>
+    |!%Qore Type|!JSON-RPC Type|!Description
+    |\c string|\c string|direct conversion to UTF-8 string
+    |\c int|\c number|direct conversion
+    |\c float|\c number|direct conversion
+    |\c bool|\c boolean|direct conversion
+    |\c date|\c string|date/time values are serialized to strings like: \
+        \c "2010-12-22 16:35:36.372996 Wed +01:00 (CET)"; intervals are serialized to ISO-8601 duration strings \
+        (ex: \c "PT2M1S")
+    |\c binary|\c string|binary values are serialized as base64 encoded strings
+    |\c list|\c array|direct conversion
+    |\c hash|\c struct|direct conversion
+    |\c NOTHING or \c NULL|\c null|direct conversion
+    |all others|n/a|All other types will cause an \c JSON-RPC-SERIALIZATION-ERROR to be raised.
+
+    <b>JSON Deserialization</b>
+    |!JSON-RPC Type|!%Qore Type|!Description
+    |\c string|\c string|direct conversion
+    |\c number|\c int or \c float|if the JSON number is an integer, it is converted as an \c int, otherwise as a \
+        \c float
+    |\c boolean|\c bool|direct conversion
+    |\c array|\c list|direct conversion
+    |\c struct|\c hash|direct conversion
+    |\c null|\c NOTHING|direct conversion
+
+    This following functions provide automatic JSON serialization and deserialization:
+
+    <b>Functions For JSON Serialization and Deserialization</b>
+    |!Function Name|!Description
+    |@ref Qore::Json::make_json() "make_json()"|Serializes qore data into a JSON string with optional verbose whitespace formatting for easier \
+        human readability
+    |@ref Qore::Json::parse_json() "parse_json()"|Parses a JSON string and returns the corresponding %Qore data structure
+
+    <b>Deprecated JSON Functions</b>
+    |!Deprecated Function Name|!New Function Name
+    |\c makeFormattedJSONString()|@ref Qore::Json::make_json() "make_json()"
+    |\c makeJSONString()|@ref Qore::Json::make_json() "make_json()"
+    |\c parseJSON()|@ref Qore::Json::parse_json() "parse_json()"
+*/

@@ -33,9 +33,9 @@
       \c binary value, or a %Qore @ref Qore::InputStream "InputStream" /
       @ref Qore::OutputStream "OutputStream"
     - Parsing Canonical Form and the CRC-64-AVRO fingerprint, for content-addressed schema caches
-    - a companion <a href="../../AvroUtil/html/index.html#avroutilintro">AvroUtil</a> user
+    - a companion @ref avroutilintro "AvroUtil" user
       module mapping Avro schemas to
-      <a href="../../DataProvider/html/index.html#dataproviderintro">data provider</a> types
+      @ref dataproviderintro "data provider" types
     - a versioned C++ API for other binary modules, so a consumer that decodes many data against a
       schema supplied out of band can do so without a %Qore-language call per datum; see
       @ref avrocppapisec below
@@ -126,4 +126,9 @@ hash<auto> event = schema.decode(data);
     @section avrolicense License
 
     The \c avro module is released under the MIT license.
+
+    @section avroqlibmodules Qore User Modules
+
+    - @ref avroutilintro "AvroUtil" — maps Apache Avro schemas to DataProvider types
+
 */

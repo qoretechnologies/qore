@@ -60,7 +60,7 @@ module SGLangRestClient {
     The %SGLangRestClient module provides an API for calling SGLang REST API services.
     SGLang (<https://github.com/sgl-project/sglang>) is a fast serving framework for
     large language models and vision language models; it exposes an OpenAI-compatible
-    HTTP API at `/v1/<!--%%-->*` plus SGLang-native endpoints for constrained decoding
+    HTTP API at <tt>/v1/<!-- -->*</tt> plus SGLang-native endpoints for constrained decoding
     (<tt>/generate</tt>), server introspection (<tt>/get_server_info</tt>), and cache
     management (<tt>/flush_cache</tt>).
 

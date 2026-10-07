@@ -51,19 +51,19 @@ module HttpClientIo {
     request/response exchanges (HTTP/1.1) regardless of the underlying transport protocol.
 
     Features:
-    - **Protocol auto-selection**: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
+    - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
       preferring HTTP/3 when available, and falling back to HTTP/1.1 for endpoints that
       complete the TLS handshake but refuse HTTP/2 via ALPN
-    - **HTTP/1.1 support**: Serial request/response with keep-alive; connection manager creates
+    - <b>HTTP/1.1 support</b>: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
-    - **True multiplexing**: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
-    - **Connection pooling**: Shared connections across multiple clients
-    - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
+    - <b>True multiplexing</b>: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
+    - <b>Connection pooling</b>: Shared connections across multiple clients
+    - <b>Async I/O</b>: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
       blocks the caller via Future while the controller event loop handles actual I/O
-    - **Sync and async APIs**: Blocking and Future-based interfaces
-    - **Streaming support**: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
-    - **Connection migration**: QUIC connection migration for HTTP/3
-    - **UNIX domain sockets**: plain HTTP/1.1 to a local server listening on a UNIX domain socket, addressed
+    - <b>Sync and async APIs</b>: Blocking and Future-based interfaces
+    - <b>Streaming support</b>: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
+    - <b>Connection migration</b>: QUIC connection migration for HTTP/3
+    - <b>UNIX domain sockets</b>: plain HTTP/1.1 to a local server listening on a UNIX domain socket, addressed
       like @ref Qore::HTTPClient "HTTPClient" with a \c socket= URL
 
     GET requests must use @ref NOTHING for the request body and cannot enable request-body streaming.
@@ -320,7 +320,7 @@ public namespace HttpClientIo {
     }
 
     #! Canonical response shape for HTTP client async / conn_mgr requests.
-    /** This hashdecl is the **single authoritative shape** for responses
+    /** This hashdecl is the <b>single authoritative shape</b> for responses
         returned by the C++ HTTP connection manager and consumed by
         pure-async callers (@ref HttpClientConnectionManager,
         @ref HttpClientIo, \c RestClientIo, their DataProviders).
@@ -341,13 +341,13 @@ public namespace HttpClientIo {
         @par Legacy adapters
         Two legacy callers still expect different response shapes:
 
-        - **Sync HTTPClient** (`hc.send()`, `hc.get()`, …) expects a
+        - <b>Sync HTTPClient</b> (<tt>hc.send()</tt>, <tt>hc.get()</tt>, …) expects a
           flattened hash where the response headers are top-level keys
           alongside @c status_code and @c body, matching the pre-conn_mgr
           @c readHTTPHeader format.  Adapted from this shape by
           @c transformConnMgrResponse in @c lib/QoreHttpClientObject.cpp.
 
-        - **Legacy HTTPClient poll API** (`hc.startPollSendRecv(...)` +
+        - <b>Legacy HTTPClient poll API</b> (<tt>hc.startPollSendRecv(...)</tt> +
           @c spop.getOutput() ) expects @c {code, info: {response-headers,
           response-headers-raw, response-body}, response-body}, matching
           the pre-conn_mgr \c HttpClientConnectSendRecvPollOperation

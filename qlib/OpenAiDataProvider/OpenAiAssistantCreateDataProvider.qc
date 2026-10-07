@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiAssistantCreateDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiAssistantCreateDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 public namespace OpenAiDataProvider {
 #! The OpenAi data provider class
 /** @deprecated The OpenAI Assistants API is deprecated and will be removed by OpenAI on 2026-08-26;
-    use the `responses` data provider; assistant configuration is replaced by reusable prompts referenced with the `prompt` field of a create-response request instead
+    use the <tt>responses</tt> data provider; assistant configuration is replaced by reusable prompts referenced with the <tt>prompt</tt> field of a create-response request instead
 */
 public class OpenAiAssistantCreateDataProvider inherits OpenAiDataProviderCommon {
     public {

@@ -128,7 +128,7 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
     }
 
     #! Creates the provider from constructor options
-    /** @param options provider options as a generic hash; one of `path`, `stream`, or `data` must be provided
+    /** @param options provider options as a generic hash; one of <tt>path</tt>, <tt>stream</tt>, or <tt>data</tt> must be provided
 
         @throw JSON-FILE-READ-ERROR if no input source is provided or conflicting options are given
     */

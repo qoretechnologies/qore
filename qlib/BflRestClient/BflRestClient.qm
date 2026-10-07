@@ -57,17 +57,17 @@ module BflRestClient {
     @section bflrestclientintro BflRestClient Introduction
 
     The %BflRestClient module provides a REST client for
-    [Black Forest Labs](https://bfl.ai) — the company behind the FLUX
+    <a href="https://bfl.ai">Black Forest Labs</a> — the company behind the FLUX
     image and video generation models.
 
-    BFL's API is asynchronous: every submit returns a `polling_url`
+    BFL's API is asynchronous: every submit returns a <tt>polling_url</tt>
     that must be polled until the result is ready.  This module wraps
     the lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
     so callers see a synchronous request/response shape.
 
     Two QoreMediaUtils backends are auto-registered on module load:
-    - `bfl` image generator (FLUX models)
-    - `bfl` video generator (FLUX video models)
+    - <tt>bfl</tt> image generator (FLUX models)
+    - <tt>bfl</tt> video generator (FLUX video models)
 
     @section BflRestClientRelnotes Release Notes
 
@@ -77,7 +77,7 @@ module BflRestClient {
     - preserve regional endpoints and route each independent wait through the returned polling URL
     - bound setup, submission, validation, polling, and downloads by one overall timeout
     - verify image/video MIME, size, and container metadata with credential-free delivery downloads
-    - replace the unsupported `flux-1.1-pro-video` alias with explicit `flux-3-video` selection
+    - replace the unsupported <tt>flux-1.1-pro-video</tt> alias with explicit <tt>flux-3-video</tt> selection
 
     @par Example: Create a product image and retain its bytes
     @code{.py}
@@ -95,7 +95,7 @@ binary image = job.media.data;
     require an external media demuxer. Signed delivery URLs are temporary and must not be logged.
     The current schema retains deprecated legacy fine-tune operations; account availability is unverified.
     LoRA beta base variants expose only the common fields documented by BFL. Pinned source hashes,
-    normalization details, and source/license attribution are installed in `bfl-provenance.json`.
+    normalization details, and source/license attribution are installed in <tt>bfl-provenance.json</tt>.
 
     @subsection BflRestClientv1_0 BflRestClient v1.0
     - the initial version of the %BflRestClient module
@@ -175,8 +175,8 @@ public class BflRestClientBase {
     }
 
     #! Maps the API key to the shared client's sensitive token mechanism
-    /** @param opts client options; an explicitly supplied `apikey` always takes precedence
-        @return idempotently normalized options using the `x-key` header
+    /** @param opts client options; an explicitly supplied <tt>apikey</tt> always takes precedence
+        @return idempotently normalized options using the <tt>x-key</tt> header
         @throw BFL-CONFIG-ERROR missing, empty, or invalid credentials or endpoint
     */
     static hash<auto> getOptions(hash<auto> opts) {

@@ -783,8 +783,8 @@ module Cin7CoreDataProvider {
     and can be obtained from the Cin7Core application:
     1. Go to https://inventory.dearsystems.com/ExternalApi
     2. Create a New Application or select an existing one
-    3. Open the **Setup** tab for the Application
-    4. Copy the **Account ID** and **Application Key**
+    3. Open the <b>Setup</b> tab for the Application
+    4. Copy the <b>Account ID</b> and <b>Application Key</b>
 
     @par Example:
     @code{.py}

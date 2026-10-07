@@ -658,7 +658,7 @@ module GoogleDriveDataProvider {
     file larger than memory can be written, and reading takes the bytes from the response body rather than
     base64-encoded into a JSON field.
 
-    Drive addresses a file by an immutable ID, so a **read** location is a file ID.  A **write** location is a
+    Drive addresses a file by an immutable ID, so a <b>read</b> location is a file ID.  A <b>write</b> location is a
     name, since the file does not exist yet; the folder to create it in comes from the \c container option,
     and without one the user's \c "My Drive" root is used.  A Google-native document has no byte content of
     its own and needs the \c export_mime_type option to be read at all.

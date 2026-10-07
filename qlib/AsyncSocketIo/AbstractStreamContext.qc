@@ -101,7 +101,7 @@ public class AbstractStreamContext {
 
     #! Returns True when the transport feeds pre-decoded WebSocket frames
     /** Subclasses that support WebSocket frame-level delivery (HTTP/3 with
-        C++ `WebSocketStreamFrameState` in the loop) override this.  Default
+        C++ <tt>WebSocketStreamFrameState</tt> in the loop) override this.  Default
         is False, meaning @ref readData() returns raw bytes.
     */
     bool usesFrameState() {

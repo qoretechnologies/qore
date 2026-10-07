@@ -1,0 +1,22 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_vocabguide Vocabulary Access
+
+    @tableofcontents
+
+    @code{.py}
+# Get vocabulary size
+printf("Vocab size: %d\n", tok.getVocabSize());
+
+# Look up individual tokens
+printf("hello -> %d\n", tok.tokenToId("hello"));
+printf("7592 -> %s\n", tok.idToToken(7592));
+
+# Get the full vocabulary as a hash
+hash<string, int> vocab = tok.getVocab();
+printf("Total entries: %d\n", vocab.size());
+
+# Get the pad token ID (auto-detected from [PAD] or <pad>)
+printf("Pad token ID: %d\n", tok.getPadTokenId());
+    @endcode
+*/

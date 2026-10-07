@@ -27,13 +27,13 @@ public namespace DataProviderML {
 #! Pipeline processor that enriches text records with dense embedding vectors
 /** Accumulates records in a window and batch-embeds the specified text field using
     @ref QoreTokenizerUtils::EmbeddingModel "EmbeddingModel". Each record is enriched
-    with a dense embedding vector in a new `embedding` field.
+    with a dense embedding vector in a new <tt>embedding</tt> field.
 
     Supports both HTTP (OpenAI-compatible endpoint) and ONNX backends for embedding
     generation. Records are batched for efficiency; the batch is flushed when
-    `window_size` is reached or at pipeline end.
+    <tt>window_size</tt> is reached or at pipeline end.
 
-    This is a @ref DPC_AGGREGATE processor because it buffers records and emits
+    This is a @ref DataProvider::DPC_AGGREGATE processor because it buffers records and emits
     them in batches.
 
     @par Example:

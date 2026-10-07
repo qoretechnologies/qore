@@ -33,7 +33,7 @@
 
 Name: qore
 Version: 3.0.0
-Release: 21%{?dist}
+Release: 22%{?dist}
 Summary: Multithreaded programming language and integration platform
 License: (LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT) AND LGPL-2.1-or-later AND Apache-2.0 AND BSD-3-Clause AND BSL-1.0 AND Unicode-3 AND BSD-2-Clause AND ISC AND HPND-Markus-Kuhn AND HPND-sell-variant AND BSD-2-Clause-NetBSD
 URL: https://qore.org
@@ -184,6 +184,7 @@ Native and AOT-compiled standard modules, source fallbacks, resources and
 translations. This package includes JSON, YAML and CPU ONNX inference.
 
 %package devel
+Provides: qore-devel(module-doc-peers) = 1
 Summary: Qore headers, native compiler and module development tools
 Requires: %{libname}%{?_isa} = %{version}-%{release}
 Requires: %{name}%{?_isa} = %{version}-%{release}
@@ -244,8 +245,8 @@ BuildArch: noarch
 API reference for embedding Qore and writing native modules.
 %endif
 
-# Keep this block identical to rpm/macros.qore's implementation. Core Qore
-# bootstraps the macro package and cannot BuildRequire itself.
+# Bootstrap the metadata wrapper from rpm/macros.qore without a self BuildRequires.
+# Core also completes its debug-source tree after automatic source extraction.
 %global qore_rpm_helper rpm/preserve-aot-metadata.py
 %global qore_debug_source_dir %{lua:local p = rpm.expand("/usr/src/debug/%{name}-%{version}"); if (tonumber(rpm.expand("%{?_unique_debug_srcs}")) or 0) > 0 then p = p .. rpm.expand("-%{release}.%{_arch}") end; print(p)}
 %{lua:
@@ -260,6 +261,8 @@ cat > qore-rpm-post.sh <<'QORE_RPM_POST_EOF'
 %{qore_original_install_post}
 QORE_RPM_POST_EOF
 /usr/bin/python3 "%{qore_rpm_helper}" "%{buildroot}" /bin/sh -e qore-rpm-post.sh
+# Supplement debugedit sources after its copy, so cpio never encounters preinstalled files.
+/usr/bin/python3 rpm/install-aot-sources.py "%{buildroot}" "%{qore_debug_source_dir}" qlib
 ]=]
   rpm.define("__spec_install_post " .. wrapper:gsub(newline, continuation))
 }
@@ -307,7 +310,6 @@ cmake --build build --target docs -- %{?_smp_mflags}
 
 %install
 DESTDIR=%{buildroot} cmake --install build
-python3 rpm/install-aot-sources.py "%{buildroot}" "%{qore_debug_source_dir}" qlib
 install -dm755 %{buildroot}%{_libdir}/qore
 mv %{buildroot}%{_bindir}/qcc-format.stamp %{buildroot}%{_libdir}/qore/
 sed -i 's|%{_bindir}/qcc-format.stamp|%{_libdir}/qore/qcc-format.stamp|' \
@@ -349,6 +351,7 @@ python3 -B -W error -m unittest discover -s rpm/tests -p 'test_examples.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_licenses.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_build_env.py' -v
 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_aot_sources.py' -v
+python3 -B -W error -m unittest discover -s rpm/tests -p 'test_debug_source_order.py' -v
 QORE_RPM_VERIFY_INSTALLED_DEPS=1 python3 -B -W error -m unittest discover -s rpm/tests -p 'test_spec_metadata.py' -v
 QORE_TEST_QCC=$PWD/build/qcc QORE_TEST_QORE=$PWD/build/qore \
     python3 -B -W error rpm/tests/qcc-rpm-integration.py -v
@@ -432,6 +435,11 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 %endif
 
 %changelog
+* Wed Oct 07 2026 David Nichols <david@qore.org> - 3.0.0-22
+- Backport tested SDK peer-documentation passes and installed asset resolution.
+- Advertise the documentation capability required by current AMQP sources.
+- Complete debug sources after automatic RPM extraction to avoid duplicate copies.
+- Preserve scanner debug-source paths and correct literal documentation markup.
 * Sat Oct 03 2026 David Nichols <david@qore.org> - 3.0.0-21
 - Require the versioned openSUSE LLVM SDK independently of other compilers.
 

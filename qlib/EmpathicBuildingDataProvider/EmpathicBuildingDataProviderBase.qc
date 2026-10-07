@@ -156,7 +156,7 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
 
     #! Map a @ref RestClient::RestResponseInfo error arg to the legacy ex arg shape
     /** The async @ref RestClientIo::RestClientIo "RestClientIo" transport throws
-        @ref RestClient::REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
+        \c REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
         in \c ex.arg; translate to the legacy \c "request-uri" / \c "response-code" /
         \c "response-body" shape so callers do not need to change.
     */

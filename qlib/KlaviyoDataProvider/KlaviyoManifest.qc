@@ -36,7 +36,7 @@ public namespace KlaviyoDataProvider {
     hand-written actions over the \c klaviyo-api SDK, with a designed, flat, camelCase option surface, and
     around seventy option names that differ from the wire by case, by nesting, or by both.
 
-    Existing workflows supply option values **by name**, so those names are as much a commitment as the
+    Existing workflows supply option values <b>by name</b>, so those names are as much a commitment as the
     action IDs are, and this manifest reproduces both.  Three mechanisms carry the weight:
 
     |!Mechanism|!What it fixes|!Where
@@ -57,7 +57,7 @@ everywhere
     option shape, and they are written by hand:
 
     |!Actions|!Why
-    |the six \c add_* / \c remove_* relationship actions|the body is a JSON:API relationship **array**, \
+    |the six \c add_* / \c remove_* relationship actions|the body is a JSON:API relationship <b>array</b>, \
 \c "{data: [{type, id}]}", and the action takes one identifier rather than a list; an array has no \
 properties to lift
     |\c create_event|the body nests a metric envelope and a profile envelope inside the event's attributes, \
@@ -72,14 +72,14 @@ subscription envelopes per channel, and the application published one profile's 
     @section klaviyomanifest_added What Was Added
 
     Two read-only listings the superseded application did not export, both because a dropdown needs them:
-    \c list_metrics fills the metric picker on **Create Event** and the **New Event** trigger, and
+    \c list_metrics fills the metric picker on <b>Create Event</b> and the <b>New Event</b> trigger, and
     \c list_events fills the event picker.  Exporting a listing to fill a dropdown is deliberate - a
     dropdown can only name an action the manifest exports.
 
     @section klaviyomanifest_dropped What Is Deliberately Not Published
 
     Every listing declares JSON:API's \c include and its sparse-fieldset \c "fields[…]" arguments, and none
-    is published.  Both change the **shape of the response** - \c include adds a top-level \c included
+    is published.  Both change the <b>shape of the response</b> - \c include adds a top-level \c included
     array, a fieldset removes attributes - while the action's output type is derived from the description's
     unmodified response.  Publishing an option that can silently invalidate the declared output type would
     be worse than not having it; \c make-api-call reaches them.
@@ -123,14 +123,14 @@ public class KlaviyoManifest {
         const RefCampaign = "klaviyo-campaign";
 
         #! Reference data: metrics, keyed by metric name
-        /** \c create_event names the metric by **name** rather than by ID, because Klaviyo creates a metric
+        /** \c create_event names the metric by <b>name</b> rather than by ID, because Klaviyo creates a metric
             on first use: an event may name a metric that does not exist yet, and that is how a new one is
             defined.
         */
         const RefMetricName = "klaviyo-metric-name";
 
         #! Reference data: metrics, keyed by metric ID
-        /** The **New Event** trigger filters events by \c metric_id, so it needs the identifier where
+        /** The <b>New Event</b> trigger filters events by \c metric_id, so it needs the identifier where
             \c create_event needs the name.
         */
         const RefMetricId = "klaviyo-metric-id";
@@ -146,7 +146,7 @@ public class KlaviyoManifest {
         const RefPageSize = 10;
 
         #! The header naming the API revision, which the connection supplies rather than the action
-        /** Klaviyo declares this header **required** on 344 of its 345 operations, which is the good case:
+        /** Klaviyo declares this header <b>required</b> on 344 of its 345 operations, which is the good case:
             a connection that does not send it is reported naming the option to set rather than failing as a
             schema type error several frames down.
 
@@ -339,7 +339,7 @@ public class KlaviyoManifest {
             together - and this reproduces that: the envelope is unwrapped and the attributes are merged
             into the identity beside them.
 
-            \c links and \c relationships are **kept**, unlike in the application being replaced, which
+            \c links and \c relationships are <b>kept</b>, unlike in the application being replaced, which
             dropped them.  They are additive, and \c relationships is the only way to see what a resource
             belongs to without a second call.
         */

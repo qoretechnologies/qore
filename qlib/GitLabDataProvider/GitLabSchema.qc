@@ -76,7 +76,7 @@ public hashdecl GitLabSchemaProvenanceInfo {
 
     @section gitlabschema_generated Why This Document
 
-    GitLab **generates** this description from its own API source (\c lib/tasks/gitlab/openapi/v3.rake)
+    GitLab <b>generates</b> this description from its own API source (\c lib/tasks/gitlab/openapi/v3.rake)
     and publishes it in the same repository as the code, so it cannot silently lag the API the way a
     hand-maintained description does.  It is also the same source the Swagger 2.0 document the superseded
     TypeScript application vendored was generated from, which is why every action ID carries over
@@ -90,7 +90,7 @@ public hashdecl GitLabSchemaProvenanceInfo {
     array.  15 of the document's 656 request bodies carry the same generated placeholder.
 
     An overlay must never be used for structural repair, and inventing the missing fields here would be
-    exactly that, so this one action is **hand-written** instead - see
+    exactly that, so this one action is <b>hand-written</b> instead - see
     @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider".  It keeps its
     action ID, so nothing calling it can tell the difference.
 

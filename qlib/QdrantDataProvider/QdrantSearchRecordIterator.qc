@@ -25,7 +25,7 @@
 #! Contains all public definitions in the QdrantDataProvider module
 public namespace QdrantDataProvider {
 #! Record iterator wrapping Qdrant query results
-/** Calls `POST /collections/{name}/points/query` and iterates over scored point results
+/** Calls <tt>POST /collections/{name}/points/query</tt> and iterates over scored point results
 */
 public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {

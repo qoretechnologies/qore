@@ -1,0 +1,16 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_decodeguide Decoding
+
+    @tableofcontents
+
+    @code{.py}
+# Decode with special tokens visible
+string with_special = tok.decode(enc.input_ids);
+# "[CLS] hello , world ! [SEP]"
+
+# Decode without special tokens
+string clean = tok.decode(enc.input_ids, True);
+# "hello , world !"
+    @endcode
+*/

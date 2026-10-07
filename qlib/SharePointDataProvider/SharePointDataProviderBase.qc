@@ -33,7 +33,7 @@ public namespace SharePointDataProvider {
     here rather than reimplemented.
 
     @note Inheritance order matters where this class is combined with a OneDrive leaf provider: a
-    base class repeated in a Qore hierarchy is instantiated once, and the branch named **first**
+    base class repeated in a Qore hierarchy is instantiated once, and the branch named <b>first</b>
     supplies the method.  The leaf providers therefore say
     \c "inherits SharePointDataProviderBase, OneDriveGetItemDataProvider" - the other order silently
     keeps OneDrive's personal-drive path.

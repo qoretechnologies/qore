@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the GroqDataProvider module
 public namespace GroqDataProvider {
-#! Data provider for the Groq `/v1/models` endpoint (list currently-available models)
+#! Data provider for the Groq <tt>/v1/models</tt> endpoint (list currently-available models)
 public class GroqListModelsDataProvider inherits GroqDataProviderCommon {
     public {
         #! Provider info
@@ -72,8 +72,8 @@ public class GroqListModelsDataProvider inherits GroqDataProviderCommon {
     }
 
     #! Lists the models currently served by the Groq API
-    /** Converts each model's Unix-seconds `created` field on the response into
-        a Qore date to match the typed `*date` field in the response schema.
+    /** Converts each model's Unix-seconds <tt>created</tt> field on the response into
+        a Qore date to match the typed <tt>*date</tt> field in the response schema.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = doRestCommand("GET", "models").body;

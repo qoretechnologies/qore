@@ -31,7 +31,7 @@ public class LinkedInOrganizationsUtil {
 
         @return the trailing ID
 
-        @throw LINKEDIN-URN-ERROR the value is not a simple URN; a **composite** URN such as
+        @throw LINKEDIN-URN-ERROR the value is not a simple URN; a <b>composite</b> URN such as
         \c "urn:li:comment:(urn:li:activity:1,2)" has no single trailing ID and is rejected rather
         than silently truncated to its last component
     */
@@ -65,7 +65,7 @@ public class LinkedInOrganizationsUtil {
     }
 
     #! Returns the next pagination cursor from a DMA finder response
-    /** The DMA APIs report the cursor in **two different places**: the feed finders nest it under
+    /** The DMA APIs report the cursor in <b>two different places</b>: the feed finders nest it under
         \c metadata.paginationCursorMetdata (LinkedIn's own spelling, missing an \c "a"), while the
         follows finders put it directly on \c metadata.  Reading only one of them silently ends
         pagination after the first page on the other family.
@@ -89,7 +89,7 @@ public class LinkedInOrganizationsUtil {
 
     #! Returns True if a query parameter value is a Rest.li structural value
     /** Rest.li encodes structured query values as \c "(key:value)" and \c "List(a,b)", and those
-        parentheses, colons and commas are **syntax**: percent-encoding them addresses a different
+        parentheses, colons and commas are <b>syntax</b>: percent-encoding them addresses a different
         query, which LinkedIn rejects.  Everything else is an ordinary value and is encoded.
     */
     static bool isRestliValue(string value) {
@@ -105,7 +105,7 @@ public class LinkedInOrganizationsUtil {
     }
 
     #! Normalizes a DMA audit stamp
-    /** An audit stamp carries the acting member's URN, which LinkedIn **omits entirely** when that
+    /** An audit stamp carries the acting member's URN, which LinkedIn <b>omits entirely</b> when that
         member has not consented to sharing their data through the DMA APIs; only \c time is
         reliably present.
     */

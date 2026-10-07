@@ -53,6 +53,10 @@ set(PROTOBUF_CPP_SRC
 
 set(QORE_DOX_PROTOBUF_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
+    docs/guide-protobuferrors.dox.tmpl
+    docs/guide-protobufexamples.dox.tmpl
+    docs/guide-protobuftype.dox.tmpl
 )
 
 # Process QPP files
@@ -67,7 +71,13 @@ target_link_libraries(${protobuf_module_name} ${Protobuf_LIBRARIES})
 target_include_directories(${protobuf_module_name} PRIVATE ${Protobuf_INCLUDE_DIRS})
 add_dependencies(${protobuf_module_name} libqore PROTOBUF_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/protobuf/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/protobuf/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/protobuf/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-protobuferrors.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-protobufexamples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-protobuftype.dox
+)
 qore_binary_module_qore(${protobuf_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

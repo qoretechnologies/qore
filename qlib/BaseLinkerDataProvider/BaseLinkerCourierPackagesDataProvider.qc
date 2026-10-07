@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker courier packages collection data provider (`getOrderPackages`)
+#! BaseLinker courier packages collection data provider (<tt>getOrderPackages</tt>)
 /** Returns all packages associated with a single order; no pagination. */
 public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProviderBase {
     public {

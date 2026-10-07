@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `payment.completed` webhook events
+#! Watches for <tt>payment.completed</tt> webhook events
 public class EasyPostWatchPaymentCompletedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

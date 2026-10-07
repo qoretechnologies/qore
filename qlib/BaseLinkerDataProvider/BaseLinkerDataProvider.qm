@@ -1167,17 +1167,17 @@ module BaseLinkerDataProvider {
     - Inventory — catalogs, products (upsert), stock (bulk update), prices (bulk update)
     - Shipping — list packages, create package, retrieve label, delete package
     - Metadata — couriers, courier services/accounts/fields, order statuses/sources
-    - Event triggers — 22 polling-based event providers derived from `getJournalList`
+    - Event triggers — 22 polling-based event providers derived from <tt>getJournalList</tt>
 
     All API calls are made via BaseLinker's single-endpoint RPC protocol
-    (`POST /connector.php` with form-encoded `method`/`parameters`); the module
+    (<tt>POST /connector.php</tt> with form-encoded <tt>method</tt>/<tt>parameters</tt>); the module
     hides this mechanism behind a conventional data-provider surface.
 
-    **Rate limit:** 100 requests per minute per token. The base class reactively
+    <b>Rate limit:</b> 100 requests per minute per token. The base class reactively
     retries rate-limited calls with exponential backoff (up to 3 attempts with
     1s/2s/4s sleep between attempts).
 
-    **Event retention:** BaseLinker's journal retains log entries for 3 days. Pick
+    <b>Event retention:</b> BaseLinker's journal retains log entries for 3 days. Pick
     a polling interval well below that (default 120s) and ensure pollers keep up
     with traffic.
 

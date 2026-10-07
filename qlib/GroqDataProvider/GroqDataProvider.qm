@@ -119,7 +119,7 @@ module GroqDataProvider {
     @section groqdataproviderintro GroqDataProvider Introduction
 
     The %GroqDataProvider module provides a data provider API for
-    [Groq](https://groq.com) LPU-accelerated inference services.
+    <a href="https://groq.com">Groq</a> LPU-accelerated inference services.
 
     The following data providers are exposed:
     - @ref GroqDataProvider::GroqDataProvider "GroqDataProvider" — the root provider
@@ -128,7 +128,7 @@ module GroqDataProvider {
     - @ref GroqDataProvider::GroqListModelsDataProvider
       "GroqListModelsDataProvider" — lists the currently-available models
 
-    See the [Groq models documentation](https://console.groq.com/docs/models)
+    See the <a href="https://console.groq.com/docs/models">Groq models documentation</a>
     for the currently-available models.
 
     @par Example:
@@ -175,11 +175,11 @@ printf("Response: %s\n", result.choices[0].message.content);
     |Batches|Create Batch, List Batches, Get Batch, Cancel Batch
     |LoRA adapters|Register LoRA Adapter, List LoRA Adapters, Get LoRA Adapter, Delete LoRA Adapter
 
-    Contracts follow the [API reference](https://console.groq.com/docs/api-reference),
-    [Responses guide](https://console.groq.com/docs/responses-api),
-    [batch guide](https://console.groq.com/docs/batch),
-    [Orpheus guide](https://console.groq.com/docs/text-to-speech/orpheus), and
-    [LoRA guide](https://console.groq.com/docs/lora), reviewed on 2026-09-08.
+    Contracts follow the <a href="https://console.groq.com/docs/api-reference">API reference</a>,
+    <a href="https://console.groq.com/docs/responses-api">Responses guide</a>,
+    <a href="https://console.groq.com/docs/batch">batch guide</a>,
+    <a href="https://console.groq.com/docs/text-to-speech/orpheus">Orpheus guide</a>, and
+    <a href="https://console.groq.com/docs/lora">LoRA guide</a>, reviewed on 2026-09-08.
     The existing hand-written provider architecture and public chat/model classes are retained.
     The reference page embeds an OpenAPI description, but it lags the feature guides: its speech
     models omit Orpheus, file purposes omit LoRA uploads, batch endpoints omit audio, and Responses tools omit browser, code, and MCP tools. The

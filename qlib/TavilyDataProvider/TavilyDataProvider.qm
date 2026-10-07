@@ -302,7 +302,7 @@ module TavilyDataProvider {
 
     @section tavilydataproviderintro TavilyDataProvider Introduction
 
-    Data-provider integration for [Tavily](https://www.tavily.com), a search API built for programs:
+    Data-provider integration for <a href="https://www.tavily.com">Tavily</a>, a search API built for programs:
     the query is meaning rather than keywords, and the result can be the page content, or the
     answer, rather than a list of links.
 

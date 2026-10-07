@@ -77,7 +77,10 @@ public class HttpGatewayReranker inherits AbstractReranker {
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
-    /** @param opts when non-empty, every key/value is forwarded into the
+    /** @param query the query to rank documents against
+        @param documents the candidate documents
+        @param top_k the maximum number of results to return
+        @param opts when non-empty, every key/value is forwarded into the
         request body so the upstream gateway sees vendor-specific options
         (e.g. \c max_chunks_per_doc, \c rank_fields, \c truncation) without
         the gateway client having to know about them; reserved keys

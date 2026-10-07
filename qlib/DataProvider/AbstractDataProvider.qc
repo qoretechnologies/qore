@@ -2244,7 +2244,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         /** When a data provider exposes a non-NOTHING value via @ref getRestClientForGenericCall(), the framework
             automatically injects a virtual child provider with this name. The child provider accepts arbitrary
             method/path/headers/query/body input and dispatches the request through the provider's authenticated
-            REST client. The action catalog auto-registers a corresponding `make-api-call` DPAT_API action for every
+            REST client. The action catalog auto-registers a corresponding <tt>make-api-call</tt> DPAT_API action for every
             REST-capable app, pointing at this child.
 
             Do not use this name for any user-defined child provider; the framework reserves it.
@@ -4688,7 +4688,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     /** REST-based data providers should expose their underlying authenticated REST client (typically a
         @c RestClientIo instance) by overriding @ref getRestClientForGenericCallImpl() to return it. The
         framework uses the returned object to auto-inject a virtual @ref GenericApiCallChildName "__call__"
-        child provider and a corresponding `make-api-call` DPAT_API action for every REST-capable app.
+        child provider and a corresponding <tt>make-api-call</tt> DPAT_API action for every REST-capable app.
 
         Non-REST data providers should leave the default implementation in place, which returns @ref NOTHING.
 
@@ -7204,12 +7204,12 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     /** The default implementation auto-discovers the underlying REST client via reflection. Two
         conventions are recognized:
 
-        1. **Direct REST client member** (the qore qlib convention): walks the class hierarchy of
+        1. <b>Direct REST client member</b> (the qore qlib convention): walks the class hierarchy of
            @c self for a member named @ref GenericApiCallRestMemberName "\"rest\"" whose value is an
            object responding to @c restDoRequest() (the abstract REST API on
-           [AbstractRestClient](../../RestClient/html/index.html)). Returns that value directly.
+           @ref RestClient::AbstractRestClient "AbstractRestClient"). Returns that value directly.
 
-        2. **Connection member** (the module-v8 convention): if no direct @c rest member is found,
+        2. <b>Connection member</b> (the module-v8 convention): if no direct @c rest member is found,
            walks for a member named @ref GenericApiCallConnectionMemberName "\"conn\"" that exposes
            @c getAsync(bool) or @c get(bool); the framework calls @c getAsync(False) to obtain the underlying
            asynchronous client without establishing a network connection, and returns it if it responds to

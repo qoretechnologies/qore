@@ -368,7 +368,7 @@ public hashdecl RagConfig {
 public hashdecl RagPipelineOptions {
     #! Optional query transformer (e.g. HyDE-style hypothetical-answer generation)
     /** When set, the raw query is passed through this callable and the result
-        is used for embedding.  The reranker still sees the **original** query
+        is used for embedding.  The reranker still sees the <b>original</b> query
         so that scoring semantics stay stable.
     */
     *code<string(string)> query_transformer;
@@ -383,7 +383,7 @@ public hashdecl RagPipelineOptions {
     *AbstractEmbeddingCache embedding_cache;
 
     #! Explicit vector-search K before reranking
-    /** When set **and** a reranker is configured, overrides the pipeline's
+    /** When set <b>and</b> a reranker is configured, overrides the pipeline's
         \c initial_retrieval_k for the vector-store call.  The reranker still
         emits \c top_k results.  Use this to implement an over-retrieval
         multiplier (e.g. 5x top_k) without changing the pipeline default.

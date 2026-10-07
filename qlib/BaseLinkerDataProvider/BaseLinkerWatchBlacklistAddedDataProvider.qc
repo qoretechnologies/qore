@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Blacklist Entry Added
-/** Fires whenever A buyer is added to the blacklist (BaseLinker journal `log_type` 15).
+/** Fires whenever A buyer is added to the blacklist (BaseLinker journal <tt>log_type</tt> 15).
 */
 public class BaseLinkerWatchBlacklistAddedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

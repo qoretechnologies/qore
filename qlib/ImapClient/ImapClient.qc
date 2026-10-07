@@ -150,7 +150,7 @@ ImapClient imap("imaps://imap.example.com", {
           (<a href="https://datatracker.ietf.org/doc/html/rfc2971">RFC 2971</a>) after login
         - \c connect_timeout (int): the connect timeout in milliseconds
         - \c io_timeout (int): the I/O timeout in milliseconds
-        - \c logger (@ref Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
+        - \c logger (@ref Qore::Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
         - \c max_response_size (int): the maximum accepted size of a single response in bytes; defaults
           to @ref DefaultMaxResponseSize
         - \c password (string): the password for authentication; conflicts with the \c token option

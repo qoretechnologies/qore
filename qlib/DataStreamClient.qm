@@ -344,7 +344,7 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
         @endcode
 
         @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
-        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing_type "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
         @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
@@ -704,7 +704,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
         @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
         @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
-        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing_type "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
         @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
         @param path The path for the message (i.e. \c "/path/resource?method&param=value")
         @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value

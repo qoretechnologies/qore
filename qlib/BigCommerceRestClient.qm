@@ -251,9 +251,9 @@ public class BigCommerceRestClientBase {
     X-Auth-Token authentication.
 
     @par Authentication:
-    - **OAuth2 mode**: uses BigCommerce OAuth2 endpoints (authorization_code grant) to obtain
+    - <b>OAuth2 mode</b>: uses BigCommerce OAuth2 endpoints (authorization_code grant) to obtain
       an access token; tokens are applied as \c X-Auth-Token headers (BigCommerce requirement)
-    - **Manual token mode**: accepts a pre-generated API access token from the BigCommerce
+    - <b>Manual token mode</b>: accepts a pre-generated API access token from the BigCommerce
       admin panel and applies it as the \c X-Auth-Token header
     - BigCommerce OAuth2 tokens are permanent (no refresh flow needed)
 

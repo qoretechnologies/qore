@@ -75,7 +75,7 @@ public class DropboxAsyncOperationBase inherits DropboxDataProviderBase {
 
     #! Converts one per-entry batch result into this module's representation
     /** Dropbox reports each entry as a tagged union: \c success carrying the metadata, or \c failure carrying
-        the reason.  **A batch does not fail as a whole**, so a caller must be able to see which entries
+        the reason.  <b>A batch does not fail as a whole</b>, so a caller must be able to see which entries
         worked, which is why the outcome is reported per entry rather than raised.
 
         @param entry the per-entry result

@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Tracker event payload (`tracker.created` / `tracker.updated`)
+#! Tracker event payload (<tt>tracker.created</tt> / <tt>tracker.updated</tt>)
 public class EasyPostTrackerEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

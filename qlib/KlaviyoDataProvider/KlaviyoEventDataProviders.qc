@@ -53,10 +53,10 @@ public const KlaviyoMaxPollPages = 10;
     whatever was still in that page, and a burst larger than one page lost records outright.  These position
     the feed by its timestamp field through
     @ref DataProvider::AbstractTimestampWatchDataProvider "AbstractTimestampWatchDataProvider" and send that
-    cursor upstream as a \c greater-than filter in **ascending** order, so a cycle reads only what is
+    cursor upstream as a \c greater-than filter in <b>ascending</b> order, so a cycle reads only what is
     genuinely new, pages through all of it, and a restart resumes from the durable checkpoint.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to
     the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation as
@@ -67,7 +67,7 @@ public const KlaviyoMaxPollPages = 10;
     Klaviyo is JSON:API, so a record arrives as \c "{id, type, attributes: {…}}".  The event delivers the
     identity and the attributes together, which is the shape the superseded application delivered and the
     same shape this module's listing actions return - so a workflow reading \c email off an event and off a
-    **List Profiles** result reads the same field name in both.
+    <b>List Profiles</b> result reads the same field name in both.
 */
 public class KlaviyoWatchDataProviderBase inherits DataProvider::AbstractTimestampWatchDataProvider,
         DataProvider::AbstractDataProvider {
@@ -493,7 +493,7 @@ public class KlaviyoNewEventDataProvider inherits KlaviyoWatchDataProviderBase {
     }
 
     #! Returns the configuration that defines which scan this provider follows
-    /** \c metric selects **which** events the feed returns, so it defines the scan: resuming a cursor taken
+    /** \c metric selects <b>which</b> events the feed returns, so it defines the scan: resuming a cursor taken
         against one metric under another would silently skip everything recorded before the change.
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
@@ -561,7 +561,7 @@ public class KlaviyoGroupMembershipDataProviderBase inherits KlaviyoWatchDataPro
 public class KlaviyoNewListProfileDataProvider inherits KlaviyoGroupMembershipDataProviderBase {
     public {
         #! The event name
-        /** The ID the superseded TypeScript application registered.  Its **file** was called
+        /** The ID the superseded TypeScript application registered.  Its <b>file</b> was called
             \c profile-added-to-list; the registered ID is this, and it is the ID existing workflows
             subscribe to.
         */
@@ -647,7 +647,7 @@ public class KlaviyoNewListProfileDataProvider inherits KlaviyoGroupMembershipDa
 public class KlaviyoNewSegmentProfileDataProvider inherits KlaviyoGroupMembershipDataProviderBase {
     public {
         #! The event name
-        /** The ID the superseded TypeScript application registered.  Its **file** was called
+        /** The ID the superseded TypeScript application registered.  Its <b>file</b> was called
             \c profile-added-to-segment; the registered ID is this.
         */
         const EventName = "new_segment_profile";
@@ -776,7 +776,7 @@ public class KlaviyoEventsDataProvider inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

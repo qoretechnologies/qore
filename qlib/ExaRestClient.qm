@@ -50,7 +50,7 @@ module ExaRestClient {
     @section exarestclientintro ExaRestClient Introduction
 
     The %ExaRestClient module provides a REST client and connection for
-    [Exa](https://exa.ai) (formerly Metaphor) — a web-search API built for programs, where the query
+    <a href="https://exa.ai">Exa</a> (formerly Metaphor) — a web-search API built for programs, where the query
     is meaning rather than keywords and the result can be the answer itself rather than a list of
     links.
 
@@ -79,7 +79,7 @@ module ExaRestClient {
 
     @par Agent integration
 
-    The @ref ExaAgentTools namespace exports `ToolDefinition` factories
+    The @ref ExaRestClient::ExaAgentTools namespace exports <tt>ToolDefinition</tt> factories
     and a dispatch callable for plugging Exa into
     @ref QoreAgentStrategies::SimpleAgentStrategy "SimpleAgentStrategy".
 
@@ -101,7 +101,7 @@ public class ExaRestClientBase {
         };
     }
 
-    #! Exa uses the `x-api-key` header (NOT Authorization: Bearer)
+    #! Exa uses the <tt>x-api-key</tt> header (NOT Authorization: Bearer)
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto!> rv;
         rv += DefaultOptions + opts;
@@ -260,7 +260,7 @@ public class ExaRestConnection inherits RestClient::RestConnection {
 #! Agent-tool helpers for Exa
 public namespace ExaAgentTools {
     #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
-    #! `exa_search` tool that agents can choose to invoke
+    #! <tt>exa_search</tt> tool that agents can choose to invoke
     public hash<QoreLlmUtils::ToolDefinition> sub makeSearchTool() {
         return <QoreLlmUtils::ToolDefinition>{
             "name": "exa_search",
@@ -312,7 +312,7 @@ public namespace ExaAgentTools {
         };
     }
 
-    #! Returns a @ref QoreLlmUtils::ToolDefinition for the `exa_find_similar` tool
+    #! Returns a @ref QoreLlmUtils::ToolDefinition for the <tt>exa_find_similar</tt> tool
     public hash<QoreLlmUtils::ToolDefinition> sub makeFindSimilarTool() {
         return <QoreLlmUtils::ToolDefinition>{
             "name": "exa_find_similar",
@@ -341,7 +341,7 @@ public namespace ExaAgentTools {
         };
     }
 
-    #! Returns a @ref QoreLlmUtils::ToolDefinition for the `exa_contents` tool
+    #! Returns a @ref QoreLlmUtils::ToolDefinition for the <tt>exa_contents</tt> tool
     public hash<QoreLlmUtils::ToolDefinition> sub makeContentsTool() {
         return <QoreLlmUtils::ToolDefinition>{
             "name": "exa_contents",
@@ -378,7 +378,7 @@ public namespace ExaAgentTools {
     }
 
     #! Builds a tool-dispatcher callable wired to the given Exa REST client
-    /** Recognised tool names: `exa_search`, `exa_find_similar`, `exa_contents`.
+    /** Recognised tool names: <tt>exa_search</tt>, <tt>exa_find_similar</tt>, <tt>exa_contents</tt>.
         Other tool names cause the dispatcher to throw \c AGENT-TOOL-ERROR.
 
         @param client the @ref ExaRestClient::ExaRestClientIo to use

@@ -1,0 +1,102 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page mlchoosingguide Choosing the Right Algorithm
+
+    @tableofcontents
+
+    <b>"I need to find bad or unusual records"</b>
+    - Do you want to catch records that are unusual across <i>all</i> your data?
+      → Use @ref Qore::ML::IsolationForest "IsolationForest"
+    - Do you want to catch records that are unusual <i>compared to similar records</i>?
+      → Use @ref Qore::ML::LOF "LOF"
+
+    <b>"I need to group or segment my data"</b>
+    - Do you know how many groups you want?
+      - Yes → Use @ref Qore::ML::KMeans "KMeans"
+      - No → Use @ref Qore::ML::DBSCAN "DBSCAN"
+    - Do records need probability scores for multiple groups (soft assignment)?
+      → Use @ref Qore::ML::GMM "GMM"
+
+    <b>"I need to assign records to categories"</b>
+    - Is this tabular data (rows and columns) and accuracy matters most?
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" or @ref Qore::ML::RandomForest "RandomForest"
+    - Do you need interpretable rules (e.g., for compliance or audit)?
+      → Use @ref Qore::ML::DecisionTree "DecisionTree" — you can inspect the learned rules
+    - Do your categories have a clear linear boundary?
+      → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
+    - Do you want to classify based on what similar past records looked like?
+      → Use @ref Qore::ML::KNN "KNN" (classification mode)
+    - Do you need a maximum-margin classifier with kernel support?
+      → Use @ref Qore::ML::SVM "SVM" with linear or RBF kernel
+    - Do you need fast probabilistic classification (e.g., text, spam filtering)?
+      → Use @ref Qore::ML::NaiveBayes "NaiveBayes"
+
+    <b>"I need to predict or forecast values"</b>
+    - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
+      → Use @ref Qore::ML::HoltWinters "HoltWinters"
+    - Do you want to predict a value from input features (price from size, time from distance)?
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" (regression mode) for best accuracy,
+        or @ref Qore::ML::LinearRegression "LinearRegression" for speed and interpretability
+
+    <b>"I need to understand or simplify my data"</b>
+    - Do you want to separate trend, seasonality, and noise in a time series?
+      → Use @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"
+    - Do you want to compress many fields into fewer meaningful values?
+      → Use @ref Qore::ML::PCA "PCA"
+
+    <b>"I need to know how good my model is"</b>
+    - Predicting categories (fraud/not fraud, customer segment)?
+      → Use @ref Qore::ML::ml_classification_report() "ml_classification_report()" for accuracy, precision, recall, F1
+    - Predicting numbers (prices, delivery times)?
+      → Use @ref Qore::ML::ml_r2_score() "ml_r2_score()" and @ref Qore::ML::ml_rmse() "ml_rmse()" to measure prediction quality
+    - Evaluating cluster quality?
+      → Use @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()" — above 0.5 means good separation
+    - Want to test on data the model hasn't seen?
+      → Use @ref Qore::ML::CrossValidator "CrossValidator" for k-fold cross-validation
+
+    <b>"My data has categorical columns (strings, labels)"</b>
+    - Do you need binary indicator columns for each category (for linear models, neural nets)?
+      → Use @ref Qore::ML::OneHotEncoder "OneHotEncoder"
+    - Do you need simple integer encoding (for tree-based models)?
+      → Use @ref Qore::ML::LabelEncoder "LabelEncoder"
+    - Do you want to remove uninformative (near-constant) columns?
+      → Use @ref Qore::ML::VarianceThreshold "VarianceThreshold"
+    - Do you need polynomial or interaction features for a linear model?
+      → Use @ref Qore::ML::PolynomialFeatures "PolynomialFeatures"
+    - Do you want to select the most informative features automatically?
+      → Use @ref Qore::ML::SelectKBest "SelectKBest" (filter) or @ref Qore::ML::RFE "RFE" (wrapper, more accurate)
+
+    <b>"I need to test a statistical hypothesis"</b>
+    - Are two groups' means significantly different?
+      → Use @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's two-sample t-test)
+    - Are two categorical variables related?
+      → Use @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
+
+    <b>"My data has different scales or missing values"</b>
+    - Do your fields have very different ranges (e.g., age 18–65 vs income 20,000–200,000)?
+      → Use @ref Qore::ML::StandardScaler "StandardScaler" to put them on the same scale
+    - Do you need values in a fixed range like 0 to 1?
+      → Use @ref Qore::ML::MinMaxScaler "MinMaxScaler"
+    - Do you have gaps in your data (missing sensor readings, incomplete records)?
+      → Use @ref Qore::ML::Imputer "Imputer" to fill them in automatically
+    - Do you want to preprocess <i>and</i> analyze in one step?
+      → Use @ref Qore::ML::MLPipeline "MLPipeline" to chain preprocessing with analysis
+
+    <b>"My deployed model might be getting stale"</b>
+    - Monitor any numeric metric (error, latency, revenue) for distribution shifts?
+      → Use @ref Qore::ML::ADWIN "ADWIN" — the most general-purpose drift detector
+    - Monitor a single metric for mean shifts?
+      → Use @ref Qore::ML::PageHinkley "PageHinkley" — simple and efficient
+    - Monitor a classifier's error rate directly?
+      → Use @ref Qore::ML::DDM "DDM" — provides warning and drift levels
+
+    <b>"I have a pre-trained model from Python or R"</b>
+    - Export it to ONNX format and use @ref Qore::ML::OnnxModel "OnnxModel"
+
+    This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
+    more information). The module is tagged as such in the module's header (meaning it can be loaded
+    unconditionally regardless of how the %Qore library was initialized).
+
+    To use the module in a %Qore script, use the \c %%requires directive as follows:
+    @code{.py} %requires ml @endcode
+*/

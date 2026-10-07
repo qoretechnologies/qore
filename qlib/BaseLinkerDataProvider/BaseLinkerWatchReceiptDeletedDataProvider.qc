@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Receipt Deleted
-/** Fires whenever A previously-issued receipt is deleted (BaseLinker journal `log_type` 20).
+/** Fires whenever A previously-issued receipt is deleted (BaseLinker journal <tt>log_type</tt> 20).
 */
 public class BaseLinkerWatchReceiptDeletedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

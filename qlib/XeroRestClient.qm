@@ -50,7 +50,7 @@ module XeroRestClient {
 
     @section xerorestclientintro XeroRestClient Introduction
 
-    The %XeroRestClient module provides an API for calling [Xero](https://www.xero.com)'s REST API services.
+    The %XeroRestClient module provides an API for calling <a href="https://www.xero.com">Xero</a>'s REST API services.
 
     To use this module, use \c "%requires XeroRestClient" in your code.
 
@@ -66,7 +66,7 @@ module XeroRestClient {
     @section xerorestclient_tenant One Credential, Many Organisations
 
     A Xero credential is not scoped to an organisation.  It is granted access to one or more of them, and
-    **every** API call has to say which one it means by sending \c Xero-Tenant-Id; a call without it is
+    <b>every</b> API call has to say which one it means by sending \c Xero-Tenant-Id; a call without it is
     rejected whatever the credential can reach.
 
     The tenant therefore belongs to the connection rather than to an action: a connection is a connection to
@@ -74,8 +74,8 @@ module XeroRestClient {
     invoice into the wrong company.  \c GET /connections lists what a credential can reach, which is why it
     is also the ping - it is the one call that needs no tenant.
 
-    The organisation cannot be known before the credential exists, so it is **discovered from the credential
-    itself** as soon as one is issued: every path that completes an OAuth2 authorization asks
+    The organisation cannot be known before the credential exists, so it is <b>discovered from the credential
+    itself</b> as soon as one is issued: every path that completes an OAuth2 authorization asks
     \c GET /connections and persists \c tenant_id onto the connection.  A user therefore never has to go and
     look up an organisation ID, which is the whole point - an authorized connection is a working one.  A
     credential granted access to more than one organisation gets the first one Xero lists and the others are
@@ -93,7 +93,7 @@ module XeroRestClient {
     |Payroll (NZ, UK)|\c /payroll.xro/2.0
 
     So the client's URL is the bare host and the prefix comes from whichever API a request belongs to.  Note
-    that Australian payroll is a different **API version** from the other two, not merely a different path;
+    that Australian payroll is a different <b>API version</b> from the other two, not merely a different path;
     see @ref XeroRestClient::XeroRestClientBase::getPayrollPrefix() "getPayrollPrefix()".
 
     @par Example:

@@ -67,9 +67,9 @@ module BedrockRestClient {
     Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
     Titan / Cohere embeddings are supported.
 
-    Native `ConverseStream` and `InvokeModelWithResponseStream` responses are delivered incrementally by
+    Native <tt>ConverseStream</tt> and <tt>InvokeModelWithResponseStream</tt> responses are delivered incrementally by
     @ref BedrockRestClient::BedrockRestClientIo "BedrockRestClientIo". Full-duplex
-    `InvokeModelWithBidirectionalStream` sessions support concurrent
+    <tt>InvokeModelWithBidirectionalStream</tt> sessions support concurrent
     model input and output over HTTP/2, chained event signatures, and upload half-close.
 
     SigV4 signing, region detection, and the standard AWS credential
@@ -165,7 +165,7 @@ while (*hash<auto> event = stream.readEvent()) {
 */
 public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
     #! Creates a regional Bedrock runtime client
-    /** @param opts AWS and HTTP client options; `url` identifies the runtime endpoint
+    /** @param opts AWS and HTTP client options; <tt>url</tt> identifies the runtime endpoint
         @param shared_mgr optional caller-owned connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
@@ -187,7 +187,7 @@ public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
     /** @param model_id model ID or ARN
         @param body pre-serialized model-specific JSON request
         @param headers optional Bedrock headers, including guardrail, trace, and response content type
-        @return a stream whose `chunk.bytes` values are decoded binary payloads
+        @return a stream whose <tt>chunk.bytes</tt> values are decoded binary payloads
         @throw BEDROCK-STREAM-ERROR the model ID is empty
     */
     BedrockEventStream openInvokeModelWithResponseStream(string model_id, data body, *hash<auto> headers) {
@@ -201,9 +201,9 @@ public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
 
     #! Opens a full-duplex model session with chained SigV4 event signatures
     /** @param model_id model ID or ARN supporting bidirectional inference
-        @return a session supporting concurrent `send()`, `readEvent()`, and upload half-close
+        @return a session supporting concurrent <tt>send()</tt>, <tt>readEvent()</tt>, and upload half-close
         @throw BEDROCK-STREAM-ERROR the model ID is empty or HTTP/2 was not negotiated
-        @note Configure `http_version` as `2.0` if the endpoint does not negotiate HTTP/2 automatically.
+        @note Configure <tt>http_version</tt> as <tt>2.0</tt> if the endpoint does not negotiate HTTP/2 automatically.
     */
     BedrockEventStream openInvokeModelWithBidirectionalStream(string model_id) {
         AwsRestClient::AwsSignedEventStream stream = startEncodedEventStream("POST",
@@ -226,13 +226,13 @@ public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
 }
 
 #! Native Bedrock event reader and optional bidirectional writer
-/** Events have the same single-member shape as the AWS SDK: `messageStart`, `contentBlockDelta`, `metadata`,
-    or `chunk`, for example. Model-specific `chunk.bytes` values are decoded to binary; application JSON is
+/** Events have the same single-member shape as the AWS SDK: <tt>messageStart</tt>, <tt>contentBlockDelta</tt>, <tt>metadata</tt>,
+    or <tt>chunk</tt>, for example. Model-specific <tt>chunk.bytes</tt> values are decoded to binary; application JSON is
     deliberately left to the caller. Transport and service exceptions never appear as successful EOF.
 
     @par Bidirectional model sessions
     Send model-native input from one thread while another reads events. Before ending the upload, send
-    the model's own closing events (for Nova Sonic, `contentEnd`, `promptEnd`, and `sessionEnd`), then
+    the model's own closing events (for Nova Sonic, <tt>contentEnd</tt>, <tt>promptEnd</tt>, and <tt>sessionEnd</tt>), then
     call @ref writesDone(). Continue reading until EOF and always close an abandoned session.
     The library frames and signs bytes; the caller owns the model's audio format and event ordering.
     @note Long-lived sessions retain the credentials used to authenticate their initial request. Credential
@@ -629,7 +629,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Streams text, tool-call fragments, stop reason, and usage from ConverseStream
-    /** Each native event is delivered immediately. Exactly one final `done` event follows clean EOF,
+    /** Each native event is delivered immediately. Exactly one final <tt>done</tt> event follows clean EOF,
         after the message stop and usage metadata; errors or callback failures cancel the stream without
         retrying a partially delivered generation.
 

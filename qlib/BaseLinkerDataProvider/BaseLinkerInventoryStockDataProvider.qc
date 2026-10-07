@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker inventory stock collection data provider (`getInventoryProductsStock`)
+#! BaseLinker inventory stock collection data provider (<tt>getInventoryProductsStock</tt>)
 public class BaseLinkerInventoryStockDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

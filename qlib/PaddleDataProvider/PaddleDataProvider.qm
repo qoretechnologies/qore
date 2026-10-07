@@ -112,15 +112,15 @@ module PaddleDataProvider {
     @section paddledataproviderintro PaddleDataProvider Introduction
 
     The %PaddleDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [Paddle](https://www.paddle.com), the billing platform for software businesses.
+    <a href="https://www.paddle.com">Paddle</a>, the billing platform for software businesses.
 
-    Paddle is a **merchant of record**: it sells your software on your behalf, so it handles payment
+    Paddle is a <b>merchant of record</b>: it sells your software on your behalf, so it handles payment
     processing, sales tax and invoicing, and pays out the balance.  An integration works with catalog
     products and prices, customers, transactions, subscriptions and reports.
 
     @section paddledataprovider_generated Generated, Not Hand-Written
 
-    The actions this application exports are **generated from Paddle's own OpenAPI 3.1 description** by
+    The actions this application exports are <b>generated from Paddle's own OpenAPI 3.1 description</b> by
     the @ref restschemaactionsintro "RestSchemaActions" module, rather than being hand-written.  A schema
     describes the transport contract precisely and is maintained by Paddle; duplicating several hundred
     request and response fields in %Qore would mean finding and reproducing every upstream change by
@@ -169,12 +169,12 @@ module PaddleDataProvider {
 
     Three conventions are worth knowing before using these actions:
 
-    - **Amounts are strings in the currency's smallest unit.**  \c "1000" is $10.00 in USD, but ¥1000 in
+    - <b>Amounts are strings in the currency's smallest unit.</b>  \c "1000" is $10.00 in USD, but ¥1000 in
       JPY, which has no minor unit.  They are strings rather than numbers so that no precision is lost
       in transit.
-    - **Timestamps are RFC 3339 strings**, not epoch counts, so they need no conversion - unlike Stripe,
+    - <b>Timestamps are RFC 3339 strings</b>, not epoch counts, so they need no conversion - unlike Stripe,
       this application has no timestamp codec anywhere.
-    - **Every response is an envelope.**  A listing action returns Paddle's \c {data, meta} envelope
+    - <b>Every response is an envelope.</b>  A listing action returns Paddle's \c {data, meta} envelope
       whole, because \c meta.pagination carries the cursor without which the next page cannot be
       fetched.  A single-entity action returns just the entity: its \c meta holds only a request ID,
       so there is nothing to keep.
@@ -195,13 +195,13 @@ module PaddleDataProvider {
 
     Each table takes the standard search expressions.  What the listing's own arguments can express is sent
     to the service, and the rest is evaluated against each record as it arrives; the listing is paged until
-    the caller's \c limit is met **by matching records**, so a search never silently under-returns.
+    the caller's \c limit is met <b>by matching records</b>, so a search never silently under-returns.
 
-    The tables declare \c supports_search_expressions and **not** \c supports_native_search: this API has no
+    The tables declare \c supports_search_expressions and <b>not</b> \c supports_native_search: this API has no
     filter expression language, so a search does not happen entirely on the server, and each operator says
     for itself whether the service can evaluate it.
 
-    Nothing in Paddle is deleted: a customer, a product or a price is **archived** by setting its status,
+    Nothing in Paddle is deleted: a customer, a product or a price is <b>archived</b> by setting its status,
     which is an update, so no delete action is registered.
 
     The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
@@ -217,7 +217,7 @@ module PaddleDataProvider {
     listing ordered by creation time cannot see an entity created and removed between two runs, cannot
     see an update at all, and costs a request per interval whether or not anything happened.
 
-    **Every delivery is verified.**  A notification destination is a URL anyone on the internet can post
+    <b>Every delivery is verified.</b>  A notification destination is a URL anyone on the internet can post
     to; without verification it would accept a fabricated \c transaction.completed, which is enough to
     make an integration provision a paid plan nobody paid for, or a fabricated
     \c subscription.canceled, enough to cut off a paying customer.  A delivery whose
@@ -226,10 +226,10 @@ module PaddleDataProvider {
 
     Two things are worth knowing when handling these events:
 
-    - **Paddle can deliver the same event more than once.**  Record the \c event_id and ignore one
+    - <b>Paddle can deliver the same event more than once.</b>  Record the \c event_id and ignore one
       already processed, so that handling is idempotent.  \c notification_id differs per delivery and is
       what distinguishes a redelivery from the original.
-    - **Paddle sends the entity in full, not a diff.**  An update event does not say which field
+    - <b>Paddle sends the entity in full, not a diff.</b>  An update event does not say which field
       changed, so compare against what you hold if that matters.
 
     @section paddledataprovider_examples Examples
@@ -289,7 +289,7 @@ printf("%d active customers\n", all.size());
     @subsection paddledataprovider_ex_catalog Creating a Product and a Price
 
     A product carries no price of its own, so selling anything takes both.  \c unit_price.amount is a
-    string in the **smallest unit** of its currency.
+    string in the <b>smallest unit</b> of its currency.
 
     @code{.py}
 hash<auto> product = paddle.getChildProviderEx("create_product").doRequest({

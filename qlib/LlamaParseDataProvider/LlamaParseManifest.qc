@@ -30,7 +30,7 @@ public namespace LlamaParseDataProvider {
     @par Which API version
 
     LlamaIndex serves \c /api/v1 and \c /api/v2 side by side and publishes a v1-to-v2 migration guide.
-    This application exports **v2 wherever the vendor has one** - parsing, extraction, classification
+    This application exports <b>v2 wherever the vendor has one</b> - parsing, extraction, classification
     and batches - and v1 only where there is no v2 counterpart: files, splitting, saved configurations
     and the account lookups.  The v2 parse surface is also what makes the application usable in one
     step: \c GET \c /api/v2/parse/{job_id} returns the parsed content itself through \c expand, where
@@ -43,7 +43,7 @@ public namespace LlamaParseDataProvider {
 
     - Several list parameters name their permitted values in prose and type the elements as bare
       strings: \c expand on four operations, \c order_by on the file listing.  Those values are
-      restored as element allowed values, because a list field enumerates what its **elements** may
+      restored as element allowed values, because a list field enumerates what its <b>elements</b> may
       be.
     - \c project_id and \c organization_id appear on almost every operation and are opaque IDs; they
       are backed by the account listings this application also exports.
@@ -110,7 +110,7 @@ public class LlamaParseManifest {
         };
 
         #! The two overlays almost every operation in this API needs
-        /** The document also declares a \c session **cookie** parameter on every operation - the
+        /** The document also declares a \c session <b>cookie</b> parameter on every operation - the
             LlamaCloud console's own browser session.  It needs no entry here: a cookie parameter is
             never published as an action option, so it cannot reach a user in the first place.
         */

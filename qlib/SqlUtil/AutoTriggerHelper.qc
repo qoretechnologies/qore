@@ -60,6 +60,7 @@ public namespace SqlUtil {
     @param driver_name the database driver name (e.g., \c "pgsql", \c "oracle", \c "mysql")
     @param table_name the name of the table
     @param auto_trigger_config the auto-trigger configuration hash; see @ref auto_trigger_config
+    @param pk_columns optional primary-key column names used by driver-specific trigger generation
     @param insert_only if \c True, only INSERT triggers are generated (no UPDATE triggers for \c modified)
 
     @return a hash with the following possible keys:

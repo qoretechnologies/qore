@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Created
-/** Fires whenever A new order is created (BaseLinker journal `log_type` 1).
+/** Fires whenever A new order is created (BaseLinker journal <tt>log_type</tt> 1).
 */
 public class BaseLinkerWatchOrderCreatedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

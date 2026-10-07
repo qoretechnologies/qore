@@ -26,7 +26,7 @@
 public namespace WooCommerceDataProvider {
 
 #! WooCommerce product attribute data type
-/** Used on the product object to declare attributes (with multiple `options`),
+/** Used on the product object to declare attributes (with multiple <tt>options</tt>),
     not to be confused with the variation attribute selector. */
 public class WooCommerceProductAttributeDataType inherits HashDataType {
     public {

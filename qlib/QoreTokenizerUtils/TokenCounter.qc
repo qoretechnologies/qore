@@ -60,8 +60,8 @@ public class TokenCounter {
     }
 
     #! Creates a TokenCounter with the given tokenizer configuration
-    /** @param tokenizer_config a parsed `tokenizer.json` hash (from `parse_json()`)
-        @param tokenizer_runtime_config optional parsed `tokenizer_config.json`
+    /** @param tokenizer_config a parsed <tt>tokenizer.json</tt> hash (from <tt>parse_json()</tt>)
+        @param tokenizer_runtime_config optional parsed <tt>tokenizer_config.json</tt>
             hash; when present, model-level tokenizer settings such as maximum
             sequence length and chat templates are loaded into the tokenizer
     */
@@ -75,7 +75,7 @@ public class TokenCounter {
     #! Counts the number of tokens in the given text
     /** @param text the text to tokenize and count
         @param add_special_tokens whether to include special tokens in the count
-        (default: `False` — gives the raw content token count)
+        (default: <tt>False</tt> — gives the raw content token count)
         @return the number of tokens
 
         @par Example:
@@ -98,7 +98,7 @@ printf("Token count: %d\n", count);
     /** @param text the text to check
         @param max_tokens the maximum number of tokens allowed
         @param add_special_tokens whether to include special tokens in the count
-        @return `True` if the text fits, `False` if it exceeds the limit
+        @return <tt>True</tt> if the text fits, <tt>False</tt> if it exceeds the limit
 
         @par Example:
         @code{.py}

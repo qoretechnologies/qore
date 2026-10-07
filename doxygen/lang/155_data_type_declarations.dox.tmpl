@@ -771,7 +771,7 @@ Factory<int> inferred_factory = Factory::make(14);
     choose a unique instantiation, or an inferred type argument violates a bound,
     parsing raises a \c PARSE-TYPE-ERROR and the call should be written with an
     explicit receiver such as <tt>InferredBox&lt;int&gt;</tt> or
-    <tt>Factory&lt;int&gt;::make(...)</tt>. Classes marked with
+    <tt>Factory&lt;int&gt;\::make(...)</tt>. Classes marked with
     <tt>[legacy_raw]</tt> or <tt>[legacy_raw_construct]</tt> keep their legacy
     behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
     instead of inferring type arguments from constructor values.

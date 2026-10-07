@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Paid
-/** Fires whenever An order is paid (BaseLinker journal `log_type` 3).
+/** Fires whenever An order is paid (BaseLinker journal <tt>log_type</tt> 3).
 */
 public class BaseLinkerWatchOrderPaidDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

@@ -47,7 +47,7 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! This app opts out of the framework-injected generic API call child
-    /** The @ref RestClientDataProvider::RestClientDataProvider::AppName "GenericRest" app registers
+    /** The @ref RestClientDataProvider::AppName "GenericRest" app registers
         @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call" because
         its canonical \c /call child already provides exactly this functionality; the runtime provider tree
         has to declare the same opt-out, as a provider cannot look up its own app.

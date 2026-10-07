@@ -67,7 +67,7 @@ public namespace ServerSentEventHandler {
     For finer control — for example, to plug the bridge into an
     @ref HttpServer::AbstractHttpSocketHandler "AbstractHttpSocketHandler"
     that manages its own response plumbing — callers may construct an
-    @ref SseObservableBridge directly and drive @ref nextChunk() from their
+    @ref SseObservableBridge directly and drive @ref ServerSentEventHandler::SseObservableBridge::nextChunk() from their
     own send loop.
 
     @par Lifecycle
@@ -84,7 +84,7 @@ public namespace ServerSentEventHandler {
 
     All state transitions are guarded by a single Mutex/Condition pair.
     @ref update() is expected to be called from the Observable's publisher
-    thread(s); @ref nextChunk() is called from the HTTP server's
+    thread(s); @ref ServerSentEventHandler::SseObservableBridge::nextChunk() is called from the HTTP server's
     response-writer thread.  The Condition variable handshake ensures the
     writer never busy-waits.
 
@@ -96,7 +96,7 @@ public class SseObservableBridge inherits DataProvider::Observer {
         const DefaultSerialization = "json";
 
         #! Supported serializations
-        /** "json": data is rendered via @ref Qore::make_json();
+        /** "json": data is rendered via @ref Qore::Json::make_json();
             "none": data is rendered as a string via @c sprintf("%s", value)
             with embedded newlines/carriage-returns escaped so they cannot
             break the SSE framing. */
@@ -139,13 +139,13 @@ public class SseObservableBridge inherits DataProvider::Observer {
     #! Create the bridge and subscribe it to the given Observable.
     /** @param source the Observable to subscribe to
         @param opts options hash:
-        - \c event_ids (@c *softlist<string>): if set, only events whose ID
+        - \c event_ids (<tt>*softlist&lt;string&gt;</tt>): if set, only events whose ID
           appears here are forwarded; other events are silently dropped
         - \c terminate_on (@c *string): optional event ID; when an event
           with this ID is emitted, the matching chunk is enqueued and the
           stream is closed immediately afterwards
         - \c serialization (@c *string): @c "json" (default) or @c "none"
-        - \c initial_event (@c *hash<SseMessageInfo>): an optional event
+        - \c initial_event (<tt>*hash&lt;SseMessageInfo&gt;</tt>): an optional event
           pushed before any live events — useful for priming a just-
           attached client with a current-state snapshot
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load
@@ -186,7 +186,7 @@ public class SseObservableBridge inherits DataProvider::Observer {
 
         if (init_is_terminal) {
             # No point subscribing — we already have the last event we will
-            # ever emit.  Flag closure so @ref nextChunk() will return
+            # ever emit.  Flag closure so @ref ServerSentEventHandler::SseObservableBridge::nextChunk() will return
             # @ref nothing after the initial chunk is drained.
             close();
             remove self.source;
@@ -419,7 +419,7 @@ public class SseObservableBridge inherits DataProvider::Observer {
     need to push a progress stream.  Creates an
     @ref ServerSentEventHandler::SseObservableBridge "SseObservableBridge",
     subscribes it to @a source, and assembles a ready-to-return response
-    hash whose @c send_callback is wired to the bridge's @ref nextChunk().
+    hash whose @c send_callback is wired to the bridge's @ref ServerSentEventHandler::SseObservableBridge::nextChunk().
 
     @param source the @ref DataProvider::Observable "Observable" whose
     events should be streamed to the client

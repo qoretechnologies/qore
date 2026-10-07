@@ -605,7 +605,7 @@ public class DataProviderPresentation {
 
         @param domain native catalog domain
         @param discovery_opts options accepted by
-            [I18n::get_catalog_search_path()](../../i18n/html/index.html)
+            @ref Qore::I18n::get_catalog_search_path "I18n::get_catalog_search_path()"
         @return canonical locale tags in stable order, with @c root first when
             it is present
 
@@ -688,7 +688,7 @@ public class DataProviderPresentation {
         @param domain native catalog domain
         @param root_messages generated root-catalog message map
         @param discovery_opts options accepted by
-            [I18n::get_catalog_search_path()](../../i18n/html/index.html)
+            @ref Qore::I18n::get_catalog_search_path "I18n::get_catalog_search_path()"
         @return a hash with \c translation_count, an \c issues list, and
             \c translation_message_ids_by_locale; each issue contains
             \c path, \c locale, \c message_id (empty for a file-level issue),
@@ -1143,7 +1143,7 @@ public class DataProviderPresentationCatalog {
         user-facing provider presentation.
 
         The check is performed by
-        [I18n::MessageCatalog](../../i18n/html/index.html) while it composes
+        @ref Qore::I18n::MessageCatalog "I18n::MessageCatalog" while it composes
         the layers (its @c disjoint_layers option), which also remains the
         schema and placeholder-validation authority. Layers for different
         locales, such as @c root.json and @c ja.json, cannot collide, so the
@@ -1211,7 +1211,7 @@ public class DataProviderPresentationCatalog {
     #! Creates a projection catalog
     /** @param domain native i18n catalog domain
         @param requested_locale requested BCP 47 locale or \c root for producer-source presentation
-        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_opts options passed to @ref Qore::I18n::discover_catalog_files "I18n::discover_catalog_files()"
         @param discovery_index optional discovery index reused by every catalog
             built for one operation; catalog discovery for many domains and
             locales otherwise re-reads the same catalog directories for each
@@ -1277,7 +1277,7 @@ public class DataProviderPresentationCatalog {
         @param domain native i18n catalog domain
         @param requested_locale requested BCP 47 locale or \c root for
             producer-source presentation
-        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_opts options passed to @ref Qore::I18n::discover_catalog_files "I18n::discover_catalog_files()"
         @param discovery_index optional discovery index reused for one
             operation; see the constructor
 
@@ -1394,7 +1394,7 @@ public class DataProviderPresentationCatalog {
         @param domain native i18n catalog domain
         @param requested_locales requested BCP 47 locales or \c root for
             producer-source presentation
-        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_opts options passed to @ref Qore::I18n::discover_catalog_files "I18n::discover_catalog_files()"
         @param discovery_index optional discovery index reused by every catalog
             built for one operation; if not given, one is created for this
             call
@@ -1446,7 +1446,7 @@ public class DataProviderPresentationCatalog {
         @param consumer called with each catalog in the order of
             \a requested_locales; an exception it throws stops the build and
             is propagated
-        @param discovery_opts options passed to [I18n::discover_catalog_files()](../../i18n/html/index.html)
+        @param discovery_opts options passed to @ref Qore::I18n::discover_catalog_files "I18n::discover_catalog_files()"
         @param discovery_index optional discovery index reused by every catalog
             built for one operation; if not given, one is created for this
             call

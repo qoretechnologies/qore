@@ -42,7 +42,7 @@ public namespace ExaDataProvider {
 
     @par What is not exported
 
-    The 39 Websets operations - everything the document paths under \c /v0 - are **not** exported,
+    The 39 Websets operations - everything the document paths under \c /v0 - are <b>not</b> exported,
     because those paths do not exist on the server the document names.  The document declares
     \c "servers: [https://api.exa.ai]" and paths such as \c /v0/websets, and every one of them answers
     \c 404 there; the Websets API is served under \c /websets instead, and not uniformly:
@@ -52,7 +52,7 @@ public namespace ExaDataProvider {
     them needs a document whose paths match the service.
 
     Two of Exa's own declarations are worth recording while that stands.  \c "POST /v0/websets/preview"
-    declares its \c search argument as a **path** parameter with \c "required: false", on a path with
+    declares its \c search argument as a <b>path</b> parameter with \c "required: false", on a path with
     no \c {search} template variable, which is not a valid %OpenAPI document at all and does not load;
     and \c "GET /v0/teams/me", the natural thing for a connection to ping, is one of the paths that
     answers \c 404.

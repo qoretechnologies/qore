@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker courier accounts data provider (`getCourierAccounts`)
+#! BaseLinker courier accounts data provider (<tt>getCourierAccounts</tt>)
 public class BaseLinkerCourierAccountsDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

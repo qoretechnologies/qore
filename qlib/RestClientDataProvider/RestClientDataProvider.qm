@@ -312,7 +312,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         @ref DataProvider::DataProviderActionCatalog::setGenericApiCallActionBuilder() "action builder"
         in the module's init block, so every REST-capable app that has not opted out via
         @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
-        automatically gets a uniform `make-api-call` DPAT_API action
+        automatically gets a uniform <tt>make-api-call</tt> DPAT_API action
       - added @ref RestClientDataProvider::GenericApiCallProvider "GenericApiCallProvider", the
         framework-injected provider class that backs the auto-injected
         @ref DataProvider::AbstractDataProvider::GenericApiCallChildName "\"__call__\"" child;
@@ -322,15 +322,15 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         @ref DataProvider::DataProviderAppInfo::disable_generic_api_call "disable_generic_api_call"
         opt-out, so the canonical \c /call child is not duplicated by an injected \c "__call__" child
       - rich per-call configuration:
-        - `body_type` selector (json / form / multipart / xml / yaml / text / binary / auto) drives
-          both body serialization and the `Content-Type` header; the
+        - <tt>body_type</tt> selector (json / form / multipart / xml / yaml / text / binary / auto) drives
+          both body serialization and the <tt>Content-Type</tt> header; the
           @ref RestClientDataProvider::GenericApiCallRequestDataType "request type" uses dynamic
           option resolution so the body editor in the UI reshapes for the chosen body_type (JSON
           editor for json, file picker for multipart, etc.)
-        - `path_vars` substitutes `{name}` placeholders in the URI path
-        - `expected_status` whitelists response codes (mismatches raise `REST-STATUS-ERROR`)
-        - `error_passthru` returns non-2xx responses as data instead of raising
-        - `multipart` body type accepts a @ref DataProvider::FileDataType "FileDataType" structure
+        - <tt>path_vars</tt> substitutes <tt>{name}</tt> placeholders in the URI path
+        - <tt>expected_status</tt> whitelists response codes (mismatches raise <tt>REST-STATUS-ERROR</tt>)
+        - <tt>error_passthru</tt> returns non-2xx responses as data instead of raising
+        - <tt>multipart</tt> body type accepts a @ref DataProvider::FileDataType "FileDataType" structure
           and the framework builds the multipart envelope
 
     @subsection restclientdataprovider_v2_3 RestClientDataProvider v2.3

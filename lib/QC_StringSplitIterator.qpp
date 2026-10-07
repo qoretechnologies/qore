@@ -192,8 +192,8 @@ const QoreTypeInfo* StringSplitIterator::getElementType() const {
     @ref map, @ref select, or @ref foldl — the functional operators consume
     the iterator element-by-element and the intermediate list is never built.
 
-    Iteration semantics match @ref Qore::split(): `"a,b,".splitString(",")`
-    yields `"a"`, `"b"`, `""`; an empty delimiter yields the whole string once.
+    Iteration semantics match @ref Qore::split(): <tt>"a,b,".splitString(",")</tt>
+    yields <tt>"a"</tt>, <tt>"b"</tt>, <tt>""</tt>; an empty delimiter yields the whole string once.
 
     @par Example
     @code{.py}

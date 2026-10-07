@@ -174,7 +174,7 @@ public class BaseLinkerRestClientBase {
 /** BaseLinker exposes an RPC-over-HTTP API at
     \c https://api.baselinker.com/connector.php. All operations are POSTs to this
     single endpoint with a form-encoded body of the shape
-    \c method=<name>&parameters=<URL-encoded JSON>.
+    <tt>method=&lt;name&gt;&amp;parameters=&lt;URL-encoded JSON&gt;</tt>.
 
     @par Authentication:
     - API token sent via the \c X-BLToken HTTP header (raw token, no \c Bearer prefix)

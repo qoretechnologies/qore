@@ -1,0 +1,71 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframe_typed_examplesguide Typed DataFrame Examples
+
+    @tableofcontents
+
+    DataFrame methods that produce another frame now declare
+    @ref Qore::DataFrame::DataFrame "DataFrame" directly, and grouped operations
+    declare @ref Qore::DataFrame::GroupedDataFrame "GroupedDataFrame" or
+    @ref Qore::DataFrame::DataFrame "DataFrame" according to the value returned.
+    Methods that return fixed record shapes use typed hashdecls:
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame employees(
+    ({"dept": "sales", "name": "Alice", "salary": 65000.0},
+     {"dept": "sales", "name": "Bob", "salary": 70000.0},
+     {"dept": "eng", "name": "Carol", "salary": 95000.0}));
+
+hash<DataFrame::DataFrameShape> shape = employees.shape();
+printf("rows=%d cols=%d\n", shape.rows, shape.cols);
+
+DataFrame::DataFrame sales = employees.filter("dept", "==", "sales");
+DataFrame::GroupedDataFrame grouped = employees.groupBy(("dept",));
+DataFrame::DataFrame means = grouped.mean();
+
+list<hash<DataFrame::ColumnStats>> stats = employees.describe();
+foreach hash<DataFrame::ColumnStats> stat in (stats) {
+    printf("%s: %s count=%d\n", stat.name, stat.dtype, stat.count);
+}
+    @endcode
+
+    DataFrame also registers native plugin-operator operations for common
+    access patterns. Row slices use normal inclusive Qore range semantics,
+    including open-ended forms:
+
+    @code{.py}
+list<auto> names = employees["name"];
+hash<auto> second_row = employees[1];
+DataFrame::DataFrame first_two = employees[0..1];
+DataFrame::DataFrame reversed = employees[2..0];
+DataFrame::DataFrame from_second = employees[1..];
+    @endcode
+
+    Predicate masks use explicit column references so direct column access stays
+    simple and predictable. Compare a @ref Qore::DataFrame::ColumnRef "ColumnRef" with
+    a scalar to get a @ref Qore::DataFrame::RowMask "RowMask"; then pass the mask to
+    \c frame[mask] or @ref Qore::DataFrame::DataFrame::filter(Qore::DataFrame::RowMask) "filter(mask)".
+    The comparison operators are registered plugin operations and work in AST,
+    IR, and JIT execution. In JIT/AOT-generated code, the hot subscript,
+    comparison, and mask-composition operators use direct module-helper calls
+    while preserving the same runtime-helper fallback behavior:
+
+    @code{.py}
+DataFrame::ColumnRef salary = employees.column("salary");
+DataFrame::RowMask high_salary = salary >= 90000.0;
+DataFrame::DataFrame senior = employees[high_salary];
+
+DataFrame::DataFrame sales = employees.filter(employees.column("dept") == "sales");
+DataFrame::DataFrame known_salary = employees[employees.column("salary") != NOTHING];
+
+printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
+    @endcode
+
+    Supported predicate operators are \c ==, \c !=, \c <, \c <=, \c >, and
+    \c >= against scalar \c int, \c float, \c number, \c string, \c bool,
+    \c date, \c null, and \c NOTHING values. \c NOTHING equality selects null
+    rows; \c NOTHING inequality selects non-null rows. Ordered comparisons with
+    \c NOTHING do not select rows.
+*/

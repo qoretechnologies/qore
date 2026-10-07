@@ -71,7 +71,7 @@ module CohereDataProvider {
     @section coheredataproviderintro CohereDataProvider Introduction
 
     The %CohereDataProvider module provides a data provider API for
-    [Cohere](https://cohere.com) chat, embeddings, reranking, and
+    <a href="https://cohere.com">Cohere</a> chat, embeddings, reranking, and
     classification services, plus model discovery, tokenization, document image parsing, audio
     transcription, datasets, and batch jobs.
 
@@ -104,8 +104,8 @@ module CohereDataProvider {
     });
     @endcode
 
-    Upload actions accept `FileDataType` values. Supply the original filename so Cohere can determine
-    the audio or dataset format; `content` accepts raw binary data or base64-encoded data.
+    Upload actions accept <tt>FileDataType</tt> values. Supply the original filename so Cohere can determine
+    the audio or dataset format; <tt>content</tt> accepts raw binary data or base64-encoded data.
     @par Audio upload example
     @code{.q}
     auto transcript = provider.getChildProvider("transcribe").doRequest({
@@ -116,10 +116,10 @@ module CohereDataProvider {
     @endcode
 
     The vendored schema is pinned to a reviewed upstream revision. Re-import it with
-    `tools/rest-schema-import.qr --spec qlib/CohereDataProvider/cohere-import.yaml` and review drift.
+    <tt>tools/rest-schema-import.qr --spec qlib/CohereDataProvider/cohere-import.yaml</tt> and review drift.
     Classify remains for compatibility, but Cohere has retired classification fine-tuning and
     previously fine-tuned models. See Cohere's
-    [September 2025 deprecation notice](https://docs.cohere.com/changelog/2025-09-15-major-command-deprecations).
+    <a href="https://docs.cohere.com/changelog/2025-09-15-major-command-deprecations">September 2025 deprecation notice</a>.
     Use Chat with structured output for new classification workflows. The Chat action returns a
     completed response and does not expose the streaming transport switch.
 

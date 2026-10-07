@@ -1,0 +1,19 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page astparserreleasehistory astparser Module Release Notes
+
+    @tableofcontents
+
+    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    @section astparser_3_0 astparser Module Version 3.0
+    - supports brace-delimited match, substitution, transliteration and extraction expressions,
+      including nested and escaped braces, multiline contents and operation-specific modifiers
+    - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"
+      for scope-aware symbol completion
+    - added \c ADK_Typedef constant for typedef declarations
+    - added \c ASYK_TypeAlias constant for typedef symbol kind
+    - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds
+    - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
+      (now returns 0-indexed values consistent with LSP convention)
+*/

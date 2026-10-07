@@ -32,7 +32,7 @@ public namespace StripeDataProvider {
 
     A Stripe listing takes \c starting_after - the ID of the last record of the previous page - rather than a
     page number or an opaque cursor, and reports \c has_more beside the records.  \c limit is capped at 100
-    and is asked for in full.  @ref RSRP_AFTER_ID is exactly this contract, and \c has_more is what ends a
+    and is asked for in full.  @ref RestSchemaActions::RSRP_AFTER_ID is exactly this contract, and \c has_more is what ends a
     walk.
 
     @section striperecord_pushdown What Stripe Filters
@@ -42,7 +42,7 @@ public namespace StripeDataProvider {
     Every one of them is an exact equality on an identifier, which is what makes it safe to drop the
     predicate once it has been sent.
 
-    A record's \c created is **not** wired to an operator.  Stripe's \c created argument accepts either an
+    A record's \c created is <b>not</b> wired to an operator.  Stripe's \c created argument accepts either an
     exact second or a <tt>{gt, gte, lt, lte}</tt> object, and this module's timestamps are %Qore
     @ref date values converted by the \c UnixSeconds codec; comparing a point in time for equality to the
     second is not a search anybody means, and the range form is not one operator.  A date predicate is
@@ -219,7 +219,7 @@ public class StripeRecordTables {
         };
 
         #! The columns an external account carries whatever kind it is
-        /** Stripe describes an external account as **either** a bank account or a card, so its listing has
+        /** Stripe describes an external account as <b>either</b> a bank account or a card, so its listing has
             no single element type to derive a record type from.  These are the columns both declare; a table
             over a polymorphic collection can offer no more than that, and \c object says which kind a record
             is so that the rest can be read through the action surface.
@@ -243,7 +243,7 @@ public class StripeRecordTables {
         );
 
         #! The columns a customer payment source carries whatever kind it is
-        /** A source is a bank account, a card **or** a source object, and the three agree on very little.
+        /** A source is a bank account, a card <b>or</b> a source object, and the three agree on very little.
             These are the columns all three declare.
         */
         const CustomerSourceFields = (

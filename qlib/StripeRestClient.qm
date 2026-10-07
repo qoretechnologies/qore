@@ -74,7 +74,7 @@ module StripeRestClient {
     |OAuth2 options|Stripe Connect, for a platform acting on behalf of accounts that authorized it
 
     A secret key grants full access to the account it belongs to, so it is marked sensitive and should
-    come from the connection rather than from code.  Stripe also publishes **restricted** keys, which
+    come from the connection rather than from code.  Stripe also publishes <b>restricted</b> keys, which
     can be limited to the resources an integration actually needs; a restricted key works here exactly
     as a secret key does and is the better choice for a production integration.
 

@@ -23,9 +23,9 @@
 */
 
 public namespace CohereDataProvider {
-#! Data provider for Cohere's `/v1/classify` endpoint
+#! Data provider for Cohere's <tt>/v1/classify</tt> endpoint
 /** Classify uses Cohere's v1 surface — the request body path is absolute
-    (`/v1/classify`) to address the v1 endpoint from a v2-default client.
+    (<tt>/v1/classify</tt>) to address the v1 endpoint from a v2-default client.
 */
 public class CohereClassifyDataProvider inherits CohereDataProviderCommon {
     public {

@@ -9,7 +9,9 @@
     Code with this flag makes no calculations, but rather returns a constant value. This flag is given to function and method variants that return a default value depending on the type of argument(s). When variants with this flag are resolved at parse time, a @ref call-with-type-errors warning is raised (assuming this warning is enabled), unless Qore::PO_REQUIRE_TYPES or Qore::PO_STRICT_ARGS is set. If either Qore::PO_REQUIRE_TYPES or Qore::PO_STRICT_ARGS is set, then these variants are inaccessible; resolving to a variant with this flag set at parse time or run time causes an exception to be thrown. These variants are included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments.
 
     @section CONSTANT
-    This flag indicates that the function or method has no side effects and does not throw any exceptions (see also @ref RET_VALUE_ONLY).
+    This legacy diagnostic flag indicates that discarding the return value is probably a mistake.
+    It does not guarantee determinism or freedom from exceptions. Optimizations that depend on those
+    properties require the explicit @ref PURE and @ref TOTAL contracts.
 
     @note This flag is not the same as a @ref const_methods "const method". Code flags describe side effects and
     exception behavior; const-method metadata describes whether an instance method can be called through a read-only
@@ -17,6 +19,30 @@
 
     @section RET_VALUE_ONLY
     This flag indicates that the function or method has no side effects but could throw an exception (see also @ref CONSTANT).
+
+    @section NO_SIDE_EFFECTS
+    The function or method does not mutate observable state.
+
+    @section DETERMINISTIC
+    The result depends only on the arguments and immutable state. The operation does not read clocks,
+    random generators, process or thread IDs, the environment, or other mutable external state.
+
+    @section NO_DOMAIN_THROW
+    The operation raises no exception determined by its arguments or program state. Resource exhaustion,
+    including allocation failure, can still raise an exception.
+
+    @section PURE
+    This combines @ref RET_VALUE_ONLY, @ref NO_SIDE_EFFECTS, and @ref DETERMINISTIC. Repeated calls with
+    identical arguments can be combined, but a call can still raise a domain exception.
+
+    @section TOTAL
+    This combines @ref PURE and @ref NO_DOMAIN_THROW. In addition to combining identical calls, it permits
+    eliminating unused calls and speculative evaluation, subject to resource-exhaustion exceptions.
+
+    @section HOST_PORTABLE
+    Results are bit-identical across conforming hosts. This stronger guarantee is required when a compiler
+    evaluates a call on one host and stores its result in an executable for another host. It implies
+    @ref DETERMINISTIC; determinism alone does not guarantee identical results on different hosts.
 
     @section DEPRECATED
     Code with this flag is deprecated and may be removed in a future version of %Qore; if a variant with this flag is resolved at parse time, a @ref deprecated warning is raised (assuming this warning is enabled).

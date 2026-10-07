@@ -56,7 +56,7 @@ module FireworksRestClient {
     @section fireworksrestclientintro FireworksRestClient Introduction
 
     The %FireworksRestClient module provides an API for calling
-    [Fireworks AI](https://fireworks.ai) REST API services.
+    <a href="https://fireworks.ai">Fireworks AI</a> REST API services.
 
     Fireworks AI hosts open-weight LLMs (Llama 3.1/3.3, Qwen, DeepSeek,
     Mixtral) at high throughput via an OpenAI-compatible API and provides
@@ -89,8 +89,8 @@ printf("%Y\n", ans.body);
     @endcode
 
     @note Model identifiers on Fireworks use the
-    `accounts/<owner>/models/<name>` format.  See the
-    [Fireworks model catalog](https://fireworks.ai/models).
+    <tt>accounts/&lt;owner&gt;/models/&lt;name&gt;</tt> format.  See the
+    <a href="https://fireworks.ai/models">Fireworks model catalog</a>.
 
     @section FireworksRestClientRelnotes Release Notes
 
@@ -370,7 +370,7 @@ public class FireworksLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
 }
 
 public namespace QoreRagUtils {
-#! Fireworks AI-backed embedder — calls the Fireworks `/embeddings` endpoint
+#! Fireworks AI-backed embedder — calls the Fireworks <tt>/embeddings</tt> endpoint
 public class FireworksEmbedder inherits AbstractEmbedder {
     public {
         const DefaultModel = "accounts/fireworks/models/qwen3-embedding-8b";

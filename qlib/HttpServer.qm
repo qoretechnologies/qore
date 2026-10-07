@@ -629,14 +629,14 @@ public hashdecl HttpServerOptionInfo {
 
     #! Headers to add in responses
     /** Empty hash = use the built-in X-Powered-By header default; actual
-        substitution happens in HttpServer::init().  See `name` member for
+        substitution happens in HttpServer::init().  See <tt>name</tt> member for
         the AOT-serialisation constraint.
     */
     hash<auto> hdr = {};
 
     #! Idle disconnect time; the default is 75 seconds
     /** 0s = use HttpServer::DefaultTtl default; actual substitution happens
-        in HttpServer::init().  See `name` member for the AOT-serialisation
+        in HttpServer::init().  See <tt>name</tt> member for the AOT-serialisation
         constraint.
     */
     date ttl = 0s;
@@ -7984,10 +7984,10 @@ namespace Priv {
     This class manages the lifecycle of HTTP connections and ensures proper counter
     management for graceful server shutdown. It tracks two types of connections:
 
-    1. **Normal connections (cThreads)**: Regular HTTP request/response connections
+    1. <b>Normal connections (cThreads)</b>: Regular HTTP request/response connections
        that are handled by the thread pool and released after the response is sent.
 
-    2. **Dedicated connections (dThreads)**: Long-lived connections like WebSocket
+    2. <b>Dedicated connections (dThreads)</b>: Long-lived connections like WebSocket
        or SSE that take over the socket for bidirectional communication.
 
     ## WaitGroup Management
@@ -7995,17 +7995,17 @@ namespace Priv {
     The server uses WaitGroups to track active connections so that shutdown can wait
     for all connections to complete. The flow is:
 
-    1. When a request starts: `cThreads.add()` is called (before RequestHelper is created)
-    2. RequestHelper stores a reference to cThreads in `c`
+    1. When a request starts: <tt>cThreads.add()</tt> is called (before RequestHelper is created)
+    2. RequestHelper stores a reference to cThreads in <tt>c</tt>
     3. If the connection becomes dedicated (WebSocket/SSE):
-       - `setDedicated()` is called: adds to dThreads, marks cThreads done, switches `c` to dThreads
-    4. When RequestHelper is destroyed: `c.done()` decrements the appropriate WaitGroup
+       - <tt>setDedicated()</tt> is called: adds to dThreads, marks cThreads done, switches <tt>c</tt> to dThreads
+    4. When RequestHelper is destroyed: <tt>c.done()</tt> decrements the appropriate WaitGroup
 
     ## Dedicated External Mode
 
     When a handler takes full control of the socket (e.g., WebSocket handler returns True
-    from start()), `setDedicatedExternal()` is called. This:
-    - Sets `dedicated_external = True` so the destructor won't close the socket
+    from start()), <tt>setDedicatedExternal()</tt> is called. This:
+    - Sets <tt>dedicated_external = True</tt> so the destructor won't close the socket
     - The handler is responsible for socket cleanup
     - The WaitGroup is still decremented in the destructor
 
@@ -8107,7 +8107,7 @@ class RequestHelper {
         - The connection counter is still decremented in destructor
 
         @note This fixes a bug where calling setDedicatedExternal() after setDedicated()
-              would double-increment dThreads. The check `c === cThreads` prevents this.
+              would double-increment dThreads. The check <tt>c === cThreads</tt> prevents this.
     */
     setDedicatedExternal() {
         # Only adjust counters if not already in dedicated mode

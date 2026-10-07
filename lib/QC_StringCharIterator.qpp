@@ -294,7 +294,7 @@ StringCharIterator::reset() {
 //! Lazy iterator over a string's Unicode characters.
 /** Yields each codepoint as a @ref char value, decoded from the source
     string's encoding.  This is the iterator returned by
-    @ref Qore::zzz8stringzzz9::iterator() and by `iterate string`.
+    @ref Qore::zzz8stringzzz9::iterator() and by <tt>iterate string</tt>.
 
     @par Example
     @code{.py}

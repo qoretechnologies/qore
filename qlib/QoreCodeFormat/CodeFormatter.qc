@@ -2884,7 +2884,7 @@ string indent = strmul(SourceEmitter::INDENT_STR, level);
     }
 
     #! Namespace-aware indent level calculation using brace counting
-    /** Counts `{`/`}` while skipping strings and comments, and excludes braces
+    /** Counts <tt>{</tt>/<tt>}</tt> while skipping strings and comments, and excludes braces
         that belong to namespace declarations (Qore convention: namespace contents
         are left-justified).
 
@@ -2896,7 +2896,7 @@ string indent = strmul(SourceEmitter::INDENT_STR, level);
     }
 
     #! Fallback indent level calculation using simple brace counting
-    /** Used when tree-sitter parsing fails. Counts `{`/`}` while skipping
+    /** Used when tree-sitter parsing fails. Counts <tt>{</tt>/<tt>}</tt> while skipping
         strings and comments.
 
         @param code The accumulated code
@@ -2907,7 +2907,7 @@ string indent = strmul(SourceEmitter::INDENT_STR, level);
     }
 
     #! Core brace-counting implementation shared by namespace-aware and fallback modes
-    /** Counts `{`/`}` while skipping strings and comments.  When @a ns_aware
+    /** Counts <tt>{</tt>/<tt>}</tt> while skipping strings and comments.  When @a ns_aware
         is True, braces belonging to namespace declarations are excluded from
         the depth count (Qore convention: namespace contents are left-justified).
 

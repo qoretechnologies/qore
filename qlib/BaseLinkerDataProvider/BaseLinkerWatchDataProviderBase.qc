@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! Shared constructor-option hash for BaseLinker watch providers
-/** Adds a polling-interval option and a `since` cursor (date/time) on top of
+/** Adds a polling-interval option and a <tt>since</tt> cursor (date/time) on top of
     the base client/connection options inherited from @ref BaseLinkerDataProviderBase.
 */
 public const WatchConstructorOptions = BaseLinkerDataProviderBase::BaseConstructorOptions + {
@@ -51,17 +51,17 @@ public const WatchConstructorOptions = BaseLinkerDataProviderBase::BaseConstruct
 };
 
 #! Base class for BaseLinker polling watch data providers
-/** Polls BaseLinker's `getJournalList` method with a fixed `logs_types` filter
-    (provided by the concrete subclass) and a monotonically-increasing `last_log_id`
+/** Polls BaseLinker's <tt>getJournalList</tt> method with a fixed <tt>logs_types</tt> filter
+    (provided by the concrete subclass) and a monotonically-increasing <tt>last_log_id</tt>
     cursor. New log entries are emitted as observable events via @ref notifyObservers().
 
-    Subclasses supply the numeric `log_type` code and the event name; everything else
+    Subclasses supply the numeric <tt>log_type</tt> code and the event name; everything else
     (polling loop, cursor tracking, deduplication) is handled here.
 */
 public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase,
         DataProvider::AbstractOrderedWatchDataProvider {
     private {
-        #! Last journal `log_id` seen; BaseLinker returns entries strictly after this value
+        #! Last journal <tt>log_id</tt> seen; BaseLinker returns entries strictly after this value
         softint last_log_id = 0;
 
         #! Optional date/time lower bound (inclusive) for the first poll
@@ -97,12 +97,12 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
         stopEventsIntern();
     }
 
-    #! The BaseLinker journal is returned in ascending `log_id` order
+    #! The BaseLinker journal is returned in ascending <tt>log_id</tt> order
     string getSourceOrdering() {
         return WSO_ASCENDING;
     }
 
-    #! Returns the highest journal `log_id` delivered so far
+    #! Returns the highest journal <tt>log_id</tt> delivered so far
     /** @since BaseLinkerDataProvider 1.0
     */
     softint getLastLogId() {

@@ -135,12 +135,12 @@ public class GitHubNewPullRequestDataProvider inherits GitHubBaseEventDataProvid
 }
 
 #! Raised when a review is submitted on a pull request
-/** @note The superseded application called this event a review **request**, and its description said so,
+/** @note The superseded application called this event a review <b>request</b>, and its description said so,
     but it subscribes to GitHub's \c pull_request_review event and its payload carries a \c review - so what
-    it actually reports is a review being **given**.  The name is a product commitment and is kept; the
+    it actually reports is a review being <b>given</b>.  The name is a product commitment and is kept; the
     presentation is corrected here rather than the behaviour, because the payload is what existing workflows
     read.  A review being *requested* is the \c pull_request event with action \c review_requested, which
-    **New Pull Request** raises with **All Actions** set.
+    <b>New Pull Request</b> raises with <b>All Actions</b> set.
 */
 public class GitHubNewReviewDataProvider inherits GitHubBaseEventDataProvider {
     public {
@@ -498,7 +498,7 @@ public class GitHubEventsDataProvider inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {

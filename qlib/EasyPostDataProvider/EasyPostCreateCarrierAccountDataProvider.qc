@@ -91,7 +91,7 @@ public class EasyPostCreateCarrierAccountDataProvider inherits EasyPostDataProvi
         return RequestType;
     }
 
-    #! Returns the request type with carrier-specific credential fields based on the selected `type` option
+    #! Returns the request type with carrier-specific credential fields based on the selected <tt>type</tt> option
     private *DataProvider::AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
         *string carrier_type = options."type".value ?? options."type";
         if (!carrier_type) {
@@ -112,7 +112,7 @@ public class EasyPostCreateCarrierAccountDataProvider inherits EasyPostDataProvi
         return buildDynamicRequestType(carrier_type);
     }
 
-    #! Builds a request type whose `credentials`/`test_credentials` fields are typed for the selected carrier
+    #! Builds a request type whose <tt>credentials</tt>/<tt>test_credentials</tt> fields are typed for the selected carrier
     private AbstractDataProviderType buildDynamicRequestType(string carrier_type) {
         *list<hash<auto>> carrier_types = fetchCarrierTypes();
         *hash<auto> ct;

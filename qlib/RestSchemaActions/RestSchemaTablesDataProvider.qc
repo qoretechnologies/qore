@@ -25,7 +25,7 @@
 #! contains all public definitions in the RestSchemaActions module
 public namespace RestSchemaActions {
 #! Names the record-based actions an application registers against its tables
-/** Tables are reached by **actions**; declaring the providers is only half of it, and an application that
+/** Tables are reached by <b>actions</b>; declaring the providers is only half of it, and an application that
     declares tables and registers no action against them offers them to nobody.
 
     The IDs are the application's to choose and are a product commitment: where a native application replaces
@@ -157,7 +157,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
     }
 
     #! Checks that everything a table declares about its records names a column the records have
-    /** A filter, a filterable query field and an identity are all **predicates or references on a record**,
+    /** A filter, a filterable query field and an identity are all <b>predicates or references on a record</b>,
         so each has to name a column of the record type.  One that does not is dead on arrival and fails in a
         way that does not point at the declaration: the framework rejects a search on an unknown field before
         the table is reached, so a filter on a column that is not there is simply never used, and an identity
@@ -250,7 +250,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
     #! Returns what every table in the set supports, for the record-based actions
     /** The per-table search and create options are not here: they differ by table and are resolved through
         \c data_dependent_options by walking to the chosen table.  What is here is the capability set common
-        to the whole application, together with the scope options **every** table requires - a repository, a
+        to the whole application, together with the scope options <b>every</b> table requires - a repository, a
         workspace - which is what a form can show before a table has been chosen.
 
         @param action_sets the action sets the tables' actions belong to

@@ -227,8 +227,8 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         @param limit optional maximum number of results to return
         @return a list of all result records
 
-        ClickFunnels uses cursor-based pagination with the `after` query parameter.
-        The `Pagination-Next` response header contains the cursor for the next page.
+        ClickFunnels uses cursor-based pagination with the <tt>after</tt> query parameter.
+        The <tt>Pagination-Next</tt> response header contains the cursor for the next page.
     */
     list<auto> fetchAllPages(string path, *hash<auto> params, *int limit) {
         list<auto> results = ();

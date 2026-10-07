@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Package Status Changed
-/** Fires whenever A courier package status changes (BaseLinker journal `log_type` 22).
+/** Fires whenever A courier package status changes (BaseLinker journal <tt>log_type</tt> 22).
 */
 public class BaseLinkerWatchPackageStatusChangedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

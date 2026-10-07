@@ -36,7 +36,7 @@ public namespace QoreRagUtils {
       parsed contents of the model's \c tokenizer.json
     - \c options.max_tokens (optional): maximum input tokens; default 512
     - \c options.pooling_strategy (optional): \c "mean" (default), \c "cls", or \c "max"
-    - \c options.session_config (optional): an @ref ML::OnnxSessionConfig hash passed to the
+    - \c options.session_config (optional): an @ref Qore::ML::OnnxSessionConfig hash passed to the
       underlying ONNX session; set its \c content_identity key to make
       @ref getContentIdentity() report the content actually loaded
 
@@ -136,9 +136,9 @@ public class LocalOnnxEmbedder inherits AbstractEmbedder {
         Request capture by setting \c content_identity in \c options.session_config; otherwise
         an identity with \c complete = @ref False is returned.
 
-        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+        @return an @ref Qore::ML::OnnxContentIdentity hash describing the loaded content
 
-        @see @ref ML::OnnxModel::getContentIdentity()
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
     *hash<ML::OnnxContentIdentity> getContentIdentity() {
         ensureModel();

@@ -100,14 +100,6 @@ public bool sub isCompactIri(string str) {
     return True;
 }
 
-#! Resolves a relative IRI against a base IRI
-/** Implements RFC 3986 Section 5.3 reference resolution
-    @param base the base IRI
-    @param relative the relative IRI to resolve
-    @return the resolved absolute IRI
-
-    @since json 1.12
-*/
 #! Parses an IRI into its components per RFC 3986 Appendix B
 /** Works for ALL URI schemes, not just HTTP.
     @param iri the IRI to parse
@@ -150,6 +142,14 @@ public hash<auto> sub parseIriComponents(string iri) {
     return result;
 }
 
+#! Resolves a relative IRI against a base IRI
+/** Implements RFC 3986 Section 5.3 reference resolution
+    @param base the base IRI
+    @param relative the relative IRI to resolve
+    @return the resolved absolute IRI
+
+    @since json 1.12
+*/
 public string sub resolveIri(string base, string relative) {
     # RFC 3986 Section 5.2.2 — Reference Resolution
 

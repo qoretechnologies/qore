@@ -611,7 +611,7 @@ AbstractIterator<int> <string>::codePointIterator() [const;flags=CONSTANT] {
 //! Returns a lazy iterator yielding each Unicode codepoint of the string as a char value.
 /** Each yielded value is a @ref char decoded from the source string's
     encoding via \c QoreString::getUnicodePointFromBytePos().  This is the
-    pseudo-method used by `iterate string`.
+    pseudo-method used by <tt>iterate string</tt>.
 
     For integer codepoints, use
     @ref Qore::zzz8stringzzz9::codePointIterator() instead.  For

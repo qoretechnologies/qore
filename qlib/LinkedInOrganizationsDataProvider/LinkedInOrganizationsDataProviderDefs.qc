@@ -78,7 +78,7 @@ public const DefaultPageSize = 25;
 public const MaxBatchSize = 50;
 
 #! The shortest poll interval the \c new-post trigger allows, in seconds
-/** LinkedIn rate-limits the DMA feed finders to **one request per 60 seconds** and serves data that
+/** LinkedIn rate-limits the DMA feed finders to <b>one request per 60 seconds</b> and serves data that
     can be up to 48 hours old, so polling faster than this cannot see anything new and earns HTTP
     429s.
 */

@@ -837,7 +837,7 @@ public class DropboxSuccessResponseDataType inherits HashDataType {
 public const DropboxSuccessResponseDataType = new DropboxSuccessResponseDataType();
 
 #! Request type for an action that takes no arguments
-/** A @ref DPAT_API action still has to declare a request type: without one the framework raises
+/** A @ref DataProvider::DPAT_API action still has to declare a request type: without one the framework raises
     \c UNIMPLEMENTED from @ref DataProvider::AbstractDataProvider::getRequestType() "getRequestType()" before
     \c doRequestImpl() is ever reached, so an argument-less action would appear in the catalog and fail on use.
     Having no fields is what keeps the action from advertising options it does not accept.

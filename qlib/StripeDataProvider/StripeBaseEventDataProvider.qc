@@ -33,7 +33,7 @@ public namespace StripeDataProvider {
     A Stripe webhook endpoint is a URL anyone can post to.  Without verification it would accept a
     fabricated \c charge.succeeded - enough to make an integration ship goods that were never paid for -
     or a fabricated \c invoice.payment_failed, enough to suspend a paying customer's account.  So a
-    delivery whose signature cannot be verified is **dropped**, and one that arrives before the endpoint
+    delivery whose signature cannot be verified is <b>dropped</b>, and one that arrives before the endpoint
     has been created is dropped too; there is no configuration that turns this off.
 
     Stripe sends a \c Stripe-Signature header holding the time it signed at and one or more HMAC-SHA256
@@ -41,7 +41,7 @@ public namespace StripeDataProvider {
     The timestamp is checked against @ref ReplayTolerance so that a captured delivery cannot be replayed
     indefinitely.
 
-    @note The signature covers the **exact bytes** Stripe sent.  A body that has been parsed into a hash
+    @note The signature covers the <b>exact bytes</b> Stripe sent.  A body that has been parsed into a hash
     and re-serialized is a different sequence of bytes, so a delivery that arrives already parsed cannot
     be verified and is dropped with an error saying so, rather than being accepted unchecked.
 

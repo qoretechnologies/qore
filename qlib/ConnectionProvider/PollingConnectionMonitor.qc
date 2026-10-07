@@ -655,14 +655,14 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         });
     }
 
-    #! Thread-local key under which ping-handler log messages are queued while `m` is held
+    #! Thread-local key under which ping-handler log messages are queued while <tt>m</tt> is held
     const DeferredLogKey = "Qore::ConnectionProvider::PollingConnectionMonitor::deferred-logs";
 
-    #! Queues a log message to be emitted after the monitor lock `m` is released
-    /** The ping handlers run while `m` is held; emitting a log inline routes through
+    #! Queues a log message to be emitted after the monitor lock <tt>m</tt> is released
+    /** The ping handlers run while <tt>m</tt> is held; emitting a log inline routes through
         the Logger (and any global log-limiter), which would serialise the monitor
         lock behind logging and, under load, stall every concurrent ping callback.
-        Queued messages are emitted by flushDeferredLogs() after `m` is unlocked. */
+        Queued messages are emitted by flushDeferredLogs() after <tt>m</tt> is unlocked. */
     private deferLog(auto level, string msg) {
         *list<auto> q = get_thread_data(DeferredLogKey);
         q += {"level": level, "msg": msg};
@@ -670,7 +670,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     }
 
     #! Emits and clears any messages queued by deferLog() on the current thread
-    /** Must be called only after the monitor lock `m` has been released. */
+    /** Must be called only after the monitor lock <tt>m</tt> has been released. */
     private flushDeferredLogs() {
         *list<auto> q = get_thread_data(DeferredLogKey);
         if (!q) {
@@ -685,12 +685,12 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     #! Handles the result of a ping operation from the async I/O controller
     /** Runs in the controller's I/O thread.
 
-        Design note: this callback acquires `m` while running on the I/O thread.
+        Design note: this callback acquires <tt>m</tt> while running on the I/O thread.
         Contention is bounded by ping_repeat intervals and the critical section is
         short. Lock ordering is PCM.m -> controller.m (controller callbacks are
         delivered without holding the controller lock), so no deadlock is possible.
         Log messages produced by the ping handlers are queued via deferLog() and
-        emitted by flushDeferredLogs() only after `m` is released, so logging
+        emitted by flushDeferredLogs() only after <tt>m</tt> is released, so logging
         contention can never serialise the monitor lock.
     */
     private handlePingResult(string name, int gen, hash<SocketPollResultInfo> result) {

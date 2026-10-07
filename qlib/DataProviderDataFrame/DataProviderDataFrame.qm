@@ -45,7 +45,7 @@ module DataProviderDataFrame {
 
     @section dataproviderdataframeintro DataProviderDataFrame Module Introduction
 
-    Provides DataProvider integration for the @ref dataframe "dataframe" binary module,
+    Provides DataProvider integration for the @ref dataframeintro "dataframe" binary module,
     enabling DataFrames to participate in DataProvider pipelines.
 
     The module registers a \c dataframe data provider factory that creates DataFrames
@@ -104,7 +104,7 @@ pipeline.waitDone();
     @endcode
 
     When a pipeline receives a \c DataFrame, it is detected as
-    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
+    @ref DataProvider::DataFrameBlock "DataFrameBlock".  Processors that support that shape can
     keep the DataFrame representation; processors that only support bulk records receive a hash-of-lists conversion.
     The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" and
     @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" both support \c DataFrameBlock, so common

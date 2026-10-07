@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Product Removed
-/** Fires whenever A product is removed from an order (BaseLinker journal `log_type` 14).
+/** Fires whenever A product is removed from an order (BaseLinker journal <tt>log_type</tt> 14).
 */
 public class BaseLinkerWatchOrderProductRemovedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

@@ -83,7 +83,7 @@ module RestSchemaValidator {
     - schema data types describe and enforce the schema's validation constraints (bounds, lengths, patterns,
       enumerations, and item and property counts), so a value violating them is rejected when it is accepted by the
       type rather than only when a request is validated
-    - accept unconstrained array elements when `items` is absent while retaining bounds and uniqueness
+    - accept unconstrained array elements when <tt>items</tt> is absent while retaining bounds and uniqueness
     - compare unique JSON array values with structural typed keys instead of loose equality
     - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
       (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
@@ -99,7 +99,7 @@ module RestSchemaValidator {
       - @ref RestSchemaValidator::AbstractRestSchemaObject "AbstractRestSchemaObject": shared REST schema object methods
     - fixed Swagger min/max error messages that incorrectly reported maximum instead of minimum values
     - fixed two parameters that share a name and a schema sharing one another's documentation: the derived
-      field was cached under the parameter name alone, although a field also carries what the **use**
+      field was cached under the parameter name alone, although a field also carries what the <b>use</b>
       supplies - its own description and default value - so whichever operation was registered second
       published the first one's.  The cached field is still shared, because it is also what stops a
       recursive property from recursing forever, and a use whose description or default differs from it now
@@ -1314,7 +1314,7 @@ public namespace RestSchemaValidator {
 
         private {
             #! maps fields: name -> {Y,N} -> field
-            /** The canonical field for a name, and also the **recursion cut**:
+            /** The canonical field for a name, and also the <b>recursion cut</b>:
                 @ref getFieldIntern() registers a field here before building its type and then updates
                 that same field in place, so a property on the far side of a cycle is handed the very
                 same object and still ends up with the real type.
@@ -1329,7 +1329,7 @@ public namespace RestSchemaValidator {
             #! maps per-use fields: use key -> {Y,N} -> field
             /** A schema object is interned by its content, so two parameters with the same name and the
                 same schema are one object.  That is right for the type, which the schema determines
-                completely, and wrong for the field: a field also carries what the **use** supplies - its
+                completely, and wrong for the field: a field also carries what the <b>use</b> supplies - its
                 own description and default value.  Publishing the canonical field for every use gave
                 whichever operation was registered second the first one's documentation.
 
@@ -1534,7 +1534,7 @@ public namespace RestSchemaValidator {
                 ukey, name, desc, required, default_value, rstr);
         }
 
-        #! Returns the key identifying one **use** of this schema as a field
+        #! Returns the key identifying one <b>use</b> of this schema as a field
         /** @param name the field name
             @param desc the description supplied by the use, before this schema's own is merged into it
             @param default_value the default value supplied by the use
@@ -1862,7 +1862,7 @@ public namespace RestSchemaValidator {
             parameter declared as anything else has to be converted before it is checked, or every request
             carrying it is rejected for sending the value in the only form a URI can carry.
 
-            An **array** is converted element by element as well.  The element schema is checked strictly,
+            An <b>array</b> is converted element by element as well.  The element schema is checked strictly,
             so an array of integers would otherwise be rejected for holding the strings it must be sent as,
             and the parameter would be unusable: this is what made a search on a list of identifiers fail
             with <tt>invalid type "string" (should be "integer")</tt>.

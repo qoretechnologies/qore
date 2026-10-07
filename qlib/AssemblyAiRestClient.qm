@@ -56,7 +56,7 @@ module AssemblyAiRestClient {
     @section assemblyairestclientintro AssemblyAiRestClient Introduction
 
     The %AssemblyAiRestClient module provides an API for calling
-    [AssemblyAI](https://www.assemblyai.com) speech-to-text REST services.
+    <a href="https://www.assemblyai.com">AssemblyAI</a> speech-to-text REST services.
 
     AssemblyAI provides transcription with Universal-3.5 Pro and Universal-2, plus optional analytics
     (sentiment, summarization, entity detection, content safety, topic
@@ -705,7 +705,7 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
 }
 
 #! @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" backed by
-#! AssemblyAI's `/v2/transcript` endpoint
+#! AssemblyAI's <tt>/v2/transcript</tt> endpoint
 public class AssemblyAiTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
     private {
         AssemblyAiRestClientIo rest;

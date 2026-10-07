@@ -144,7 +144,7 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
     public {
         #! Optional contact properties to request from the API
         /** These fields are not returned by default and must be explicitly requested
-            via the `optional_properties` query parameter
+            via the <tt>optional_properties</tt> query parameter
         */
         const OptionalContactProperties = (
             "email_addresses", "phone_numbers",

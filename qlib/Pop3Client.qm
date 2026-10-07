@@ -278,7 +278,7 @@ public class Pop3Client inherits Logger::LoggerWrapper, ConnectionProvider::Opti
         @param opts options for the object; supported options:
         - \c connect_timeout (int): the connect timeout in milliseconds
         - \c io_timeout (int): the I/O timeout in milliseconds
-        - \c logger (@ref Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
+        - \c logger (@ref Qore::Logger::LoggerInterface "LoggerInterface"): a logger to use for logging
         - \c password (string): the password for the connection
         - \c read_timeout (int): the read timeout in milliseconds
         - \c tls (bool): execute the \c STLS command after connecting with insecure connections
@@ -2228,8 +2228,8 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
 
     #! Creates the retrieve pipeline
     /** @param sock already-connected POP3 socket
-        @param msg_ids list of message IDs to fetch (from LIST output)
-        @param delete_after_fetch if True, send DELE after each RETR
+        @param ids list of message IDs to fetch (from LIST output)
+        @param do_delete if True, send DELE after each RETR
     */
     constructor(Socket sock, list<string> ids, bool do_delete = False)
             : PollPipeline(sock) {
@@ -2302,7 +2302,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
     to the AsyncIoController. When it completes, call @ref createRetrOp() to
     build the RETR pipeline for the discovered messages, then submit that.
 
-    This follows the same pattern as @ref FtpClientPollOperation - the
+    This follows the same pattern as @ref FtpClientIo::FtpClientPollOperation - the
     orchestrator manages sub-operations but does not inherit
     @c AbstractPollOperation itself.
 
@@ -2321,8 +2321,8 @@ public class Pop3FetchPollOperation {
     }
 
     #! Creates the fetch orchestrator
-    /** @param pop3 the Pop3Client whose connection info drives the pipeline
-        @param delete_after_fetch if True, delete messages after fetching
+    /** @param client the Pop3Client whose connection info drives the pipeline
+        @param do_delete if True, delete messages after fetching
     */
     constructor(Pop3Client client, bool do_delete = False) {
         pop3 = client;

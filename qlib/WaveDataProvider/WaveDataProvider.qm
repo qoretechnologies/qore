@@ -1051,8 +1051,8 @@ module WaveDataProvider {
     @section wavedataproviderauth Authentication
 
     Wave uses OAuth 2.0 for authentication:
-    - **OAuth 2.0**: Use oauth2_client_id and oauth2_client_secret for third-party applications.
-    - **Full-stack Token**: For testing, use the \c token option with a Wave full-stack token.
+    - <b>OAuth 2.0</b>: Use oauth2_client_id and oauth2_client_secret for third-party applications.
+    - <b>Full-stack Token</b>: For testing, use the \c token option with a Wave full-stack token.
 
     @par Example:
     @code{.py}

@@ -80,7 +80,7 @@ module WeaviateDataProvider {
     @section weaviatedataproviderintro WeaviateDataProvider Introduction
 
     Lightweight data-provider integration for
-    [Weaviate](https://weaviate.io).  For full vector operations use the
+    <a href="https://weaviate.io">Weaviate</a>.  For full vector operations use the
     @ref QoreRagUtils::WeaviateVectorStore "WeaviateVectorStore" backend
     via @ref QoreRagUtils::RagPipeline "RagPipeline".
 

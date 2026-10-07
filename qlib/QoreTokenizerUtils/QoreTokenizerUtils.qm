@@ -66,8 +66,8 @@ module QoreTokenizerUtils {
     - @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker" — chunks
       documents at semantic boundaries detected by embedding similarity
 
-    All classes accept a HuggingFace `tokenizer.json` configuration and can also
-    apply companion `tokenizer_config.json` settings such as model maximum length
+    All classes accept a HuggingFace <tt>tokenizer.json</tt> configuration and can also
+    apply companion <tt>tokenizer_config.json</tt> settings such as model maximum length
     and chat templates when available. ONNX embedding and re-ranking models can be
     loaded from either filesystem paths or in-memory binary artifacts, which allows
     QoreModelRegistry database and REST backends to execute registered ONNX packages

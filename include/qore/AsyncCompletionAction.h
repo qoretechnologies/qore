@@ -94,13 +94,13 @@ public:
         Called once, when the request is submitted and before the action can run.
 
         @param sink the event sink; a reference is taken and released when the action is destroyed.
-            A @ref nullptr sink leaves the action without a sink.
+            A @c nullptr sink leaves the action without a sink.
 
         @since %Qore 3.0
     */
     DLLEXPORT void setEventSink(HttpClientEventSink* sink);
 
-    //! Returns the HTTP client event sink of the request, or @ref nullptr if none is set
+    //! Returns the HTTP client event sink of the request, or @c nullptr if none is set
     /** The reference belongs to the action, which the caller must keep referenced while it uses the
         sink.
 

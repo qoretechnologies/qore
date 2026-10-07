@@ -1,0 +1,22 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_batchguide Batch Encoding
+
+    @tableofcontents
+
+    Encode multiple texts at once with uniform output length:
+
+    @code{.py}
+list<hash<auto>> batch = tok.encodeBatch(
+    ("short text", "a much longer sentence that will be truncated"), {
+        "max_length": 10,
+        "truncation": "longest_first",
+        "padding": "true",          # pad all to the longest in the batch
+    });
+
+# Both outputs have the same length (suitable for ONNX batch inference)
+printf("Text 1 length: %d\n", batch[0].input_ids.size());
+printf("Text 2 length: %d\n", batch[1].input_ids.size());
+# Both: 10
+    @endcode
+*/

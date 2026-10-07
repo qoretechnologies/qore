@@ -134,22 +134,22 @@ module AwsTextractDataProvider {
     @section awstextractdataproviderintro AwsTextractDataProvider Introduction
 
     The %AwsTextractDataProvider module provides a data provider API for
-    [AWS Textract](https://aws.amazon.com/textract/). All 25 operations in the pinned official AWS
+    <a href="https://aws.amazon.com/textract/">AWS Textract</a>. All 25 operations in the pinned official AWS
     service model are exposed as typed actions, together with the shared generic API-call action.
-    The original `detect-document-text` and `analyze-document` option names remain compatible.
+    The original <tt>detect-document-text</tt> and <tt>analyze-document</tt> option names remain compatible.
     Other actions use the native AWS field names, including nested document, query, adapter,
     notification, training, tagging, and output settings.
 
     Synchronous documents are limited to 10 MB, including S3 references; PDF and TIFF must have
     one page. Async PDF/TIFF documents support up to 500 MB and 3,000 pages; JPEG/PNG remain
     limited to 10 MB. Identity analysis supports US passports and driver's licenses.
-    See [AWS limits](https://docs.aws.amazon.com/textract/latest/dg/limits-document.html).
+    See <a href="https://docs.aws.amazon.com/textract/latest/dg/limits-document.html">AWS limits</a>.
 
     @par Async API
 
     Start/get actions expose raw jobs for text, document, expense, and lending analysis.
-    Save `JobId`, check `JobStatus`, and fetch all pages using `NextToken`. A get action never
-    waits for completion or combines pages. `FAILED` and `PARTIAL_SUCCESS` are returned with
+    Save <tt>JobId</tt>, check <tt>JobStatus</tt>, and fetch all pages using <tt>NextToken</tt>. A get action never
+    waits for completion or combines pages. <tt>FAILED</tt> and <tt>PARTIAL_SUCCESS</tt> are returned with
     their status messages and warnings so callers can decide how to proceed. AWS retains job
     results for seven days. The service provides no job-list API.
 
@@ -160,11 +160,11 @@ module AwsTextractDataProvider {
     adapter versions; tests use deterministic fixtures for that operation.
 
     @par Model provenance
-    `tools/textract-model-import.py` imports the immutable botocore revision recorded in
-    `textract-types.json`. The original `textract-service-2.json` is preserved with its checksum.
+    <tt>tools/textract-model-import.py</tt> imports the immutable botocore revision recorded in
+    <tt>textract-types.json</tt>. The original <tt>textract-service-2.json</tt> is preserved with its checksum.
     The OpenAPI resource contains component types only, with no generated HTTP routes.
     The versioned normalization boundary supplies presentation, document-source constraints,
-    and timestamp/blob conversions. Native requests use signed AWS JSON 1.1 at `/`.
+    and timestamp/blob conversions. Native requests use signed AWS JSON 1.1 at <tt>/</tt>.
 
     @section AwsTextractDataProviderRelnotes Release Notes
 

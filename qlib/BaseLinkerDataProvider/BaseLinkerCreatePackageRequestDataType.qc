@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `createPackage` method
+#! Request type for the BaseLinker <tt>createPackage</tt> method
 public class BaseLinkerCreatePackageRequestDataType inherits HashDataType {
     public {
         const Fields = {

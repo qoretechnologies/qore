@@ -31,10 +31,10 @@ public namespace UnstructuredDataProvider {
     @section unstructured_events_why_polling Why Polling and Not Webhooks
 
     Unstructured can post job notifications to a webhook channel, and this module exposes the actions that
-    create, verify and delete those channels.  Their **deliveries** are not consumed here, because the
+    create, verify and delete those channels.  Their <b>deliveries</b> are not consumed here, because the
     Platform API description documents a consumer-supplied signing secret but no signature header, no
     algorithm and no signed payload format.  A webhook endpoint is a URL anyone can post to: without
-    verification a fabricated `job.completed` would tell an integration that documents are ready which were
+    verification a fabricated <tt>job.completed</tt> would tell an integration that documents are ready which were
     never processed.  Accepting deliveries unverified is not an option, and guessing the scheme is not
     verification, so the events here are derived from the API's own job listing instead - which is
     authoritative and needs no inbound connectivity.

@@ -30,7 +30,7 @@ public namespace DataProviderML {
     @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker".
     Each chunk becomes a separate output record.
 
-    This is a @ref DPC_AGGREGATE processor because it produces multiple output
+    This is a @ref DataProvider::DPC_AGGREGATE processor because it produces multiple output
     records per input record (one per semantic chunk).
 
     @par Example:

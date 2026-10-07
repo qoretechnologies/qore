@@ -12,7 +12,7 @@
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires reflection @endcode
+    @code{.py} %requires reflection @endcode
 
     To prohibit reflection in a @ref Qore::Program "Program" object; use the @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION"
     sandbox restriction when creating the object or when setting sandboxing restrictions on the
@@ -74,42 +74,17 @@
 
     @section reflection_examples Examples
 
-    @par Example:
-    @code{.py}
-#!/usr/bin/env qore
+    @subpage reflection_examplesguide
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
-
-%requires reflection
-
-Class c = Class::forName("Condition");
-AbstractMethodVariant v = c.getVariant("wait", Class::forName("AbstractSmartLock").getType(), TimeoutType);
-printf("%s\n", v.toString());
-# produces the following output:
-# public int Condition::wait(object<AbstractSmartLock> lock, timeout timeout_ms = 0)
-    @endcode
-
-    @par Plugin Type Registry Example:
-    @code{.py}
-#!/usr/bin/env qore
-
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
-
-%requires reflection
-
-PluginRegistry registry = PluginRegistry::getProcessRegistry();
-foreach string mod_name in (registry.getProcessModules()) {
-    printf("%s: %N\n", mod_name, registry.getTypes(mod_name));
-}
-    @endcode
 
     @section reflectionreleasenotes reflection Module Release Notes
 
-    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+    @subpage reflectionreleasehistory
+
+    @section reflectionqlibmodules Qore User Modules
+
+    - @ref connectionproviderintro "ConnectionProvider" — API for pluggable connection providers to Qore
+    - <img src="Qore-Q-square.svg" width="28" height="28" alt="DataProvider app icon"/> @ref dataproviderintro "DataProvider" — data integration patterns and data and API introspection
+    - @ref qoreapimetadataintro "QoreApiMetadata" — structured API metadata extraction for Qore
+
 */

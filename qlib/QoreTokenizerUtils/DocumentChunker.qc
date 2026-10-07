@@ -73,17 +73,17 @@ public class DocumentChunker {
     }
 
     #! Creates a DocumentChunker with the given tokenizer configuration
-    /** @param tokenizer_config a parsed `tokenizer.json` hash (from `parse_json()`)
+    /** @param tokenizer_config a parsed <tt>tokenizer.json</tt> hash (from <tt>parse_json()</tt>)
         @param options optional hash with:
         - \c chunk_size (int): maximum tokens per chunk, including special tokens
-          (default: `512`; typical values: `256` for small embeddings, `512` for
-          standard models, `8192` for long-context models)
+          (default: <tt>512</tt>; typical values: <tt>256</tt> for small embeddings, <tt>512</tt> for
+          standard models, <tt>8192</tt> for long-context models)
         - \c chunk_overlap (int): number of tokens shared between consecutive chunks
-          to preserve context at boundaries (default: `64`; typically 10–20% of
+          to preserve context at boundaries (default: <tt>64</tt>; typically 10–20% of
           chunk_size)
-        - \c add_special_tokens (bool): whether to include special tokens like `[CLS]`
-          and `[SEP]` in each chunk (default: `True`)
-        - \c tokenizer_runtime_config (hash): optional parsed `tokenizer_config.json`
+        - \c add_special_tokens (bool): whether to include special tokens like <tt>[CLS]</tt>
+          and <tt>[SEP]</tt> in each chunk (default: <tt>True</tt>)
+        - \c tokenizer_runtime_config (hash): optional parsed <tt>tokenizer_config.json</tt>
           companion settings to load into the tokenizer
 
         @throw DOCUMENT-CHUNKER-ERROR if chunk_size <= 0 or chunk_overlap >= chunk_size

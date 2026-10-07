@@ -173,7 +173,7 @@ Content-Length: 118
     - new AbstractConnection infrastructure
 
     @subsection yrc_v_1_2 YamlRpcClient v1.2
-    - the @ref YamlRpcConnection::YamlRpcConnection::getConstructorInfo() "YamlRpcConnection::getConstructorInfo()"
+    - the \c YamlRpcConnection::getConstructorInfo()
       method was added to allow connections to be created dynamically, potentially in another process from a network
       call (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
 
@@ -384,7 +384,7 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
             : HttpBasedConnection(name, description, url, attributes, options) {

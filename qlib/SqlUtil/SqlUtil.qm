@@ -164,7 +164,7 @@ module SqlUtil {
       caller's specification and the catalog bound to the same representation
     - added @ref SqlUtil::sqlutil_register_table_resolver() "sqlutil_register_table_resolver()" so that an
       application can supply the table objects it has already resolved.  A join or a sub-select can name its
-      table instead of supplying a table object, and the @ref DataProviderExpression "advanced expression" form
+      table instead of supplying a table object, and the @ref DataProvider::DataProviderExpression "advanced expression" form
       of \c "in_select" can only name it, since an expression must stay serializable; resolving that name built
       a new table object, which reads the table's entire description from the database on first use, so every
       SQL-generation call for such a query re-read the description of every referenced table - eleven catalog
@@ -750,6 +750,13 @@ hash<auto> sh = {
       as a workaround for MySQL.
     - By using the @ref select_option_offset "offset option" the results will be automatically ordered according to the primary key of the table
 
+    @subsubsection select_option_orderby_no_unique Select Option "orderby_no_unique"
+
+    When @ref True, permits @ref select_option_orderby "orderby" columns that do not match a
+    unique constraint when pagination uses @ref select_option_offset "offset" or
+    @ref select_option_limit "limit". The default is @ref False. Callers accepting non-unique
+    ordering must account for rows with equal sort keys appearing in an unspecified order.
+
     @subsubsection select_option_desc Select Option "desc"
     <b>Desc Example:</b>
     @code{.py}
@@ -1120,7 +1127,7 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
 
     These clauses can use any kind of logical groupings or operators / functions supported by the SQL driver.
 
-    For a default set of expressions, see @ref DefaultExpressionMap.
+    For a default set of expressions, see @ref SqlUtil::DefaultExpressionMap.
 
     @par Advanced Where Hash Example:
     @code{.py}
@@ -2102,7 +2109,7 @@ list<auto> rows = source_table.selectRows({
       that support it (PostgreSQL \c "on commit drop", Oracle private temporary tables \c "on commit drop
       definition", Oracle global temporary tables \c "on commit delete rows") storage is released automatically
       when the transaction ends
-    - @ref SqlUtil::TT_Session: the table persists for the database session and must be dropped explicitly (for
+    - @ref SqlUtil::TT_Session : the table persists for the database session and must be dropped explicitly (for
       example, with @ref SqlUtil::TempTableHelper)
 
     @par Driver notes
@@ -4869,7 +4876,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     */
     public const string OP_IN_SELECT = "in_select";
 
-    #! Normalizes a digest algorithm name for the @ref DP_FUNC_DIGEST expression
+    #! Normalizes a digest algorithm name for the @ref DataProvider::DP_FUNC_DIGEST expression
     /** Lower-cases the value and strips \c "-", \c "_", and space characters so that, for example,
         \c "SHA-256" and \c "sha256" are treated identically.
 
@@ -4893,7 +4900,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return regex_subst(alg.lwr(), "[-_ ]", "", RE_Global);
     }
 
-    #! Normalizes and validates the digest output encoding for the @ref DP_FUNC_DIGEST expression
+    #! Normalizes and validates the digest output encoding for the @ref DataProvider::DP_FUNC_DIGEST expression
     /** @param enc the encoding argument; must be missing or one of \c "hex", \c "base64", or
         \c "binary" (case-insensitive)
 
@@ -7503,7 +7510,7 @@ sqlutil_register_table_resolver(\MyTableRegistry::getTable());
         @endcode
 
         A join or a sub-select can name its table instead of supplying a table object; the
-        @ref DataProviderExpression "advanced expression" form of \c "in_select" can only name it, since an
+        @ref DataProvider::DataProviderExpression "advanced expression" form of \c "in_select" can only name it, since an
         expression must stay serializable.  Resolving that name produces an AbstractTable that reads its entire
         description from the database on first use, so an application that already holds resolved table objects
         should register them here; otherwise every SQL-generation call for such a query re-reads the description

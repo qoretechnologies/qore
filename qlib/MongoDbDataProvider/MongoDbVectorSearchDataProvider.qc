@@ -23,20 +23,20 @@
 */
 
 public namespace MongoDbDataProvider {
-#! MongoDB Atlas Vector Search data provider — runs a `$vectorSearch` pipeline
+#! MongoDB Atlas Vector Search data provider — runs a <tt>$vectorSearch</tt> pipeline
 /** Wraps a MongoDB collection's aggregation pipeline with a single
-    [`$vectorSearch`](https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-stage/)
+    <a href="https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-stage/"><tt>$vectorSearch</tt></a>
     stage targeting a pre-created Atlas Vector Search index.
 
     This is a thin specialization of @ref MongoDbAggregateDataProvider — it
-    just constructs the `$vectorSearch` stage from named fields, then runs
-    it through the same `MongoCollection::aggregate()` path.
+    just constructs the <tt>$vectorSearch</tt> stage from named fields, then runs
+    it through the same @ref mongodb::MongoCollection::aggregate() "MongoCollection::aggregate()" path.
 
     @par Index setup
 
     The target collection must have an Atlas Vector Search index created
-    out-of-band (via Atlas UI, `mongosh`, or the Atlas Admin API).  The
-    index name is passed via the `index_name` request field.
+    out-of-band (via Atlas UI, <tt>mongosh</tt>, or the Atlas Admin API).  The
+    index name is passed via the <tt>index_name</tt> request field.
 
     @par Example:
     @code{.py}

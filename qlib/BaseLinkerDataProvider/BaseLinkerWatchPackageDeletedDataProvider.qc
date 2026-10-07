@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Package Deleted
-/** Fires whenever A courier package is deleted (BaseLinker journal `log_type` 10).
+/** Fires whenever A courier package is deleted (BaseLinker journal <tt>log_type</tt> 10).
 */
 public class BaseLinkerWatchPackageDeletedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

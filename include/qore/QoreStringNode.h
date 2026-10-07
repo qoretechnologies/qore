@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -234,7 +234,7 @@ public:
         Reads on the view go through the parent's buffer. On any mutation, the view promotes itself to an owned
         copy (copy-on-write) and releases the parent.
 
-        Arguments are **byte** offsets and lengths; the caller is responsible for ensuring that \a byte_offset and
+        Arguments are <b>byte</b> offsets and lengths; the caller is responsible for ensuring that \a byte_offset and
         \a byte_offset + \a byte_len fall on codepoint boundaries for multibyte encodings. (In debug builds an
         assertion enforces that the offsets are <= parent->size().)
 

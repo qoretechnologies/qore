@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Downloaded
-/** Fires whenever An order is downloaded from a shop (BaseLinker journal `log_type` 2).
+/** Fires whenever An order is downloaded from a shop (BaseLinker journal <tt>log_type</tt> 2).
 */
 public class BaseLinkerWatchOrderDownloadedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

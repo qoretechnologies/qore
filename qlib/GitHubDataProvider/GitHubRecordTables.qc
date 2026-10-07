@@ -25,15 +25,15 @@
 #! contains all public definitions in the GitHubDataProvider module
 public namespace GitHubDataProvider {
 #! The GitHub record-based tables
-/** GitHub is not a database, and these tables are not its response shapes.  Each one is a **flattened,
-    writable projection** the application owns: an issue's labels arrive from GitHub as objects and are
+/** GitHub is not a database, and these tables are not its response shapes.  Each one is a <b>flattened,
+    writable projection</b> the application owns: an issue's labels arrive from GitHub as objects and are
     presented here as a list of names, its assignee as a login rather than a user object, and a pull
     request's base and head as branch names rather than as the repository-and-ref objects GitHub returns.
 
     That is why the record types here are declared rather than derived from the schema, unlike everything on
     the action surface.  A derived type would be GitHub's own shape, which is not what a record consumer
-    writes back: the same record has to be readable and creatable, and GitHub accepts label **names** on
-    create while returning label **objects** on read.
+    writes back: the same record has to be readable and creatable, and GitHub accepts label <b>names</b> on
+    create while returning label <b>objects</b> on read.
 
     The projection is the one the superseded TypeScript application defined, kept property for property,
     because existing mappers read these column names.
@@ -51,14 +51,14 @@ public namespace GitHubDataProvider {
     \c repo are therefore required search and create options rather than connection settings - exactly as in
     the application this module replaces.
 
-    \c repositories is the exception, because its records **are** the repositories: its listing spans every
+    \c repositories is the exception, because its records <b>are</b> the repositories: its listing spans every
     owner the credential can see, so it has no scope at all and names each record by its owner and its name
     instead.
 
     @section githubrecord_number The Identity Is the Number, Not the ID
 
     An issue and a pull request each carry two identities: GitHub's global \c id, and the \c number that
-    identifies it **within its repository**.  Every endpoint that reads, updates or comments on one takes the
+    identifies it <b>within its repository</b>.  Every endpoint that reads, updates or comments on one takes the
     number, and nothing takes the global ID, so the number is what a record is addressed by here.  Both are
     in the record, because the superseded application published both.
 
@@ -67,13 +67,13 @@ public namespace GitHubDataProvider {
     GitHub's issue and pull request listings take a handful of query arguments, and those are sent when a
     search asks for what they express: an issue's \c state, a pull request's \c base branch, and \c since for
     issues updated after a point in time.  Everything else in a search is evaluated here, against each record
-    as it arrives, and the listing is paged until the caller's limit is met **by matching records**.
+    as it arrives, and the listing is paged until the caller's limit is met <b>by matching records</b>.
 
     \c since is declared inexact - it is sent as a narrowing hint and the predicate is applied again to what
     comes back - because GitHub documents it as "last updated after" without saying whether the bound is
     inclusive, and a filter whose boundary is undocumented cannot be relied on to answer the predicate.
 
-    Two GitHub filters are deliberately **not** used.  Its \c assignee argument matches an issue assigned to a
+    Two GitHub filters are deliberately <b>not</b> used.  Its \c assignee argument matches an issue assigned to a
     user, while this projection's \c assignee column is the *first* of possibly several assignees, so the two
     do not describe the same set.  Its \c milestone argument takes a milestone number, while the column is the
     milestone's title.  Sending either would answer a search with records that do not match it.
@@ -82,14 +82,14 @@ public namespace GitHubDataProvider {
 
     GitHub's REST API cannot delete an issue or a pull request - both are closed rather than removed - and it
     exports no delete for a release either, so those three tables support read, create and update and say so.
-    A **repository** can be deleted, and permanently, so the record delete action is registered and refuses
+    A <b>repository</b> can be deleted, and permanently, so the record delete action is registered and refuses
     the tables that cannot honour it rather than pretending.
 
     @section githubrecord_lag A New Record Is Not Immediately Listed
 
     GitHub's collection endpoints lag its writes by a few seconds: an issue created through
     \c createRecord() - or through the \c "issues-create" action - is readable straight away by number, and is
-    **not** yet in what the listing returns.  Verified against the live API: creating an issue and searching
+    <b>not</b> yet in what the listing returns.  Verified against the live API: creating an issue and searching
     the table in the same breath returns the records that existed before it.
 
     So a workflow that creates a record and then searches for it will not find it, and should use what
@@ -103,7 +103,7 @@ public namespace GitHubDataProvider {
     could only ever fail.  They declare none, and the record-based create, update and delete actions refuse
     them by name rather than pretending.
 
-    Unlike the four tables above, these three publish **GitHub's own record shape** rather than a
+    Unlike the four tables above, these three publish <b>GitHub's own record shape</b> rather than a
     projection: there is no predecessor whose column names have to be preserved, and a derived type cannot
     drift from the contract the actions use.
 
@@ -195,7 +195,7 @@ public class GitHubRecordTables {
         );
 
         #! The state search option, which a table defaults to "all" where GitHub's listing defaults to "open"
-        /** The application this module replaces returned open **and** closed records from a table by
+        /** The application this module replaces returned open <b>and</b> closed records from a table by
             default, and a table that quietly adopted GitHub's own default would return a different set.
         */
         const StateDefaultsToAll = {
@@ -304,12 +304,12 @@ public class GitHubRecordTables {
         };
 
         #! The repositories table
-        /** The one table in this application whose records are **not** scoped to a repository, because they
+        /** The one table in this application whose records are <b>not</b> scoped to a repository, because they
             are the repositories: the listing spans every owner the credential can see.
 
             @section githubrecord_repos_id Its Identity Has Two Parts
 
-            GitHub addresses a repository by its \c {owner} **and** its \c {repo}, both path variables, so a
+            GitHub addresses a repository by its \c {owner} <b>and</b> its \c {repo}, both path variables, so a
             record is addressed by two values rather than one - see
             @ref RestSchemaActions::RestSchemaRecordTableInfo::id_parts "id_parts".  The record carries the
             second as \c name and the first as \c "owner.login", because a repository's \c owner is a user
@@ -328,8 +328,8 @@ public class GitHubRecordTables {
 
             @section githubrecord_repos_nofilter Nothing Is Pushed Down
 
-            GitHub's repository listing takes \c visibility, \c affiliation and \c type, and **\c type may
-            not be combined with either of the others** - a request carrying both is rejected.  Wiring a
+            GitHub's repository listing takes \c visibility, \c affiliation and \c type, and <b>\c type may
+            not be combined with either of the others</b> - a request carrying both is rejected.  Wiring a
             predicate to \c visibility would therefore turn a search into a 422 for any caller who had also
             set \c type, so all three stay ordinary search options that a caller sets deliberately, and a
             predicate is evaluated here.

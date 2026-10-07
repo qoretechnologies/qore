@@ -57,6 +57,7 @@ public class CircleDataProviderFactory inherits DataProvider::AbstractDataProvid
 
     #! Returns a data provider with the given options
     /** @param constructor_options factory constructor options
+        @param template_options optional template options (unused)
 
         @return the data provider created
     */

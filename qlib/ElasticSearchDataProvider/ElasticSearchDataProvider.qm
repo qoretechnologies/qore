@@ -249,19 +249,19 @@ module ElasticSearchDataProvider {
       @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3); the data provider
       and its sub-providers now take any
       @ref RestClient::AbstractRestClient "AbstractRestClient" subclass, so callers that
-      already have a sync `RestClient` or an async `RestClientIo` can pass either via the
-      `restclient` constructor option
+      already have a sync <tt>RestClient</tt> or an async <tt>RestClientIo</tt> can pass either via the
+      <tt>restclient</tt> constructor option
     - bulk NDJSON body construction now uses
       @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" from the
-      `NdjsonDataProvider` module (shipped with `json` >= 1.11), switching the
+      <tt>NdjsonDataProvider</tt> module (shipped with <tt>json</tt> >= 1.11), switching the
       bulk-request accumulator from O(n²) string concatenation to O(n) streaming
       via @ref Qore::StringOutputStream "StringOutputStream"; this matters for large
       @ref ElasticSearchDataProvider::ElasticSearchBulkDataProvider "ElasticSearchBulkDataProvider"
       and @ref ElasticSearchDataProvider::ElasticSearchBulkOperation "ElasticSearchBulkOperation"
       batches where the hand-rolled accumulator spent meaningful wall time in buffer
       reallocation
-    - minimum `json` module version bumped to 1.11 (the version that introduced NDJSON
-      support); environments on older `json` will now get a clearer error pointing at the
+    - minimum <tt>json</tt> module version bumped to 1.11 (the version that introduced NDJSON
+      support); environments on older <tt>json</tt> will now get a clearer error pointing at the
       version requirement instead of silently running the old slow path
     - the request and response data type classes are now public, so types serialized in a provider index can be
       restored by programs that import the module

@@ -5,8 +5,8 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `addInventoryProduct` action data provider (upsert)
-/** A single action handles both create and update: omit `product_id` to
+#! BaseLinker <tt>addInventoryProduct</tt> action data provider (upsert)
+/** A single action handles both create and update: omit <tt>product_id</tt> to
     create a new product; supply it to update the existing one. This matches
     BaseLinker's upsert shape for this method.
 */

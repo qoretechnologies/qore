@@ -1,0 +1,42 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_model_inputsguide Dense Model Input Buffers
+
+    @tableofcontents
+
+    For ONNX inference, use the model-input APIs to avoid materializing
+    per-token Qore lists. These methods return row-major \c buffer<int64>
+    values and shape metadata that can be converted directly to
+    <a href="../../ml/html/classQore_1_1ML_1_1Tensor.html">ML::Tensor</a> values.
+
+    @code{.py}
+%requires ml
+
+hash<Tokenizer::TokenizerModelInputBatch> batch = tok.encodeBatchForModel(
+    ("short text", "a much longer sentence"), {
+        "max_length": 128,
+        "truncation": "longest_first",
+        "padding": "batch_longest",
+    });
+
+hash<auto> inputs = {
+    "input_ids": ML::Tensor::fromBuffer(batch.input_ids, batch.shape),
+    "attention_mask": ML::Tensor::fromBuffer(batch.attention_mask, batch.shape),
+    "token_type_ids": ML::Tensor::fromBuffer(batch.token_type_ids, batch.shape),
+};
+hash<auto> outputs = model.runTensors(inputs);
+    @endcode
+
+    Sentence-pair models such as cross-encoder rerankers can use
+    \c encodeBatchPairsForModel():
+
+    @code{.py}
+hash<Tokenizer::TokenizerModelInputBatch> pairs = tok.encodeBatchPairsForModel(
+    ("What is Qore?", "What is ONNX?"),
+    ("Qore is an integration language.", "ONNX is a model format."), {
+        "max_length": 256,
+        "truncation": "longest_first",
+        "padding": "batch_longest",
+    });
+    @endcode
+*/

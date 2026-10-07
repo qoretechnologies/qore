@@ -268,8 +268,8 @@ public class KlaviyoHandWrittenDataProviderBase inherits DataProvider::AbstractD
 }
 
 #! Attaches one object to another, or detaches it
-/** These six actions are **hand-written rather than generated**, and they are all hand-written for the
-    same reason: Klaviyo declares the body of a relationship endpoint as a JSON:API relationship **array**,
+/** These six actions are <b>hand-written rather than generated</b>, and they are all hand-written for the
+    same reason: Klaviyo declares the body of a relationship endpoint as a JSON:API relationship <b>array</b>,
 
     @code{.py}
 {"data": [{"type": "profile", "id": "01H…"}]}
@@ -286,8 +286,8 @@ public class KlaviyoHandWrittenDataProviderBase inherits DataProvider::AbstractD
 
     @section klaviyorelationship_semantics Membership Is Not Consent
 
-    Adding a profile to a list makes it a **member**.  It does not record marketing **consent**, which is
-    what **Subscribe Profile** does, and removing a profile from a list does not withdraw consent either.
+    Adding a profile to a list makes it a <b>member</b>.  It does not record marketing <b>consent</b>, which is
+    what <b>Subscribe Profile</b> does, and removing a profile from a list does not withdraw consent either.
     The two are deliberately separate in Klaviyo: a profile can be on a list and unsubscribed, and a
     subscribed profile can be removed from the list it subscribed through.
 */

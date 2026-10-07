@@ -27,7 +27,7 @@ public namespace BaseLinkerDataProvider {
 
 #! Container data provider grouping the 22 BaseLinker polling watch providers
 /** BaseLinker has no webhook API; all events are derived by polling
-    `getJournalList`. This container exposes one child per `log_type` code
+    <tt>getJournalList</tt>. This container exposes one child per <tt>log_type</tt> code
     (1..22) — each child is a dedicated watch provider.
 */
 public class BaseLinkerEventsDataProvider inherits BaseLinkerDataProviderBase {

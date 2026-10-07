@@ -30,17 +30,17 @@ public namespace QoreOnnxExport {
     by any ONNX-compatible runtime (ONNX Runtime, TensorFlow, PyTorch, etc.).
 
     @par Supported Algorithms
-    - @ref ML::StandardScaler "StandardScaler"
-    - @ref ML::MinMaxScaler "MinMaxScaler"
-    - @ref ML::Imputer "Imputer"
-    - @ref ML::LinearRegression "LinearRegression"
-    - @ref ML::LogisticRegression "LogisticRegression"
-    - @ref ML::PCA "PCA"
-    - @ref ML::KMeans "KMeans"
-    - @ref ML::DecisionTree "DecisionTree"
-    - @ref ML::RandomForest "RandomForest"
-    - @ref ML::GradientBoostedTrees "GradientBoostedTrees"
-    - @ref ML::IsolationForest "IsolationForest"
+    - @ref Qore::ML::StandardScaler "StandardScaler"
+    - @ref Qore::ML::MinMaxScaler "MinMaxScaler"
+    - @ref Qore::ML::Imputer "Imputer"
+    - @ref Qore::ML::LinearRegression "LinearRegression"
+    - @ref Qore::ML::LogisticRegression "LogisticRegression"
+    - @ref Qore::ML::PCA "PCA"
+    - @ref Qore::ML::KMeans "KMeans"
+    - @ref Qore::ML::DecisionTree "DecisionTree"
+    - @ref Qore::ML::RandomForest "RandomForest"
+    - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees"
+    - @ref Qore::ML::IsolationForest "IsolationForest"
 
     @par Example:
     @code{.py}

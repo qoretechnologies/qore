@@ -38,7 +38,7 @@ public namespace DataProvider {
 #/@{
 #! Enable servers
 /** If this is set, then external server threads or programs may be started for data provider functionality; in this
-    case the user must call @ref DataProvider::shutdown() before exiting
+    case the user must call @ref DataProvider::DataProvider::shutdown() before exiting
 */
 public const int DPO_EnableServers                  = (1 << 0);
 

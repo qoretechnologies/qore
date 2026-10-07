@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Watches for `batch.updated` webhook events
+#! Watches for <tt>batch.updated</tt> webhook events
 public class EasyPostWatchBatchUpdatedEventDataProvider inherits EasyPostBaseEventDataProvider {
     public {
         const ProviderInfo = <DataProviderInfo>{

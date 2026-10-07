@@ -7,7 +7,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2019 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -92,13 +92,13 @@ QoreValue JsonRpcClient::call(QoreStringNode* msg, QoreHashNode* info, Exception
 }
 
 //! The JsonRpcClient class provides easy access to JSON-RPC web services
-/** @deprecated Use the <a href="../../JsonRpcClientIo/html/index.html">JsonRpcClientIo</a> module instead.
+/** @deprecated Use the @ref jsonrpcclientiointro "JsonRpcClientIo" module instead.
     JsonRpcClientIo provides the same JSON-RPC call API with async I/O via
     \c HttpClientIo::HttpClientConnectionManager, offering automatic HTTP protocol negotiation
     (HTTP/3 &rarr; HTTP/2 &rarr; HTTP/1.1), connection pooling, and JSON-RPC 2.0 notification support.
     This class uses synchronous blocking I/O limited to HTTP/1.x.
 
-    This class inherits all public methods of the HTTPClient class. The inherited HTTPClient methods are not listed in this section, see the documentation for the HTTPClient class for more information on methods provided by the parent class.  For a list of low-level JSON-RPC functions, see @ref JSONRPC.
+    This class inherits all public methods of the HTTPClient class. The inherited HTTPClient methods are not listed in this section, see the documentation for the HTTPClient class for more information on methods provided by the parent class.  For a list of low-level JSON-RPC functions, see @ref JSONRPCguide.
 
     This object supports the following JSON-RPC protocol versions:
     - \c "2.0": the default; requests and responses will include the \c "jsonrpc" attribute assigned to the version number (this is true for any declared JSON-RPC protocol version >= 2)

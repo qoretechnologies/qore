@@ -50,7 +50,7 @@ module GitLabRestClient {
 
     @section gitlabrestclientintro GitLabRestClient Introduction
 
-    The %GitLabRestClient module provides an API for calling [GitLab](https://gitlab.com)'s REST API
+    The %GitLabRestClient module provides an API for calling <a href="https://gitlab.com">GitLab</a>'s REST API
     services, on both GitLab.com and self-managed installations.
 
     To use this module, use \c "%requires GitLabRestClient" in your code.
@@ -70,8 +70,8 @@ module GitLabRestClient {
     API over entirely separate data, and an integration pointed at the wrong one does not fail - it
     succeeds against the wrong repositories.
 
-    So \c hostname is the connection's defining option, and **everything else is derived from it in both
-    directions**:
+    So \c hostname is the connection's defining option, and <b>everything else is derived from it in both
+    directions</b>:
 
     |!Derived from \c hostname|!Value for \c https://gitlab.example.com
     |the target URL|\c https://gitlab.example.com
@@ -87,10 +87,10 @@ module GitLabRestClient {
 
     GitLab accepts either of two credentials, and this module supports both:
 
-    - a **personal, project or group access token**, sent as a bearer token.  This is the simplest
+    - a <b>personal, project or group access token</b>, sent as a bearer token.  This is the simplest
       option and is what a script normally uses; create one under
       \c "User Settings > Access Tokens" with the \c api scope.
-    - an **OAuth2 authorization code** flow, which is what an interactive integration uses.
+    - an <b>OAuth2 authorization code</b> flow, which is what an interactive integration uses.
       \c oauth2_client_id and \c oauth2_client_secret come from an OAuth application registered in the
       GitLab instance, and the authorization and token URLs are derived from \c hostname.
 
@@ -150,7 +150,7 @@ public class GitLabRestClientBase {
             identify the authorizing user.
 
             @note These are the scopes the application this module replaces requested, and that is not a
-            style choice.  GitLab validates a request against the scopes the **OAuth application** was
+            style choice.  GitLab validates a request against the scopes the <b>OAuth application</b> was
             registered with, and the application the platform publishes for GitLab was registered for the
             superseded one.  Asking for a scope outside that set - \c read_user, say, which is a perfectly
             valid GitLab scope in general - fails the authorization outright with "The requested scope is
@@ -499,19 +499,19 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
 
     #! Fills in the OAuth2 endpoints for the instance the connection works with
     /** GitLab runs on-premises as well as at gitlab.com, so its authorization and token endpoints belong to
-        the **instance** and cannot be constants in the connection scheme the way GitHub's and Xero's are.
+        the <b>instance</b> and cannot be constants in the connection scheme the way GitHub's and Xero's are.
         They are derived from \c hostname instead.
 
         Deriving them in the client alone is not enough, and this is the whole reason this method exists.
         @ref RestClient::RestConnection "RestConnection" decides at construction whether the connection can
         offer the OAuth2 authorization code flow, and it decides it by looking for \c oauth2_auth_url,
-        \c oauth2_token_url, \c oauth2_client_id, \c oauth2_client_secret and \c oauth2_redirect_url **in
-        the connection's own options**.  A connection that leaves the two endpoints to be worked out later,
+        \c oauth2_token_url, \c oauth2_client_id, \c oauth2_client_secret and \c oauth2_redirect_url <b>in
+        the connection's own options</b>.  A connection that leaves the two endpoints to be worked out later,
         when a client is finally constructed, therefore reports that it cannot authorize at all: the
         platform offers an access-token form instead of the authorization flow, and a connection created
         that way comes back with \c oauth2_auth_code false.
 
-        The endpoints are derived from \c hostname **every time**, overwriting whatever is stored, which is
+        The endpoints are derived from \c hostname <b>every time</b>, overwriting whatever is stored, which is
         the same rule this connection already applies to its URL and for the same reason: they belong to the
         instance, so a value left over from a previous one would send the authorization somewhere the
         connection no longer talks to.  Nothing is lost by it - GitLab serves \c /oauth/authorize and

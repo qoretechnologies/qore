@@ -58,10 +58,10 @@ module AwsRestClientDataProvider {
 
     The following classes are provided by this module:
     - @ref AwsRestClientDataProvider::AwsRestClientCallDataProvider "AwsRestClientCallDataProvider"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallRequestDataType "AwsRestClientCallRequestDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallResponseDataType "AwsRestClientCallResponseDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallWithMethodRequestDataType "AwsRestClientCallWithMethodRequestDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallWithoutBodyRequestDataType "AwsRestClientCallWithoutBodyRequestDataType"
+    - @ref RestClientDataProvider::RestClientCallRequestDataType "RestClientCallRequestDataType"
+    - @ref RestClientDataProvider::RestClientCallResponseDataType "RestClientCallResponseDataType"
+    - @ref RestClientDataProvider::RestClientCallWithMethodRequestDataType "RestClientCallWithMethodRequestDataType"
+    - @ref RestClientDataProvider::RestClientCallWithoutBodyRequestDataType "RestClientCallWithoutBodyRequestDataType"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProviderFactory "AwsRestClientDataProviderFactory"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProvider "AwsRestClientDataProvider"
     - @ref AwsRestClientDataProvider::AwsRestClientDeleteDataProvider "AwsRestClientDeleteDataProvider"

@@ -129,7 +129,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         #! the search criteria used to match messages
         string criteria;
 
-        #! set the \Seen flag on reported messages
+        #! set the <tt>\\Seen</tt> flag on reported messages
         bool mark_seen = False;
 
         #! delete reported messages after reporting them
@@ -144,7 +144,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         #! True once IDLE has been entered on the connection
         bool idling = False;
 
-        #! True when messages were flagged \Deleted in the current cycle and must be expunged
+        #! True when messages were flagged <tt>\\Deleted</tt> in the current cycle and must be expunged
         bool expunge_needed = False;
     }
     #! @endcond

@@ -27,20 +27,20 @@ public namespace KlaviyoDataProvider {
 #! The Klaviyo record-based tables
 /** Klaviyo's collections are JSON:API resource collections, and every one of them is filtered with the same
     \c filter query argument.  Six of the seven tables therefore declare
-    @ref DataProvider::DataProviderInfo::supports_native_search "supports_native_search": a whole search
+    @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search": a whole search
     expression is rendered into that argument and Klaviyo does the searching.
 
     @section klaviyorecord_filter The Filter Syntax
 
-    Klaviyo's filter is a **prefix call** rather than an infix comparison - \c {equals(name,"Newsletter")},
+    Klaviyo's filter is a <b>prefix call</b> rather than an infix comparison - \c {equals(name,"Newsletter")},
     <tt>greater-than(created,"2026-01-01T00:00:00Z")</tt> - and predicates are joined by a bare comma meaning
-    **and**.  There is **no disjunction and no negation at all**, which is why
+    <b>and</b>.  There is <b>no disjunction and no negation at all</b>, which is why
     @ref KlaviyoRecordTables::Filter "Filter" leaves \c or_op and \c not_op unset: a search containing an
     \c OR or a \c NOT is evaluated here rather than being sent as something Klaviyo would answer differently.
     Sending the arguments of an \c OR joined by commas would answer with their intersection, which is the
     wrong set and would look like a working search.
 
-    A set predicate is spelled \c any and its value is **always a JSON array**: Klaviyo rejects
+    A set predicate is spelled \c any and its value is <b>always a JSON array</b>: Klaviyo rejects
     <tt>any(email,"x")</tt> as an invalid filter and accepts <tt>any(email,["x"])</tt>.  The application this
     one replaces sent a bare string whenever it had exactly one value, so its single-value filters never
     worked at all.
@@ -48,7 +48,7 @@ public namespace KlaviyoDataProvider {
     @section klaviyorecord_fieldops Each Field Accepts Different Comparisons
 
     Klaviyo indexes each field for particular comparisons and answers a filter using any other one with an
-    **error**, so the matrix is declared per field rather than per table.  A profile's \c id takes \c equals
+    <b>error</b>, so the matrix is declared per field rather than per table.  A profile's \c id takes \c equals
     and \c any; its \c created takes only \c greater-than and \c less-than - there is no \c greater-or-equal
     on a profile at all, though there is one on a campaign's \c created_at and on an event's \c datetime.
     Every entry below is transcribed from the argument's own description in the pinned schema.
@@ -59,12 +59,12 @@ public namespace KlaviyoDataProvider {
     @section klaviyorecord_campaigns Campaigns Are Scoped, Not Searched
 
     Klaviyo will not list campaigns at all without being told which channel to look at - \c filter is a
-    **required** argument there, and \c messages.channel accepts only \c equals.  The listing action
+    <b>required</b> argument there, and \c messages.channel accepts only \c equals.  The listing action
     therefore publishes the filter as the two options the superseded application offered, \c channel and
     \c name, and there is no raw \c filter argument left for a rendered expression to travel in: one query
     argument cannot carry both the required channel and a whole expression.
 
-    So the campaigns table declares \c channel as a **scope option** - it identifies the collection and is
+    So the campaigns table declares \c channel as a <b>scope option</b> - it identifies the collection and is
     the same for every record in a search - and narrows on \c name with a filter rule.  It does not claim
     native search, because it does not have it.
 
@@ -79,18 +79,18 @@ public namespace KlaviyoDataProvider {
     @section klaviyorecord_events Events Are Appended, Never Changed
 
     An event is a record of something that happened, so it is created and never updated or deleted.  It is
-    created through **Create Event**, which is hand-written rather than generated - Klaviyo's event body
+    created through <b>Create Event</b>, which is hand-written rather than generated - Klaviyo's event body
     nests a metric envelope and a profile envelope inside its attributes - and a table can only name an
     action the manifest exports, so this table reads and searches and does not create.
 
     @section klaviyorecord_paging Paging Is by Cursor, and the Cap Differs per Endpoint
 
-    Every listing pages by cursor, and Klaviyo answers with a whole **URL** in \c links.next rather than with
+    Every listing pages by cursor, and Klaviyo answers with a whole <b>URL</b> in \c links.next rather than with
     the cursor itself; the response overlay merges those links up, so the next page is at \c next and
     @ref KlaviyoWatchDataProviderBase::getCursorFromLink() "getCursorFromLink()" takes the cursor out of it.
 
     \c {page[size]} caps differ per endpoint - 10 for lists and segments, 50 for tags, 100 for profiles,
-    campaigns and events - and Klaviyo **rejects** a larger value rather than clamping it, so the maximum is
+    campaigns and events - and Klaviyo <b>rejects</b> a larger value rather than clamping it, so the maximum is
     declared per table.
 
     @section klaviyorecord_writenames A Column Is Not Always Spelled Like Its Option
@@ -446,7 +446,7 @@ public class KlaviyoRecordTables {
 
     #! Renders one value as Klaviyo's filter syntax spells it
     /** Every literal is JSON, which is what Klaviyo's filter takes: a string is double-quoted and escaped, a
-        boolean is a bare keyword and a set is a JSON array.  A set is **always** an array even when it holds
+        boolean is a bare keyword and a set is a JSON array.  A set is <b>always</b> an array even when it holds
         one value - Klaviyo rejects <tt>any(email,"x")</tt> - and the renderer is handed the whole set, so
         that falls out rather than being a special case.
 

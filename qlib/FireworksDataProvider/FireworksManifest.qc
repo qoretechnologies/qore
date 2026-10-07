@@ -24,7 +24,7 @@
 
 public namespace FireworksDataProvider {
 #! Reviewed Fireworks operations, forms, and account-scoped dropdowns
-/** The original `chat-completion` and `create-embeddings` action identities remain stable.
+/** The original <tt>chat-completion</tt> and <tt>create-embeddings</tt> action identities remain stable.
     Five vendor schemas retain their own API base paths. Streaming is exposed by the LLM adapter;
     app inference actions return complete responses. Dropdowns fetch one page and accept custom IDs.
 

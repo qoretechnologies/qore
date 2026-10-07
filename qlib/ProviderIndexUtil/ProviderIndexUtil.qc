@@ -564,7 +564,7 @@ bool build_mode = ProviderIndexUtil::setBuildMode(True);
 on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @endcode
 
-        @note @ref ProviderIndex::ProviderIndex::createDataProviderIndex() "ProviderIndex::createDataProviderIndex()"
+        @note \c ProviderIndex::createDataProviderIndex()
         enters build mode itself; an embedder that loads provider modules before it, or that loads modules whose
         initialization looks up providers, should enter build mode first, or set the @ref ProviderIndexBuildEnvVar
         environment variable for the process
@@ -4891,7 +4891,7 @@ class IndexedTypeTableBuilder {
 %endif
 
 #! The tables of distinct type and field descriptions of a metadata cache chunk
-/** Restores the descriptions stored by @ref IndexedTypeTableBuilder: each description is restored once, when it is
+/** Restores the descriptions stored by @ref IndexedTypeTableBuilder "IndexedTypeTableBuilder": each description is restored once, when it is
     first needed, and every description that refers to it shares the restored description, so restoring the option
     types of an app's actions takes time and memory in proportion to its distinct descriptions, not to the size of
     their complete descriptions.

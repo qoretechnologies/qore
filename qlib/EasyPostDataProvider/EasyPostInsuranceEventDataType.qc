@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Insurance event payload (`insurance.purchased`)
+#! Insurance event payload (<tt>insurance.purchased</tt>)
 public class EasyPostInsuranceEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

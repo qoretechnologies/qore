@@ -146,7 +146,7 @@ const YamlVersion1_2 = 12;
 
     @since yaml 1.1
 */
-hashdecl YamlParseOptions {
+hashdecl Qore::YAML::YamlParseOptions {
     //! Target YAML version for parsing (YamlVersion1_1 or YamlVersion1_2)
     /** When set to YamlVersion1_2:
         - Only true/false recognized as booleans (not yes/no/on/off)

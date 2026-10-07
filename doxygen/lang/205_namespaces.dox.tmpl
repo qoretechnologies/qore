@@ -78,7 +78,7 @@ A::B::MyOtherConst;
     - <tt>::</tt><em>root_namespace::[sub_namespace(s)::]constant|class|namespace</em>
 
     The first form is <b>relative</b>: <em>starting_namespace</em> is a namespace <i>name</i>, and any namespace with that name matches, no matter how deeply it is nested (see @ref qualified_symbol_resolution "qualified symbol resolution").  The second form, with a leading <tt>::</tt>, is <b>anchored</b> to the root namespace, so <em>root_namespace</em> must be a namespace declared directly in the root namespace.\n\n
-    For example, given a namespace \c Inner declared inside \c Outer, the path <tt>Inner::MyConst</tt> resolves, while <tt>::Inner::MyConst</tt> does not, because \c Inner is not a root-level namespace.
+    For example, given a namespace \c Inner declared inside \c Outer, the path <tt>Inner::MyConst</tt> resolves, while <tt>\::Inner::MyConst</tt> does not, because \c Inner is not a root-level namespace.
 
     @par Example
     @code{.py}

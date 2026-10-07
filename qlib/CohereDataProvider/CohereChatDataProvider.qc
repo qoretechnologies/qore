@@ -23,7 +23,7 @@
 */
 
 public namespace CohereDataProvider {
-#! Data provider for Cohere's `/v2/chat` endpoint
+#! Data provider for Cohere's <tt>/v2/chat</tt> endpoint
 public class CohereChatDataProvider inherits CohereDataProviderCommon {
     public {
         const ProviderInfo = <DataProviderInfo>{

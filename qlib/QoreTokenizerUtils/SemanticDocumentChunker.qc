@@ -86,15 +86,15 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
     }
 
     #! Creates a SemanticDocumentChunker
-    /** @param tokenizer_config a parsed `tokenizer.json` hash
+    /** @param tokenizer_config a parsed <tt>tokenizer.json</tt> hash
         @param embedding_config an @ref EmbeddingConfig hash for the embedding model
         @param options optional hash with:
-        - \c chunk_size (int): maximum tokens per chunk (default: `512`)
-        - \c chunk_overlap (int): overlapping tokens between chunks (default: `50`)
-        - \c segment_size (int): sentences per segment for embedding (default: `3`)
+        - \c chunk_size (int): maximum tokens per chunk (default: <tt>512</tt>)
+        - \c chunk_overlap (int): overlapping tokens between chunks (default: <tt>50</tt>)
+        - \c segment_size (int): sentences per segment for embedding (default: <tt>3</tt>)
         - \c similarity_threshold (float): breakpoint threshold; lower values produce
-          more breakpoints and smaller chunks (default: `0.5`)
-        - \c add_special_tokens (bool): whether to include special tokens (default: `True`)
+          more breakpoints and smaller chunks (default: <tt>0.5</tt>)
+        - \c add_special_tokens (bool): whether to include special tokens (default: <tt>True</tt>)
 
         @throw DOCUMENT-CHUNKER-ERROR if chunk parameters are invalid
         @throw EMBEDDING-CONFIG-ERROR if embedding config is invalid

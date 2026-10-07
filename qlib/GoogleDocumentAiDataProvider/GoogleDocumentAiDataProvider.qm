@@ -137,12 +137,12 @@ module GoogleDocumentAiDataProvider {
     @section googledocumentaidataproviderintro GoogleDocumentAiDataProvider Introduction
 
     The %GoogleDocumentAiDataProvider module provides a data provider API
-    for [Google Document AI](https://cloud.google.com/document-ai).
+    for <a href="https://cloud.google.com/document-ai">Google Document AI</a>.
     Typed actions cover processing, processor and version management, evaluations, operations, and
     document schemas. Explicitly named beta actions support datasets and processor-version import.
 
-    - `process-document` — submit a document to a Document AI processor
-      and receive the parsed `Document` object with text, layout, and
+    - <tt>process-document</tt> — submit a document to a Document AI processor
+      and receive the parsed <tt>Document</tt> object with text, layout, and
       typed entities
 
     Documents are submitted as inline bytes (base64-encoded automatically),
@@ -151,7 +151,7 @@ module GoogleDocumentAiDataProvider {
     @par Authentication
 
     Auth uses @ref gcpauthintro "GcpAuth" — either an explicit
-    service-account JSON file (via the `gcp_sa_json_path` constructor
+    service-account JSON file (via the <tt>gcp_sa_json_path</tt> constructor
     option) or Application Default Credentials.
 
     @section GoogleDocumentAiDataProviderRelnotes Release Notes

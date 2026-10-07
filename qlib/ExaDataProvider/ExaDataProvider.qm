@@ -83,7 +83,7 @@ module ExaDataProvider {
 
     @section exadataproviderintro ExaDataProvider Introduction
 
-    Data-provider integration for [Exa](https://exa.ai) (formerly Metaphor), a web-search API built
+    Data-provider integration for <a href="https://exa.ai">Exa</a> (formerly Metaphor), a web-search API built
     for programs: the query is meaning rather than keywords, and the result can be the answer itself
     rather than a list of links.
 

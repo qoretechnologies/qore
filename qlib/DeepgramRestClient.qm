@@ -54,9 +54,9 @@ module DeepgramRestClient {
     @section deepgramrestclientintro DeepgramRestClient Introduction
 
     The %DeepgramRestClient module provides an API for calling
-    [Deepgram](https://deepgram.com) speech REST services — automatic
-    speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS)
-    via `/v1/speak`.
+    <a href="https://deepgram.com">Deepgram</a> speech REST services — automatic
+    speech recognition (ASR) via <tt>/v1/listen</tt> and text-to-speech (TTS)
+    via <tt>/v1/speak</tt>.
 
     To use this module, use \c "%requires DeepgramRestClient" in your code.
 
@@ -102,8 +102,8 @@ f.write(resp.body);
     @section DeepgramRestClientRelnotes Release Notes
 
     @subsection DeepgramRestClientv1_1 DeepgramRestClient v1.1
-    - the `Authorization: Token <key>` header built from the `apikey` option is now placed in the `headers`
-      option read by the REST clients; it was previously put in an unread `default_headers` option, so
+    - the <tt>Authorization: Token &lt;key&gt;</tt> header built from the <tt>apikey</tt> option is now placed in the <tt>headers</tt>
+      option read by the REST clients; it was previously put in an unread <tt>default_headers</tt> option, so
       requests and the connection ping were sent without authentication and failed with HTTP 401
       (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
 
@@ -312,7 +312,7 @@ public class DeepgramRestConnection inherits RestClient::RestConnection {
 }
 
 #! @ref QoreSpeechUtils::AbstractTranscriber "AbstractTranscriber" backed by
-#! Deepgram's `/v1/listen` endpoint
+#! Deepgram's <tt>/v1/listen</tt> endpoint
 public class DeepgramTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
     private {
         DeepgramRestClientIo rest;
@@ -378,7 +378,7 @@ public class DeepgramTranscriber inherits QoreSpeechUtils::AbstractTranscriber {
 }
 
 #! @ref QoreSpeechUtils::AbstractSpeechSynthesizer "AbstractSpeechSynthesizer"
-#! backed by Deepgram's `/v1/speak` endpoint
+#! backed by Deepgram's <tt>/v1/speak</tt> endpoint
 public class DeepgramSynthesizer inherits QoreSpeechUtils::AbstractSpeechSynthesizer {
     private {
         DeepgramRestClientIo rest;

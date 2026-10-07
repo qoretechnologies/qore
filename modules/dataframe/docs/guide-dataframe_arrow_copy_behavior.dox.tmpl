@@ -1,0 +1,27 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframe_arrow_copy_behaviorguide Arrow, Parquet, And Copy Behavior
+
+    @tableofcontents
+
+    DataFrame Arrow IPC and Parquet APIs preserve logical schema and values
+    across \c DataFrame, @ref Qore::SQL::ColumnarResult "ColumnarResult", and
+    Apache Arrow. They use zero-copy storage only where ownership, alignment,
+    nullability, and mutability rules make it safe. Mutating a DataFrame column
+    that references external immutable storage detaches that column before
+    writing.
+
+    |!Data shape|!Import/export behavior
+    |Fixed-width primitive columns|Preserved as dense buffers and can be zero-copy when host storage is compatible.
+    |Boolean columns|Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage.
+    |Fixed-scale decimal columns|Preserved as \c buffer<decimal128>; Arrow IPC and Parquet import/export can reuse the fixed-width buffer when precision and scale metadata match.
+    |String and binary columns|Preserve values and schema; variable-width buffers may be copied into Qore-owned storage.
+    |Date, timestamp, and duration columns|Preserve logical values and use \c buffer<int64> microsecond storage when represented as ColumnarResult/DataFrame dense columns; microsecond timestamp and duration Arrow arrays can be imported and exported without copying the value buffer.
+    |List, fixed-size-list, struct, map, and dictionary-compatible columns|Preserve recursive schema metadata and lossless Qore values in \c auto columns.
+    |Unsupported physical layouts|Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings.
+
+    A DataFrame itself is intentionally not generic. Operations such as
+    select(), groupBy(), join(), pivot(), and melt() can change the row shape
+    at runtime based on selected columns or remote data. Use typed hashdecls
+    for stable result records and \c hash<auto> for dynamic rows.
+*/

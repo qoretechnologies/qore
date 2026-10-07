@@ -191,8 +191,8 @@ module Hl7v2Util {
     - Parses message delimiters from the \c MSH segment.
     - Preserves segment order, including unknown custom \c Z segments.
     - Supports field, repetition, component, and subcomponent separators.
-    - Handles standard HL7 escape sequences such as \c "\\F\\", \c "\\S\\",
-      \c "\\R\\", \c "\\T\\", \c "\\E\\", and \c "\\.br\\".
+    - Handles standard HL7 escape sequences such as <tt>\\F\\</tt>, <tt>\\S\\</tt>,
+      <tt>\\R\\</tt>, <tt>\\T\\</tt>, <tt>\\E\\</tt>, and <tt>\\.br\\</tt>.
     - Provides address helpers for common expressions such as \c "MSH-9",
       \c "PID-3(2).1", and \c "OBX-5".
     - Builds \c ORU^R01 observation result messages from structured patient,

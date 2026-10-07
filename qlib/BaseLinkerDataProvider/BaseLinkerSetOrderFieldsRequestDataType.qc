@@ -4,15 +4,15 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `setOrderFields` method
-/** `setOrderFields` updates mutable header fields only. The API does not accept:
+#! Request type for the BaseLinker <tt>setOrderFields</tt> method
+/** <tt>setOrderFields</tt> updates mutable header fields only. The API does not accept:
 
-    - `order_status_id` (use `set-order-status`)
-    - `paid` (use `set-order-payment`)
-    - `date_add`, `currency`, `custom_source_id`, `products`
+    - <tt>order_status_id</tt> (use <tt>set-order-status</tt>)
+    - <tt>paid</tt> (use <tt>set-order-payment</tt>)
+    - <tt>date_add</tt>, <tt>currency</tt>, <tt>custom_source_id</tt>, <tt>products</tt>
 
-    `setOrderFields` also adds three pick/pack/star workflow flags that are not
-    present on `addOrder`.
+    <tt>setOrderFields</tt> also adds three pick/pack/star workflow flags that are not
+    present on <tt>addOrder</tt>.
 */
 public class BaseLinkerSetOrderFieldsRequestDataType inherits HashDataType {
     public {

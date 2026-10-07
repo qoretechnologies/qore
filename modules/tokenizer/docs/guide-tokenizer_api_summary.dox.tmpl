@@ -1,0 +1,21 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page tokenizer_api_summaryguide API Summary
+
+    @tableofcontents
+
+    |!Method|!Description
+    |@ref Qore::Tokenizer::HFTokenizer::encode "encode(text)"|Basic encoding with special tokens
+    |@ref Qore::Tokenizer::HFTokenizer::encodeWithOptions "encodeWithOptions(text, text_pair, add_special)"|Encoding with sentence pair support
+    |@ref Qore::Tokenizer::HFTokenizer::encodeAdvanced "encodeAdvanced(text, options)"|Full encoding with truncation, padding, sentence pairs
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatch "encodeBatch(texts, options)"|Batch encoding with uniform output length
+    |@ref Qore::Tokenizer::HFTokenizer::encodeForModel "encodeForModel(text, options)"|Single-row dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchForModel "encodeBatchForModel(texts, options)"|Batch dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::encodeBatchPairsForModel "encodeBatchPairsForModel(texts, text_pairs, options)"|Sentence-pair dense model input buffers
+    |@ref Qore::Tokenizer::HFTokenizer::decode "decode(ids, skip_special)"|Decode token IDs back to text
+    |@ref Qore::Tokenizer::HFTokenizer::getVocabSize "getVocabSize()"|Return vocabulary size
+    |@ref Qore::Tokenizer::HFTokenizer::idToToken "idToToken(id)"|Convert token ID to string
+    |@ref Qore::Tokenizer::HFTokenizer::tokenToId "tokenToId(token)"|Convert token string to ID
+    |@ref Qore::Tokenizer::HFTokenizer::getVocab "getVocab()"|Return full vocabulary as hash
+    |@ref Qore::Tokenizer::HFTokenizer::getPadTokenId "getPadTokenId()"|Return the pad token ID
+*/

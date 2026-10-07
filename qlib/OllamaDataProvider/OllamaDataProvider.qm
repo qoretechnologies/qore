@@ -134,14 +134,14 @@ module OllamaDataProvider {
     @section ollamadataproviderintro OllamaDataProvider Introduction
 
     The %OllamaDataProvider module provides a data provider API for
-    [Ollama](https://ollama.com) — a local-first runtime that serves
+    <a href="https://ollama.com">Ollama</a> — a local-first runtime that serves
     open-weight LLMs via HTTP.
 
     The following data providers are exposed:
     - @ref OllamaDataProvider::OllamaDataProvider "OllamaDataProvider" — root
     - @ref OllamaDataProvider::OllamaChatCompletionDataProvider "OllamaChatCompletionDataProvider" — chat
-    - @ref OllamaDataProvider::OllamaEmbedDataProvider "OllamaEmbedDataProvider" — embeddings via native `/api/embed`
-    - @ref OllamaDataProvider::OllamaListModelsDataProvider "OllamaListModelsDataProvider" — `/api/tags`
+    - @ref OllamaDataProvider::OllamaEmbedDataProvider "OllamaEmbedDataProvider" — embeddings via native <tt>/api/embed</tt>
+    - @ref OllamaDataProvider::OllamaListModelsDataProvider "OllamaListModelsDataProvider" — <tt>/api/tags</tt>
 
     @section OllamaDataProviderRelnotes Release Notes
 

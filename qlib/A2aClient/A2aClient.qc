@@ -897,7 +897,7 @@ public class A2aClient {
 
     #! Sets a callback fired for each event received on a streaming call
     /** Registered callbacks are dispatched by @ref sendMessageStream() and
-        @ref resubscribeTask() alongside the per-call \c on_event handler, so a caller can
+        @ref A2aClient::A2aClient::resubscribe() alongside the per-call \c on_event handler, so a caller can
         register a handler once instead of passing one to every streaming call.
 
         The callback name is the event type: \c "TaskStatusUpdateEvent",

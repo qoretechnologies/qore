@@ -26,11 +26,11 @@
 public namespace FirecrawlDataProvider {
 
 #! Firecrawl parse action data provider
-/** Sends a `multipart/form-data` POST to `/parse` with two parts:
-    - `file` — the binary file content (with filename + MIME type)
-    - `options` — a JSON-encoded object holding the parse options
+/** Sends a <tt>multipart/form-data</tt> POST to <tt>/parse</tt> with two parts:
+    - <tt>file</tt> — the binary file content (with filename + MIME type)
+    - <tt>options</tt> — a JSON-encoded object holding the parse options
 
-    The provider handles base64→binary conversion of `req.file.content`,
+    The provider handles base64→binary conversion of <tt>req.file.content</tt>,
     builds the multipart envelope manually, and invokes the connection
     manager directly so that the high-level REST encoding machinery does
     not interfere with the binary body.

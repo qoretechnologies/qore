@@ -28,9 +28,9 @@ public namespace BaseLinkerDataProvider {
 #! Base class for all BaseLinker data providers
 /** All data-provider REST traffic is dispatched through @ref callMethod() which
     wraps BaseLinker's single-endpoint RPC-over-HTTP protocol: every operation
-    is a POST to `/connector.php` with a form-encoded body of the shape
-    `method=<name>&parameters=<URL-encoded JSON>`. Responses are always HTTP 200;
-    success/failure is signalled by the JSON body's `status` field.
+    is a POST to <tt>/connector.php</tt> with a form-encoded body of the shape
+    <tt>method=&lt;name&gt;&amp;parameters=&lt;URL-encoded JSON&gt;</tt>. Responses are always HTTP 200;
+    success/failure is signalled by the JSON body's <tt>status</tt> field.
 */
 public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
@@ -100,15 +100,15 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
 
     #! Invokes a BaseLinker API method and returns the parsed response body
     /** This is the single dispatcher that every child provider uses to call the
-        BaseLinker API. It serializes `parameters` as JSON, pre-escapes `+` to
-        `%2B` (so BaseLinker's form decoder does not convert `+` back to space —
+        BaseLinker API. It serializes <tt>parameters</tt> as JSON, pre-escapes <tt>+</tt> to
+        <tt>\%2B</tt> (so BaseLinker's form decoder does not convert <tt>+</tt> back to space —
         this matters for base64 payloads), URL-encodes the JSON, builds the
-        form-encoded body `method=<name>&parameters=<encoded-json>`, and POSTs to
+        form-encoded body <tt>method=&lt;name&gt;&amp;parameters=&lt;encoded-json&gt;</tt>, and POSTs to
         the root endpoint. The parsed JSON response body is then validated by
-        @ref checkResponse(); on API errors a `BASELINKER-API-ERROR` is thrown.
+        @ref checkResponse(); on API errors a <tt>BASELINKER-API-ERROR</tt> is thrown.
 
-        @param method BaseLinker API method name, e.g. `"getOrders"`
-        @param parameters hash of method parameters (may be `NOTHING` / empty)
+        @param method BaseLinker API method name, e.g. <tt>"getOrders"</tt>
+        @param parameters hash of method parameters (may be <tt>NOTHING</tt> / empty)
 
         @return the successful response body hash
         @throw BASELINKER-API-ERROR if the response body indicates an error
@@ -201,9 +201,9 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     /** @param method the API method name (included in exception arg/desc for debugging)
         @param body the parsed response body
 
-        @return the body unchanged on success (`status == "SUCCESS"` or no error indicator)
-        @throw BASELINKER-API-ERROR if `body.status == "ERROR"`
-        @throw BASELINKER-RESPONSE-ERROR if `body` is not a hash
+        @return the body unchanged on success (<tt>status == "SUCCESS"</tt> or no error indicator)
+        @throw BASELINKER-API-ERROR if <tt>body.status == "ERROR"</tt>
+        @throw BASELINKER-RESPONSE-ERROR if <tt>body</tt> is not a hash
     */
     hash<auto> checkResponse(string method, auto body) {
         if (body.typeCode() != NT_HASH) {
@@ -228,7 +228,7 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
 
     #! Runs a callable with exponential-backoff retry on rate-limit and transient errors
     /** Retries up to @ref MaxRetries times with 1s/2s/4s sleep between attempts. Retries on:
-        - `BASELINKER-API-ERROR` whose `error_code` matches a known rate-limit code
+        - <tt>BASELINKER-API-ERROR</tt> whose <tt>error_code</tt> matches a known rate-limit code
         - socket-level errors from @ref RetrySet
     */
     auto retryRequest(code func) {
@@ -269,9 +269,9 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Converts create-request fields into optional fields for matching update-request types
-    /** Removes `required: True`, swaps strict types for their `*OrNothing` counterparts
-        where available, and leaves every other attribute intact. Used by `set*` and
-        `update*` request types to avoid duplicating the full field hash.
+    /** Removes <tt>required: True</tt>, swaps strict types for their <tt>*OrNothing</tt> counterparts
+        where available, and leaves every other attribute intact. Used by <tt>set*</tt> and
+        <tt>update*</tt> request types to avoid duplicating the full field hash.
     */
     static hash<auto> makeFieldsOptional(hash<auto> fields) {
         hash<auto> or_nothing_map = {
@@ -318,8 +318,8 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns reference data for the requested type
-    /** Signature must match @ref AbstractDataProvider::getReferenceDataImpl() exactly
-        (\c string \c type, \c *hash<auto> \c action_opts) — Qore's method dispatch will not
+    /** Signature must match @ref DataProvider::AbstractDataProvider::getReferenceDataImpl() exactly
+        (\c string \c type, \c *hash&lt;auto&gt; \c action_opts) — Qore's method dispatch will not
         invoke an override with a different signature, so any deviation silently disables
         ref_data resolution for every action option in the module.
     */

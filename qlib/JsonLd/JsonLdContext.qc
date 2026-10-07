@@ -1034,6 +1034,10 @@ public class JsonLdContext {
     /** When a redefinition is identical (modulo protected flag), the term retains
         its protected status per W3C spec step 7.
 
+        @param previous the prior term definition, if present
+        @param current the new term definition
+        @param term the term being defined
+        @param override_protected whether protected definitions may be replaced
         @param result reference to the active context being built (to update protected flag)
     */
     private checkProtectedRedefinition(*hash<JsonLdTermDefinition> previous,

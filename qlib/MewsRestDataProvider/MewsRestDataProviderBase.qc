@@ -32,7 +32,7 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     private {
-        #! The REST client — must be a @ref MewsRestClient or @ref MewsRestClientIo
+        #! The REST client — must be a @ref MewsRestClient or @ref MewsRestClient::MewsRestClientIo
         RestClient::AbstractRestClient rest;
         SwaggerDataProvider::SwaggerDataProvider sdp;
     }

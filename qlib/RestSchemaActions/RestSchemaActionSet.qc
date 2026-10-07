@@ -49,7 +49,7 @@ public hashdecl RestSchemaReferenceDataInfo {
     #! Options taken from the action being filled in, keyed by the listing action's option name
     /** Turns a dropdown that can only list globally into one scoped by what the user has already chosen:
         the branches of the selected project, the pages of the selected space.  Each entry names an option
-        of the listing action, and the value names the option of the **calling** action supplying it.
+        of the listing action, and the value names the option of the <b>calling</b> action supplying it.
 
         Every named value is required: until the user has filled in the option it depends on, the listing
         cannot be made at all, so the dropdown is empty rather than listing the wrong thing.  Pair this with
@@ -99,7 +99,7 @@ public hashdecl RestSchemaReferenceDataInfo {
     *string display_field;
 
     #! Option sets to run the listing once for each of, in addition to @ref options
-    /** Some APIs will not list a collection whole.  Klaviyo's campaign listing **requires** a filter on the
+    /** Some APIs will not list a collection whole.  Klaviyo's campaign listing <b>requires</b> a filter on the
         message channel and accepts only \c equals there, so an account's campaigns are only reachable one
         channel at a time - and a dropdown offering half the account is worse than no dropdown at all.
 
@@ -164,7 +164,7 @@ public class RestSchemaActionSet {
 
         An application whose API is split across documents needs one set per document, because a set binds
         one schema and the request URI takes its prefix from that schema's base path.  Its dropdowns do not
-        split the same way: a Xero project names a **contact**, and contacts are declared in the accounting
+        split the same way: a Xero project names a <b>contact</b>, and contacts are declared in the accounting
         document while projects are declared in the projects one.  Naming the peer sets lets a field in this
         set declare reference data another set produces, and the listing then runs against the schema that
         actually declares it.
@@ -429,7 +429,7 @@ public class RestSchemaActionSet {
 
     #! Returns the set that resolves the given host source, from this set or a peer
     /** An application whose data plane is described in a different document than its control plane declares
-        the host source in the **control** set, because that is where the action resolving the host lives;
+        the host source in the <b>control</b> set, because that is where the action resolving the host lives;
         the data-plane set names it as a peer.  The lookup has to run against the schema that declares it,
         for the same reason a reference-data listing does: the request URI takes its prefix from that
         schema's base path.

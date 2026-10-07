@@ -5,8 +5,8 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker inventory categories data provider (`getInventoryCategories`)
-/** When `inventory_id` is supplied, only categories within that catalog are
+#! BaseLinker inventory categories data provider (<tt>getInventoryCategories</tt>)
+/** When <tt>inventory_id</tt> is supplied, only categories within that catalog are
     returned; otherwise categories across all catalogs are returned.
 */
 public class BaseLinkerInventoryCategoriesDataProvider inherits BaseLinkerDataProviderBase {

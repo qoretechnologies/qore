@@ -25,7 +25,7 @@
 #! contains all public definitions in the SGLangDataProvider module
 public namespace SGLangDataProvider {
 #! Data provider for generating embeddings via the SGLang OpenAI-compatible API
-/** Uses the `POST /v1/embeddings` endpoint.  The `model` field is optional on
+/** Uses the <tt>POST /v1/embeddings</tt> endpoint.  The <tt>model</tt> field is optional on
     the request and defaults to the model configured on the SGLang connection.
 */
 public class SGLangEmbeddingsDataProvider inherits SGLangDataProviderCommon {

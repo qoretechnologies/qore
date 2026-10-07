@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! An inventory manufacturer (from `getInventoryManufacturers`)
+#! An inventory manufacturer (from <tt>getInventoryManufacturers</tt>)
 public class BaseLinkerInventoryManufacturerDataType inherits HashDataType {
     public {
         const Fields = {

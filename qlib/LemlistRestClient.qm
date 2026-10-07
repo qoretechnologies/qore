@@ -345,20 +345,23 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
         return "Lemlist";
     }
 
-    #! returns a @ref LemlistRestClient object
-    /** @param connect if @ref True, a connection is made immediately
-        @param rtopts runtime options (ignored)
-
-        @return a @ref LemlistRestClient object
-    */
     #! Returns connection options with apikey translated to username/password for HTTP Basic Auth
     /** This ensures the polling ping mechanism gets proper Basic Auth credentials.
+
+        @param rtopts runtime connection options
+        @return connection options with HTTP Basic Auth credentials
     */
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> opts = AbstractConnection::getConnectionOptions(rtopts);
         return LemlistRestClientBase::getOptions(opts);
     }
 
+    #! returns a @ref LemlistRestClient object
+    /** @param connect if @ref True, a connection is made immediately
+        @param rtopts runtime options (ignored)
+
+        @return a @ref LemlistRestClient object
+    */
     private LemlistRestClient::LemlistRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new LemlistRestClient::LemlistRestClient(getConnectionOptions(rtopts), !connect);
     }

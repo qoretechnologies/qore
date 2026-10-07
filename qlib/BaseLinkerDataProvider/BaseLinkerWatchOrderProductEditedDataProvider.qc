@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Order Product Edited
-/** Fires whenever An order product is edited (BaseLinker journal `log_type` 13).
+/** Fires whenever An order product is edited (BaseLinker journal <tt>log_type</tt> 13).
 */
 public class BaseLinkerWatchOrderProductEditedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

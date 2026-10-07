@@ -25,10 +25,10 @@
 public namespace AzureDocumentIntelligenceDataProvider {
 #! Typed sub-hash for a single Azure DI Page
 /** Covers the common top-level fields of an Azure Document
-    Intelligence `Page` object as documented in the
-    [analyzeResult.pages schema](https://learn.microsoft.com/en-us/rest/api/aiservices/document-models/analyze-document).
-    Container fields (`lines`, `words`, `selectionMarks`, `spans`,
-    `barcodes`, `formulas`) flow through as untyped lists so downstream
+    Intelligence <tt>Page</tt> object as documented in the
+    <a href="https://learn.microsoft.com/en-us/rest/api/aiservices/document-models/analyze-document">analyzeResult.pages schema</a>.
+    Container fields (<tt>lines</tt>, <tt>words</tt>, <tt>selectionMarks</tt>, <tt>spans</tt>,
+    <tt>barcodes</tt>, <tt>formulas</tt>) flow through as untyped lists so downstream
     consumers can access any field the service returns.
 */
 public class AzureDocIntelPageDataType inherits HashDataType {
@@ -91,8 +91,8 @@ public class AzureDocIntelPageDataType inherits HashDataType {
 }
 
 #! Typed sub-hash for a single Azure DI typed-entity Document
-/** Each prebuilt model returns one or more `Document` objects, each
-    with a model-specific schema in `fields`.
+/** Each prebuilt model returns one or more <tt>Document</tt> objects, each
+    with a model-specific schema in <tt>fields</tt>.
 */
 public class AzureDocIntelDocumentDataType inherits HashDataType {
     public {

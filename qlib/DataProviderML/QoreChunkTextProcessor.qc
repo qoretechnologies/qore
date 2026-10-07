@@ -30,7 +30,7 @@ public namespace DataProviderML {
     Each chunk becomes a separate output record containing the original record fields
     plus chunk metadata.
 
-    This is a @ref DPC_AGGREGATE processor because it produces multiple output records
+    This is a @ref DataProvider::DPC_AGGREGATE processor because it produces multiple output records
     per input record (one per chunk).
 
     @par Example:

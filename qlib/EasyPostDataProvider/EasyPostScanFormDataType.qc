@@ -4,8 +4,8 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! ScanForm event payload (`scan_form.created` / `scan_form.updated`)
-/** Reuses `EasyPostScanFormType` defined in `EasyPostBatchDataType.qc` for the `result` field. */
+#! ScanForm event payload (<tt>scan_form.created</tt> / <tt>scan_form.updated</tt>)
+/** Reuses <tt>EasyPostScanFormType</tt> defined in <tt>EasyPostBatchDataType.qc</tt> for the <tt>result</tt> field. */
 public class EasyPostScanFormEventType inherits HashDataType {
     public {
         const Fields = EasyPostBaseEventType::Fields - "result" + {

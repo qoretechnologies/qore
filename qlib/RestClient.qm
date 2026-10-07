@@ -5656,12 +5656,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     }
 
     #! Returns @ref True if an absolute ping path is appended to the connection's URL path
-    /** An absolute \c ping_path normally addresses the **host**, so the connection's own URL path is
+    /** An absolute \c ping_path normally addresses the <b>host</b>, so the connection's own URL path is
         dropped for it.  That is what a connection whose URL carries an API namespace needs: with
         \c http://host/v1, a health endpoint outside the namespace is \c "/get_server_info", and inheriting
         the namespace turns it into \c "/v1/get_server_info", which reliably 404s.
 
-        For a connection whose URL path is not a namespace but the **address of the thing connected to**,
+        For a connection whose URL path is not a namespace but the <b>address of the thing connected to</b>,
         the opposite is true.  Atlassian addresses a Confluence site as
         \c https://api.atlassian.com/ex/confluence/\<cloud_id\>, and a ping that drops that prefix asks the
         gateway for a site it never named - which answers 404 while every other request on the same

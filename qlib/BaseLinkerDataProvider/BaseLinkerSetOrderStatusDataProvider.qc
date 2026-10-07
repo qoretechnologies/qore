@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `setOrderStatus` action data provider
+#! BaseLinker <tt>setOrderStatus</tt> action data provider
 public class BaseLinkerSetOrderStatusDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

@@ -26,7 +26,7 @@
     unconditionally regardless of how the %Qore library was initialized).
 
     To use the module in a %Qore script, use the \c %%requires directive as follows:
-    @code %requires mongodb @endcode
+    @code{.py} %requires mongodb @endcode
 
     Classes provided by this module:
     - @ref mongodb::MongoClient "MongoClient" - MongoDB client connection management
@@ -62,12 +62,12 @@ list<hash<auto>> docs = users.aggregate((
     @section mongodbconnection Connection Strings
 
     MongoDB connections use the standard MongoDB connection string format:
-    @code
+    @code{.py}
     mongodb://[username:password@]host[:port][/database][?options]
     @endcode
 
     Examples:
-    @code
+    @code{.py}
     # Connect to local MongoDB
     MongoClient client("mongodb://localhost:27017");
 
@@ -80,11 +80,10 @@ list<hash<auto>> docs = users.aggregate((
 
     @section mongodbreleasenotes mongodb Module Release Notes
 
-    @subsection mongodb_1_0 mongodb Module Version 1.0
-    - Initial release with full CRUD support
-    - Aggregation pipeline support
-    - Cursor-based iteration with
-      <tt>MongoCursor&lt;DocT: hash&lt;auto&gt; = hash&lt;auto&gt;&gt;</tt>
-    - ObjectId type support
-    - BSON to Qore type conversion
+    @subpage mongodbreleasehistory
+
+    @section mongodbqlibmodules Qore User Modules
+
+    - <img src="mongodb-logo.svg" width="28" height="28" alt="MongoDbDataProvider app icon"/> @ref mongodbdataproviderintro "MongoDbDataProvider" — a data provider API for MongoDB servers
+
 */

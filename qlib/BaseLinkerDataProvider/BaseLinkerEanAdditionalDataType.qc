@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! A single additional-EAN entry for `addInventoryProduct`
+#! A single additional-EAN entry for <tt>addInventoryProduct</tt>
 /** Each entry carries one extra EAN/barcode for the product together with the
     quantity that barcode represents (e.g. a multi-pack barcode).
 */

@@ -4,7 +4,7 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
-#! Allowed values for the `sort` query parameter on the batches list endpoint
+#! Allowed values for the <tt>sort</tt> query parameter on the batches list endpoint
 const BatchesSortAllowedValues = (
     <AllowedValueInfo>{"value": "asc", "desc": "Sort ascending"},
     <AllowedValueInfo>{"value": "desc", "desc": "Sort descending"},

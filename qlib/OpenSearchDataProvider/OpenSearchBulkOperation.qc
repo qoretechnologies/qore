@@ -108,7 +108,7 @@ public class OpenSearchBulkOperation inherits DataProvider::AbstractDataProvider
         @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
             by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
             buffering — so building the bulk body is O(n) in the number of queued records
-            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            rather than the O(n²) cost of repeated <tt>string += make_json(x) + "\\n"</tt>
             concatenation
     */
     private string formatNDJSON() {

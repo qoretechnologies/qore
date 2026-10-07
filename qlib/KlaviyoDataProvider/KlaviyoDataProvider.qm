@@ -142,15 +142,15 @@ module KlaviyoDataProvider {
     @section klaviyodataproviderintro KlaviyoDataProvider Introduction
 
     The %KlaviyoDataProvider module provides a @ref dataproviderintro "data provider" API for
-    [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.
+    <a href="https://www.klaviyo.com">Klaviyo</a>, the e-mail and SMS marketing platform.
 
-    Klaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to
-    and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and
-    sends **campaigns** to them.
+    Klaviyo holds the people a brand markets to as <b>profiles</b>, groups them into <b>lists</b> they opted in to
+    and <b>segments</b> it evaluates continuously, records what they did as <b>events</b> against <b>metrics</b>, and
+    sends <b>campaigns</b> to them.
 
     @section klaviyodataprovider_generated Mostly Generated, Deliberately Not Entirely
 
-    Most of the actions this application exports are **generated from Klaviyo's own OpenAPI 3 description**
+    Most of the actions this application exports are <b>generated from Klaviyo's own OpenAPI 3 description</b>
     by the @ref restschemaactionsintro "RestSchemaActions" module.  A schema describes the transport contract
     precisely and is maintained by Klaviyo; duplicating a thousand request and response fields in %Qore would
     mean finding and reproducing every upstream change by hand.
@@ -163,7 +163,7 @@ module KlaviyoDataProvider {
 
     This is the first application on this path whose predecessor was hand-written rather than generated from
     an \c allowed-paths map.  Its 21 actions had a designed, flat, camelCase option surface, and existing
-    workflows supply option values **by name** - so both the action IDs **and** the option names are a
+    workflows supply option values <b>by name</b> - so both the action IDs <b>and</b> the option names are a
     commitment, and both are reproduced here.
 
     Three mechanisms carry that, and each one exists because of this application:
@@ -188,7 +188,7 @@ properties beside the identity, so a result carries \c email rather than \c attr
     |Stable until|2027-07-15, removed 2028-07-15
     |Imported|2026-08-13
 
-    Klaviyo declares the \c revision header **required** on 344 of its 345 operations, so
+    Klaviyo declares the \c revision header <b>required</b> on 344 of its 345 operations, so
     @ref KlaviyoRestClient::KlaviyoRestClientBase "KlaviyoRestClientBase" always sends it and sends the one
     this description describes.  See @ref KlaviyoDataProvider::KlaviyoSchema "KlaviyoSchema".
 
@@ -213,20 +213,20 @@ properties beside the identity, so a result carries \c email rather than \c attr
 
     Three conventions are worth knowing before using these actions:
 
-    - **Filters are structured, not typed.**  Klaviyo's own filter syntax is a string of predicates -
+    - <b>Filters are structured, not typed.</b>  Klaviyo's own filter syntax is a string of predicates -
       \c "any(name,[\"a\",\"b\"])" - and this application publishes named fields instead, assembling the
       string when the request is built.  A field a listing does not publish is reachable through
       \c make-api-call.
-    - **Sorting is a field and a direction**, not Klaviyo's signed token; \c "-created" is
+    - <b>Sorting is a field and a direction</b>, not Klaviyo's signed token; \c "-created" is
       \c "{field: \"created\", direction: \"desc\"}" here.
-    - **Paging is by cursor.**  A listing answers \c links.next, published as \c next, and that value is
+    - <b>Paging is by cursor.</b>  A listing answers \c links.next, published as \c next, and that value is
       passed back as \c cursor; it is absent once the collection is exhausted.  Klaviyo caps the page size
       per endpoint - 10 on lists and segments, 50 on tags, 100 on profiles and campaigns - and rejects a
       larger value rather than clamping it.
 
     @section klaviyodataprovider_events Events
 
-    Four events are reported, and all **poll**:
+    Four events are reported, and all <b>poll</b>:
 
     |!Event|!Fires
     |\c new_profile|for each profile created in the account
@@ -263,12 +263,12 @@ properties beside the identity, so a result carries \c email rather than \c attr
     them; every one is a new action ID, so none of the 26 IDs the superseded application registered is
     touched.
 
-    A search is **hybrid**: what Klaviyo can evaluate is rendered into its \c filter argument, and the rest
-    is applied to the records as they arrive, with the caller's limit counting **matching** records.  What
+    A search is <b>hybrid</b>: what Klaviyo can evaluate is rendered into its \c filter argument, and the rest
+    is applied to the records as they arrive, with the caller's limit counting <b>matching</b> records.  What
     Klaviyo can evaluate is declared per field, because Klaviyo indexes each field for particular
     comparisons and answers any other one with an error rather than with records - there is no
     \c greater-or-equal on a profile's \c created at all, though there is one on an event's \c datetime.
-    Klaviyo also has **no disjunction and no negation**, so a search containing an \c OR or a \c NOT is
+    Klaviyo also has <b>no disjunction and no negation</b>, so a search containing an \c OR or a \c NOT is
     evaluated here rather than sent as something Klaviyo would answer differently.
 
     @see @ref KlaviyoDataProvider::KlaviyoRecordTables "KlaviyoRecordTables" for the whole of it, including

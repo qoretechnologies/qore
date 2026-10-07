@@ -5,9 +5,9 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker inventory products collection (`getInventoryProductsList`)
-/** Uses page-number pagination (1000 per page). Supplying `product_id` triggers
-    a single-fetch via `getInventoryProductsData`.
+#! BaseLinker inventory products collection (<tt>getInventoryProductsList</tt>)
+/** Uses page-number pagination (1000 per page). Supplying <tt>product_id</tt> triggers
+    a single-fetch via <tt>getInventoryProductsData</tt>.
 */
 public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProviderBase {
     public {

@@ -81,7 +81,7 @@ module MilvusDataProvider {
     @section milvusdataproviderintro MilvusDataProvider Introduction
 
     Lightweight data-provider integration for
-    [Milvus](https://milvus.io) and [Zilliz Cloud](https://zilliz.com).
+    <a href="https://milvus.io">Milvus</a> and <a href="https://zilliz.com">Zilliz Cloud</a>.
     For full vector operations use the
     @ref QoreRagUtils::MilvusVectorStore "MilvusVectorStore" backend
     via @ref QoreRagUtils::RagPipeline "RagPipeline".

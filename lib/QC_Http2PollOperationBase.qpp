@@ -1239,7 +1239,7 @@ nothing Http2PollOperationBase::continueReading() {
 
     Each chunk of data received is pushed to the Queue as a binary value, and the end of the data is pushed as
     follows:
-    - @ref nothing: the client ended the stream with END_STREAM, or the stream of a CONNECT tunnel was closed
+    - @ref nothing "nothing" : the client ended the stream with END_STREAM, or the stream of a CONNECT tunnel was closed
     - a hash with \c "err" and \c "desc" keys:
       - \c HTTP-BODY-TOO-LARGE: the request body exceeds the maximum request body size
       - \c HTTP-BODY-INCOMPLETE: a request body (\a request_body = @ref True) ended before the client sent
@@ -1316,7 +1316,7 @@ nothing Http2PollOperationBase::deregisterPersistentSessionQueue() {
 
 //! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
 /** Incoming DATA frame payload bytes are fed into a server-side
-    @ref WebSocketStreamFrameState that decodes WebSocket frames in C++
+    @c WebSocketStreamFrameState that decodes WebSocket frames in C++
     and pushes one typed message hash per complete WebSocket message
     (\c {type, data, [code, reason]}) to the supplied Queue.  Control
     frames (ping / close) are auto-handled with outgoing responses

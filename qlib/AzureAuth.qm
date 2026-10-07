@@ -48,12 +48,12 @@ module AzureAuth {
     The %AzureAuth module exchanges Entra ID (formerly Azure AD) credentials
     for bearer access tokens.  Two flows are supported:
 
-    - **Client credentials**: register an app in Entra, provide tenant ID +
+    - <b>Client credentials</b>: register an app in Entra, provide tenant ID +
       client ID + client secret, exchange for a token good for the requested
       scope.  See
       @ref AzureAuth::getEntraTokenClientCredentials() "getEntraTokenClientCredentials()".
 
-    - **Managed identity**: when running on Azure (App Service, AKS, Container
+    - <b>Managed identity</b>: when running on Azure (App Service, AKS, Container
       Apps, VM with managed-identity enabled), no secret is required — the
       Instance Metadata Service issues tokens for the attached identity.
       See @ref AzureAuth::getEntraTokenManagedIdentity() "getEntraTokenManagedIdentity()".

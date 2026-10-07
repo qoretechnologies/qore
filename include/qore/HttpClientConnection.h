@@ -526,8 +526,8 @@ public:
 
     //! Lifetime barrier: concurrent-safe guard against use-after-free.
     /** Qore's connection APIs are reachable from any thread; a well-formed
-        Qore program can `delete rc` from one thread while another is still
-        executing `rc.get()`.  Libqore's contract is "Qore code cannot crash
+        Qore program can <tt>delete rc</tt> from one thread while another is still
+        executing <tt>rc.get()</tt>.  Libqore's contract is "Qore code cannot crash
         libqore", so the C++ connection MUST keep itself alive for the
         duration of any in-flight public method call regardless of when
         the destructor is invoked.

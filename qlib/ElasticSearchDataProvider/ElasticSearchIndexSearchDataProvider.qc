@@ -27,7 +27,7 @@ public namespace ElasticSearchDataProvider {
 #! The ElasticSearch index search API data provider
 /** This class implements an API to search an index using ElasticSearch's index search API
 
-    The `query` API argument takes a data structure that corresponds to ElasticSearch's JSON Query DSL, for example.
+    The <tt>query</tt> API argument takes a data structure that corresponds to ElasticSearch's JSON Query DSL, for example.
 */
 public class ElasticSearchIndexSearchDataProvider inherits ElasticSearchDataProviderBase {
     public {

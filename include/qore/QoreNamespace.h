@@ -345,7 +345,7 @@ public:
 
     //! Returns true iff the given module is among this namespace's contributors
     /** A namespace may receive classes/functions/sub-namespaces from more than one module
-        (e.g. two modules each declaring `public namespace HttpServer { ... }`).  This
+        (e.g. two modules each declaring <tt>public namespace HttpServer { ... }</tt>).  This
         method tests membership across all contributors instead of the single-string
         @ref getModuleName() — useful for code that needs to decide whether a namespace
         was provided by a particular module without depending on which module contributed

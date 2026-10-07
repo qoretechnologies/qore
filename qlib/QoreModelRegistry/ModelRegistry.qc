@@ -322,7 +322,7 @@ public class ModelRegistry {
 
     #! Loads a model version using its declared execution plan
     /** Native Qore ML artifacts are deserialized with \c ML::ml_deserialize().
-        ONNX artifacts are loaded into @ref ML::OnnxModel when ONNX Runtime is
+        ONNX artifacts are loaded into @ref Qore::ML::OnnxModel when ONNX Runtime is
         available. Source-only, weights-only, tokenizer-only, and metadata-only
         packages raise an informative error.
 
@@ -395,7 +395,7 @@ public class ModelRegistry {
         @param artifact_name named ONNX/ORT artifact to load
         @param session_config optional ONNX Runtime session configuration
 
-        @return executable @ref ML::OnnxModel object
+        @return executable @ref Qore::ML::OnnxModel object
 
         @throw ML-REGISTRY-ERROR if the artifact is missing, is not executable
             ONNX/ORT, or provider metadata does not match the requested provider

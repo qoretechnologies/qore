@@ -5,7 +5,7 @@
 #! Contains all public definitions in the BaseLinkerDataProvider module
 public namespace BaseLinkerDataProvider {
 
-#! BaseLinker `deleteInventoryProduct` action data provider
+#! BaseLinker <tt>deleteInventoryProduct</tt> action data provider
 public class BaseLinkerDeleteInventoryProductDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{

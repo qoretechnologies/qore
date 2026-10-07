@@ -25,7 +25,7 @@
 #! contains all public definitions in the RestSchemaActions module
 public namespace RestSchemaActions {
 #! An upstream schema document as downloaded, before anything has been done to it
-/** The checksum and size describe the **unmodified** bytes, which is what the next import has to be diffed
+/** The checksum and size describe the <b>unmodified</b> bytes, which is what the next import has to be diffed
     against; a checksum of the pruned artifact would be useless for that.
 */
 public hashdecl RestSchemaSourceInfo {
@@ -103,7 +103,7 @@ public hashdecl RestSchemaValueRepairInfo {
 }
 
 #! One declared repair applied to a source document before it is pruned
-/** A vendor's description is sometimes **incomplete** rather than merely unhelpful: it omits something the
+/** A vendor's description is sometimes <b>incomplete</b> rather than merely unhelpful: it omits something the
     API accepts and the vendor documents elsewhere.  Bitbucket describes \c page and \c pagelen on a shared
     pagination page rather than per endpoint, and declares them on 3 of its 331 operations - so an action
     generated from it cannot ask for the second page of anything.
@@ -111,12 +111,12 @@ public hashdecl RestSchemaValueRepairInfo {
     That cannot be fixed in a UX overlay: an overlay expresses presentation, and adding a parameter is
     structural.  It is fixed here instead, before pruning, so that:
 
-    - the repair is **declared**, with a reason, in the application's import spec rather than buried in
+    - the repair is <b>declared</b>, with a reason, in the application's import spec rather than buried in
       code;
-    - it is **checked**: naming an operation the document does not declare, or a parameter it already
+    - it is <b>checked</b>: naming an operation the document does not declare, or a parameter it already
       declares, is an error - so a normalization that upstream has since fixed fails the next import
       instead of quietly staying forever;
-    - it is **recorded** in the committed artifact under \c "x-qore-normalized", so that a reviewer diffing
+    - it is <b>recorded</b> in the committed artifact under \c "x-qore-normalized", so that a reviewer diffing
       the artifact against the upstream document is told why they differ.
 
     The provenance checksum still describes the unmodified upstream document, because that is the baseline
@@ -137,14 +137,14 @@ public hashdecl RestSchemaNormalizationInfo {
 
     #! Parameters to replace, each a complete OpenAPI parameter object matched by \c name
     /** For a parameter the vendor declares, but declares wrongly, in a way no overlay can reach: an
-        overlay expresses presentation, and a parameter in the wrong **location** changes the request.
+        overlay expresses presentation, and a parameter in the wrong <b>location</b> changes the request.
 
         Exa declares \c search on \c "POST /v0/websets/preview" as a \c path parameter with
         \c "required: false", on a path that has no \c {search} template variable at all - which is
         not a valid %OpenAPI document, so it does not load.  The description says what it is: a
         boolean saying whether to search for a preview list of items, which is a query parameter.
 
-        Like @ref add_parameters it is **checked**: naming a parameter the operation does not declare
+        Like @ref add_parameters it is <b>checked</b>: naming a parameter the operation does not declare
         is an error, so the repair disappears by failing the next import once upstream corrects the
         document.
     */
@@ -154,7 +154,7 @@ public hashdecl RestSchemaNormalizationInfo {
     /** \c oneOf means *exactly* one branch matches, and a document that writes it where the branches
         overlap describes a value that can never be valid.  Confluence declares a page body as
         \c "oneOf: [PageBodyWrite, PageNestedBodyWrite]" where neither branch requires anything, so
-        **every** body matches both and every create and update is rejected before it is sent.
+        <b>every</b> body matches both and every create and update is rejected before it is sent.
 
         Each pointer names the composition, ex:
         \c "#/components/requestBodies/PageCreateRequest/content/application~1json/schema/properties/body".
@@ -274,7 +274,7 @@ public hashdecl RestSchemaImportResultInfo {
 }
 
 #! Imports a vendor's REST schema into the pinned, pruned form an application ships
-/** An application's actions are generated from a schema **committed to the module**, never one fetched at
+/** An application's actions are generated from a schema <b>committed to the module</b>, never one fetched at
     run time, because an upstream change must not be able to alter the contract of an action that existing
     workflows already call.  Producing that committed artifact is therefore a reviewed, reproducible step:
 
@@ -292,7 +292,7 @@ public hashdecl RestSchemaImportResultInfo {
     @par Why path matching is normalized
 
     A manifest names an operation by method and path template, and the obvious implementation compares that
-    path to the document's own as a string.  That produces **false negatives**, and they look exactly like an
+    path to the document's own as a string.  That produces <b>false negatives</b>, and they look exactly like an
     operation that has been withdrawn:
 
     |!What differs|!Example
@@ -301,7 +301,7 @@ public hashdecl RestSchemaImportResultInfo {
 
     Neither changes the operation: a path parameter's name is scoped to its own operation, and a trailing
     slash is not a distinct resource in any of these documents.  So both are normalized away when resolving,
-    and every match that was only reachable through normalization is **reported** - because the manifest
+    and every match that was only reachable through normalization is <b>reported</b> - because the manifest
     still has to be written with the document's own spelling for
     @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" to resolve it at run time.
 
@@ -499,13 +499,6 @@ public class RestSchemaImporter {
         return rv;
     }
 
-    #! Downloads a document and describes it
-    /** @param source a URL or file path
-
-        @return the document, its checksum and size as downloaded, and its counts
-
-        @throw REST-SCHEMA-IMPORT-ERROR the document is not a hash, or declares no paths
-    */
     #! Parses a vendor YAML document
     /** A vendor document is JSON-compatible YAML.  Parsed with the yaml module's default resolution, a plain
         scalar that looks like a Qore date or duration becomes one, so an example timestamp would be written back
@@ -567,6 +560,13 @@ public class RestSchemaImporter {
         return True;
     }
 
+    #! Downloads a document and describes it
+    /** @param source a URL or file path
+
+        @return the document, its checksum and size as downloaded, and its counts
+
+        @throw REST-SCHEMA-IMPORT-ERROR the document is not a hash, or declares no paths
+    */
     static hash<RestSchemaSourceInfo> fetch(string source) {
         binary raw = FileLocationHandler::getBinaryFileFromLocation(source);
         # the checksum and size describe the bytes as downloaded, so they are taken before any decoding
@@ -980,7 +980,7 @@ public class RestSchemaImporter {
     }
 
     #! Returns the comparable form of a path template
-    /** Removes the two differences that are not differences: a trailing slash, and the **name** of a path
+    /** Removes the two differences that are not differences: a trailing slash, and the <b>name</b> of a path
         parameter, which is scoped to the operation that declares it.
 
         @param path the path template
@@ -1080,7 +1080,7 @@ public class RestSchemaImporter {
         @return the values of the provenance members this class owns, ready to be written into an
         application's \c \<App\>SchemaProvenanceInfo record
 
-        @note \c source_updated is **not** returned: when the upstream document was last changed is a
+        @note \c source_updated is <b>not</b> returned: when the upstream document was last changed is a
         property of the vendor's repository, not of the document, so it has to be recorded by whoever ran
         the import.
     */

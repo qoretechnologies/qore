@@ -51,7 +51,7 @@ public namespace ConfluenceDataProvider {
     in a search is evaluated here as the records arrive.
 
     A task's date bounds are exact and are sent as well.  Confluence documents \c created-at-from and its
-    siblings as **inclusive** and as epoch **milliseconds**, so they carry \c >= and \c <= exactly, and a
+    siblings as <b>inclusive</b> and as epoch <b>milliseconds</b>, so they carry \c >= and \c <= exactly, and a
     value that cannot be read as a point in time is not sent at all rather than sent in the wrong unit.
 
     @section confluencerecord_readonly Three Collections Are Read Only

@@ -1470,8 +1470,8 @@ fetch
     - fixed short descriptions containing quoted parameter names or numbers to preserve ordinary words
       and literal braces while ignoring sentence punctuation inside quoted spans
     - fixed @ref DataProvider::QoreStringDataTypeBase "QoreStringDataTypeBase" to honor the value conversion
-      implemented by a wrapped user-defined [Type](../../reflection/html/classQore_1_1Reflection_1_1Type.html) subclass; the generic string
-      conversion silently replaced the type's own [acceptsValue()](../../reflection/html/classQore_1_1Reflection_1_1Type.html)
+      implemented by a wrapped user-defined @ref Qore::Reflection::Type "Type" subclass; the generic string
+      conversion silently replaced the type's own @ref Qore::Reflection::Type::acceptsValue "acceptsValue()"
       override, so a type that renders a boolean as the string \c "true" or \c "false" for a REST query
       argument produced \c "1" or \c "0" instead
     - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now renders

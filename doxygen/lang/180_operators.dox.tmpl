@@ -818,7 +818,7 @@ map printf("%s\n", $1), hash.keyIterator();
 auto a = map $1, src;         # NOTHING
 auto b = map $1, ();          # () - an empty list
     @endcode
-    This matters when the result is assigned to or returned as a typed list, because @ref nothing does not satisfy \c list<T>: the result is a \c RUNTIME-TYPE-ERROR on exactly the input (an unset optional argument) that produces no elements.  Coerce the result with <tt>?? ()</tt> when the source may be @ref nothing:
+    This matters when the result is assigned to or returned as a typed list, because @ref nothing does not satisfy \c list<T>: the result is a \c RUNTIME-TYPE-ERROR on exactly the input (an unset optional argument) that produces no elements.  Coerce the result with <tt>?? ()</tt> when the source may be @ref nothing "nothing" :
     @code{.py}
 list<string> rv = (map format($1), src) ?? ();
     @endcode

@@ -60,7 +60,7 @@ InputStream::constructor() {
 /**
 
     @param limit the maximum number of bytes to read
-    @return the read bytes (the length is between 1 and `limit` inclusive) or \ref NOTHING if no more bytes are
+    @return the read bytes (the length is between 1 and <tt>limit</tt> inclusive) or \ref NOTHING if no more bytes are
     available
 
     @par Example:

@@ -273,8 +273,63 @@ more than one "type" of content — split it into topical subpages.
   rendered URLs stay stable.
 - The mainpage links subpages via `@subpage` (not `@ref`) so they appear in the
   doxygen tree navigation; subpages link peers via `@ref`.
+- Doxygen configurations set `EXTERNAL_PAGES = NO` and `EXTERNAL_GROUPS = NO`.
+  Imported tag files resolve explicit cross-references, but their pages and groups
+  do not belong in the current module's sidebar or indexes. This also prevents
+  development-only Qore pages from appearing as broken published-documentation links.
+- Group guide links into a compact documentation list, with short descriptions
+  where they help readers choose a page. Do not create a separate large section
+  heading followed only by a link repeating that heading. Preserve old section
+  targets with `@anchor` on the corresponding navigation entry.
+- Links to extracted guides, including module release notes, use the guide's `@page`
+  identifier. Legacy anchors on mainpage navigation entries preserve bookmarks;
+  they are not the destination for new `@ref` links to the guide content.
+  Check tracked documentation and API comments with
+  `python3 doxygen/check-guide-refs.py . ../module-*`; this catches references
+  that Doxygen accepts but renders with an obsolete bookmark as the link label
+  and a destination on the navigation page. Regression tests are in
+  `examples/test/cmake/test_guide_refs.py`.
+- A binary module's mainpage lists its companion qlib modules. Within the documentation
+  build, module links use `@ref <lowercasemodulename>intro "ModuleName"`, including
+  guides and release notes; do not hardcode `index.html` URLs or substitute a
+  helper-page section for the module's introduction. References to particular API
+  classes and methods use their qualified symbol names. For independently published
+  external modules whose tag indexes are outside the build, use the published HTTPS
+  documentation URL with the same `#<lowercasemodulename>intro` fragment. Companion
+  modules built together always use tag references and the two-phase build below.
+- Module Doxygen configurations set `MARKDOWN_SUPPORT = NO`. Use HTML anchors for external
+  website links, `<tt>code</tt>` (or `\c` for a single token) for inline code, and `<b>text</b>`
+  for emphasis. Markdown links, backticks, fenced blocks, and `**bold**` otherwise remain visible in the
+  generated page, often without warnings. Put literal Markdown examples inside `<tt>` or
+  `@code` blocks. Runtime DataProvider `desc` strings still use Markdown; this rule applies
+  to Doxygen documentation comments, not application descriptions.
+  Run `python3 doxygen/check-rendered-refs.py <documentation-root>...` after building to catch
+  raw references and Markdown markup throughout the rendered pages, including subpages.
+- Keep `@ref` and `@subpage` outside `@htmlonly` blocks: Doxygen copies those
+  blocks literally, leaving raw commands in the page without a warning. Keep
+  quoted reference labels on one physical line for Doxygen 1.9 compatibility.
+  For literal backslashes, use `<tt>\\</tt>` (for example `<tt>\\F\\</tt>`)
+  instead of a quoted `\c` argument ending in a backslash, which can consume
+  subsequent documentation commands.
+  Paragraph titles (`@par ...`) are also plain text: put references in the body
+  below the title.
+- Reuse the primary companion `*DataProvider` SVG application icon as the binary
+  module's logo immediately below its `<lowercasemodname>intro` heading. Show the
+  same app icon in the provider's own intro, typically with `width="96"`, preserving
+  its aspect ratio. Companion-module lists stay text-only; do not decorate their
+  entries with small app icons. Keep an existing dedicated module logo when there
+  is no suitable primary provider. Set `QORE_DOXYGEN_IMAGES` to their source paths before registering
+  the binary documentation target. The shared configuration adds image search
+  paths and exports the SVGs through `HTML_EXTRA_FILES`, so inline `<img>` links
+  work without duplicating the source assets.
 - Release notes always live on their own page — they only grow, and nobody visiting
   the mainpage for orientation wants a changelog.
+- Describe changes from the last released branch (`2.x` for the Qore 3.0 release).
+  Fold unreleased development versions into the upcoming release, retaining the
+  feature introductions and fixes to previously shipped behavior. Omit fixes,
+  optimizations, and documentation corrections to functionality first introduced
+  in that same release; those belong in the API documentation and tests, not in
+  a release history. Bundled native modules version with Qore.
 - Cookbook examples always live on their own page — examples dwarf the index content.
 - A major feature warrants its own guide page when it has **non-example** content
   (reference tables, decision guides, operational recommendations, caveats) — not
@@ -298,14 +353,20 @@ docs must be built in two passes so that the binary module's mainpage can `@ref`
 into user module symbols:
 
 1. **Initial pass** (`docs-module`): generates the binary module's tag file (e.g.,
-   `krb5.tag`) with empty `TAGFILES` and `WARN_IF_DOC_ERROR = NO` to suppress
-   unresolved cross-reference warnings.
+   `krb5.tag`) with `WARN_IF_DOC_ERROR = NO` while reverse references are unavailable.
 2. **User module builds** (`docs-<UserModuleName>`): each generates its own tag
    file, referencing the binary module's tag file for cross-references back to
    binary module symbols.
-3. **Final pass** (`docs-module-final`): rebuilds the binary module docs with the
-   user module tag files in `TAGFILES`, enabling `@ref` cross-references from the
-   mainpage into user module symbols.
+3. **Final passes** (`docs-module-final` and `docs-<UserModuleName>-final`): rebuild
+   both the binary and user module pages with all sibling tag files, enabling
+   links in either direction, including between user modules. Every final target
+   depends on every initial target. Final passes disable `GENERATE_TAGFILE` so
+   concurrent readers see complete, immutable indexes.
+
+Bundled Qore binary modules use `qore_bundled_module_two_phase_docs()` after all
+native and qlib documentation targets are registered. Their final passes import
+every available bundled native and qlib index. The language final pass also keeps
+its initial tag file unchanged.
 
 #### Preferred: `qore_binary_module_two_phase_docs()` macro
 

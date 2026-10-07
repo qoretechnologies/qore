@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! An inventory category (from `getInventoryCategories`)
+#! An inventory category (from <tt>getInventoryCategories</tt>)
 public class BaseLinkerInventoryCategoryDataType inherits HashDataType {
     public {
         const Fields = {

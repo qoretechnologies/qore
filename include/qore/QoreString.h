@@ -41,8 +41,7 @@
 class DateTime;
 class BinaryNode;
 
-//! @defgroup StringConcatEncoding String Concatenation Encoding Codes
-/**
+/** @defgroup StringConcatEncoding String Concatenation Encoding Codes
 */
 ///@{
 //! code for encoding HTML entities
@@ -57,8 +56,7 @@ class BinaryNode;
 #define CE_ALL (CE_XHTML | CE_NONASCII)
 ///@}
 
-//! @defgroup StringConcatDecoding String Concatenation Decoding Codes
-/**
+/** @defgroup StringConcatDecoding String Concatenation Decoding Codes
 */
 ///@{
 //! code for decoding HTML entities

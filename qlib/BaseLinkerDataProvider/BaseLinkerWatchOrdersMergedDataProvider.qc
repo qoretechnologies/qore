@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker polling watch provider: Orders Merged
-/** Fires whenever Two or more orders are merged (BaseLinker journal `log_type` 5).
+/** Fires whenever Two or more orders are merged (BaseLinker journal <tt>log_type</tt> 5).
 */
 public class BaseLinkerWatchOrdersMergedDataProvider inherits BaseLinkerWatchDataProviderBase {
     public {

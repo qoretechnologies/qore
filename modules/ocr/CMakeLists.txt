@@ -109,6 +109,7 @@ set(OCR_CPP_SRC
 
 set(QORE_DOX_OCR_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
 )
 
 # Process QPP files
@@ -132,7 +133,8 @@ endif()
 target_link_libraries(${ocr_module_name} ${TESSERACT_LIBRARIES} ${LEPTONICA_LIBRARIES})
 add_dependencies(${ocr_module_name} libqore OCR_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ocr/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ocr/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/ocr/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${ocr_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)

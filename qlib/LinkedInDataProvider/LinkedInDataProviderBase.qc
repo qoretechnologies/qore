@@ -185,7 +185,7 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns the URN of the entity a versioned write created
-    /** A LinkedIn versioned write answers \c 201 with an **empty body**: the created entity's URN
+    /** A LinkedIn versioned write answers \c 201 with an <b>empty body</b>: the created entity's URN
         is only in the \c x-restli-id response header.  Reading it from the body — as an
         implementation modelled on the older \c ugcPosts endpoint would — yields nothing at all, and
         silently, because the call itself succeeded.
@@ -211,7 +211,7 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Splits an absolute URL into the origin to bind a client to and the path to request
-    /** LinkedIn hands back media upload URLs on a **different host** from the API
+    /** LinkedIn hands back media upload URLs on a <b>different host</b> from the API
         (\c www.linkedin.com rather than \c api.linkedin.com), so the upload cannot go through this
         provider's client: a @ref RestClientIo::RestClientIo "RestClientIo" request takes a path and
         resolves it against the client's own URL, which would send the bytes to the wrong host.
@@ -272,7 +272,7 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
         through the ordinary request path would hand them to the connection's JSON codec, which
         base64-encodes a @ref binary into a JSON string — LinkedIn would then store a corrupted
         asset and report success, and only a byte comparison would show it.  Calling
-        \c setSerialization("bin") around the request is **not** an alternative: it mutates
+        \c setSerialization("bin") around the request is <b>not</b> an alternative: it mutates
         client-wide state shared between provider objects and threads.
     */
     private hash<auto> uploadBytes(RestClientIo::RestClientIo client, string path, binary content,
@@ -296,7 +296,7 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
 
         @throw LINKEDIN-UPLOAD-ERROR LinkedIn did not return an image URN and an upload URL
 
-        @note the asset is **not** read back afterwards: a token holding only \c w_member_social is
+        @note the asset is <b>not</b> read back afterwards: a token holding only \c w_member_social is
         write-only on \c "/rest/images", so a \c GET would fail with HTTP 403 on exactly the
         connections this action is meant for
     */
@@ -396,7 +396,7 @@ public class LinkedInDataProviderBase inherits DataProvider::AbstractDataProvide
 
     #! Returns the part ID of an uploaded video part from its upload response
     /** LinkedIn identifies a part by the \c ETag its upload returned, and \c finalizeUpload takes
-        those IDs **unquoted** and in part order; an \c ETag is often sent quoted, so the quotes are
+        those IDs <b>unquoted</b> and in part order; an \c ETag is often sent quoted, so the quotes are
         stripped.
 
         @param resp the part upload response

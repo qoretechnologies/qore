@@ -110,6 +110,8 @@ set(REFLECTION_H_SRC
 
 set(QORE_DOX_REFLECTION_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/release-notes.dox.tmpl
+    docs/guide-reflection_examples.dox.tmpl
 )
 
 foreach (it ${REFLECTION_H_SRC})
@@ -162,7 +164,14 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(${reflection_module_name} libqore REFLECTION_QPP_GENERATED_FILES)
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/reflection/mainpage.dox ${_dox_src})
+set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/reflection/mainpage.dox
+    ${CMAKE_BINARY_DIR}/modules/reflection/release-notes.dox ${_dox_src})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-reflection_examples.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/DataProvider/Qore-Q-square.svg"
+)
 qore_binary_module_qore(${reflection_module_name} "${VERSION}" "/${VERSION}")
 qore_install_qpp_metadata(${reflection_module_name} ${REFLECTION_QPP_META_SRC})
 

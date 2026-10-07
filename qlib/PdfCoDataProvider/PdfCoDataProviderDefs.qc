@@ -78,7 +78,7 @@ public namespace PdfCoDataProvider {
     #! PDF.co logo in SVG format (loaded from file)
     public const PdfCoLogo = File::readTextFile(get_script_dir() + "/pdfco-logo.svg");
 
-    #! Allowed values for the barcode `type` parameter shared by generate-barcode and read-barcode
+    #! Allowed values for the barcode <tt>type</tt> parameter shared by generate-barcode and read-barcode
     /** Sourced from the PDF.co barcode types documentation. Common formats appear first; less
         common formats follow.
     */

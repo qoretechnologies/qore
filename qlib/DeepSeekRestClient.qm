@@ -53,7 +53,7 @@ module DeepSeekRestClient {
     @section deepseekrestclientintro DeepSeekRestClient Introduction
 
     The %DeepSeekRestClient module provides an API for calling
-    [DeepSeek](https://platform.deepseek.com) REST API services.
+    <a href="https://platform.deepseek.com">DeepSeek</a> REST API services.
 
     DeepSeek serves an OpenAI-compatible chat-completions endpoint, so the
     @ref DeepSeekRestClient::DeepSeekLlmProvider "DeepSeekLlmProvider"

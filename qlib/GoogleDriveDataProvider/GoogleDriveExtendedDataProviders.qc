@@ -25,7 +25,7 @@
 #! contains all public definitions in the GoogleDriveDataProvider module
 public namespace GoogleDriveDataProvider {
 #! Lists the shared drives the user can reach
-/** A business account keeps most of its content on shared drives rather than in any one person's `My Drive`,
+/** A business account keeps most of its content on shared drives rather than in any one person's <tt>My Drive</tt>,
     so this is how the drive to work in is discovered.
 */
 public class GoogleDriveListSharedDrivesDataProvider inherits GoogleDriveDataProviderBase {

@@ -50,7 +50,7 @@ module TavilyRestClient {
     @section tavilyrestclientintro TavilyRestClient Introduction
 
     The %TavilyRestClient module provides REST clients and a connection for
-    [Tavily](https://www.tavily.com) — a search API built for programs, where the query is meaning
+    <a href="https://www.tavily.com">Tavily</a> — a search API built for programs, where the query is meaning
     rather than keywords and the result can be the page content, or the answer, rather than a list
     of links.
 
@@ -78,7 +78,7 @@ module TavilyRestClient {
 
     @par Agent integration
 
-    The @ref TavilyAgentTools namespace exports helpers for wiring
+    The @ref TavilyRestClient::TavilyAgentTools namespace exports helpers for wiring
     Tavily into a @ref QoreAgentStrategies::SimpleAgentStrategy
     "SimpleAgentStrategy":
 
@@ -270,12 +270,12 @@ public class TavilyRestConnection inherits RestClient::RestConnection {
 #! and a dispatch callable for plugging Tavily into agent strategies
 /** No central tool registry exists in QoreLlmUtils / QoreAgentStrategies;
     these helpers produce the data structures needed to populate
-    @ref QoreAgentStrategies::AgentContext.tools and
-    @ref QoreAgentStrategies::AgentContext.tool_dispatch directly.
+    @ref QoreAgentStrategies::AgentContext::tools and
+    @ref QoreAgentStrategies::AgentContext::tool_dispatch directly.
 */
 public namespace TavilyAgentTools {
     #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
-    #! `tavily_search` tool that agents can choose to invoke
+    #! <tt>tavily_search</tt> tool that agents can choose to invoke
     public hash<QoreLlmUtils::ToolDefinition> sub makeSearchTool() {
         return <QoreLlmUtils::ToolDefinition>{
             "name": "tavily_search",
@@ -326,7 +326,7 @@ public namespace TavilyAgentTools {
     }
 
     #! Returns a @ref QoreLlmUtils::ToolDefinition describing the
-    #! `tavily_extract` tool that agents can invoke to scrape URLs
+    #! <tt>tavily_extract</tt> tool that agents can invoke to scrape URLs
     public hash<QoreLlmUtils::ToolDefinition> sub makeExtractTool() {
         return <QoreLlmUtils::ToolDefinition>{
             "name": "tavily_extract",
@@ -354,10 +354,10 @@ public namespace TavilyAgentTools {
 
     #! Builds a tool-dispatcher callable wired to the given Tavily REST client
     /** The returned callable matches the signature expected by
-        @ref QoreAgentStrategies::AgentContext.tool_dispatch:
-        `auto sub (string tool_name, hash<auto> args)`.
+        @ref QoreAgentStrategies::AgentContext::tool_dispatch "tool_dispatch":
+        <tt>auto sub (string tool_name, hash&lt;auto&gt; args)</tt>.
 
-        Recognised tool names: `tavily_search`, `tavily_extract`.  Other
+        Recognised tool names: <tt>tavily_search</tt>, <tt>tavily_extract</tt>.  Other
         tool names cause the dispatcher to throw \c AGENT-TOOL-ERROR.
 
         @param client the @ref TavilyRestClient::TavilyRestClientIo to use

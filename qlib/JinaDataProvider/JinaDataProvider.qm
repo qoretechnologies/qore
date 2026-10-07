@@ -161,7 +161,7 @@ module JinaDataProvider {
 
     @section jinadataproviderintro JinaDataProvider Introduction
 
-    The %JinaDataProvider module provides 19 actions for [Jina AI](https://jina.ai) search,
+    The %JinaDataProvider module provides 19 actions for <a href="https://jina.ai">Jina AI</a> search,
     content extraction, classification, and multimodal inference. The existing \c create-embeddings and
     \c rerank action IDs and provider classes remain available.
 

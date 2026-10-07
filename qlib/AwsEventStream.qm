@@ -40,8 +40,8 @@ module AwsEventStream {
 
     @section awseventstreamintro Introduction to the AwsEventStream Module
 
-    The %AwsEventStream module encodes and decodes the **AWS event-stream binary framing
-    format** used by Bedrock's \c InvokeModelWithResponseStream, Kinesis
+    The %AwsEventStream module encodes and decodes the <b>AWS event-stream binary framing
+    format</b> used by Bedrock's \c InvokeModelWithResponseStream, Kinesis
     SubscribeToShard, S3 Select, and Transcribe streaming endpoints.
 
     Each message is framed as:
@@ -199,7 +199,7 @@ public class AwsEventStreamEncoder {
     @ref nextFrame() returns one frame and removes its bytes from the
     internal buffer.
 
-    This class is **not** thread-safe — drive it from a single decoder
+    This class is <b>not</b> thread-safe — drive it from a single decoder
     thread per HTTP response stream.
 
     @par CRC validation

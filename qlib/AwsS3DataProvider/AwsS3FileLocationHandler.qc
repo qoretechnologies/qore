@@ -30,12 +30,12 @@ public namespace AwsS3DataProvider {
     request/response actions.
 
     Two things this gains over the declarative application file API:
-    - **writing does not buffer the object.**
+    - <b>writing does not buffer the object.</b>
       @ref getOutputStreamImpl() "getOutputStreamForLocation()" drives a multipart upload from the stream
       itself, sending each part as it is written, so an object larger than memory can be written.  Going
       through the \c upload-file action instead requires the whole object in memory, base64-encoded, before
       the first byte is sent
-    - **reading does not inflate the object.**  The bytes arrive as the response body rather than
+    - <b>reading does not inflate the object.</b>  The bytes arrive as the response body rather than
       base64-encoded into a JSON field, so nothing is encoded, buffered, and decoded again
 
     @par Addressing the bucket

@@ -131,13 +131,13 @@ module DeepgramDataProvider {
     @section deepgramdataproviderintro DeepgramDataProvider Introduction
 
     The %DeepgramDataProvider module provides a data provider API for
-    [Deepgram](https://deepgram.com) speech services.
+    <a href="https://deepgram.com">Deepgram</a> speech services.
 
     Two DPAT_API actions are registered:
-    - `transcribe-file` — submit an audio URL, or upload the audio bytes
-      directly, to `/v1/listen` and receive a JSON transcript (Nova model
+    - <tt>transcribe-file</tt> — submit an audio URL, or upload the audio bytes
+      directly, to <tt>/v1/listen</tt> and receive a JSON transcript (Nova model
       family, smart format, diarization, summarization, language detection)
-    - `synthesize-speech` — submit text to `/v1/speak` and receive audio
+    - <tt>synthesize-speech</tt> — submit text to <tt>/v1/speak</tt> and receive audio
       bytes (Aura voice models, MP3/WAV/Opus/FLAC encodings)
 
     @par WebSocket streaming
@@ -150,10 +150,10 @@ module DeepgramDataProvider {
     @section DeepgramDataProviderRelnotes Release Notes
 
     @subsection DeepgramDataProviderv1_1 DeepgramDataProvider v1.1
-    - the `transcribe-file` action accepts the audio to transcribe as a new
-      `audio` input option — a file value (or raw audio bytes) uploaded as the
-      request body with its MIME type sent as the `Content-Type` — as an
-      alternative to the `url` option, which is now optional; exactly one of
+    - the <tt>transcribe-file</tt> action accepts the audio to transcribe as a new
+      <tt>audio</tt> input option — a file value (or raw audio bytes) uploaded as the
+      request body with its MIME type sent as the <tt>Content-Type</tt> — as an
+      alternative to the <tt>url</tt> option, which is now optional; exactly one of
       the two must be given
 
     @subsection DeepgramDataProviderv1_0 DeepgramDataProvider v1.0

@@ -35,7 +35,7 @@ public namespace BitbucketDataProvider {
 
     @section bitbucketcodecs_why Why a Codec and Not a Request Transform
 
-    A codec is **declarative and reversible**: the manifest names it, the option is published with the
+    A codec is <b>declarative and reversible</b>: the manifest names it, the option is published with the
     codec's own type, and the value converts in both directions - so a response reads back as the same flat
     value the request took, and the overlay carries no executable code.  A request transform would convert
     one way only, and would have to be written and maintained per action.

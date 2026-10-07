@@ -886,7 +886,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             will be read into memory and returned as binary data, allowing the HTTP server transport
             layer to apply automatic compression.
 
-            Larger files are compressed through @ref TransformInputStream with bounded buffers.
+            Larger files are compressed through @ref Qore::TransformInputStream with bounded buffers.
             Set to zero to stream all files eligible for compression. This option does not disable
             compression; clients can request the identity representation with \c Accept-Encoding.
 

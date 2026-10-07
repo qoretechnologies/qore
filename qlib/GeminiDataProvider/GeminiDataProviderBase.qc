@@ -280,7 +280,7 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Returns an enriched error description that includes the Gemini API error message if available
     /** Gemini uses the standard Google Cloud \c google.rpc error envelope:
-        \c {"error": {"code": <int>, "message": "<prose>", "status": "<UPPER_SNAKE>", "details": [ ... ]}}.
+        \c {"error": {"code": &lt;int&gt;, "message": "<prose>", "status": "<UPPER_SNAKE>", "details": [ ... ]}}.
         \c details is a list of typed entries such as \c BadRequest.fieldViolations[] (field-level
         violations), \c ErrorInfo (reason/domain/metadata, e.g. \c API_KEY_INVALID), \c QuotaFailure,
         and \c LocalizedMessage.

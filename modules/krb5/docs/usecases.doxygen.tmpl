@@ -24,21 +24,21 @@
 
     Typical targets:
 
-    - **<a href="https://datatracker.ietf.org/doc/html/rfc4511">LDAP</a>
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc4511">LDAP</a>
       with <a href="https://datatracker.ietf.org/doc/html/rfc4752">SASL
-      GSSAPI</a>** — Active Directory, Red Hat Identity Management,
+      GSSAPI</a></b> — Active Directory, Red Hat Identity Management,
       <a href="https://www.openldap.org/">OpenLDAP</a>, and 389 Directory
       Server. The channel-binding options enable
       <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
       \c tls-server-end-point binding for LDAP over TLS, which defeats
       TLS-proxy relay attacks.
-    - **<a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP SPNEGO
-      / Negotiate</a>** — corporate REST APIs behind
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP SPNEGO
+      / Negotiate</a></b> — corporate REST APIs behind
       <a href="https://github.com/gssapi/mod_auth_gssapi">mod_auth_gssapi</a>,
       nginx-krb5, and similar gateways. Hex-encoded GSSAPI tokens are
       transformed to base64 and placed in \c "Authorization: Negotiate …"
       headers by the caller.
-    - **Databases** —
+    - <b>Databases</b> —
       <a href="https://www.postgresql.org/docs/current/gssapi-auth.html">PostgreSQL</a>,
       Oracle,
       <a href="https://learn.microsoft.com/en-us/sql/relational-databases/native-client/features/using-integrated-authentication">Microsoft
@@ -47,16 +47,16 @@
       all support GSSAPI authentication. A
       @ref Qore::Krb5::GssCredential imported from a service keytab lets
       datasources connect with no stored password.
-    - **<a href="https://kafka.apache.org/documentation/#security_sasl_kerberos">Kafka</a>**
+    - <b><a href="https://kafka.apache.org/documentation/#security_sasl_kerberos">Kafka</a></b>
       with \c SASL_GSSAPI.
-    - **<a href="https://www.ibm.com/docs/en/ibm-mq">IBM MQ</a> / JMS**,
-      **ActiveMQ**, and
-      **<a href="https://www.rabbitmq.com/auth-mechanism-gssapi.html">RabbitMQ</a>**
+    - <b><a href="https://www.ibm.com/docs/en/ibm-mq">IBM MQ</a> / JMS</b>,
+      <b>ActiveMQ</b>, and
+      <b><a href="https://www.rabbitmq.com/auth-mechanism-gssapi.html">RabbitMQ</a></b>
       with the krb5 plugin.
-    - **<a href="https://datatracker.ietf.org/doc/html/rfc4752">IMAP /
-      POP3 / SMTP</a>** with SASL GSSAPI for mail-polling interfaces.
-    - **<a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/">SMB
-      / CIFS</a>** corporate file shares (through a native file-share
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc4752">IMAP /
+      POP3 / SMTP</a></b> with SASL GSSAPI for mail-polling interfaces.
+    - <b><a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/">SMB
+      / CIFS</a></b> corporate file shares (through a native file-share
       library layered on top of the module's GSSAPI primitives).
 
     From the module's perspective these integrations all look the same:
@@ -178,11 +178,11 @@
     <a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP Negotiate</a>
     authentication natively:
 
-    - **Client-side**: the initiator calls
+    - <b>Client-side</b>: the initiator calls
       @ref Qore::Krb5::GssClientContext::step() "step()", wraps the
       resulting GSSAPI token in SPNEGO with \c negotiateSpnegoToken(), and
       sends it as an \c "Authorization: Negotiate" header.
-    - **Server-side**: the acceptor unwraps the SPNEGO envelope, feeds the
+    - <b>Server-side</b>: the acceptor unwraps the SPNEGO envelope, feeds the
       inner GSSAPI token to
       @ref Qore::Krb5::GssAcceptorContext::step() "step()", wraps the
       response in SPNEGO, and sends it back as a
@@ -194,17 +194,17 @@
 
     These workflows fit naturally on top of the existing primitives:
 
-    - **Constrained delegation
+    - <b>Constrained delegation
       (<a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-sfu/3bff5864-8135-400e-bdd9-33b552051d94">S4U2Self
-      / S4U2Proxy</a>)** — Qorus can use GSS-level S4U2Self helpers to act
+      / S4U2Proxy</a>)</b> — Qorus can use GSS-level S4U2Self helpers to act
       as an identity-forwarding service that authenticates to downstream
       Kerberized resources on behalf of the end user. The low-level
       Kerberos S4U2Proxy binding is available when the caller already has a
       Kerberos evidence credential.
-    - **Credential maintenance** — long-running services can renew TGTs and
+    - <b>Credential maintenance</b> — long-running services can renew TGTs and
       prefetch service tickets through
       \c Krb5Util::maintainCredentialCache().
-    - **Cross-realm trust** — already reachable today through KDC
+    - <b>Cross-realm trust</b> — already reachable today through KDC
       canonicalization and explicit realm handling on principals; useful
       for multi-tenant and post-merger deployments.
 */

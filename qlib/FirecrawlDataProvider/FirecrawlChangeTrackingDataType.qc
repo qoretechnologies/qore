@@ -27,7 +27,7 @@ public namespace FirecrawlDataProvider {
 
 #! Change tracking result type for Firecrawl scrape responses
 /** Contains change tracking information comparing the current scrape to a previous
-    scrape of the same URL. Available when `changeTracking` is in the `formats` list.
+    scrape of the same URL. Available when <tt>changeTracking</tt> is in the <tt>formats</tt> list.
 */
 public class FirecrawlChangeTrackingDataType inherits HashDataType {
     public {

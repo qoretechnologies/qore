@@ -1,0 +1,21 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page dataframeapiguide dataframe Module API
+
+    @tableofcontents
+
+    Main classes:
+    - @ref Qore::DataFrame::DataFrame "DataFrame" - the columnar data structure
+    - @ref Qore::DataFrame::ColumnRef "ColumnRef" - lazy column reference for predicate masks
+    - @ref Qore::DataFrame::RowMask "RowMask" - bitmap row selector returned by column comparisons
+    - @ref Qore::DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
+
+    Result hashdecls:
+    - @ref Qore::DataFrame::DataFrameShape "DataFrameShape" - returned by
+      @ref Qore::DataFrame::DataFrame::shape() "DataFrame::shape()"
+    - @ref Qore::DataFrame::ColumnStats "ColumnStats" - returned by
+      @ref Qore::DataFrame::DataFrame::describe() "DataFrame::describe()"
+    - @ref Qore::DataFrame::CsvOptions "CsvOptions" - accepted by
+      @ref Qore::DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" and
+      @ref Qore::DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()"
+*/

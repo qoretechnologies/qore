@@ -23,9 +23,9 @@
 */
 
 public namespace MistralDataProvider {
-#! Data provider for Mistral's `/v1/ocr` document OCR endpoint
+#! Data provider for Mistral's <tt>/v1/ocr</tt> document OCR endpoint
 /** Extracts structured markdown from PDF and image documents using
-    Mistral's `mistral-ocr-latest` model.
+    Mistral's <tt>mistral-ocr-latest</tt> model.
 */
 public class MistralOcrDataProvider inherits MistralDataProviderCommon {
     public {

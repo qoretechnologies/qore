@@ -4,7 +4,7 @@
 
 public namespace BaseLinkerDataProvider {
 
-#! Request type for the BaseLinker `setOrderStatus` method
+#! Request type for the BaseLinker <tt>setOrderStatus</tt> method
 public class BaseLinkerSetOrderStatusRequestDataType inherits HashDataType {
     public {
         const Fields = {

@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the GroqDataProvider module
 public namespace GroqDataProvider {
-#! Data provider for the Groq `/v1/chat/completions` endpoint
+#! Data provider for the Groq <tt>/v1/chat/completions</tt> endpoint
 public class GroqChatCompletionDataProvider inherits GroqDataProviderCommon {
     public {
         #! Provider info
@@ -75,8 +75,8 @@ public class GroqChatCompletionDataProvider inherits GroqDataProviderCommon {
     }
 
     #! Makes a chat-completion request and returns the response
-    /** Converts Groq's Unix-seconds `created` field on the response into a
-        Qore date to match the typed `*date` field in the response schema.
+    /** Converts Groq's Unix-seconds <tt>created</tt> field on the response into a
+        Qore date to match the typed <tt>*date</tt> field in the response schema.
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         GroqApiDataProvider::validateGeneration(req);

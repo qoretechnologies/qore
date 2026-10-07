@@ -4,7 +4,7 @@
 
     @section module_dev Qore Module Development
 
-    Binary modules are shared libraries (`.so` / `.dylib` / `.dll`) that extend the %Qore language with new classes,
+    Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
     Since %Qore 2.0, binary modules use Module API 2.0, which requires a single

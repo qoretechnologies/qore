@@ -25,9 +25,9 @@
 public namespace PineconeDataProvider {
 #! The operations this application exports from the Pinecone API
 /** Pinecone publishes one description per API rather than one per product, and this application exports
-    all three of the ones a data integration needs: the **control plane** that manages indexes, backups
-    and collections, the **data plane** that searches and writes vectors and documents, and the
-    **inference** API that embeds and reranks text.  52 operations in total, every one of them exported.
+    all three of the ones a data integration needs: the <b>control plane</b> that manages indexes, backups
+    and collections, the <b>data plane</b> that searches and writes vectors and documents, and the
+    <b>inference</b> API that embeds and reranks text.  52 operations in total, every one of them exported.
 
     Action IDs are a product commitment: an upstream rename is reported as drift and never renames an
     action here.  \c list-indexes predates this manifest - it was the application's only action - and
@@ -46,7 +46,7 @@ public namespace PineconeDataProvider {
 
     @section pineconemanifest_xenum Every Enum Is a Vendor Extension
 
-    This is the one thing to know before reading the overlay below.  Pinecone declares **no**
+    This is the one thing to know before reading the overlay below.  Pinecone declares <b>no</b>
     \c "enum" for any of its finite value sets.  It writes them as \c "x-enum" - a vendor extension -
     beside a bare \c "type: string":
 
@@ -58,13 +58,13 @@ metric:
     @endcode
 
     An extension is invisible to the parser, so every one of these generates as free text and a user
-    gets a text box where the API accepts exactly three values.  There are **28** such declarations
+    gets a text box where the API accepts exactly three values.  There are <b>28</b> such declarations
     across the three documents; the ones that reach an action option are restored here as
     @ref RestSchemaActions::RestSchemaFieldOverlayInfo::allowed_values "allowed_values" with display
     names, and the values are the vendor's own - copied from the \c "x-enum" list, not from
     documentation and not from memory.
 
-    The distinction that matters when reading a diff: a value set that appears here **is** in the
+    The distinction that matters when reading a diff: a value set that appears here <b>is</b> in the
     committed document, in the \c "x-enum" beside the field.  If the vendor adds a fourth metric, the
     import shows it and this list has to grow; nothing detects that automatically, because drift
     compares what the parser can see.
@@ -81,8 +81,8 @@ metric:
 
     which checks a value without revealing the set.
 
-    So @ref RegionValues is taken from the vendor's published list and **every pair in it was verified
-    against the live API**, by creating an index in it and dropping it again; \c "aws"/"eu-north-1" and
+    So @ref RegionValues is taken from the vendor's published list and <b>every pair in it was verified
+    against the live API</b>, by creating an index in it and dropping it again; \c "aws"/"eu-north-1" and
     \c "gcp"/"us-east-1" were both refused, which is what shows Pinecone validates the *pair* rather
     than the region string.  The option is
     @ref RestSchemaActions::RestSchemaFieldOverlayInfo::allowed_values_creatable "creatable", because a
@@ -97,7 +97,7 @@ metric:
 
     @section pineconemanifest_version The API Version Is the Connection's
 
-    All three documents declare a **required** \c X-Pinecone-Api-Version header on every one of the 52
+    All three documents declare a <b>required</b> \c X-Pinecone-Api-Version header on every one of the 52
     operations.  It is the connection's business rather than each action's - see
     @ref PineconeRestClient::PineconeRestClientBase::ApiVersion "PineconeRestClientBase::ApiVersion" -
     so every action drops it with
@@ -113,7 +113,7 @@ metric:
     @section pineconemanifest_host The Index Is the Host
 
     The 24 data-plane operations do not name an index anywhere - not in a path variable, not in a query
-    argument, not in a body property.  The index **is** the host: Pinecone's own description declares the
+    argument, not in a body property.  The index <b>is</b> the host: Pinecone's own description declares the
     data-plane server as the template \c "https://{index_host}", and only the control plane knows what
     that host is for a given index.
 
@@ -143,7 +143,7 @@ anyOf:
 
     Those branches introduce nothing - every property they name is declared by the object above them - so
     the composition is a constraint, not a set of alternative shapes.  Reading it as alternatives
-    published \c delete-documents and \c update-documents with **no options at all**, and
+    published \c delete-documents and \c update-documents with <b>no options at all</b>, and
     \c fetch-documents with one opaque \c body option; that was a defect in %OpenApi3's composition
     handling and is fixed rather than worked around here.  The either/or is expressed to the user with
     @ref RestSchemaActions::RestSchemaFieldOverlayInfo::required_groups "required_groups" and
@@ -154,7 +154,7 @@ anyOf:
 
     \c list-collections, \c create-collection, \c describe-collection and \c delete-collection are
     exported, and Pinecone's own description says of each that collections are supported only for
-    pod-based indexes and that pod-based indexes **cannot be created** at API version \c 2026-07.  They
+    pod-based indexes and that pod-based indexes <b>cannot be created</b> at API version \c 2026-07.  They
     are kept because a project that still has an index created under an earlier version still has
     collections to manage, and withdrawing the actions would remove the only way to reach them.  Each
     action's description says so, so nobody reaches for one expecting it to work on a serverless index.
@@ -232,13 +232,13 @@ public class PineconeManifest {
         );
 
         #! The regions a serverless index may be hosted in
-        /** The one value set in this application that does **not** come from the document: Pinecone
+        /** The one value set in this application that does <b>not</b> come from the document: Pinecone
             declares \c region as a bare string, publishes no endpoint that lists regions in any of its
             seven API descriptions, and its own validation reports an unknown pair without enumerating
             the known ones (\c "Resource cloud: aws region: eu-north-1 not found").
 
-            So the list is the vendor's published one, and every pair in it was **verified against the
-            live API** by creating an index in it and dropping it again; \c "aws"/"eu-north-1" and
+            So the list is the vendor's published one, and every pair in it was <b>verified against the
+            live API</b> by creating an index in it and dropping it again; \c "aws"/"eu-north-1" and
             \c "gcp"/"us-east-1" were both refused, which is what shows the *pair* is validated rather
             than the region string on its own.
 
@@ -459,7 +459,7 @@ public class PineconeManifest {
 
         #! The index an action works on, where the index is named by the request
         /** Used by the control-plane actions, which take the index name in the path.  A data-plane
-            action does **not** use this: there the index selects the host, and its option is
+            action does <b>not</b> use this: there the index selects the host, and its option is
             synthesized by the host source - see @ref IndexKeyOverlay.
         */
         const IndexNameOverlay = <RestSchemaFieldOverlayInfo>{
@@ -516,13 +516,13 @@ public class PineconeManifest {
         };
 
         #! The backup schedule an action works on
-        /** No dropdown, deliberately: Pinecone lists backup schedules **per index**
+        /** No dropdown, deliberately: Pinecone lists backup schedules <b>per index</b>
             (\c "GET /indexes/{index_name}/backup-schedules") and publishes no project-wide listing, so
             a dropdown here would need an index to scope it - and none of the four actions that take a
             schedule ID has one, because the schedule ID addresses the schedule on its own.  Adding an
             index option purely to fill a dropdown would add an option the API does not take.
 
-            **List Backup Schedules** is where the IDs come from.
+            <b>List Backup Schedules</b> is where the IDs come from.
         */
         const ScheduleIdOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Backup Schedule",
@@ -1357,7 +1357,7 @@ public class PineconeManifest {
             one declares \c host_from and gains a synthesized \c index option that is consumed rather
             than sent.
 
-            The set divides into three families that do **not** mix, and each action's description says
+            The set divides into three families that do <b>not</b> mix, and each action's description says
             which index it needs:
 
             |!Family|!Reads and writes|!Index it needs
@@ -2230,7 +2230,7 @@ public class PineconeManifest {
             dropdowns.  These need no index: they are Pinecone's hosted models used directly, which is
             what makes them useful beside a vector store that is not Pinecone's.
 
-            \c embed and \c rerank declare an **optional** request body while marking the properties
+            \c embed and \c rerank declare an <b>optional</b> request body while marking the properties
             inside it required, so everything generates optional; the overlay narrows the ones the API
             actually needs back to required, which an overlay is allowed to do because it is a
             narrowing.

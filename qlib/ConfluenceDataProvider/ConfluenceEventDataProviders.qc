@@ -51,7 +51,7 @@ public const ConfluenceMaxPollPages = 5;
     Every provider sorts the collection newest-first upstream, so the newest records arrive in the first
     page and @ref ConfluenceMaxPollPages bounds how far back a cycle reads.
 
-    @note The watch base is inherited **first**, deliberately: both bases implement
+    @note The watch base is inherited <b>first</b>, deliberately: both bases implement
     @ref DataProvider::DelayedObservable::observersReady() "observersReady()", %Qore resolves a method to
     the first branch that declares it, and
     @ref DataProvider::AbstractDataProvider "AbstractDataProvider"'s implementation reports the operation
@@ -478,7 +478,7 @@ public class ConfluenceEventsDataProvider inherits DataProvider::AbstractDataPro
     }
 
     #! Returns the given event provider or @ref nothing if the event is unknown
-    /** The child returned here is a **template**: it carries the event's option declarations, and the
+    /** The child returned here is a <b>template</b>: it carries the event's option declarations, and the
         values are supplied when a subscription is created.
     */
     private *AbstractDataProvider getChildProviderImpl(string name) {
