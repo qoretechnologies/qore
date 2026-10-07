@@ -1149,3 +1149,80 @@ records 311 release cases / 13223 assertions plus the standalone AOT location
 script, 13 debug cases / 11279 assertions, ten harness unit tests, old-AOT
 compatibility and generated-code inspection. No full-suite, sanitizer or
 production-performance claim is made.
+
+## Compiler-proven native leaf frames (2026-10-07)
+
+Fetched origin and merged origin/develop at 0122225d0 in 089ab8e44. The two
+incoming commits fix DPQL Unicode handling and do not change call-runtime
+sources. Rebuilt DataProvider-qmod and verified DPQL plus callback integration
+before preserving the merged Release runtime/compiler as the baseline.
+
+The executed optimization uses the existing whole-body scalar-expression proof
+to specialize empty local/closure frames around typed native callbacks.
+Diagnostic frames, local/closure markers and frame counts remain visible, but
+the local stack no longer appends a general variable-cleanup record, and both
+markers are popped directly. Ordinary calls retain their general cleanup path.
+Program/debugger/type/entry-identity guards, stack checks, reader synchronization,
+policy overrides, lazy materialization and helper ABI are unchanged.
+
+Same Apple M4 Pro / arm64 / macOS 27.0.1 host, LLVM 22.1.8, Release -O3
+-DNDEBUG. Five forks, count 1024, three warmups and five 300 ms measurement
+windows. Before/after and Java jobs are shuffled/interleaved. Values are median
+fork means in ns/element, including callback and loop/checksum work. They are
+not isolated call latency. Java retained-call targets use DONT_INLINE.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|indirect_call|226.24|228.03|53.87|50.14|1.67
+|arithmetic|97.28|96.29|4.12|4.13|0.88
+|polymorphic_call|426.60|427.71|296.57|294.61|2.53
+
+AOT callbacks use 6.9% less time, with nonoverlapping fork ranges:
+53.47-54.48 ns before and 49.61-50.33 ns after. A three-fork count-4096 repeat
+gives 53.61 -> 49.79 ns, a 7.1% reduction. AOT arithmetic is essentially
+unchanged; polymorphic AOT controls vary 0.7% faster/slower across the two runs,
+not evidence of optimized method dispatch.
+
+IR callbacks were 0.8% slower in the first comparison, and 223.03 -> 227.95 ns
+(2.2% slower) in the larger-count repeat. A longer five-fork count-4096 run,
+500 ms windows and a different shuffle, gives 224.54 -> 225.26 ns (0.3% slower)
+with overlapping ranges; IR arithmetic is 94.88 -> 95.31 ns (0.4% slower).
+The larger shift did not persist, but no IR speedup or universal no-regression
+claim is made. Every fork is retained.
+
+The five-fork IR Program probe gives 222.49 -> 224.13 ns/call within one Program
+(0.7% slower) and 339.19 -> 338.32 across Programs (0.3% faster), both with
+overlapping ranges. Neither probe uses the new AOT frame helper. The separate
+fresh pre-edit baseline is also retained, but percentages above come from
+matched interleaved comparisons, not from that earlier run.
+
+AOT callbacks still take 30.1 times the matched Java result. Separate five-second
+sampling no longer shows the general variable-frame push/pop helpers in the
+native callback stack; the source confirms their replacement. It still shows
+scalar coercion/type-path resolution, typed-reference guards, context setup,
+closure-marker insertion and stack guards. This is qualitative evidence, not a
+component-cost or allocation count. The next optimization should keep the
+typed success path compiler-visible and unboxed, while preserving validation
+on generic fallback. Adapter diagnostic metadata and guarded native method
+dispatch remain separate subsequent stages.
+
+Reproduce with run.py --modes qore-ir qore-aot java-jit --kernels indirect_call
+arithmetic polymorphic_call --forks 5 --time-ms 300 and the saved 089ab8e44
+library as --baseline-libdir. Repeat without Java using --count 4096 --forks 3.
+The longer IR control selects indirect_call arithmetic, --count 4096 --forks 5
+--time-ms 500 --order-seed 20261008. Program controls use program_calls.py
+--forks 5 --time-ms 300. Each AOT artifact is compiled against its selected
+runtime. Compilation, tests and profiling are separate from timing; ordinary
+host activity and lightweight inspection were not eliminated.
+
+[Sanitized evidence](results-native-leaf-macos-arm64.json) contains five
+experiments, 178 jobs / 890 measured samples, source/library hashes and all raw
+fork values. Suite modes pass 165 independent reference checks each; Program
+probes pass 30 per mode. [Full audit](FOLLOWUP-AUDIT.md#native-leaf-frame-audit-2026-10-07)
+records 367 release cases / 16011 assertions plus the standalone AOT location
+script, 14 debug cases / 11282 assertions, ten harness tests and old-AOT
+compatibility. No full-suite, sanitizer or production-performance claim is made.
+
+Test development also found a pre-existing recursive per-frame capture failure
+in JIT mode, reproduced on the saved baseline and final runtime while AST/IR
+pass. It is not fixed here; the evidence retains the complete reproducer and
+the audit explains the distinction from the passing mixed-frame regression.

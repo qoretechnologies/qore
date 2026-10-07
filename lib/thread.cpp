@@ -1959,7 +1959,9 @@ RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
     assert(td->current_pgm == pgm);
     td->call_program_context = pgm;
     td->closure_rt_env = nullptr;
-    tlpd->lvstack.pushFrameBoundary();
+    // Typed callback admission proves a scalar leaf with no TLS locals or
+    // generic reentry. Keep observable markers, but no variable cleanup record.
+    tlpd->lvstack.pushNativeLeafFrameBoundary();
     tlpd->cvstack.pushFrameBoundary();
     call_loc = old_loc ? old_loc : parse_loc;
     old_stack = publish_pushed_stack_location(td, stack_loc);
@@ -1981,8 +1983,8 @@ RuntimeConfigNativeCallHelper::~RuntimeConfigNativeCallHelper() {
     }
     td->runtime_loc_sp = old_sp;
     publish_popped_stack_location(td, old_stack);
-    tlpd->lvstack.popFrameBoundary();
-    tlpd->cvstack.popFrameBoundary();
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
     td->closure_rt_env = old_closure;
     td->call_program_context = old_call_pgm;
 }

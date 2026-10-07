@@ -1126,3 +1126,143 @@ No full-suite or DPQL performance claim is made. git diff --cached --check passe
 |QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change.
 |Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Reviewed the five incoming files; 55 DPQL cases / 2785 assertions, qmod Unicode smoke and 48 callback assertions pass.
 |Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Reviewed the five incoming files; 55 DPQL cases / 2785 assertions, qmod Unicode smoke and 48 callback assertions pass.
+
+## Native leaf-frame audit (2026-10-07)
+
+Applied audit-changes to the optimization after merge 089ab8e44. Read the full
+skill and its module-structure, sandboxing and cooperative-cancellation guides;
+the integration audit above also covers the two DataProvider guides. No agents
+were delegated work.
+
+Scope: specialized empty local/closure-frame bookkeeping for the existing v2
+typed scalar callback path, the recursive mixed-frame regression, documentation
+and sanitized measurements. No new native eligibility, helper ABI, serialized
+format, public layout, module, parser or qlib source change.
+
+### Design and correctness review
+
+The local stack retains its ordinary frame marker and frame count but omits
+the general cleanup-vector record. Its paired pop asserts that the top slot
+is that unassigned marker and directly restores the position/count. Closure
+pop likewise removes only the proven-empty top marker. Stack-block allocation
+and reuse still use the existing push routines; a pop at the first slot can
+leave an empty current block for ordinary stack unwinding, as before.
+
+This is justified by emitFunctionRefNativeEntry's existing whole-body scalar
+expression and context-independence proof, not by assuming every same-Program
+function is a leaf. General/throwing/context-dependent callbacks retain the
+existing fallback. RuntimeConfigNativeCallHelper is used only by the v2
+typed-reference helper. Admission still checks Program, debugger, exact node,
+signature and native-entry identity; ordinary v1 entries remain unchanged.
+
+Frame inspection scans the actual local/closure markers, not the private
+cleanup vector. Markers and counts therefore remain observable. The diagnostic
+frame is unpublished and the existing reader handshake completes before either
+marker is popped. Location, parse-option override, call Program, closure
+environment, stack guards and cancellation semantics remain unchanged.
+No Qore values are owned by the empty markers, so skipping general variable
+destruction loses no ownership operation; debug assertions validate this.
+
+### Full checklist
+
+|!Check|!Status|!Evidence
+|Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No module or QPP class added; no module registration/layout change.
+|Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No module or QPP class added; no module registration/layout change.
+|qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No module or QPP class added; no module registration/layout change.
+|Module added to QMOD list in CMakeLists.txt|N/A|No module or QPP class added; no module registration/layout change.
+|.qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No module or QPP class added; no module registration/layout change.
+|%modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No module or QPP class added; no module registration/layout change.
+|No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No module or QPP class added; no module registration/layout change.
+|No %include usage (deprecated for modules)|N/A|No module or QPP class added; no module registration/layout change.
+|Copyright 2026 on all new files|Pass|New sanitized evidence JSON has 2026 copyright and MIT identifier; no other file added.
+|Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No module or QPP class added; no module registration/layout change.
+|No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No module or QPP class added; no module registration/layout change.
+|ns=Qore::XX matches the QoreNamespace constructor path|N/A|No module or QPP class added; no module registration/layout change.
+|%modern directive present|Pass|IRFunctionRefCalls.qr retains %modern and mode 100755; no dependencies added. Existing wrapper prepends qlib before QUnit/FsUtil.
+|Executable permission set (chmod +x)|Pass|IRFunctionRefCalls.qr retains %modern and mode 100755; no dependencies added. Existing wrapper prepends qlib before QUnit/FsUtil.
+|Uses %prepend-module-path  before %requires for in-repo modules|Pass|IRFunctionRefCalls.qr retains %modern and mode 100755; no dependencies added. Existing wrapper prepends qlib before QUnit/FsUtil.
+|External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|IRFunctionRefCalls.qr retains %modern and mode 100755; no dependencies added. Existing wrapper prepends qlib before QUnit/FsUtil.
+|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|No filesystem/network operations added; runtime admission, sandbox policy and current Program checks unchanged.
+|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|No filesystem/network operations added; runtime admission, sandbox policy and current Program checks unchanged.
+|If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|Pass|No filesystem/network operations added; runtime admission, sandbox policy and current Program checks unchanged.
+|No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|No filesystem/network operations added; runtime admission, sandbox policy and current Program checks unchanged.
+|All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No C++ loop or blocking operation added. Existing cancellation and stack-reader handshake remain unchanged.
+|Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|Pass|No C++ loop or blocking operation added. Existing cancellation and stack-reader handshake remain unchanged.
+|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|Pass|No C++ loop or blocking operation added. Existing cancellation and stack-reader handshake remain unchanged.
+|No blocking operations without cancellation support|Pass|No C++ loop or blocking operation added. Existing cancellation and stack-reader handshake remain unchanged.
+|Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash<string, AbstractDataField>|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Response/output types use private Fields|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Password/secret fields have "sensitive": True|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|No bare field/option names in prose — must use backticks|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|getRecordTypeImpl() signature: must be private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) — NOT returning *AbstractDataProviderType|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider changes in this optimization; upstream DPQL merge audited separately above.
+|No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Complete specialized frame pair; no TODO, FIXME, stub, or expanded eligibility.
+|Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|Existing RAII helper restores context on normal/exception exit; marker slots are unassigned and own no Qore values; ordinary residual-variable cleanup remains unchanged.
+|Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|TLS stacks remain owning-thread state; diagnostic publication and reader-completion handshake precede marker destruction. No new shared mutable state.
+|Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Compiler admission retains exact scalar signature/whole-body proof; test callback parameters use code<int(int)> and code<int()>.
+|Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Removes local marker-vector push/pop and general empty-frame cleanup; constant-time leaf pop. Matched before/after and controls recorded in RESULTS.md.
+|Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Existing current-Program/debugger/entry-identity guards and generic fallback unchanged; debug assertions verify empty top markers.
+|Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Only internal methods added; document pairing, compiler proof, empty-slot invariant and observable frame preservation; design/README/release note updated.
+|QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change.
+|Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new untrusted format string, indexing input, I/O or credentials; stack indices derive from established push/pop invariant, asserted in debug.
+|Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Baseline and optimized semantic matrix agree, including 140-level recursion, outer captures, ownership and unwind across TLS blocks; broader tests listed below.
+
+### Verification
+
+|!Verification|!Result
+|Release and debug builds|Pass; cmake --build build and build-debug --target qore qcc -j3
+|Extended IRFunctionRefCalls fixture on saved baseline|Pass; 48 wrapper assertions, all execution modes and disabled/AOT configurations
+|Extended IRFunctionRefCalls release/debug|Pass; 48 wrapper assertions each; 140-level recursion, outer capture preservation, object destruction, exception unwinding and native callbacks during cleanup
+|IR/AOT regression matrix|Pass; AOTQoLinkNativeSymbols, IRCallFrameReuse, IRExecModeSmoke, IRExceptionTrace, IRReturnBorrowedSlot, JitDebugStep, StackGuardCompiled, AOTRuntimeLocationCache, AOTLazyFunctionContext, AOTRecursiveClosureFrame
+|Policy and runtime integration|Pass; policy-barrier, sandbox-manager, thread-cancel, test-debug, concurrent-call-stacks, get-call-stack, Dpql
+|Debug subset|Pass; IRFunctionRefCalls, IRCallFrameReuse, IRReturnBorrowedSlot, StackGuardCompiled, concurrent-call-stacks, AOTRecursiveClosureFrame
+|Old AOT binary on final runtime|Pass; all 165 reference outputs byte-identical to saved pre-change result
+|Harness unit tests|Pass; python3 bench/runtime-comparison/test_runner.py, 10 tests
+|Benchmark integrity|Pass; five experiments, 178 unique jobs / 890 measured samples; counts, finite values and medians recomputed, source/library hashes recorded, environment and absolute user paths excluded
+|Separate sampling|Pass; five seconds at 1 ms; general variable-frame cleanup no longer sampled in native callback stack, while scalar coercion/type resolution and context/guard work remain
+|Strict documentation tables and diff whitespace|Pass; qpp --table-strict and git diff --check
+
+Release: 367 QUnit cases / 16011 assertions plus the standalone AOT location
+script. Debug: 14 cases / 11282 assertions. All test commands use the matching
+build via DYLD_LIBRARY_PATH and QORE_LIBDIR, and --exec-mode=ir at the wrapper.
+No qlib source changed after integration. Builds, tests and final sampling were
+separate from benchmark timing. No full-suite, sanitizer or allocation-count
+claim is made.
+
+### Separate pre-existing JIT finding
+
+An initial fixture created a fresh captured local in each recursive frame.
+It fails in JIT mode on the saved, unmodified merged runtime and on the final
+runtime: depth 1 reads captured value 0 after returning from recursion. The
+same reproducer passes AST and IR. This does not exercise the new native-leaf
+path in JIT mode and is not fixed by this optimization. The final regression
+uses a capture owned by the outer caller, while still exercising recursive
+ordinary frames, native callbacks and exception cleanup across stack blocks.
+
+The complete diagnostic reproducer and its hash are retained in
+results-native-leaf-macos-arm64.json under baseline_finding.reproducer_source.
+Run it with --exec-mode=jit and QORE_JIT_SYNC_COMPILE=1. This finding should be
+isolated and fixed separately before expanding captured/native call eligibility;
+it is not counted as a passing regression or hidden by the test totals above.

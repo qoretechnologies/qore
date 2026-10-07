@@ -282,4 +282,41 @@ sub checkConcurrentFrames(code<int(int)> shared) {
     expect(True, walkOutcomes.get(1000));
 }
 checkConcurrentFrames(shared);
+
+# Cross multiple 64-entry TLS stack blocks while mixing native leaves with
+# ordinary recursive frames, captured locals, owned objects, and unwinding.
+int sub checkLeafFrameBlocks(code<int(int)> fn, code<int()> readCapture, int depth, bool fail) {
+    Marker owned(depth);
+    on_exit {
+        expect(42, readCapture());
+        expect(depth, owned.value);
+        expect(depth + 1, fn(depth));
+    }
+    expect(depth + 1, fn(depth));
+    if (depth) {
+        expect(depth - 1, checkLeafFrameBlocks(fn, readCapture, depth - 1, fail));
+    } else if (fail) {
+        throw "LEAF-FRAME-UNWIND", "unwind through mixed native and ordinary frames";
+    }
+    expect(42, readCapture());
+    return depth;
+}
+sub checkLeafFrames(code<int(int)> fn) {
+    int captured = 42;
+    code<int()> readCapture = int sub () { return captured; };
+    int before = destroyed;
+    int stack_depth = get_thread_call_stack().size();
+    expect(140, checkLeafFrameBlocks(fn, readCapture, 140, False));
+    expect(before + 141, destroyed);
+    try {
+        checkLeafFrameBlocks(fn, readCapture, 140, True);
+        throw "FUNCREF-TEST-ERROR", "expected leaf-frame unwind";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("LEAF-FRAME-UNWIND", ex.err);
+    }
+    expect(before + 282, destroyed);
+    expect(stack_depth, get_thread_call_stack().size());
+    expect(8, fn(7));
+}
+checkLeafFrames(shared);
 printf("function-references: ok (%d)\n", division_line);

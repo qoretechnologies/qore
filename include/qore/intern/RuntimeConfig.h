@@ -125,6 +125,8 @@ public:
     Construction fills call_loc before publishing; destruction waits for stack
     observers before any of the enclosing location's members are destroyed.
     The caller has checked the stack and prepared its callee's AOT context.
+    Only for compiler-proven scalar native leaves with no TLS locals or generic
+    reentry: local/closure frame markers are retained but popped as empty frames.
 */
 class RuntimeConfigNativeCallHelper {
 public:

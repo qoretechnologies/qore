@@ -290,6 +290,17 @@ public:
         instantiateIntern(nullptr, 0);
     }
 
+    //! Pair with pushFrameBoundary() only for a compiler-proven TLS-independent native leaf.
+    /** The body cannot add closure variables or reenter generic execution, so
+        the top entry is still the empty marker, including on exception exit.
+    */
+    DLLLOCAL void popNativeLeafFrameBoundary() {
+        assert(frame_count >= 0 && curr->pos);
+        assert(!curr->var[curr->pos - 1].cvv);
+        --curr->pos;
+        --frame_count;
+    }
+
     DLLLOCAL void popFrameBoundary() {
         assert(frame_count >= 0);
         --frame_count;

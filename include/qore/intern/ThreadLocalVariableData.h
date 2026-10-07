@@ -169,6 +169,29 @@ public:
         frame_marker_stack.push_back({curr, (int)curr->pos - 1});
     }
 
+    //! A native leaf has no TLS locals: retain its visible marker without a cleanup record.
+    /** Only pair with popNativeLeafFrameBoundary(). The compiler must prove that
+        the body cannot instantiate TLS locals or reenter generic execution.
+        Frame inspection still sees the same marker and frame count.
+    */
+    DLLLOCAL void pushNativeLeafFrameBoundary() {
+        LocalVarValue* v = instantiate();
+        assert(!v->val.assigned);
+        v->setFrameBoundary();
+        v->frame_marker_id = ++frame_count;
+    }
+
+    //! Pop the empty native leaf directly, without variable cleanup or marker-vector traffic.
+    DLLLOCAL void popNativeLeafFrameBoundary() {
+        assert(frame_count >= 0 && curr->pos);
+        LocalVarValue& v = curr->var[--curr->pos];
+        assert(v.frame_boundary && v.frame_marker_id == frame_count);
+        assert(!v.val.assigned);
+        v.block_cleared = true;
+        v.frame_boundary = false;
+        --frame_count;
+    }
+
     DLLLOCAL void popFrameBoundary() {
         assert(frame_count >= 0);
         assert(!frame_marker_stack.empty());

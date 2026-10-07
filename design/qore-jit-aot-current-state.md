@@ -167,6 +167,17 @@ reader-visible fields, including the caller location, are initialized before
 publication and remain alive until readers finish. Stack protection and
 cancellation points are unchanged. The callee still uses its own AOT context.
 
+The admitted scalar leaf cannot instantiate TLS locals or reenter generic
+execution. Its local-variable marker therefore uses a specialized push/pop pair:
+it retains the ordinary marker and frame count for inspection, but does not
+append a variable-cleanup record to the local marker vector. Both local and
+closure markers are popped directly as empty frames. Debug assertions verify
+the top marker and unassigned local slot. Ordinary calls still use the general
+cleanup path, including cleanup of residual variables. This relies on the
+existing whole-body scalar-expression admission proof; widening native-entry
+eligibility must revisit this contract. The diagnostic frame is unpublished and
+stack readers finish before either marker is popped, as before.
+
 Context and PC-map readiness use their existing acquire-published state before
 calling the slow materialization helpers. Materialization remains lazy: an
 unused reference cannot start failing earlier just because its target was
@@ -184,6 +195,8 @@ separate semantic tests and retained-call measurements before expanding scope.
 `IRFunctionRefCalls` additionally tests repeated local/foreign-Program calls
 inside one invocation, captured state after native calls, both helper versions,
 and concurrent stack walks over shared callbacks.
+It also mixes native leaves with recursive ordinary frames, captured locals,
+owned objects and exception unwinding across multiple TLS stack blocks.
 
 ## Tiered Execution
 
