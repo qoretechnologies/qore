@@ -62,6 +62,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <typeinfo>
 
 #include <qore/ExceptionSink.h>
@@ -10165,12 +10166,19 @@ private:
 // Borrow that descriptor instead of copying its name/statements/Program on
 // every call. This exact scalar leaf cannot reenter or replace its own cache;
 // popping the frame waits for observers before the caller can change/clear it.
+template <bool Deferred = false>
 class QorePreparedFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
     __attribute__((always_inline)) QorePreparedFunctionRefStackLocation(RuntimeConfig& rc,
             const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
-        : cache(cache), helper(rc, this, loc, cache.parse_loc,
-              cache.uvb->getParseOptions(cache.pgm->getParseOptions()), cache.pgm, xsink) {
+        : cache(cache), helper([&]() {
+            if constexpr (Deferred) {
+                return RuntimeConfigNativeLeafCallHelper(rc, this, loc, cache, xsink);
+            } else {
+                return RuntimeConfigNativeCallHelper(rc, this, loc, cache.parse_loc,
+                    cache.uvb->getParseOptions(cache.pgm->getParseOptions()), cache.pgm, xsink);
+            }
+        }()) {
     }
     __attribute__((always_inline)) ~QorePreparedFunctionRefStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
@@ -10184,9 +10192,9 @@ private:
     const QorePreparedFunctionRefV3& cache;
     const QoreProgramLocation* loc = nullptr;
     // LAST: unpublish and wait before any observable member is destroyed.
-    RuntimeConfigNativeCallHelper helper;
+    std::conditional_t<Deferred, RuntimeConfigNativeLeafCallHelper, RuntimeConfigNativeCallHelper> helper;
 };
-static_assert(sizeof(QorePreparedFunctionRefStackLocation) < sizeof(QoreExplicitFunctionRefStackLocation));
+static_assert(sizeof(QorePreparedFunctionRefStackLocation<>) < sizeof(QoreExplicitFunctionRefStackLocation));
 
 extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
@@ -10302,18 +10310,28 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         }
         qore_aot_ensure_pc_loc_map(ctx);
     }
-    QorePreparedFunctionRefStackLocation frame(rc, cache, xsink);
+    if (auto inline_entry = cache.ref->getTypedInlineStackEntry(Signature)) {
+        QorePreparedFunctionRefStackLocation<true> frame(rc, cache, xsink);
+        if (*xsink) {
+            return 1;
+        }
+        using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+        try {
+            *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
+                qore_rt_get_stack_limit_v1(&rc));
+        } catch (const QoreJITException&) {
+            // Any overflow has materialized context; the frame restores it.
+        }
+        return 1;
+    }
+    QorePreparedFunctionRefStackLocation<> frame(rc, cache, xsink);
     if (*xsink) {
         return 1;
     }
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(cache.entry);
     try {
-        if (auto inline_entry = cache.ref->getTypedInlineStackEntry(Signature)) {
-            using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
-            *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
-                qore_rt_get_stack_limit_v1(&rc));
-        } else if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
+        if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
             using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
             *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
         } else {

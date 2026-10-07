@@ -352,6 +352,25 @@ reader-visible fields, including the caller location, are initialized before
 publication and remain alive until readers finish. Stack protection and
 cancellation points are unchanged. The callee still uses its own AOT context.
 
+Prepared calls to the re-emitted callee v3 use a deferred variant of this
+helper. Their complete scalar-body proof permits only native arithmetic/select
+operations and the full stack-guard edge: no TLS context access, allocation or
+generic reentry. Successful calls therefore leave Program-call, closure,
+statement/location, parse-option and saved-SP fields untouched. Empty variable
+frame markers and the independent diagnostic frame are still pushed/published
+on every call, with the existing reader handshake and caller location.
+
+A same-thread invocation-local pointer identifies the deferred helper. Before
+constructing a stack-overflow exception (including the IA-64 register-stack
+case), the full guard materializes the original context exactly once. It reads
+the target's current parse options and runtime override at that point; neither
+is cached across invocations. Destruction restores materialized state in the
+original order and restores the previous deferred pointer. Unmaterialized calls
+have no context writes to undo. The descriptor remains pinned and immutable
+while published. Older callee entries and helper v2 use eager context setup;
+disabling callee v3 also provides an eager control. No native helper ABI or
+prepared-descriptor layout changes.
+
 The native frame helper and enclosing diagnostic-frame constructors/destructor
 carry inlining hints so the C++ runtime compiler can allocate their save/restore
 state together with the typed-call helper. The publishing helper's hints are

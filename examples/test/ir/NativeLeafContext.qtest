@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeLeafContextTest
+
+class NativeLeafContextTest inherits QUnit::Test {
+    constructor() : Test("native leaf deferred context", "1.0", \ARGV) {
+        addTestCase("native boundary overflow and context restoration", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        TmpDir dir("qore-native-leaf-context-");
+        string source = dir.path + "/provider.qr";
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\n"
+            "int sub nativeLeafProbe(int value) { return (value + 17) & 65535; }\n"
+            "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n");
+        file.close();
+        string control = dir.path + "/control.qr";
+        file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub contextControl() { return 23; }\n");
+        file.close();
+        string executable = dir.path + "/guard-test";
+        string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " ";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/native_leaf_context.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output;
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                output = backquote(env + prefix + "QORE_DUMP_LLVM_IR=1 " + quote(qcc) + " " + level
+                    + " -c --batch-script-aggregate=NATIVE_LEAF_CONTEXT --script-aggregate-native-registers"
+                    + " --batch-script-aggregate-output=" + quote(dir.path + "/aggregate.qo")
+                    + " --output-dir=" + quote(dir.path) + " " + quote(source) + " " + quote(control)
+                    + " 2>&1", \status);
+                assertEq(0, status, output);
+                assertRegex("qore_rt_bind_function_call_ref_typed_v2", output, "typed provider binding");
+                assertEq(prefix.empty(), output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
+                    "deferred eligible entry or eager control");
+                list<string> objects = glob(dir.path + "/*.qo");
+                assertEq(3, objects.size(), "two native inputs plus aggregate");
+                output = backquote((map quote($1), args).join(" ") + " "
+                    + (map quote($1), objects).join(" ") + " 2>&1", \status);
+                assertEq(0, status, output);
+                output = backquote(env + quote(executable) + (prefix.empty() ? " inline" : " eager")
+                    + " 2>&1", \status);
+                assertEq(0, status, output);
+                assertEq("native-leaf-context: ok\n", output);
+            }
+        }
+    }
+}

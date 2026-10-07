@@ -401,6 +401,9 @@ public:
     uintptr_t runtime_loc_sp = 0;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
+    // Same-thread deferred context for an admitted pure native scalar leaf.
+    // Never read by stack observers; they use the independently published frame.
+    RuntimeConfigNativeLeafCallHelper* native_leaf_context = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
     const char* parse_file = nullptr; // the current file or label being parsed
     const char* parse_source = nullptr; // the current source being parsed
@@ -1204,6 +1207,9 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
     if (td->rse_limit < get_rse_bsp()) {
+        if (td->native_leaf_context) {
+            td->native_leaf_context->materialize();
+        }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the IA-64 RSE (Register " \
             "Stack Engine) stack size limit (%ld bytes)", td->stack_size - QORE_STACK_GUARD);
         return -1;
@@ -1224,6 +1230,9 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
+        if (td->native_leaf_context) {
+            td->native_leaf_context->materialize();
+        }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
             "(%lu bytes)", td->stack_size - QORE_STACK_GUARD);
         return -1;
@@ -2037,6 +2046,64 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
     tlpd->cvstack.popNativeLeafFrameBoundary();
     td->closure_rt_env = old_closure;
     td->call_program_context = old_call_pgm;
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), tlpd(td->tlpd), cache(cache),
+          previous(td->native_leaf_context) {
+    assert(td->current_pgm == cache.pgm);
+    tlpd->lvstack.pushNativeLeafFrameBoundary();
+    tlpd->cvstack.pushNativeLeafFrameBoundary();
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+#ifdef QORE_MANAGE_STACK
+    if (cache.parse_loc) {
+        check_stack_intern(xsink, td);
+    }
+#endif
+}
+
+// Never pull exception-only context traffic back into the successful call path.
+__attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
+    if (materialized) {
+        return;
+    }
+    old_call_pgm = td->call_program_context;
+    old_closure = td->closure_rt_env;
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    old_sp = td->runtime_loc_sp;
+    materialized = true;
+    td->call_program_context = cache.pgm;
+    td->closure_rt_env = nullptr;
+    if (cache.parse_loc) {
+        td->runtime_statement = nullptr;
+        td->runtime_loc = cache.parse_loc;
+        td->runtime_po = apply_runtime_po_override(td, cache.uvb->getParseOptions(cache.pgm->getParseOptions()));
+    }
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::~RuntimeConfigNativeLeafCallHelper() {
+    if (materialized) {
+        if (cache.parse_loc) {
+            td->runtime_statement = old_stmt;
+            td->runtime_loc = old_loc;
+            td->runtime_po = apply_runtime_po_override(td, old_po);
+        }
+        td->runtime_loc_sp = old_sp;
+    }
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
+    if (materialized) {
+        td->closure_rt_env = old_closure;
+        td->call_program_context = old_call_pgm;
+    }
 }
 
 // called when pushing a new location on the stack

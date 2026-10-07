@@ -305,6 +305,14 @@ snapshotted. `QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1` suppresses this
 entry while retaining callee v2. Existing helper/cache ABIs and old entries are
 unchanged; newly bound v3 entries require the new runtime. Caller/frame checks
 and overflow diagnostics remain.
+Prepared calls to this re-emitted pure callee v3 defer same-thread context
+save/restore until a stack guard actually fails. The full guard materializes
+Program/closure/location/policy state before exception construction; successful
+scalar bodies cannot access or mutate it. Published diagnostic frames, empty
+local/closure markers and their reader handshake remain active on every call.
+Older callee entries and helper v2 keep eager setup; disabling callee v3 tests
+that path. This is not permission to defer context for generic or reentrant
+callees, and it does not remove any stack/cancellation check.
 Compiler-proven scalar leaves retain their local/closure frame markers but
 avoid general variable-cleanup bookkeeping for those empty frames. The native
 closure-marker push handles an available slot inline and outlines full-block

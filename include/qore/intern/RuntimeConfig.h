@@ -159,6 +159,42 @@ private:
     bool swapped;
 };
 
+struct QorePreparedFunctionRefV3;
+
+//! Deferred context for a prepared, re-emitted pure scalar callee (callee v3).
+/** Keep as the last member of its published stack location. The callee can
+    only evaluate native scalar operations or enter the full stack guard; it
+    cannot read or change the deferred context, allocate, or reenter Qore.
+    Empty local/closure markers and stack publication are always retained.
+    The full stack guard materializes context before constructing an exception.
+    All pointers belong to the current invocation/thread, including the cache.
+*/
+class RuntimeConfigNativeLeafCallHelper {
+public:
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink);
+    DLLLOCAL ~RuntimeConfigNativeLeafCallHelper();
+    RuntimeConfigNativeLeafCallHelper(const RuntimeConfigNativeLeafCallHelper&) = delete;
+    RuntimeConfigNativeLeafCallHelper& operator=(const RuntimeConfigNativeLeafCallHelper&) = delete;
+    //! Install the original context before any stack-overflow exception work; idempotent.
+    DLLLOCAL void materialize();
+
+private:
+    ThreadData* td;
+    ThreadLocalProgramData* tlpd;
+    const QorePreparedFunctionRefV3& cache;
+    RuntimeConfigNativeLeafCallHelper* previous;
+    const QoreStackLocation* old_stack;
+    // Read/written only by materialize() and the matching restoration path.
+    QoreProgram* old_call_pgm;
+    const QoreClosureBase* old_closure;
+    const AbstractStatement* old_stmt;
+    const QoreProgramLocation* old_loc;
+    QoreParseOptions old_po;
+    uintptr_t old_sp;
+    bool materialized = false;
+};
+
 /**
  * @brief Get the current runtime configuration from thread-local storage.
  *

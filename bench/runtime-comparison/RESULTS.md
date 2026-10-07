@@ -2252,3 +2252,89 @@ introduced. Next: identify which same-thread context saves/restores can safely
 be deferred for proven non-reentrant scalar leaves, while preserving published
 frames, empty local/closure markers and full failure diagnostics. Do not
 assume that removing more checks is required or safe.
+
+## Deferred pure scalar call context (2026-10-07)
+
+Baseline: `9e74e1788`, saved before editing. Prepared calls to the re-emitted
+pure scalar callee v3 now defer Program-call, closure, statement/location,
+parse-option and saved-SP context traffic. These bodies can execute only
+native scalar expressions or the full stack-guard edge: they cannot observe
+or change those fields, allocate, or generically reenter Qore.
+
+A same-thread invocation-local pointer identifies the deferred helper. Before
+a full guard constructs an overflow exception, it materializes the original
+context once, including live parse options and runtime overrides. Destruction
+restores materialized fields in the original order. Successful calls leave
+those fields untouched. The published diagnostic frame, caller location, empty
+local/closure markers and pop/walker synchronization remain active on every
+call. The publishing helper stays last. All live admission checks and stack/
+cancellation checks remain; older entries and helper v2 stay eager. There is
+no serialized, prepared-cache or native helper ABI change.
+
+### Measured benefit and costs
+
+The same isolated shuffled five-fork contract gives ns/element results below;
+these include loop/computation/checksum work, not isolated call latency.
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_call|11.61965|10.44432|-10.11%|10.62244|9.58208|-9.79%
+|indirect_wide|11.57739|10.48551|-9.43%|10.62372|9.49397|-10.63%
+|indirect_float|11.77056|10.85802|-7.75%|10.79080|9.93837|-7.90%
+|indirect_tagged_float|11.64819|10.78339|-7.42%|10.67099|9.89214|-7.30%
+|indirect_branch_float|11.83330|10.91008|-7.80%|10.86487|9.98752|-8.08%
+
+All five callback fork ranges separate in both runs: **7.30-10.63% less time**.
+The controls do not show a general execution-speed improvement. Arithmetic
+moves +1.64% at 1024 (separated ranges) and +0.16% at 4096 (overlap); direct call
+moves +0.16% (overlap) and +0.64% (separated). Generic polymorphic/hash repeat
+medians worsen 1.77%/1.73%, with overlapping ranges. All samples are retained.
+The callback benefit is clear, but the small control regressions are a
+tradeoff/continuing investigation, not silently classified as zero.
+
+Java retained-call medians at 1024 are 1.63138-1.67142 ns/element; Qore still
+takes **6.3-6.6x** as long. Java parity remains open.
+[Evidence](results-deferred-context-macos-arm64.json) retains **195 jobs /
+975 samples**, binary/source hashes and independently recomputed medians from
+`run-fk5l8dsj` and `run-4p7lcn8n`. No build, test, profiler or documentation
+validator overlapped either timing run.
+
+The integer helper frame grows **256 to 304 bytes** despite fewer successful-
+path state writes. AOT text is unchanged at 83548 bytes; runtime text falls
+13871852 to 13865792 bytes (-6060). A separate five-second sample attributes
+1342 top-of-stack samples to the constructor-selection lambda, 1335 to the
+typed helper, 731 to the caller and 217 to the scalar callee. Disassembly
+confirms an out-of-line lambda call. Sampling is qualitative, not an additive
+cost model; removing that wrapper boundary is the next measured experiment.
+
+### Validation and audit
+
+Each final release/debug build passes **157 cases / 13957 assertions** in
+25 wrappers plus 11 standalone checks, and ten Python harness tests pass.
+Older callee-v2 and callee-v3 artifacts each reproduce 225 records. Each timed
+implementation passes 225 independent reference checks.
+
+The new native-boundary wrapper contributes 28 assertions. A native-register
+script aggregate provides a validated typed callback in the same Program;
+the host verifies the expected v3/eager binding and positive prepared cache.
+It sweeps 4096 byte offsets of the current thread's test stack limit, restores
+the real limit before inspecting errors, and requires both pre-frame and
+published-leaf overflow failures. It checks exception diagnostics, caller
+Program context, subsequent successful calls and a separate control function.
+The sweep runs at O0/O3 with v3 enabled/disabled, on the main thread and three
+successive foreign-thread registrations. The same final fixture passes the
+saved baseline. Existing concurrent-reader, replacement/cleanup, captured/
+generic/foreign-Program, debugger, policy, exception and cancellation coverage
+remains in the selected matrix.
+
+Fixture authoring initially used a qmod reference without static fast-call
+metadata and a simple affine integer expression without typed admission.
+The final fixture uses native script registration and an already admitted
+masked expression. Those separate admission limitations were not changed or
+mistaken for deferred-context failures.
+
+The [full audit](FOLLOWUP-AUDIT.md#deferred-scalar-context-audit-2026-10-07)
+covers all 62 checks. It drove forced boundary-failure testing and preservation
+of restoration order, full exception materialization and observer lifetime.
+No full-suite, sanitizer or Linux runtime claim. Next: measure explicit
+inlining of the constructor-selection wrapper, retaining all state semantics;
+then assess missing affine-integer admission with dedicated workloads.

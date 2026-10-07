@@ -2564,3 +2564,98 @@ The skill drove explicit live-address ownership and unsupported-layout fallback
 review. Native harness fallback is equivalent C++ coverage, not a forced call
 of generated LLVM's null edge; that edge has structural coverage. No full-suite
 or sanitizer claim. Existing unrelated findings remain documented.
+
+## Deferred scalar context audit (2026-10-07)
+
+Scope: all uncommitted changes after `9e74e1788`: internal C++ runtime helper,
+two new integration-test files, design/benchmark prose and sanitized evidence.
+Applied audit-changes with module-structure, sandboxing and cooperative-
+cancellation guides. No qlib, DataProvider, QPP or JNI changes. Every skill
+check is accounted for below.
+
+|!Check|!Status|!Findings
+|Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|Module added to QMOD list in CMakeLists.txt|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|.qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|%modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|No %include usage (deprecated for modules)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|Copyright 2026 on all new files|Pass|Both new test files and evidence have 2026/MIT notices.
+|Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new shipped module or QPP class; generated fixtures are scripts.
+|%modern directive present|Pass|New wrapper and both generated scripts use %modern; not applicable to C++ harness.
+|Executable permission set (chmod +x)|Pass|New Qore wrapper is executable; C++ source is compiled by that wrapper.
+|Uses %prepend-module-path  before %requires for in-repo modules|Pass|Repository qlib prepend precedes QUnit/FsUtil requirements.
+|External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only Qore-delivered QUnit/FsUtil modules are required.
+|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|No new production filesystem/network operation or direct I/O in the native harness.
+|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|No new production filesystem/network operation or direct I/O in the native harness.
+|If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No new production filesystem/network operation or direct I/O in the native harness.
+|No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|File/TmpDir/glob/subprocess operations are scoped to compiling, linking and running temporary test artifacts.
+|All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No new production loop. Native 4096-step sweep polls every 10 iterations; stack inspection every 100; remaining loops have at most 20 iterations.
+|Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|Pass|New test polls use qore_check_cancel; no deprecated API.
+|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|Pass|Production poll frequency unchanged. Expensive test sweep polls every 10 iterations and tight stack scan every 100.
+|No blocking operations without cancellation support|Pass|No new production blocking operation. Existing reader wait retained; native harness joins its bounded, cancellable worker.
+|Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider or JNI change.
+|Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider or JNI change.
+|Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider or JNI change.
+|DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider or JNI change.
+|DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash<string, AbstractDataField>|N/A|No DataProvider or JNI change.
+|Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider or JNI change.
+|Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider or JNI change.
+|Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider or JNI change.
+|Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider or JNI change.
+|Response/output types use private Fields|N/A|No DataProvider or JNI change.
+|Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider or JNI change.
+|Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider or JNI change.
+|Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider or JNI change.
+|Password/secret fields have "sensitive": True|N/A|No DataProvider or JNI change.
+|groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider or JNI change.
+|App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider or JNI change.
+|App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider or JNI change.
+|display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider or JNI change.
+|short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider or JNI change.
+|desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider or JNI change.
+|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider or JNI change.
+|No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider or JNI change.
+|No bare field/option names in prose — must use backticks|N/A|No DataProvider or JNI change.
+|Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider or JNI change.
+|Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider or JNI change.
+|getRecordTypeImpl() signature: must be private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) — NOT returning *AbstractDataProviderType|N/A|No DataProvider or JNI change.
+|Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider or JNI change.
+|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider or JNI change.
+|No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Complete deferred helper with idempotent failure materialization and eager compatibility path. No stub/TODO; the constructor lambda is functional but remains a measured follow-up optimization.
+|Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|No new production allocation. Context is materialized before overflow exception construction, then restored in original order. Stack publication/helper-last lifetime and cache owner are retained; unmaterialized fields are never restored/read. Native test consumes exceptions in holders and releases its prepared owner.
+|Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|New pointer and deferred fields belong only to the current thread/invocation. Cache is pinned and cannot be replaced by a pure non-reentrant leaf. Readers use separately initialized immutable diagnostic fields and the unchanged pop/walker handshake.
+|Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Only validated, re-emitted scalar callee-v3 bindings enter deferral; zero/one native argument ABI unchanged. Compile-time helper selection uses conditional_t with explicit type_traits include. Native test verifies the typed signature, selected entry and prepared cache.
+|Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|No new scan, allocation or metadata copying in successful calls. Callback ranges separate twice with 7.30-10.63% time reduction. Larger 304-byte helper frame and small control regressions are reported; no universal speedup claim.
+|Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Full native and IA-64 register-stack overflow branches materialize before raising the original exception. All Program/debugger/body/readiness guards and sink checks remain. Older entries stay eager; actual boundary sweep proves error and recovery paths.
+|Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Internal-only helper documents purity, borrowed ownership and mandatory materialization. No public QPP/API addition needing business examples; README/current-state/results describe safety boundaries, compatibility and measured costs.
+|QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change.
+|Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new production I/O, user format string, secret or unbounded index. Limit mutation exists only in an isolated same-thread test sweep and is restored before inspecting errors. Production limit is unchanged. Evidence metadata allowlisted.
+|Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|157 cases / 13957 assertions plus 11 standalones per release/debug build, new boundary sweep and concurrent reader tests pass. Two old artifacts and all independent benchmark checks match; unsupported-runtime and full-suite limitations stated.
+
+### Verification
+
+|!Check|!Outcome
+|Final builds|Release/debug qore and qcc pass, including explicit type_traits dependency
+|Selected matrix|157 cases / 13957 assertions in 25 wrappers plus 11 standalones per build
+|New native boundary test|28 assertions: O0/O3, v3/eager binding, 4096 limit offsets, main plus three foreign registrations, failure diagnostics and recovery; saved baseline passes too
+|Deferred-state proof|Only re-emitted pure scalar v3 body; no context reads/writes, allocation or generic reentry before its full guard
+|Failure semantics|Native and register-stack guards materialize context before exception construction; existing policy override and restoration order preserved
+|Observers|Independent diagnostic frame and empty markers always active; same publication/pop handshake; helper stays last and cache remains pinned
+|Old artifacts|225 matching records each for callee-v2 and callee-v3 artifacts
+|Independent benchmark checks|225 records per implementation; ten Python harness tests pass
+|Timing integrity|195 unique jobs / 975 finite positive samples; medians independently recomputed; no builds/tests/profiles/docs validation during timings
+|Benefit|All five callback ranges separate in both runs; 7.30-10.63% less time
+|Controls / size|Small control regressions retained; helper frame 256 to 304 bytes, AOT text unchanged, runtime text -6060 bytes
+|Separate profile|Frame/helper dominates; out-of-line constructor-selection lambda confirmed, queued as next measured experiment
+|Documentation / whitespace|Strict qpp table checks and staged git diff whitespace check
+
+The skill drove forced native-boundary coverage and preservation of failure
+materialization/restoration order. Initial test setup did not reach the typed
+path; the final native-register aggregate asserts actual admission rather than
+accepting generic fallback. No full-suite, sanitizer or Linux runtime claim.
+Java parity is not achieved.
