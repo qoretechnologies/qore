@@ -258,7 +258,8 @@ fields with `rc_get_current_ref()`.
 
 Generated JIT/AOT loop polls also use the live view. A function containing a
 poll acquires an optional borrowed pointer once in its logical entry, after
-the stack guard, and calls `qore_rt_check_cancel_v2` at the existing poll sites.
+the stack guard. The full `qore_rt_check_cancel_v2` helper remains available
+at every existing poll site.
 `qore_rt_get_loop_runtime_config` returns null when thread data is unavailable,
 without accessing possibly destroyed TLS RuntimeConfig state. A null pointer
 selects the ordinary TLS poll; it is not a cached proof that cancellation is
@@ -274,6 +275,24 @@ No request state, manager identity or deferral state is cached, and polling
 frequency is unchanged for ordinary and fused loops. The compiler comparison
 switch is `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG`. The new helper symbols are
 additive: old artifacts work on the updated runtime; new artifacts require it.
+
+The compiler now calls `qore_rt_get_cancel_poll_state_v1` once in that entry
+to borrow the deferral-depth, thread-request and global pending-count addresses.
+Its versioned descriptor contains three target-sized pointers, not copied
+values. On matching native primitive layouts, each checkpoint checks deferral
+first, then loads the thread byte and Program count using seq_cst atomic
+operations. A pending value calls the full helper: a set flag alone cannot
+prove that cancellation is in scope. A null descriptor also calls that helper.
+The final exception-sink check remains on every merged path.
+
+The runtime exposes addresses only for the documented i32/i8/i64 sizes,
+alignment and lock-free atomic representation; other targets return all-null
+fields. Borrowed thread-slot and deferral addresses are valid only during the
+same thread's current native invocation, never across teardown or TID reuse.
+No Program or manager pointer is cached. Language loops still poll on every
+iteration; fused internal loops retain their existing 100-element interval.
+`QORE_DISABLE_LLVM_INLINE_CANCEL_POLL` retains v2 helper calls as a compiler
+control. This additive ABI does not change RuntimeConfig layout or old helpers.
 
 The native frame helper performs the existing Program-call-context,
 closure-environment, local/closure-frame-boundary, diagnostic-frame, and

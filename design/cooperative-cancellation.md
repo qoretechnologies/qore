@@ -521,6 +521,35 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
 }
 ```
 
+### Generated native-loop polling
+
+JIT/AOT loops can inline the no-pending-request part of the check without
+reducing checkpoint frequency. `qore_rt_get_cancel_poll_state_v1` supplies a
+versioned three-pointer descriptor from the invocation's live RuntimeConfig:
+deferral depth, the current thread's fixed-slot request flag, and the global
+pending-Program-interrupt count. Only addresses are retained. Every checkpoint
+reads deferral first, then performs seq_cst loads of the thread flag and global
+count in that order. A nonzero deferral skips cancellation, as in the full
+helper; a nonzero request/count calls `qore_rt_check_cancel_v2` to resolve
+scope, governing manager, priority and diagnostics. The global count is only
+a conservative zero test, never evidence that this Program is interrupted.
+
+The runtime returns all-null fields if thread context is unavailable or the
+documented native primitive size/alignment/lock-free atomic requirements do
+not hold. A null descriptor selects the full nullable-context helper rather
+than skipping a poll. Thread-local addresses cannot outlive the acquiring
+thread's invocation or survive thread teardown/re-registration. The global
+counter's request-before-publication and clear-before-decrement ordering is
+unchanged. Pending requests are always rechecked by the full helper, and
+exception-sink checking remains after the merged fast/slow paths.
+
+Ordinary language loops still poll every iteration; fused internal loops keep
+their existing 100-element interval. `QORE_DISABLE_LLVM_INLINE_CANCEL_POLL`
+retains helper calls for comparison, while
+`QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG` selects the original TLS entry.
+These are compilation controls. The interpreter and previously compiled AOT
+artifacts retain their existing cancellation paths.
+
 ### `qore_cancel_thread()` Implementation
 
 ```cpp

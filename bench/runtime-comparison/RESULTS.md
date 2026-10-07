@@ -1822,3 +1822,86 @@ guarantee is to be traded away to claim Java-level speed.
 No full-suite, sanitizer or Linux validation claim. Previously documented
 legacy debug-wrapper selection, recursive-JIT-capture, nested AOT source-line
 and default-target linker-warning limitations remain separate.
+
+## Inline no-pending cancellation checks (2026-10-07)
+
+Generated JIT/AOT code now borrows live flag addresses once per invocation and
+checks deferral, thread cancellation and the global Program-interrupt count
+at every existing checkpoint. Both request loads remain seq_cst. Pending
+requests, unavailable thread state and unsupported primitive atomic layouts
+call the full helper; no scope, manager, priority or diagnostic decision is
+cached. Language loops still poll every iteration, and fused internal loops
+retain their existing interval. Old helper ABIs and RuntimeConfig layout remain.
+
+### Before/after measurements
+
+Baseline is `77f11fc72`. Identical sources, five shuffled forks, three warmup
+and five measurement windows of 300 ms; median fork means in ns/element include
+loop/computation/checksum. Java is Temurin 25.0.2/JMH 1.37 with retained
+DONT_INLINE targets. No builds/tests/profiles overlapped either timing run.
+
+Count 1024 (`run-saxqlud0`):
+
+|!Kernel|!Before|!After|!Reduction|!Java
+|arithmetic|2.951|2.180|26.1%|0.924
+|direct_call|2.963|2.182|26.4%|0.923
+|indirect_call|13.846|12.802|7.5%|1.704
+|indirect_wide|13.924|12.790|8.1%|1.709
+|indirect_float|13.606|12.812|5.8%|1.673
+|indirect_tagged_float|13.594|12.959|4.7%|1.671
+|indirect_branch_float|132.682|129.303|2.5%|1.686
+
+Count 4096 repeat (`run-t49g5i82`):
+
+|!Kernel|!Before|!After|!Reduction
+|arithmetic|2.091|1.310|37.3%
+|direct_call|2.081|1.324|36.4%
+|indirect_call|12.887|11.833|8.2%
+|indirect_wide|12.855|11.846|7.8%
+|indirect_float|12.704|12.100|4.8%
+|indirect_tagged_float|12.653|11.979|5.3%
+|indirect_branch_float|131.283|129.920|1.0%
+|polymorphic_call|282.017|281.428|0.2%
+|temporary_hash|318.602|322.804|-1.3%
+
+Arithmetic/direct loops take **26-37% less time**, and all four native callback
+loops take **5-8% less time**, with nonoverlapping fork ranges in both runs.
+Generic branch/dispatch/allocation control ranges overlap; temporary-hash's
+median is 1.3% slower. These controls do not establish either a generic gain
+or zero regression. Native callbacks still take **7.5-7.8x Java's time** at
+count 1024; arithmetic/direct loops take about 2.36x. None is isolated call
+latency, and Java parity is not reached.
+
+AOT native text grows **77592 to 81864 bytes** (5.5%); runtime text grows
+**13859680 to 13861796 bytes**. Compilation/startup observations are retained
+but are not speedup evidence.
+
+### Validation, audit and next target
+
+Release/debug each pass **108 cases / 12085 assertions** in 20 wrappers plus
+seven standalone scripts. The loop wrapper now checks while/for/do/foreach,
+both disable controls, JIT/tiered, AOT O0/O3, EH, stripped debug information
+and split compilation, including emitted seq_cst loads. Native tests compare
+full and inline checks under manager changes, deferral, request/clear races,
+null descriptors and repeated foreign-thread registration/teardown. Fused-loop
+and linked-executable shutdown checks also pass. An older AOT artifact matches
+all 225 checksum records; every measured implementation passes all 225
+independent checks, and ten Python harness tests pass.
+
+[Evidence](results-inline-cancel-macos-arm64.json) contains all **195 jobs /
+975 samples**, independently verified medians and source/library/inspection
+hashes. [Full audit](FOLLOWUP-AUDIT.md#inline-cancellation-poll-audit-2026-10-07)
+reports all 62 checks, with particular attention to borrowed address lifetime,
+sequential consistency, pending-request fallback and teardown behavior.
+
+Separate sequential five-second profiles show no cancellation helper in the
+hot loop. AArch64 disassembly retains live atomic request loads and sink
+checks. Native callback frame bookkeeping still dominates sampling; the
+callee stack-check/TLS path remains visible. Sampling is qualitative, not
+additive cost attribution. Next, pass RuntimeConfig through an additive typed
+callee entry while retaining old entries and all stack/observer guarantees;
+then revisit compact frames and generic float-branch admission.
+
+No full-suite, sanitizer or Linux claim. Legacy debug-wrapper child-library
+selection and the previously recorded recursive-JIT-capture, nested-AOT-line
+and default-target-linker-warning limitations remain separate.

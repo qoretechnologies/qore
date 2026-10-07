@@ -14,13 +14,34 @@ struct QoreTypeParamInstantiation;
 #include <cstdio>
 #include <thread>
 
+// Mirrors the generated guard using the published primitive-atomic ABI. Only
+// pending/unavailable cases perform full scope/manager/diagnostic resolution.
+static bool inlineCheck(const QoreCancelPollStateV1& state, RuntimeConfig* rc, ExceptionSink* xsink) {
+    if (!state.deferral || (!*state.deferral
+            && (state.thread_requested->load(std::memory_order_seq_cst)
+                || state.program_pending->load(std::memory_order_seq_cst)))) {
+        return qore_rt_check_cancel_v2(xsink, "inline poll test", rc);
+    }
+    return false;
+}
+
 static void check(ExceptionSink& xsink, const char* error = nullptr) {
     // Capture once, before entering the nested Programs below. This must be a
     // live view rather than a snapshot of the initial manager/deferral state.
     static thread_local RuntimeConfig* loop_context = qore_rt_get_loop_runtime_config();
     assert(loop_context);
-    for (unsigned path = 0; path < 3; ++path) {
-        bool cancelled = path == 1 ? qore_check_cancel(&xsink, "interrupt fast-path test")
+    static thread_local const QoreCancelPollStateV1 state = []() {
+        QoreCancelPollStateV1 value;
+        qore_rt_get_cancel_poll_state_v1(loop_context, &value);
+        assert((value.deferral && value.thread_requested && value.program_pending)
+            || (!value.deferral && !value.thread_requested && !value.program_pending));
+        return value;
+    }();
+    const QoreCancelPollStateV1 unavailable{};
+    for (unsigned path = 0; path < 5; ++path) {
+        bool cancelled = path == 4 ? inlineCheck(unavailable, loop_context, &xsink)
+            : path == 3 ? inlineCheck(state, loop_context, &xsink)
+            : path == 1 ? qore_check_cancel(&xsink, "interrupt fast-path test")
             : qore_rt_check_cancel_v2(&xsink, "interrupt fast-path test", path ? nullptr : loop_context);
         assert(cancelled == (error != nullptr));
         assert(static_cast<bool>(xsink) == (error != nullptr));
@@ -31,6 +52,7 @@ static void check(ExceptionSink& xsink, const char* error = nullptr) {
     }
     assert(static_cast<bool>(qore_rt_check_cancel_v2(nullptr, "sinkless native poll", loop_context))
         == (error != nullptr));
+    assert(inlineCheck(state, loop_context, nullptr) == (error != nullptr));
 }
 
 static void checkContexts() {
@@ -144,16 +166,34 @@ static void checkForeignLifecycle() {
     std::thread worker([]() {
         assert(!qore_rt_get_loop_runtime_config());
         assert(!qore_rt_check_cancel_v2(nullptr, "unregistered thread", nullptr));
-        {
+        for (unsigned i = 0; i < 20; ++i) {
             QoreForeignThreadHelper foreign;
             RuntimeConfig* context = qore_rt_get_loop_runtime_config();
             assert(context);
+            QoreCancelPollStateV1 state;
+            qore_rt_get_cancel_poll_state_v1(context, &state);
             assert(!qore_rt_check_cancel_v2(nullptr, "registered thread", context));
+            assert(!inlineCheck(state, context, nullptr));
+            assert(!qore_cancel_thread(q_gettid(), "reactivated native invocation"));
+            assert(inlineCheck(state, context, nullptr));
+            {
+                QoreCancelDeferralHelper defer;
+                assert(!inlineCheck(state, context, nullptr));
+            }
+            assert(inlineCheck(state, context, nullptr));
+            qore_clear_thread_cancel();
+            assert(!inlineCheck(state, context, nullptr));
+            qore_rt_get_cancel_poll_state_v1(nullptr, &state);
+            assert(!state.deferral && !state.thread_requested && !state.program_pending);
         }
         // The borrowed context above is no longer valid. Reacquiring must return
         // null rather than touching TLS context state after thread-data teardown.
         assert(!qore_rt_get_loop_runtime_config());
         assert(!qore_rt_check_cancel_v2(nullptr, "unregistered again", nullptr));
+        QoreCancelPollStateV1 state;
+        qore_rt_get_cancel_poll_state_v1(nullptr, &state);
+        assert(!state.deferral && !state.thread_requested && !state.program_pending);
+        assert(!inlineCheck(state, nullptr, nullptr));
     });
     worker.join();
 }

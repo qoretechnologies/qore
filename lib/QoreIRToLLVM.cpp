@@ -9608,10 +9608,59 @@ void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* l
             auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
                 llvm::FunctionType::get(ptr_type, {}, false));
             loop_runtime_config = eb.CreateCall(acquire, {}, "loop_runtime_config");
+            if (!std::getenv("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
+                // Describe QoreCancelPollStateV1 using target pointer sizes.
+                // Initialize/read the descriptor after context acquisition so
+                // both calls dominate every generated checkpoint and handler.
+                auto* state_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, ptr_type});
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                auto* state = ab.CreateAlloca(state_type, nullptr, "cancel_poll_state");
+                auto acquire_state = module.getOrInsertFunction("qore_rt_get_cancel_poll_state_v1",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                eb.CreateCall(acquire_state, {loop_runtime_config, state});
+                loop_cancel_deferral = eb.CreateLoad(ptr_type,
+                    eb.CreateStructGEP(state_type, state, 0), "cancel_deferral_ptr");
+                loop_cancel_requested = eb.CreateLoad(ptr_type,
+                    eb.CreateStructGEP(state_type, state, 1), "cancel_requested_ptr");
+                loop_program_interrupts = eb.CreateLoad(ptr_type,
+                    eb.CreateStructGEP(state_type, state, 2), "program_interrupts_ptr");
+            }
         }
         auto check = module.getOrInsertFunction("qore_rt_check_cancel_v2",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(check, {xsink_arg, label, loop_runtime_config});
+        if (loop_cancel_deferral) {
+            auto* deferral = llvm::BasicBlock::Create(ctx, "cancel_deferral", llvm_func);
+            auto* thread = llvm::BasicBlock::Create(ctx, "cancel_thread", llvm_func);
+            auto* program = llvm::BasicBlock::Create(ctx, "cancel_program", llvm_func);
+            auto* slow = llvm::BasicBlock::Create(ctx, "cancel_pending", llvm_func);
+            auto* done = llvm::BasicBlock::Create(ctx, "cancel_checked", llvm_func);
+            builder->CreateCondBr(builder->CreateIsNotNull(loop_cancel_deferral), deferral, slow);
+            builder->SetInsertPoint(deferral);
+            llvm::Value* depth = builder->CreateLoad(i32_type, loop_cancel_deferral, "cancel_deferred");
+            builder->CreateCondBr(builder->CreateICmpNE(depth, llvm::ConstantInt::get(i32_type, 0)),
+                done, thread);
+            builder->SetInsertPoint(thread);
+            auto* flag_type = llvm::Type::getInt8Ty(ctx);
+            auto* requested = builder->CreateLoad(flag_type, loop_cancel_requested, "cancel_requested");
+            requested->setAtomic(llvm::AtomicOrdering::SequentiallyConsistent);
+            requested->setAlignment(llvm::Align(1));
+            builder->CreateCondBr(builder->CreateICmpNE(requested, llvm::ConstantInt::get(flag_type, 0)),
+                slow, program);
+            builder->SetInsertPoint(program);
+            auto* pending = builder->CreateLoad(i64_type, loop_program_interrupts, "program_interrupts");
+            pending->setAtomic(llvm::AtomicOrdering::SequentiallyConsistent);
+            pending->setAlignment(llvm::Align(8));
+            builder->CreateCondBr(builder->CreateICmpNE(pending, llvm::ConstantInt::get(i64_type, 0)),
+                slow, done);
+            builder->SetInsertPoint(slow);
+            // A set flag can be out of scope, deferred, or already cleared.
+            // The full helper retains resolution, priority and error handling.
+            builder->CreateCall(check, {xsink_arg, label, loop_runtime_config});
+            builder->CreateBr(done);
+            builder->SetInsertPoint(done);
+        } else {
+            builder->CreateCall(check, {xsink_arg, label, loop_runtime_config});
+        }
     }
     emitExceptionCheck(module, llvm_func, inst);
 }
@@ -10712,6 +10761,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_call_target_contexts.clear();
     fast_runtime_config = nullptr;
     loop_runtime_config = nullptr;
+    loop_cancel_deferral = nullptr;
+    loop_cancel_requested = nullptr;
+    loop_program_interrupts = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();

@@ -263,6 +263,16 @@ Program scope and atomic ordering are unchanged. Uncommon exception/manager
 work is outlined for both polling paths; this switch isolates context passing,
 not that shared runtime improvement. Old AOT artifacts remain supported.
 
+`QORE_DISABLE_LLVM_INLINE_CANCEL_POLL=1` at compilation retains the explicit
+context helper call at every checkpoint. By default, generated code borrows
+three flag addresses once per invocation and loads the live deferral depth,
+thread request and global Program-interrupt count at each checkpoint. Both
+request loads remain seq_cst; pending requests and unavailable/unsupported
+native flag layouts use the full helper. Language-loop polling remains every
+iteration and fused internal-loop polling retains its existing interval.
+This switch isolates generated negative-path polling, not the interpreter.
+Measure it separately from before/after compiler/library comparisons.
+
 `QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1`
 at compilation selects the original typed callback helpers instead of v2,
 which acquires an explicit live execution context once per generated invocation.

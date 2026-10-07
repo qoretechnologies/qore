@@ -32,13 +32,16 @@ class IRLoopRuntimeConfigTest inherits QUnit::Test {
     private check() {
         string source = get_script_dir() + "/IRLoopRuntimeConfig.qr";
         string expected = "loop-runtime-config: ok\n";
-        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_LLVM_INLINE_CANCEL_POLL=1 ")) {
             foreach string mode in (("ast", "ir", "jit", "tiered")) {
                 assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
             }
         }
         TmpDir dir("qore-loop-runtime-config-");
-        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_LLVM_INLINE_CANCEL_POLL=1 ", "QORE_AOT_EH=1 ",
+                "QORE_AOT_NO_DEBUG_INFO=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string exe = dir.path + "/fixture";
                 string generated = run((qcc, level, "--strip-source", "-o", exe, source),
@@ -48,6 +51,14 @@ class IRLoopRuntimeConfigTest inherits QUnit::Test {
                     "versioned polling helper selection");
                 assertEq(explicit_context, generated.find("qore_rt_get_loop_runtime_config") >= 0,
                     "entry context acquisition selection");
+                bool inline_poll = explicit_context
+                    && !prefix.startsWith("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL");
+                assertEq(inline_poll, generated.find("qore_rt_get_cancel_poll_state_v1") >= 0,
+                    "borrowed poll-address selection");
+                assertEq(inline_poll, generated =~ /load atomic i8,[^\n]*seq_cst/,
+                    "thread flag must retain sequential consistency");
+                assertEq(inline_poll, generated =~ /load atomic i64,[^\n]*seq_cst/,
+                    "program count must retain sequential consistency");
                 assertEq(expected, run((exe,)), "AOT " + level);
             }
         }

@@ -48,6 +48,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
@@ -1950,6 +1951,26 @@ RuntimeConfig* RuntimeConfigNativeAccess::tryGetCurrent() {
 
 QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
     return getThreadData(rc)->current_pgm;
+}
+
+extern "C" DLLEXPORT void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state) {
+    *state = {};
+    // Expose a native atomic load ABI only when the runtime's representation
+    // matches it. Other targets retain the ordinary helper at every checkpoint.
+    if constexpr (sizeof(unsigned) == 4 && alignof(unsigned) >= 4
+            && sizeof(std::atomic<bool>) == 1 && std::atomic<bool>::is_always_lock_free
+            && sizeof(std::atomic<uint64_t>) == 8 && alignof(std::atomic<uint64_t>) >= 8
+            && std::atomic<uint64_t>::is_always_lock_free) {
+        if (rc) {
+            ThreadData* td = RuntimeConfigNativeAccess::getThreadData(*rc);
+            const auto* flag = thread_list.getCancelRequestedFlag(td->tid);
+            if (flag) {
+                state->deferral = &td->cancel_defer_count;
+                state->thread_requested = flag;
+                state->program_pending = &qore_pending_program_interrupts;
+            }
+        }
+    }
 }
 
 int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink* xsink) {

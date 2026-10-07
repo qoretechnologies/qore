@@ -315,6 +315,13 @@ public:
         return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_seq_cst);
     }
 
+    //! Borrow the fixed-slot flag for an active native invocation on this same thread.
+    //! @return the flag address, or nullptr for an invalid TID; read only with seq_cst
+    //! @note The caller must not retain this address across thread teardown/TID reuse.
+    DLLLOCAL const std::atomic<bool>* getCancelRequestedFlag(int tid) const {
+        return tid >= 0 && tid < MAX_QORE_THREADS ? &entry[tid].cancel_requested : nullptr;
+    }
+
     //! Register the QoreCondition the current thread is about to block on (for waitWithInterrupt)
     /** seq_cst pairs with seq_cst on the cancel side; see clearCurrentWaitingOn() for the lock-free
         rationale.  This store is lock-free — registration races against cancellation are resolved

@@ -275,6 +275,11 @@ private:
     // Optional live view for cancellation; null at runtime retains the legacy
     // teardown behavior. Distinct from the non-null callback ABI's context.
     llvm::Value* loop_runtime_config = nullptr;
+    // Borrowed addresses, not snapshots. Atomic request loads remain at every
+    // loop checkpoint; null deferral selects the full optional-context helper.
+    llvm::Value* loop_cancel_deferral = nullptr;
+    llvm::Value* loop_cancel_requested = nullptr;
+    llvm::Value* loop_program_interrupts = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.

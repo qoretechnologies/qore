@@ -34,6 +34,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <string>
 
 class ExceptionSink;
@@ -71,6 +72,25 @@ struct QorePreparedFunctionRefV3 {
     const QoreProgramLocation* parse_loc;
 };
 static_assert(offsetof(QorePreparedFunctionRefV3, owner) == 0);
+
+//! Borrowed flag addresses for a generated no-pending cancellation check.
+/** Versioned native ABI: three target-sized pointers, all null when unsupported
+    or when no live thread context exists. The compiler reads deferral as i32,
+    thread_requested as atomic i8 and program_pending as atomic i64. Both atomic
+    loads MUST be seq_cst. The runtime only provides these addresses on targets
+    whose primitive atomic layout/alignment and lock-free operations match.
+
+    Addresses (never values) may be retained only within the acquiring thread's
+    current native invocation. Check deferral first, then thread cancellation,
+    then the program count. A pending flag is NOT proof of cancellation: call
+    qore_rt_check_cancel_v2 to resolve scope, manager, priority and diagnostics.
+    A null deferral pointer likewise requires the full helper, not a skipped poll.
+*/
+struct QoreCancelPollStateV1 {
+    const unsigned* deferral;
+    const std::atomic<bool>* thread_requested;
+    const std::atomic<uint64_t>* program_pending;
+};
 
 struct QoreJITRuntimeSymbolInfo {
     const char* name;
@@ -838,6 +858,11 @@ RuntimeConfig* qore_rt_get_fast_runtime_config();
 //! Acquire an optional borrowed live context for generated loop cancellation checks.
 //! @return nullptr after thread-data teardown; only valid within this thread's invocation
 RuntimeConfig* qore_rt_get_loop_runtime_config();
+//! Acquire addresses for an inline no-pending poll; never snapshots request values.
+//! @param rc optional same-thread live context from qore_rt_get_loop_runtime_config()
+//! @param state non-null caller-owned output; all three fields are always initialized
+//! @note The output's borrowed addresses cannot outlive the current native invocation.
+void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state);
 //! Preserve normal cancellation semantics; a null context selects the legacy TLS path.
 //! @param xsink optional sink receiving a cancellation or interruption exception
 //! @param operation diagnostic operation name

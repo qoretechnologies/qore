@@ -430,6 +430,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v1) },
     { "qore_rt_get_fast_runtime_config", reinterpret_cast<void*>(&qore_rt_get_fast_runtime_config) },
     { "qore_rt_get_loop_runtime_config", reinterpret_cast<void*>(&qore_rt_get_loop_runtime_config) },
+    { "qore_rt_get_cancel_poll_state_v1", reinterpret_cast<void*>(&qore_rt_get_cancel_poll_state_v1) },
     { "qore_rt_check_cancel_v2", reinterpret_cast<void*>(&qore_rt_check_cancel_v2) },
 #define QORE_TYPED_FUNCREF_SYMBOL(NAME, ARG) \
     { "qore_rt_try_funcref_" #NAME "_" #ARG "_v1", \

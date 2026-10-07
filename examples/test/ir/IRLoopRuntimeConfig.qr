@@ -6,14 +6,18 @@
 int sub spin(int kind, Counter ready) {
     int i = 0;
     int value = 7;
+    list<int> values;
+    if (kind == 3) { values = (0..999999); }
     ready.dec();
     # A finite bound also lets a broken polling implementation terminate.
     if (kind == 0) {
         while (i < 50000000) { value = (value * 33 + 17) & 65535; ++i; }
     } else if (kind == 1) {
         for (; i < 50000000; ++i) { value = (value * 33 + 17) & 65535; }
-    } else {
+    } else if (kind == 2) {
         do { value = (value * 33 + 17) & 65535; ++i; } while (i < 50000000);
+    } else {
+        foreach int element in (values) { value = (value * 33 + element) & 65535; }
     }
     return value;
 }
@@ -54,5 +58,5 @@ sub checkLoop(int kind) {
     }
 }
 
-for (int kind = 0; kind < 3; ++kind) { checkLoop(kind); }
+for (int kind = 0; kind < 4; ++kind) { checkLoop(kind); }
 printf("loop-runtime-config: ok\n");
