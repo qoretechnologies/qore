@@ -13,11 +13,33 @@ struct QoreTypeParamInstantiation;
 #include <cstdio>
 #include <thread>
 
+#if defined(__aarch64__)
+#include <qore/macros-aarch64.h>
+#elif defined(__x86_64__)
+#include <qore/macros-x86_64.h>
+#endif
+
 static __attribute__((noinline)) unsigned exhaust(RuntimeConfig* rc, ExceptionSink& xsink,
-        bool explicit_context, unsigned depth = 0) {
+        unsigned guard, unsigned depth = 0) {
     volatile unsigned char padding[512];
     padding[0] = static_cast<unsigned char>(depth);
-    int error = explicit_context ? qore_rt_check_stack_v2(&xsink, rc) : qore_rt_check_stack(&xsink);
+    int error;
+    if (!guard) {
+        error = qore_rt_check_stack(&xsink);
+    } else if (guard == 1) {
+        error = qore_rt_check_stack_v2(&xsink, rc);
+    } else {
+        // Exercise both the live view and the required null-view fallback,
+        // with the same comparison and full-check edge emitted by LLVM.
+        const size_t* limit = guard == 2 ? qore_rt_get_stack_limit_v1(rc) : nullptr;
+#if defined(__aarch64__) || defined(__x86_64__)
+        bool full_check = !limit || *limit > get_stack_pos();
+#else
+        assert(!limit);
+        bool full_check = true;
+#endif
+        error = full_check ? qore_rt_check_stack_v2(&xsink, rc) : 0;
+    }
     if (error) {
         assert(xsink);
         assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
@@ -28,7 +50,7 @@ static __attribute__((noinline)) unsigned exhaust(RuntimeConfig* rc, ExceptionSi
     if (!(depth % 100)) {
         assert(!qore_check_cancel(&xsink, "native stack guard test"));
     }
-    unsigned result = exhaust(rc, xsink, explicit_context, depth + 1);
+    unsigned result = exhaust(rc, xsink, guard, depth + 1);
     // Keep the frame live and prevent tail recursion from eliding the stack use.
     padding[511] = padding[0];
     return result + (padding[511] == 255 ? 1 : 0);
@@ -41,12 +63,13 @@ static void check() {
     assert(!xsink);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     assert(rc);
+    assert(!qore_rt_get_stack_limit_v1(nullptr));
     assert(!qore_rt_check_stack_v2(&xsink, rc));
     assert(!xsink);
-    assert(exhaust(rc, xsink, false));
-    xsink.clear();
-    assert(exhaust(rc, xsink, true));
-    xsink.clear();
+    for (unsigned guard = 0; guard < 4; ++guard) {
+        assert(exhaust(rc, xsink, guard));
+        xsink.clear();
+    }
     assert(!qore_rt_check_stack_v2(&xsink, rc));
     assert(!xsink);
 }

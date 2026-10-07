@@ -37,6 +37,7 @@ class PreparedFrameReadersTest inherits QUnit::Test {
         }
         TmpDir dir("qore-prepared-frame-readers-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -46,6 +47,8 @@ class PreparedFrameReadersTest inherits QUnit::Test {
                     ir.find("qore_rt_try_funcref_int_int_v3") >= 0, "prepared target lowering");
                 assertRegex("preparedLeafA[^\n]*funcref_typed_v2", ir, "native target A");
                 assertRegex("preparedLeafB[^\n]*funcref_typed_v2", ir, "native target B");
+                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK"),
+                    regex(ir, "preparedLeafA[^\n]*funcref_typed_v3"), "inline-stack target A");
                 assertEq(Expected, run((executable,)), "AOT " + level);
                 assertEq(Expected, run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "generic fallback");
             }

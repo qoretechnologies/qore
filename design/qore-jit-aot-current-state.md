@@ -273,6 +273,28 @@ remain responsible for observation and stack-failure diagnostics.
 an independent compilation control. All caller/frame/callee stack checks,
 live guards, empty-frame markers and observer synchronization remain intact.
 
+Optional callee-entry v3 appends a borrowed live stack-limit address to v2.
+Helper v2/v3 prefers it when present; prior callee entries and helper ABIs are
+retained. The compiler emits a null check, a live 64-bit limit load and LLVM's
+native stacksave SP comparison. A null view or failed comparison tail-calls the
+v2 entry, which executes the full qore_rt_check_stack_v2 guard and uses its result,
+including the original overflow exception. This cold return does not merge back
+into the v3 body, so native arguments need not survive a helper call on the hot
+path. The runtime supplies a non-null view only for managed,
+downward-growing 64-bit x86-64/AArch64 stacks; other layouts/configurations
+return null. This fixed-width view does not guess the host/default data layout
+before the cross-compilation target is finalized. Neither the limit nor SP is
+cached across calls. The view is borrowed only for the current thread's call.
+
+The v3 binder requires the existing validated v2 binding and normal-body identity;
+rebinding v1 or v2 clears v3. The admitted body and observation/lifetime proofs
+are unchanged. QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK suppresses only this
+entry at compilation, leaving the explicit-context v2 callee available.
+New artifacts that bind v3 require its runtime helper; old artifacts continue
+to use their existing entries. No serialized metadata or prepared-cache layout
+changes. Caller and frame guards remain unchanged; the callee guard is inlined,
+not removed.
+
 `RuntimeConfigNativeAccess` provides a live, invocation-scoped thread-state
 view within the existing PIMPL. It is not a copied Program/object snapshot:
 nested generic calls may refresh the TLS RuntimeConfig and enter another

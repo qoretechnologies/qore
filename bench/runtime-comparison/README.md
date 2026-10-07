@@ -294,6 +294,17 @@ unavailable/disabled summaries keep the old entry. The original typed entry is
 always retained. `QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1` suppresses
 this additive entry at compilation, independently of the helper-version switch.
 V2/v3 helpers prefer it when present; v1 helpers still use the original entry.
+An optional callee-entry v3 additionally receives a live stack-limit address
+and inlines its successful check. This callee version is separate from the
+callback-helper versions. Only managed downward-growing 64-bit x86-64/AArch64
+runtimes provide a non-null view; null/unsupported views and failed comparisons
+tail-call the v2 entry with its full explicit-context guard. Keeping the slow
+return separate avoids preserving arguments across a helper call on the hot
+path. Limits and SP are read per call, not
+snapshotted. `QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1` suppresses this
+entry while retaining callee v2. Existing helper/cache ABIs and old entries are
+unchanged; newly bound v3 entries require the new runtime. Caller/frame checks
+and overflow diagnostics remain.
 Compiler-proven scalar leaves retain their local/closure frame markers but
 avoid general variable-cleanup bookkeeping for those empty frames. The native
 closure-marker push handles an available slot inline and outlines full-block

@@ -2166,3 +2166,89 @@ check. Keep prior entries and the full check on failure, unavailable state or
 unsupported targets. This aims to remove the remaining out-of-line callee
 guard cost without removing stack protection; it is not yet implemented or
 measured in this section.
+
+## Inline scalar callee stack guard (2026-10-07)
+
+Baseline: `9438835b4`, preserved before editing. Optional callee-entry v3
+appends a live stack-limit address to the explicit-context v2 ABI. The runtime
+supplies it only for managed downward-growing 64-bit x86-64/AArch64 stacks.
+Other configurations supply null and retain the full check. The limit and
+native SP are read on every invocation; no limit value or SP is cached.
+
+The compiler emits a null check and unsigned limit/SP comparison. Null or
+failed checks return through the existing v2 entry, preserving its full guard,
+overflow exception and result handling. The tail-call hint avoids merging a
+helper return into the v3 body; a noinline call-site attribute preserves this
+cold boundary. Prior entries remain available. Binding v3 requires validated
+v2 metadata and normal-body identity; replacing v1/v2 clears v3. The disable
+control is `QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK`. Existing helper and
+prepared-cache ABIs, admission proofs, caller/frame guards, policy state,
+markers, cancellation and observer synchronization remain unchanged.
+
+### Rejected first design and retained revision
+
+The first design called the full guard and merged back into the scalar body.
+Its two isolated runs (`run-9w6fkx60`, `run-7d620r7u`) showed no repeatable
+benefit: ordinary float medians worsened 0.82% and 0.71%, and most callback
+ranges overlapped. Disassembly showed a 32-byte callee frame with an argument
+saved across the cold helper call even on success. Those 195 jobs / 975
+samples are retained as negative evidence, not counted as improvement.
+
+The revised cold return removes that saved argument and reduces the arm64
+integer callee frame to 16 bytes. The enclosing native helper stays at 256
+bytes. Two fresh shuffled five-fork comparisons produced the following
+ns/element results (loop, computation and checksum included, not isolated
+call latency):
+
+|!Kernel|!1024 before|!1024 after|!Time change|!4096 before|!4096 after|!Time change
+|indirect_call|11.79743|11.71259|-0.72%|10.91740|10.60618|-2.85%
+|indirect_wide|11.81210|11.74741|-0.55%|10.83949|10.77973|-0.55%
+|indirect_float|11.98546|11.90675|-0.66%|11.06115|10.92349|-1.24%
+|indirect_tagged_float|11.90257|11.81354|-0.75%|11.05108|10.81365|-2.15%
+|indirect_branch_float|12.05532|11.90934|-1.21%|11.13598|10.99187|-1.29%
+
+Tagged-float ranges separate in both final runs: **0.75% and 2.15% less time**.
+Ordinary floats separate only in the repeat; integer and branch ranges overlap.
+All callback medians improve, but the evidence supports a modest, workload-
+dependent benefit, not a universal speedup. Arithmetic/direct controls move
++0.21%/-0.03% at 1024 and -0.94%/+0.74% at 4096. Polymorphic and temporary-hash
+repeat medians move +0.32% and +2.40%; their ranges overlap and all samples
+remain included. No build, test, profile or docs validator ran during timings.
+
+Java retained-call medians at 1024 are 1.64119-1.68025 ns/element. Qore still
+takes **7.0-7.2x** as long: Java parity is not reached. Final runs
+`run-ivz641wf` and `run-ikl3zooe` retain another 195 jobs / 975 samples.
+[Evidence](results-inline-stack-macos-arm64.json) contains all four experiments
+(**390 jobs / 1950 samples**), allowlisted hashes, ranges and independently
+recomputed medians. AOT text grows 82972 to 83548 bytes (+576), and runtime
+text 13869316 to 13871852 (+2536).
+
+A separate five-second wide-callback profile records 2706 helper, 726 caller,
+180 callee and 75 helper-stub top-of-stack samples. The callee's out-of-line
+guard no longer appears among counts of five or more; this is qualitative,
+not an additive attribution or proof that remaining frame work is removable.
+
+### Validation, audit and next step
+
+Each release/debug build passes **156 cases / 13929 assertions** in 24 wrappers
+plus 11 standalone checks. Coverage includes AST/IR/JIT/tiered, O0/O3, disabled
+v3, prior helpers, runtime generic fallback, EH/split AOT, IEEE float cases and
+concurrent frame readers. The native harness exhausts and recovers the legacy,
+explicit, live-view and forced-null guards, including three foreign-thread
+registrations. It tests an equivalent C++ comparison; generated LLVM null/
+failure edges and cold return are checked structurally, not invoked through
+an exported generated-entry test. Ten Python tests and 225 old-artifact records
+pass; every timed implementation passes 225 independent checks.
+
+ELF64 x86-64 and ELF32 i386 objects are emitted and inspected. The qcc command
+then exits 1 because its manifest checks the pre-suffix output name; the saved
+baseline reproduces this unrelated CLI issue. This is object-code inspection,
+not a clean cross-CLI or Linux runtime pass. No full-suite or sanitizer claim.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#inline-stack-guard-audit-2026-10-07)
+drove explicit unsupported-layout fallback and live-address lifetime
+documentation. No new filesystem/network operation or long runtime loop is
+introduced. Next: identify which same-thread context saves/restores can safely
+be deferred for proven non-reentrant scalar leaves, while preserving published
+frames, empty local/closure markers and full failure diagnostics. Do not
+assume that removing more checks is required or safe.

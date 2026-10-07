@@ -1981,6 +1981,19 @@ int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink
 #endif
 }
 
+extern "C" DLLEXPORT __attribute__((always_inline)) const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc) {
+#if defined(QORE_MANAGE_STACK) && defined(STACK_DIRECTION_DOWN) \
+        && (defined(__aarch64__) || defined(__x86_64__))
+    // These targets use the same native SP for get_stack_pos() and LLVM
+    // stacksave. Do not expose a partial guard on targets with extra state
+    // (for example the IA-64 register stack) or different stack conventions.
+    if constexpr (sizeof(size_t) == 8 && sizeof(void*) == 8) {
+        return rc ? &RuntimeConfigNativeAccess::getThreadData(*rc)->stack_limit : nullptr;
+    }
+#endif
+    return nullptr;
+}
+
 // Keep native-leaf save/restore visible to the caller's register allocator when
 // this definition is available (the normal single-compilation-unit build).
 // Applying the hint only here retains ordinary out-of-line symbols for split

@@ -10,7 +10,7 @@
 
 class NativeStackRuntimeConfigTest inherits QUnit::Test {
     constructor() : Test("native stack runtime context", "1.0", \ARGV) {
-        addTestCase("explicit and legacy guards reject stack exhaustion", \check());
+        addTestCase("legacy, explicit and live/null-view guards reject stack exhaustion", \check());
         set_return_value(main());
     }
     private static string quote(string value) {

@@ -39,6 +39,7 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
                 "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE=1 ",
@@ -74,6 +75,18 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
                     generated =~ /floatAdd[^\n]*funcref_typed_v2/, "explicit float leaf entry selection");
                 assertEq(False, generated =~ /floatDivide[^\n]*funcref_typed_v2/,
                     "throwing float body has no explicit native entry");
+                bool inline_stack = explicit_callee
+                    && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK");
+                assertEq(inline_stack, generated.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
+                    "additive inline-stack entry selection");
+                assertEq(inline_stack, generated.find("llvm.stacksave") >= 0,
+                    "inline guard reads the live native stack pointer");
+                if (inline_stack) {
+                    assertRegex("icmp ugt", generated, "downward stack comparison");
+                    assertRegex("stack_full_check", generated, "null/failed guard retains full check");
+                    assertRegex("tail call [^\n]*funcref_typed_v2", generated,
+                        "cold guard path returns through the full-check entry");
+                }
                 assertRegex("qore_rt_coerce_value_by_type_path_aot", generated, "checked fallback retained");
                 assertEq(expected, run((executable,)), "AOT " + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "),

@@ -344,6 +344,7 @@ public:
         typed_entry = entry;
         // A replacement v1 binding cannot keep an adapter for a previous body.
         typed_runtime_config_entry = nullptr;
+        typed_inline_stack_entry = nullptr;
         typed_signature = signature;
         normal_entry = normal;
     }
@@ -356,10 +357,21 @@ public:
     // the AOT context and sink. Bound only after v1, before publication.
     DLLLOCAL void setTypedRuntimeConfigEntry(QoreFunctionRefTypedEntry entry) {
         typed_runtime_config_entry = entry;
+        typed_inline_stack_entry = nullptr;
     }
 
     DLLLOCAL QoreFunctionRefTypedEntry getTypedRuntimeConfigEntry(uint32_t signature) const {
         return typed_signature == signature ? typed_runtime_config_entry : nullptr;
+    }
+
+    // Optional v3 callee ABI appends a borrowed live stack-limit address to v2.
+    // A null address requires the complete v2 stack check, never an unchecked call.
+    DLLLOCAL void setTypedInlineStackEntry(QoreFunctionRefTypedEntry entry) {
+        typed_inline_stack_entry = entry;
+    }
+
+    DLLLOCAL QoreFunctionRefTypedEntry getTypedInlineStackEntry(uint32_t signature) const {
+        return typed_signature == signature ? typed_inline_stack_entry : nullptr;
     }
 
 protected:
@@ -369,6 +381,7 @@ protected:
     QoreFunctionRefCallMetadata fast_call;
     QoreFunctionRefTypedEntry typed_entry = nullptr;
     QoreFunctionRefTypedEntry typed_runtime_config_entry = nullptr;
+    QoreFunctionRefTypedEntry typed_inline_stack_entry = nullptr;
     uint32_t typed_signature = 0;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);

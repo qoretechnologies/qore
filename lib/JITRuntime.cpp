@@ -431,6 +431,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v1) },
     { "qore_rt_bind_function_call_ref_typed_v2",
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v2) },
+    { "qore_rt_bind_function_call_ref_typed_v3",
+        reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v3) },
+    { "qore_rt_get_stack_limit_v1", reinterpret_cast<void*>(&qore_rt_get_stack_limit_v1) },
     { "qore_rt_get_fast_runtime_config", reinterpret_cast<void*>(&qore_rt_get_fast_runtime_config) },
     { "qore_rt_get_loop_runtime_config", reinterpret_cast<void*>(&qore_rt_get_loop_runtime_config) },
     { "qore_rt_get_cancel_poll_state_v1", reinterpret_cast<void*>(&qore_rt_get_cancel_poll_state_v1) },
@@ -3274,6 +3277,18 @@ extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_typed_v2(uint64_t ref_b
             && ref->getNormalEntry() == normal
             && ref->getFastCallMetadata().uvb->getCachedAOTFunction() == normal) {
         ref->setTypedRuntimeConfigEntry(entry);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_typed_v3(uint64_t ref_bits,
+        AotFunctionPtr normal, QoreFunctionRefTypedEntry entry, uint32_t signature) {
+    QoreValue value = fromBits(ref_bits);
+    auto* ref = value.hasNode()
+        ? dynamic_cast<FunctionCallReferenceNode*>(value.getInternalNode()) : nullptr;
+    if (ref && entry && normal && ref->getTypedRuntimeConfigEntry(signature)
+            && ref->getNormalEntry() == normal
+            && ref->getFastCallMetadata().uvb->getCachedAOTFunction() == normal) {
+        ref->setTypedInlineStackEntry(entry);
     }
 }
 
@@ -10248,7 +10263,11 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(ref->getTypedEntry(Signature));
     try {
-        if (auto explicit_entry = ref->getTypedRuntimeConfigEntry(Signature)) {
+        if (auto inline_entry = ref->getTypedInlineStackEntry(Signature)) {
+            using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+            *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
+                qore_rt_get_stack_limit_v1(&rc));
+        } else if (auto explicit_entry = ref->getTypedRuntimeConfigEntry(Signature)) {
             using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
             *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
         } else {
@@ -10290,7 +10309,11 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*);
     auto entry = reinterpret_cast<Entry>(cache.entry);
     try {
-        if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
+        if (auto inline_entry = cache.ref->getTypedInlineStackEntry(Signature)) {
+            using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+            *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
+                qore_rt_get_stack_limit_v1(&rc));
+        } else if (auto explicit_entry = cache.ref->getTypedRuntimeConfigEntry(Signature)) {
             using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
             *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
         } else {

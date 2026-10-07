@@ -134,6 +134,15 @@ int qore_rt_check_stack(ExceptionSink* xsink);
 //! @return zero on success, nonzero on stack exhaustion
 int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc);
 
+//! Borrow the live downward-growing native stack-limit address for a scalar callee.
+//! @param rc same-thread invocation context; nullptr is permitted
+//! @return address of a 64-bit size_t limit, or nullptr for unsupported targets/configurations
+//! @note Compare the live limit against the current native SP, not a saved limit or SP.
+//! A null address or failed comparison MUST use qore_rt_check_stack_v2; the address
+//! must not escape the acquiring thread's invocation. Only 64-bit x86-64/AArch64 are supported;
+//! other pointer/size_t layouts receive nullptr and must retain the complete helper check.
+const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc);
+
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 
 //! Signal that the outlined helper is executing an in-region `return`;
@@ -865,6 +874,15 @@ void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_bits,
 //! @param signature same scalar signature as an already validated v1 binding
 //! @note Does not replace v1; older callers and disabled controls keep that entry.
 void qore_rt_bind_function_call_ref_typed_v2(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Bind an optional scalar entry appending const size_t* stack_limit to the v2 ABI.
+//! @param ref_bits newly created reference, not yet published
+//! @param normal same normal body identity as the validated v1/v2 binding
+//! @param entry native scalar args, AOT context, sink, RuntimeConfig*, live stack-limit address
+//! @param signature scalar signature of the existing binding
+//! @note Prior entries remain available; a null limit must execute the full stack check.
+void qore_rt_bind_function_call_ref_typed_v3(uint64_t ref_bits,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
 
 //! Acquire a borrowed RuntimeConfig for this native invocation, on this thread only.

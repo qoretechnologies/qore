@@ -48,7 +48,8 @@ class FloatComparisonSummaryTest inherits QUnit::Test {
         }
         foreach string prefix in (("", "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ", "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ",
-                "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ", "QORE_AOT_EH=1 ",
                 "QORE_AOT_NO_DEBUG_INFO=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -63,6 +64,9 @@ class FloatComparisonSummaryTest inherits QUnit::Test {
                     assertEq(typed, regex(ir, name + "[^\n]*funcref_typed_v1"), "typed entry: " + name);
                     assertEq(typed && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG"),
                         regex(ir, name + "[^\n]*funcref_typed_v2"), "explicit-context entry: " + name);
+                    assertEq(typed && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG")
+                            && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK"),
+                        regex(ir, name + "[^\n]*funcref_typed_v3"), "inline-stack entry: " + name);
                 }
                 assertEq(False, ir =~ /cmpDivision[^\n]*funcref_typed_v[12]/,
                     "division stays outside scalar callback admission");
