@@ -466,6 +466,12 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
                 case AOTFloatExpressionNodeKind::Neg:
                 case AOTFloatExpressionNodeKind::BoolParam:
                 case AOTFloatExpressionNodeKind::Select:
+                case AOTFloatExpressionNodeKind::Eq:
+                case AOTFloatExpressionNodeKind::Ne:
+                case AOTFloatExpressionNodeKind::Lt:
+                case AOTFloatExpressionNodeKind::Le:
+                case AOTFloatExpressionNodeKind::Gt:
+                case AOTFloatExpressionNodeKind::Ge:
                     break;
                 default:
                     nothrow_scalar = false;
@@ -7124,6 +7130,24 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                     break;
                 case AOTFloatExpressionNodeKind::Mul:
                     value = builder->CreateFMul(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Eq:
+                    value = builder->CreateFCmpOEQ(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Ne:
+                    value = builder->CreateFCmpUNE(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Lt:
+                    value = builder->CreateFCmpOLT(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Le:
+                    value = builder->CreateFCmpOLE(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Gt:
+                    value = builder->CreateFCmpOGT(lhs, rhs);
+                    break;
+                case AOTFloatExpressionNodeKind::Ge:
+                    value = builder->CreateFCmpOGE(lhs, rhs);
                     break;
                 case AOTFloatExpressionNodeKind::Div: {
                     expression_may_throw = true;

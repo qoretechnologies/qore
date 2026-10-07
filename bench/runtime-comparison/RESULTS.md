@@ -1999,3 +1999,93 @@ an active, incomplete goal, not a conclusion of these microbenchmarks.
 No full-suite, sanitizer or Linux claim; previously documented debug-wrapper
 selection, recursive-JIT-capture, nested-AOT-location and default-target-linker
 limitations remain separate.
+
+## Float comparison/select callback summaries (2026-10-07)
+
+Baseline: `b6923e800`, saved before editing. Complete float summaries now
+accept all six typed comparisons, branch-return trees and a single four-block
+ternary diamond. Comparisons produce bool nodes; arithmetic and both selected
+results remain float. Equality/order are ordered and inequality is unordered,
+matching ordinary lowering for NaNs. Signed zero is preserved.
+
+The collector requires complete, bounded, side-effect-free bodies and rejects
+speculative division, generic calls, handlers and loops. Imported node types,
+indices, predecessors and result types are validated. New optional node tags
+do not change the serialized record layout: an old reader declines the summary
+and uses ordinary calls. Native-entry admission still requires the existing
+context-independence proof; live guards, ownership, RuntimeConfig, frame
+publication/restoration, cancellation and both stack checks are unchanged.
+
+### Isolated before/after measurements
+
+Same shuffled five-fork methodology, three warmup and five 300 ms measurement
+windows per fork. Units are ns/element including loop, calculation and checksum,
+not isolated call latency. Java targets retain DONT_INLINE.
+
+|!Branch-float callback|!Before|!After|!Time reduction|!Speedup
+|1024 elements, run-uzzl65js|128.82348|12.36752|90.40%|10.42x
+|4096 elements, run-icxfq0lk|125.18379|11.44669|90.86%|10.94x
+
+Fork ranges do not overlap in either experiment: 126.12134-129.39152 versus
+12.29808-12.55237 at 1024; 125.00519-126.09349 versus 11.36745-11.50890
+at 4096. Java's 1024-element median is **1.65920**, leaving the optimized
+Qore callback **7.45x slower**, not at parity.
+
+Controls show no consistent general speedup. At 1024, arithmetic/direct move
+-0.08%/+0.05% and previously native callbacks move -0.66% to +1.99% in time.
+At 4096, arithmetic/direct move -0.59%/-0.20%, native callbacks -0.77% to
+-1.82%, polymorphic dispatch -0.39%, and temporary hashes +0.93%.
+Most fork ranges overlap; the small float improvement in the repeat does not
+replicate with nonoverlapping ranges in the first run. All samples, including
+an 18.06683 tagged-float fork and noisy generic-control forks, are retained.
+No builds, tests, profiles or documentation validators overlapped either run.
+
+[Evidence](results-float-comparison-macos-arm64.json) contains **195 jobs / 975
+samples**, exact source/binary hashes, all fork/window values, and independently
+recomputed medians. Startup/compilation observations are not used as speedup
+evidence. The later source change only clarifies the benchmark control comment;
+each experiment retains its exact source snapshot/hash.
+
+AOT native text grows **82344 to 82972 bytes** (+628 / 0.76%); runtime text grows
+**13865396 to 13868224 bytes** (+2828). Separate generated-code inspection shows
+the branch callback's typed v1/v2 bindings and native compare/select. A separate
+five-second profile attributes 2579 top-of-stack samples to the typed helper,
+805 to its caller, 80 to the typed callee and 76 to its stack guard. These are
+qualitative observations, not additive cost estimates; frame/helper work
+remains the next target.
+
+### Validation and audit
+
+Release/debug each pass **155 cases / 13331 assertions** in 23 wrappers, plus
+11 standalone checks. This includes the expanded 632-assertion comparison
+wrapper and 44-case/419-assertion symbol-index suite. Comparisons are checked in
+both operand positions for finite values, infinities and both NaNs; tests cover
+signed zero, nested branches, unselected division and side effects, all 15
+eligible native entries, O0/O3, split/EH/stripped compilation, disabled paths
+and cross-object imports. The saved baseline passes the final explicit-truth-
+table fixture; old/new provider/consumer object combinations pass in both
+directions. An old AOT executable matches all 225 records; each measured
+implementation passes 225 independent checks. Ten Python harness tests pass.
+
+Test development exposed an unrelated nested-list-index oracle problem:
+`row[expectedIndexes[i]]` produced 2.0 for the second entry of the first
+truth-table row, where the independent expected value is 1.0. The original
+fixture fails identically with saved b6923e800 and with float summaries disabled.
+The ignored reproducer is
+`build/bench-runtime-comparison/float-compare-diagnostic.qr`
+(SHA-256 `32d0d6356cbe9b70e3ff7ee221b9f33d6e922c3fc174244fba06f1e1052a055d`).
+The committed comparison oracle passes expected values directly and does not
+depend on nested indexing. This finding remains unresolved and is not a
+comparison-optimization fix.
+
+The debug symbol-index suite initially used a stale April reflection binary;
+rebuilding the debug reflection target restored all cases. Its wrapper also
+now explicitly sets DYLD_LIBRARY_PATH for child processes, matching its
+existing Linux-library selection.
+
+The [full 62-check audit](FOLLOWUP-AUDIT.md#float-comparison-summary-audit-2026-10-07)
+influenced boolean operand validation, safe PHI condition retention, conservative
+branch laziness, explicit semantic oracles and child-library selection.
+No full-suite, sanitizer or Linux claim; previously documented limitations
+remain. Next: measure a smaller prepared-target-backed observable frame,
+retaining live checks, state restoration and stack-reader synchronization.

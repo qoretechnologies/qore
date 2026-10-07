@@ -135,8 +135,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         if (ENV.QORE_MODULE_DIR) {
             module_dir += ":" + ENV.QORE_MODULE_DIR;
         }
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
-            libqore_dir, libqore_dir, module_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, module_dir);
         return tmp;
     }
 

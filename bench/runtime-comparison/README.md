@@ -102,6 +102,13 @@ call reference and a Java functional interface have different runtime contracts.
 The polymorphic control measures the selection/recurrence work, but subtracting
 it does not isolate an exact virtual-call cost.
 
+The float-branch callback now qualifies for a complete native comparison/select
+summary; older compilers dispatch it generically. Its checksum and input are
+unchanged. NaN comparisons and signed-zero selection retain Qore semantics;
+throwing or side-effecting branches remain on the ordinary path. Polymorphic
+dispatch and temporary hashes remain controls. `QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT`
+disables this summary optimization at compilation.
+
 ## Measurement contract
 
 - Each selected mode first passes 225 checks: every kernel at sizes 0, 1, 17, 1024,

@@ -116,8 +116,15 @@ validates the signature against the immutable reference metadata.
 Native float adapters also consume the complete `FloatBinary` leaf summary
 for add, subtract, and multiply. The float-expression builder intentionally
 does not duplicate that summary; ignoring it previously left these simple
-bodies on generic dispatch. Division and comparison/branch bodies are not
-admitted by this addition. The existing context-independence and full-body
+bodies on generic dispatch. Complete float-expression summaries also admit
+typed comparisons and non-throwing branch-return trees or a single four-block
+ternary diamond. Equality and ordering use ordered comparisons; inequality
+is unordered, preserving NaN behavior. Only a proven boolean may select two
+float results, including signed zero. Division, side effects, generic reentry,
+loops and handlers cannot be speculated across branches. Optional imported
+summary nodes are checked for operand types and topological bounds; older
+readers decline the new node tags and retain ordinary calls. No serialized
+record layout changes. The existing context-independence and full-body
 proof still exclude TLS locals, captures, generic reentry, and throwing work.
 
 Ordinary AOT call sites with a typed callable use this route after proving or

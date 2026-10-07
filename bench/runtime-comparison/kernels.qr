@@ -15,8 +15,8 @@ int sub wideStep(int value) {
 float sub floatStep(float value) {
     return 65535.0 - value;
 }
-# Keep a generic-dispatch control: float comparisons are not currently admitted
-# by the whole-body native callback summary.
+# Exercise a whole-body float comparison/select callback; older compilers use
+# generic dispatch. Polymorphic dispatch and temporary hashes remain controls.
 float sub branchFloatStep(float value) {
     return value > 32767.0 ? value - 32767.0 : value + 17.0;
 }

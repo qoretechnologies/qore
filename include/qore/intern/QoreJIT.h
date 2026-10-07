@@ -216,6 +216,13 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     //! Select a float value; lhs is the condition, rhs the true value, and param the false value.
     Select = 9,
     HashKeyFloat = 10,
+    //! Float comparisons produce bool nodes; Ne is unordered, the others ordered.
+    Eq = 11,
+    Ne = 12,
+    Lt = 13,
+    Le = 14,
+    Gt = 15,
+    Ge = 16,
 };
 
 constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 64;
