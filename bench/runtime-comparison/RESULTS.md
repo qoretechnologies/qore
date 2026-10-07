@@ -2758,3 +2758,70 @@ documentation validator overlapped timing. The
 the safety review and final validation. Next: acquire the invocation's stable
 thread-data pointer once, keeping mutable fields live, and measure that isolated
 change against this version before considering broader calling-convention work.
+
+## Rejected thread-view reuse (2026-10-07)
+
+Baseline `3af96b157`, macOS arm64. Two runtime-only candidates tried to remove
+repeated `RuntimeConfig::impl->native_thread_data` loads without snapshotting
+mutable Program/debugger/body/readiness/limit state. Neither changed native
+helper ABI, cache layout, admission rules, publication, markers or cancellation.
+**Both are rejected and their production changes are reverted.**
+
+The broad candidate borrowed ThreadData once at the prepared helper entry and
+passed it through internal live-Program, guard, frame and limit-address routines.
+The narrow candidate borrowed only the pointer already stored in the active
+deferred frame for its final limit-address handoff. All original exported
+wrappers and unsupported-target full-guard fallbacks remained.
+
+Five forks, three warmups and five windows per fork; 4096 elements and randomized
+implementation/kernel order. Medians of fork means, ns/element, include loop,
+scalar computation and checksum work. Pilot windows are 300 ms; the narrow
+repeat uses 500 ms and a different shuffle seed.
+
+|!Kernel|!Broad before|!Broad after|!Narrow before|!Narrow after|!Repeat before|!Repeat after
+|indirect_wide|8.62273|8.37057|8.72526|8.59379|8.60937|8.53330
+|indirect_float|9.02902|9.33989|9.07243|9.06974|9.00518|9.04403
+|indirect_tagged_float|8.99755|8.75974|8.99424|9.17311|8.94943|8.99773
+|indirect_branch_float|9.09756|9.29815|9.17532|9.13427|9.08245|9.05505
+
+The broad pilot (`run-mfbdjmwq`) improves wide integer 2.92% with separated
+ranges, but ordinary/branch-float medians worsen 3.44%/2.20%; float ranges
+overlap, so those are not established population regressions. Tagged float
+improves 2.64%, but includes an 11.55 ns fork outlier. Runtime text grows
+13875264 → 13876424 bytes (+1160), the integer helper frame stays 272 bytes,
+and the float frame grows to 288 bytes. Assembly removes the repeated pointer
+loads, but that is not sufficient to establish a net optimization.
+
+The narrow pilot (`run-3jlzyij3`) improves wide integer 1.51%, again with
+separated ranges; ordinary float is essentially unchanged, tagged float worsens
+1.99%, and branch float improves 0.45%. All float ranges overlap, with tagged/
+branch outliers of 11.48/13.78 ns. The longer repeat (`run-soj4_t8_`) has changes
+of -0.88%, +0.43%, +0.54% and -0.30% respectively; all ranges overlap, and a
+branch-float fork reaches 13.35 ns. No samples or outliers were discarded.
+Runtime text shrinks 84 bytes and both helper frames stay 272 bytes. The small,
+mixed repeat does not justify retaining another internal accessor for this
+performance goal; it does not prove that pointer reuse can never help.
+
+Both candidates build in release/debug and pass five focused suites per build:
+NativeLeafContext 28, NativeStackRuntimeConfig 3, AOTFunctionRefScalarABI 530,
+IRNativeFunctionRefContinuation 554 and AOTPreparedFrameReaders 98 assertions
+(1213 total). This includes actual scalar ABI selection, native integer/float
+overflow/recovery, foreign-thread registration, callback replacement, mutable
+debugger state and concurrent readers. Both changed implementation files pass
+standalone release syntax checks; the first broad ad-hoc command lacked
+`-DNDEBUG`, produced release-header assertion errors, and passed when corrected.
+This is not a full split-build runtime or full-suite/sanitizer validation.
+
+[Evidence](results-rejected-thread-view-macos-arm64.json) retains both exact
+production diffs and hashes, candidate/baseline hashes, settings and all 120
+jobs / 600 samples with recomputed medians. Every measured implementation passes
+270 reference checks. There is no fresh Java measurement or Java-speed claim.
+Restored release/debug builds and focused validation are recorded in the
+[62-check audit](FOLLOWUP-AUDIT.md#rejected-thread-view-audit-2026-10-07).
+
+Next: investigate reuse of immutable diagnostic-frame metadata or specialize
+empty-marker handling for integer results, with the floating path as an explicit
+regression gate. Preserve per-call publication/pop reader synchronization and
+overflow-time variable/context visibility. Boolean identity/constant native
+admission is a separate coverage opportunity, not evidence that the existing
+retained-call overhead has reached Java's level.
