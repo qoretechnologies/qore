@@ -16822,7 +16822,21 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         && nargs >= static_cast<int>(num_params);
 
     LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
-    bool selfid_instantiated = selfid;
+    // Read immutable context flags through the acquire-published AOT context,
+    // not usesSelf()/usesArgv(), which lazy debug-IR materialization can rewrite.
+    // Do not force lazy context creation here. Object/defining-class context
+    // remains installed; IR/JIT, cross-Program and debugger calls keep locals.
+    static const bool context_elision_enabled =
+        std::getenv("QORE_DISABLE_IR_CONTEXT_ELISION") == nullptr;
+    const QoreAOTContext* aot_ctx = uvb->getCachedAOTContext();
+    bool elide_context = context_elision_enabled && aot_ctx && uvb->hasCachedAOT()
+        && caller_pgm == exec_pgm
+        && !qore_program_private::get(*exec_pgm)->hasDebuggerAttached();
+    bool selfid_instantiated = selfid && (!elide_context || aot_ctx->uses_self);
+    // Excess arguments retain their original list ownership and cleanup order,
+    // even when the method itself never reads argv.
+    bool use_argv = !elide_context || aot_ctx->uses_argv
+        || nargs > static_cast<int>(num_params);
     if (selfid_instantiated) {
         selfid->instantiateSelf(o);
     }
@@ -16857,8 +16871,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         }
     }
 
-    // Instantiate argv variable
-    if (sig->argvid) {
+    // Instantiate argv only when its context is required.
+    if (use_argv && sig->argvid) {
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
@@ -16871,7 +16885,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
 
     QoreValue val{};
     {
-        ArgvContextHelper argv_helper(argv.release(), xsink);
+        std::optional<ArgvContextHelper> argv_helper;
+        if (use_argv) {
+            argv_helper.emplace(argv.release(), xsink);
+        }
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, arg_cleanups};
@@ -16908,7 +16925,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-        if (sig->argvid) {
+        if (use_argv && sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }
         if (!use_direct_params) {
@@ -16923,7 +16940,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return true;
     }
 
-    if (sig->argvid) {
+    if (use_argv && sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
 

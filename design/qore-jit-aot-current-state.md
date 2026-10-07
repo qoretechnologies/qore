@@ -47,6 +47,32 @@ Normal method dispatch cannot invoke a copy variant: its calling convention is
 different. `ImplicitCopyDispatch.qtest` exercises polymorphic copies and failing
 copy hooks in all four execution modes.
 
+### AOT method context elision
+
+The resolved dot-eval fast-method path (also used by polymorphic dispatch-cache
+hits) reuses the final IR's conservative implicit-context requirements. For a
+ready AOT context, a caller in the method's execution Program and no attached
+debugger, it can omit the synthetic `self` local when unused and omit the `argv`
+local/context when unused and no excess arguments were supplied. Parameters,
+object/defining-class substitution, receiver type information, variable-frame
+boundaries, diagnostic frames, parse policy/location and return filtering remain.
+
+Flags are read from the acquire-published, immutable `QoreAOTContext`, not the
+variant's mutable `usesSelf()`/`usesArgv()` fields that IR materialization may
+rewrite. A missing context keeps the existing setup and does not trigger eager
+materialization. IR/JIT, cross-execution-Program and debugger calls keep their
+original context setup. The process presence flag
+`QORE_DISABLE_IR_CONTEXT_ELISION`, sampled on first fast-method use, disables
+this optimization along with the existing context-elision controls.
+
+Explicit `self`, self members/calls, method closures and opaque AST access are
+handled conservatively by the existing context-use analysis. Excess arguments
+retain their original list allocation, ownership and cleanup order even when
+the body does not read them. `AOTDotEvalOverload.qtest` covers mixed receivers,
+private members, explicit self, closures, recursion, nested contexts, argv,
+object-argument destruction and exception recovery against source, qmod and
+disabled-cache/context controls. No method entry or serialized ABI changes.
+
 ## Opaque Function-Reference Calls
 
 IR/JIT/AOT runtime dispatch can bypass `QoreListNode` and dynamic binding for a

@@ -4407,6 +4407,9 @@ while (*binary chunk = input.read(65536)) {
       guards, concurrent stack inspection, and cancellation remain active; partial marker allocation is rolled back
     - Reused validated immutable scalar signatures when selecting entries from prepared callback caches;
       generic signature checks and live Program, debugger, compiled-body, and readiness guards remain
+    - Reused compile-time context requirements in same-program AOT method dispatch to omit unused
+      synthetic self and argv setup, while preserving object/class context, debugger behavior,
+      diagnostic frames, and excess-argument ownership and cleanup
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

@@ -2959,3 +2959,124 @@ private defining-class context, overrides, cross-Program and debugger semantics.
 For scalar calls, invocation-owned diagnostic metadata and exception-only
 saved-state initialization remain hypotheses; do not remove the per-call reader
 handshake, native guards or generic fallback merely to match Java's number.
+
+## AOT method implicit-context reuse (2026-10-08)
+
+Baseline `870bdce9d`, macOS arm64, M4 Pro. The resolved dot-eval fast method
+path, including polymorphic cache hits, previously instantiated synthetic
+`self` and `argv` on every call despite existing compiler context-use metadata.
+The retained change reads immutable flags from an acquire-published, already-
+ready AOT context. With the same caller/execution Program and no attached
+debugger, unused self setup can be skipped; unused argv setup is skipped only
+without excess arguments.
+
+The object and defining-class context, receiver type information, parameter
+binding, variable/diagnostic frames, parse policy/location, return filtering
+and cleanup remain. No context is eagerly materialized for this optimization.
+Excess arguments keep their original list ownership and destruction order.
+IR/JIT and cross-execution-Program calls retain their previous setup. No new
+method-entry ABI or serialized format is needed for this step.
+
+### Measurements
+
+All comparisons use one identical AOT executable against the two compatible
+libraries, randomized implementation/kernel/fork order, three warmups and five
+measurement windows per fork. Every timed implementation first passes 270
+independent reference records. Numbers are medians of fork means, ns/element,
+including receiver selection/assignment, computation, loop and checksum work,
+not isolated call latency.
+
+Primary `run-m9xb9fns`: 1024 elements, five forks, 300 ms windows and fresh
+Java measurements.
+
+|!Kernel|!Before|!After|!Change|!Java
+|polymorphic_call|273.08598|233.96860|-14.32%|2.51939
+|method_call|2.45769|2.45605|-0.07%|0.87444
+|dispatch_control|2.35622|2.32913|-1.15%|0.96814
+|indirect_wide|8.05092|8.14915|1.22%|1.66695
+|indirect_float|10.03246|10.03749|0.05%|1.63277
+|indirect_tagged_float|10.04774|10.03474|-0.13%|1.63983
+|indirect_branch_float|10.03145|10.04693|0.15%|1.64761
+|temporary_hash|320.23280|304.20266|-5.01%|15.42502
+
+Polymorphic ranges separate: 268.1989–281.5103 before versus
+231.8401–240.4188 after. Hash ranges also separate in this run; all other
+before/after ranges overlap. The final-method arithmetic workload can inline
+and must not be presented as retained polymorphic-call performance.
+
+The 4096-element pilot `run-slbko259` improves polymorphic calls
+273.84242 → 237.64623 (-13.22%), ranges 263.8096–282.0575 versus
+232.1913–239.5590. Its wide/float controls change +1.50%/+0.28% and hash
+-4.30%, with overlapping ranges. A longer seven-fork/500 ms repeat
+`run-_hg9d0h4` confirms 270.92341 → 235.01551 (-13.25%), ranges
+268.0059–278.5568 versus 230.6194–238.1677.
+
+The unfavorable scalar control is retained: wide callbacks have slower medians
+in all three enabled runs. In the longer repeat they change
+7.06756 → 7.09981 (+0.46%), ranges 7.0345–7.4502 versus 6.9940–7.2245.
+This is smaller than the pilot/primary +1.50%/+1.22%, but overlapping ranges
+are not proof of equivalence. Hash changes 306.89975 → 305.71600 (-0.39%),
+ranges 301.6733–310.7114 versus 303.3012–312.5889. Its earlier larger benefits
+are not isolated evidence about method setup; runtime layout and host variation
+remain uncontrolled.
+
+The diagnostic control `run-cg8u1ufx` sets
+`QORE_DISABLE_IR_CONTEXT_ELISION=1` for compilation and both runtime modes
+(4096 elements, seven forks, 500 ms). The polymorphic benefit disappears:
+269.06657 → 271.22539 (+0.80%), ranges 266.5296–278.6610 versus
+267.9540–279.4644. Wide changes -0.77%, also overlapping. The flag affects
+other context-elision paths too, so this supports the mechanism without
+measuring its exact isolated cost.
+
+### Rejected first step and audit correction
+
+An unused-self-only pilot `run-86jsu9wh` changed polymorphic calls
+266.84121 → 263.06060 (-1.42%), ranges 265.0387–268.1120 versus
+248.7820–268.3404. Wide/hash medians worsened 1.12%/2.30%; float improved
+0.16%, all overlapping. It was not an established standalone performance win.
+
+Thread-safety review also rejected its extra reads of
+`UserVariantBase::usesSelf()/usesArgv()`: lazy IR/debug materialization can
+rewrite these fields. The final implementation instead reads immutable flags
+from an already-published AOT context and keeps the process disable control.
+An intermediate combined mutable-flag build was never benchmarked or retained.
+All measured variants and samples, including the self-only fast fork, remain
+in [sanitized evidence](results-method-context-macos-arm64.json).
+
+### Validation and next work
+
+Release/debug qore/qcc builds pass. The expanded selected matrix passes
+48 files per build: 31 QUnit wrappers with 166 cases / 15935 assertions, plus
+17 standalone tests. Seven focused suites also pass per build. Extended
+`AOTDotEvalOverload.qtest` compares source, qmod, disabled-cache and disabled-
+context behavior: mixed receivers, explicit self, private members, closures,
+recursion, nested receivers, argv restoration, excess-object destruction and
+exception recovery. It passes the saved baseline as well. Initial missing
+variadic declarations in the new fixture were rejected by the baseline;
+corrected declarations pass before and after.
+
+Old v2/v3 AOT artifacts retain byte-identical 225/270 reference records.
+Eleven Python harness tests, standalone release syntax, strict Qore tables,
+evidence integrity and whitespace checks pass. Runtime text grows
+13872648 → 13873068 bytes (+420). No full-suite, sanitizer, injected
+allocation-failure, Linux runtime or full split-runtime-build claim.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#aot-method-context-audit-2026-10-08)
+records every item. Evidence includes the exact runtime/test diffs and hashes,
+library/executable hashes, settings and all 310 jobs / 1550 samples; medians,
+counts, uniqueness and finite values were independently checked. No build,
+test, profile or documentation validator overlapped timings.
+
+Java parity remains distant: primary polymorphic execution is about 234 versus
+2.52 ns/element (roughly 93 times), while wide scalar callbacks are 8.15 versus
+1.67. Compiler inspection confirms all three polymorphic target bodies already
+declare unused self/argv, but the caller still uses boxed receiver assignment,
+reference/reload tracking, argument boxing and
+`qore_rt_dot_eval_object_method_direct_aot`. This inspection is of pre-native-
+optimization IR, not a claim that every displayed store survives LLVM.
+
+Next: inspect why the resolved base method misses the existing guarded direct
+entry and evaluate explicit AOT method parameters/boxed-local lowering. Scalar
+callbacks separately need a measured versioned reusable-frame/fast-entry
+experiment; removing caller-frame construction requires preserving per-call
+publication, reader completion, live guards, overflow and fallback semantics.

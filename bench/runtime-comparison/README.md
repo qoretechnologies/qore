@@ -64,6 +64,14 @@ identical executable hashes and only one compile time. Do not use this option
 to measure compiler optimizations or when the new executable requires symbols
 or an ABI absent from the saved runtime; a failed baseline check aborts the run.
 
+For AOT method-runtime context comparisons, the process presence flag
+`QORE_DISABLE_IR_CONTEXT_ELISION=1` retains eager synthetic self/argv setup.
+The optimized dot-eval path reads immutable flags from an already-ready AOT
+context and is limited to the same execution Program without a debugger.
+Unused argv setup is omitted only without excess arguments; their ownership
+and cleanup remain unchanged. This flag also controls other context-elision
+paths, so treat it as a diagnostic control, not isolated cost attribution.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit
