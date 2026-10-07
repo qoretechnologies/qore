@@ -33,6 +33,10 @@
 #include "qore/intern/ThreadClosureVariableStack.h"
 #include "qore/intern/LocalVar.h"
 
+void ThreadClosureVariableStack::pushNativeLeafFrameBoundarySlow() {
+    instantiateIntern(nullptr, 0);
+}
+
 int ThreadClosureVariableStack::getFrame(int frame, Block*& w, int& p) {
     assert(frame >= 0);
 

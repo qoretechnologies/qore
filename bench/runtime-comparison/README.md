@@ -246,7 +246,9 @@ do not combine disabled-path measurements with before/after library labels.
 V2 preserves diagnostic frames, policy overrides, stack-reader synchronization,
 and lazy context materialization. It is not an end-to-end TLS-free native ABI.
 Compiler-proven scalar leaves retain their local/closure frame markers but
-avoid general variable-cleanup bookkeeping for those empty frames. V1 remains
+avoid general variable-cleanup bookkeeping for those empty frames. The native
+closure-marker push handles an available slot inline and outlines full-block
+growth/reuse; the entry fields and publication ordering are unchanged. V1 remains
 available as a functional control; this does not broaden native eligibility.
 
 Use the `kernels-aot` executable in a run directory, or invoke `kernels.qr`

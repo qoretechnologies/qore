@@ -1451,3 +1451,75 @@ four experiments, **246 jobs / 1230 samples**, hashes and recomputed medians.
 every audit-changes checklist item and the validation limitations. Audit review
 kept the borrowed context nullable at teardown and added direct semantic
 coverage; no pending-state snapshot or weaker ordering was introduced.
+
+## Inline native closure markers and combined result (2026-10-07)
+
+The final small specialization uses the original empty closure-frame marker,
+count and publication order, but inserts the marker inline when its stack block
+has space. Only full-block growth/reuse calls the general insertion path.
+Admission is still limited to compiler-proven TLS-independent scalar leaves;
+ordinary calls and captured variables are unchanged. No calling-convention or
+serialized metadata change is required.
+
+Against `002ba39cb`, retained callbacks improve **2.6%** at 1024 elements
+(19.968 to 19.451 ns/element, three forks) and **4.5%** in a five-fork repeat
+at 4096 elements (19.482 to 18.597). Both runs have nonoverlapping before/after
+fork-mean ranges. Arithmetic, direct-call, dispatch, polymorphic and allocation
+controls have overlapping ranges; their small differences are not attributed
+to this optimization. AOT native text is unchanged at 51648 bytes.
+
+### Combined comparison with Java
+
+A fresh, shuffled five-fork comparison measures the four changes together
+against `1e974dc50`: exact scalar assignment guards, targeted scalar cleanup,
+live-context cancellation polling/outlined cold paths, and native marker push.
+These are measured combined results, not multiplied gains from separate runs.
+Each fork uses three warmups and five 300 ms samples, with 1024 elements.
+
+|!Kernel|!AOT before ns/element|!AOT after ns/element|!Java JIT ns/element|!Qore time reduction
+|Arithmetic|4.077|2.604|0.875|36.1%
+|Direct call|4.089|2.592|0.878|36.6%
+|Retained callback|49.798|19.538|1.657|60.8%
+
+The callback is **2.55x faster than the earlier Qore baseline**, but still
+takes **11.8x Java's time**. Its fork ranges are 49.448-50.674 before and
+19.310-19.631 after. Direct calls add effectively no cost over Qore's arithmetic
+control; their loop remains about **3.0x Java's time**. These include the loop,
+computation and checksum, not an isolated call-latency measurement.
+
+### Remaining boundary
+
+Final sampling no longer finds the general closure insertion routine on the
+callback hot path. It still finds native frame setup/restoration, typed callable
+validation, stack checks and cancellation. These results do not establish that
+Java parity is impossible, but they do not demonstrate it either. Replacing
+individual TLS lookups is no longer sufficient to close the retained-call gap.
+
+The next substantial work is compiler-visible callback specialization/unboxed
+continuations and a lower-cost representation of observable native frames.
+Any such change must retain foreign-Program fallback, live debugger behavior,
+stack inspection, source locations, ownership and cancellation. Immutable
+binding/signature facts can be prepared earlier; current Program identity and
+other changing state cannot simply be assumed from an opaque typed callback.
+Polymorphic dispatch remains a separate, much slower path.
+
+### Validation and evidence
+
+The frame fixture now covers depths 0/1, 31/32, 63/64/65, 127/128/129 and 140,
+including block reuse, captured-value reads, owned-object destruction, restored
+stack depth and exception unwinding. It passes on the saved baseline in
+AST/IR/JIT/tiered and stripped-source AOT O0/O3, and through the release/debug
+wrapper's disabled-path, cross-Program, concurrent-stack and split-codegen cases.
+
+Final selected verification passes **76 cases / 11631 assertions per build**
+(release and debug), plus one standalone script each; all 165 old-AOT reference
+records match and the 10 benchmark-harness tests pass. No full-suite, sanitizer
+or Linux validation claim is made. Previously recorded correctness/toolchain
+limitations are unchanged and remain documented in the preceding audits.
+
+[Sanitized evidence](results-native-marker-macos-arm64.json) includes three
+experiments, **125 jobs / 625 samples**, library/source hashes, combined-diff
+identity and independently recomputed medians.
+[Full audit](FOLLOWUP-AUDIT.md#native-marker-audit-2026-10-07) records all 62
+checklist items. The audit strengthened block-boundary/reuse coverage and kept
+the existing marker contents, ownership, frame eligibility and publication.

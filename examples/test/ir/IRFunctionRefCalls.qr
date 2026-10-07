@@ -306,15 +306,22 @@ sub checkLeafFrames(code<int(int)> fn) {
     code<int()> readCapture = int sub () { return captured; };
     int before = destroyed;
     int stack_depth = get_thread_call_stack().size();
-    expect(140, checkLeafFrameBlocks(fn, readCapture, 140, False));
-    expect(before + 141, destroyed);
+    # Exercise both sides of repeated block transitions, including reuse after
+    # returning to an earlier block. Captures and owned locals stay ordinary.
+    foreach int depth in ((0, 1, 31, 32, 63, 64, 65, 127, 128, 129, 140)) {
+        expect(depth, checkLeafFrameBlocks(fn, readCapture, depth, False));
+        before += depth + 1;
+        expect(before, destroyed);
+        expect(42, readCapture());
+        expect(stack_depth, get_thread_call_stack().size());
+    }
     try {
         checkLeafFrameBlocks(fn, readCapture, 140, True);
         throw "FUNCREF-TEST-ERROR", "expected leaf-frame unwind";
     } catch (hash<ExceptionInfo> ex) {
         expect("LEAF-FRAME-UNWIND", ex.err);
     }
-    expect(before + 282, destroyed);
+    expect(before + 141, destroyed);
     expect(stack_depth, get_thread_call_stack().size());
     expect(8, fn(7));
 }

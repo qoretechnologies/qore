@@ -221,7 +221,11 @@ The admitted scalar leaf cannot instantiate TLS locals or reenter generic
 execution. Its local-variable marker therefore uses a specialized push/pop pair:
 it retains the ordinary marker and frame count for inspection, but does not
 append a variable-cleanup record to the local marker vector. Both local and
-closure markers are popped directly as empty frames. Debug assertions verify
+closure markers are popped directly as empty frames. The native closure-marker
+push writes the same null/zero/non-owner entry inline when the current block
+has space. Only full-block growth/reuse calls an outlined helper, which uses
+the original insertion path; frame counts and publication order are unchanged.
+Debug assertions verify
 the top marker and unassigned local slot. Ordinary calls still use the general
 cleanup path, including cleanup of residual variables. This relies on the
 existing whole-body scalar-expression admission proof; widening native-entry

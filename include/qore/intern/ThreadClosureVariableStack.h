@@ -61,6 +61,9 @@ struct ClosureStackEntry {
 
 class ThreadClosureVariableStack : public ThreadLocalData<ClosureStackEntry> {
 private:
+    // Keep block growth/allocation out of the common empty-marker push.
+    DLLLOCAL __attribute__((noinline)) void pushNativeLeafFrameBoundarySlow();
+
     DLLLOCAL void instantiateIntern(ClosureVarValue* cvar, uint64_t order, bool owner = false) {
         //printd(5, "ThreadClosureVariableStack::instantiateIntern(%p = '%s') this: %p pgm: %p\n", cvar ? cvar->id : "null", cvar ? cvar->id : "null", this, getProgram());
 
@@ -290,7 +293,21 @@ public:
         instantiateIntern(nullptr, 0);
     }
 
-    //! Pair with pushFrameBoundary() only for a compiler-proven TLS-independent native leaf.
+    //! Push the normal visible marker without inlining the uncommon block-growth path.
+    /** Only for a compiler-proven TLS-independent native leaf; pair with
+        popNativeLeafFrameBoundary(). Marker contents and frame count are unchanged.
+    */
+    DLLLOCAL void pushNativeLeafFrameBoundary() {
+        ++frame_count;
+        if (curr->pos == QORE_THREAD_STACK_BLOCK) {
+            pushNativeLeafFrameBoundarySlow();
+            return;
+        }
+        assert(curr->pos >= 0 && curr->pos < QORE_THREAD_STACK_BLOCK);
+        curr->var[curr->pos++] = ClosureStackEntry(nullptr, 0, false);
+    }
+
+    //! Pair with pushNativeLeafFrameBoundary() for a compiler-proven TLS-independent native leaf.
     /** The body cannot add closure variables or reenter generic execution, so
         the top entry is still the empty marker, including on exception exit.
     */

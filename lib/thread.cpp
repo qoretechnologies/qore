@@ -1974,7 +1974,7 @@ RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
     // Typed callback admission proves a scalar leaf with no TLS locals or
     // generic reentry. Keep observable markers, but no variable cleanup record.
     tlpd->lvstack.pushNativeLeafFrameBoundary();
-    tlpd->cvstack.pushFrameBoundary();
+    tlpd->cvstack.pushNativeLeafFrameBoundary();
     call_loc = old_loc ? old_loc : parse_loc;
     old_stack = publish_pushed_stack_location(td, stack_loc);
     if (swapped) {
