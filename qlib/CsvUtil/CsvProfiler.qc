@@ -61,7 +61,7 @@ public class CsvProfiler {
     */
     static hash<TabularTextFormat> sniffTextFormat(binary data, string quote = "\"") {
         hash<auto> enc = detectEncoding(data);
-        string text = decode(data, enc);
+        string text = decode(data, enc.encoding);
         return <TabularTextFormat>{
             "separator": detectSeparator(text, quote),
             "encoding": enc.encoding,
@@ -94,15 +94,13 @@ public class CsvProfiler {
             throw "CSV-PROFILE-ERROR", sprintf("quote must be one character; got %y", opts.quote);
         }
         hash<TabularTextFormat> format = sniffTextFormat(data, opts.quote);
-        hash<auto> enc = {"encoding": format.encoding, "bom": format.bom};
         if (opts.encoding) {
-            enc.encoding = opts.encoding;
             format.encoding = opts.encoding;
         }
         if (opts.separator) {
             format.separator = opts.separator;
         }
-        string text = decode(data, enc);
+        string text = decode(data, format.encoding);
 
         hash<TabularSheetGrid> sheet({"name": "csv"});
         int rows = 0;
@@ -146,15 +144,9 @@ public class CsvProfiler {
 
     #! Detects the character encoding and byte order mark
     private static hash<auto> detectEncoding(binary data) {
-        string head = data.substr(0, 3).toHex();
-        if (head == "efbbbf") {
-            return {"encoding": "UTF-8", "bom": True, "skip": 3};
-        }
-        if (head.substr(0, 4) == "fffe") {
-            return {"encoding": "UTF-16LE", "bom": True, "skip": 2};
-        }
-        if (head.substr(0, 4) == "feff") {
-            return {"encoding": "UTF-16BE", "bom": True, "skip": 2};
+        *string bom_encoding = CsvByteOrderMark::detect(data);
+        if (bom_encoding) {
+            return {"encoding": bom_encoding, "bom": True};
         }
         try {
             convert_encoding(binary_to_string(data, "UTF-8"), "UTF-16LE");
@@ -166,13 +158,11 @@ public class CsvProfiler {
     }
 
     #! Decodes the content to a UTF-8 string without the byte order mark
-    private static string decode(binary data, hash<auto> enc) {
-        int skip = enc.skip ?? 0;
-        if (!skip && enc.bom) {
-            skip = enc.encoding =~ /^UTF-16/ ? 2 : 3;
-        }
-        binary body = skip ? data.substr(skip) : data;
-        return convert_encoding(binary_to_string(body, enc.encoding), "UTF-8");
+    /** As the CSV readers do, a byte order mark is removed only when the content is decoded in the encoding the
+        mark is written in; in another encoding its bytes are characters of the content.
+    */
+    private static string decode(binary data, string encoding) {
+        return CsvByteOrderMark::strip(convert_encoding(binary_to_string(data, encoding), "UTF-8"));
     }
 
     #! Detects the line ending

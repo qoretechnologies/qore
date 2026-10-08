@@ -43,7 +43,7 @@ public namespace CsvUtil {
 
             @throw ABSTRACTCSVITERATOR-ERROR invalid or unknown option; invalid data type for option; \c "header_names" is @ref True "True" and \c "header_lines" is 0 or \c "headers" is also present; unknown field type
          */
-        constructor(string data, *hash opts) : AbstractCsvIterator(new DataLineIterator(data, opts.eol), opts) {
+        constructor(string data, *hash opts) : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(data, opts.eol), opts) {
         }
 
         #! Creates the CsvDataIterator in multi-type mode with the path of the file to read and an option hash
@@ -51,7 +51,7 @@ public namespace CsvUtil {
             @param spec a hash of field and type definition; see @ref abstractcsviterator_option_field_hash for more information
             @param opts a hash of optional options; see @ref abstractcsviterator_options for more information
          */
-        constructor(string data, hash spec, hash opts) : AbstractCsvIterator(new DataLineIterator(data, opts.eol), spec, opts) {
+        constructor(string data, hash spec, hash opts) : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(data, opts.eol), spec, opts) {
         }
 
         auto memberGate(string name) {

@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvByteOrderMarkTest
+
+#! Returns data a few bytes at a time, so that a byte order mark spans several reads
+class CsvBomTrickleInputStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+        int chunk;
+    }
+
+    constructor(binary data, int chunk = 1) {
+        self.data = data;
+        self.chunk = chunk;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0 || pos >= data.size()) {
+            return;
+        }
+        int size = min(limit, chunk, data.size() - pos);
+        binary rv = data.substr(pos, size);
+        pos += size;
+        return rv;
+    }
+}
+
+#! Tests that the CSV readers skip a byte order mark at the start of the data, as spreadsheet programs write it
+/** A CSV file saved as "CSV UTF-8" by a spreadsheet program starts with a UTF-8 byte order mark.  The mark is not
+    part of the first header; with header names matched against field names, a reader that kept it would not match
+    the first column.
+*/
+public class CsvByteOrderMarkTest inherits QUnit::Test {
+    public {
+        #! the purchase order confirmation used in the tests
+        const Text = "PO;SKU;Qty\nPO-1001;A-1;5\nPO-1002;B-2;12\n";
+
+        #! the records read from it with the fields matched by header name
+        const Records = (
+            {"PO": "PO-1001", "SKU": "A-1", "Qty": 5},
+            {"PO": "PO-1002", "SKU": "B-2", "Qty": 12},
+        );
+
+        #! the options reading it with header names matched to typed fields
+        const Options = {
+            "separator": ";",
+            "header_names": True,
+            "fields": {"PO": "string", "SKU": "string", "Qty": "int"},
+        };
+
+        #! the UTF-8 byte order mark
+        const Utf8Bom = <efbbbf>;
+    }
+
+    private {
+        string dir;
+    }
+
+    constructor() : Test("CsvByteOrderMarkTest", "1.0") {
+        addTestCase("file input", \fileInput());
+        addTestCase("stream input", \streamInput());
+        addTestCase("binary data", \binaryData());
+        addTestCase("string data", \stringData());
+        addTestCase("a quoted first header", \quotedFirstHeader());
+        addTestCase("no byte order mark", \noByteOrderMark());
+        addTestCase("an explicit encoding", \explicitEncoding());
+        addTestCase("UTF-16 byte order marks", \utf16());
+        addTestCase("the stream start", \streamStart());
+        addTestCase("the profiler and the reader agree", \profilerAgrees());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + "csv-bom-" + get_random_string(8);
+        mkdir(dir);
+    }
+
+    globalTearDown() {
+        if (dir && is_dir(dir)) {
+            Dir d();
+            d.chdir(dir);
+            foreach string f in (d.listFiles() ?? ()) {
+                unlink(dir + DirSep + f);
+            }
+            rmdir(dir);
+        }
+    }
+
+    fileInput() {
+        string path = writeFile("bom.csv", Utf8Bom + binary(Text));
+        assertEq(Records, read(new CsvFileIterator(path, Options)), "CsvFileIterator");
+        assertEq(Records, search(new CsvReadDataProvider(path, Options)), "CsvReadDataProvider path");
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"path": path})), "path option");
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"path": "file://" + path})), "path URL");
+    }
+
+    streamInput() {
+        binary data = Utf8Bom + binary(Text);
+        assertEq(Records, read(new CsvIterator(new BinaryInputStream(data), "UTF-8", Options)), "CsvIterator");
+        assertEq(Records, read(new CsvIterator(new FileInputStream(writeFile("stream.csv", data)), "UTF-8",
+            Options)), "file stream");
+        assertEq(Records, search(new CsvReadDataProvider(new BinaryInputStream(data), Options)),
+            "CsvReadDataProvider stream");
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"stream": new BinaryInputStream(data)})),
+            "stream option");
+        # the default encoding of the stream is UTF-8
+        assertEq(Records, read(new CsvIterator(new BinaryInputStream(data), NOTHING, Options)), "default encoding");
+        # another name of UTF-8
+        assertEq(Records, read(new CsvIterator(new BinaryInputStream(data), "utf8", Options)), "utf8");
+    }
+
+    binaryData() {
+        binary data = Utf8Bom + binary(Text);
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"data": data})));
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"data": data, "encoding": "UTF-8"})));
+        # the record type is read from the headers without the mark
+        CsvReadDataProvider dp(Options + {"data": data});
+        assertEq(("PO", "SKU", "Qty"), keys dp.getRecordType());
+    }
+
+    stringData() {
+        # text that kept the mark when it was decoded
+        string text = binary_to_string(Utf8Bom + binary(Text), "UTF-8");
+        assertEq(0xfeff, text.getUnicode(0));
+        assertEq(Records, read(new CsvDataIterator(text, Options)), "CsvDataIterator");
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"data": text})), "data option");
+        # the mark is not removed from a later line
+        string later = Text + "﻿PO-1003;C-3;1\n";
+        list<hash<auto>> records = read(new CsvDataIterator(later, Options - "fields"));
+        assertEq("﻿PO-1003", records[2].PO);
+    }
+
+    quotedFirstHeader() {
+        # a quoted field must start with the quote, so the mark before it would break the quoting
+        binary data = Utf8Bom + binary("\"PO\";\"SKU\";\"Qty\"\n\"PO-1001\";\"A-1\";5\n");
+        assertEq(Records[0], read(new CsvIterator(new BinaryInputStream(data), "UTF-8", Options))[0]);
+        string text = binary_to_string(data, "UTF-8");
+        assertEq(Records[0], read(new CsvDataIterator(text, Options))[0]);
+    }
+
+    noByteOrderMark() {
+        assertEq(Records, read(new CsvIterator(new BinaryInputStream(binary(Text)), "UTF-8", Options)));
+        assertEq(Records, read(new CsvDataIterator(Text, Options)));
+        assertEq(Records, search(new CsvReadDataProvider(Options + {"data": binary(Text)})));
+        # a first character that starts with the same byte as the mark is content
+        string text = "PO;SKU\n1;2\n";
+        CsvIterator i(new BinaryInputStream(binary(text)), "UTF-8", {"separator": ";", "header_names": True});
+        assertTrue(i.next());
+        assertEq(("PO", "SKU"), i.getHeaders());
+        # empty input
+        assertFalse(new CsvIterator(new BinaryInputStream(binary()), "UTF-8", Options).next());
+        assertFalse(new CsvIterator(new BinaryInputStream(Utf8Bom), "UTF-8", Options).next());
+        assertFalse(new CsvDataIterator("", Options).next());
+    }
+
+    explicitEncoding() {
+        # in an 8-bit encoding the bytes of a UTF-8 byte order mark are characters of the content
+        binary data = Utf8Bom + binary(convert_encoding(Text, "ISO-8859-1"));
+        CsvIterator i(new BinaryInputStream(data), "ISO-8859-1", Options - "fields");
+        assertTrue(i.next());
+        string first = i.getHeaders()[0];
+        assertEq("ISO-8859-1", first.encoding());
+        assertEq(convert_encoding("ï»¿PO", "ISO-8859-1"), first);
+        CsvReadDataProvider dp(Options - "fields" + {"data": data, "encoding": "ISO-8859-1"});
+        hash<auto> record_type = dp.getRecordType();
+        assertEq(3, record_type.size());
+        assertFalse(record_type.hasKey("PO"));
+        # with header names matched, the first field is not found under its name
+        list<hash<auto>> records = read(new CsvIterator(new BinaryInputStream(data), "ISO-8859-1",
+            Options - "fields"));
+        assertFalse(records[0].hasKey("PO"));
+    }
+
+    utf16() {
+        # the line iterator removes a UTF-16 byte order mark
+        binary le = <fffe> + binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE"));
+        CsvIterator i(new BinaryInputStream(le), "UTF-16LE", {"header_names": True});
+        assertTrue(i.next());
+        assertEq(("PO", "Qty"), i.getHeaders());
+    }
+
+    streamStart() {
+        binary data = Utf8Bom + binary(Text);
+        # the mark spans several reads
+        foreach int chunk in (1, 2, 4) {
+            assertEq(Records, read(new CsvIterator(new CsvBomTrickleInputStream(data, chunk), "UTF-8", Options)),
+                sprintf("chunk %d", chunk));
+        }
+        # a stream shorter than the mark
+        CsvIterator i(new CsvBomTrickleInputStream(<efbb>), "ISO-8859-1", {"header_names": False});
+        assertTrue(i.next());
+        assertEq(convert_encoding("ï»", "ISO-8859-1"), i.getRawLine());
+        i = new CsvIterator(new CsvBomTrickleInputStream(binary("a")), "UTF-8", {"header_names": False});
+        assertTrue(i.next());
+        assertEq("a", i.getRawLine());
+    }
+
+    profilerAgrees() {
+        binary data = Utf8Bom + binary(Text);
+        hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(data);
+        assertTrue(grid.text_format.bom);
+        assertEq(("PO", "SKU", "Qty"), grid.sheets[0].rows[0]);
+        CsvIterator i(new BinaryInputStream(data), grid.text_format.encoding,
+            {"separator": grid.text_format.separator, "header_names": True});
+        assertTrue(i.next());
+        assertEq(grid.sheets[0].rows[0], i.getHeaders());
+
+        # an explicit 8-bit encoding: the profiler reads the mark's bytes as the reader does
+        data = Utf8Bom + binary(convert_encoding(Text, "ISO-8859-1"));
+        grid = CsvProfiler::readGrid(data, {"encoding": "ISO-8859-1"});
+        assertEq("ï»¿PO", grid.sheets[0].rows[0][0]);
+        i = new CsvIterator(new BinaryInputStream(data), "ISO-8859-1", {"separator": ";", "header_names": True});
+        assertTrue(i.next());
+        assertEq(grid.sheets[0].rows[0], map convert_encoding($1, "UTF-8"), i.getHeaders());
+
+        # a UTF-16 byte order mark
+        data = <fffe> + binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE"));
+        grid = CsvProfiler::readGrid(data);
+        assertEq("UTF-16LE", grid.text_format.encoding);
+        assertEq(("PO", "Qty"), grid.sheets[0].rows[0]);
+    }
+
+    #! Writes a file in the test directory and returns its path
+    private string writeFile(string name, binary data) {
+        string path = dir + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+        return path;
+    }
+
+    #! Returns the records of an iterator
+    private static list<hash<auto>> read(AbstractCsvIterator i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+
+    #! Returns the records of a data provider
+    private static list<hash<auto>> search(CsvReadDataProvider dp) {
+        return map $1, dp.searchRecords();
+    }
+}
