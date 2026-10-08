@@ -2954,6 +2954,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
+      - BSON arrays support current and older libbson APIs and honor cancellation and sandbox interruption
       - MongoClient/MongoDatabase/MongoCollection/MongoCursor/ObjectId classes with full CRUD and
         aggregation-pipeline support and automatic BSON-to-Qore value conversion
       - generic typed cursors (<tt>MongoCursor&lt;DocT&gt;</tt>) with find()/aggregate() preserving the document type

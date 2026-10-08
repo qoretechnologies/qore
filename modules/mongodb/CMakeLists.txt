@@ -131,6 +131,17 @@ set(QORE_DOXYGEN_IMAGES
 )
 qore_binary_module_qore(${mongodb_module_name} "${VERSION}" "/${VERSION}")
 
+# Exercise the real conversion code without requiring a MongoDB server.  The
+# generated ObjectId unit supplies its normal class symbols to the converter.
+add_executable(qore-mongodb-bson-array-test EXCLUDE_FROM_ALL
+    test/bson-array.cpp src/bson_conversion.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/QC_ObjectId.cpp)
+# Like mongodb itself, the converter uses the public Qore API, not libqore's
+# core-only compilation definitions.  Link the runtime without inheriting them.
+target_link_libraries(qore-mongodb-bson-array-test PRIVATE
+    $<TARGET_LINKER_FILE:libqore> ${MONGODB_LIBRARIES})
+add_dependencies(qore-mongodb-bson-array-test libqore MONGODB_QPP_GENERATED_FILES)
+
 if (DOXYGEN_FOUND)
     # Add MongoDB logo SVG to the module docs (reuse the logo from MongoDbDataProvider)
     file(APPEND ${CMAKE_BINARY_DIR}/modules/mongodb/Doxyfile

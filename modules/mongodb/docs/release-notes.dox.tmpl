@@ -6,4 +6,9 @@
 
     @section mongodb_3_0 mongodb Module Version 3.0
     - initial release
+    - BSON array construction uses the supported libbson 2.3 API while retaining
+      compatibility with older drivers; array keys remain contiguous from zero,
+      including null elements and nested arrays
+    - array conversion honors thread cancellation and sandbox interruption,
+      including large arrays, while preserving cleanup deferral
 */
