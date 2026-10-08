@@ -46,6 +46,8 @@ class ClassBodyLocalsTest inherits QUnit::Test {
                     "ordinary store " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_NODE_STORE=1 "),
                     "generic value store " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_STRONG_STORE=1 "),
+                    "weak-normalization path " + prefix + level);
             }
         }
     }

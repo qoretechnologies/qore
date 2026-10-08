@@ -4714,3 +4714,95 @@ assertions), plus the debug C++ async-I/O wrapper (1 case / 2 assertions); old
 AOT retains 300 records. [Integration evidence](results-class-node-store-merge-macos-arm64.json)
 contains the full 62-item audit. The timings above are premerge; no new merged
 performance or full non-SCU build result is claimed.
+
+## Strong-object initializer entry (2026-10-08)
+
+Baseline: final merged `d3aa2a9bc` on `feature/performance`, including
+`origin/develop` at `9951c7d3e`. Its exact-revision release/debug builds and
+ownership checks pass. The new runtime-only change identifies strong objects
+before constructing a weak-input holder, then uses the existing checked fresh
+initializer. A handled attempt avoids weak normalization and empty-holder
+cleanup. Type/access checks, both owned references, runtime-backed storage,
+real-reference accounting, errors and destructor order are unchanged. Weak,
+non-object, captured and unadmitted cases retain their ordinary path; some
+misses pay an additional admission probe. No compiler, AOT format or helper ABI
+change is made. `QORE_DISABLE_AOT_CLASS_STRONG_STORE=1` selects the old entry path.
+
+### Measurements and attribution
+
+Apple M4 Pro, macOS arm64, Temurin Java 25.0.2+10. All comparisons use five
+independent forks, three warmup windows and five 500 ms measured windows per
+fork, three startup samples and shuffled sequential jobs. Each baseline pair
+uses the identical AOT executable against saved/current libraries. The final
+toggle comparison also holds the library fixed. All modes pass 300 independent
+reference checks before timing. Timing does not overlap builds, tests, profiles,
+disassembly or evidence validation. Values below are medians of fork means in
+whole-loop ns/element, not isolated call latency or confidence intervals.
+
+|!Comparison|!Before / disabled|!After / enabled|!Change|!Before / after fork-mean ranges
+|run-925e5v99, enabled, count 1024|73.38268|69.53294|-5.25%|73.25845–73.56726 / 67.66657–69.60601
+|run-g0ao81ak, enabled, count 4096|71.70679|67.94573|-5.25%|71.49596–72.99545 / 67.17278–68.26435
+|run-0g3cbger, disabled, count 4096|71.82313|70.25146|-2.19%|71.04624–72.27300 / 69.11950–73.02172
+|strong-toggle-tmw9dz33, same-library on/off, count 4096|70.16176|67.49224|-3.80%|69.51931–70.79992 / 66.52946–67.74187
+
+The enabled target ranges separate in both baseline comparisons. Primary Java
+measures 2.54843 ns/element, leaving a **27.28×** whole-workload gap. Qore may
+inline the exact base case while Java retains all three target calls; this is
+not Java parity or a pure dispatch-cost comparison.
+
+In the disabled baseline comparison, both processes receive the new flag (the
+baseline ignores it). Its target median improves 2.19% with overlapping ranges.
+Therefore the full cross-library 5.25% gain cannot be assigned solely to the new
+branch. The extra same-library comparison changes only the flag and demonstrates
+a 3.80% target reduction with separated ranges. Its integer-callback control
+changes -1.26%, with overlapping ranges. This supports the branch's benefit;
+it does not partition the earlier gain exactly or prove zero fallback cost.
+
+|!Unrelated control|!Primary 1024|!Repeat 4096|!Disabled 4096
+|indirect_wide|0.96%|1.77%|-0.23%
+|indirect_float|-0.70%|1.02%|-0.60%
+|closure_call (noncapturing)|-1.09%|-2.17%|-2.66%
+|arithmetic|0.48%|-0.14%|-0.63%
+
+All enabled control ranges overlap. Adverse medians above remain part of the
+record; overlap does not prove neutrality. The disabled run's closure ranges
+separate favorably, but the new branch is off and no closure speedup is attributed
+to it. Startup samples have uncontrolled filesystem caches. No samples or adverse
+runs were discarded.
+
+[Evidence](results-class-strong-store-macos-arm64.json) retains all four runs:
+**195 jobs / 975 measured windows**, every raw timing value, recomputed summaries,
+library/source/artifact hashes, the exact runtime diff, the same-library runner
+source and all 62 audit checks. Baseline release library SHA-256:
+`40caaa97d1eb3133113e14b32fe2cb2bebf53e8fe4a25b7cf244382e2fc83967`.
+Measured candidate release/debug libraries:
+`32e931f8d80f4d1cc6481ab54fea3b2c05c26579bb887e8d4c2aa9924224a207` /
+`d269bd51427d3734f5e43473d26c3b9b6cbf8c6cbc7ab63239c61c8fc918900a`.
+Runtime diff SHA-256:
+`6b6b99a4821784e95793f408e7985694d65bc44799449e2e9f62f43356fbd362`.
+Release executable `__text` grows 13,959,236 → 13,959,516 bytes (+280).
+
+### Validation and next step
+
+Release/debug each pass 24 selected files: 18 QUnit wrappers, 46 cases / 2574
+assertions plus six standalone scripts. The expanded assignment wrapper passes
+300 assertions on the saved baseline and both candidates. It adds an unrelated
+strong-object rejection and flag-disabled comparisons, retaining private access,
+weak expiry, generic compatibility and normal/EH final-owner checks. The AST/AOT
+destructor-order wrapper passes 59 assertions per build; its previously documented
+JIT mixed-local unwind issue remains outside this change. Old premerge AOT output
+still matches all 300 reference records; 11 Python harness tests pass. No full
+suite, sanitizer, race detector, Linux or allocation-failure injection is claimed.
+
+A separate 5-second / 1 ms sample profile has 3785 main-thread samples (excluding
+3785 signal-wait samples). Direct caller branches include assignment 1145, native
+method attempt 632, runtime local clear 447, two stale reload sites 307/274 and
+temporary decref 292. These are inclusive samples, not isolated costs or
+before/after timing; nested children must not be added. Disassembly confirms the
+early branch and retained fallback.
+
+Next: derive a boundary-aware local-effect/lifetime proof, including pending
+generic effects and destructor-capable cleanup, before attempting to retain
+receiver caches across pure calls. Admission alone cannot justify eliminating
+runtime slots or their ordered cleanup. Repeated class acceptance and native
+frame setup remain fallback targets if that proof cannot admit useful cases.

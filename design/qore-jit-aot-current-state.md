@@ -220,6 +220,17 @@ borrowed and protected by its caller while the non-mutating acceptance check
 runs. `QORE_DISABLE_AOT_CLASS_NODE_STORE=1` retains generic value storage
 (presence sampled once); no compiler or helper ABI change is required.
 
+The versioned class-store helper also attempts this checked initializer before
+constructing a weak-input holder when the borrowed input is positively identified
+as a strong object. A handled attempt needs no weak normalization or empty
+weak-holder cleanup. The result holder, type/access checks, runtime slot and both
+owned references remain unchanged; errors still return NOTHING with the sink
+set. Captured locals take their existing path before this probe. Weak/non-object
+inputs and unadmitted slots keep the normal path. No lifetime or cache elision is
+implied. `QORE_DISABLE_AOT_CLASS_STRONG_STORE=1` selects the old entry path
+(presence sampled once). A same-library flag comparison isolates this branch
+from cross-library layout variation; see the benchmark results.
+
 The first native-purity local-cache proposal needs additional work: statement
 boundary cleanup independently advances the reload epoch and can run destructors.
 Skipping only the increment after a pure call cannot preserve caches across that

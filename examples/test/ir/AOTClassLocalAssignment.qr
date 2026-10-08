@@ -13,6 +13,8 @@ class ClassLocalValue {
 class ClassLocalDerived inherits ClassLocalValue {
     constructor(int id) : ClassLocalValue(id) { }
 }
+class ClassLocalUnrelated {
+}
 class ClassLocalGenericDerived<T> inherits ClassLocalValue {
     constructor(T id) : ClassLocalValue(int(id)) { }
 }
@@ -189,6 +191,7 @@ for (int round = 0; round < 8; ++round) {
     if (rawClassSource(new ClassLocalRawAccept<int>(29)) != 29
             || rawClassSource(new ClassLocalRawAccept<string>("31")) != 31
             || checkedSource(new ClassLocalGenericDerived<int>(37)) != "37"
+            || checkedSource(new ClassLocalUnrelated()) != "RUNTIME-TYPE-ERROR"
             || parameterizedClassSource(new ClassLocalRawAccept<int>(41)) != "41"
             || parameterizedClassSource(new ClassLocalRawAccept<string>("43")) != "RUNTIME-TYPE-ERROR"
             || ClassLocalPrivate::accepted() != 13) {

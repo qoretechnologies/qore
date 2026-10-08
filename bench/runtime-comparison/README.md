@@ -116,6 +116,15 @@ normalization, and cleanup order remain unchanged. This presence flag is sampled
 once; the helper ABI is unchanged and identical-executable comparisons are valid.
 The measured disabled path has a small adverse cost; see `RESULTS.md` rather
 than assuming the control path is performance-neutral.
+`QORE_DISABLE_AOT_CLASS_STRONG_STORE=1` retains the weak-normalization entry path
+for strong objects. Otherwise a positively identified strong input attempts the
+same checked fresh initializer before constructing the weak-input holder. A
+handled result skips only empty weak-holder setup/cleanup; ownership, class
+access, errors and runtime-backed storage are unchanged. Weak/non-object and
+unadmitted inputs retain the ordinary path (with an extra admission probe on
+some misses). The flag is sampled once and the helper ABI is unchanged. See
+`RESULTS.md` for both baseline comparisons and a same-library on/off comparison;
+do not attribute all cross-library variation to this branch.
 
 The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
 Earlier class-check experiments used 16 bytes and also measured unaligned and

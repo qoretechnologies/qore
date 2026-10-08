@@ -12421,6 +12421,7 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx
 extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx,
         int32_t idx, uint64_t value, ExceptionSink* xsink) {
     static const bool fresh_store = !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE");
+    static const bool strong_store = !std::getenv("QORE_DISABLE_AOT_CLASS_STRONG_STORE");
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     LocalVar* var = ctx->locals[idx];
     if (!var || *xsink) {
@@ -12431,9 +12432,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
         return *xsink ? toBits(QoreValue()) : qore_rt_load_local(var, xsink);
     }
     ValueHolder result(xsink);
+    QoreValue val = fromBits(value);
+    // A strong object needs no weak-input owner or normalization. Keep the same
+    // admission, type/access checks and runtime-slot ownership, and only bypass
+    // the empty weak-holder cleanup on a handled strong-object initializer.
+    if (fresh_store && strong_store && val.getType() == NT_OBJECT
+            && var->tryAssignInitialClassValue(val, result, xsink)) {
+        return *xsink ? toBits(QoreValue()) : toBits(result.release());
+    }
     bool fresh = false;
     {
-        QoreValue val = fromBits(value);
         ValueHolder weak_eval_holder(xsink);
         qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
         if (*xsink) {
