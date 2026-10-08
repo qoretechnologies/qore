@@ -323,7 +323,9 @@ public hashdecl TabularWorkbookProfile {
     - \c no_header_row: no header row was found
     - \c partial_profile: the sheet has more rows than were read
     - \c title_rows: rows above the header hold titles or banners
-    - \c totals_row: a row holds totals or subtotals
+    - \c totals_row: a row holds totals or subtotals: its first cell with content is a totals label
+      (@ref isTotalsLabel()), or one of its formulas totals the rows above it in its own column
+      (@ref isTotalsFormula()); a formula across its own row, such as a line total, does not make a totals row
     - \c wide_period_columns: several columns are periods such as weeks, months, or dates, a layout that is usually
       unpivoted into rows
 
@@ -343,6 +345,23 @@ hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbook
 */
 public class TabularProfiler {
     public {
+        #! Labels of totals rows in common languages
+        /** A row whose first cell with content is text matching this regular expression (without regard to case,
+            with Unicode support) is a totals row; see @ref isTotalsRow()
+
+            @since %DataProvider 3.9
+        */
+        const TotalsRegex = "^\\s*(grand\\s+total|sub\\s*-?\\s*total|total|totals|sum|summe|gesamt|zwischensumme"
+            "|celkem|mezisou[cč]et|spolu|razem|suma|totale|totaal|итого|всього|합계|소계|合計|小計|总计|小计)\\b";
+
+        #! Formula functions that aggregate the rows above a totals row
+        /** Matched against formula text without the leading \c "=" and without regard to case; see
+            @ref isTotalsFormula()
+
+            @since %DataProvider 3.9
+        */
+        const TotalsFormulaRegex = "^\\s*(SUM|SUBTOTAL|AGGREGATE)\\s*\\(";
+
         #! Text that stands for a missing value in spreadsheets and exported data
         /** Reported in @ref TabularColumnProfile::empty_markers "TabularColumnProfile::empty_markers" when a cell's
             trimmed text is exactly one of these values; the vocabulary is fixed, so the reported markers never
@@ -380,13 +399,6 @@ public class TabularProfiler {
 
         #! @ref EmptyMarkers for quick lookups
         const EmptyMarkerSet = map {$1: True}, EmptyMarkers;
-
-        #! Labels of totals rows in common languages
-        const TotalsRegex = "^\\s*(grand\\s+total|sub\\s*-?\\s*total|total|totals|sum|summe|gesamt|zwischensumme"
-            "|celkem|mezisou[cč]et|spolu|razem|suma|totale|totaal|итого|всього|합계|소계|合計|小計|总计|小计)\\b";
-
-        #! Formula functions that mark a totals row
-        const TotalsFormulaRegex = "^\\s*(SUM|SUBTOTAL|AGGREGATE)\\s*\\(";
 
         #! Header labels that name periods
         const PeriodHeaderRegex = "^\\s*(W(K|eek)?\\s*\\d{1,2}|KW\\s*\\d{1,2}|Q[1-4]|\\d{4}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{4}"
@@ -493,6 +505,112 @@ public class TabularProfiler {
             col = (col - 1) / 26;
         }
         return rv;
+    }
+
+    #! Returns True if a value labels a totals row
+    /** A totals row is labelled by its first cell with content; this method tells whether that value is a totals
+        label, such as \c "Total", \c "Summe" or \c "Celkem" (@ref TotalsRegex).
+
+        @param value the value of the first cell with content in the row
+
+        @return True if the value is text that labels a totals or subtotals row
+
+        @par Example:
+        @code{.py}
+bool totals = TabularProfiler::isTotalsLabel("Grand total"); # True
+        @endcode
+
+        @see @ref isTotalsFormula() for the other way a row is recognized as a totals row
+
+        @since %DataProvider 3.9
+    */
+    static bool isTotalsLabel(auto value) {
+        return value.typeCode() == NT_STRING && regex(value, TotalsRegex, RE_Caseless | RE_Unicode);
+    }
+
+    #! Returns True if a formula makes its cell a total of the rows above it
+    /** A formula marks a totals row when it is a \c SUM, \c SUBTOTAL or \c AGGREGATE (@ref TotalsFormulaRegex) with
+        a cell range argument that includes the formula's own column and ends above the formula's row, as in
+        \c B10 holding \c SUM(B2:B9) or \c SUBTOTAL(9,B2:B9).
+
+        A \c SUM across its own row, such as a line total \c D3 holding \c SUM(B3:C3), and a \c SUM of another column
+        or another sheet do not total the rows above; the row is a data row.
+
+        This rule is used both when a sheet is profiled and when its records are read with their formulas, so a
+        totals row is recognized the same way at design time and at run time.
+
+        @param ref the A1 reference of the cell holding the formula, for example \c "B10"; \c "$" markers are allowed
+        @param formula the formula text, with or without the leading \c "="
+
+        @return True if the formula totals the rows above it in its own column
+
+        @throw TABULAR-PROFILE-ERROR \a ref is not an A1 cell reference
+
+        @par Example:
+        @code{.py}
+bool totals = TabularProfiler::isTotalsFormula("B10", "SUM(B2:B9)"); # True
+bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
+        @endcode
+
+        @see
+        - @ref hasTotalsFormula() for the formulas of a row
+        - @ref isTotalsLabel() for the other way a row is recognized as a totals row
+
+        @since %DataProvider 3.9
+    */
+    static bool isTotalsFormula(string ref, string formula) {
+        *list<*string> cell = (ref =~ x/^\s*\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)\s*$/);
+        if (!cell) {
+            throw "TABULAR-PROFILE-ERROR", sprintf("%y is not an A1 cell reference", ref);
+        }
+        int col = columnIndex(cell[0]);
+        int row = cell[1].toInt();
+        formula =~ s/^\s*=//;
+        if (!regex(formula, TotalsFormulaRegex, RE_Caseless)) {
+            return False;
+        }
+        # the cell ranges of the formula that are not qualified by a sheet name; each match gives four strings: the
+        # first column and row, and the last column and row
+        list<*string> parts = (formula =~ x/(?<![A-Za-z0-9_.!'$])\$?([A-Za-z]{1,3})\$?([0-9]+):\$?([A-Za-z]{1,3})\$?([0-9]+)/g) ?? ();
+        @assert(!(parts.size() % 4));
+        for (int i = 0; i < parts.size(); i += 4) {
+            int c1 = columnIndex(parts[i]);
+            int c2 = columnIndex(parts[i + 2]);
+            int r2 = max(parts[i + 1].toInt(), parts[i + 3].toInt());
+            if (col >= min(c1, c2) && col <= max(c1, c2) && r2 < row) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns True if one of the formulas of a row makes it a totals row
+    /** @param formulas the formulas of the cells of one row, keyed by A1 cell reference, as in
+        @ref TabularSheetGrid::formulas "TabularSheetGrid::formulas" and the formula field of a record read with its
+        formulas
+
+        @return True if one of the formulas totals the rows above it in its own column (see @ref isTotalsFormula())
+
+        @throw TABULAR-PROFILE-ERROR a key is not an A1 cell reference
+
+        @since %DataProvider 3.9
+    */
+    static bool hasTotalsFormula(*hash<string, string> formulas) {
+        foreach hash<auto> i in (formulas.pairIterator()) {
+            if (isTotalsFormula(i.key, i.value)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the 0-based column index of a column letter, for example 0 for \c "A" and 26 for \c "AA"
+    private static int columnIndex(string letter) {
+        int rv = 0;
+        foreach string c in (letter.upr().split("")) {
+            rv = rv * 26 + (ord(c) - 64);
+        }
+        return rv - 1;
     }
 
     #! Redacts a value to its shape: letters become \c x or \c X and digits \c 9
@@ -1150,20 +1268,20 @@ public class TabularProfiler {
     #! Returns True if the row holds totals or subtotals
     private static bool isTotalsRow(list<auto> row, list<string> row_types, int r, hash<string, string> formulas) {
         foreach auto cell in (row) {
-            string type = row_types[$#];
-            if (type == "empty") {
+            if (row_types[$#] == "empty") {
                 continue;
             }
             # the first cell with content labels the row
-            if (type == "string" && regex(cell, TotalsRegex, RE_Caseless | RE_Unicode)) {
+            if (isTotalsLabel(cell)) {
                 return True;
             }
             break;
         }
         int c = 0;
         foreach auto cell in (row) {
-            *string formula = formulas{columnLetter(c) + (r + 1)};
-            if (formula && regex(formula, TotalsFormulaRegex, RE_Caseless)) {
+            string ref = columnLetter(c) + (r + 1);
+            *string formula = formulas{ref};
+            if (formula && isTotalsFormula(ref, formula)) {
                 return True;
             }
             ++c;
