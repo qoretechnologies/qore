@@ -4139,6 +4139,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a closure created in a static method losing access to its class's private members with IR and tiered
+      execution once it had been called often: a call of a private constructor or private static method in the
+      closure raised \c RUNTIME-OVERLOAD-ERROR
+
     - Fixed @ref exec_mode_tiered "tiered execution" never compiling small functions and methods to native code when
       they were called directly, for example from top-level code: the IR interpreter runs such calls in the caller
       and did not count them, so a function called thousands of times stayed on the IR tier

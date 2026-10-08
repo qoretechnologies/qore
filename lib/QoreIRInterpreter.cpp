@@ -4246,6 +4246,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
         object_ctx.emplace(self, cb->getClassCtx());
     }
+    // A closure created in a static method has no captured object, but it keeps the lexical class context of the
+    // method, which gives it access to the class's private members (such as a private constructor), as with AST and
+    // JIT execution (see execClosureDirect() in JITRuntime.cpp)
+    OptionalClassOnlySubstitutionHelper class_ctx(self ? nullptr : cb->getClassCtx());
 
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
