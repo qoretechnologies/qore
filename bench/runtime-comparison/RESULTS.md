@@ -4878,3 +4878,104 @@ invalidation, not unconditional reload removal. Admission must validate the raw
 slot against the already-owned cache snapshot; references, weak/escaped/captured
 or written parameters and class body locals remain conservative. Keep runtime
 slot ownership and cleanup ordering intact.
+
+## Guarded class parameter caches (2026-10-08)
+
+Copyright (c) 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT.
+
+This is a correctness fix plus a guarded optimization, not a general call-speed
+win. Eligible unwritten strong class parameters retain their real runtime slots
+and existing entry owners. A compiler proof and matching raw-slot admission
+allow reuse only while a same-thread/per-Program reflective-write epoch remains
+unchanged. A write invalidates before reentrant assignment and permanently
+returns that invocation to normal reference evaluation and reload/cleanup rules.
+The epoch saturates rather than wraps. Optional, generic, captured, weak, written,
+reference and AST-visible parameters and class body locals remain excluded.
+
+The tests exposed an older correctness defect: the reload epoch was created
+lazily while lowering the first mutating call. A receiver read lowered earlier
+in a loop had no freshness check on later iterations. A subclass that replaces
+its caller's receiver therefore produced 6 rather than AST's 51. Required-class
+candidate loops now create the ordinary reload epoch eagerly, including with
+the new cache disabled. Single returning blocks and reload-exempt uses avoid
+unnecessary admission. This is why the old baseline is not a semantically
+equivalent no-cache control.
+
+Baseline: merged revision `d3bf25d52`; release library
+`de24963eb55b60f25f4d69af052a8c45d560bbd00c4e4f915e6932609de3d219`.
+Candidate: that revision plus the recorded compiler/runtime diff; release library
+`efcff6b1cdc1bf83e9d1659fbbf33f52a11df23497178cf24e139edae23cc033`.
+[Full evidence](results-class-param-cache-macos-arm64.json) retains source/library
+hashes, all four runs and all 925 windows, reproduction sources and 62 audit rows.
+Each run uses five forks, three warmups, five 500-ms samples and three startup
+samples. AOT is compiled separately for each variant. No timing overlaps
+builds, tests, profiles, disassembly or evidence validation.
+
+Median of fork means, ns/element; negative changes are improvements:
+
+|!Count|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|1024|polymorphic_call|68.24817|66.56062|-2.47%|No
+|1024|monomorphic_call|11.47280|11.99570|4.56%|No
+|1024|indirect_wide|8.39884|8.14906|-2.97%|Yes
+|1024|indirect_float|10.28466|10.27168|-0.13%|Yes
+|1024|arithmetic|2.29576|2.37540|3.47%|No
+|4096|polymorphic_call|67.43745|64.99998|-3.61%|No
+|4096|monomorphic_call|10.39114|10.78800|3.82%|No
+|4096|indirect_wide|7.22082|7.28043|0.83%|Yes
+|4096|indirect_float|9.04115|9.08305|0.46%|Yes
+|4096|arithmetic|1.31681|1.33781|1.59%|Yes
+|1024|method_call|2.55764|2.65697|3.88%|No
+|1024|direct_call|2.32010|2.38422|2.76%|No
+
+Polymorphic gains repeat at 2.47% and 3.61%, while monomorphic regressions repeat
+at 4.56% and 3.82%; neither target's fork ranges overlap. The added final-method
+run regresses 3.88%, and its direct-call control regresses 2.76%. Arithmetic
+regresses 3.47% at 1024 and 1.59% at 4096; wide/float control movement and all
+adverse samples are retained. Do not attribute every cross-library or
+cross-artifact change to the cache branch. Range overlap is not a significance
+test and ranges are not confidence intervals.
+
+A same-runtime, separately compiled comparison keeps the correctness fix in
+both variants. Only `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1` differs at compilation;
+`qore-aot-before` denotes disabled caching for this run, not the old library:
+
+|!Count|!Kernel|!Disabled cache|!Enabled cache|!Change|!Fork ranges overlap
+|1024|polymorphic_call|85.65964|65.98196|-22.97%|No
+|1024|monomorphic_call|29.81555|12.06324|-59.54%|No
+|1024|arithmetic|2.33726|2.35201|0.63%|No
+
+This saves 22.97% on polymorphic and 59.54% on monomorphic calls compared with the
+corrected ordinary-reload fallback, but the arithmetic control also changes
++0.63% with nonoverlapping ranges. The large on/off benefit mostly pays for the
+freshness checks missing from the old baseline; it is not a 60% speedup over
+the previous release.
+
+At 1024, measured Qore/Java ratios are 26.35x for polymorphic calls
+(66.56062/2.52573), 7.18x for monomorphic calls (11.99570/1.67006),
+4.88x for wide callbacks and 6.25x for floating callbacks. The added run gives
+3.00x for final methods (2.65697/0.88579) and 2.69x for direct calls
+(2.38422/0.88514). These are whole-loop costs, not isolated call latency.
+The existing inlining-policy caveat applies: Qore can inline the exact base
+method while Java's non-final targets use DONT_INLINE. Java parity is not reached.
+
+Release and debug each pass 26 selected files: 48 QUnit cases/3026 assertions
+plus six standalone scripts. The new 330-assertion matrix covers AST reference,
+O0/O3, stripped source, native EH, parallel compilation, full-context execution,
+compile-disabled caching, mutation to invalid/reference values, later reference
+changes, failed writes, destructor reentry, deletion, recursion and exclusions.
+The existing identity test covers cross-Program mutation and concurrent callers.
+All four benchmark modes and an older AOT artifact pass 315 independent
+reference records; 11 Python harness tests pass. Generated LLVM contains all
+three polymorphic parameter guards, including the formerly unchecked first read.
+
+Known limitations, not passes: the optional-class reflective replacement probe
+returns 101 in both old and candidate AOT versus AST's 110. Its complete source
+and outputs are retained in the evidence. IR/JIT/tiered uncaptured caller-frame
+reflection and zero-argument fast-call frame visibility have separately observed
+baseline limitations; neither is claimed fixed. Saturation and entry-admission
+mismatch are reviewed code invariants, not forcibly injected runtime tests.
+
+Next: fix the optional-parameter visibility gap, then profile the remaining
+polymorphic dispatch/context/ownership cost. Explore eliminating freshness work
+only under a complete non-reentrant loop proof; source-level lack of assignment
+alone is insufficient. Keep new baselines and report both gains and regressions.

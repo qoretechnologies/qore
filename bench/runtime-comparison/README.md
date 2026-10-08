@@ -126,6 +126,20 @@ some misses). The flag is sampled once and the helper ABI is unchanged. See
 `RESULTS.md` for both baseline comparisons and a same-library on/off comparison;
 do not attribute all cross-library variation to this branch.
 
+`QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1` at compilation disables guarded reuse of
+read-only required-class parameter caches. The default admits only unwritten,
+unescaped, noncaptured, nonweak, nongeneric parameters with an existing entry
+owner and an identical ordinary strong runtime slot. A per-thread/per-Program
+reflective-write epoch invalidates reuse before assignment can reenter Qore;
+after the first write, the invocation keeps ordinary reload/reference semantics.
+Runtime slots, owners, deferred cleanup, receiver validity and access checks remain.
+The control retains the loop-backedge freshness fix, so it measures the cache
+against a corrected fallback, not against the older unchecked first-receiver path.
+Compile both artifacts separately; newly compiled callers need the additive
+`qore_rt_get_class_param_epoch_aot_v1` runtime helper. Older artifacts still run
+but must be recompiled to receive the fix. See the measured regressions as well
+as gains in [RESULTS.md](RESULTS.md#guarded-class-parameter-caches-2026-10-08).
+
 The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
 Earlier class-check experiments used 16 bytes and also measured unaligned and
 128-byte alternatives. The dynamic-closure follow-up compares saved executables

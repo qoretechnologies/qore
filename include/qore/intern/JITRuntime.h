@@ -1421,6 +1421,16 @@ struct QoreAOTContext;
 //! Load from a local variable via AOT context slot
 uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Acquire the invalidation epoch for a compiler-proven read-only strong class parameter.
+//! @param ctx current AOT context
+//! @param idx parameter local slot
+//! @param cached entry value retained by the existing native cleanup owner
+//! @param rc borrowed live same-thread invocation context
+//! @return borrowed epoch address, or immutable UINT64_MAX sentinel if admission fails
+//! @note Never retain the address beyond this invocation/thread; no new object ownership.
+const uint64_t* qore_rt_get_class_param_epoch_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t cached, RuntimeConfig* rc);
+
 //! AOT variant of qore_rt_reload_local_if_stale().
 void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,

@@ -375,6 +375,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_raise_typed_foreach_nothing",
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
+    { "qore_rt_get_class_param_epoch_aot_v1", reinterpret_cast<void*>(&qore_rt_get_class_param_epoch_aot_v1) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
@@ -12391,6 +12392,20 @@ extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* c
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+extern "C" DLLEXPORT const uint64_t* qore_rt_get_class_param_epoch_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t cached, RuntimeConfig* rc) {
+    static const uint64_t rejected = std::numeric_limits<uint64_t>::max();
+    if (!ctx || idx < 0 || idx >= ctx->num_locals || !rc) {
+        return &rejected;
+    }
+    QoreValue value = fromBits(cached);
+    if (value.getType() != NT_OBJECT) {
+        return &rejected;
+    }
+    return RuntimeConfigNativeAccess::getStrongLocalMutationEpoch(*rc, ctx->locals[idx],
+        value.get<const QoreObject>());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, int32_t idx,

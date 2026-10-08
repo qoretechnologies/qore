@@ -345,6 +345,43 @@ including subclass overrides, without changing local storage or destruction
 order. No source-level write is not a sufficient cache-validity proof. Old AOT
 artifacts must be recompiled to receive this generated guard.
 
+Required-class AOT parameters can avoid repeated reload-helper calls only with
+both a compiler proof and live invalidation. Admission excludes written,
+captured, reference/weak, AST-visible, self/top-level, optional and parameterized
+class parameters, and requires the existing preinstantiated entry cleanup owner.
+The runtime additionally rejects absent, finalized, cleared, static, unassigned
+or non-strong slots and requires raw slot identity with the retained entry value.
+That identity check also protects against reentrant evaluation of another
+parameter before the snapshot. Class body locals remain runtime-backed.
+
+`ThreadLocalVariableData` owns a same-thread, per-Program 64-bit mutation epoch.
+Both reflective assignment APIs reach the target stack's `setVarValue()`, which
+increments the epoch before lvalue resolution or assignment can reenter Qore.
+It saturates at `UINT64_MAX`; this value permanently rejects cache admission.
+The versioned AOT helper obtains a borrowed counter address through the live
+`RuntimeConfig`, not a copied context or per-iteration TLS lookup. The address
+must not escape its invocation/thread; no reference ownership is transferred.
+An unchanged epoch skips the reload helper. Any write permanently revokes this
+invocation's entry-cache reuse. Each newly observed epoch forces freshness once,
+then preserves normal tracker/deferred cleanup and reference evaluation; a
+reference installed reflectively can subsequently change without a new write.
+
+Multi-block functions (and non-returning single blocks) create their ordinary
+reload epoch before lowering the first read: a read lowered before a call can
+execute after it through a loop backedge. This correctness fix also applies
+with `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1`; straight-line returning functions
+retain lazy setup, and admission is materialized only when a reload is needed.
+The new helper is additive; new artifacts require the matching runtime and old
+artifacts need recompilation to get the generated fix. Existing old artifacts
+were separately checked on the new runtime.
+
+The required-class loop regression is fixed, but optional-class reflective
+replacement still has a separately reproduced baseline cache-visibility defect.
+IR/JIT caller-frame reflection and zero-argument fast-frame visibility also have
+pre-existing limitations. These are not treated as passing or fixed by this
+optimization. See `results-class-param-cache-macos-arm64.json` for reproduction,
+scope, full samples and audit; the performance change has measured tradeoffs.
+
 The helper rechecks deletion, actual body identity/readiness, Program and debugger
 state before calling the companion. Missing admission/companion data requests
 effect-free generic fallback; no receiver or argument ownership is consumed.

@@ -49,6 +49,7 @@
  */
 class ExceptionSink;
 class ThreadData;
+class LocalVar;
 
 class RuntimeConfig::Impl {
 public:
@@ -125,6 +126,14 @@ public:
     DLLLOCAL static QoreParseOptions getParseOptions(const RuntimeConfig& rc);
     //! Whether this invocation has the variable stacks required by a native observable frame.
     DLLLOCAL static bool hasProgramData(const RuntimeConfig& rc);
+    //! Admit a native cache only for an unchanged, ordinary strong-object slot.
+    //! @param rc borrowed live same-thread invocation context
+    //! @param local compiler-proven unwritten, unescaped parameter
+    //! @param expected object retained by the existing native entry-load owner
+    //! @return same-thread stack epoch address, or an immutable UINT64_MAX sentinel on rejection
+    //! @note The address cannot outlive this invocation/thread. No ownership is transferred.
+    DLLLOCAL static const uint64_t* getStrongLocalMutationEpoch(const RuntimeConfig& rc,
+        const LocalVar* local, const QoreObject* expected);
     //! Preserve the normal stack guard without looking up TLS again.
     DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
     //! Perform the normal cancellation check using the live thread view, not TLS snapshots.

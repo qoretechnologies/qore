@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
+#include <limits>
 
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -1960,6 +1961,23 @@ RuntimeConfig* RuntimeConfigNativeAccess::tryGetCurrent() {
 
 bool RuntimeConfigNativeAccess::hasProgramData(const RuntimeConfig& rc) {
     return getThreadData(rc)->tlpd != nullptr;
+}
+
+const uint64_t* RuntimeConfigNativeAccess::getStrongLocalMutationEpoch(const RuntimeConfig& rc,
+        const LocalVar* local, const QoreObject* expected) {
+    static const uint64_t rejected = std::numeric_limits<uint64_t>::max();
+    ThreadData* td = getThreadData(rc);
+    if (!td->tlpd || !local || !expected || local->closureUse() || local->isSelf()
+            || local->isTopLevel()) {
+        return &rejected;
+    }
+    LocalVarValue* slot = td->tlpd->lvstack.findMaybe(local);
+    if (!slot || slot->finalized || slot->block_cleared || !slot->val.assigned
+            || slot->val.static_assignment || slot->val.getType() != NT_OBJECT
+            || slot->val.getValue().get<const QoreObject>() != expected) {
+        return &rejected;
+    }
+    return td->tlpd->lvstack.getReflectiveMutationEpoch();
 }
 
 QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {

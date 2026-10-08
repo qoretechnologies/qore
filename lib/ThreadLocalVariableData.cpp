@@ -33,6 +33,8 @@
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/LocalVar.h"
 
+#include <limits>
+
 int ThreadLocalVariableData::getFrame(int frame, Block*& w, int& p) {
     assert(frame >= 0);
 
@@ -108,6 +110,11 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
                 return 1;
 
             if (!strcmp(var.id, name)) {
+                // Publish invalidation before lvalue resolution/assignment can
+                // reenter Qore. Failed writes may conservatively invalidate too.
+                if (reflective_mutation_epoch != std::numeric_limits<uint64_t>::max()) {
+                    ++reflective_mutation_epoch;
+                }
                 LValueHelper lvh(xsink);
                 if (var.getLValue(lvh, false, nullptr, nullptr))
                     return -1;

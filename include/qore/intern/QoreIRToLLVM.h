@@ -314,6 +314,17 @@ private:
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
+    // Read-only class parameters retain their ordinary runtime slots and entry
+    // owners. A reflective write permanently revokes entry-cache reuse; the
+    // observed epoch also forces freshness when ordinary call effects do not.
+    struct AotClassParamCache {
+        llvm::Value* epoch_address;
+        llvm::Value* initial_epoch;
+        llvm::AllocaInst* observed_epoch;
+    };
+    std::unordered_set<const void*> aot_class_param_cache_candidates;
+    std::unordered_map<const void*, AotClassParamCache> aot_class_param_caches;
+
     using NativeConversionCache =
         std::unordered_map<const LocalVar*,
             std::pair<llvm::BasicBlock*, llvm::Value*>>;

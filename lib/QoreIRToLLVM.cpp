@@ -5159,6 +5159,35 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         return;
     }
 
+    // Materialize admission only for parameters that actually need a reload;
+    // a call-free body or a fully reload-exempt use pays no new entry cost.
+    if (aot_class_param_cache_candidates.count(key) && !aot_class_param_caches.count(key)) {
+        llvm::BasicBlock* entry = block_map.at(current_ir_func->blocks.front().get());
+        llvm::IRBuilder<> eb(entry, entry->getFirstInsertionPt());
+        if (!fast_runtime_config) {
+            auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
+                llvm::FunctionType::get(ptr_type, {}, false));
+            fast_runtime_config = eb.CreateCall(acquire, {}, "runtime_config");
+        } else {
+            // Context acquisition must dominate this use, including when a
+            // previous candidate or native callback already materialized it.
+            auto* acquire = llvm::cast<llvm::Instruction>(fast_runtime_config);
+            eb.SetInsertPoint(acquire->getParent(), std::next(acquire->getIterator()));
+        }
+        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+        auto* observed = ab.CreateAlloca(i64_type, nullptr, "class_param_observed_epoch");
+        llvm::Value* cached = eb.CreateLoad(i64_type, alloca_it->second, "class_param_entry");
+        auto acquire = module.getOrInsertFunction("qore_rt_get_class_param_epoch_aot_v1",
+            llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+        llvm::Value* address = eb.CreateCall(acquire,
+            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), cached, fast_runtime_config},
+            "class_param_epoch_address");
+        llvm::Value* initial = eb.CreateLoad(i64_type, address, "class_param_initial_epoch");
+        eb.CreateStore(initial, observed);
+        aot_class_param_caches.emplace(key, AotClassParamCache{address, initial, observed});
+    }
+
     auto tracker_it = local_reload_trackers.find(key);
     if (tracker_it == local_reload_trackers.end()) {
         llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
@@ -5187,6 +5216,31 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
 
     llvm::AllocaInst* valid_epoch = getOrCreateLocalValidEpoch(key, llvm_func);
     llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
+    llvm::BasicBlock* cache_continue = nullptr;
+    auto cache_it = aot_class_param_caches.find(key);
+    if (cache_it != aot_class_param_caches.end()) {
+        const AotClassParamCache& cache = cache_it->second;
+        llvm::Value* mutation_epoch = builder->CreateLoad(i64_type,
+            cache.epoch_address, "class_param_mutation_epoch");
+        auto* rejected_epoch = llvm::ConstantInt::get(i64_type,
+            std::numeric_limits<uint64_t>::max());
+        llvm::Value* admitted = builder->CreateICmpNE(cache.initial_epoch, rejected_epoch);
+        llvm::Value* unchanged = builder->CreateICmpEQ(mutation_epoch, cache.initial_epoch);
+        auto* reload = llvm::BasicBlock::Create(ctx, "class_param_reload", llvm_func);
+        cache_continue = llvm::BasicBlock::Create(ctx, "class_param_cached", llvm_func);
+        builder->CreateCondBr(builder->CreateAnd(admitted, unchanged), cache_continue, reload);
+        builder->SetInsertPoint(reload);
+
+        // A new reflective write must be observed even if an ordinary effect
+        // boundary did not invalidate this local. Force only once per observed
+        // mutation; repeated reads retain the existing tracker/cleanup timing.
+        llvm::Value* previous = builder->CreateLoad(i64_type, cache.observed_epoch);
+        llvm::Value* changed = builder->CreateICmpNE(mutation_epoch, previous);
+        llvm::Value* valid = builder->CreateLoad(i64_type, valid_epoch);
+        builder->CreateStore(builder->CreateSelect(changed,
+            builder->CreateXor(epoch, rejected_epoch), valid), valid_epoch);
+        builder->CreateStore(mutation_epoch, cache.observed_epoch);
+    }
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_reload_local_if_stale_aot",
                 llvm::FunctionType::get(void_type,
@@ -5208,6 +5262,10 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         builder->CreateCall(helper,
                 {var_as_ptr, alloca_it->second, tracker_it->second,
                  deferred_it->second, valid_epoch, epoch, xsink_arg});
+    }
+    if (cache_continue) {
+        builder->CreateBr(cache_continue);
+        builder->SetInsertPoint(cache_continue);
     }
 }
 
@@ -11149,6 +11207,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();
+    aot_class_param_cache_candidates.clear();
+    aot_class_param_caches.clear();
     stable_int_conversions.clear();
     stable_float_conversions.clear();
     nanboxed_values.clear();
@@ -12044,6 +12104,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 && ((QoreTypeInfo::isType(value_type, NT_INT)
                         && !QoreTypeInfo::getReturnEnum(value_type))
                     || QoreTypeInfo::isType(value_type, NT_FLOAT));
+            bool cache_class_param = parameter_locals.count(local) && !local->isTopLevel() && !local->isSelf()
+                && !owner_has_parse_reference && !closure_capture_counts.count(local)
+                && !weak_assigned_locals.count(key) && !QoreTypeInfo::isComplex(value_type)
+                && QoreTypeInfo::getUniqueReturnClass(value_type)
+                && preinstantiated_entry_cleanup_by_local.count(key)
+                && canReloadLocalFromRuntime(key);
             size_t stable_load_count = 0;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
@@ -12057,6 +12123,26 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (stable_scalar) {
                         stable_scalar_loads.emplace(load->result.id, local);
                     }
+                } else {
+                    cache_class_param = false;
+                }
+            }
+            if (cache_class_param) {
+                // A read lowered before the first mutating call can execute
+                // again after it through a backedge (or an out-of-order block).
+                // Ensure its reload check exists even with caching disabled.
+                // A single returning block retains lazy setup: its first
+                // read cannot follow a later instruction. Do not exempt a
+                // one-block self-loop or an incomplete/unknown terminator.
+                const auto& entry_instructions = func.blocks.front()->instructions;
+                bool straight_line_return = func.blocks.size() == 1 && !entry_instructions.empty()
+                    && entry_instructions.back()
+                    && entry_instructions.back()->opcode == QoreIROpcode::Return;
+                if (!straight_line_return) {
+                    getOrCreateLocalReloadEpoch(llvm_func);
+                }
+                if (!std::getenv("QORE_DISABLE_AOT_CLASS_PARAM_CACHE")) {
+                    aot_class_param_cache_candidates.insert(key);
                 }
             }
         }

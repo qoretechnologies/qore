@@ -45,7 +45,16 @@ private:
         int pos;        // position of the marker within the block
     };
     std::vector<FrameMarkerRecord> frame_marker_stack;
+    // Only the owning thread can inspect or mutate this Program's local stack.
+    // Reflective writes invalidate native read-only parameter caches. Saturate
+    // rather than wrap, so an old snapshot can never become valid again.
+    uint64_t reflective_mutation_epoch = 0;
 public:
+    //! @return borrowed same-thread epoch address, valid for this stack's lifetime
+    DLLLOCAL const uint64_t* getReflectiveMutationEpoch() const {
+        return &reflective_mutation_epoch;
+    }
+
     // clears and marks all variables as finalized on the stack
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
         ThreadLocalVariableData::iterator i(curr);
