@@ -826,6 +826,15 @@ an event that fires rarely.
 
 **Periodic fetch checks**: Check every 100 rows/iterations in tight loops to amortize overhead.
 
+**Hash key encoding scans**: `QoreHashKeyHelper` scans non-default ASCII-compatible
+encodings in chunks of at most 100 bytes and checks `qore_check_cancel()` before
+each chunk. A cancelled scan leaves the helper invalid with an empty key and
+propagates the exception instead of falling through to encoding conversion.
+Default-encoding keys and inline strings retain their constant-time selection.
+The internal invariant-only scan has no exception sink and does not deliver
+cancellation; runtime constructors always provide their sink. Cleanup deferral
+uses the same cancellation mechanism as other native operations.
+
 **Cancel callbacks**: Invoked synchronously from `requestInterrupt()`. Keep them fast and
 thread-safe. Use atomic pointers for handles that may become invalid.
 

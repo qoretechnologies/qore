@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
+    cancellation and program interruption at most every 100 bytes. Cleanup cancellation
+    deferral remains effective, and interrupted existence lookups set their output to false.
+
     The exception-aware C++ <tt>QoreHashNode</tt> existence APIs now set their
     <tt>exists</tt> output to false on key-conversion or member-validation errors.
 
