@@ -4303,11 +4303,11 @@ while (*binary chunk = input.read(65536)) {
       and searches, splits, and lines read with an end-of-line marker by
       @ref Qore::StreamReader::readLine() "StreamReader::readLine()" and
       @ref Qore::InputStreamLineIterator "InputStreamLineIterator" could match the second byte of a double-byte
-      character (ex: \c "|" in the Shift_JIS character \c "ポ", 0x83 0x7c).  Such strings now have the same characters as the same text in UTF-8.
-      Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932", \c "WINDOWS-31J") are now handled as
-      encodings that are not compatible with ASCII on every platform, since the bytes 0x5c and 0x7e are the yen sign
-      and overline in JIS X 0201 with some iconv implementations, and the second bytes of their double-byte
-      characters are ASCII characters
+      character (ex: \c "|" in the Shift_JIS character \c "ポ", 0x83 0x7c).  Such strings now have the same
+      characters as the same text in UTF-8.  Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932",
+      \c "WINDOWS-31J") are now handled as encodings that are not compatible with ASCII on every platform, since
+      their bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201 in Shift_JIS, and iconv implementations
+      and variants map them differently
 
     - %Qore now refuses a default character encoding that is not compatible with ASCII (such as UTF-16, UTF-32 or
       Shift_JIS), which could not work and crashed with UTF-16: given with \c --charset or \c QORE_CHARSET, %Qore
