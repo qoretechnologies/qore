@@ -5221,3 +5221,144 @@ on native continuation edges, retaining all fallback ownership and EH behavior.
 Then investigate narrower guarded admission for nullable exact-class targets
 without overwriting unresolved AST/IR target facts, and reduce observable frame
 setup without weakening stack readers, debugger behavior or Program boundaries.
+
+## Scalar cleanup guards for native method callers (2026-10-08)
+
+The existing late LLVM scalar-cleanup pass now also selects callers containing
+`qore_rt_try_method_int_unary_v1`. It previously selected only native callbacks.
+This is selection, not a new ownership rule: each cleanup still guards exact
+NOTHING, int48 and bool values, while heap numbers, opaque references and other
+owned values retain the original release helper, ordering and exception sink.
+Normal optimization runs first; only local instruction/CFG simplification runs
+afterward. Arbitrary functions are not selected.
+
+`QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1` suppresses method-based selection at
+compilation. Existing callback-selected functions, including mixed callers, stay
+eligible. `QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1` still disables the entire pass.
+Compile separate artifacts for comparisons; neither control changes runtime
+dispatch, native admission, coercion, frames or the ABI.
+
+### Identity and measurement
+
+Before: merged revision `b360e5a21bce122e9c66eba48ebca3fe867030fb`, which contains
+the preceding name-method optimization and `origin/develop` at
+`edf340a3ad28ce7bbc0d8d64c0e1de206bfdbf7d`. The upstream merge added unrelated
+DataFrame/Parquet and MongoDB fixes. Both merged builds passed the preceding
+28-file regression set and all four benchmark modes passed 330 reference checks
+before this experiment. Saved release library:
+`a6dda74687813883a643cb6c3c520752841d6784120c22adc902d486a8fc747a`.
+
+After: that revision plus compiler diff
+`51f520a9708143a1ba4a43d1f2293b724f4e640cdf4f1850628a8339c61a972c`,
+release library
+`1a7e7c5ef52a42533f55417d3ea040ef18aa8e5fae6357a94653704979f7f9e9`;
+debug validation library
+`f113f3940cd4d9237f4bc8600b1cb5e764417fb7a50ae263062d828030a97efa`.
+
+M4 Pro / macOS arm64; Java Temurin 25.0.2, JMH 1.37. Five randomized forks,
+three warmups, five 500 ms windows per job and three startup samples per mode.
+All **1100 measured windows** are retained; no timing overlapped builds, tests,
+profiles, disassembly or evidence validation. Tables show medians of fork means
+in ns/element, not isolated call latency. Negative changes mean lower time.
+The JSON evidence `results-method-cleanup-macos-arm64.json` contains samples,
+exact identities, reproduction, compiler-toggle source, tests, optimized LLVM,
+code-size/profile evidence and all 62 audit classifications.
+
+### Before/after and Java, count 1024
+
+Run `run-bnj70_ey`, seed 810485: 120 jobs / 600 windows.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap|!Java ns|!After / Java
+|optional_method_call|25.687|20.813|-18.97%|no|1.678|12.40x
+|polymorphic_call|66.310|55.425|-16.41%|no|2.537|21.85x
+|monomorphic_call|12.226|7.256|-40.65%|no|1.674|4.34x
+|method_call|2.679|2.707|+1.05%|yes|0.889|3.05x
+|indirect_wide|8.467|8.316|-1.78%|yes|1.680|4.95x
+|arithmetic|2.398|2.433|+1.43%|yes|0.889|2.74x
+|direct_call|2.423|2.412|-0.45%|yes|0.891|2.71x
+|dispatch_control|2.555|2.579|+0.96%|no|0.967|2.67x
+
+Nullable, polymorphic and monomorphic gains have non-overlapping ranges.
+The **+0.96% dispatch-control regression also has non-overlapping ranges** and
+is retained. Other small control changes overlap. Exact-base/final Qore paths
+can inline arithmetic while Java retains selected calls: monomorphic 4.34x
+and final-method 3.05x are workload ratios with different inlining policies,
+not retained-call parity. Nullable remains **12.40x**, polymorphic **21.85x**
+the Java workload. No new IR speedup is claimed.
+
+### Longer loop, count 4096
+
+Run `run-udn4hvpx`, seed 810486: 40 jobs / 200 windows.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap
+|optional_method_call|24.356|19.417|-20.28%|no
+|polymorphic_call|64.616|53.438|-17.30%|no
+|monomorphic_call|10.821|6.185|-42.84%|no
+|arithmetic|1.321|1.327|+0.46%|yes
+
+All three call-workload gains repeat with non-overlapping ranges. Arithmetic
+moves +0.46% with overlap.
+
+### Same-runtime compiler control, count 1024
+
+Run `method-cleanup-toggle-rwl1rzdk`, seed 810487: 60 jobs / 300 windows.
+Both sides use the candidate runtime. “Before” means the method cleanup guard
+is disabled at compilation, not an old runtime; the flag is absent at execution.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap
+|optional_method_call|25.757|20.608|-19.99%|no
+|polymorphic_call|65.699|55.751|-15.14%|no
+|monomorphic_call|12.370|7.362|-40.49%|no
+|arithmetic|2.387|2.376|-0.44%|yes
+|direct_call|2.384|2.401|+0.72%|yes
+|dispatch_control|2.553|2.568|+0.59%|yes
+
+The compiler toggle reproduces all three gains. Dispatch control is +0.59%
+with overlap; that does not erase the adverse old/new result or prove neutrality.
+Direct-call and arithmetic controls overlap too. Accepting this change trades
+the documented small control movement and code growth for repeatable gains
+in the selected call workloads.
+
+### Code size, compilation, startup and validation
+
+The benchmark executable's `__text` section grows from **106116 to 110944 bytes**
+(+4828 bytes, **4.55%**). Guard statistics grow from 174 to 288. Optional-method
+optimized LLVM expands from 319 to 734 lines; both versions retain 27 static
+decref call sites, but the new guards bypass them for exact immediate values.
+Call-site counts alone do not describe dynamic work. Segment alignment masks
+the text growth in whole-executable size; do not interpret file size as no growth.
+
+Descriptive before/after compilation times in ms: 363.85/366.79 (main),
+345.58/355.91 (4096), 342.43/357.69 (toggle). These are single compilations,
+not a compile-time performance study. Startup medians in ms:
+31.50/32.37 (main; Java 23.98), 30.17/28.99 (4096), 29.33/29.57 (toggle).
+Each pair's startup ranges overlap; filesystem caches are uncontrolled.
+
+Release and debug each pass 28 selected files: 51 QUnit cases / 3844 assertions
+in 22 files, plus six standalone scripts. The method fixture now verifies that
+108 owned-object returns rejected by an int assignment are all destroyed.
+Its expanded driver passes two cases / 546 assertions per build and checks
+method/global cleanup-disabled controls, positive/nonempty guard selection,
+AST/IR/JIT/tiered, stripped O0/O3, C++ EH, parallel compilation, native-path
+exclusions, arbitrary fallback returns, Program boundaries, debugger attachment
+and concurrent frame readers. The expanded ownership fixture also passed saved
+baseline AST/IR and stripped O3 before enabling this change. Existing mixed-scalar,
+opaque-reference, local-lifetime and freshness regressions pass.
+
+Six benchmark modes each pass 330 independent records; the saved AOT artifact
+passes 330 records on the candidate, and all 11 harness tests pass. Audit:
+**18 Pass, 44 N/A, 0 Fail**; see `FOLLOWUP-AUDIT.md`. Existing IR/JIT full
+caller-frame reflection and zero-argument fast-frame limitations remain outside
+scope, not newly passing.
+
+A separate five-second candidate profile has 3828 main-thread samples (idle
+signal thread excluded). Top self counts: guarded native helper 1056, native
+frame construction 953, frame destruction 517, caller 505, value type checks
+270; value discard is only 12. This supports cleanup leaving the hot path,
+but sample counts are attribution, not latency or a measured percentage gain.
+
+Next focus: full-key native admission and observable frame construction/destruction.
+Investigate whether immutable checked-entry facts can remove redundant work,
+and whether compiler-proven receiver/native-body facts permit narrower guarded
+entrypoints. Keep mutable Program/body/debugger/receiver guards, stack checks
+and concurrent frame-reader semantics; do not simply omit observable frames.

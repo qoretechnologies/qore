@@ -474,14 +474,22 @@ typed callable declarations alone are not accepted as proof of actual results.
 
 `QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1` at compilation disables the late
 LLVM cleanup guards for immediate int48, bool and NOTHING values in AOT functions
-containing typed native callback calls. Other functions are unchanged: broad
-guard insertion regressed direct-call and dispatch-control loops. The enabled
+containing typed native callback or unary-integer native method calls. Other
+functions are unchanged: broad guard insertion regressed direct-call and
+dispatch-control loops. The enabled
 pass runs after the normal optimizer and only simplifies locally afterward;
 inserting these guards before the full pipeline caused excessive code growth.
 Opaque references, heap numbers and other representations retain the original
 release operation. `QORE_IR_OPT_STATS=1` reports the number of inserted guards.
 This trades additional native code for fewer runtime cleanup calls; compare
 code size and compilation time as well as steady-state performance.
+
+`QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1` disables only method-caller selection
+for this pass. Existing callback-selected functions remain eligible, including
+functions with both call kinds. It is a compile-only control, requiring separately
+compiled artifacts. No method dispatch/admission or result-coercion guard changes.
+Owned fallback values are still released at the original point; only exact
+NOTHING, int48 and bool representations skip the runtime cleanup call.
 
 `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1` at compilation selects legacy TLS
 polling for generated JIT/AOT loops. The enabled path acquires a nullable,

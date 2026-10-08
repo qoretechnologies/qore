@@ -1333,7 +1333,7 @@ size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
 static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& error,
         size_t& guards) {
     std::vector<llvm::CallInst*> calls;
-    bool has_native_scalar_callback = false;
+    bool has_native_scalar_call = false;
     size_t checked = 0;
     for (llvm::BasicBlock& block : *function) {
         for (llvm::Instruction& inst : block) {
@@ -1347,17 +1347,20 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
             }
             llvm::StringRef name = call->getCalledFunction()->getName();
             if (name.starts_with("qore_rt_try_funcref_")) {
-                has_native_scalar_callback = true;
+                has_native_scalar_call = true;
+            } else if (name == "qore_rt_try_method_int_unary_v1"
+                    && !std::getenv("QORE_DISABLE_LLVM_METHOD_DECREF_GUARD")) {
+                has_native_scalar_call = true;
             }
             if (name == "qore_rt_decref" || name == "qore_rt_decref_nothrow") {
                 calls.push_back(call);
             }
         }
     }
-    // Native scalar callback results merge with owned generic fallbacks, leaving
+    // Native scalar callback/method results merge with owned generic fallbacks, leaving
     // cleanup traffic on the common scalar edge. Target those callers: guarding
     // arbitrary functions grew cold cleanup code and regressed direct-call loops.
-    if (!has_native_scalar_callback) {
+    if (!has_native_scalar_call) {
         return true;
     }
     // Reverse order avoids repeatedly moving a long block suffix when it contains many cleanup calls.

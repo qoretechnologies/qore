@@ -16,6 +16,13 @@ class NameNativeNothing inherits NameNativeBase {
 class NameNativeString inherits NameNativeBase {
     string next(int value) { return "not an integer"; }
 }
+thread_local int nameNativeDestroyed = 0;
+class NameNativeOwned {
+    destructor() { ++nameNativeDestroyed; }
+}
+class NameNativeObject inherits NameNativeBase {
+    object next(int value) { return new NameNativeOwned(); }
+}
 class NameNativeThrow inherits NameNativeBase {
     int next(int value) { throw "NAME-METHOD-ERROR", "fallback"; }
 }
@@ -83,6 +90,7 @@ NameNativeBase base();
 NameNativeDerived derived();
 NameNativeNothing absent();
 NameNativeString text();
+NameNativeObject owned();
 NameNativeThrow throwing();
 NameNativeSelf self();
 NameNativeOverload overload();
@@ -104,6 +112,7 @@ foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
                 || nameNativeDynamic(gate, value, 16) != value + 368
                 || nameNativeInvoke(absent, value, 16) != "RUNTIME-TYPE-ERROR"
                 || nameNativeInvoke(text, value, 16) != "RUNTIME-TYPE-ERROR"
+                || nameNativeInvoke(owned, value, 16) != "RUNTIME-TYPE-ERROR"
                 || nameNativeInvoke(throwing, value, 16) != "NAME-METHOD-ERROR"
                 || nameNativeInvoke(NOTHING, value, 16) != "PSEUDO-METHOD-DOES-NOT-EXIST"
                 || nameNativeEscapes(text, value) != "not an integer"
@@ -114,7 +123,8 @@ foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
         }
     }
 }
-if (nameNativeDeleted(new NameNativeDerived()) != "OBJECT-ALREADY-DELETED"
+if (nameNativeDestroyed != 108
+        || nameNativeDeleted(new NameNativeDerived()) != "OBJECT-ALREADY-DELETED"
         || nameNativeAccess(hidden) != "METHOD-IS-PRIVATE"
         || nameNativeBoxedArg(derived, "wrong") != "RUNTIME-OVERLOAD-ERROR"
         || nameNativeOptionalArg(derived, NOTHING) != "RUNTIME-OVERLOAD-ERROR") {

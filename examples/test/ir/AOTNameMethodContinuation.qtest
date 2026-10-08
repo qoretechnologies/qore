@@ -38,6 +38,8 @@ class NameMethodContinuationTest inherits QUnit::Test {
         }
         TmpDir dir("qore-name-method-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1 ",
+                "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ",
                 "QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1 ",
                 "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                 "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
@@ -45,8 +47,16 @@ class NameMethodContinuationTest inherits QUnit::Test {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
-                    prefix + "QORE_DUMP_LLVM_IR=1 ");
-                bool enabled = !prefix.startsWith("QORE_DISABLE_");
+                    prefix + "QORE_DUMP_LLVM_IR=1 QORE_IR_OPT_STATS=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_");
+                if (prefix == "" || prefix == "QORE_AOT_EH=1 ") {
+                    assertRegex("scalar-cleanup-guards=[1-9][0-9]*", ir,
+                        "method-only callers receive cleanup guards");
+                } else if (prefix == "QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1 ") {
+                    assertRegex("scalar-cleanup-guards=0", ir, "method guard disabled");
+                } else if (prefix == "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ") {
+                    assertFalse(regex(ir, "scalar-cleanup-guards="), "all guards disabled");
+                }
                 foreach string name in (("nameNativeLoop", "nameNativeDynamic", "nameNativeInvoke")) {
                     *list<*string> body = regex_extract(ir,
                         "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");

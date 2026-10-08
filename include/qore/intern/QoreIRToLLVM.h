@@ -73,7 +73,7 @@ public:
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
 
-    //! Guard immediate-scalar cleanup in AOT native callback callers after the main LLVM pipeline.
+    //! Guard immediate-scalar cleanup in AOT native callback/method callers after the main LLVM pipeline.
     //! @param module lowered module with finalized debug information
     //! @param error receives a cancellation or LLVM-verification diagnostic on failure
     //! @return false on cancellation or invalid generated IR; error receives the diagnostic
