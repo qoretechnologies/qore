@@ -116,8 +116,8 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         return 0;
     }
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-    int64 remaining_timeout = tl_timeout_ms;
+    // the deadline for a positive timeout; a negative timeout means no timeout
+    int64 deadline_us = tl_timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(tl_timeout_ms) * 1000 : 0;
 
     while (tid != -1) {
         // Check for cancellation or program interrupt
@@ -125,37 +125,32 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
             return -2;  // -2 indicates interrupt
         }
 
-        ++waiting;
-        if (tl_timeout_ms != 0) {
-            // Non-zero timeout: always poll at intervals for cancel/interrupt checking
-            int effective_timeout;
-            if (tl_timeout_ms < 0 || remaining_timeout > poll_interval) {
-                effective_timeout = poll_interval;
-            } else {
-                effective_timeout = remaining_timeout;
-            }
-
-            int rc = cond.wait(&ds_lock, effective_timeout);
-            --waiting;
-            if (!rc) {
-                continue;
-            }
-
-            // Timeout occurred - check if real timeout expired
-            if (tl_timeout_ms > 0) {
-                remaining_timeout -= effective_timeout;
-                if (remaining_timeout <= 0) {
-                    printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
-                    return -1;
-                }
-            }
-            // For infinite timeout, continue polling
-        } else {
+        if (!tl_timeout_ms) {
             // Zero timeout means try once without waiting - fail immediately if lock not available
             printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
-            --waiting;
             return -1;
         }
+
+        int64 wait_ms = -1;
+        if (tl_timeout_ms > 0) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
+                return -1;
+            }
+            wait_ms = (remaining_us + 999) / 1000;
+        }
+
+        ++waiting;
+        if (xsink) {
+            // a cancellation request or program interrupt wakes the wait at once; the check at the top of the
+            // loop raises it
+            cond.waitWithInterrupt(&ds_lock, wait_ms);
+        } else {
+            // without an exception sink this is not a cancellation point
+            cond.wait2(&ds_lock, wait_ms);
+        }
+        --waiting;
     }
 
     tid = ctid;

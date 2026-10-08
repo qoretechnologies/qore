@@ -47,6 +47,11 @@
     @ref Qore::Program "Program" is interrupted, instead of within 100 ms, as do the retries of
     @ref Qore::File::lockBlocking() "File::lockBlocking()".
 
+    @ref Qore::StreamPipe "StreamPipe" reads, writes and closes, waits for a @ref Qore::SQL::Datasource "Datasource"
+    transaction lock, and @ref Qore::channel_select() "channel_select()" now end as soon as the thread is
+    cancelled or its @ref Qore::Program "Program" is interrupted; \c channel_select() with a timeout previously
+    noticed the request only when the timeout expired.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.

@@ -75,10 +75,7 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
     printd(1, "PipeInputStream::read()\n");
     AutoLocker lock(pipe->mutex);
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-
     printd(1, "read - lock acquired, limit: " QLLD "\n", limit);
-    int64 remaining_timeout = pipe->timeout;
     while (true) {
         // Check for cancellation or program interrupt
         if (qore_check_cancel(xsink, "pipe read")) {
@@ -105,27 +102,13 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
         }
 
         printd(1, "read - buffer empty, before wait\n");
-        // Always poll at intervals for cancel/interrupt checking
-        int effective_timeout;
-        if (pipe->timeout < 0) {
-            effective_timeout = poll_interval;
-        } else {
-            effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-        }
-
-        int rc = pipe->readCondVar.wait2(pipe->mutex, effective_timeout);
+        // a single wait for the pipe's timeout (none if negative): a cancellation request or program
+        // interrupt wakes it at once, and the check at the top of the loop then raises it
+        int rc = pipe->readCondVar.waitWithInterrupt(pipe->mutex, pipe->timeout);
         printd(1, "read - buffer empty, after wait, rc: %d\n", rc);
-
-        if (rc != 0) {
-            // Timeout occurred - check if real timeout expired
-            if (pipe->timeout >= 0) {
-                remaining_timeout -= effective_timeout;
-                if (remaining_timeout <= 0) {
-                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-                    return 0;
-                }
-            }
-            // For infinite timeout, continue polling
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
+            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+            return 0;
         }
     }
 
@@ -152,10 +135,7 @@ int64 PipeInputStream::peek(ExceptionSink *xsink) {
     printd(1, "PipeInputStream::peek()\n");
     AutoLocker lock(pipe->mutex);
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-
     printd(1, "peek - lock acquired\n");
-    int64 remaining_timeout = pipe->timeout;
     while (true) {
         // Check for cancellation or program interrupt
         if (qore_check_cancel(xsink, "pipe peek")) {
@@ -181,26 +161,13 @@ int64 PipeInputStream::peek(ExceptionSink *xsink) {
         }
 
         printd(1, "peek - buffer empty, before wait\n");
-        // Always poll at intervals for cancel/interrupt checking
-        int effective_timeout;
-        if (pipe->timeout < 0) {
-            effective_timeout = poll_interval;
-        } else {
-            effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-        }
-
-        int rc = pipe->readCondVar.wait2(pipe->mutex, effective_timeout);
+        // a single wait for the pipe's timeout (none if negative): a cancellation request or program
+        // interrupt wakes it at once, and the check at the top of the loop then raises it
+        int rc = pipe->readCondVar.waitWithInterrupt(pipe->mutex, pipe->timeout);
         printd(1, "peek - buffer empty, after wait, rc: %d\n", rc);
-        if (rc != 0) {
-            // Timeout occurred - check if real timeout expired
-            if (pipe->timeout >= 0) {
-                remaining_timeout -= effective_timeout;
-                if (remaining_timeout <= 0) {
-                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-                    return -2;
-                }
-            }
-            // For infinite timeout, continue polling
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
+            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+            return -2;
         }
     }
 
@@ -220,8 +187,6 @@ void PipeOutputStream::close(ExceptionSink* xsink) {
     printd(1, "PipeOutputStream::close()\n");
     AutoLocker lock(pipe->mutex);
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-
     if (pipe->outputClosed) {
         xsink->raiseException("OUTPUT-STREAM-CLOSED-ERROR", "this PipeOutputStream object has been already closed");
         return;
@@ -230,7 +195,6 @@ void PipeOutputStream::close(ExceptionSink* xsink) {
     pipe->readCondVar.broadcast();
     pipe->writeCondVar.broadcast();
 
-    int64 remaining_timeout = pipe->timeout;
     while (!pipe->closeFinished) {
         // Check for cancellation or program interrupt
         if (qore_check_cancel(xsink, "pipe close")) {
@@ -242,25 +206,12 @@ void PipeOutputStream::close(ExceptionSink* xsink) {
             return;
         }
 
-        // Always poll at intervals for cancel/interrupt checking
-        int effective_timeout;
-        if (pipe->timeout < 0) {
-            effective_timeout = poll_interval;
-        } else {
-            effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-        }
-
-        int rc = pipe->writeCondVar.wait2(pipe->mutex, effective_timeout);
-        if (rc != 0) {
-            // Timeout occurred - check if real timeout expired
-            if (pipe->timeout >= 0) {
-                remaining_timeout -= effective_timeout;
-                if (remaining_timeout <= 0) {
-                    xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-                    return;
-                }
-            }
-            // For infinite timeout, continue polling
+        // a single wait for the pipe's timeout (none if negative): a cancellation request or program
+        // interrupt wakes it at once, and the check at the top of the loop then raises it
+        int rc = pipe->writeCondVar.waitWithInterrupt(pipe->mutex, pipe->timeout);
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
+            xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+            return;
         }
     }
 }
@@ -270,11 +221,8 @@ void PipeOutputStream::write(const void *ptr, int64 toWrite, ExceptionSink *xsin
     printd(1, "PipeOutputStream::write()\n");
     AutoLocker lock(pipe->mutex);
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-
     printd(1, "write - lock acquired, toWrite: " QLLD "\n", toWrite);
     const uint8_t *src = static_cast<const uint8_t *>(ptr);
-    int64 remaining_timeout = pipe->timeout;
     while (toWrite > 0) {
         // Check for cancellation or program interrupt
         if (qore_check_cancel(xsink, "pipe write")) {
@@ -310,26 +258,13 @@ void PipeOutputStream::write(const void *ptr, int64 toWrite, ExceptionSink *xsin
             pipe->readCondVar.broadcast();
         } else {
             printd(1, "write - buffer full, before wait\n");
-            // Always poll at intervals for cancel/interrupt checking
-            int effective_timeout;
-            if (pipe->timeout < 0) {
-                effective_timeout = poll_interval;
-            } else {
-                effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-            }
-
-            int rc = pipe->writeCondVar.wait2(pipe->mutex, effective_timeout);
+            // a single wait for the pipe's timeout (none if negative): a cancellation request or program
+            // interrupt wakes it at once, and the check at the top of the loop then raises it
+            int rc = pipe->writeCondVar.waitWithInterrupt(pipe->mutex, pipe->timeout);
             printd(1, "write - buffer full, after wait, rc: %d\n", rc);
-            if (rc != 0) {
-                // Timeout occurred - check if real timeout expired
-                if (pipe->timeout >= 0) {
-                    remaining_timeout -= effective_timeout;
-                    if (remaining_timeout <= 0) {
-                        xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
-                        return;
-                    }
-                }
-                // For infinite timeout, continue polling
+            if (rc == QORE_COND_RESULT_TIMEOUT) {
+                xsink->raiseException("TIMEOUT-ERROR", "operation timed out");
+                return;
             }
         }
     }

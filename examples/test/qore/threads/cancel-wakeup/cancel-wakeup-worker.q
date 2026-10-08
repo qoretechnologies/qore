@@ -145,6 +145,12 @@ run_case("pipe read", auto sub () {
     }, sub () { wait_fifo(fifo); });
 }
 
+# a StreamPipe read: nothing is ever written to the pipe
+run_case("stream pipe read", auto sub () {
+    StreamPipe sp();
+    return sp.getInputStream().read(1);
+});
+
 # a socket read and a TLS socket read: the peer never sends anything; the connections are made before the case runs
 {
     list<hash<auto>> pairs = map socket_pair(False), xrange(Trials);
@@ -167,6 +173,35 @@ run_case("sleep", auto sub () {
 run_case("usleep", auto sub () {
     return usleep(60s);
 });
+
+# a channel select wait, with and without a timeout
+{
+    Channel ch();
+    run_case("channel select", auto sub () {
+        return channel_select(({"channel": ch, "op": "recv"},));
+    });
+    run_case("channel select timeout", auto sub () {
+        return channel_select(({"channel": ch, "op": "recv"},), 60s);
+    });
+}
+
+# a Datasource transaction lock wait: this thread holds the lock for the whole case
+{
+    *Datasource ds;
+    try {
+        ds = new Datasource("dbitest:u/p@db");
+        ds.setAutoCommit(False);
+        ds.open();
+        ds.beginTransaction();
+    } catch (hash<ExceptionInfo> ex) {
+        printf("datasource lock|SKIP|0|%s\n", ex.err);
+        remove ds;
+    }
+    if (ds) {
+        run_case("datasource lock", auto sub () { return ds.exec("select 1"); });
+        ds.rollback();
+    }
+}
 
 # a program interrupt during a backquote read in a sandboxed Program
 {
