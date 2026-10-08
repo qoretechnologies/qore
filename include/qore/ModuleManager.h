@@ -48,11 +48,20 @@
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
 
-//! Native ABI revision for code generated into AOT Qore modules.
+//! Revision of the module descriptor protocol of AOT Qore modules.
 /** This is separate from the binary module API: ordinary C/C++ modules do not
-    use it. Increment it whenever generated AOT code can no longer execute
-    safely against an older libqore runtime contract. */
-#define QORE_AOT_MODULE_ABI_VERSION 1
+    use it.  It versions how an AOT module describes itself to the loader, not
+    the compatibility of its generated code: since revision 2 every AOT module
+    also records the AOT runtime identity of the libqore that compiled it
+    (QoreModuleInfo::aot_runtime_identity), and the loader refuses a module
+    whose identity differs from its own.  The identity is derived automatically
+    from the libqore sources that define the generated-code contract, so it
+    changes by itself when that contract can change; this revision only needs
+    to be incremented when the descriptor protocol itself changes.
+
+    @since %Qore 3.0: revision 2 adds the AOT runtime identity
+*/
+#define QORE_AOT_MODULE_ABI_VERSION 2
 
 //! element of qore_mod_api_list;
 struct qore_mod_api_compat_s {
@@ -151,6 +160,13 @@ struct QoreModuleInfo {
 
     //! native generated-code ABI revision for an AOT-compiled Qore module
     unsigned aot_abi_version = 0;
+
+    //! the AOT runtime identity of the libqore that compiled an AOT-compiled Qore module
+    /** Empty for ordinary binary modules and for AOT modules compiled before the identity was recorded.
+
+        @since %Qore 3.0
+    */
+    std::string aot_runtime_identity;
 };
 
 //! Module description function

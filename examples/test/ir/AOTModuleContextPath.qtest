@@ -23,6 +23,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
         addTestCase("AOT module init uses runtime qmod path", \moduleInitUsesRuntimeQmodPath());
         addTestCase("AOT module rejects incompatible native ABI",
             \moduleRejectsIncompatibleNativeAbi());
+        addTestCase("AOT module rejects a different runtime identity",
+            \moduleRejectsDifferentRuntimeIdentity());
         addTestCase("AOT module init can inspect module hash", \moduleInitCanInspectModuleHash());
         addTestCase("AOT module init can load another module", \moduleInitCanLoadAnotherModule());
         addTestCase("AOT module-qualified static variable resolves as a class member",
@@ -112,6 +114,88 @@ printf(\"%d\\n\", AOTIncompatibleNativeAbi::value());
         assertTrue(is_file(qmod_path), "compiled current-ABI AOT module: " + compile_out);
         assertEq("42\nEXIT=0\n", runQoreScriptWithTimeout(module_dir, script_path),
             "current native AOT module ABI must load normally");
+    }
+
+    moduleRejectsDifferentRuntimeIdentity() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string source_dir = tmp_dir + "/src";
+        string module_dir = tmp_dir + "/modules";
+        mkdir(source_dir);
+        mkdir(module_dir);
+        string qm_path = source_dir + "/AOTRuntimeIdentity.qm";
+        string qmod_path = module_dir + "/AOTRuntimeIdentity.qmod";
+        string script_path = tmp_dir + "/run.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTRuntimeIdentity {
+    version = \"1.0\";
+    desc = \"AOT runtime identity test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTRuntimeIdentity {
+    public int sub value() {
+        return 42;
+    }
+}
+");
+        f.close();
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTRuntimeIdentity
+
+printf(\"%d\\n\", AOTRuntimeIdentity::value());
+");
+        f.close();
+
+        # a module compiled by a libqore with a different AOT runtime identity
+        string other_identity = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        string compile_out = backquote(sprintf(
+            "QORE_AOT_TEST_RUNTIME_IDENTITY=%s QORE_LIBDIR=%s LD_LIBRARY_PATH=%s "
+                + "%s -b --compile-module --output %s %s 2>&1",
+            other_identity, libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled foreign-identity AOT module: " + compile_out);
+
+        # is refused before any of its code runs, naming the module, both identities and the remedy
+        string out = runQoreScriptWithTimeout(module_dir, script_path);
+        assertRegex("LOAD-MODULE-ERROR", out);
+        assertTrue(out.find("AOT module '" + qmod_path + "': feature 'AOTRuntimeIdentity': the module was compiled "
+            "for AOT runtime identity '" + other_identity + "'") != -1, "the error names the module: " + out);
+        assertRegex("rebuild the module with the qcc of this Qore installation", out);
+        assertRegex("EXIT=2", out);
+        assertFalse(out =~ /^42$/m, "the refused module's code must not run: " + out);
+        *list<*string> runtime_identity = (out =~ x/has AOT runtime identity '([0-9a-f]{64})'/);
+        assertEq(1, runtime_identity.size(), "the error names the 64-digit runtime identity: " + out);
+        assertNeq(other_identity, runtime_identity[0]);
+
+        # qcc --version reports the same runtime identity
+        string qcc_bin = dirname(qore_bin) + "/qcc";
+        if (is_executable(qcc_bin)) {
+            string version_out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s --version 2>&1",
+                libqore_dir, libqore_dir, qcc_bin));
+            assertRegex("AOT runtime identity: " + runtime_identity[0], version_out);
+        }
+
+        # with the module source beside the refused artifact, the source module is loaded instead
+        copy_file(qm_path, module_dir + "/AOTRuntimeIdentity.qm");
+        out = runQoreScriptWithTimeout(module_dir, script_path);
+        assertTrue(out =~ /^42$/m, "the source module is loaded instead of the refused artifact: " + out);
+        assertRegex("EXIT=0", out);
+        unlink(module_dir + "/AOTRuntimeIdentity.qm");
+
+        # the same module compiled by this libqore loads
+        compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled current-identity AOT module: " + compile_out);
+        assertEq("42\nEXIT=0\n", runQoreScriptWithTimeout(module_dir, script_path),
+            "an AOT module compiled by this runtime must load normally");
     }
 
     moduleInitUsesRuntimeQmodPath() {

@@ -58,6 +58,9 @@ class AotBinarySymbolResolutionTest inherits QUnit::Test {
 
 extern \"C\" void qore_missing_lazy_symbol_for_aot_loader_test();
 
+// defined in libqore; not part of the public API
+extern \"C\" const char* qore_aot_runtime_identity;
+
 extern \"C\" DLLEXPORT void LazyAotResolveFail_call_missing() {
     qore_missing_lazy_symbol_for_aot_loader_test();
 }
@@ -86,6 +89,8 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
     mod_info.license_str = \"MIT\";
     mod_info.is_aot = true;
     mod_info.aot_abi_version = QORE_AOT_MODULE_ABI_VERSION;
+    // an AOT module records the AOT runtime identity of the libqore it was built for
+    mod_info.aot_runtime_identity = qore_aot_runtime_identity;
 }
 ");
         f.close();
@@ -137,6 +142,9 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
 #include <cstdio>
 #include <cstdlib>
 
+// defined in libqore; not part of the public API
+extern \"C\" const char* qore_aot_runtime_identity;
+
 struct AotLoadCounter {
     AotLoadCounter() {
         const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
@@ -177,6 +185,8 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
     mod_info.license_str = \"MIT\";
     mod_info.is_aot = true;
     mod_info.aot_abi_version = QORE_AOT_MODULE_ABI_VERSION;
+    // an AOT module records the AOT runtime identity of the libqore it was built for
+    mod_info.aot_runtime_identity = qore_aot_runtime_identity;
 }
 ");
         f.close();

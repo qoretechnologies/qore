@@ -6042,6 +6042,31 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
     using ExpressionMap = std::unordered_map<QoreIRScalarExpressionKey, QoreIRValue,
         QoreIRScalarExpressionKeyHash>;
     using LoadMap = std::unordered_map<const LocalVar*, QoreIRValue>;
+    // Native IR scalars are QoreValues in the interpreter: large integers and
+    // tag-colliding doubles own boxed nodes. Dominance proves execution, not
+    // lifetime across DiscardTemps. Only values proven inline may cross a
+    // basic-block boundary; within a block, boxed candidates expire at a drain.
+    std::unordered_set<uint32_t> inline_scalars;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR scalar CSE lifetime analysis")) {
+                return {};
+            }
+            if (!inst->result.isValid()) {
+                continue;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+            bool is_inline = facts && (facts->representation == QoreIRValueRepresentation::NativeBool
+                || (facts->representation == QoreIRValueRepresentation::NativeInt && facts->hasInlineIntRange()));
+            if (inst->opcode == QoreIROpcode::ConstFloat) {
+                const auto& constant = static_cast<const QoreIRConstInstruction&>(*inst).constant;
+                is_inline = !QoreValue::rawDoubleCollidesWithTag(std::bit_cast<uint64_t>(constant.float_value));
+            }
+            if (is_inline) {
+                inline_scalars.insert(inst->result.id);
+            }
+        }
+    }
     struct AvailableState {
         ExpressionMap expressions;
         LoadMap loads;
@@ -6171,6 +6196,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         }
         ExpressionMap available;
         LoadMap available_loads;
+        ExpressionMap scoped_expressions;
+        LoadMap scoped_loads;
         bool block_has_exception_edge = false;
         if (cross_block && cfg.reachable[block_id]
                 && cfg.predecessors[block_id].size() == 1) {
@@ -6212,6 +6239,11 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 return {};
             }
 
+            if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep) {
+                scoped_expressions.clear();
+                scoped_loads.clear();
+            }
+
             const LocalVar* written_local = nullptr;
             if (inst.opcode == QoreIROpcode::StoreLocal
                     || inst.opcode == QoreIROpcode::StoreClosure
@@ -6225,8 +6257,10 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
             if (written_local) {
                 available_loads.erase(written_local);
+                scoped_loads.erase(written_local);
             } else if (qore_ir_may_mutate_unknown_local(inst)) {
                 available_loads.clear();
+                scoped_loads.clear();
             }
 
             if (qore_ir_is_forwardable_scalar_load(func, inst)
@@ -6234,7 +6268,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                         func, inst.result, uses, true, check_count, cancelled,
                         true)) {
                 const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
-                auto [load_it, inserted] = available_loads.emplace(load.local, inst.result);
+                LoadMap& candidates = inline_scalars.count(inst.result.id) ? available_loads : scoped_loads;
+                auto [load_it, inserted] = candidates.emplace(load.local, inst.result);
                 if (!inserted) {
                     replacements.emplace(inst.result.id, load_it->second);
                     eliminated.insert(&inst);
@@ -6259,7 +6294,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 continue;
             }
             QoreIRScalarExpressionKey key = qore_ir_get_scalar_expression_key(inst);
-            auto [available_it, inserted] = available.emplace(std::move(key), inst.result);
+            ExpressionMap& candidates = inline_scalars.count(inst.result.id) ? available : scoped_expressions;
+            auto [available_it, inserted] = candidates.emplace(std::move(key), inst.result);
             if (inserted) {
                 continue;
             }

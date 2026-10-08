@@ -65,6 +65,18 @@ int sub crossBlock(int value, bool pick) {
     return before + after + side;
 }
 
+bool sub crossBlockInline(bool value, bool pick) {
+    bool before = !value;
+    bool side;
+    if (pick) {
+        side = value;
+    } else {
+        side = !value;
+    }
+    bool after = !value;
+    return before == after && side == pick;
+}
+
 int sub crossBlockMutation(bool pick) {
     int value = 3;
     int before = value + 1;
@@ -137,6 +149,7 @@ printf(\"cross:%d:%d:%d:%d:%d:%d\\n\",
     crossBlock(5, True), crossBlock(5, False),
     crossBlockMutation(True), crossBlockMutation(False),
     crossBlockReference(True), crossBlockReference(False));
+printf(\"inline:%y:%y\\n\", crossBlockInline(True, True), crossBlockInline(True, False));
 printf(\"boxed:%y\\n\", boxedCallArguments());
 printf(\"caught:%y:%y\\n\", logicalOrAfterCaughtException(True),
     logicalOrAfterCaughtException(False));
@@ -168,6 +181,7 @@ string sub runAot() {
 
 string expected = "values:36:26:445:7.0:True:41
 cross:39:49:410:406:405:404
+inline:True:True
 boxed:True
 caught:True:True
 state:4:True:5:True:True
@@ -192,9 +206,14 @@ string disabled_stats = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_DOMINANCE_CSE=1"
         + " %s -b --exec-mode=ir %s 2>&1",
     libqore_dir, qore_bin, script_path));
-if (!(stats =~ /IR-OPT: crossBlock:.*scalar-loads=[1-9][0-9]*.*scalar-cse=[1-9][0-9]*/)
-        || disabled_stats
-            =~ /IR-OPT: crossBlock:.*scalar-loads=[1-9][0-9]*.*scalar-cse=[1-9][0-9]*/) {
+# Unknown integer parameters can need boxed storage. Only proven inline values
+# may be reused across temporary cleanup; dominance still benefits booleans.
+string pattern = "IR-OPT: crossBlockInline:.*scalar-loads=([0-9]+).*scalar-cse=([0-9]+)";
+*list<*string> enabled_counts = regex_extract(stats, pattern);
+*list<*string> disabled_counts = regex_extract(disabled_stats, pattern);
+if (enabled_counts.size() != 2 || disabled_counts.size() != 2
+        || enabled_counts[0].toInt() <= disabled_counts[0].toInt()
+        || enabled_counts[1].toInt() <= disabled_counts[1].toInt()) {
     printf("dominance CSE stats mismatch:\nenabled:\n%sdisabled:\n%s",
         stats, disabled_stats);
     exit(2);
