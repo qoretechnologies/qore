@@ -820,9 +820,8 @@ void ThreadEntry::cleanup() {
 
     // clear per-thread cancellation state
     clearCancelState();
-    // a thread in waitWithInterrupt clears waiting_on before returning, so it must be null here,
-    // but be defensive against any future code path that exits without clearing
-    waiting_on.store(nullptr, std::memory_order_relaxed);
+    // a thread in a cancellable condition wait unregisters before it returns
+    assert(!waiting_on && !waiting_mutex && !wake_queued && !wake_busy);
 
     status = QTS_AVAIL;
 }
@@ -3282,6 +3281,8 @@ void qore_exit_process(int rc) {
         // The reaper has no Qore TID either. With all external workers joined,
         // stop it before static destruction reaches its condition variable.
         qore_stop_external_thread_reaper();
+        // as is the condition waker; no other thread can be waiting any more
+        qore_stop_cond_waker();
         exit(rc);
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
@@ -4594,33 +4595,263 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
-    // wake the target if it's blocked in waitWithInterrupt — the waiter clears waiting_on under
-    // lck before returning, so a non-null pointer observed here (under lck, with the entry still
-    // active) is in use by a still-alive cond
-    QoreCondition* cond = entry[tid].waiting_on.load(std::memory_order_seq_cst);
-    if (cond) {
-        cond->broadcast();
-    }
+    // wake the target if it's blocked (or about to block) in a cancellable condition wait
+    wakeCondWaiter(tid);
     return 0;
-}
-
-void QoreThreadList::clearCurrentWaitingOn() {
-    AutoLocker al(lck);
-    int tid = q_gettid();
-    if (tid >= 0 && tid < MAX_QORE_THREADS) {
-        entry[tid].waiting_on.store(nullptr, std::memory_order_seq_cst);
-    }
 }
 
 void QoreThreadList::wakeAllWaiters() {
     AutoLocker al(lck);
     for (int t = 0; t < MAX_QORE_THREADS; ++t) {
-        QoreCondition* cond = entry[t].waiting_on.load(std::memory_order_seq_cst);
-        if (cond) {
-            cond->broadcast();
-        }
+        wakeCondWaiter(t);
     }
 }
+
+// --- cancellable condition waits ---
+//
+// A waiter holds its mutex from its check for a cancellation request until pthread_cond_wait() releases it, so a
+// broadcast made in that window without the mutex would be lost.  A canceller therefore only broadcasts after it
+// has held the mutex: at once if it can take the mutex without blocking, otherwise through the condition waker
+// thread, which blocks on the mutex until the waiter releases it.  The canceller itself never blocks on a waiter's
+// mutex, so a canceller holding that mutex (or anything its holder waits for) cannot deadlock.
+//
+// Lock order: a waiter's mutex -> the wait registry lock (cond_waker.lck); thread_list.lck -> the wait registry
+// lock; the waker thread never blocks on a waiter's mutex while holding the wait registry lock.
+namespace {
+class QoreCondWaker {
+public:
+    ~QoreCondWaker() {
+        // qore_cleanup() stops the thread; this covers a host that reaches static destruction without it
+        stop();
+    }
+
+    //! the lock guarding the wait registry fields of every ThreadEntry and the waker's queue
+    QoreThreadLock lck;
+    //! signalled when a wakeup handed to the waker has completed
+    QoreCondition done;
+
+    //! Starts the waker thread in this process if it is not running; lck must be held
+    int ensureStarted() {
+        pid_t pid = getpid();
+        if (started && started_pid == pid) {
+            return 0;
+        }
+        if (started) {
+            // forked: the thread does not exist in this process, and nothing in the child can be queued, since
+            // the only thread that exists here was running fork() and not waiting
+            started = false;
+            head = tail = -1;
+        }
+        int rc = pthread_create(&native_id, nullptr, entry, this);
+        if (rc) {
+            errno = rc;
+            return -1;
+        }
+        started = true;
+        started_pid = pid;
+        return 0;
+    }
+
+    //! Queues a wakeup of the given entry's waiter; lck must be held and the waker started
+    void queue(ThreadEntry* entries, int tid, QoreCondition* cond, pthread_mutex_t* m) {
+        assert(started && started_pid == getpid());
+        ThreadEntry& te = entries[tid];
+        if (te.wake_queued) {
+            // the queued wakeup has not taken the mutex yet, so it covers this request too
+            return;
+        }
+        te.wake_cond = cond;
+        te.wake_mutex = m;
+        te.wake_queued = true;
+        te.wake_next = -1;
+        if (tail == -1) {
+            head = tid;
+        } else {
+            entries[tail].wake_next = tid;
+        }
+        tail = tid;
+        cond_ready.signal();
+    }
+
+    void stop() {
+        {
+            AutoLocker al(lck);
+            if (!started || started_pid != getpid()) {
+                return;
+            }
+            stopping = true;
+            cond_ready.signal();
+        }
+        int rc = pthread_join(native_id, nullptr);
+        if (rc) {
+            fprintf(stderr, "qore: cannot join the condition waker thread: %s\n", strerror(rc));
+            abort();
+        }
+        AutoLocker al(lck);
+        started = stopping = false;
+    }
+
+private:
+    QoreCondition cond_ready;
+    pthread_t native_id{};
+    pid_t started_pid = 0;
+    int head = -1;
+    int tail = -1;
+    bool started = false;
+    bool stopping = false;
+
+    static void* entry(void* arg) {
+        static_cast<QoreCondWaker*>(arg)->run();
+        return nullptr;
+    }
+
+    void run();
+};
+}
+
+static QoreCondWaker cond_waker;
+
+void QoreCondWaker::run() {
+#ifdef QORE_HAVE_THREAD_NAME
+    q_set_thread_name("qore-cond-waker");
+#endif
+    ThreadEntry* entries = thread_list.getEntryArray();
+    SafeLocker sl(lck);
+    while (true) {
+        while (head == -1 && !stopping) {
+            cond_ready.wait(lck);
+        }
+        if (head == -1) {
+            return;
+        }
+        int tid = head;
+        ThreadEntry& te = entries[tid];
+        head = te.wake_next;
+        if (head == -1) {
+            tail = -1;
+        }
+        te.wake_next = -1;
+        te.wake_queued = false;
+        te.wake_busy = true;
+        QoreCondition* cond = te.wake_cond;
+        pthread_mutex_t* m = te.wake_mutex;
+        sl.unlock();
+        // the waiter cannot return from its wait while wake_busy is set, so the condition and mutex are alive;
+        // holding the mutex means that the waiter has either blocked (and the broadcast wakes it) or not yet
+        // checked for the request (and will see it)
+        pthread_mutex_lock(m);
+        pthread_mutex_unlock(m);
+        cond->broadcast();
+        sl.lock();
+        te.wake_busy = false;
+        if (!te.wake_queued) {
+            te.wake_cond = nullptr;
+            te.wake_mutex = nullptr;
+        }
+        done.broadcast();
+    }
+}
+
+void qore_stop_cond_waker() {
+    cond_waker.stop();
+}
+
+int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(cond_waker.lck);
+    // the waker must be available before the thread can be woken through it
+    if (cond_waker.ensureStarted()) {
+        return -1;
+    }
+    ThreadEntry& te = entry[tid];
+    assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
+    te.waiting_on = cond;
+    te.waiting_mutex = m;
+    return 0;
+}
+
+void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    SafeLocker sl(cond_waker.lck);
+    ThreadEntry& te = entry[tid];
+    assert(te.waiting_mutex == m);
+    te.waiting_on = nullptr;
+    te.waiting_mutex = nullptr;
+    if (!te.wake_queued && !te.wake_busy) {
+        return;
+    }
+    // a wakeup with the waker thread uses the condition and mutex: release the mutex so that it can complete,
+    // wait for it, and then reacquire the mutex (never while holding the registry lock)
+    pthread_mutex_unlock(m);
+    while (te.wake_queued || te.wake_busy) {
+        cond_waker.done.wait(cond_waker.lck);
+    }
+    sl.unlock();
+    pthread_mutex_lock(m);
+}
+
+void QoreThreadList::wakeCondWaiter(int tid) {
+    AutoLocker al(cond_waker.lck);
+    ThreadEntry& te = entry[tid];
+    if (!te.waiting_on) {
+        return;
+    }
+    // the registration cannot be cleared while the registry lock is held, so the condition and mutex are alive
+    if (!pthread_mutex_trylock(te.waiting_mutex)) {
+        // the waiter is not between its check for the request and its wait
+        pthread_mutex_unlock(te.waiting_mutex);
+        te.waiting_on->broadcast();
+        return;
+    }
+    // the mutex is held - possibly by the waiter about to block, or by the caller: hand the wakeup to the waker
+    // thread, which was started when the waiter registered
+    cond_waker.queue(entry, tid, te.waiting_on, te.waiting_mutex);
+}
+
+int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    // a request made before the wait
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+    int tid = q_gettid();
+    // a thread unknown to Qore cannot be cancelled, and nothing can be delivered while cancellation is deferred
+    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
+        return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+    }
+    if (thread_list.registerCondWait(tid, &cond, m)) {
+        if (xsink) {
+            xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
+                "thread that wakes cancelled threads", operation);
+            return QORE_COND_RESULT_INTERRUPTED;
+        }
+        // without an exception sink the failure cannot be reported: the wait is not a cancellation point
+        return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+    }
+    // a request made after the registration: either this check sees it, or the canceller sees the registration and
+    // wakes the wait once it has held the mutex, which this thread holds until it blocks
+    if (qore_check_cancel(xsink, operation)) {
+        thread_list.unregisterCondWait(tid, m);
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+#ifdef DEBUG
+    void (*hook)() = qore_cond_wait_window_hook.load();
+    if (hook) {
+        hook();
+    }
+#endif
+    int rc = cond.wait2(m, timeout_ms);
+    thread_list.unregisterCondWait(tid, m);
+    // woken by a request, or a request made while waking up
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+    return rc ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+}
+
+#ifdef DEBUG
+std::atomic<void (*)()> qore_cond_wait_window_hook{nullptr};
+#endif
 
 void QoreThreadList::clearCancel(int tid) {
     // the lock serializes cancel_reason handling against a concurrent cancelThread() call, which

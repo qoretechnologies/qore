@@ -443,6 +443,33 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+//! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
+/** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
+    (@ref qore_cancel_thread()) or program interrupt (@ref QoreSandboxManager::requestInterrupt()) wakes the wait at
+    once, also when it is made just before the thread blocks.
+
+    @param cond the condition to wait on
+    @param m the mutex, held by the caller; it is held again when this returns
+    @param timeout_ms the timeout in milliseconds; negative for no timeout
+    @param xsink for the cancellation exception; may be nullptr
+    @param operation the operation named in the cancellation exception
+
+    @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
+    if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
+    an exception has been raised on \a xsink if it is not nullptr
+*/
+DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
+        ExceptionSink* xsink, const char* operation);
+
+//! Stops the condition waker thread; called when no thread can be waiting any more
+DLLLOCAL void qore_stop_cond_waker();
+
+#ifdef DEBUG
+//! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+#endif
+
+
 //! Clears all Qore program-level thread-local data on the calling thread without
 //! destroying thread registration
 /** Called by worker pool threads (ThreadPool, AsyncIoController) between tasks to

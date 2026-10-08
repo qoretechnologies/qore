@@ -30,6 +30,11 @@
     including when extracted inside another repository. Revision updates reject corrupt
     metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.
 
+    A thread cancelled with @ref Qore::cancel_thread() "cancel_thread()", or whose @ref Qore::Program "Program" was
+    interrupted, just as it started to wait on a condition — for example in
+    @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the
+    condition was signalled for another reason, possibly forever; the request now always ends the wait.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.
