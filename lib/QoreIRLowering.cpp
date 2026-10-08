@@ -5911,6 +5911,21 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
         auto* parse_node = dynamic_cast<const ParseNode*>(node);
         if (parse_node) {
             analysis = parse_node->getParseAnalysis();
+            // The definite-assignment state of a local variable is flow-sensitive parse state that only sees the
+            // writes in its own function's code.  A local that is the target of a reference or is captured by a
+            // closure can also be cleared through that reference or closure (e.g. "remove value" in a callee that
+            // takes a "reference<string>" argument), at a point the analysis does not see - even before the read,
+            // in an earlier iteration of a loop.  Such a read can be NOTHING whatever its declared type, so it
+            // must not let compiled code skip the checks for NOTHING.
+            const VarRefNode* var = dynamic_cast<const VarRefNode*>(node);
+            if (var) {
+                qore_var_t var_type = var->getType();
+                if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
+                        && var->ref.id && var->ref.id->closureUse()) {
+                    analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
+                    analysis.clearFlag(QoreParseAnalysis::NeverNothing);
+                }
+            }
             return true;
         }
     }

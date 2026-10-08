@@ -4149,6 +4149,12 @@ while (*binary chunk = input.read(65536)) {
       up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
       or found declarations that are not visible to the caller
 
+    - Fixed native code compiled with JIT execution not checking a typed local variable for \c NOTHING after its
+      value could have been removed through a reference: for example, after
+      <tt>clear(\\value)</tt> removed a \c string parameter's value, <tt>index(value, ".")</tt> returned -1 instead of
+      raising \c RUNTIME-OVERLOAD-ERROR as the interpreters do; \c rindex(), \c substr() and
+      <tt><string>::find()</tt> were affected as well
+
     - Fixed closures never running as native code with JIT and tiered execution when they were called often by
       builtin code, such as \c map, @ref Qore::call_function() "call_function()" or @ref Qore::sort() "sort()":
       a closure already compiled with the function that creates it was compiled again, which failed, and it stayed

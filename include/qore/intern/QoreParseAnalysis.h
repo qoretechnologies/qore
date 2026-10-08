@@ -59,6 +59,10 @@ struct QoreParseAnalysis {
         flags |= f;
     }
 
+    void clearFlag(Flags f) {
+        flags &= ~static_cast<uint32_t>(f);
+    }
+
     bool hasFlag(Flags f) const {
         return (flags & f) != 0;
     }
