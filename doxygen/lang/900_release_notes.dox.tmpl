@@ -4080,6 +4080,11 @@ while (*binary chunk = input.read(65536)) {
       or ran long loops to native code, as tiered execution does; IR execution now runs code only with the IR
       interpreter, as documented, so its behavior and performance no longer depend on how often code runs
 
+    - Fixed \c extract and \c splice on a list element or hash member that does not exist, such as
+      <tt>extract l[16], 0, 1</tt> on a shorter list, returning \c NOTHING with IR, tiered and JIT execution and in
+      compiled (AOT) modules; as with AST execution, the element is created and the operator raises
+      \c EXTRACT-ERROR, as it does for any other value that is not a list, string or binary object
+
     - Fixed some expressions being taken for a value of another type with IR, tiered and JIT execution and in compiled
       (AOT) modules, which gave wrong results or raised type errors where AST execution did not: a hash literal with
       keys that are not constants, or a hash \c map, was taken for its last value, so for example

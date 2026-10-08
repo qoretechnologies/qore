@@ -13729,18 +13729,18 @@ load_local_done:
                     ? getIRValue(values, path_inst->operands[1]) : QoreValue();
                 QoreValue replacement_val = (path_inst->operands.size() > 2)
                     ? getIRValue(values, path_inst->operands[2]) : QoreValue();
-                // Navigate to lvalue; for extract without replacement, avoid vivification
-                bool no_vivify = (path_inst->ternary_op == LVTernaryOp::Extract
-                    && replacement_val.isNothing());
                 QoreValue res;
                 // the operation runs in a function so that the lvalue lock is released before values are cleaned
-                // up or the exception is dispatched to an enclosing catch block; returns 1 if the lvalue does not
-                // exist, -1 for an error, 0 for OK
+                // up or the exception is dispatched to an enclosing catch block; returns -1 for an error, 0 for OK
                 auto run_ternary = [&]() -> int {
                     ReferenceHolder<QoreListNode> removed_list(xsink);
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
-                        return no_vivify && !*xsink ? 1 : -1;
+                    // as with AST execution, a hash member or list element that does not exist is created, and
+                    // then raises EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+                        // a vivifying navigation fails only with an exception
+                        assert(*xsink);
+                        return -1;
                     }
                     qore_type_t vt = lvh.getType();
                     if (vt == NT_NOTHING) {
@@ -13754,9 +13754,7 @@ load_local_done:
                             }
                         }
                     }
-                    if (vt == NT_NOTHING) {
-                        // Nothing to extract/splice — return NOTHING
-                    } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+                    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
                         xsink->raiseException("EXTRACT-ERROR",
                             "first (lvalue) argument to the extract operator is not a list, "
                             "string, or binary object");
@@ -13871,14 +13869,6 @@ load_local_done:
                     return *xsink ? -1 : 0;
                 };
                 int ternary_rc = run_ternary();
-                if (ternary_rc > 0) {
-                    // Lvalue doesn't exist — no-op, return NOTHING
-                    if (path_inst->result.isValid()) {
-                        setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
-                    }
-                    ++ip;
-                    break;
-                }
                 if (ternary_rc < 0) {
                     res.discard(xsink);
                     res = QoreValue();

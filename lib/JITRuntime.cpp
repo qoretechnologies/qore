@@ -13953,11 +13953,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     QoreValue offset_val = fromBits(a_bits);
     QoreValue length_val = fromBits(b_bits);
     QoreValue replacement_val = fromBits(c_bits);
-    // For extract without replacement, avoid vivification
-    bool no_vivify = (inst->ternary_op == LVTernaryOp::Extract && replacement_val.isNothing());
     ReferenceHolder<QoreListNode> removed_list(xsink);
     LValueHelper lvh(xsink);
-    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
+    // as with AST execution, a hash member or list element that does not exist is created, and then raises
+    // EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        // a vivifying navigation fails only with an exception
+        assert(*xsink);
         return toBits(QoreValue());
     }
     QoreValue res;
@@ -13971,9 +13973,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
             }
         }
     }
-    if (vt == NT_NOTHING) {
-        // Nothing to extract/splice — return NOTHING
-    } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");

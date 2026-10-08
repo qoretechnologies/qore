@@ -119,6 +119,66 @@ auto sub hash_map_plus(string a, string b) { return (map {$1: 1}, (a,)) + (map {
 auto sub extract_list(list<auto> l, list<auto> k) { return (extract l, 0, 1) + (extract k, 0, 1); }
 auto sub extract_string(string a, string b) { return (extract a, 0, 1) + (extract b, 0, 1); }
 
+# extract and splice on a list element or hash member that does not exist: the element is created and the operator
+# raises EXTRACT-ERROR, as for any other lvalue that is not a list, string or binary; returns the error and the
+# container afterwards
+string sub extract_missing_index(list<auto> l, int i) {
+    try {
+        extract l[i], 0, 1;
+        return sprintf("no error: %y", l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+string sub extract_missing_index_value(list<auto> l, int i) {
+    try {
+        auto v = extract l[i], 0, 1;
+        return sprintf("no error: %y %y", v, l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+string sub extract_missing_index_replace(list<auto> l, int i) {
+    try {
+        extract l[i], 0, 1, "x";
+        return sprintf("no error: %y", l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+string sub extract_missing_key(hash<auto> h, string k) {
+    try {
+        extract h{k}, 0, 1;
+        return sprintf("no error: %y", h);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, h);
+    }
+}
+string sub splice_missing_index(list<auto> l, int i) {
+    try {
+        splice l[i], 0, 1;
+        return sprintf("no error: %y", l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+string sub splice_missing_key(hash<auto> h, string k) {
+    try {
+        splice h{k}, 0, 1;
+        return sprintf("no error: %y", h);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, h);
+    }
+}
+string sub extract_missing_constant_index(list<auto> l) {
+    try {
+        extract l[4], 0, 1;
+        return sprintf("no error: %y", l);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+
 # assignment operators, whose right operand has another type than their result
 auto sub plus_equals_int(int a, float f) { int x = a; int y = a; return (x += f) + (y += f); }
 auto sub plus_equals_string(string a, int i) { string x = a; string y = a; return (x += i) + (y += i); }
@@ -161,6 +221,20 @@ public list<string> sub get_results() {
     c.chk("hash map +", auto sub () { return hash_map_plus("x", "y"); }, {"x": 1, "y": 2});
     c.chk("extract list", auto sub () { return extract_list(("a", "b"), ("c", "d")); }, ("a", "c"));
     c.chk("extract string", auto sub () { return extract_string("ab", "cd"); }, "ac");
+    c.chk("extract missing index", auto sub () { return extract_missing_index((1, 2), 4); },
+        "EXTRACT-ERROR: [1, 2, null, null, null]");
+    c.chk("extract missing index value", auto sub () { return extract_missing_index_value((1, 2), 4); },
+        "EXTRACT-ERROR: [1, 2, null, null, null]");
+    c.chk("extract missing index replace", auto sub () { return extract_missing_index_replace((1, 2), 4); },
+        "EXTRACT-ERROR: [1, 2, null, null, null]");
+    c.chk("extract missing constant index", auto sub () { return extract_missing_constant_index((1, 2)); },
+        "EXTRACT-ERROR: [1, 2, null, null, null]");
+    c.chk("extract missing key", auto sub () { return extract_missing_key({"a": 1}, "b"); },
+        "EXTRACT-ERROR: {a: 1, b: null}");
+    c.chk("splice missing index", auto sub () { return splice_missing_index((1, 2), 4); },
+        "EXTRACT-ERROR: [1, 2, null, null, null]");
+    c.chk("splice missing key", auto sub () { return splice_missing_key({"a": 1}, "b"); },
+        "EXTRACT-ERROR: {a: 1, b: null}");
     c.chk("+= int", auto sub () { return plus_equals_int(1, 1.5); }, 4);
     c.chk("+= string", auto sub () { return plus_equals_string("s", 1); }, "s1s1");
     c.chk("-= int", auto sub () { return minus_equals_int(5, 1.5); }, 8);
