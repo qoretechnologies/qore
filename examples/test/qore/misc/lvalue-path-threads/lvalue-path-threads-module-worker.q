@@ -8,6 +8,8 @@
 
 %requires LValuePathThreadChecks
 
-foreach string line in (LValuePathThreadChecks::get_results()) {
+# the checks run twice: when native compilation follows the first call of a function, the first pass runs with the IR
+# interpreter and the second one as native code with --exec-mode=jit or tiered
+foreach string line in (LValuePathThreadChecks::get_results() + LValuePathThreadChecks::get_results()) {
     printf("%s\n", line);
 }

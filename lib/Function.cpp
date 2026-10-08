@@ -6148,6 +6148,13 @@ void UserVariantBase::attemptJITCompilation() const {
     QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
     assert(ir);
 
+    // --exec-mode=ir executes code with the IR interpreter only: its functions are never compiled to native code,
+    // whatever their execution count or the hot loops the interpreter detects.  Every native promotion of a
+    // function goes through this function, so this is the only check needed.
+    if (pgm && pgm->getExecMode() == QEM_IR) {
+        return;
+    }
+
     // Atomically claim JIT compilation (CAS 0→1).
     // This is the single point of guard — callers should NOT do their own CAS.
     int expected = 0;

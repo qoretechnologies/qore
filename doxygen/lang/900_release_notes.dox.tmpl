@@ -4076,6 +4076,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref exec_mode_ir "IR execution" (<tt>--exec-mode=ir</tt>) compiling functions that were called often
+      or ran long loops to native code, as tiered execution does; IR execution now runs code only with the IR
+      interpreter, as documented, so its behavior and performance no longer depend on how often code runs
+
     - Fixed some expressions being taken for a value of another type with IR, tiered and JIT execution and in compiled
       (AOT) modules, which gave wrong results or raised type errors where AST execution did not: a hash literal with
       keys that are not constants, or a hash \c map, was taken for its last value, so for example

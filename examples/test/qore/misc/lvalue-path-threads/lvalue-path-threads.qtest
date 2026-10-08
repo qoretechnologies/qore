@@ -13,6 +13,14 @@
 
 %exec-class LValuePathThreadsTest
 
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout, followed by any error output
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
 #! Tests that concurrent extract and splice operations on the same lvalue path use their own keys in every engine
 /** The checks in lvalue-path-threads-checks.qi run in this program, in each execution mode, and from a compiled
     (AOT) module; every check must pass in every engine.
@@ -46,8 +54,10 @@ class LValuePathThreadsTest inherits QUnit::Test {
 
     testExecModes() {
         foreach string mode in (ExecModes) {
-            checkResults(mode, getLines(runWorker("lvalue-path-threads-worker.q", get_script_dir(),
-                "--exec-mode=" + mode)));
+            hash<WorkerResult> r = runWorker("lvalue-path-threads-worker.q", get_script_dir(), "--exec-mode=" + mode);
+            # the worker runs the checks twice
+            checkResults(mode, getLines(r.out), 2);
+            checkEngine(mode, r.trace);
         }
     }
 
@@ -60,22 +70,56 @@ class LValuePathThreadsTest inherits QUnit::Test {
         assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
 
         # the directory holds only the compiled module, so the worker cannot load the source instead
-        checkResults("aot", getLines(runWorker("lvalue-path-threads-module-worker.q", tmp.path)));
+        checkResults("aot", getLines(runWorker("lvalue-path-threads-module-worker.q", tmp.path).out), 2);
     }
 
-    #! runs a worker with the given module directory and options and returns its output
-    private string runWorker(string worker_name, string module_dir, string opts = "") {
+    #! runs a worker with the given module directory and options and returns its output and compilation trace
+    /** The worker runs the checks twice.  Compilation to native code is synchronous and follows the first call of a
+        function (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the first pass
+        runs with the IR interpreter and the second one as native code; QORE_JIT_TIMING traces every compilation on
+        stderr.  Any other output on stderr is added to the output, where it fails the checks.
+    */
+    private hash<WorkerResult> runWorker(string worker_name, string module_dir, string opts = "") {
         string worker = get_script_dir() + DirSep + worker_name;
-        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1",
-            libqore_dir, libqore_dir, module_dir, qore_bin, opts, worker));
+        TmpFile err("qore-worker-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>%s", libqore_dir, libqore_dir,
+            module_dir, qore_bin, opts, worker, err.path));
+        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("
+"), $1.val();
+        list<string> errors = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        return <WorkerResult>{
+            "out": out + (errors ? errors.join("
+") + "
+" : ""),
+            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+        };
+    }
+
+    #! checks that a worker ran the checks with the engine named by its execution mode
+    /** No code is compiled to native code with the AST or the IR interpreter; with JIT and tiered execution the
+        functions with the checks are compiled after their first call, so the second pass runs them as native code.
+    */
+    private checkEngine(string mode, list<string> trace) {
+        if (mode == "ast" || mode == "ir") {
+            assertEq((), trace, mode + ": no code is compiled to native code");
+        } else {
+            list<string> promoted = select trace, $1 =~ /promoted/ && $1 =~ /'extract_key@/;
+            assertTrue(promoted.size() > 0, mode + ": the checks run as native code: " + trace.join("
+"));
+        }
     }
 
     private list<string> getLines(string out) {
         return select out.split("\n"), $1.val();
     }
 
-    #! checks that every check ran and passed
-    private checkResults(string label, list<string> results) {
-        assertEq(expected, results, label);
+    #! checks that every check ran and passed in each of the given number of passes
+    private checkResults(string label, list<string> results, int passes = 1) {
+        list<string> all = ();
+        for (int i = 0; i < passes; ++i) {
+            all += expected;
+        }
+        assertEq(all, results, label);
     }
 }
