@@ -387,6 +387,20 @@ public class TabularProfiler {
     }
 
     private {
+        #! @ref TotalsRegex compiled once: a pattern given as text is compiled at every match
+        static Regex totals_label_regex(TotalsRegex, RE_Caseless | RE_Unicode);
+
+        #! @ref TotalsFormulaRegex compiled once
+        static Regex totals_formula_regex(TotalsFormulaRegex, RE_Caseless);
+
+        #! An A1 cell reference: its column letters and row number
+        static Regex cell_ref_regex("^\\s*\\$?([A-Za-z]{1,3})\\$?([1-9][0-9]*)\\s*$");
+
+        #! The cell ranges of a formula that are not qualified by a sheet name: the first column and row, and the
+        #! last column and row of each
+        static Regex cell_range_regex("(?<![A-Za-z0-9_.!'$])\\$?([A-Za-z]{1,3})\\$?([0-9]+):\\$?([A-Za-z]{1,3})"
+            "\\$?([0-9]+)", RE_Global);
+
         #! ISO 4217 codes recognized as currencies around numbers stored as text
         const CurrencyCodes = (
             "EUR", "USD", "GBP", "CHF", "JPY", "CNY", "CZK", "PLN", "HUF", "SEK", "NOK", "DKK", "RON", "BGN",
@@ -525,7 +539,7 @@ bool totals = TabularProfiler::isTotalsLabel("Grand total"); # True
         @since %DataProvider 3.9
     */
     static bool isTotalsLabel(auto value) {
-        return value.typeCode() == NT_STRING && regex(value, TotalsRegex, RE_Caseless | RE_Unicode);
+        return value.typeCode() == NT_STRING && totals_label_regex.match(value);
     }
 
     #! Returns True if a formula makes its cell a total of the rows above it
@@ -559,19 +573,18 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         @since %DataProvider 3.9
     */
     static bool isTotalsFormula(string ref, string formula) {
-        *list<*string> cell = (ref =~ x/^\s*\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)\s*$/);
+        *list<*string> cell = cell_ref_regex.extractGroups(ref);
         if (!cell) {
             throw "TABULAR-PROFILE-ERROR", sprintf("%y is not an A1 cell reference", ref);
         }
         int col = columnIndex(cell[0]);
         int row = cell[1].toInt();
         formula =~ s/^\s*=//;
-        if (!regex(formula, TotalsFormulaRegex, RE_Caseless)) {
+        if (!totals_formula_regex.match(formula)) {
             return False;
         }
-        # the cell ranges of the formula that are not qualified by a sheet name; each match gives four strings: the
-        # first column and row, and the last column and row
-        list<*string> parts = (formula =~ x/(?<![A-Za-z0-9_.!'$])\$?([A-Za-z]{1,3})\$?([0-9]+):\$?([A-Za-z]{1,3})\$?([0-9]+)/g) ?? ();
+        # each range gives four strings: the first column and row, and the last column and row
+        list<*string> parts = cell_range_regex.extractGroups(formula) ?? ();
         @assert(!(parts.size() % 4));
         for (int i = 0; i < parts.size(); i += 4) {
             int c1 = columnIndex(parts[i]);
@@ -607,8 +620,9 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
     #! Returns the 0-based column index of a column letter, for example 0 for \c "A" and 26 for \c "AA"
     private static int columnIndex(string letter) {
         int rv = 0;
-        foreach string c in (letter.upr().split("")) {
-            rv = rv * 26 + (ord(c) - 64);
+        for (int i = 0; i < letter.size(); ++i) {
+            # the letters are ASCII: one byte each
+            rv = rv * 26 + (ord(letter, i) & ~0x20) - 64;
         }
         return rv - 1;
     }
