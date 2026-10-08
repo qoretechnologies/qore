@@ -39,6 +39,7 @@
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
@@ -18390,7 +18391,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_intp_noguard(uint64_t val_bi
     if (str->empty()) {
         return toBits(QoreValue(false));
     }
-    const char* data = str->c_str();
+    QoreAsciiCompatStringHelper text(**str);
+    const char* data = text.c_str();
     char c = data[0];
     if (c == '-') {
         c = data[1];
@@ -18634,14 +18636,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_
         return toBits(QoreValue(strtoll(buf, nullptr, 10)));
     }
     QoreStringValueHelper str(v);
-    if (!str->getEncoding()->isAsciiCompat()) {
-        if (xsink) {
-            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot convert string in non-ASCII-compatible "
-                "encoding \"%s\" to an integer", str->getEncoding()->getCode());
-        }
-        return toBits(QoreValue());
-    }
-    return toBits(QoreValue(strtoll(str->c_str(), nullptr, 10)));
+    QoreAsciiCompatStringHelper text(**str);
+    return toBits(QoreValue(strtoll(text.c_str(), nullptr, 10)));
 }
 
 //! Fast pseudo-method: type() - return type name string

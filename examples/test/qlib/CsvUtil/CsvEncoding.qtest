@@ -35,11 +35,66 @@ public class CsvEncodingTest inherits QUnit::Test {
             {"encoding": "UTF-16BE", "headers": CzechHeaders},
         );
 
-        #! the encodings that are not ASCII-compatible
-        /** a number in a string in one of these encodings is not converted to an integer; this is not a matter of
-            the keys, so the typed field values are checked only in the other encodings
-        */
-        const NonAsciiCompatible = {"UTF-16LE": True, "UTF-16BE": True};
+        #! the headers of the data with typed fields
+        const TypedHeaders = ("qty", "price", "amount", "active", "date", "day", "stamp", "opt");
+
+        #! the data with typed fields
+        const TypedRows = (
+            ("5", "1.5", "1.25", "true", "2024-01-02", "02.01.2024", "20240102T030405", ""),
+            ("-12", "-2.25e3", "100.5", "0", "2026-10-08T12:30:45", "31.12.2025", "2025-06-30 23:59:59", "7"),
+        );
+
+        #! the field types of the data with typed fields
+        const TypedFields = {
+            "qty": "int",
+            "price": "float",
+            "amount": "number",
+            "active": "bool",
+            "date": "date",
+            "day": {"type": "date", "format": "DD.MM.YYYY"},
+            "stamp": {"type": "date", "timezone": "UTC"},
+            "opt": "*int",
+        };
+
+        #! the records of the data with typed fields
+        const TypedRecords = (
+            {"qty": 5, "price": 1.5, "amount": 1.25n, "active": True, "date": 2024-01-02, "day": 2024-01-02,
+                "stamp": 2024-01-02T03:04:05Z, "opt": NOTHING},
+            {"qty": -12, "price": -2250.0, "amount": 100.5n, "active": False, "date": 2026-10-08T12:30:45,
+                "day": 2025-12-31, "stamp": 2025-06-30T23:59:59Z, "opt": 7},
+        );
+
+        #! the headers of the data with numbers in a continental European format
+        const FormatHeaders = ("n", "f", "i");
+
+        #! the data with numbers in a continental European format
+        const FormatRows = (
+            ("1.234,5", "1.234,5", "1.234"),
+            ("-7,25", "-7,25", "-7"),
+        );
+
+        #! the field types of the data with numbers in a continental European format
+        const FormatFields = {"n": "number", "f": "float", "i": "int"};
+
+        #! the records of the data with numbers in a continental European format
+        const FormatRecords = (
+            {"n": 1234.5n, "f": 1234.5, "i": 1234},
+            {"n": -7.25n, "f": -7.25, "i": -7},
+        );
+
+        #! the encodings of the data with typed fields, with the byte order mark written before the data, if any
+        const TypedCases = (
+            {"encoding": "ISO-8859-2"},
+            {"encoding": "WINDOWS-1252"},
+            {"encoding": "UTF-8"},
+            {"encoding": "UTF-16LE"},
+            {"encoding": "UTF-16BE"},
+            {"encoding": "UTF-16LE", "bom": <fffe>},
+            {"encoding": "UTF-16BE", "bom": <feff>},
+            {"encoding": "UTF-16", "data_encoding": "UTF-16LE", "bom": <fffe>},
+            {"encoding": "UTF-16", "data_encoding": "UTF-16BE", "bom": <feff>},
+            {"encoding": "UTF-16", "data_encoding": "UTF-16BE"},
+        );
 
         #! the data rows
         const Rows = (
@@ -60,6 +115,7 @@ public class CsvEncodingTest inherits QUnit::Test {
         addTestCase("data providers", \dataProviders());
         addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
         addTestCase("generic UTF-16", \genericUtf16());
+        addTestCase("typed fields", \typedFields());
         set_return_value(main());
     }
 
@@ -105,8 +161,8 @@ public class CsvEncodingTest inherits QUnit::Test {
             binary data = encode(c.headers, c.encoding);
             string label = c.encoding;
             # the fields are named in UTF-8; the last field is converted to an integer
-            string type = NonAsciiCompatible{c.encoding} ? "string" : "int";
-            auto qty = NonAsciiCompatible{c.encoding} ? ("5", "12") : (5, 12);
+            string type = "int";
+            list<int> qty = (5, 12);
             hash<auto> opts = {
                 "separator": ";",
                 "header_names": True,
@@ -137,10 +193,9 @@ public class CsvEncodingTest inherits QUnit::Test {
             hash<auto> opts = {"separator": ";", "headers": c.headers};
             checkRecords(c.headers, read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts)),
                 label + " headers");
-            opts.fields = {c.headers[2]: NonAsciiCompatible{c.encoding} ? "string" : "int"};
+            opts.fields = {c.headers[2]: "int"};
             list<hash<auto>> records = read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts));
-            assertEq(NonAsciiCompatible{c.encoding} ? ("5", "12") : (5, 12), map $1{c.headers[2]}, records,
-                label + " headers and fields");
+            assertEq((5, 12), map $1{c.headers[2]}, records, label + " headers and fields");
         }
     }
 
@@ -218,6 +273,38 @@ public class CsvEncodingTest inherits QUnit::Test {
         binary data = encode(CzechHeaders, "UTF-16BE");
         checkRecords(CzechHeaders, read(new CsvIterator(new BinaryInputStream(data), "UTF-16", opts)),
             "UTF-16 without a byte order mark");
+    }
+
+    typedFields() {
+        # int, float, number, bool, and date fields are converted from data in every encoding, including the
+        # encodings that are not ASCII-compatible
+        foreach hash<auto> c in (TypedCases) {
+            string label = sprintf("%s%s", c.encoding, c.bom ? " with a byte order mark" : "");
+            checkTyped(c, label, TypedHeaders, TypedRows, TypedRecords, {"fields": TypedFields});
+            checkTyped(c, label + " number format", FormatHeaders, FormatRows, FormatRecords,
+                {"fields": FormatFields, "number_format": ".,"});
+        }
+    }
+
+    #! Checks the records read from data with typed fields in the given encoding
+    private checkTyped(hash<auto> c, string label, list<string> headers, list<list<string>> rows,
+            list<hash<auto>> expected, hash<auto> field_opts) {
+        string text = (foldl $1 + ";" + $2, headers) + "\n";
+        foreach list<string> row in (rows) {
+            text += (foldl $1 + ";" + $2, row) + "\n";
+        }
+        binary data = (c.bom ?? binary()) + convert_encoding(text, c.data_encoding ?? c.encoding).toBinary();
+        hash<auto> opts = {"separator": ";", "header_names": True} + field_opts;
+        assertEq(expected, read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts)), label + " CsvIterator");
+        assertEq(expected, read(new CsvFileIterator(writeFile("typed.csv", data), opts + {"encoding": c.encoding})),
+            label + " CsvFileIterator");
+        assertEq(expected, search(new CsvReadDataProvider(opts + {"data": data, "encoding": c.encoding})),
+            label + " CsvReadDataProvider");
+        # a string with a byte order mark is not valid CSV data
+        if (!c.bom) {
+            assertEq(expected, read(new CsvDataIterator(binary_to_string(data, c.encoding), opts)),
+                label + " CsvDataIterator");
+        }
     }
 
     #! Checks that the records have the expected keys and values

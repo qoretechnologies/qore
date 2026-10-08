@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_date_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cerrno>
 #include <cstring>
@@ -160,14 +161,14 @@ void qore_absolute_time::set(const AbstractQoreZoneInfo* n_zone, const QoreValue
       set(n_zone, v.getAsBigInt(), 0);
    } else if (t == NT_FLOAT) {
       set(v.getAsFloat(), n_zone);
+   } else if (t == NT_STRING) {
+      // a short string is not a node; the helper provides the string
+      QoreStringValueHelper str(v);
+      QoreAsciiCompatStringHelper text(**str);
+      set(text.c_str(), n_zone);
    } else if (v.hasNode()) {
       const AbstractQoreNode* n = v.getInternalNode();
       switch (get_node_type(n)) {
-         case NT_STRING: {
-            const char* str = reinterpret_cast<const QoreStringNode*>(n)->getBuffer();
-            set(str, n_zone);
-            break;
-         }
          case NT_DATE: {
             const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(n);
             if (d->priv->relative) {
@@ -892,14 +893,14 @@ void qore_relative_time::set(const QoreValue v) {
     } else if (t == NT_FLOAT) {
         zero();
         addSecondsTo(v.getAsFloat());
+    } else if (t == NT_STRING) {
+        // a short string is not a node; the helper provides the string
+        QoreStringValueHelper str(v);
+        QoreAsciiCompatStringHelper text(**str);
+        set(text.c_str());
     } else if (v.hasNode()) {
         const AbstractQoreNode* n = v.getInternalNode();
         switch (get_node_type(n)) {
-            case NT_STRING: {
-                const char* str = reinterpret_cast<const QoreStringNode*>(n)->getBuffer();
-                set(str);
-                break;
-            }
             case NT_DATE: {
                 const DateTimeNode* d = reinterpret_cast<const DateTimeNode*>(n);
                 if (d->priv->relative)

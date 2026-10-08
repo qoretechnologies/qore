@@ -40,6 +40,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
 #endif
@@ -2901,10 +2902,12 @@ int i = strtoint("41", 8);
     @throw STRTOINT-ERROR cannot parse string; unsupported base, etc
 */
 int strtoint(string value, softint base = 10) [flags=NAMED_ARGS] {
+   QoreAsciiCompatStringHelper text(*value);
    errno = 0;
-   int64 rv = strtoll(value->c_str(), 0, base);
-   if (errno == EINVAL || errno == ERANGE)
-      xsink->raiseException("STRTOINT-ERROR", "could not parse '%s' to an integer", value->c_str());
+   int64 rv = strtoll(text.c_str(), 0, base);
+   if (errno == EINVAL || errno == ERANGE) {
+      xsink->raiseException("STRTOINT-ERROR", "could not parse '%s' to an integer", text.c_str());
+   }
    return rv;
 }
 

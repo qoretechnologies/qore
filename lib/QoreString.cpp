@@ -32,6 +32,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/IconvHelper.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -581,6 +582,54 @@ void qore_string_private::concatUTF8FromUnicode(unsigned code) {
         concat(0x80 | (code & 0x3f));
     } else
         concat((char)code);
+}
+
+void QoreAsciiCompatStringHelper::setupSlow(const qore_string_private& str) {
+    tmp.reset(new QoreString(QCS_UTF8));
+    decodeToUtf8(str.encoding, str.effective_buf(), str.len, *tmp);
+    buf = tmp->c_str();
+    len = tmp->size();
+    enc = QCS_UTF8;
+}
+
+void QoreAsciiCompatStringHelper::decodeToUtf8(const QoreEncoding* enc, const char* p, size_t size,
+        QoreString& out) {
+    assert(enc);
+    assert(!enc->isAsciiCompat());
+    assert(out.getEncoding() == QCS_UTF8);
+    const char* end = p + size;
+    // a byte order mark gives the byte order of a string in the generic "UTF-16" encoding (big-endian by default)
+    if (enc == QCS_UTF16 && size >= 2) {
+        unsigned char b0 = static_cast<unsigned char>(p[0]);
+        unsigned char b1 = static_cast<unsigned char>(p[1]);
+        if (b0 == 0xff && b1 == 0xfe) {
+            enc = QCS_UTF16LE;
+            p += 2;
+        } else if (b0 == 0xfe && b1 == 0xff) {
+            p += 2;
+        }
+    }
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    qore_string_private* op = qore_string_private::get(out);
+    // most characters in a string to be parsed are ASCII and need one byte each
+    op->check_char(op->len + static_cast<size_t>(end - p) / ep->getMinCharWidth() + 1);
+    while (p < end) {
+        qore_offset_t clen = enc->getCharLen(p, end - p);
+        if (clen <= 0) {
+            // an incomplete character at the end of the string
+            op->concatUTF8FromUnicode(0xfffd);
+            break;
+        }
+        unsigned code = ep->getUnicode(p);
+        // an unpaired surrogate is not a valid character
+        if (code >= 0xd800 && code <= 0xdfff) {
+            code = 0xfffd;
+            // only the first code unit is skipped, since the next one may be a valid character
+            clen = ep->getMinCharWidth();
+        }
+        op->concatUTF8FromUnicode(code);
+        p += clen;
+    }
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
@@ -3703,7 +3752,11 @@ bool QoreString::isDataAscii() const {
 }
 
 int64 QoreString::toBigInt() const {
-   return priv->len ? strtoll(priv->effective_buf(), 0, 10) : 0;
+   if (!priv->len) {
+      return 0;
+   }
+   QoreAsciiCompatStringHelper str(*this);
+   return strtoll(str.c_str(), 0, 10);
 }
 
 qore_offset_t QoreString::getByteOffset(size_t i, ExceptionSink* xsink) const {

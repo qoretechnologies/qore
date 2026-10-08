@@ -4135,6 +4135,27 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" no longer return the byte order mark
       at the start of UTF-16, UTF-16LE or UTF-16BE data as a character
 
+    - Fixed converting strings in a character encoding that is not ASCII-compatible (UTF-16, UTF-16LE and
+      UTF-16BE) to numbers, booleans and dates: the raw bytes of the string were parsed, so a number was cut at the
+      first null byte of its UTF-16 representation (\c "12" in UTF-16LE converted to \c 1), \c "0" was
+      @ref True, and dates could not be parsed.  This affected \c int(), \c float(), \c number(), \c boolean(),
+      @ref Qore::parse_boolean() "parse_boolean()", \c parse_int(), \c parse_float(), \c parse_number(),
+      \c strtoint(), \c date() (also with a format mask), @ref Qore::TimeZone::date() "TimeZone::date()", the
+      \c softint, \c softfloat, \c softnumber, \c softbool and \c softdate types,
+      @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()", @ref Qore::zzz8stringzzz9::intp() "<string>::intp()",
+      the \c toInt(), \c toFloat(), \c toNumber() and \c toBool() methods, boolean evaluation, and comparisons
+      with numbers, in every execution mode and in compiled (AOT) modules.  Such a string now gives the same result
+      as the UTF-8 string with the same characters, and @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()" no
+      longer raises \c UNSUPPORTED-ENCODING; a byte sequence that is not a valid character ends a number or date
+      like any other character that cannot be part of it.  Strings in ASCII-compatible encodings are parsed as
+      before, with no additional cost
+      - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
+        @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
+
+    - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a constant list in a
+      compiled (AOT) module, converting to \c 1970-01-01 instead of the date it represents (ex: \c "P1DT2H") when
+      assigned to a \c softdate variable or member
+
     - Fixed an exception raised while a loop or a functional operator advances an iterator escaping the
       enclosing \c try block with IR, tiered and JIT execution: an exception from an iterator's \c next() or
       \c getValue() in a \c foreach loop, or in an operator such as \c map, \c select or \c foldl, returned from

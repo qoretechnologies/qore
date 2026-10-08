@@ -47,6 +47,7 @@
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <atomic>
 #include <cctype>
@@ -2567,7 +2568,8 @@ void LVarSet::add(LocalVar* var) {
 bool q_parse_bool(QoreValue n) {
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        return q_parse_bool(str->c_str());
+        QoreAsciiCompatStringHelper text(**str);
+        return q_parse_bool(text.c_str());
     }
     return n.getAsBool();
 }

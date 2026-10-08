@@ -35,6 +35,7 @@
 #include "qore/intern/QC_StringSplitIterator.h"
 #include "qore/intern/QC_StringRegexSplitIterator.h"
 #include "qore/intern/QC_StringCharIterator.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cctype>
 
@@ -383,11 +384,12 @@ bool <string>::intp() [const;flags=CONSTANT] {
     if (str->empty()) {
         return false;
     }
-    char c = (*str)[0];
+    QoreAsciiCompatStringHelper text(*str);
+    char c = text.c_str()[0];
     if (c == '-') {
-        c = (*str)[1];
+        c = text.c_str()[1];
     }
-    return (isdigit(c)) ? true : false;
+    return isdigit(static_cast<unsigned char>(c)) ? true : false;
 }
 
 //! Converts the string to an integer value with respect to the <b>base</b>
@@ -414,24 +416,23 @@ bool <string>::intp() [const;flags=CONSTANT] {
     @endcode
 
     @throw INVALID-BASE the base is invalid; must be 0 or 2 - 36 inclusive
-    @throw UNSUPPORTED-ENCODING only ASCII-compatible encodings are currently supported
 
     @see <value>::toInt()
     @see Qore::int(string str, int base = 10)
 
-    @since %Qore 0.8.13; in previous versions the \link <value>::toInt() \endlink function (without the <b>base</b>
-    argument) applied also to strings
+    @since
+    - %Qore 0.8.13; in previous versions the \link <value>::toInt() \endlink function (without the <b>base</b>
+      argument) applied also to strings
+    - %Qore 3.0 a string in an encoding that is not ASCII-compatible (UTF-16) is converted as the same characters in
+      UTF-8; previously an \c UNSUPPORTED-ENCODING exception was raised
   */
 int <string>::toInt(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 0 || base == 1 || base > 36) {
         return xsink -> raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 0 or 2 - 36 inclusive",
             base);
     }
-    if (!str->getEncoding()->isAsciiCompat()) {
-        return xsink -> raiseException("UNSUPPORTED-ENCODING", "cannot convert string in non-ASCII-compatible "
-            "encoding \"%s\" to an integer", str->getEncoding()->getCode());
-    }
-    return strtoll(str -> c_str(), 0, (int)base);
+    QoreAsciiCompatStringHelper text(*str);
+    return strtoll(text.c_str(), 0, (int)base);
 }
 
 //! Returns @ref True by default

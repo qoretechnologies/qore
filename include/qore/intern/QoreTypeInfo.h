@@ -3143,8 +3143,7 @@ public:
             }
          },
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               QoreStringValueHelper str(n);
-               discard(n.assign(new QoreNumberNode(str->c_str())), xsink);
+               discard(n.assign(QoreNumberNode::toNumber(n)), xsink);
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3195,8 +3194,7 @@ public:
             }
          },
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               QoreStringValueHelper str(n);
-               discard(n.assign(new QoreNumberNode(str->c_str())), xsink);
+               discard(n.assign(QoreNumberNode::toNumber(n)), xsink);
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3587,8 +3585,14 @@ public:
    DLLLOCAL QoreSoftDateTypeInfo() : QoreTypeInfo("softdate", q_accept_vec_t {
          {NT_DATE, nullptr, true},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               DateTimeNodeValueHelper dt(n.getInternalNode());
-               discard(n.assign(dt.getReferencedValue()), xsink);
+               // a short string is not a node; the helper provides one
+               DateTimeNode* d;
+               {
+                  QoreStringNodeValueHelper str(n);
+                  DateTimeNodeValueHelper dt(*str);
+                  d = dt.getReferencedValue();
+               }
+               discard(n.assign(d), xsink);
             }
          },
          {NT_BOOLEAN, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3636,8 +3640,14 @@ public:
    DLLLOCAL QoreSoftDateOrNothingTypeInfo() : QoreTypeInfo("*softdate", q_accept_vec_t {
          {NT_DATE, nullptr},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               DateTimeNodeValueHelper dt(n.getInternalNode());
-               discard(n.assign(dt.getReferencedValue()), xsink);
+               // a short string is not a node; the helper provides one
+               DateTimeNode* d;
+               {
+                  QoreStringNodeValueHelper str(n);
+                  DateTimeNodeValueHelper dt(*str);
+                  d = dt.getReferencedValue();
+               }
+               discard(n.assign(d), xsink);
             }
          },
          {NT_BOOLEAN, [] (QoreValue& n, ExceptionSink* xsink) {

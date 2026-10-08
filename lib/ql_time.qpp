@@ -34,6 +34,7 @@
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cstdio>
 #include <ctime>
@@ -136,11 +137,15 @@ DateTimeNode* make_date_with_mask(const AbstractQoreZoneInfo* tz, const QoreStri
     dt.month = 1;
     dt.day = 1;
 
-    const char* d = dtstr.c_str();
-    const char* de = d + dtstr.strlen();
+    // the date and the mask are parsed in an ASCII-compatible encoding
+    QoreAsciiCompatStringHelper dtext(dtstr);
+    QoreAsciiCompatStringHelper mtext(mask);
 
-    const char* s = mask.c_str();
-    const char* se = s + mask.strlen();
+    const char* d = dtext.c_str();
+    const char* de = d + dtext.size();
+
+    const char* s = mtext.c_str();
+    const char* se = s + mtext.size();
 
     try {
         int iter = 0;

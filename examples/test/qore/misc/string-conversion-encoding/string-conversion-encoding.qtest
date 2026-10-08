@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include string-conversion-encoding-checks.qi
+
+%exec-class StringConversionEncodingTest
+
+#! Tests that strings in encodings that are not ASCII-compatible convert as UTF-8 strings in every execution engine
+/** The checks in string-conversion-encoding-checks.qi run in this program, in each execution mode, and from a
+    compiled (AOT) module; every engine must give the same results, and every check must pass.
+*/
+class StringConversionEncodingTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+        const Variants = ("UTF-16LE", "UTF-16BE", "UTF-16", "UTF-16 LE BOM", "UTF-16 BE BOM");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the results of the checks in this program
+        list<string> expected;
+    }
+
+    constructor() : QUnit::Test("StringConversionEncodingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("in this program", \testInProcess());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("a compiled module", \testCompiledModule());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        expected = StringConversionEncodingChecks::get_results();
+    }
+
+    testInProcess() {
+        checkResults("in-process", expected);
+        # every check ran for each encoding and input, and the constant and invalid string checks ran
+        int per_variant = (select expected, $1 =~ /^ok UTF-16LE "12": /).size();
+        assertTrue(per_variant > 50, "checks per input");
+        foreach string variant in (Variants) {
+            string re = "^ok " + variant + " \"";
+            assertEq(per_variant * StringConversionEncodingChecks::Inputs.size(),
+                (select expected, $1.regex(re)).size(), variant);
+        }
+        assertTrue((select expected, $1 =~ /^ok constants: /).size() > 0, "constant checks ran");
+        assertTrue((select expected, $1 =~ /^ok invalid: /).size() > 0, "invalid string checks ran");
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("string-conversion-encoding-worker.q", get_script_dir(),
+                "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-string-conversion-encoding-");
+        string qmod_path = tmp.path + DirSep + "StringConversionEncodingChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "StringConversionEncodingChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("string-conversion-encoding-module-worker.q", tmp.path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1",
+            libqore_dir, libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! compares the lines printed by a worker with the results of the checks in this program
+    private checkWorkerOutput(string label, string out) {
+        list<string> results = select out.split("\n"), $1.val();
+        checkResults(label, results);
+        assertEq(expected, results, label + ": the same checks as in this program");
+    }
+
+    #! checks that every check passed
+    private checkResults(string label, list<string> results) {
+        assertTrue(results.size() > 0, label + ": checks ran");
+        foreach string line in (results) {
+            assertTrue(line =~ /^ok /, label + ": " + line);
+        }
+    }
+}
