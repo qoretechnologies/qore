@@ -1075,6 +1075,15 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
                 i += len - 1;
                 continue;
             }
+
+            // the character is not encoded: all of its bytes are output, as the bytes after the first one of a
+            // multi-byte character are not characters themselves (ex: in EUC-JP, GB18030, or Big5)
+            assert(len);
+            for (unsigned j = 0; j < len; ++j) {
+                concat(p_buf[i + j]);
+            }
+            i += len - 1;
+            continue;
         } else if (((code & CE_HTML) && HTML_ASCII(c))
                 || ((code & CE_XML) && XML_ASCII(c))) {
             smap_t::iterator it = smap.find(c);

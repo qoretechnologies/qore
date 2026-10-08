@@ -44,6 +44,7 @@ class MultiByteEncodingTest inherits QUnit::Test {
         addTestCase("Shift_JIS", \testShiftJis());
         addTestCase("invalid strings", \testInvalid());
         addTestCase("code points in threads", \testThreads());
+        addTestCase("HTML encoding", \testHtmlEncoding());
         set_return_value(main());
     }
 
@@ -170,6 +171,30 @@ class MultiByteEncodingTest inherits QUnit::Test {
         c.waitForZero();
         assertEq({}, errors);
         assertTrue(strs.size() > 0);
+    }
+
+    testHtmlEncoding() {
+        int encoded = 0;
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            string text = i.value + " <&>";
+            if (!supported(i.key, text)) {
+                continue;
+            }
+            string s = convert_encoding(text, i.key);
+            try {
+                string h = html_encode(s);
+                # a character that is not encoded is copied with all of its bytes
+                assertEq(html_encode(text), convert_encoding(h, "UTF-8"), i.key + " html_encode()");
+                assertEq(text.getEncoded(CE_NONASCII), convert_encoding(s.getEncoded(CE_NONASCII), "UTF-8"),
+                    i.key + " getEncoded(CE_NONASCII)");
+                ++encoded;
+            } catch (hash<ExceptionInfo> ex) {
+                # only encodings that are not ASCII-compatible cannot be encoded to
+                assertEq("UNSUPPORTED-ENCODING", ex.err, i.key + ": " + ex.desc);
+                assertNeq("EUC-JP", i.key);
+            }
+        }
+        assertTrue(encoded > 0);
     }
 
     testInvalid() {
