@@ -99,7 +99,7 @@ void Http1ClientPollOperationPriv::initAdoptedReady(ExceptionSink* xsink) {
     // state to the connection priv.  Safe to call from the app thread
     // before controller submission - the I/O thread will see READING
     // on its first continuePoll().
-    startReady(xsink);
+    startReady(false, xsink);
 }
 
 Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
@@ -319,7 +319,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         } else if (ssl_required) {
             startSslUpgrade(xsink);
         } else {
-            startReady(xsink);
+            startReady(false, xsink);
         }
         if (*xsink) {
             return nullptr;
@@ -373,7 +373,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxySslUpgrade(ExceptionSink*
             startProxyConnect(xsink);
         } else {
             // plain HTTP requests are sent to the proxy with absolute URIs
-            startReady(xsink);
+            startReady(false, xsink);
         }
         if (*xsink) {
             return nullptr;
@@ -578,15 +578,15 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
 
         // No ALPN check for HTTP/1.1 - it is the default protocol
         printd(5, "Http1ClientPollOperationPriv::handleSslUpgrade() SSL done\n");
-        startReady(xsink);
+        // with h2, the operation enters PROTOCOL_SWITCHED before readiness is signaled, so that the connection
+        // manager, which takes the socket as soon as it is woken, never sees the HTTP/1.1 states; no HTTP/1.1
+        // request can be submitted in that state (see submitRequest())
+        startReady(h2, xsink);
         if (*xsink) {
             return nullptr;
         }
         if (h2) {
             ASYNC_IO_TRACE("H1 handleSslUpgrade: h2 negotiated, socket ready for extraction\n");
-            // no HTTP/1.1 request can be submitted in this state (see submitRequest())
-            req_state = ReqState::PROTOCOL_SWITCHED;
-            h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
             return handleProtocolSwitched(xsink);
         }
         return continuePoll(xsink);
@@ -596,13 +596,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
     return nullptr;
 }
 
-void Http1ClientPollOperationPriv::startReady(ExceptionSink* xsink) {
-    printd(5, "Http1ClientPollOperationPriv::startReady()\n");
+void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionSink* xsink) {
+    printd(5, "Http1ClientPollOperationPriv::startReady() protocol_switched: %d\n", protocol_switched);
     releaseCurrentOp(xsink);
     // the connect phase is over; the request budget governs from here on
     connect_deadline_us = 0;
-    h1_state.store(H1State::READING, std::memory_order_release);
-    req_state = ReqState::IDLE;
+    // the final state is set before readiness is signaled: a waiter woken by the ready callback reads it at once;
+    // req_state is set first, so the release store of h1_state publishes it
+    if (protocol_switched) {
+        req_state = ReqState::PROTOCOL_SWITCHED;
+        h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
+    } else {
+        req_state = ReqState::IDLE;
+        h1_state.store(H1State::READING, std::memory_order_release);
+    }
     fireReadyCallback(xsink);
 }
 
