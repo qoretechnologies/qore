@@ -364,6 +364,20 @@ with its own descriptor-revision error (`native ABI version 2 is incompatible
 with runtime version 1; rebuild the module`) instead of failing in `dlopen()`
 on an unresolved symbol.
 
+Outside the Qore tree, `QORE_USER_MODULE_AOT_RULES()` (cmake/QoreMacros.cmake)
+makes every `.qmod` depend on a build-local `qcc-format.stamp` that
+`cmake/QoreWriteQccRuntimeStamp.cmake` rewrites whenever qcc, `QORE_LIBRARY`
+or the installed `qcc-format.stamp` changes. The rule records the identity
+`qcc --version` reports in the AOT environment and fails before any module is
+compiled when it reports none. Depending on the qcc executable alone was not
+enough: installing a new libqore does not always reinstall qcc, so the qmods
+kept the previous library's identity and the new library refused them. The
+AOT environment's `LD_LIBRARY_PATH` (`QORE_GET_AOT_LIBRARY_PATH()`) puts the
+directory of `QORE_LIBRARY` ahead of the configure-time `LD_LIBRARY_PATH`, so a
+path naming another Qore build tree cannot make qcc compile for that tree's
+library. `examples/test/ir/CMakeBuildHelpers.qtest` ("external AOT qmods
+rebuild for a new Qore library ...") covers both.
+
 Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
 individually: the glue object records the identity of the aggregating qcc, and
 the build-system contract below keeps the `.qo` inputs current.

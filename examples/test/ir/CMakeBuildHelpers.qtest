@@ -70,6 +70,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testFormatFingerprintCoverage());
         addTestCase("qcc build inputs track libqore for an installed qore",
             \testQccDepsTrackInstalledLibqore());
+        addTestCase("external AOT qmods rebuild for a new Qore library and use its qcc runtime",
+            \testExternalQmodsTrackQoreRuntime());
         addTestCase("cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
         addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
@@ -910,6 +912,115 @@ file(WRITE \"${CMAKE_BINARY_DIR}/deps.txt\"
             "an installed qore tracks libqore itself: " + deps.installed);
         assertEq(-1, deps.in_tree.find(library),
             "an in-tree qore keeps the curated list alone: " + deps.in_tree);
+    }
+
+    #! AOT qmods of a module built outside the Qore tree follow the Qore library they are built for
+    /** The qmods of such a build depended only on the qcc executable, which is not reinstalled when only the Qore
+        library changes, so installing a new library left qmods compiled for the previous one, which the new library
+        refuses.  The qcc run also inherited the configure-time LD_LIBRARY_PATH ahead of the Qore library, so a
+        path to another Qore build tree made qcc compile for that tree's library.  A fake qcc stands in for the real
+        one: it reports the identity in \c identity.txt and records each compilation in \c compiles.log.
+    */
+    testExternalQmodsTrackQoreRuntime() {
+        if (!qore_dir) {
+            testSkip("QoreConfig.cmake is not available for the build under test");
+        }
+        TmpDir tmp("qore-external-qmod-runtime-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string tool_dir = tmp.path + "/tools";
+        string lib_dir = tmp.path + "/lib";
+        mkdir(src_dir + "/qlib/Fixture", 0755, True);
+        mkdir(tool_dir);
+        mkdir(lib_dir);
+        write(src_dir + "/qlib/Fixture/Fixture.qm", "%modern\n"
+            "module Fixture {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"external qmod runtime fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreExternalQmodRuntime NONE)
+find_package(Qore REQUIRED)
+# the stand-in library, also for a build-tree QoreConfig.cmake, which names the build tree's library
+set(QORE_LIBRARY \"${FIXTURE_QORE_LIBRARY}\")
+qore_external_user_module(\"qlib/Fixture\" \"\")
+");
+        string library = lib_dir + "/libqore.so";
+        write(library, "a stand-in for the Qore library\n");
+        string identity_file = tool_dir + "/identity.txt";
+        string log = tool_dir + "/compiles.log";
+        string qcc = tool_dir + "/qcc";
+        write(qcc, sprintf("#!/bin/sh\n"
+            "if [ \"$1\" = --version ]; then\n"
+            "    echo 'qcc (Qore Code Compiler) v1.0'\n"
+            "    id=`cat %s`\n"
+            "    [ -n \"$id\" ] && echo \"AOT runtime identity: $id\"\n"
+            "    exit 0\n"
+            "fi\n"
+            "out=\n"
+            "while [ $# -gt 0 ]; do\n"
+            "    case \"$1\" in\n"
+            "        -o) out=$2; shift ;;\n"
+            "        --depfile=*) dep=${1#--depfile=} ;;\n"
+            "    esac\n"
+            "    shift\n"
+            "done\n"
+            "echo \"LD_LIBRARY_PATH=$LD_LIBRARY_PATH\" >> %s\n"
+            "echo qmod > \"$out\"\n"
+            "[ -n \"$dep\" ] && echo \"$out:\" > \"$dep\"\n"
+            "exit 0\n", identity_file, log));
+        chmod(qcc, 0755);
+        write(identity_file, "aaaa\n");
+
+        string other_tree = tmp.path + "/other-qore-build";
+        string configure = run(sprintf("LD_LIBRARY_PATH=%s cmake -S %s -B %s -DQore_DIR=%s "
+            "-DQORE_QCC_EXECUTABLE=%s -DFIXTURE_QORE_LIBRARY=%s -DQORE_BUILD_AOT_MODULES=ON",
+            shellQuote(other_tree), shellQuote(src_dir), shellQuote(build_dir), shellQuote(qore_dir),
+            shellQuote(qcc), shellQuote(library)));
+        string qmod = build_dir + "/qlib-qmod/Fixture/Fixture.qmod";
+        string stamp = build_dir + "/qcc-format.stamp";
+
+        code<int()> compiles = int sub () {
+            return is_file(log) ? read(log).split("\n").size() : 0;
+        };
+        string build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertTrue(is_file(qmod), "the fixture qmod is compiled: " + configure + build);
+        assertEq(1, compiles());
+        assertRegex("aot-runtime-identity=aaaa", read(stamp), "the stamp records the identity qcc reports");
+
+        # qcc runs with the Qore library's directory ahead of the configure-time library path
+        string ld_path = read(log).split("\n")[0];
+        int lib_pos = ld_path.find(lib_dir);
+        int other_pos = ld_path.find(other_tree);
+        assertTrue(lib_pos >= 0 && other_pos > lib_pos,
+            "the Qore library directory precedes the configure-time LD_LIBRARY_PATH: " + ld_path);
+
+        # nothing changed: nothing is recompiled
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(1, compiles(), "an unchanged build recompiles nothing");
+
+        # a new Qore library is installed and qcc is not: the qmods are recompiled
+        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 2, shellQuote(library)));
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(2, compiles(), "a new Qore library recompiles the qmods: " + build);
+
+        # a new qcc reporting a new identity: recompiled, and the stamp names the new identity
+        write(identity_file, "bbbb\n");
+        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 4, shellQuote(qcc)));
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(3, compiles(), "a new qcc recompiles the qmods: " + build);
+        assertRegex("aot-runtime-identity=bbbb", read(stamp));
+
+        # a qcc that reports no identity fails the build before any module is compiled
+        write(identity_file, "");
+        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 6, shellQuote(qcc)));
+        build = run(sprintf("cmake --build %s; echo RC=$?", shellQuote(build_dir)));
+        assertRegex("does\\s+not\\s+report\\s+an\\s+AOT\\s+runtime\\s+identity", build);
+        assertFalse(build =~ /RC=0/, "the build fails: " + build);
+        assertEq(3, compiles(), "no module is compiled with a qcc that reports no identity");
     }
 
     testExportedHelpers() {

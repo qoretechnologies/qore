@@ -17,6 +17,10 @@
     it. AOT modules compiled by earlier %Qore 3.0 development builds must be rebuilt; see
     @ref aot_module_runtime_identity.
 
+    Modules built with the %Qore CMake support outside of the %Qore source tree recompile their AOT modules when a
+    new %Qore library is installed, also when \c qcc itself is unchanged, and compile them for the library found by
+    \c find_package(Qore) even when \c LD_LIBRARY_PATH names another %Qore build tree.
+
     Data provider factories report that a data provider does not support a constructor from an option hash only
     when its class has no such constructor. Other errors raised while looking up the constructor, such as
     <tt>PROGRAM-ERROR</tt> for a class whose @ref Qore::Program "Program" has been deleted, are raised unchanged
