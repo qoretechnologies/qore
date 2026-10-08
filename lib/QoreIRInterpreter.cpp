@@ -6531,7 +6531,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 fprintf(stderr, " refs=%d rrefs=%d rcount=%d rset=%p deferred=%d recursive_found=%d status=%d",
                     priv->references.load(), priv->rrefs.load(), priv->rcount,
                     static_cast<void*>(priv->rset.load(std::memory_order_relaxed)),
-                    priv->deferred_scan ? 1 : 0, priv->recursive_ref_found ? 1 : 0, priv->status);
+                    priv->deferred_scan ? 1 : 0, priv->recursive_ref_found ? 1 : 0, priv->status.load());
             }
         }
         fputc('\n', stderr);

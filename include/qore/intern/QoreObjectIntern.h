@@ -193,7 +193,12 @@ class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    int status = OS_OK;
+    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
+        the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
+        whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
+    */
+    std::atomic<int> status{OS_OK};
 
     KeyList* privateData = nullptr;
     // member data
@@ -214,7 +219,9 @@ public:
     */
     std::atomic<int> scan_private_data{0};
 
-    bool system_object, in_destructor;
+    bool system_object;
+    //! set when the object's destruction has started; read without the object's locks as status is
+    std::atomic<bool> in_destructor;
     bool recursive_ref_found;
 
     QoreObject* obj;
@@ -514,7 +521,7 @@ public:
     DLLLOCAL virtual bool isValidImpl() const {
         if (status != OS_OK || in_destructor) {
             printd(QRO_LVL, "qore_object_intern::isValidImpl() this: %p cannot delete graph obj status: %d "
-                "in_destructor: %d\n", this, status, in_destructor);
+                "in_destructor: %d\n", this, status.load(), (int)in_destructor.load());
             return false;
         }
         return true;
