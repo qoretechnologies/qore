@@ -214,6 +214,9 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     printd(5, "QoreParseHashNode::parseInitImpl() this: %p type: %s (%s)\n", this,
         QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(typeInfo));
 
+    // the analysis left by the last key or value initialized above describes that value, not the hash
+    qore_set_result_parse_analysis(parse_context, parse_context.typeInfo);
+
     if (err) {
         parse_error = true;
         return err;
@@ -234,6 +237,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     if (!result.isNothing()) {
         val = result;
         parse_context.typeInfo = val.getFullTypeInfo();
+        qore_set_result_parse_analysis(parse_context, parse_context.typeInfo);
         return 0;
     }
     // constants not resolved - skip parse-time folding, let runtime handle it

@@ -137,6 +137,8 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2,
         iteratorTypeInfo, expected_hint);
+    // the analysis left by the value expression describes the values, not the hash
+    qore_set_result_parse_analysis(parse_context, parse_context.typeInfo);
     return err;
 }
 

@@ -1,0 +1,179 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file expression-result-types-checks.qi checks that operators take each operand for the value it has, not for the last value inside it
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** Each check combines two expressions whose last operand has another type than the expression itself: a hash literal
+    or hash \c map whose last value is a number, an \c extract whose last operand is an offset, or an assignment
+    operator whose right operand has another type than its result.  The operator must use the type of the value of
+    each expression, as the AST interpreter does: for example two hash literals with integer values are added as
+    hashes, not as integers.
+
+    The checks are in functions taking their keys and values as arguments, so the expressions cannot be evaluated
+    when the code is parsed.
+
+    Each execution engine selects its own code for the operators, so the checks are run in each execution mode by
+    expression-result-types-worker.q, which includes this file in its main program, and as a compiled (AOT) module
+    by ExpressionResultTypeChecks.qm, which includes it as well.
+*/
+public namespace ExpressionResultTypeChecks {
+hashdecl KeyHd {
+    int a = 1;
+    int b = 2;
+}
+
+#! collects the result of each check as \c "ok <label>" or \c "FAIL <label>: <reason>"
+class Checker {
+    private {
+        list<string> results = ();
+    }
+
+    #! checks that \a actual has the same type and value as \a expected, and that a hash has the same key order
+    chk(string label, code<auto()> c, auto expected) {
+        auto actual;
+        try {
+            actual = c();
+        } catch (hash<ExceptionInfo> ex) {
+            results += sprintf("FAIL %s: %s: %s", label, ex.err, ex.desc);
+            return;
+        }
+        if (actual !== expected) {
+            results += sprintf("FAIL %s: got %y (%s) expected %y (%s)", label, actual, actual.type(), expected,
+                expected.type());
+            return;
+        }
+        if (actual.typeCode() == NT_HASH && keys actual != keys expected) {
+            results += sprintf("FAIL %s: got keys %y expected %y", label, keys actual, keys expected);
+            return;
+        }
+        results += "ok " + label;
+    }
+
+    #! checks that the code raises the given exception
+    chkErr(string label, code<auto()> c, string err, string desc) {
+        try {
+            auto v = c();
+            results += sprintf("FAIL %s: no exception: %y", label, v);
+        } catch (hash<ExceptionInfo> ex) {
+            results += (ex.err == err && ex.desc == desc)
+                ? "ok " + label
+                : sprintf("FAIL %s: %s: %s", label, ex.err, ex.desc);
+        }
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+# hash literals with keys given by variables
+auto sub hash_plus(string a, string b) { return {a: 1} + {b: 2}; }
+auto sub hash_plus_same_key(string a) { return {a: 1} + {a: 2}; }
+auto sub hash_plus_key_counts(string a, string b, string c) { return {a: 1, b: 2} + {c: 3}; }
+auto sub hash_plus_three(string a, string b, string c) { return {a: 1} + {b: 2} + {c: 3}; }
+auto sub hash_plus_float(string a, string b) { return {a: 1.5} + {b: 2.5}; }
+auto sub hash_plus_number(string a, string b) { return {a: 1.5n} + {b: 2.5n}; }
+auto sub hash_plus_string(string a, string b) { return {a: "x"} + {b: "y"}; }
+auto sub hash_plus_nested(string a, string b) { return {a: {b: 1}} + {b: {a: 2}}; }
+auto sub hash_plus_value_vars(string a, string b, int i, int j) { return {a: i} + {b: j}; }
+hash<auto> sub hash_plus_assign_auto(string a, string b) { hash<auto> x = {a: 1} + {b: 2}; return x; }
+hash<string, int> sub hash_plus_assign_typed(string a, string b) { hash<string, int> x = {a: 1} + {b: 2}; return x; }
+auto sub hash_plus_hashdecl(string b) { return new hash<KeyHd>() + {b: 5}; }
+auto sub hash_plus_hashdecl_right(string a) { return {a: 5} + new hash<KeyHd>(); }
+auto sub hash_plus_plus_equals(string a, string b) {
+    hash<auto> x = {a: 1};
+    hash<auto> y = {};
+    return (x += {b: 2}) + (y += {a: 3});
+}
+auto sub hash_minus_key(string a, string b) { return {a: 1, b: 2} - b; }
+auto sub hash_minus_list(string a, string b) { return {a: 1, b: 2} - (b,); }
+auto sub hash_minus_equals(string a, string b) {
+    hash<auto> x = {a: 1, b: 2};
+    hash<auto> y = {a: 3, b: 4};
+    return (x -= a) + (y -= b);
+}
+auto sub hash_multiply(string a, string b) { return {a: 1} * {b: 2}; }
+auto sub hash_divide(string a, string b) { return {a: 4} / {b: 2}; }
+auto sub hash_map_plus(string a, string b) { return (map {$1: 1}, (a,)) + (map {$1: 2}, (b,)); }
+
+# extract, whose last operand is an integer offset or length
+auto sub extract_list(list<auto> l, list<auto> k) { return (extract l, 0, 1) + (extract k, 0, 1); }
+auto sub extract_string(string a, string b) { return (extract a, 0, 1) + (extract b, 0, 1); }
+
+# assignment operators, whose right operand has another type than their result
+auto sub plus_equals_int(int a, float f) { int x = a; int y = a; return (x += f) + (y += f); }
+auto sub plus_equals_string(string a, int i) { string x = a; string y = a; return (x += i) + (y += i); }
+auto sub minus_equals_int(int a, float f) { int x = a; int y = a; return (x -= f) + (y -= f); }
+auto sub multiply_equals_float(float a, int i) { float x = a; float y = a; return (x *= i) + (y *= i); }
+auto sub multiply_equals_number(number a, int i) { number x = a; number y = a; return (x *= i) + (y *= i); }
+auto sub divide_equals_float(float a, int i) { float x = a; float y = a; return (x /= i) + (y /= i); }
+auto sub divide_equals_number(number a, int i) { number x = a; number y = a; return (x /= i) + (y /= i); }
+auto sub and_equals(int a, float f) { int x = a; int y = a; return (x &= f) + (y &= f); }
+auto sub or_equals(int a, float f) { int x = a; int y = a; return (x |= f) + (y |= f); }
+auto sub xor_equals(int a, float f) { int x = a; int y = a; return (x ^= f) + (y ^= f); }
+auto sub modulo_equals(int a, float f) { int x = a; int y = a; return (x %= f) + (y %= f); }
+auto sub shift_left_equals(int a, float f) { int x = a; int y = a; return (x <<= f) + (y <<= f); }
+auto sub shift_right_equals(int a, float f) { int x = a; int y = a; return (x >>= f) + (y >>= f); }
+
+#! runs the checks and returns the result of each one
+public list<string> sub get_results() {
+    Checker c();
+    c.chk("hash +", auto sub () { return hash_plus("an", "a"); }, {"an": 1, "a": 2});
+    c.chk("hash + same key", auto sub () { return hash_plus_same_key("a"); }, {"a": 2});
+    c.chk("hash + key counts", auto sub () { return hash_plus_key_counts("x", "y", "z"); }, {"x": 1, "y": 2, "z": 3});
+    c.chk("hash + three", auto sub () { return hash_plus_three("x", "y", "z"); }, {"x": 1, "y": 2, "z": 3});
+    c.chk("hash + float values", auto sub () { return hash_plus_float("x", "y"); }, {"x": 1.5, "y": 2.5});
+    c.chk("hash + number values", auto sub () { return hash_plus_number("x", "y"); }, {"x": 1.5n, "y": 2.5n});
+    c.chk("hash + string values", auto sub () { return hash_plus_string("x", "y"); }, {"x": "x", "y": "y"});
+    c.chk("hash + nested", auto sub () { return hash_plus_nested("x", "y"); }, {"x": {"y": 1}, "y": {"x": 2}});
+    c.chk("hash + value variables", auto sub () { return hash_plus_value_vars("x", "y", 3, 4); }, {"x": 3, "y": 4});
+    c.chk("hash + to hash<auto>", auto sub () { return hash_plus_assign_auto("an", "a"); }, {"an": 1, "a": 2});
+    c.chk("hash + to hash<string, int>", auto sub () { return hash_plus_assign_typed("an", "a"); },
+        cast<hash<string, int>>({"an": 1, "a": 2}));
+    c.chk("hashdecl + hash", auto sub () { return hash_plus_hashdecl("b"); }, {"a": 1, "b": 5});
+    c.chk("hash + hashdecl", auto sub () { return hash_plus_hashdecl_right("a"); }, {"a": 1, "b": 2});
+    c.chk("hash += results", auto sub () { return hash_plus_plus_equals("x", "y"); }, {"x": 3, "y": 2});
+    c.chk("hash - key", auto sub () { return hash_minus_key("x", "y"); }, {"x": 1});
+    c.chk("hash - list", auto sub () { return hash_minus_list("x", "y"); }, {"x": 1});
+    c.chk("hash -= results", auto sub () { return hash_minus_equals("x", "y"); }, {"y": 2, "x": 3});
+    c.chk("hash *", auto sub () { return hash_multiply("x", "y"); }, NOTHING);
+    c.chkErr("hash /", auto sub () { return hash_divide("x", "y"); }, "DIVISION-BY-ZERO",
+        "division by zero found in floating-point expression");
+    c.chk("hash map +", auto sub () { return hash_map_plus("x", "y"); }, {"x": 1, "y": 2});
+    c.chk("extract list", auto sub () { return extract_list(("a", "b"), ("c", "d")); }, ("a", "c"));
+    c.chk("extract string", auto sub () { return extract_string("ab", "cd"); }, "ac");
+    c.chk("+= int", auto sub () { return plus_equals_int(1, 1.5); }, 4);
+    c.chk("+= string", auto sub () { return plus_equals_string("s", 1); }, "s1s1");
+    c.chk("-= int", auto sub () { return minus_equals_int(5, 1.5); }, 8);
+    c.chk("*= float", auto sub () { return multiply_equals_float(1.25, 2); }, 5.0);
+    c.chk("*= number", auto sub () { return multiply_equals_number(1.25n, 2); }, 5n);
+    c.chk("/= float", auto sub () { return divide_equals_float(1.0, 4); }, 0.5);
+    c.chk("/= number", auto sub () { return divide_equals_number(1n, 4); }, 0.5n);
+    c.chk("&=", auto sub () { return and_equals(7, 3.0); }, 6);
+    c.chk("|=", auto sub () { return or_equals(4, 1.0); }, 10);
+    c.chk("^=", auto sub () { return xor_equals(4, 1.0); }, 10);
+    c.chk("%=", auto sub () { return modulo_equals(7, 4.0); }, 6);
+    c.chk("<<=", auto sub () { return shift_left_equals(1, 2.0); }, 8);
+    c.chk(">>=", auto sub () { return shift_right_equals(8, 1.0); }, 8);
+    return c.getResults();
+}
+}

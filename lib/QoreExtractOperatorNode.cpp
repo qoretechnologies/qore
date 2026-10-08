@@ -110,6 +110,8 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
 
     parse_context.typeInfo = returnTypeInfo = expTypeInfo;
+    // the analysis left by the last operand initialized above describes that operand, not the result
+    qore_set_result_parse_analysis(parse_context, returnTypeInfo);
     return err;
 }
 

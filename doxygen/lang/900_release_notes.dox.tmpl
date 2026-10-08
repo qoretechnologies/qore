@@ -4076,6 +4076,15 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed some expressions being taken for a value of another type with IR, tiered and JIT execution and in compiled
+      (AOT) modules, which gave wrong results or raised type errors where AST execution did not: a hash literal with
+      keys that are not constants, or a hash \c map, was taken for its last value, so for example
+      <tt>{a: 1} + {b: 2}</tt> with variables \c a and \c b returned \c 0 instead of a hash, and assigning it raised
+      \c RUNTIME-TYPE-ERROR; \c extract was taken for its offset or length, so <tt>(extract a, 0, 1) + (extract b, 0,
+      1)</tt> returned \c 0; and the \c +=, \c -=, \c *=, \c /=, \c &=, \c |=, \c ^=, \c %=, \c <<= and \c >>=
+      operators were taken for their right operand, so for example the sum of two <tt>*=</tt> expressions on
+      floats multiplied by integers was calculated as an integer
+
     - Fixed hash keys and object member names given as strings in a character encoding other than the default
       (UTF-8), such as ISO-8859-2, WINDOWS-1250 or UTF-16LE, being used as raw bytes in many operations: keys were
       stored with invalid UTF-8 bytes, keys stored correctly were not found, and UTF-16 keys were cut at their first

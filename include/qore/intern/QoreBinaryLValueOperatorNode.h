@@ -91,6 +91,8 @@ public:
         }
 
         parse_context.typeInfo = bigIntTypeInfo;
+        // the analysis left by the right operand describes that operand, not the result
+        qore_set_result_parse_analysis(parse_context, bigIntTypeInfo);
         return err;
     }
 
