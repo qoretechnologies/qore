@@ -7,6 +7,9 @@
 # usage: h2-proxy-handoff-worker.q <cert-and-key-file>
 
 %modern
+
+# the worker runs in its own process: it must load the modules of this source tree, not installed ones
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
 %requires HttpServer
 %requires Logger
 %requires Mime
