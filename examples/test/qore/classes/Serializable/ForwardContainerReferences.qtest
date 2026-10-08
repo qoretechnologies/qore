@@ -172,7 +172,8 @@ class ForwardContainerReferencesTest inherits QUnit::Test {
         parent.record = record;
         child.record = record;
 
-        Serializable::deserialize(parent.serialize());
+        auto copy = Serializable::deserialize(parent.serialize());
+        assertTrue(copy instanceof ForwardNode, "the parent is deserialized");
         assertEq({"links": 1, "lookup": 1, "record": 1}, ForwardNode::seen.child,
             "the callback of the child sees the complete containers");
         assertEq({"links": 1, "lookup": 1, "record": 1}, ForwardNode::seen.parent,

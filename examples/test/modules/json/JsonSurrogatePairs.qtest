@@ -58,6 +58,16 @@ class JsonSurrogatePairsTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! Returns the error code raised by parsing the JSON text, or text showing the value parsed if there is none
+    private string parseErr(string json) {
+        try {
+            auto v = parse_json(json);
+            return sprintf("<no-exception: %y>", v);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     private string errOf(code c) {
         try {
             c();
@@ -92,17 +102,17 @@ class JsonSurrogatePairsTest inherits QUnit::Test {
     }
 
     testUnpairedHigh() {
-        assertEq("JSON-PARSE-ERROR", errOf(sub () { parse_json("{\"m\": \"\\ud83e\"}"); }));
-        assertEq("JSON-PARSE-ERROR", errOf(sub () { parse_json("{\"m\": \"\\ud83e X\"}"); }));
+        assertEq("JSON-PARSE-ERROR", parseErr("{\"m\": \"\\ud83e\"}"));
+        assertEq("JSON-PARSE-ERROR", parseErr("{\"m\": \"\\ud83e X\"}"));
     }
 
     testUnpairedLow() {
-        assertEq("JSON-PARSE-ERROR", errOf(sub () { parse_json("{\"m\": \"\\uddea\"}"); }));
+        assertEq("JSON-PARSE-ERROR", parseErr("{\"m\": \"\\uddea\"}"));
     }
 
     testHighThenNonLow() {
         # a high surrogate followed by a valid-but-non-low-surrogate \u escape (U+0041 'A')
-        assertEq("JSON-PARSE-ERROR", errOf(sub () { parse_json("{\"m\": \"\\ud83e\\u0041\"}"); }));
+        assertEq("JSON-PARSE-ERROR", parseErr("{\"m\": \"\\ud83e\\u0041\"}"));
     }
 
     testBmpUnaffected() {
