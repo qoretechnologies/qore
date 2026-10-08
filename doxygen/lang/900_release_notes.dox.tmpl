@@ -4149,6 +4149,10 @@ while (*binary chunk = input.read(65536)) {
       up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
       or found declarations that are not visible to the caller
 
+    - Fixed a memory leak with JIT and tiered execution and in compiled (AOT) code when
+      @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()" converted a string to an integer outside the range
+      -140737488355328 to 140737488355327, such as \c "9223372036854775807"
+
     - Fixed a memory leak with IR, tiered and JIT execution when a builtin function or method raised an exception
       and also returned a value, as @ref Qore::strtoint() "strtoint()" does for a number out of range: the value was
       never released, which leaked objects and kept them from being destroyed

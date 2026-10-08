@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class PseudoToIntLeakTest
+
+#! the output, the native compilation trace and the leak report of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+    #! the other output on stderr, which includes the leak checker's report
+    string err;
+}
+
+#! Tests that integers converted from strings outside the inline integer range are released by compiled code
+/** An integer outside the inline (48-bit) range of a NaN-boxed value is a heap QoreBigIntNode.  The compiled fast
+    path of <tt><string>::toInt()</tt> returns a new reference to one, which compiled code did not release, so every
+    such conversion leaked with JIT and tiered execution and in AOT-compiled code; strtoint() returning a clamped
+    value with its exception in a closure leaked on the IR tier.
+
+    A leaked integer cannot be observed from %Qore, so the worker runs under the platform leak checker, which must
+    report no leaks; the test is skipped where no supported leak checker is available (\c leaks on macOS).  The
+    worker runs in every execution mode, with synchronous native compilation following the first call of a
+    function, and as a qcc-compiled executable.
+*/
+class PseudoToIntLeakTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the result printed by the worker
+        const Expected = "[1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, "
+            "\"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\"]\n";
+
+        #! the functions of the worker that must run as native code with JIT and tiered execution
+        const NativeFunctions = ("passed", "assigned", "unused", "discarded", "in_closure");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        string worker;
+        #! the leak checker command prefix, if available
+        *string leak_checker;
+    }
+
+    constructor() : QUnit::Test("PseudoToIntLeakTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "pseudo-to-int-leak-worker.q";
+        if (PlatformOS == "Darwin" && is_executable("/usr/bin/leaks")) {
+            leak_checker = "/usr/bin/leaks --atExit --";
+        }
+
+        addTestCase("negative: the leak report check", \testLeakReportCheck());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+        set_return_value(main());
+    }
+
+    testLeakReportCheck() {
+        assertEq(0, getLeakCount("Process 1234: 0 leaks for 0 total leaked bytes.\n"));
+        assertEq(6, getLeakCount("x\nProcess 1234: 6 leaks for 192 total leaked bytes.\ny\n"));
+        assertThrows("LEAK-REPORT-ERROR", \getLeakCount(), "no report\n");
+    }
+
+    testExecModes() {
+        if (!leak_checker) {
+            testSkip("no supported leak checker is available");
+        }
+        foreach string mode in (ExecModes) {
+            hash<WorkerResult> r = runWorker(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, worker));
+            assertEq(Expected, r.out, mode + ": result");
+            assertEq(0, getLeakCount(r.err), mode + ": leaks: " + r.err);
+            if (mode == "ast" || mode == "ir") {
+                assertEq((), r.trace, mode + ": no code is compiled to native code");
+            } else {
+                foreach string fn in (NativeFunctions) {
+                    assertTrue((select r.trace, $1 =~ /promoted/ && $1.find("'" + fn + "@") >= 0).size() > 0,
+                        sprintf("%s: %s() runs as native code: %s", mode, fn, r.trace.join("\n")));
+                }
+            }
+        }
+    }
+
+    testCompiled() {
+        if (!leak_checker) {
+            testSkip("no supported leak checker is available");
+        }
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-pseudo-to-int-leak-");
+        string exe = tmp.path + DirSep + "pseudo-to-int-leak";
+        string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "qcc: " + compile_out);
+        hash<WorkerResult> r = runWorker(exe);
+        assertEq(Expected, r.out, "aot: result");
+        assertEq(0, getLeakCount(r.err), "aot: leaks: " + r.err);
+    }
+
+    #! runs a command under the leak checker and returns its output, compilation trace and leak report
+    /** Compilation to native code is synchronous and follows the first call of a function
+        (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the functions run as
+        native code from their second call on; QORE_JIT_TIMING traces every compilation on stderr.
+    */
+    private hash<WorkerResult> runWorker(string command) {
+        TmpFile err("qore-pseudo-to-int-leak-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 %s %s %s "
+            "2>%s", env, leak_checker, command, err.path));
+        list<string> err_lines = (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n");
+        list<string> trace = select err_lines, $1 =~ /^\[BG-JIT\]/;
+        list<string> other_err = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        # the leak checker writes its report on stdout; only the worker's own output is the result
+        list<string> result = select out.split("\n"), $1 =~ /^\[/;
+        return <WorkerResult>{
+            "out": result ? result.join("\n") + "\n" : "",
+            "trace": trace,
+            "err": out + other_err.join("\n"),
+        };
+    }
+
+    #! returns the number of leaks in a leak checker's report
+    /** @throw LEAK-REPORT-ERROR the output holds no leak report
+    */
+    private int getLeakCount(string report) {
+        *string count = (report =~ x/^Process [0-9]+: ([0-9]+) leaks? for /m)[0];
+        if (!exists count) {
+            throw "LEAK-REPORT-ERROR", sprintf("no leak report in: %s", report);
+        }
+        return count.toInt();
+    }
+}

@@ -18625,6 +18625,9 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
 }
 
 //! Fast pseudo-method: <string>::toInt() for bases known as string/NOTHING/NULL.
+/** Returns a new reference: an integer outside the inline NaN-boxed range is a new QoreBigIntNode, which the caller
+    must release.
+*/
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);
     if (!v.isShortString() && v.getType() != NT_STRING) {
