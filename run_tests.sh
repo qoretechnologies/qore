@@ -14,6 +14,8 @@ print_usage () {
   echo
   echo "Environment variables:"
   echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
+  echo "  QORE_TEST_DIRS           Space-separated test directories (as found in $BASE_TEST_PATH) to run when no"
+  echo "                           -d option is given (e.g., 'qore/misc qore/vars'); default: all tests."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
   echo "                           declares its own budget with a '# test-timeout: <seconds>' comment."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
@@ -93,6 +95,17 @@ done
 if [ $PERF_EXCLUDE -eq 1 ] && [ $PERF_ONLY -eq 1 ]; then
     echo "Cannot use -E and -P together." >&2
     exit 1
+fi
+
+# Test dirs can also be given in the environment, for CI jobs that run a subset of the tests
+if [ -z "$TEST_DIRS" ] && [ -n "$QORE_TEST_DIRS" ]; then
+    for dir in $QORE_TEST_DIRS; do
+        if [ ! -d "$BASE_TEST_PATH/$dir" ]; then
+            echo "ERROR: QORE_TEST_DIRS entry '$dir' is not a directory in $BASE_TEST_PATH" >&2
+            exit 1
+        fi
+        TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$dir"
+    done
 fi
 
 # If no test dirs were specified, run all the tests
