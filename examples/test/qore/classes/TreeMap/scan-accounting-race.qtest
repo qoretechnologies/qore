@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class TreeMapScanAccountingRaceTest
+
+#! a value that can be part of a reference cycle, so a TreeMap holding it is scanned by the garbage collector
+class ScanValue {
+}
+
+class TreeMapScanAccountingRaceTest inherits QUnit::Test {
+    public {
+        #! the number of maps shared by the threads
+        const MapCount = 2;
+        #! the number of threads using the maps
+        const ThreadCount = 8;
+        #! the number of operations each thread makes
+        const Iterations = 20000;
+        #! the number of keys used in each map
+        const KeyCount = 4;
+    }
+
+    constructor() : QUnit::Test("TreeMap scan accounting race", "1.0") {
+        addTestCase("scan accounting with concurrent puts and takes", \raceTest());
+        set_return_value(main());
+    }
+
+    #! many threads put scannable values in shared maps, replace them with scalars and take them
+    /** A map counts the scannable values it holds, and while it holds any the object's private data scan count
+        includes it; the count of the object must follow the map's count in the same order as the map's transitions.
+        When it does not, a take decrements the object's count before the put that made the map's count non-zero has
+        incremented it, which the library asserts against in debug builds; and once the threads are done, the
+        object's count must be 1 for a map that holds scannable values and 0 for one that does not.
+    */
+    raceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_node_info() requires library debugging");
+        }
+
+        list<TreeMap> maps = map new TreeMap(), xrange(MapCount);
+        Queue<hash<ExceptionInfo>> errors();
+        Counter running(ThreadCount);
+        for (int t = 0; t < ThreadCount; ++t) {
+            background run(t, maps, errors, running);
+        }
+        running.waitForZero();
+
+        list<hash<ExceptionInfo>> unexpected;
+        while (*hash<QueueTryResult<hash<ExceptionInfo>>> r = errors.tryGet()) {
+            unexpected += r.value;
+        }
+        assertEq(0, unexpected.size(), sprintf("unexpected errors: %y",
+            (map sprintf("%s: %s", $1.err, $1.desc), unexpected)));
+
+        foreach TreeMap tm in (maps) {
+            *hash<string, auto> all = tm.getAll();
+            bool scannable = (select all.values(), $1.typeCode() == NT_OBJECT).size() > 0;
+            assertEq(scannable ? 1 : 0, getScanPrivateData(tm), sprintf("map %d holds %y", $#, all));
+            foreach string key in (keys all) {
+                tm.take(key);
+            }
+            assertEq(0, getScanPrivateData(tm), sprintf("map %d after all values were taken", $#));
+        }
+    }
+
+    #! one thread's operations: a put of a scannable value followed by one of the ways to remove it
+    private run(int t, list<TreeMap> maps, Queue<hash<ExceptionInfo>> errors, Counter running) {
+        on_exit {
+            running.dec();
+        }
+        try {
+            for (int i = 0; i < Iterations; ++i) {
+                TreeMap tm = maps[(t + i) % MapCount];
+                string key = sprintf("k%d", (t + i) % KeyCount);
+                tm.put(key, new ScanValue());
+                switch ((t + i) % 4) {
+                    case 0:
+                    case 1:
+                        tm.take(key);
+                        break;
+                    case 2:
+                        # replaced with a value that is not counted
+                        tm.put(key, i);
+                        break;
+                    # case 3: the value is left for the other threads to replace or take
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(ex);
+        }
+    }
+
+    #! returns the private data scan count of the given object as reported by dbg_node_info()
+    private static int getScanPrivateData(object obj) {
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9-]+)/);
+        return m[0].toInt();
+    }
+}
