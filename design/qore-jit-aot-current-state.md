@@ -335,6 +335,16 @@ every receiver class/type, normalized access class, caller/object Program,
 parse-option, epoch and argument type/state component. Access class and parse
 options come from the live thread view, not refreshed compatibility snapshots.
 
+An unwritten receiver parameter can still be replaced through reflective local
+assignment. A hoisted exact-class result is therefore reusable only when the
+call's actual receiver is identical to the entry receiver. The existing owned
+entry-load cleanup must retain that original object, preventing address reuse;
+without that owner the compiler keeps the per-call class check. Receiver validity
+is still checked on every call. An identity mismatch selects normal dispatch,
+including subclass overrides, without changing local storage or destruction
+order. No source-level write is not a sufficient cache-validity proof. Old AOT
+artifacts must be recompiled to receive this generated guard.
+
 The helper rechecks deletion, actual body identity/readiness, Program and debugger
 state before calling the companion. Missing admission/companion data requests
 effect-free generic fallback; no receiver or argument ownership is consumed.

@@ -45,6 +45,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(6, run.reference("indirect_tagged_float", 1, 7))
         self.assertEqual(12, run.reference("indirect_tagged_float", 3, 0))
         self.assertEqual(8451, run.reference("polymorphic_call", 2, 7))
+        self.assertEqual(8449, run.reference("monomorphic_call", 2, 7))
         self.assertEqual(8451, run.reference("dispatch_control", 2, 7))
 
     def test_checks(self):

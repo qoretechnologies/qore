@@ -302,9 +302,14 @@ private:
     llvm::Value* loop_cancel_requested = nullptr;
     llvm::Value* loop_program_interrupts = nullptr;
 
-    // Exact-class checks for stable local receivers, materialized once in the
-    // logical function entry. Object validity remains guarded at each call.
-    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+    // Exact-class checks for unwritten local receivers, materialized once in
+    // the logical entry. Reflection can still replace the local: each call
+    // checks receiver identity and validity before reusing the class result.
+    struct AotExactClassGuard {
+        llvm::Value* receiver;
+        llvm::Value* matches;
+    };
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;

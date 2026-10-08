@@ -9227,7 +9227,11 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         if (require_exact_object_class
                 && !std::getenv("QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST")) {
             auto stable_it = stable_exact_receiver_loads.find(object_base_id);
-            if (stable_it != stable_exact_receiver_loads.end()) {
+            // Retaining the entry receiver prevents address reuse from making
+            // the identity check below accept a different object. Do not add
+            // an owner just for this optimization or change destruction order.
+            if (stable_it != stable_exact_receiver_loads.end()
+                    && preinstantiated_entry_cleanup_by_local.count(stable_it->second)) {
                 stable_receiver = stable_it->second;
             }
         }
@@ -9249,8 +9253,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             if (stable_receiver) {
                 auto& guards = aot_exact_class_guards[slot];
                 auto guard_it = guards.find(stable_receiver);
+                llvm::Value* entry_receiver = nullptr;
                 if (guard_it != guards.end()) {
-                    exact_class = guard_it->second;
+                    entry_receiver = guard_it->second.receiver;
+                    exact_class = guard_it->second.matches;
                 } else {
                     auto alloca_it = local_allocas.find(stable_receiver);
                     auto entry_it = current_ir_func && !current_ir_func->blocks.empty()
@@ -9259,7 +9265,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                     if (alloca_it != local_allocas.end() && entry_it != block_map.end()) {
                         llvm::IRBuilder<> entry_builder(entry_it->second,
                             entry_it->second->getFirstInsertionPt());
-                        llvm::Value* entry_receiver = entry_builder.CreateLoad(
+                        entry_receiver = entry_builder.CreateLoad(
                             i64_type, alloca_it->second, "stable_exact_receiver");
                         auto exact_helper = module.getOrInsertFunction(
                             "qore_rt_object_has_exact_aot_target_class_only",
@@ -9271,8 +9277,16 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                         exact_class = entry_builder.CreateICmpNE(exact_class,
                             llvm::ConstantInt::get(i32_type, 0),
                             "stable_exact_class_ok");
-                        guards.emplace(stable_receiver, exact_class);
+                        guards.emplace(stable_receiver, AotExactClassGuard{entry_receiver, exact_class});
                     }
+                }
+                if (exact_class) {
+                    // No StoreLocal does not imply immutability: debugger/API
+                    // writes can replace an uncaptured parameter. A changed
+                    // receiver must use normal dispatch, including overrides.
+                    llvm::Value* same_receiver = builder->CreateICmpEQ(
+                        object_base, entry_receiver, "stable_exact_receiver_unchanged");
+                    exact_class = builder->CreateAnd(exact_class, same_receiver);
                 }
             }
             if (!exact_class) {

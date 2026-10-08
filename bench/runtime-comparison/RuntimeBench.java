@@ -160,6 +160,15 @@ public class RuntimeBench {
         return sum;
     }
 
+    static long monomorphicCall(int count, long seed, DynamicStep receiver) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = receiver.next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
     static long polymorphicCall(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
         long sum = 0;
         for (int i = 0; i < count; ++i) {
@@ -293,6 +302,7 @@ public class RuntimeBench {
     @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
     @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
     @Benchmark public long polymorphic_call() { return polymorphicCall(count, nextSeed(), a, b, c); }
+    @Benchmark public long monomorphic_call() { return monomorphicCall(count, nextSeed(), a); }
     @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
     @Benchmark public long list_read() { return listRead(data, nextSeed()); }
     @Benchmark public long list_build() { return listBuild(count, nextSeed()); }
@@ -322,7 +332,7 @@ public class RuntimeBench {
                 String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
                     "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
-                    "polymorphic_call", "dispatch_control", "list_read",
+                    "polymorphic_call", "monomorphic_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
                     "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -332,7 +342,7 @@ public class RuntimeBench {
                     floatIndirectCall(count, seed, branchCallback),
                     indirectCall(count, seed, affineCallback), wideIndirectCall(count, seed, affineCallback),
                     indirectCall(count, seed, branchIntCallback),
-                    polymorphicCall(count, seed, a, b, c), dispatchControl(count, seed),
+                    polymorphicCall(count, seed, a, b, c), monomorphicCall(count, seed, a), dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),
                     indirectCall(count, seed, closureCallback), indirectCall(count, seed, capturedCallback)};

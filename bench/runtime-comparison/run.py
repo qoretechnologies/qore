@@ -21,7 +21,7 @@ import urllib.request
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
+KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call", "monomorphic_call",
            "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",

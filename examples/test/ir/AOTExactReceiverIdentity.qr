@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class IdentityBase {
+    int next(int value) { return value + 1; }
+}
+class IdentityDerived inherits IdentityBase {
+    int next(int value) { return value + 10; }
+}
+
+sub replaceIdentity(IdentityBase replacement) {
+    set_local_var_value(1, "receiver", replacement);
+}
+
+int sub identityOnce(IdentityBase receiver, IdentityBase replacement) {
+    int first = receiver.next(0);
+    replaceIdentity(replacement);
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityLoop(IdentityBase receiver, IdentityBase replacement, IdentityBase original) {
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == 2) {
+            replaceIdentity(replacement);
+        } else if (i == 4) {
+            replaceIdentity(original);
+        }
+        sum += receiver.next(0);
+    }
+    return sum;
+}
+
+int sub identityInvoke(IdentityBase receiver, IdentityBase replacement) {
+    int first = receiver.next(0);
+    try {
+        replaceIdentity(replacement);
+        throw "IDENTITY-REPLACED", "test";
+    } catch (hash<auto> ex) {
+        if (ex.err != "IDENTITY-REPLACED") {
+            rethrow;
+        }
+        return first * 100 + receiver.next(0);
+    }
+}
+
+int sub identityCrossProgram(IdentityBase receiver, IdentityBase replacement, Program mutator) {
+    int first = receiver.next(0);
+    mutator.callFunction("replaceReceiver", replacement);
+    return first * 100 + receiver.next(0);
+}
+
+sub identityWorker(Counter done, Queue results) {
+    on_exit done.dec();
+    IdentityBase base();
+    results.push(identityLoop(base, new IdentityDerived(), base));
+}
+
+IdentityBase base();
+IdentityDerived derived();
+printf("%d:%d:%d:%d:%d:%d\n",
+    identityOnce(base, derived), identityOnce(derived, base),
+    identityOnce(base, new IdentityBase()), identityOnce(base, base),
+    identityLoop(base, derived, base), identityInvoke(base, derived));
+Program mutator(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBUGGER);
+mutator.parse("sub replaceReceiver(object replacement) { set_local_var_value(1, \"receiver\", replacement); }",
+    "identity-mutator");
+printf("%d\n", identityCrossProgram(base, derived, mutator));
+Counter done(4);
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background identityWorker(done, results);
+}
+done.waitForZero();
+for (int i = 0; i < 4; ++i) {
+    if (results.get(1000) != 24) {
+        throw "IDENTITY-TEST", "thread-local receiver replacement was not observed";
+    }
+}
+printf("exact-receiver-identity: ok\n");

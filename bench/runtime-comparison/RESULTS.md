@@ -4806,3 +4806,75 @@ generic effects and destructor-capable cleanup, before attempting to retain
 receiver caches across pure calls. Admission alone cannot justify eliminating
 runtime slots or their ordered cleanup. Repeated class acceptance and native
 frame setup remain fallback targets if that proof cannot admit useful cases.
+
+## Exact receiver identity after reflective writes (2026-10-08)
+
+This is a **correctness fix**, not a speedup. While investigating read-only
+class-parameter caches, a baseline reproducer showed that an unwritten parameter
+is not immutable: `set_local_var_value()` can replace it with a subclass instance.
+The cached entry-class result then selected the old base method. AST returned
+`110`, but baseline AOT returned `101`.
+
+The generated guard now requires the call's actual receiver to equal the entry
+receiver before reusing that class result. The existing entry cleanup must own
+the original object, preventing address reuse; otherwise the compiler retains
+the per-call class check. Changed receivers use normal dispatch. Validity,
+Program/access checks, exceptions, runtime slots and ownership are unchanged.
+Previously compiled native artifacts must be recompiled.
+
+Added `monomorphic_call` to exercise this guard: one unchanged receiver parameter
+of a non-final class, with the exact-base object created outside timing. The
+existing three-type `polymorphic_call` uses an assigned body local and does not
+exercise this hoist. Both baseline and candidate compile the same expanded
+benchmark snapshot. Java's non-final target retains `DONT_INLINE`, whereas Qore
+may inline the exact-base arithmetic; this is not an equal-inlining-policy or
+isolated call-latency comparison.
+
+Before: `6bb834ad1`; candidate: the compiler diff recorded in
+[the complete evidence](results-exact-receiver-identity-macos-arm64.json).
+Apple M4 Pro, Temurin 25.0.2+10, five forks, three warmups and five 500 ms
+measurement windows, three startup samples, shuffled sequential jobs.
+Separate baseline/candidate AOT compilation; no artifact-reuse shortcut.
+Both runs retain all 100 jobs/500 windows with no build/test/profile overlap.
+All 315 independent reference checks pass per selected mode.
+
+|!Count|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|1024|monomorphic_call|11.65187|11.66607|0.12%|Yes
+|1024|polymorphic_call|68.83208|69.27922|0.65%|Yes
+|1024|indirect_wide|8.34529|8.26068|-1.01%|Yes
+|1024|arithmetic|2.35711|2.34356|-0.58%|Yes
+|4096|monomorphic_call|10.38266|10.41820|0.34%|Yes
+|4096|polymorphic_call|66.98306|67.15477|0.26%|Yes
+|4096|indirect_wide|7.24567|7.32151|1.05%|Yes
+|4096|arithmetic|1.34953|1.34209|-0.55%|Yes
+
+The affected loop changes +0.12% and +0.34%; neither run separates its fork
+ranges. All controls overlap too, including the adverse +1.05% wide-callback
+repeat. Overlap is not a proof of neutrality and ranges are not confidence
+intervals. No speedup or precise guard-cost attribution is claimed.
+
+At count 1024, Java measures 1.66690 ns/element for `monomorphic_call` versus
+Qore's 11.66607 (7.00x), and 2.53364 for `polymorphic_call` versus 69.27922
+(27.34x). These include loop arithmetic, checks and ownership work; the
+inlining-policy caveat above applies. Java parity is not reached.
+
+Release/debug builds each pass 25 selected files: 47 QUnit cases/2696 assertions
+plus six standalone scripts. The new regression contributes 122 assertions per
+build, covering repeated replacement, return to the original receiver, base and
+derived entry objects, exception handling, cross-Program writes, four concurrent
+callers, O0/O3, source stripping, native EH, parallel compilation and disabled
+hoist/runtime controls. All benchmark execution modes pass 315 reference records;
+11 Python harness tests pass.
+
+Separate existing limitation: baseline and candidate IR/JIT/tiered execution
+raise `UNKNOWN-VARIABLE` for this uncaptured caller-parameter reflection case,
+including with IR context elision disabled. The new regression therefore compares
+AST with AOT; it does not claim to fix IR frame visibility. Full reproduction
+and sample records, source/library hashes and all 62 audit checks are in the
+evidence file. Audit: 15 Pass, 47 N/A, zero Fail.
+
+Next: a guarded read-only strong-parameter cache with reflective-write
+invalidation, not unconditional reload removal. Admission must validate the raw
+slot against the already-owned cache snapshot; references, weak/escaped/captured
+or written parameters and class body locals remain conservative. Keep runtime
+slot ownership and cleanup ordering intact.

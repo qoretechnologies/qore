@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ExactReceiverIdentityTest
+
+class ExactReceiverIdentityTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT exact receiver identity", "1.0", \ARGV) {
+        addTestCase("reflective replacement invalidates cached class checks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTExactReceiverIdentity.qr";
+        string expected = "110:1001:101:101:24:110\n110\nexact-receiver-identity: ok\n";
+        # The baseline IR/JIT frame lookup cannot expose this uncaptured
+        # caller parameter to reflection (UNKNOWN-VARIABLE). This regression
+        # compares the supported AOT path with the AST reference semantics.
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-exact-receiver-identity-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("identityOnce", "identityLoop", "identityInvoke",
+                        "identityCrossProgram")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "stable_exact_receiver_unchanged"),
+                        name + " identity guard " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
+                    "generic method fallback " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full context " + prefix + level);
+            }
+        }
+    }
+}

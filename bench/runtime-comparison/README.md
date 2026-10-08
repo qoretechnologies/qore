@@ -212,12 +212,22 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |indirect_branch_int|Integer comparison selecting one of two affine expressions
 |indirect_branch_float|Float comparison selecting between two affine expressions through a retained callback
 |polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
+|monomorphic_call|Non-final method with one unchanged exact-base receiver parameter; Qore may inline its arithmetic, while Java's target retains `DONT_INLINE`
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
 |list_build|Build a growing list, then read every element into the checksum
 |list_mutate|Build a growing list, then increment and read every element
 |temporary_list|Construct two elements per iteration and select with a runtime index
 |temporary_hash|Construct a two-key hash per iteration and select with a runtime key
+
+`monomorphic_call` exercises the cached exact-class check for an unwritten
+receiver parameter. The generated AOT guard also checks receiver identity:
+reflective writes can replace such parameters despite the absence of source
+assignments. `QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST=1` at compilation keeps
+per-call class checks for comparison. Compile separate baseline/current artifacts
+for changes to this guard. Java retains the target call while Qore may inline
+the exact-base arithmetic, so this kernel is not an equal-inlining-policy or
+isolated call-latency comparison.
 
 Qore integers are compared to Java `long`; the original recurrence keeps values in
 0..65535, while the wide callback retains bit 50. All intermediates and checksums
