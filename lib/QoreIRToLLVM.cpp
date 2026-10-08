@@ -9613,6 +9613,147 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     return result;
 }
 
+bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
+        llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
+        std::string& error) {
+    if (!aot_mode || !current_ir_func || inst->operands.size() != 2
+            || std::getenv("QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION")
+            || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+            || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")) {
+        return false;
+    }
+    auto store = native_funcref_store_types.find(inst->result.id);
+    if (store == native_funcref_store_types.end() || store->second != bigIntTypeInfo) {
+        return false;
+    }
+    const QoreValue* expr = nullptr;
+    bool has_ref_args;
+    const QoreIRInvokeDotEvalMethodDirectInstruction* invoke = nullptr;
+    if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+        const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+        if (call->method || call->qc || call->variant || call->pseudo
+                || !call->fallback_method_name || call->explicit_type_param_inst) {
+            return false;
+        }
+        expr = &call->expr;
+        has_ref_args = call->has_ref_args;
+    } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+        invoke = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+        if (invoke->method || invoke->qc || invoke->variant || invoke->pseudo
+                || !invoke->fallback_method_name || invoke->explicit_type_param_inst) {
+            return false;
+        }
+        expr = &invoke->expr;
+        has_ref_args = invoke->has_ref_args;
+    } else {
+        return false;
+    }
+    if (qore_ir_get_call_type_instantiation(*expr)) {
+        return false;
+    }
+    uint32_t arg_id = inst->operands[1].id;
+    llvm::Value* arg = getVal(arg_id, error);
+    if (!arg || arg->getType() != i64_type || nanboxed_values.count(arg_id)
+            || native_boxed_sources.count(arg_id)) {
+        return false;
+    }
+    // The operand is already an assigned native integer. Do not reinterpret
+    // an arbitrary boxed value or coerce NOTHING to an integer for admission.
+    uint64_t bits;
+    std::memcpy(&bits, expr, sizeof(bits));
+    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(bits);
+    bool has_cleanups = false;
+    llvm::Value* cleanups = buildArgCleanupArray(inst, 1, llvm_func, 1, has_cleanups);
+    llvm::IRBuilder<> eb(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+    auto* output = eb.CreateAlloca(i64_type, nullptr, "name_method_native_result");
+    if (!fast_runtime_config) {
+        auto* logical_entry = block_map.at(current_ir_func->blocks.front().get());
+        llvm::IRBuilder<> rb(logical_entry, logical_entry->getFirstInsertionPt());
+        auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
+            llvm::FunctionType::get(ptr_type, {}, false));
+        fast_runtime_config = rb.CreateCall(acquire, {}, "runtime_config");
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_try_method_int_unary_v1",
+        llvm::FunctionType::get(i32_type,
+            {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
+    auto* handled = builder->CreateCall(helper,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base, arg,
+         output, xsink_arg, fast_runtime_config});
+    auto* fast = llvm::BasicBlock::Create(ctx, "name_method_native", llvm_func);
+    auto* fallback = llvm::BasicBlock::Create(ctx, "name_method_fallback", llvm_func);
+    auto* merge = llvm::BasicBlock::Create(ctx, "name_method_merge", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)),
+        fast, fallback);
+    builder->SetInsertPoint(fast);
+    llvm::Value* payload = builder->CreateLoad(i64_type, output);
+    if (has_cleanups) {
+        emitArgCleanupClear(module, cleanups, 1, false);
+    }
+    builder->CreateBr(merge);
+    fast = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(fallback);
+    llvm::Value* args = nullptr;
+    int nargs = 0;
+    if (!buildArgsArray(inst, 1, llvm_func, args, nargs, error)) {
+        return false;
+    }
+    std::vector<llvm::Type*> types{ptr_type, i32_type, i64_type, ptr_type};
+    std::vector<llvm::Value*> fallback_args{aot_ctx_arg,
+        llvm::ConstantInt::get(i32_type, slot), base, args};
+    std::string fallback_name = "qore_rt_dot_eval_method_direct_aot";
+    if (has_cleanups) {
+        types.push_back(ptr_type);
+        fallback_args.push_back(cleanups);
+        fallback_name += "_consume_args";
+    }
+    types.insert(types.end(), {i32_type, ptr_type});
+    fallback_args.insert(fallback_args.end(), {llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    auto ft = llvm::FunctionType::get(i64_type, types, false);
+    llvm::Value* boxed = emitMaybeInvoke(module.getOrInsertFunction(fallback_name, ft),
+        module.getOrInsertFunction(fallback_name + "_throwing", ft), fallback_args,
+        module, llvm_func, inst);
+    // The native edge uses the sink even when the fallback uses a C++ invoke.
+    skip_next_exception_check = false;
+    last_call_was_invoke_eh = false;
+    builder->CreateBr(merge);
+    fallback = builder->GetInsertBlock();
+    builder->SetInsertPoint(merge);
+    auto* result = builder->CreatePHI(i64_type, 2, "name_method_boxed_result");
+    result->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), fast);
+    result->addIncoming(boxed, fallback);
+    auto* used_native = builder->CreatePHI(i1_type, 2, "name_method_native_handled");
+    used_native->addIncoming(llvm::ConstantInt::getTrue(ctx), fast);
+    used_native->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback);
+    auto* value = builder->CreatePHI(i64_type, 2, "name_method_native_value");
+    value->addIncoming(payload, fast);
+    value->addIncoming(llvm::ConstantInt::get(i64_type, 0), fallback);
+    native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{used_native, value});
+    // The unknown fallback may mutate caller locals or return any value. Keep
+    // its full invalidation, ownership and assignment-check behavior on merge.
+    reloadAllLocalsFromRuntime(module, llvm_func, !has_ref_args);
+    values[inst->result.id] = result;
+    nanboxed_values.insert(inst->result.id);
+    trackResultForCleanup(result, inst->result.id, llvm_func);
+    if (!invoke) {
+        emitExceptionCheck(module, llvm_func, inst);
+    } else {
+        releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
+        auto normal = block_map.find(invoke->normal_target);
+        auto exception = block_map.find(invoke->exception_target);
+        if (normal == block_map.end() || exception == block_map.end()) {
+            error = "name-dispatched native method continuation target not found";
+            return false;
+        }
+        auto has_exception = module.getOrInsertFunction("qore_rt_has_exception",
+            llvm::FunctionType::get(i64_type, {ptr_type}, false));
+        auto* pending = builder->CreateCall(has_exception, {xsink_arg});
+        builder->CreateCondBr(builder->CreateICmpNE(pending, llvm::ConstantInt::get(i64_type, 0)),
+            exception->second, normal->second);
+    }
+    return true;
+}
+
 bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         const std::vector<QoreIRValue>& operands,
         llvm::Module& module, llvm::Function* llvm_func,
@@ -21945,6 +22086,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!base_val) { return false; }
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
 
+            if (tryEmitAotNameMethodNativeContinuation(inst, base_boxed, module, llvm_func, error)) {
+                return true;
+            }
+            if (!error.empty()) { return false; }
+
             auto aggregate_projection =
                 direct_inst->aot_aggregate_projection;
             if (aggregate_projection
@@ -22967,6 +23113,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* base_val = getVal(inst->operands[0].id, error);
             if (!base_val) { return false; }
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
+
+            if (tryEmitAotNameMethodNativeContinuation(inst, base_boxed, module, llvm_func, error)) {
+                return true;
+            }
+            if (!error.empty()) { return false; }
 
             int nargs = static_cast<int>(inst->operands.size()) - 1;
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;

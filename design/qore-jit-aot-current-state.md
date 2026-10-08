@@ -404,6 +404,27 @@ particular, an integer annotation never licenses converting a subclass's
 check after merging with the non-throwing helper. Runtime-backed receiver locals
 and generic-call invalidation remain unchanged.
 
+Unresolved name-dispatched calls can also use this continuation after ordinary
+dispatch has populated the full-key PIC. This includes nullable-class and dynamic
+receivers; it does not resolve an AST/IR target or narrow its unknown return type.
+Only an already-native integer argument and a sole exact native-int local store
+are eligible. Generic instantiations, boxed/optional arguments and escaping
+results keep the original path. The shared normal/invoke emitter builds boxed
+arguments only on fallback and preserves invalidation, cleanup and sink checks
+on merge. Cold caches, absent native admission and every failed live guard fall
+back to unchanged name dispatch. No new ABI or cache layout is introduced.
+`QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1` disables this compiler-only
+extension; compile separate artifacts for comparison. The broader native-method
+entry/continuation controls disable it too.
+
+`AOTNameMethodContinuation.qtest` covers normal/invoke and dynamic calls, wide
+integers, mismatched returns, NOTHING, deletion, private access, overloads,
+generic and methodGate fallback, weak receivers, cross-Program restoration,
+concurrent frame readers and debugger attachment. It checks stripped O0/O3,
+C++ EH, parallel compilation and disabled controls against AST/IR/JIT/tiered
+results. See `results-name-method-continuation-macos-arm64.json` for measurements,
+including adverse control movement and the remaining Java gap.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1` at compile and runtime selects
 the v1 control path. New callers require the additive helper symbols; old
 artifacts continue to run. Before/after compiler comparisons must compile both

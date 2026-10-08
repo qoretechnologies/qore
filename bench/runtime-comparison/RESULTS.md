@@ -5083,3 +5083,141 @@ attribution clues, not isolated latency measurements. The next optimization is
 to investigate guarded native dispatch for nullable receivers, preserving
 `NOTHING`/pseudo-method behavior and arbitrary subclass fallback, then tackle
 the remaining receiver-local ownership and frame overhead.
+
+## Name-dispatched native method continuations (2026-10-08)
+
+Unresolved name-dispatched calls now reuse the existing native scalar method
+continuation after ordinary dispatch has populated the full-key PIC. This covers
+nullable-class and dynamic receivers without changing AST/IR method resolution
+or narrowing an unknown return contract. Only an already-native integer argument
+and a sole exact native-int local assignment qualify. Generic instantiations,
+boxed/optional arguments and escaping results remain on their original paths.
+
+The runtime change permits name-only slots in the existing try-helper. All
+receiver validity/type, class/access context, caller/object/execution Program,
+parse policy, dispatch epoch, signature, native-body identity/readiness, debugger,
+stack and observer guards remain. The shared normal/invoke emitter boxes
+arguments only on fallback. Fallback returns preserve assignment checks, cleanup,
+side effects and exceptions; native returns use the existing handled/value
+side channel with a NOTHING boxed cleanup slot. No new runtime ABI or cache
+layout is needed, but callers must be recompiled to get the optimization.
+
+### Identity and method
+
+Before: `da4078d6089e6d24b7f138077e2b4af5bb81a611`, exact release library
+`7ed5a4a78efddb539cf30c5b5dfab2f865323ad85259471645d36d37b7946b70`.
+After: that revision plus C++ diff
+`84698dca449c2db6cd1cbf0c5626a26476afb1c1b812188713ffb65e0eebec4c`,
+release library
+`60f6ec82a7e7d4de2520450fb74f474113fb520321d339b9e64ea55fbf930635`;
+debug validation library
+`0fa85f9ed71d47d5b9e89dc6450bfce539a916802c1866606d7e5f357ee5bfba`.
+
+M4 Pro / macOS arm64; the Java run uses Temurin 25.0.2 and JMH 1.37.
+Each run uses five randomized forks, three warmups and five 500 ms measured
+windows per job, plus three startup samples per mode. All **800 measured windows**
+are retained. No timing overlapped builds, tests, profiles, disassembly or
+evidence validation. Numbers are medians of fork means in ns/element, not
+isolated call latency; negative percentages mean less time. Before and after
+AOT artifacts were separately compiled. Raw samples, identities, reproduction
+commands, compiler control, tests, instruction comparison and all 62 audit
+classifications are in
+`results-name-method-continuation-macos-arm64.json`.
+
+### Before/after and Java, count 1024
+
+Run `run-yoebh2t_`, seed 810481, 90 jobs / 450 measured windows.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap|!Java ns|!After / Java
+|optional_method_call|39.190|25.722|-34.36%|no|1.659|15.50x
+|polymorphic_call|65.794|65.218|-0.88%|yes|2.514|25.94x
+|monomorphic_call|12.111|12.295|+1.51%|no|1.662|7.40x
+|method_call|2.655|2.655|+0.02%|yes|0.880|3.02x
+|indirect_wide|8.431|8.294|-1.63%|yes|1.670|4.97x
+|arithmetic|2.354|2.371|+0.70%|yes|0.886|2.68x
+
+Nullable/name-dispatched calls improve **34.36%**, but remain **15.50x** the Java
+workload. This does not establish Java retained-call parity. The required-class
+monomorphic control worsens **1.51% with non-overlapping fork ranges**; this
+adverse result is retained. Exact-base/final Qore paths can inline arithmetic
+while Java retains selected calls, so those rows have different inlining policies.
+Polymorphic, wide callback and arithmetic movements have overlapping ranges;
+do not attribute their small changes to this optimization.
+
+Process startup medians: after 30.07 ms, before 30.37 ms, Java 23.57 ms. Filesystem
+caches are uncontrolled; these are descriptive, not startup improvements.
+
+### Longer loop, count 4096
+
+Run `run-9mfak9qq`, seed 810482, 40 jobs / 200 measured windows.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap
+|optional_method_call|38.043|24.432|-35.78%|no
+|polymorphic_call|63.906|64.175|+0.42%|yes
+|monomorphic_call|10.762|10.925|+1.51%|yes
+|arithmetic|1.320|1.313|-0.57%|yes
+
+The optional-call gain repeats at **35.78%** with non-overlapping ranges.
+The monomorphic median again worsens 1.51%, but its ranges overlap narrowly.
+Startup medians: after 29.49 ms, before 30.04 ms.
+
+### Same-runtime compiler control, count 1024
+
+Run `name-method-toggle-3a6ot315`, seed 810484, 30 jobs / 150 measured windows.
+Both artifacts use the same candidate runtime. Here “before” means compiled
+with `QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1`, not the older runtime.
+The flag is absent at execution; freshness/admission guards are identical.
+
+|!Kernel|!Before ns|!After ns|!Change|!Fork ranges overlap
+|optional_method_call|38.747|25.572|-34.00%|no
+|monomorphic_call|12.119|12.173|+0.45%|yes
+|arithmetic|2.318|2.344|+1.13%|yes
+
+The isolated compiler toggle reproduces **34.00%** lower optional-call time.
+Monomorphic +0.45% and arithmetic +1.13% have overlapping ranges. This control
+does not erase the adverse old/new monomorphic result. Startup medians:
+enabled 28.31 ms, disabled 28.24 ms.
+
+The old/new monomorphic AOT function contains the same **328 instructions**
+after normalizing absolute stub addresses, local branch addresses and literal
+pool/page placement while retaining helper names and branch-relative offsets.
+This supports investigating layout effects, but does not prove their cause or
+performance neutrality. It is not a byte-identical comparison.
+
+### Validation, audit and remaining work
+
+Release and debug each pass 28 selected test files: 51 QUnit cases / 3716
+assertions in 22 files, plus six standalone scripts. The new test contributes
+two cases / 418 assertions per build and checks AST/IR/JIT/tiered behavior,
+stripped O0/O3, C++ EH, parallel compilation, compile/runtime disabled controls,
+normal/invoke calls, wide integers, mismatched returns/arguments, NOTHING,
+deletion, private access, overloads, generic/methodGate fallback, weak receivers,
+cross-Program restoration, debugger attachment and concurrent native frame
+readers. LLVM checks select the normal context entry, verify positive native
+codegen and reject boxed/optional arguments and escaping-result continuations.
+Existing ownership, stack, freshness and exact-receiver regressions also pass.
+
+All six benchmark check modes (current IR/AOT, Java interpreted/JIT, saved
+baseline IR/AOT) pass 330 independent reference records each. The saved baseline
+AOT artifact also passes 330 records on the candidate runtime. Eleven harness
+tests pass. There is no new IR timing result or IR-speedup claim. Previously
+documented full caller-frame reflection limitations in IR/JIT and zero-argument
+fast-frame visibility are outside this change and are not reported as fixed.
+
+The audit classifies all 62 items: **15 Pass, 47 N/A, 0 Fail**. Details are in
+`FOLLOWUP-AUDIT.md` and the JSON evidence. There is no new public API, module,
+QPP flag, cancellation loop or filesystem/network operation in production code.
+
+A separate five-second sample of the candidate optional workload contains 3796
+main-thread samples. Top self samples include the guarded native try-helper
+(855), native frame construction (728), QoreValue discard (592), frame destruction
+(435), type checks (232), decref import stub (163) and decref helper (153).
+The idle signal thread is excluded. These counts attribute work, not latency.
+Steady-state method-by-name dispatch is gone; TLS acquisition is not the dominant
+per-call cost in this path.
+
+Next: eliminate cleanup calls only where their boxed values are proven empty
+on native continuation edges, retaining all fallback ownership and EH behavior.
+Then investigate narrower guarded admission for nullable exact-class targets
+without overwriting unresolved AST/IR target facts, and reduce observable frame
+setup without weakening stack readers, debugger behavior or Program boundaries.

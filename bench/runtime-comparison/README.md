@@ -171,6 +171,15 @@ context/parse policy, Program, epoch, debugger, body readiness and stack/frame
 guards remain. The exact-base fast/inlined case is retained, so this workload
 still does not represent three retained Qore methods.
 
+`QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1` disables the compiler's
+native-result continuation for unresolved name-dispatched calls, including
+nullable-class and dynamic receivers. Compile separate artifacts: this flag is
+not a runtime switch. A warmed full-key PIC supplies the checked target; the
+compiler does not change AST/IR resolution or the unknown return contract.
+Only an already-native integer argument and sole native-int local assignment
+qualify. Every miss retains original dispatch, boxed return checks and cleanup.
+The broader native-method entry/continuation controls also disable this path.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables caching immutable
 eligibility/signature/Program/class facts in polymorphic method entries without
 disabling the native scalar companion itself. Mutable body/readiness, receiver,
@@ -253,6 +262,10 @@ null errors or reflective mutation; `AOTOptionalClassLocals.qtest` covers those
 semantics separately. Older AOT artifacts can appear fast by missing reflective
 updates, so compare the enabled cache with a separately compiled disabled cache
 on the corrected runtime as well as with the old baseline.
+The [name-method continuation follow-up](RESULTS.md#name-dispatched-native-method-continuations-2026-10-08)
+compares the native continuation with separately compiled old and same-runtime
+disabled artifacts. It retains the full nullable/name-dispatch contract and does
+not claim that all optional or dynamic calls are native.
 
 Qore integers are compared to Java `long`; the original recurrence keeps values in
 0..65535, while the wide callback retains bit 50. All intermediates and checksums

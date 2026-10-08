@@ -878,6 +878,13 @@ private:
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false);
 
+    // Try a cached scalar method entry without resolving an unknown target or
+    // narrowing its return contract. Only a sole native-int store consumes the
+    // native result; a miss retains the original boxed name-dispatch path.
+    bool tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
+            llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
+            std::string& error);
+
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary
     // is absent, disabled, or not valid for the supplied native arguments.
     llvm::Value* emitAOTScalarLeaf(const BatchCalleeInfo& info,

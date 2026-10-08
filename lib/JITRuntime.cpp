@@ -17940,7 +17940,11 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
     // establishes the complete dispatch key, including access checks, first.
     auto* cache = target.method_dispatch_cache.load(std::memory_order_acquire);
     QoreValue base = fromBits(base_bits);
-    if (!cache || !target.method || target.is_pseudo || base.getType() != NT_OBJECT) {
+    // A name-dispatched slot has no parse-selected method, but an ordinary
+    // miss can still publish a fully checked native entry. Admission below
+    // belongs to that resolved entry and full dispatch key, not target.method.
+    if (!cache || (!target.method && !target.method_name)
+            || target.is_pseudo || base.getType() != NT_OBJECT) {
         return 0;
     }
     QoreObject* object = base.get<QoreObject>();

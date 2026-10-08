@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+
+class NameNativeBase {
+    int next(int value) { return value + 7; }
+}
+class NameNativeDerived inherits NameNativeBase {
+    int next(int value) { return value + 11; }
+}
+class NameNativeNothing inherits NameNativeBase {
+    *int next(int value) { return NOTHING; }
+}
+class NameNativeString inherits NameNativeBase {
+    string next(int value) { return "not an integer"; }
+}
+class NameNativeThrow inherits NameNativeBase {
+    int next(int value) { throw "NAME-METHOD-ERROR", "fallback"; }
+}
+class NameNativeSelf inherits NameNativeBase {
+    private { int delta = 13; }
+    int next(int value) { return value + delta; }
+}
+class NameNativeOverload inherits NameNativeBase {
+    int next(int value) { return value + 17; }
+    string next(string value) { return value + "!"; }
+}
+class NameNativeGeneric<T> {
+    T next(T value) { return value; }
+}
+class NameNativePrivate {
+    private int next(int value) { return value + 19; }
+}
+class NameNativeGate {
+    auto methodGate(string name, int value) { return value + 23; }
+}
+
+int sub nameNativeLoop(*NameNativeBase receiver, int value, int count) {
+    for (int i = 0; i < count; ++i) { value = receiver.next(value); }
+    return value;
+}
+int sub nameNativeDynamic(auto receiver, int value, int count) {
+    for (int i = 0; i < count; ++i) { value = receiver.next(value); }
+    return value;
+}
+auto sub nameNativeInvoke(*NameNativeBase receiver, int value, int count) {
+    try {
+        for (int i = 0; i < count; ++i) { value = receiver.next(value); }
+        return value;
+    } catch (hash<auto> ex) { return ex.err; }
+}
+auto sub nameNativeEscapes(*NameNativeBase receiver, int value) {
+    return receiver.next(value);
+}
+auto sub nameNativeBoxedArg(*NameNativeBase receiver, auto value) {
+    try { int result = receiver.next(value); return result; }
+    catch (hash<auto> ex) { return ex.err; }
+}
+auto sub nameNativeOptionalArg(*NameNativeBase receiver, *int value) {
+    try { int result = receiver.next(value); return result; }
+    catch (hash<auto> ex) { return ex.err; }
+}
+auto sub nameNativeDeleted(*NameNativeBase receiver) {
+    NameNativeBase target = receiver;
+    int value = 0;
+    try {
+        for (int i = 0; i < 32; ++i) {
+            if (i == 16) { delete target; }
+            value = receiver.next(value);
+        }
+        return "accepted deleted object";
+    } catch (hash<auto> ex) { return ex.err; }
+}
+auto sub nameNativeAccess(auto receiver) {
+    int value = 2;
+    try { value = receiver.next(value); return value; }
+    catch (hash<auto> ex) { return ex.err; }
+}
+
+NameNativeBase base();
+NameNativeDerived derived();
+NameNativeNothing absent();
+NameNativeString text();
+NameNativeThrow throwing();
+NameNativeSelf self();
+NameNativeOverload overload();
+NameNativeGeneric<int> generic();
+NameNativePrivate hidden();
+NameNativeGate gate();
+*NameNativeBase weak := derived;
+foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+        -140737488355328, -140737488355329, 1125899906842624, -1125899906842624)) {
+    for (int round = 0; round < 12; ++round) {
+        if (nameNativeLoop(base, value, 16) != value + 112
+                || nameNativeLoop(derived, value, 16) != value + 176
+                || nameNativeLoop(weak, value, 16) != value + 176
+                || nameNativeDynamic(derived, value, 16) != value + 176
+                || nameNativeInvoke(derived, value, 16) != value + 176
+                || nameNativeLoop(self, value, 16) != value + 208
+                || nameNativeLoop(overload, value, 16) != value + 272
+                || nameNativeDynamic(generic, value, 16) != value
+                || nameNativeDynamic(gate, value, 16) != value + 368
+                || nameNativeInvoke(absent, value, 16) != "RUNTIME-TYPE-ERROR"
+                || nameNativeInvoke(text, value, 16) != "RUNTIME-TYPE-ERROR"
+                || nameNativeInvoke(throwing, value, 16) != "NAME-METHOD-ERROR"
+                || nameNativeInvoke(NOTHING, value, 16) != "PSEUDO-METHOD-DOES-NOT-EXIST"
+                || nameNativeEscapes(text, value) != "not an integer"
+                || exists nameNativeEscapes(absent, value)
+                || nameNativeBoxedArg(derived, value) != value + 11
+                || nameNativeOptionalArg(derived, value) != value + 11) {
+            throw "NAME-METHOD-CONTRACT", sprintf("mismatch for %d round %d", value, round);
+        }
+    }
+}
+if (nameNativeDeleted(new NameNativeDerived()) != "OBJECT-ALREADY-DELETED"
+        || nameNativeAccess(hidden) != "METHOD-IS-PRIVATE"
+        || nameNativeBoxedArg(derived, "wrong") != "RUNTIME-OVERLOAD-ERROR"
+        || nameNativeOptionalArg(derived, NOTHING) != "RUNTIME-OVERLOAD-ERROR") {
+    throw "NAME-METHOD-FALLBACK", sprintf("fallback mismatch: %y", (nameNativeAccess(hidden),
+        nameNativeBoxedArg(derived, "wrong"), nameNativeOptionalArg(derived, NOTHING)));
+}
+# Different Program ownership must never use the same-Program native continuation.
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("NameNativeBase");
+foreign.importClass("NameNativeDerived");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nNameNativeDerived sub make() { return new NameNativeDerived(); }\n"
+    "int sub call(*NameNativeBase receiver, int value) { value = receiver.next(value); return value; }\n",
+    "name-method-foreign");
+NameNativeBase imported = foreign.callFunction("make");
+for (int i = 0; i < 16; ++i) {
+    if (nameNativeLoop(imported, i, 16) != i + 176
+            || nameNativeInvoke(imported, i, 16) != i + 176
+            || foreign.callFunction("call", derived, i) != i + 11
+            || nameNativeLoop(derived, i, 16) != i + 176) {
+        throw "NAME-METHOD-PROGRAM", "context restoration mismatch";
+    }
+}
+printf("name-method-continuation: ok\n");
