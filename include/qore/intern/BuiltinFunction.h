@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,31 @@
 
 class BCList;
 class BCEAList;
+
+//! Calls the implementation of a builtin function or method and returns its result
+/** Builtin code can raise an exception and still return a value: strtoint(), for example, returns the clamped value
+    of an out-of-range number with its \c STRTOINT-ERROR exception.  A value returned with an exception is never
+    used, and the execution engines treat a call that raised an exception as one that returned no value: the IR
+    interpreter, for one, releases the result of a call only when the call raised no exception.  The value is
+    therefore released here, where the builtin code returns, so that no caller receives a value with an exception
+    raised by the call.
+
+    An exception raised before the call is not the call's, so the result is returned unchanged in that case.
+
+    @param xsink the exception sink of the call; must not be null
+    @param call calls the builtin implementation and returns its result
+*/
+template <typename F>
+DLLLOCAL QoreValue qore_eval_builtin_call(ExceptionSink* xsink, F&& call) {
+    assert(xsink);
+    bool prior_exception = static_cast<bool>(*xsink);
+    QoreValue rv = call();
+    if (!prior_exception && *xsink) {
+        rv.discard(xsink);
+        return QoreValue();
+    }
+    return rv;
+}
 
 class BuiltinSignature : public AbstractFunctionSignature {
 public:
@@ -127,7 +152,9 @@ public:
 
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
-        return func(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return func(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 
@@ -152,7 +179,9 @@ public:
 
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
-        return func(ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return func(ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 

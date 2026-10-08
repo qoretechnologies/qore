@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this); the workers inherit it
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include builtin-exception-result-checks.qi
+
+%exec-class BuiltinExceptionResultTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout, followed by any error output
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
+#! Tests that a value returned by builtin code with an exception is released in every execution engine
+/** Builtin code can raise an exception and still return a value, as strtoint() does for an out-of-range number.
+    Each check in builtin-exception-result-checks.qi passes a new object to a builtin function or method of the
+    cppapiuser test module that returns it with an exception, and verifies that the object is destroyed, which it is
+    only if the value returned with the exception was released.  The checks run in this program, in each execution
+    mode, and from a compiled (AOT) module.
+*/
+class BuiltinExceptionResultTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the results of the checks in this program
+        list<string> expected;
+    }
+
+    constructor() : QUnit::Test("BuiltinExceptionResultTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("in this program", \testInProcess());
+        addTestCase("negative: a leaked result fails the check", \testLeakDetected());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("a compiled module", \testCompiledModule());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        expected = BuiltinExceptionResultChecks::get_results();
+    }
+
+    testInProcess() {
+        checkResults("in-process", expected);
+        assertEq(7, expected.size(), "checks run");
+    }
+
+    testLeakDetected() {
+        # an object that is still referenced when the check completes is reported as leaked
+        BuiltinExceptionResultChecks::Tracked kept;
+        BuiltinExceptionResultChecks::ResultChecker c();
+        c.check("kept", *string sub () {
+            kept = new BuiltinExceptionResultChecks::Tracked();
+            return BuiltinExceptionResultChecks::Err;
+        });
+        list<string> results = c.getResults();
+        assertEq(1, results.size());
+        assertRegex("^FAIL kept: 0 object\\(s\\) destroyed", results[0]);
+        # and so is a call that raises no exception
+        c = new BuiltinExceptionResultChecks::ResultChecker();
+        c.check("no exception", *string sub () {});
+        assertRegex("^FAIL no exception: got exception null", c.getResults()[0]);
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            hash<WorkerResult> r = runWorker("builtin-exception-result-worker.q", "--exec-mode=" + mode);
+            checkWorkerOutput(mode, r.out);
+            checkEngine(mode, r.trace);
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-builtin-exception-result-");
+        string qmod_path = tmp.path + DirSep + "BuiltinExceptionResultChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "BuiltinExceptionResultChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the source module is not in the module path, so the worker loads the compiled module
+        checkWorkerOutput("aot", runWorker("builtin-exception-result-module-worker.q", "", tmp.path).out);
+    }
+
+    #! runs a worker with the given options and returns its output and compilation trace
+    /** The worker runs the checks twice.  Compilation to native code is synchronous and follows the first call of a
+        function (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the first pass
+        runs with the IR interpreter and the second one as native code; QORE_JIT_TIMING traces every compilation on
+        stderr.  Any other output on stderr is added to the output, where it fails the checks.
+
+        @param worker_name the worker script in this directory
+        @param opts options for qore
+        @param module_dir a directory to put first in the module path
+    */
+    private hash<WorkerResult> runWorker(string worker_name, string opts, *string module_dir) {
+        string worker = get_script_dir() + DirSep + worker_name;
+        string module_path = module_dir
+            ? module_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "")
+            : (ENV.QORE_MODULE_DIR ?? "");
+        TmpFile err("qore-worker-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>%s", libqore_dir, libqore_dir,
+            module_path, qore_bin, opts, worker, err.path));
+        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n"), $1.val();
+        list<string> errors = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        return <WorkerResult>{
+            "out": out + (errors ? errors.join("\n") + "\n" : ""),
+            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+        };
+    }
+
+    #! checks that a worker ran the checks with the engine named by its execution mode
+    private checkEngine(string mode, list<string> trace) {
+        if (mode == "ast" || mode == "ir") {
+            assertEq((), trace, mode + ": no code is compiled to native code");
+        } else {
+            foreach string fn in (("closure_function", "direct_function", "direct_method",
+                    "direct_static_method")) {
+                list<string> promoted = select trace, $1 =~ /promoted/ && $1.find("'" + fn + "@") >= 0;
+                assertTrue(promoted.size() > 0, sprintf("%s: %s() runs as native code: %s", mode, fn,
+                    trace.join("\n")));
+            }
+        }
+    }
+
+    #! compares the lines printed by a worker with the results of the checks in this program
+    private checkWorkerOutput(string label, string out) {
+        list<string> results = select out.split("\n"), $1.val();
+        checkResults(label, results);
+        # the worker runs the checks twice
+        assertEq(expected + expected, results, label + ": the same checks as in this program, twice");
+    }
+
+    #! checks that every check passed
+    private checkResults(string label, list<string> results) {
+        assertTrue(results.size() > 0, label + ": checks ran");
+        foreach string line in (results) {
+            assertTrue(line =~ /^ok /, label + ": " + line);
+        }
+    }
+}

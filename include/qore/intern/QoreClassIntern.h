@@ -619,7 +619,9 @@ public:
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), 0, getClassPriv());
 
-        return static_method(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return static_method(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 
@@ -635,7 +637,9 @@ public:
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), 0, getClassPriv());
 
-        return static_method(*qmethod, ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return static_method(*qmethod, ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 

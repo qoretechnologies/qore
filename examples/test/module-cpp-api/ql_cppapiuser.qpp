@@ -125,4 +125,20 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
     }
     return api->counter_live_count();
 }
+
+//! raises an exception and returns a new reference to the argument
+/** Builtin code can raise an exception and still return a value, but no caller may receive the value; see
+    ExceptionResultProbe
+
+    @param value the value to return
+    @param err the exception code to raise
+
+    @return a new reference to \a value, which the caller never receives because of the exception
+
+    @throw err always
+*/
+auto cpp_api_return_with_exception(auto value, string err) {
+    xsink->raiseException(err->c_str(), "the function returned a value with this exception");
+    return value.refSelf();
+}
 ///@}

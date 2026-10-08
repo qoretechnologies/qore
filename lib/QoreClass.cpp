@@ -6685,8 +6685,10 @@ const char* MethodVariantBase::getAbstractSignature() {
 QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), self, qore_class_private::get(*qmethod->getClass()));
-    return qore_object_private::evalBuiltinMethodWithPrivateData(*self, *qmethod, this, ceh.getArgs(),
-        ceh.getRuntimeConfig(), xsink);
+    return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        return qore_object_private::evalBuiltinMethodWithPrivateData(*self, *qmethod, this, ceh.getArgs(),
+            ceh.getRuntimeConfig(), xsink);
+    });
 }
 
 QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh,
@@ -6703,7 +6705,9 @@ QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, Co
             arg = *materialized;
         }
     }
-    return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    });
 }
 
 class qmi_priv {
