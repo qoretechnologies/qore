@@ -11780,7 +11780,11 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
         return (static_cast<size_t>(idx) < ctx->global_names.size())
             ? ctx->global_names[idx].c_str() : "";
     };
-    Var* var = ctx->globals[idx];
+    // A slot is resolved once and then read by every thread running the code without the lock: the acquire load
+    // pairs with the release store below, so a thread that sees a resolved slot also sees the resolved Var.
+    static_assert(std::atomic_ref<Var*>::is_always_lock_free, "global slots must be lock-free atomics");
+    std::atomic_ref<Var*> slot(ctx->globals[idx]);
+    Var* var = slot.load(std::memory_order_acquire);
     if (var) {
         if (trace_slot()) {
             fprintf(stderr, "[qore-aot-global] slot=%d name=%s cached var=%p\n",
@@ -11796,7 +11800,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
     }
 
     std::lock_guard<std::mutex> lock(ctx->global_resolution_mutex);
-    var = ctx->globals[idx];
+    var = slot.load(std::memory_order_relaxed);
     if (var) {
         return var;
     }
@@ -11806,7 +11810,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
         const qore_ns_private* vns = nullptr;
         var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
         if (var) {
-            ctx->globals[idx] = var;
+            slot.store(var, std::memory_order_release);
             if (trace_slot()) {
                 fprintf(stderr, "[qore-aot-global] slot=%d name=%s resolved var=%p\n",
                     idx, slot_name(), static_cast<void*>(var));
