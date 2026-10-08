@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Data provider factories report that a data provider does not support a constructor from an option hash only
+    when its class has no such constructor. Other errors raised while looking up the constructor, such as
+    <tt>PROGRAM-ERROR</tt> for a class whose @ref Qore::Program "Program" has been deleted, are raised unchanged
+    instead of being replaced by that message.
+
     CMake source-archive builds now retain the commit exported by <tt>git archive</tt>,
     including when extracted inside another repository. Revision updates reject corrupt
     metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.
@@ -2879,6 +2884,8 @@ while (*binary chunk = input.read(65536)) {
       - dense columnar interop with @ref buffer "buffer<T>" columns and @ref Qore::SQL::ColumnarResult "ColumnarResult",
         Eigen3-backed float64 columns, and zero-overhead ML matrix/vector feeding
       - streaming CSV, Parquet/Arrow, and DBI columnar I/O aimed at production ETL and analytics workloads
+      - Parquet reads use the supported Result API with Arrow 24 and later, retaining older SDK
+        compatibility and preserving projection, row-group selection, and read-error reporting
 
     - @ref i18nintro "i18n" module
       - new builtin module providing ICU-backed internationalization and localization primitives
@@ -2952,6 +2959,7 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
+      - BSON arrays support current and older libbson APIs and honor cancellation and sandbox interruption
       - MongoClient/MongoDatabase/MongoCollection/MongoCursor/ObjectId classes with full CRUD and
         aggregation-pipeline support and automatic BSON-to-Qore value conversion
       - generic typed cursors (<tt>MongoCursor&lt;DocT&gt;</tt>) with find()/aggregate() preserving the document type

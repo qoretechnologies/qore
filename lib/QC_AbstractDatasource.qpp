@@ -138,7 +138,7 @@ abstract auto AbstractDatasource::execRaw(string sql) [flags=NAMED_ARGS];
 
     @since %Qore 3.0
 */
-bool AbstractDatasource::bulkLoadBegin(string table, list<string> columns, *hash<auto> options)
+bool AbstractDatasource::bulkLoadBegin(string[doc] table, list<string>[doc] columns, *hash<auto>[doc] options)
         [flags=NAMED_ARGS] {
     xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
         "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
@@ -151,7 +151,7 @@ bool AbstractDatasource::bulkLoadBegin(string table, list<string> columns, *hash
 
     @since %Qore 3.0
 */
-nothing AbstractDatasource::bulkLoadRows(hash<auto> rows) {
+nothing AbstractDatasource::bulkLoadRows(hash<auto>[doc] rows) {
     xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
         "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
 }
@@ -162,7 +162,7 @@ nothing AbstractDatasource::bulkLoadRows(hash<auto> rows) {
 
     @since %Qore 3.0
 */
-nothing AbstractDatasource::bulkLoadEnd(bool success) {
+nothing AbstractDatasource::bulkLoadEnd(bool[doc] success) {
     xsink->raiseException("ABSTRACT-DATASOURCE-ERROR", "This method must be re-implemented in subclasses to provide "
         "native bulk loading; it is implemented in Datasource and DatasourcePool for example");
 }

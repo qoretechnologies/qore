@@ -591,7 +591,7 @@ string base64 = bin.toBase64Url();
     - <string>::toBase64Url()
     - make_base64_url_string(binary)
 */
-string <binary>::toBase64Url(softint max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
+string <binary>::toBase64Url(softint[doc] max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
     rv->concatBase64Url(*b);
     return rv;

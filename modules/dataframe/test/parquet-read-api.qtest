@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/Util.qm
+%requires dataframe
+%exec-class ParquetReadApiTest
+
+class ParquetReadApiTest inherits QUnit::Test {
+    constructor() : Test("Parquet read API compatibility", "1.0") {
+        addTestCase("whole table", sub() { checkRead(False, False); });
+        addTestCase("projected table", sub() { checkRead(False, True); });
+        addTestCase("selected row groups", sub() { checkRead(True, False); });
+        addTestCase("projected row groups", sub() { checkRead(True, True); });
+        addTestCase("whole table decode failure", sub() { checkFailure(False, False); });
+        addTestCase("projected table decode failure", sub() { checkFailure(False, True); });
+        addTestCase("row group decode failure", sub() { checkFailure(True, False); });
+        addTestCase("projected row group decode failure", sub() { checkFailure(True, True); });
+        set_return_value(main());
+    }
+
+    private hash<DataFrame::ParquetReadOptions> options(bool groups, bool projection) {
+        hash<DataFrame::ParquetReadOptions> opts = <DataFrame::ParquetReadOptions>{
+            "use_threads": False,
+        };
+        if (groups) {
+            opts.row_groups = (1, 0);
+        }
+        if (projection) {
+            opts.columns = ("name", "id");
+        }
+        return opts;
+    }
+
+    private writeFixture(string path) {
+        DataFrame::DataFrame frame((
+            {"id": 1, "name": "first", "score": 3.5},
+            {"id": 2, "name": NOTHING, "score": NOTHING},
+            {"id": 3, "name": "last", "score": 7.0}
+        ));
+        frame.writeParquet(path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none", "row_group_size": 2, "use_dictionary": False,
+        });
+    }
+
+    private checkRead(bool groups, bool projection) {
+        string path = tmp_location() + sprintf("/qore-parquet-api-%d.parquet", getpid());
+        on_exit { unlink(path); }
+        writeFixture(path);
+        DataFrame::DataFrame frame = DataFrame::DataFrame::readParquet(path, options(groups, projection));
+        assertEq(3, frame.numRows(), "all selected rows survive");
+        assertEq(projection ? ("name", "id") : ("id", "name", "score"), frame.columnNames(),
+            "requested column ordering survives");
+        assertEq(groups ? (3, 1, 2) : (1, 2, 3), frame.getColumn("id"),
+            "requested row group ordering survives");
+        assertEq(groups ? ("last", "first", NOTHING) : ("first", NOTHING, "last"),
+            frame.getColumn("name"), "string and null values survive");
+        if (!projection) {
+            assertEq(groups ? (7.0, 3.5, NOTHING) : (3.5, NOTHING, 7.0), frame.getColumn("score"),
+                "numeric and null values survive");
+        }
+        hash<DataFrame::ParquetReadOptions> empty = options(groups, projection);
+        empty.filters = ({"column": "id", "op": ">", "value": 100},);
+        assertEq(0, DataFrame::DataFrame::readParquet(path, empty).numRows(),
+            "statistics may select no row groups");
+    }
+
+    private checkFailure(bool groups, bool projection) {
+        string path = tmp_location() + sprintf("/qore-parquet-api-%d.parquet", getpid());
+        on_exit { unlink(path); }
+        writeFixture(path);
+        File file();
+        file.open(path, O_RDWR);
+        file.setPos(4);
+        # Damage the first page header while preserving both magic bytes and
+        # the footer, so opening succeeds and the selected read API fails.
+        file.write("XXXXXXXXXXXXXXXX");
+        file.close();
+        hash<DataFrame::ParquetReadOptions> opts = options(groups, projection);
+        assertThrows("DATAFRAME-IO-ERROR", \DataFrame::DataFrame::readParquet(), (path, opts),
+            "Arrow read failure is converted to a Qore exception");
+        writeFixture(path);
+        assertEq(3, DataFrame::DataFrame::readParquet(path, opts).numRows(),
+            "a failed read does not poison subsequent reads");
+    }
+}
