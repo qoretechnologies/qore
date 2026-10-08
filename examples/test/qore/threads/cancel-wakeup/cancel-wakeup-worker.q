@@ -160,6 +160,14 @@ run_case("pipe read", auto sub () {
     map ($1.client.close(), $1.server.close()), pairs + tls_pairs;
 }
 
+# sleep() and usleep()
+run_case("sleep", auto sub () {
+    return sleep(60);
+});
+run_case("usleep", auto sub () {
+    return usleep(60s);
+});
+
 # a program interrupt during a backquote read in a sandboxed Program
 {
     string fifo = make_fifo();

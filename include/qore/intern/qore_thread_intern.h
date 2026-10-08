@@ -497,6 +497,11 @@ DLLLOCAL void qore_stop_cond_waker();
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
 #endif
 
+//! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
+/** @return 0 if the time elapsed, -1 if an exception was raised on \a xsink, or the result of qore_usleep() when
+    cancellation is deferred
+*/
+DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operation);
 
 //! Clears all Qore program-level thread-local data on the calling thread without
 //! destroying thread registration

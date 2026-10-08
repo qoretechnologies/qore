@@ -43,6 +43,10 @@
     @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()", and blocked writes to the standard output and error
     streams.
 
+    @ref Qore::sleep() "sleep()" and @ref Qore::usleep() "usleep()" now end as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted, instead of within 100 ms, as do the retries of
+    @ref Qore::File::lockBlocking() "File::lockBlocking()".
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.

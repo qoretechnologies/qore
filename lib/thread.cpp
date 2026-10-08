@@ -5349,6 +5349,41 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
 }
 #endif
 
+int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    if (qore_check_cancel(xsink, operation)) {
+        return -1;
+    }
+    if (usecs <= 0) {
+        return 0;
+    }
+    // no cancellation can be delivered while it is deferred
+    if (qore_is_cancel_deferred()) {
+        return qore_usleep(usecs);
+    }
+
+    // the whole milliseconds are slept in a condition wait, which cancellation interrupts at once (see
+    // QoreCondition::waitWithInterrupt()); a remainder of less than a millisecond is slept as it is
+    int64 deadline_us = q_get_monotonic_us() + usecs;
+    QoreThreadLock lck;
+    QoreCondition cond;
+    AutoLocker al(lck);
+    while (true) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            return 0;
+        }
+        if (remaining_us < 1000) {
+            return qore_usleep(remaining_us);
+        }
+        // the exception is raised here so that it names the operation
+        if (cond.waitWithInterrupt(&lck, remaining_us / 1000) == QORE_COND_RESULT_INTERRUPTED
+            && qore_check_cancel(xsink, operation)) {
+            return -1;
+        }
+    }
+}
+
 bool qore_is_thread_cancel_requested() {
     int tid = q_gettid();
     return thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid);

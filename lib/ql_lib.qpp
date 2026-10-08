@@ -873,7 +873,7 @@ nothing setgroups(softlist<softint> group_ids) [flags=NAMED_ARGS;dom=PROCESS] {
 sleep(10s);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see usleep() for a similar function supporting microsecond resolution
 
@@ -884,23 +884,8 @@ int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = seconds * 1000000ll;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "sleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(seconds * 1000000ll, xsink, "sleep");
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -919,11 +904,11 @@ nothing sleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
 usleep(5000);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see sleep() for a similar function supporting second resolution
 
-    @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+    @note both sleep() and usleep() wait on a condition variable that a cancellation request or program interrupt signals, so they return as soon as one is requested; a remainder of less than a millisecond is slept with nanosleep() (2) if available on the current platform, otherwise with usleep() (3)
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -932,23 +917,8 @@ int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = microseconds;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "usleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(microseconds, xsink, "usleep");
 }
 
 //! Causes the current thread to sleep for a certain number of microseconds
@@ -961,11 +931,11 @@ int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
 usleep(250ms);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see sleep() for a similar function supporting second resolution
 
-    @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+    @note both sleep() and usleep() wait on a condition variable that a cancellation request or program interrupt signals, so they return as soon as one is requested; a remainder of less than a millisecond is slept with nanosleep() (2) if available on the current platform, otherwise with usleep() (3)
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -975,23 +945,8 @@ int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = usecs;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "usleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(usecs, xsink, "usleep");
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

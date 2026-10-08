@@ -132,7 +132,12 @@ public:
             delay_us = std::min(delay_us, remaining_us);
         }
 
-        if (qore_usleep(delay_us)) {
+        // the backoff ends at once when the thread is cancelled or its Program is interrupted
+        int sleep_rc = qore_cancellable_sleep(delay_us, xsink, "file read");
+        if (*xsink) {
+            return -1;
+        }
+        if (sleep_rc) {
             xsink->raiseErrnoException("FILE-READ-ERROR", errno,
                 "error applying backoff after stale file-read readiness");
             return -1;
