@@ -105,6 +105,14 @@ private:
                 write_waiting;  // number of threads waiting on writes
 
     // issue #3101: maintain a count of all scanable objects in the queue
+    /* While the count is not zero, the Queue object's private data scan count includes the queue, so the collector
+       scans the queue's values.  The object's count is changed under the queue's lock, in the same critical section
+       as the transition of this count that requires it: changed after the lock is released, a take could decrement
+       it before the push that made this count non-zero has incremented it, and the object would not be scanned
+       while the queue holds values.  This orders the queue's lock before the object's rlck, which is safe because
+       rlck is a leaf lock: no code acquires a queue lock while holding it, and the collector only ever tries the
+       queue's lock (see scanMembers()).
+    */
     int scan_count = 0;
 
     DLLLOCAL int waitReadIntern(ExceptionSink *xsink, int timeout_ms);
@@ -115,6 +123,9 @@ private:
     DLLLOCAL void insertIntern(QoreValue v);
 
     DLLLOCAL void clearIntern(ExceptionSink* xsink);
+
+    // removes a counted value from the scan count; called with the lock held
+    DLLLOCAL void uncountIntern(QoreObject& self);
 
     // the following helpers must be called with the lock held
     DLLLOCAL int getLenIntern() const {
