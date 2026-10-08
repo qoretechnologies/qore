@@ -10692,6 +10692,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         return toBits(QoreValue());
     }
 
+    // This is a call of a function compiled in the caller's batch module, not a closure invocation: as in
+    // qore_rt_call_fast(), a caller closure's captured LocalVar* map must not shadow the callee's own closure-use
+    // locals, and the callee needs its own frame on the closure variable stack.  Without the frame boundary the
+    // callee's closure-use locals are looked up in the caller's frame: a recursive call finds the caller's
+    // variable, skips instantiating its own, and its exit pops the caller's variable, which leaves the caller's
+    // closures with dangling captures.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+    ThreadFrameBoundaryHelper tfbh(true);
+
     // Instantiate parameter locals directly from NaN-boxed args
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
         return toBits(QoreValue());

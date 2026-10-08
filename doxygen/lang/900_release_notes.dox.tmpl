@@ -4149,6 +4149,10 @@ while (*binary chunk = input.read(65536)) {
       up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
       or found declarations that are not visible to the caller
 
+    - Fixed a crash with JIT execution when a recursive function with a local variable captured by a closure was
+      compiled to native code together with a function that called it: the recursive call used its caller's
+      variable and released it on return, leaving the caller's closure with a dangling capture
+
     - Fixed native code compiled with JIT execution not checking a typed local variable for \c NOTHING after its
       value could have been removed through a reference: for example, after
       <tt>clear(\\value)</tt> removed a \c string parameter's value, <tt>index(value, ".")</tt> returned -1 instead of
