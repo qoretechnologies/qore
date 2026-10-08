@@ -3123,6 +3123,10 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(qore-aot-runtime-identity DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+# The header is derived from the fingerprint, which the qcc-format-version target writes: without this target-level
+# dependency, a build can compile libqore with the previous identity before it regenerates the fingerprint, and qmods
+# compiled after the fingerprint changed then record that previous identity and are never rebuilt for the new one
+add_dependencies(qore-aot-runtime-identity qcc-format-version)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
     PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 
