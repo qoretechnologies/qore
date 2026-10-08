@@ -33,6 +33,7 @@
 #define _QORE_QOREOPERATORNODE_H
 
 #include <cstdarg>
+#include <type_traits>
 #include <utility>
 #include <vector>
 #include "qore/intern/qore_string_private.h"
@@ -190,7 +191,11 @@ public:
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
-        return dynamic_cast<const LValueOperatorNode*>(this);
+        if constexpr (std::is_convertible_v<const T*, const LValueOperatorNode*>) {
+            return true;
+        } else {
+            return dynamic_cast<const LValueOperatorNode*>(this) != nullptr;
+        }
     }
 
     template <class O>
@@ -241,7 +246,11 @@ public:
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
-        return dynamic_cast<const LValueOperatorNode*>(this);
+        if constexpr (std::is_convertible_v<const T*, const LValueOperatorNode*>) {
+            return true;
+        } else {
+            return dynamic_cast<const LValueOperatorNode*>(this) != nullptr;
+        }
     }
 
     template <class O>
@@ -303,7 +312,11 @@ public:
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
-        return dynamic_cast<const LValueOperatorNode*>(this);
+        if constexpr (std::is_convertible_v<const T*, const LValueOperatorNode*>) {
+            return true;
+        } else {
+            return dynamic_cast<const LValueOperatorNode*>(this) != nullptr;
+        }
     }
 
     template <class O>
@@ -381,7 +394,11 @@ public:
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
-        return dynamic_cast<const LValueOperatorNode*>(this);
+        if constexpr (std::is_convertible_v<const T*, const LValueOperatorNode*>) {
+            return true;
+        } else {
+            return dynamic_cast<const LValueOperatorNode*>(this) != nullptr;
+        }
     }
 };
 

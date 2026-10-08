@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires BulkSqlUtil
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class BulkCalendarTest
+
+class BulkCalendarTest inherits Test {
+    private {
+        string prefix = "bulkcal_" + digest("sha256", sprintf("%d:%s", getpid(), now_us())).toHex().substr(0, 12);
+    }
+    constructor() : Test("PostgreSQL bulk calendar/scalar parity", "1.0", \ARGV) {
+        addTestCase("non-UTC bulk timestamps dates and times match scalar writes", \calendar());
+        addTestCase("bulk update predicates and upsert preserve absolute instants", \mutations());
+        set_return_value(main());
+    }
+    private Datasource connection() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable PostgreSQL database");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        ds.setAutoCommit(False); ds.setOption("timezone", "America/New_York");
+        ds.selectRow("select pg_catalog.set_config('TimeZone','America/New_York',false)"); ds.commit();
+        return ds;
+    }
+    private AbstractTable fixture(Datasource ds, string suffix) {
+        AbstractTable t = (new Table(ds, {"columns": {"id": {"native_type": "bigint", "notnull": True},
+            "stamp": {"native_type": "timestamp without time zone", "size": 6},
+            "instant": {"native_type": "timestamp with time zone", "size": 6},
+            "day": {"native_type": "date"}, "clock": {"native_type": "time without time zone"}},
+            "primary_key": {"name": prefix + suffix + "_pk", "columns": ("id",)}}, prefix + suffix)).getTable();
+        t.createCommit(); return t;
+    }
+    private cleanup(Datasource ds, AbstractTable t) {
+        ds.rollback(); t.dropCommit();
+        assertFalse(AbstractTable::getTable(ds, t.getName()).checkExistence()); ds.rollback();
+    }
+    private calendar() {
+        Datasource ds = connection(); AbstractTable t = fixture(ds, "_c"); on_exit cleanup(ds, t);
+        list<date> inputs = (2026-01-01T01:30:00.123456Z, 2026-07-01T01:30:00.234567Z);
+        int id;
+        BulkInsertOperation bulk(t, {"block_size": 2}); on_error bulk.discard();
+        foreach date value in (inputs) {
+            hash<auto> data = {"stamp": value, "instant": value, "day": value, "clock": value};
+            t.insert(data + {"id": ++id});
+            bulk.queueData(data + {"id": 10 + id});
+        }
+        # A second block exercises transformBulkBindArgs on the prepared statement.
+        foreach date value in (inputs) {
+            bulk.queueData({"id": 20 + ++id, "stamp": value, "instant": value, "day": value, "clock": value});
+        }
+        bulk.flush();
+        for (int i = 1; i <= 2; ++i) {
+            hash<auto> scalar = t.selectRow({"where": {"id": i}}) - "id";
+            assertEq(scalar, t.selectRow({"where": {"id": i + 10}}) - "id");
+            assertEq(scalar, t.selectRow({"where": {"id": i + 22}}) - "id");
+        }
+        t.insert({"id": (31, 32), "stamp": (NULL, "2026-01-02 03:04:05"),
+            "day": (NULL, "2026-01-02"), "clock": (NULL, "03:04:05")});
+        assertEq(NULL, t.selectRow({"where": {"id": 31}}).stamp);
+        assertEq("2026-01-02 03:04:05", t.selectRow({"where": {"id": 32}}).stamp.format("YYYY-MM-DD HH:mm:SS"));
+        ds.rollback();
+    }
+    private mutations() {
+        Datasource ds = connection(); AbstractTable t = fixture(ds, "_m"); on_exit cleanup(ds, t);
+        date first = 2026-01-01T01:30:00Z; date second = 2026-07-01T01:30:00Z;
+        t.insert({"id": 1, "stamp": first, "instant": first});
+        code<int(hash<auto>,hash<auto>)> update = t.getBulkUpdateClosure({"instant": second}, {"stamp": first});
+        assertEq(1, update({"instant": (second,)}, {"stamp": (first,)}));
+        assertEq(second, t.selectRow({"where": {"id": 1}}).instant);
+        code<int(hash<auto>)> upsert = t.getBulkUpsertClosure({"id": 1, "stamp": second, "instant": second});
+        upsert({"id": (1, 2), "stamp": (second, first), "instant": (second, first)});
+        assertEq(second, t.selectRow({"where": {"id": 1}}).stamp);
+        assertEq(first, t.selectRow({"where": {"id": 2}}).stamp);
+        ds.rollback();
+    }
+}
