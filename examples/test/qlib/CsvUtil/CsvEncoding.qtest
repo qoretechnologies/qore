@@ -1,0 +1,279 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvEncodingTest
+
+#! Tests that CSV records read in any character encoding are keyed by the header names in UTF-8
+/** Hash keys are stored in the default character encoding (UTF-8); header names read from a file in another
+    encoding must give the same keys as the UTF-8 names, so that records can be accessed by the names, and the
+    \c "fields" and \c "headers" options given in UTF-8 match the headers of the file.
+*/
+public class CsvEncodingTest inherits QUnit::Test {
+    public {
+        #! Czech and German header names; every character exists in ISO-8859-2 and WINDOWS-1250
+        const CzechHeaders = ("Bestätigung", "Plzeň", "Množství");
+
+        #! German header names; every character exists in ISO-8859-1 and WINDOWS-1252
+        const GermanHeaders = ("Bestätigung", "Größe", "Menge");
+
+        #! the encodings in which each set of headers can be written
+        const Cases = (
+            {"encoding": "ISO-8859-2", "headers": CzechHeaders},
+            {"encoding": "WINDOWS-1250", "headers": CzechHeaders},
+            {"encoding": "ISO-8859-1", "headers": GermanHeaders},
+            {"encoding": "WINDOWS-1252", "headers": GermanHeaders},
+            {"encoding": "UTF-8", "headers": CzechHeaders},
+            {"encoding": "UTF-16LE", "headers": CzechHeaders},
+            {"encoding": "UTF-16BE", "headers": CzechHeaders},
+        );
+
+        #! the encodings that are not ASCII-compatible
+        /** a number in a string in one of these encodings is not converted to an integer; this is not a matter of
+            the keys, so the typed field values are checked only in the other encodings
+        */
+        const NonAsciiCompatible = {"UTF-16LE": True, "UTF-16BE": True};
+
+        #! the data rows
+        const Rows = (
+            ("ja", "Brno", "5"),
+            ("nein", "Praha", "12"),
+        );
+    }
+
+    private {
+        string dir;
+    }
+
+    constructor() : Test("CsvEncodingTest", "1.0") {
+        addTestCase("header-derived keys", \headerKeys());
+        addTestCase("the fields option", \fieldsOption());
+        addTestCase("the headers option", \headersOption());
+        addTestCase("the record type", \recordType());
+        addTestCase("data providers", \dataProviders());
+        addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
+        addTestCase("generic UTF-16", \genericUtf16());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + "csv-encoding-" + get_random_string(8);
+        mkdir(dir);
+    }
+
+    globalTearDown() {
+        if (dir && is_dir(dir)) {
+            Dir d();
+            d.chdir(dir);
+            foreach string f in (d.listFiles() ?? ()) {
+                unlink(dir + DirSep + f);
+            }
+            rmdir(dir);
+        }
+    }
+
+    headerKeys() {
+        foreach hash<auto> c in (Cases) {
+            binary data = encode(c.headers, c.encoding);
+            string label = c.encoding;
+            hash<auto> opts = {"separator": ";", "header_names": True};
+            checkRecords(c.headers, read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts)),
+                label + " CsvIterator");
+            string path = writeFile("headers.csv", data);
+            checkRecords(c.headers, read(new CsvFileIterator(path, opts + {"encoding": c.encoding})),
+                label + " CsvFileIterator");
+            checkRecords(c.headers, read(new CsvIterator(new FileInputStream(path), c.encoding, opts)),
+                label + " file stream");
+            checkRecords(c.headers, read(new CsvDataIterator(binary_to_string(data, c.encoding), opts)),
+                label + " CsvDataIterator");
+            # the headers are given in the encoding of the file
+            CsvIterator i(new BinaryInputStream(data), c.encoding, opts);
+            assertTrue(i.next(), label);
+            assertEq(c.headers, map convert_encoding($1, "UTF-8"), i.getHeaders(), label + " headers");
+        }
+    }
+
+    fieldsOption() {
+        foreach hash<auto> c in (Cases) {
+            binary data = encode(c.headers, c.encoding);
+            string label = c.encoding;
+            # the fields are named in UTF-8; the last field is converted to an integer
+            string type = NonAsciiCompatible{c.encoding} ? "string" : "int";
+            auto qty = NonAsciiCompatible{c.encoding} ? ("5", "12") : (5, 12);
+            hash<auto> opts = {
+                "separator": ";",
+                "header_names": True,
+                "fields": {
+                    c.headers[0]: "string",
+                    c.headers[1]: "string",
+                    c.headers[2]: type,
+                },
+            };
+            list<hash<auto>> records = read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts));
+            checkRecords(c.headers, records, label + " fields");
+            assertEq(qty, map $1{c.headers[2]}, records, label + " typed field");
+            records = read(new CsvFileIterator(writeFile("fields.csv", data), opts + {"encoding": c.encoding}));
+            assertEq(qty, map $1{c.headers[2]}, records, label + " CsvFileIterator typed field");
+            # a field renamed from a header in UTF-8
+            opts.fields = {"qty": {"type": type, "header": c.headers[2]}};
+            records = read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts));
+            assertEq(qty, map $1.qty, records, label + " renamed field");
+            assertEq((c.headers[0], c.headers[1], "qty"), keys records[0], label + " renamed field keys");
+        }
+    }
+
+    headersOption() {
+        foreach hash<auto> c in (Cases) {
+            # the data has no header line; the headers are given in UTF-8
+            binary data = encode(c.headers, c.encoding, False);
+            string label = c.encoding;
+            hash<auto> opts = {"separator": ";", "headers": c.headers};
+            checkRecords(c.headers, read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts)),
+                label + " headers");
+            opts.fields = {c.headers[2]: NonAsciiCompatible{c.encoding} ? "string" : "int"};
+            list<hash<auto>> records = read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts));
+            assertEq(NonAsciiCompatible{c.encoding} ? ("5", "12") : (5, 12), map $1{c.headers[2]}, records,
+                label + " headers and fields");
+        }
+    }
+
+    recordType() {
+        foreach hash<auto> c in (Cases) {
+            binary data = encode(c.headers, c.encoding);
+            string label = c.encoding;
+            hash<auto> opts = {"separator": ";", "header_names": True, "fields": {c.headers[2]: "int"}};
+            CsvIterator i(new BinaryInputStream(data), c.encoding, opts);
+            # the headers are read with the first record
+            assertTrue(i.next(), label);
+            checkKeys(c.headers, keys i.getRecordType(), label + " iterator record type");
+            CsvReadDataProvider dp(opts + {"data": data, "encoding": c.encoding});
+            hash<auto> record_type = dp.getRecordType();
+            checkKeys(c.headers, keys record_type, label + " provider record type");
+            # the type of the field named in UTF-8 in the "fields" option
+            assertEq("*softint", record_type{c.headers[2]}.getType().getName(), label + " typed field");
+        }
+    }
+
+    dataProviders() {
+        foreach hash<auto> c in (Cases) {
+            binary data = encode(c.headers, c.encoding);
+            string label = c.encoding;
+            hash<auto> opts = {"separator": ";", "header_names": True, "encoding": c.encoding};
+            string path = writeFile("provider.csv", data);
+            checkRecords(c.headers, search(new CsvReadDataProvider(path, opts)), label + " path");
+            checkRecords(c.headers, search(new CsvReadDataProvider(opts + {"path": path})), label + " path option");
+            checkRecords(c.headers, search(new CsvReadDataProvider(new BinaryInputStream(data), opts)),
+                label + " stream");
+            checkRecords(c.headers, search(new CsvReadDataProvider(opts + {"stream": new BinaryInputStream(data)})),
+                label + " stream option");
+            checkRecords(c.headers, search(new CsvReadDataProvider(opts + {"data": data})), label + " binary data");
+            checkRecords(c.headers, search(new CsvReadDataProvider(opts - "encoding"
+                + {"data": binary_to_string(data, c.encoding)})), label + " string data");
+            # a search by a header name in UTF-8
+            list<hash<auto>> records = search(new CsvReadDataProvider(opts + {"data": data}),
+                {c.headers[1]: "Praha"});
+            assertEq(1, records.size(), label + " search");
+            assertEq("nein", records[0]{c.headers[0]}, label + " search result");
+        }
+    }
+
+    utf16ByteOrderMarks() {
+        foreach hash<auto> c in ({"encoding": "UTF-16LE", "bom": <fffe>}, {"encoding": "UTF-16BE", "bom": <feff>}) {
+            binary data = c.bom + encode(CzechHeaders, c.encoding);
+            string label = c.encoding + " with a byte order mark";
+            hash<auto> opts = {"separator": ";", "header_names": True};
+            checkRecords(CzechHeaders, read(new CsvIterator(new BinaryInputStream(data), c.encoding, opts)), label);
+            checkRecords(CzechHeaders, read(new CsvFileIterator(writeFile("bom.csv", data),
+                opts + {"encoding": c.encoding})), label + " CsvFileIterator");
+            checkRecords(CzechHeaders, search(new CsvReadDataProvider(opts + {"data": data, "encoding": c.encoding})),
+                label + " CsvReadDataProvider");
+        }
+    }
+
+    genericUtf16() {
+        # the byte order of the generic "UTF-16" encoding is given by the byte order mark at the start of the data
+        hash<auto> opts = {"separator": ";", "header_names": True};
+        foreach hash<auto> c in ({"encoding": "UTF-16LE", "bom": <fffe>}, {"encoding": "UTF-16BE", "bom": <feff>}) {
+            binary data = c.bom + encode(CzechHeaders, c.encoding);
+            string label = "UTF-16 with a " + c.encoding + " byte order mark";
+            checkRecords(CzechHeaders, read(new CsvIterator(new BinaryInputStream(data), "UTF-16", opts)), label);
+            checkRecords(CzechHeaders, read(new CsvIterator(new BinaryInputStream(data), "UTF-16",
+                opts + {"eol": "\n"})), label + " and an explicit eol");
+            checkRecords(CzechHeaders, read(new CsvFileIterator(writeFile("utf16.csv", data),
+                opts + {"encoding": "UTF-16"})), label + " CsvFileIterator");
+            checkRecords(CzechHeaders, search(new CsvReadDataProvider(opts + {"data": data, "encoding": "UTF-16"})),
+                label + " CsvReadDataProvider");
+            CsvIterator i(new BinaryInputStream(data), "UTF-16", opts);
+            assertTrue(i.next(), label);
+            assertEq(c.encoding, i.getHeaders()[0].encoding(), label + " header encoding");
+        }
+        # without a byte order mark, UTF-16 is big-endian
+        binary data = encode(CzechHeaders, "UTF-16BE");
+        checkRecords(CzechHeaders, read(new CsvIterator(new BinaryInputStream(data), "UTF-16", opts)),
+            "UTF-16 without a byte order mark");
+    }
+
+    #! Checks that the records have the expected keys and values
+    private checkRecords(list<string> headers, list<hash<auto>> records, string label) {
+        assertEq(Rows.size(), records.size(), label + " record count");
+        foreach hash<auto> rec in (records) {
+            checkKeys(headers, keys rec, label);
+            list<auto> row = Rows[$#];
+            foreach string h in (headers) {
+                # each record can be accessed by the header names in UTF-8
+                assertTrue(rec.hasKey(h), sprintf("%s: %y", label, h));
+                assertEq(row[$#], string(rec{h}), sprintf("%s: %y value", label, h));
+            }
+        }
+    }
+
+    #! Checks that the keys are the expected UTF-8 names
+    private checkKeys(list<string> expected, *list<auto> actual, string label) {
+        assertEq(expected, actual, label + " keys");
+        foreach string k in (actual) {
+            assertEq("UTF-8", k.encoding(), label + " key encoding");
+            # the bytes are compared, so that a key in another encoding with the same characters is not equal
+            assertEq(binary(expected[$#]), binary(k), sprintf("%s: %y bytes", label, k));
+        }
+    }
+
+    #! Returns the CSV text with the given headers in the given encoding
+    private static binary encode(list<string> headers, string encoding, bool with_headers = True) {
+        string text = with_headers ? (foldl $1 + ";" + $2, headers) + "\n" : "";
+        foreach list<auto> row in (Rows) {
+            text += (foldl $1 + ";" + $2, row) + "\n";
+        }
+        return convert_encoding(text, encoding).toBinary();
+    }
+
+    #! Writes a file in the test directory and returns its path
+    private string writeFile(string name, binary data) {
+        string path = dir + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+        return path;
+    }
+
+    #! Returns the records of an iterator
+    private static list<hash<auto>> read(AbstractCsvIterator i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+
+    #! Returns the records of a data provider
+    private static list<hash<auto>> search(CsvReadDataProvider dp, *hash<auto> where_cond) {
+        return map $1, dp.searchRecords(where_cond);
+    }
+}

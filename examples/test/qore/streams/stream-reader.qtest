@@ -25,6 +25,7 @@ class StreamReaderTest inherits QUnit::Test {
         addTestCase("Read int tests", \readIntTests());
         addTestCase("Exception tests", \exceptionTests());
         addTestCase("Read string tests", \readStringTests());
+        addTestCase("UTF-16 line tests", \utf16LineTests());
 
         set_return_value(main());
     }
@@ -416,5 +417,71 @@ class StreamReaderTest inherits QUnit::Test {
         assertEq("UTF-16", snobom.encoding());
         assertEq(2, snobom.length());
         assertEq("hé", convert_encoding(snobom, "UTF-8"));
+    }
+
+    #! the byte order of a stream in the generic UTF-16 encoding is given by the byte order mark at its start
+    /** The end-of-line marker is converted to the encoding of the stream, so the byte order must be known before
+        the first line is read; little-endian data read with a big-endian marker gave lines split in the middle of a
+        character.
+    */
+    utf16LineTests() {
+        string text = "PO,Množství\nab,1\ncd,2\n";
+        list<string> lines = ("PO,Množství", "ab,1", "cd,2");
+        binary le = convert_encoding(text, "UTF-16LE").toBinary();
+        binary be = convert_encoding(text, "UTF-16BE").toBinary();
+        foreach hash<auto> c in (
+            {"label": "UTF-16 with a little-endian mark", "data": <fffe> + le, "enc": "UTF-16",
+                "line_enc": "UTF-16LE"},
+            {"label": "UTF-16 with a big-endian mark", "data": <feff> + be, "enc": "UTF-16", "line_enc": "UTF-16BE"},
+            {"label": "UTF-16 without a mark", "data": be, "enc": "UTF-16", "line_enc": "UTF-16"},
+            {"label": "UTF-16LE with a mark", "data": <fffe> + le, "enc": "UTF-16LE", "line_enc": "UTF-16LE"},
+            {"label": "UTF-16BE with a mark", "data": <feff> + be, "enc": "UTF-16BE", "line_enc": "UTF-16BE"},
+            {"label": "UTF-16LE without a mark", "data": le, "enc": "UTF-16LE", "line_enc": "UTF-16LE"},
+            {"label": "UTF-16BE without a mark", "data": be, "enc": "UTF-16BE", "line_enc": "UTF-16BE"},
+        ) {
+            foreach *string eol in ((NOTHING, "\n")) {
+                string label = c.label + (eol ? " and an explicit eol" : "");
+                StreamReader sr(new BinaryInputStream(c.data), c.enc);
+                list<string> l = ();
+                while (*string line = sr.readLine(eol)) {
+                    assertEq(c.line_enc, line.encoding(), label + " line encoding");
+                    l += convert_encoding(line, "UTF-8");
+                }
+                assertEq(lines, l, label);
+                # the same through a buffered reader and a line iterator
+                BufferedStreamReader bsr(new BinaryInputStream(c.data), c.enc);
+                l = ();
+                while (*string line = bsr.readLine(eol)) {
+                    l += convert_encoding(line, "UTF-8");
+                }
+                assertEq(lines, l, label + " buffered");
+                InputStreamLineIterator i(new BinaryInputStream(c.data), c.enc, eol);
+                l = ();
+                while (i.next()) {
+                    l += convert_encoding(i.getValue(), "UTF-8");
+                }
+                assertEq(lines, l, label + " line iterator");
+            }
+        }
+
+        # without a mark, a first character starting with a byte of a mark is content
+        StreamReader sr(new BinaryInputStream(convert_encoding("Ａb\nc\n", "UTF-16BE").toBinary()), "UTF-16");
+        assertEq("Ａb", convert_encoding(sr.readLine(), "UTF-8"));
+        assertEq("c", convert_encoding(sr.readLine(), "UTF-8"));
+        assertEq(NOTHING, sr.readLine());
+        sr = new StreamReader(new BinaryInputStream(convert_encoding("\ufeff\n", "UTF-16LE").toBinary()), "UTF-16");
+        # <fffe> is a little-endian mark, followed by an empty line
+        assertEq("", sr.readLine());
+        assertEq(NOTHING, sr.readLine());
+        sr = new StreamReader(new BinaryInputStream(convert_encoding("ｆ\n", "UTF-16BE").toBinary()), "UTF-16");
+        assertEq("ｆ", convert_encoding(sr.readLine(), "UTF-8"));
+
+        # a mark alone, a single byte and no data
+        sr = new StreamReader(new BinaryInputStream(<fffe>), "UTF-16");
+        assertEq(NOTHING, sr.readLine());
+        sr = new StreamReader(new BinaryInputStream(<ff>), "UTF-16");
+        assertThrows("ENCODING-CONVERSION-ERROR", auto sub () { return convert_encoding(sr.readLine(), "UTF-8"); });
+        sr = new StreamReader(new BinaryInputStream(binary()), "UTF-16");
+        assertEq(NOTHING, sr.readLine());
     }
 }

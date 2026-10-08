@@ -57,6 +57,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -935,18 +936,24 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
-        // Convert the index to a string for hash member access
-        QoreStringValueHelper key(*rh);
-        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+        // Convert the index to a hash key in the default encoding for hash member access
+        QoreHashKeyHelper key(*rh, vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
         if (ind < 0) {
             return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
-        // Convert the index to a string for hash member access
-        QoreStringValueHelper key(*rh);
-        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+        // Convert the index to a hash key in the default encoding for hash member access
+        QoreHashKeyHelper key(*rh, vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_BUFFER) {
         if (for_remove) {
             return -1;
@@ -1065,18 +1072,24 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
-        // Convert the index to a string for hash member access
-        QoreStringValueHelper key(*rh);
-        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+        // Convert the index to a hash key in the default encoding for hash member access
+        QoreHashKeyHelper key(*rh, vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
         if (ind < 0) {
             return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
-        // Convert the index to a string for hash member access
-        QoreStringValueHelper key(*rh);
-        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+        // Convert the index to a hash key in the default encoding for hash member access
+        QoreHashKeyHelper key(*rh, vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+        return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_BUFFER) {
         if (for_remove) {
             return -1;
@@ -1268,7 +1281,7 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove) {
 int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx) {
     //printd(5, "LValueHelper::doObjLValue() o: %p v: %p ('%s', refs: %d)\n", o, getTypeName(),
     //    getValue() ? getValue()->reference_count() : 0);
-    //printd(5, "LValueHelper::doObjLValue() obj: %p member: '%s'\n", o, mem->c_str());
+    //printd(5, "LValueHelper::doObjLValue() obj: %p member: '%s'\n", o, mem.c_str());
 
     // clear ocvec when we get to an object
     ocvec.clear();
@@ -1297,7 +1310,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     }
 
     // convert to default character encoding
-    QoreStringValueHelper mem(*rh, QCS_DEFAULT, vl.xsink);
+    QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
     }
@@ -1313,10 +1326,10 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem->c_str(), for_remove);
+        return doHashLValue(t, mem.c_str(), for_remove);
     }
 
-    return doObjLValue(o, mem->c_str(), for_remove);
+    return doObjLValue(o, mem.c_str(), for_remove);
 }
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
@@ -1326,7 +1339,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     }
 
     // convert to default character encoding
-    QoreStringValueHelper mem(*rh, QCS_DEFAULT, vl.xsink);
+    QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
     }
@@ -1342,11 +1355,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else if (t == NT_OBJECT) {
         o = getValue().get<QoreObject>();
     } else {
-        return doHashLValue(t, mem->c_str(), for_remove);
+        return doHashLValue(t, mem.c_str(), for_remove);
     }
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
-    return doObjLValue(o, mem->c_str(), for_remove, class_ctx);
+    return doObjLValue(o, mem.c_str(), for_remove, class_ctx);
 }
 
 void LValueHelper::setObjectContext(qore_object_private* obj) {
@@ -2755,19 +2768,19 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
             ConstListIterator li(l);
             while (li.next()) {
-                QoreStringValueHelper mem(li.getValue(), QCS_DEFAULT, xsink);
+                QoreHashKeyHelper mem(li.getValue(), xsink);
                 if (*xsink)
                     return;
 
                 // issue #4122: do not write output for nonexistent keys
                 bool exists;
-                QoreValue n = hp->takeKeyValueIntern(mem->c_str(), exists);
+                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
                 if (!exists) {
                     continue;
                 }
 
                 // note that no exception can occur here
-                rvh->setKeyValue(mem->c_str(), n, xsink);
+                rvh->setKeyValue(mem.c_str(), n, xsink);
                 assert(!*xsink);
             }
 
@@ -2779,15 +2792,15 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         return;
     }
 
-    QoreStringValueHelper mem(*member, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper mem(*member, xsink);
     if (*xsink)
         return;
 
     QoreValue v{};
     if (o)
-        v = qore_object_private::takeMember(*o, lvh, mem->c_str());
+        v = qore_object_private::takeMember(*o, lvh, mem.c_str());
     else {
-        v = h->takeKeyValue(mem->c_str());
+        v = h->takeKeyValue(mem.c_str());
         if (needs_scan(v)) {
             if (!qore_hash_private::getScanCount(*h))
                 lvh.setDelta(-1);

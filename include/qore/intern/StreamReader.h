@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -133,6 +133,14 @@ public:
     }
 
     DLLLOCAL QoreStringNode* readLineEol(const QoreString* eol, bool trim, ExceptionSink* xsink) {
+        // the byte order of a stream in the generic UTF-16 encoding is given by a byte order mark at its start; it
+        // must be known before the end-of-line marker is converted to the encoding of the stream
+        char start[2];
+        size_t start_len = 0;
+        if (enc == QCS_UTF16 && resolveUtf16ByteOrder(start, start_len, xsink)) {
+            return nullptr;
+        }
+
         TempEncodingHelper eolstr(eol, enc, xsink);
         if (*xsink) {
             return nullptr;
@@ -143,25 +151,14 @@ public:
 
         size_t eolpos = 0;
 
-        while (true) {
-            signed char c;
-            int64 rc = readData(xsink, &c, 1, false);
-            //printd(5, "StreamReader::readLineEol() eolpos: %d/%d rc: %d c: %d str: '%s' (%s)\n", eolpos,
-            //    eolstr->size(), rc, c, str->c_str(), enc->getCode());
-            if (*xsink)
-                return 0;
-            if (!rc)
-                return str->empty() ? 0 : q_remove_bom_utf16(str.release(), enc);
-
-            // add the char to the string
+        // adds a byte to the line; returns true if the line is complete
+        auto add_byte = [&](signed char c) -> bool {
             str->concat(c);
 
             if ((**eolstr)[eolpos] == c) {
                 ++eolpos;
                 if (eolpos == eolstr->size()) {
-                    if (trim)
-                        str->terminate(str->size() - eolpos);
-                    return q_remove_bom_utf16(str.release(), enc);
+                    return true;
                 }
             } else if (eolpos) {
                 // check all positions to see if the string matches
@@ -178,6 +175,41 @@ public:
                 }
                 if (!found)
                     eolpos = 0;
+            }
+            return false;
+        };
+
+        // returns the complete line
+        auto finish_line = [&]() -> QoreStringNode* {
+            if (trim) {
+                str->terminate(str->size() - eolpos);
+            }
+            return q_remove_bom_utf16(str.release(), enc);
+        };
+
+        // bytes read to resolve the byte order that are not a byte order mark belong to the line
+        for (size_t i = 0; i < start_len; ++i) {
+            if (add_byte(start[i])) {
+                return finish_line();
+            }
+        }
+
+        for (size_t i = 1; true; ++i) {
+            // a line can be arbitrarily long, so the read can be cancelled
+            if (!(i % 1024) && qore_check_cancel(xsink, "StreamReader line read")) {
+                return nullptr;
+            }
+            signed char c;
+            int64 rc = readData(xsink, &c, 1, false);
+            //printd(5, "StreamReader::readLineEol() eolpos: %d/%d rc: %d c: %d str: '%s' (%s)\n", eolpos,
+            //    eolstr->size(), rc, c, str->c_str(), enc->getCode());
+            if (*xsink)
+                return 0;
+            if (!rc)
+                return str->empty() ? 0 : q_remove_bom_utf16(str.release(), enc);
+
+            if (add_byte(c)) {
+                return finish_line();
             }
         }
     }
@@ -402,6 +434,52 @@ protected:
     const QoreEncoding* enc;
 
 private:
+    //! Resolves the byte order of a stream in the generic UTF-16 encoding from a byte order mark
+    /** If the next bytes are a UTF-16 byte order mark, they are consumed, and the encoding of the stream is set to
+        UTF-16LE or UTF-16BE accordingly; otherwise the stream stays in the generic (big-endian) UTF-16 encoding, and
+        the bytes read are returned to the caller as content.
+
+        @param start receives the bytes read that are not a byte order mark
+        @param start_len receives the number of bytes in \a start (0 - 2)
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int resolveUtf16ByteOrder(char* start, size_t& start_len, ExceptionSink* xsink) {
+        assert(enc == QCS_UTF16);
+        start_len = 0;
+        // peek() is not used, as it cannot tell a 0xff byte from the end of the stream in all readers
+        int64 rc = readData(xsink, start, 1, false);
+        if (*xsink) {
+            return -1;
+        }
+        if (!rc) {
+            return 0;
+        }
+        start_len = 1;
+        unsigned char b0 = static_cast<unsigned char>(start[0]);
+        if (b0 != 0xfe && b0 != 0xff) {
+            return 0;
+        }
+        rc = readData(xsink, start + 1, 1, false);
+        if (*xsink) {
+            return -1;
+        }
+        if (!rc) {
+            return 0;
+        }
+        start_len = 2;
+        unsigned char b1 = static_cast<unsigned char>(start[1]);
+        if (b0 == 0xfe && b1 == 0xff) {
+            enc = QCS_UTF16BE;
+            start_len = 0;
+        } else if (b0 == 0xff && b1 == 0xfe) {
+            enc = QCS_UTF16LE;
+            start_len = 0;
+        }
+        return 0;
+    }
+
     //! Read data until a limit.
     /** @param xsink exception sink
         @param dest destination buffer

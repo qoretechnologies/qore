@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -117,8 +117,11 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
 
         if (!p.isEqualValue(keys[i]) && (!keys[i] || keys[i].isValue())) {
-            QoreStringValueHelper key(keys[i]);
-            checkDup(lvec[i], key->c_str());
+            // a key that cannot be converted to the default encoding raises an error when the hash is evaluated
+            std::string key;
+            if (!QoreHashKeyHelper::getConstKey(keys[i], key)) {
+                checkDup(lvec[i], key.c_str());
+            }
         } else if (!needs_eval && keys[i] && keys[i].needsEval()) {
             needs_eval = true;
         }
@@ -129,9 +132,11 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
 
         const QoreTypeInfo* expected_value_type = expected_hash_value_type;
-        if (expected_hash_decl && keys[i].getType() == NT_STRING) {
-            QoreStringValueHelper key(keys[i]);
-            const HashDeclMemberInfo* m = typed_hash_decl_private::get(*expected_hash_decl)->findMember(key->c_str());
+        std::string const_key;
+        if (expected_hash_decl && keys[i].getType() == NT_STRING
+                && !QoreHashKeyHelper::getConstKey(keys[i], const_key)) {
+            const HashDeclMemberInfo* m = typed_hash_decl_private::get(*expected_hash_decl)->findMember(
+                const_key.c_str());
             if (m) {
                 expected_value_type = m->getTypeInfo();
             }
@@ -286,20 +291,25 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
             vcommon = false;
         }
 
-        QoreStringValueHelper key(*k);
+        // hash keys are stored in the default encoding; a key in another encoding is converted
+        QoreHashKeyHelper key(*k, xsink);
+        if (*xsink) {
+            needs_deref = false;
+            return QoreValue();
+        }
 
         // issue #2791: ensure that type folding is performed at the source if necessary
         QoreValue val = v.takeReferencedValue();
         //printd(5, "QoreParseHashNode::evalImpl() '%s' this->vtype: '%s' (c: %d) vt: '%s' (c: %d)\n",
-        //  key->c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
+        //  key.c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
         //  QoreTypeInfo::getName(vt), QoreTypeInfo::hasComplexType(vt));
         if (this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
                 && QoreTypeInfo::hasComplexType(vt)) {
             // this can never throw an exception; it's only used for type folding/stripping
-            QoreTypeInfo::acceptInputKey(this->vtype, key->c_str(), val, xsink);
+            QoreTypeInfo::acceptInputKey(this->vtype, key.c_str(), val, xsink);
         }
 
-        h->setKeyValue(key->c_str(), val, xsink);
+        h->setKeyValue(key.c_str(), val, xsink);
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();

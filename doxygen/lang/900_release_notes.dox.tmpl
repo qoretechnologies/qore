@@ -4068,6 +4068,33 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed hash keys and object member names given as strings in a character encoding other than the default
+      (UTF-8), such as ISO-8859-2, WINDOWS-1250 or UTF-16LE, being used as raw bytes in many operations: keys were
+      stored with invalid UTF-8 bytes, keys stored correctly were not found, and UTF-16 keys were cut at their first
+      null byte (\c "PO" in UTF-16LE became \c "P").  This affected hash literals, lookups, assignments, compound
+      assignments, \c exists, \c remove, \c delete, slices, the \c - and \c -= operators,
+      @ref Qore::zzz8hashzzz9::hasKey() "<hash>::hasKey()", object members and hashdecl members, with IR, tiered
+      and JIT execution, in compiled (AOT) modules, and partly with AST execution.  Every execution mode now
+      converts such a key to UTF-8, so it names the same key as the UTF-8 string with the same characters; a key that
+      cannot be converted raises \c ENCODING-CONVERSION-ERROR.  Keys that are already in UTF-8, or that contain
+      only ASCII characters in an ASCII-compatible encoding, are used without conversion
+      - For example, records read by the @ref csvutilintro "CsvUtil" module from data in ISO-8859-2, WINDOWS-1250,
+        ISO-8859-1, WINDOWS-1252 or UTF-16 were keyed by mis-encoded header names, so a record could not be accessed
+        by its header names, and \c "fields" options naming the headers in UTF-8 did not match
+
+    - Fixed reading lines from a stream or file in the generic \c "UTF-16" encoding that starts with a
+      little-endian byte order mark: @ref Qore::InputStreamLineIterator "InputStreamLineIterator",
+      @ref Qore::StreamReader::readLine() "StreamReader::readLine()" and
+      @ref csvutilintro "CsvUtil" iterators raised \c INVALID-ENCODING or returned garbled lines, because the
+      end-of-line marker was converted to big-endian UTF-16 before the byte order mark was read, and
+      @ref Qore::FileLineIterator "FileLineIterator" and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" decoded such data as big-endian.  The
+      byte order mark now gives the byte order of the data, which is big-endian without one, and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" (and therefore
+      @ref Qore::FileLineIterator "FileLineIterator") and
+      @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" no longer return the byte order mark
+      at the start of UTF-16, UTF-16LE or UTF-16BE data as a character
+
     - Fixed an exception raised while a loop or a functional operator advances an iterator escaping the
       enclosing \c try block with IR, tiered and JIT execution: an exception from an iterator's \c next() or
       \c getValue() in a \c foreach loop, or in an operator such as \c map, \c select or \c foldl, returned from

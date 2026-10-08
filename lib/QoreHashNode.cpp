@@ -33,6 +33,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -542,14 +543,56 @@ QoreValue QoreHashNode::getKeyValue(const char* key, ExceptionSink* xsink) const
     return getKeyValueExistence(key, exists, xsink);
 }
 
+void QoreHashKeyHelper::setupSlow(const QoreString& str, ExceptionSink* xsink) {
+    tmp.reset(str.convertEncoding(QCS_DEFAULT, xsink));
+    if (!tmp) {
+        assert(*xsink);
+        valid = false;
+        return;
+    }
+    key = tmp->c_str();
+    len = tmp->size();
+}
+
+void QoreHashKeyHelper::setupSlow(const QoreValue& n, ExceptionSink* xsink) {
+    QoreStringValueHelper str(n, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        valid = false;
+        return;
+    }
+    assert(str);
+    assert((*str)->getEncoding() == QCS_DEFAULT || usableAsIs(**str));
+    if (str.is_temp()) {
+        tmp.reset(str.giveString());
+        key = tmp->c_str();
+        len = tmp->size();
+    } else {
+        // the string belongs to the value, which outlives this object
+        key = (*str)->c_str();
+        len = (*str)->size();
+    }
+}
+
+int QoreHashKeyHelper::getConstKey(const QoreValue& n, std::string& name) {
+    ExceptionSink xsink;
+    QoreHashKeyHelper key(n, &xsink);
+    if (xsink) {
+        // the key is evaluated at runtime instead, where the error is raised in the code's context
+        xsink.clear();
+        return -1;
+    }
+    name.assign(key.c_str(), key.size());
+    return 0;
+}
+
 QoreValue QoreHashNode::getKeyValueExistence(const QoreString& key, bool& exists, ExceptionSink* xsink) const {
-    TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
-    return *xsink ? QoreValue() : getKeyValueExistence(key.c_str(), exists, xsink);
+    QoreHashKeyHelper tmp(key, xsink);
+    return *xsink ? QoreValue() : getKeyValueExistence(tmp.c_str(), exists, xsink);
 }
 
 QoreValue QoreHashNode::getKeyValue(const QoreString& key, ExceptionSink* xsink) const {
-    TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
-    return *xsink ? QoreValue() : getKeyValue(key.c_str(), xsink);
+    QoreHashKeyHelper tmp(key, xsink);
+    return *xsink ? QoreValue() : getKeyValue(tmp.c_str(), xsink);
 }
 
 // performs a lexical compare, return -1, 0, or 1 if the "this" value is less than, equal, or greater than
@@ -596,12 +639,12 @@ bool QoreHashNode::getKeyAsBool(const char* key, bool &found) const {
 
 void QoreHashNode::deleteKey(const QoreString* key, ExceptionSink* xsink) {
     assert(reference_count() == 1);
-    TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper tmp(*key, xsink);
     if (*xsink) {
         return;
     }
 
-    priv->deleteKey(tmp->c_str(), xsink);
+    priv->deleteKey(tmp.c_str(), xsink);
 }
 
 QoreValue QoreHashNode::takeKeyValue(const char* key) {
@@ -611,11 +654,11 @@ QoreValue QoreHashNode::takeKeyValue(const char* key) {
 
 void QoreHashNode::removeKey(const QoreString* key, ExceptionSink* xsink) {
    assert(reference_count() == 1);
-   TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
+   QoreHashKeyHelper tmp(*key, xsink);
    if (*xsink)
       return;
 
-   priv->removeKey(tmp->c_str(), xsink);
+   priv->removeKey(tmp.c_str(), xsink);
 }
 
 int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* xsink) {
@@ -636,13 +679,13 @@ int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* x
 
 int QoreHashNode::setKeyValue(const QoreString& key, QoreValue value, ExceptionSink* xsink) {
     assert(xsink);
-    TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper tmp(key, xsink);
     if (*xsink) {
         value.discard(xsink);
         return -1;
     }
 
-    return setKeyValue(tmp->c_str(), value, xsink);
+    return setKeyValue(tmp.c_str(), value, xsink);
 }
 
 QoreValue& QoreHashNode::getKeyValueReference(const char* key) {
@@ -1211,20 +1254,20 @@ hash_assignment_priv::hash_assignment_priv(QoreHashNode& n_h, const std::string&
 
 hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n_h, const QoreString& key,
         bool must_already_exist) : h(*n_h.priv) {
-    TempEncodingHelper k(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper k(key, xsink);
     if (*xsink)
         return;
 
-    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str(), created_member);
+    om = must_already_exist ? h.findMember(k.c_str()) : h.findCreateMember(k.c_str(), created_member);
 }
 
 hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n_h, const QoreString* key,
         bool must_already_exist) : h(*n_h.priv) {
-    TempEncodingHelper k(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper k(*key, xsink);
     if (*xsink)
         return;
 
-    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str(), created_member);
+    om = must_already_exist ? h.findMember(k.c_str()) : h.findCreateMember(k.c_str(), created_member);
 }
 
 void hash_assignment_priv::reassign(const char* key, bool must_already_exist) {
@@ -1344,20 +1387,20 @@ HashAssignmentHelper::HashAssignmentHelper(QoreHashNode& h, const std::string& k
 
 HashAssignmentHelper::HashAssignmentHelper(ExceptionSink* xsink, QoreHashNode& h, const QoreString& key,
         bool must_already_exist) : priv(0) {
-    TempEncodingHelper k(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper k(key, xsink);
     if (*xsink)
         return;
 
-    priv = new hash_assignment_priv(*h.priv, k->c_str(), must_already_exist);
+    priv = new hash_assignment_priv(*h.priv, k.c_str(), must_already_exist);
 }
 
 HashAssignmentHelper::HashAssignmentHelper(ExceptionSink* xsink, QoreHashNode& h, const QoreString* key,
         bool must_already_exist) : priv(0) {
-    TempEncodingHelper k(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper k(*key, xsink);
     if (*xsink)
         return;
 
-    priv = new hash_assignment_priv(*h.priv, k->c_str(), must_already_exist);
+    priv = new hash_assignment_priv(*h.priv, k.c_str(), must_already_exist);
 }
 
 HashAssignmentHelper::HashAssignmentHelper(HashIterator &hi)

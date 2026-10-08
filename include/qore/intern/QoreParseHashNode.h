@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #define _QORE_QOREPARSEHASHNODE_H
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreHashKeyHelper.h"
 
 #include <vector>
 #include <map>
@@ -87,9 +88,10 @@ public:
         values.push_back(v);
         lvec.push_back(loc);
 
-        if (!n || n.isValue()) {
-            QoreStringValueHelper key(n);
-            checkDup(loc, key->c_str());
+        // a key that cannot be converted to the default encoding raises an error when the hash is evaluated
+        std::string key;
+        if ((!n || n.isValue()) && !QoreHashKeyHelper::getConstKey(n, key)) {
+            checkDup(loc, key.c_str());
         }
     }
 

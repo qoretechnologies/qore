@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreHashIterator.h"
 #include "qore/intern/QoreHashListIterator.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 
 extern QoreClass* QC_HASHLISTITERATOR;
 extern QoreClass* QC_HASHITERATOR;
@@ -205,11 +206,11 @@ bool b = h.hasKey(key);
     @see <hash>::hasKeyValue(softstring)
  */
 bool <hash>::hasKey(softstring key) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   TempEncodingHelper str(key, QCS_DEFAULT, xsink);
+   QoreHashKeyHelper str(*key, xsink);
    if (!str)
       return false;
 
-   return h->existsKey(str->getBuffer());
+   return h->existsKey(str.c_str());
 }
 
 //! Returns @ref True if the key exists and is assigned to a value, @ref False if not
@@ -228,11 +229,11 @@ bool b = h.hasKeyValue(key);
     @see <hash>::hasKey(softstring)
  */
 bool <hash>::hasKeyValue(softstring key) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   TempEncodingHelper str(key, QCS_DEFAULT, xsink);
+   QoreHashKeyHelper str(*key, xsink);
    if (!str)
       return false;
 
-   return h->existsKeyValue(str->getBuffer());
+   return h->existsKeyValue(str.c_str());
 }
 
 //! Returns @ref True if the hash has no keys, @ref False if it does

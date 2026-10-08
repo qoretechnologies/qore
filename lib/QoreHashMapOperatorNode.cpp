@@ -33,6 +33,7 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 
 QoreString QoreHashMapOperatorNode::map_str("map operator expression");
 
@@ -179,7 +180,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             return QoreValue();
 
         // we have to convert to a string in the default encoding to use a hash key
-        QoreStringValueHelper str_util(*arg_key, QCS_DEFAULT, xsink);
+        QoreHashKeyHelper str_util(*arg_key, xsink);
         if (*xsink)
             return QoreValue();
 
@@ -194,7 +195,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             }
 
             // Insert key-Value pair to the hash
-            ret_val->setKeyValue(str_util->c_str(), arg_val.takeReferencedValue(), xsink);
+            ret_val->setKeyValue(str_util.c_str(), arg_val.takeReferencedValue(), xsink);
         }
     } else { // List of values
         ConstListIterator li(arg_lst->get<const QoreListNode>());
@@ -209,7 +210,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                     return QoreValue();
 
                 // we have to convert to a string in the default encoding to use a hash key
-                QoreStringValueHelper key(*ekey, QCS_DEFAULT, xsink);
+                QoreHashKeyHelper key(*ekey, xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -231,7 +232,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                         vcommon = false;
                     }
 
-                    ret_val->setKeyValue(key->c_str(), val.takeReferencedValue(), xsink);
+                    ret_val->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
                 }
             }
             // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop
@@ -283,7 +284,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
                 return QoreValue();
 
             // we have to convert to a string in the default encoding to use a hash key
-            QoreStringValueHelper key(*ekey, QCS_DEFAULT, xsink);
+            QoreHashKeyHelper key(*ekey, xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -305,7 +306,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
                     vcommon = false;
                 }
 
-                rv->setKeyValue(key->c_str(), val.takeReferencedValue(), xsink);
+                rv->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
             }
         }
         // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop

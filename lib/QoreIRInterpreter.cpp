@@ -9,6 +9,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
+#include <qore/intern/QoreHashKeyHelper.h>
 
 #include <algorithm>
 #include <cmath>
@@ -6182,16 +6183,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // which also copies into a local `path_copy`.  Without this, a thread
     // reading `step.name.c_str()` in navigatePath can see a stomped string
     // from another thread still patching.
-    auto patchLVPathLocal = [&](const QoreIRLValuePathInstruction* path_inst)
-            -> std::vector<LVPathStep> {
-        std::vector<LVPathStep> path_copy = path_inst->path;
+    // Returns 0 for OK, -1 if an exception was raised converting a dynamic hash key to the default encoding.
+    auto patchLVPathLocal = [&](const QoreIRLValuePathInstruction* path_inst, std::vector<LVPathStep>& path_copy)
+            -> int {
+        path_copy = path_inst->path;
         for (auto& step : path_copy) {
             if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
                 QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
                 step.slice_values.clear();
                 step.slice_values.push_back(key_val);
-                QoreStringValueHelper key_str(key_val);
-                step.name = key_str->c_str();
+                QoreHashKeyHelper key_str(key_val, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                step.name.assign(key_str.c_str(), key_str.size());
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                 QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
                 step.index = idx_val.getAsBigInt();
@@ -6205,7 +6210,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
             }
         }
-        return path_copy;
+        return 0;
     };
 
     // LValuePath roots are resolved through LValueHelper, so owned local roots
@@ -7137,22 +7142,35 @@ next_instruction:
                         return false;
                     }
                     QoreValue key_val = getIRValue(values, inst->operands[i]);
-                    QoreValue value = getIRValue(values, inst->operands[i + 1]);
-                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
-                    const QoreTypeInfo* vt = stored.getFullTypeInfo();
-                    if (!i) {
-                        vtype = vt;
-                        vcommon = true;
-                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
-                        vcommon = false;
+                    // hash keys are stored in the default encoding
+                    QoreHashKeyHelper key(key_val, xsink);
+                    if (!*xsink) {
+                        QoreValue value = getIRValue(values, inst->operands[i + 1]);
+                        QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                        const QoreTypeInfo* vt = stored.getFullTypeInfo();
+                        if (!i) {
+                            vtype = vt;
+                            vcommon = true;
+                        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+                            vcommon = false;
+                        }
+                        hash->setKeyValue(key.c_str(), stored, xsink);
                     }
-                    QoreStringValueHelper key(key_val);
-                    hash->setKeyValue(key->c_str(), stored, xsink);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                    if (*xsink) {
+                        break;
                     }
+                }
+                if (*xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (declared_type) {
                     qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
@@ -8681,11 +8699,14 @@ load_local_done:
                 QoreValue val      = getIRValue(values, hksd_inst->operands[1]);
                 QoreValue key_val  = getIRValue(values, hksd_inst->operands[2]);
                 ValueHolder val_holder(val.refSelf(), xsink);
-                // Convert key to string
-                QoreStringValueHelper key_str(key_val);
+                // hash keys are stored in the default encoding
+                QoreHashKeyHelper key_str(key_val, xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
                 // enclosing catch block below
                 auto store_dynamic_key = [&]() {
+                    if (*xsink) {
+                        return;
+                    }
                     if (hash_val.getType() == NT_HASH) {
                         QoreHashNode* h = hash_val.get<QoreHashNode>();
 
@@ -8700,7 +8721,7 @@ load_local_done:
                         }
 
                         // check hashdecl key validity before copying or changing the hash
-                        if (qore_hash_private::get(*h)->checkLValueKey(key_str->c_str(), xsink)) {
+                        if (qore_hash_private::get(*h)->checkLValueKey(key_str.c_str(), xsink)) {
                             return;
                         }
 
@@ -8727,7 +8748,7 @@ load_local_done:
                             }
                             h = new_h;
                         }
-                        h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                        h->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -8755,11 +8776,11 @@ load_local_done:
                         if (!new_h || (xsink && *xsink)) {
                             return;
                         }
-                        if (qore_hash_private::get(*new_h)->checkLValueKey(key_str->c_str(), xsink)) {
+                        if (qore_hash_private::get(*new_h)->checkLValueKey(key_str.c_str(), xsink)) {
                             new_h->deref(xsink);
                             return;
                         }
-                        new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                        new_h->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
                             return;
@@ -8781,7 +8802,7 @@ load_local_done:
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
                     } else if (hash_val.getType() == NT_OBJECT) {
                         assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
-                            key_str->c_str(), val, xsink);
+                            key_str.c_str(), val, xsink);
                     }
                 };
                 store_dynamic_key();
@@ -9535,8 +9556,10 @@ load_local_done:
                                 ? QoreValue()
                                 : h->getKeyValue(mhk->key2.c_str(), xsink);
                             if (!*xsink) {
-                                QoreStringValueHelper key_str(k);
-                                result->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                                QoreHashKeyHelper key_str(k, xsink);
+                                if (!*xsink) {
+                                    result->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
+                                }
                             }
                             if (*xsink) {
                                 if (inst->exception_target) {
@@ -10195,14 +10218,24 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
                 QoreValue key_val = getIRValue(values, inst->operands[1]);
                 QoreValue value_val = getIRValue(values, inst->operands[2]);
-                QoreStringValueHelper key_str(key_val);
-                QoreHashNode* hash = hash_val.get<QoreHashNode>();
-                if (value_val.hasNode()) {
-                    value_val.refSelf();
+                // hash keys are stored in the default encoding
+                QoreHashKeyHelper key_str(key_val, xsink);
+                if (!*xsink) {
+                    QoreHashNode* hash = hash_val.get<QoreHashNode>();
+                    if (value_val.hasNode()) {
+                        value_val.refSelf();
+                    }
+                    hash->setKeyValue(key_str.c_str(), value_val, xsink);
                 }
-                hash->setKeyValue(key_str->c_str(), value_val, xsink);
                 // Do NOT discard key_val here - it's managed by the IR value map cleanup
-                if (xsink && *xsink) {
+                if (*xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -12740,7 +12773,19 @@ load_local_done:
 
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                std::vector<LVPathStep> path_copy;
+                if (patchLVPathLocal(path_inst, path_copy)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ensureLValuePathRootLocal(path_inst);
 
                 // The value is handed over to the lvalue instead of borrowed when its slot owns it (it has a
@@ -12836,7 +12881,19 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                std::vector<LVPathStep> path_copy;
+                if (patchLVPathLocal(path_inst, path_copy)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
@@ -12973,7 +13030,19 @@ load_local_done:
                 // HttpServerUtil::http_set_reply_headers stomped slice_values
                 // between threads, corrupting the string pointers and SEGV'ing in
                 // QoreStringValueHelper::setup on the first (dangling) key_val.
-                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                std::vector<LVPathStep> path_copy;
+                if (patchLVPathLocal(path_inst, path_copy)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
@@ -13485,7 +13554,19 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                std::vector<LVPathStep> path_copy;
+                if (patchLVPathLocal(path_inst, path_copy)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 // Get RHS value (operands[0] for push/unshift); the holder keeps it while the caches of the root
                 // local, which can hold it, are released
@@ -13627,7 +13708,19 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                std::vector<LVPathStep> path_copy;
+                if (patchLVPathLocal(path_inst, path_copy)) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 // Get the ternary operands: offset, length, replacement
                 QoreValue offset_val = (path_inst->operands.size() > 0)
@@ -17160,8 +17253,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (right.getType() == NT_LIST) {
                     return qore_hash_private::get(*h)->getSlice(right.get<const QoreListNode>(), xsink);
                 }
-                QoreStringValueHelper key(right);
-                QoreValue v = h->getKeyValue(key->c_str(), xsink);
+                QoreHashKeyHelper key(right, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                QoreValue v = h->getKeyValue(key.c_str(), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }
@@ -17174,8 +17270,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (right.getType() == NT_LIST) {
                     return o->getSlice(right.get<const QoreListNode>(), xsink);
                 }
-                QoreStringValueHelper key(right);
-                ValueHolder rv(o->evalMember(key->c_str(), xsink), xsink);
+                QoreHashKeyHelper key(right, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                ValueHolder rv(o->evalMember(key.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }
@@ -17196,8 +17295,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (bt == NT_HASH) {
                 // hash[key] is equivalent to hash{key}
                 const QoreHashNode* h = left.get<const QoreHashNode>();
-                QoreStringValueHelper kstr(right);
-                QoreValue result = h->getKeyValue(kstr->c_str(), xsink);
+                QoreHashKeyHelper kstr(right, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                QoreValue result = h->getKeyValue(kstr.c_str(), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }

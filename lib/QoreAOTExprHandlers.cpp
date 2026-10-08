@@ -130,6 +130,7 @@
 #include <qore/QoreBigIntNode.h>
 #include <qore/QoreNothingNode.h>
 #include <qore/qore_thread.h>
+#include "qore/intern/QoreHashKeyHelper.h"
 
 static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
     static std::atomic<uint64_t> closure_ir_counter{0};
@@ -2518,16 +2519,17 @@ static bool write_expr_hash_literal(AOTExprWriteCtx& ctx) {
         const QoreParseHashNode::nvec_t& keys = phn->getKeys();
         const QoreParseHashNode::nvec_t& vals = phn->getValues();
         if (keys.size() <= 255) {
-            for (const QoreValue& key : keys) {
-                if (key.needsEval()) {
+            // hash keys are stored in the default encoding; a key that cannot be converted is not a literal
+            std::vector<std::string> key_names(keys.size());
+            for (size_t i = 0; i < keys.size(); ++i) {
+                if (keys[i].needsEval() || QoreHashKeyHelper::getConstKey(keys[i], key_names[i])) {
                     return false;
                 }
             }
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
             ctx.writer.writeU8(static_cast<uint8_t>(keys.size()));
             for (size_t i = 0; i < keys.size(); ++i) {
-                QoreStringValueHelper key(keys[i]);
-                ctx.writer.writeStringRef(key->c_str());
+                ctx.writer.writeStringRef(key_names[i].c_str());
                 if (!classifyAndWriteExpr(ctx.writer, vals[i], ctx.parent_locals,
                         ctx.parent_globals, ctx.const_reverse_map)) {
                     return false;
