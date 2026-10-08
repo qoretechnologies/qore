@@ -4174,6 +4174,13 @@ while (*binary chunk = input.read(65536)) {
     - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
       could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
 
+    - Fixed the garbage collector deleting objects that were still in use after a value was taken from a
+      @ref Qore::Thread::Queue "Queue" (@ref Qore::Thread::Queue::get() "Queue::get()",
+      @ref Qore::Thread::Queue::pop() "Queue::pop()" and their variants) or a @ref Qore::TreeMap "TreeMap"
+      (@ref Qore::TreeMap::take() "TreeMap::take()") that was part of a reference cycle with the value: when the
+      container's last other reference was released, the container and the objects in its cycle could be collected
+      while the value taken still referred to them, so using them raised \c OBJECT-ALREADY-DELETED
+
     - Fixed a crash when C++ code cleared a @ref Qore::Thread::Queue "Queue" object through the public C++ API
       (\c QoreQueueHelper::clear()) while the queue held objects added with its methods; values taken through the
       C++ API are also no longer left counted for garbage collection scanning

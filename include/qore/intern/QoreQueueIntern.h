@@ -147,6 +147,9 @@ private:
         qore_object_private* obj = nullptr;
     };
 
+    // records that values the queue may have reported to a scan are given up; called with the lock held
+    DLLLOCAL void markRemovedIntern();
+
     // adds a value to the scan count; called with the lock held
     DLLLOCAL void countIntern(QoreObject& self);
 

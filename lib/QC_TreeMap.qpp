@@ -181,6 +181,11 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
         // Check if old value needs scan and discard it
         if (it != data.end()) {
             old_needs_scan = needs_scan(it->second);
+            if (old_needs_scan) {
+                // the value is released under the lock, which can take a reference that the object's recursive set
+                // counts as internal (see RObject::remove_gen)
+                qore_object_private::get(*self)->edgesRemoved();
+            }
             it->second.discard(xsink);
             // Reuse the existing map entry
             it->second = value.refSelf();
@@ -237,6 +242,9 @@ QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, Excepti
 
         rv = i->second;
         if (needs_scan(rv)) {
+            // the value is handed to the caller with the map's reference, which the object's recursive set may count
+            // as internal: marked under the lock, before the caller can release it (see RObject::remove_gen)
+            qore_object_private::get(*self)->edgesRemoved();
             --scan_count;
             if (!scan_count) {
                 dec_obj = true;

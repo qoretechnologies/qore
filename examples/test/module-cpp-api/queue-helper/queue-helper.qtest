@@ -16,6 +16,17 @@
 class ScanValue {
 }
 
+#! a value that refers back to the Queue holding it, closing a cycle through the queue's private data
+class QueueValue {
+    public {
+        *Queue q;
+    }
+
+    constructor(*Queue q) {
+        self.q = q;
+    }
+}
+
 #! Tests values taken from a Queue object through the public C++ API (QoreQueueHelper), which has no Queue object
 /** A Queue object is scanned for reference cycles while it holds values pushed through its methods that can be
     part of one; the values can also be taken, or the queue cleared, by C++ code that only has the queue.  The
@@ -27,6 +38,8 @@ class QueueHelperTest inherits QUnit::Test {
         addTestCase("shift", \shiftTest());
         addTestCase("pop", \popTest());
         addTestCase("clear", \clearTest());
+        addTestCase("shift keeps the cycle", \shiftCycleTest());
+        addTestCase("pop keeps the cycle", \popCycleTest());
         set_return_value(main());
     }
 
@@ -58,6 +71,31 @@ class QueueHelperTest inherits QUnit::Test {
         assertScanPrivateData(1, q);
         q.get();
         assertScanPrivateData(0, q);
+    }
+
+    #! a value taken with QoreQueueHelper::shift() keeps the queue it refers to
+    shiftCycleTest() {
+        cycleTest(\cpp_api_queue_shift());
+    }
+
+    #! a value taken with QoreQueueHelper::pop() keeps the queue it refers to
+    popCycleTest() {
+        cycleTest(\cpp_api_queue_pop());
+    }
+
+    #! a value handed out through the C++ API keeps the queue after the queue's last other reference is released
+    /** The value is handed out with the queue's reference, which the recursive set of the queue and the value counted
+        as internal; see design/dgc.md, "Values handed out by a container"
+    */
+    private cycleTest(code take) {
+        Queue q();
+        {
+            QueueValue v(q);
+            q.push(v);
+        }
+        QueueValue v2 = take(q);
+        remove q;
+        assertEq(0, v2.q.size(), "the queue is still usable");
     }
 
     private takeTest(code take) {

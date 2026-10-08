@@ -82,6 +82,13 @@ qore_queue_private::ScanHolderRelease::~ScanHolderRelease() {
     }
 }
 
+void qore_queue_private::markRemovedIntern() {
+    // the queue only reports its values to a scan while it has a scan holder (see scanMembers())
+    if (scan_holder) {
+        scan_holder->edgesRemoved();
+    }
+}
+
 void qore_queue_private::countIntern(QoreObject& self) {
     qore_object_private* obj = qore_object_private::get(self);
     if (!scan_count++) {
@@ -398,6 +405,12 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             write_cond.signal();
         }
 
+        // the value is handed to the caller with the queue's reference, which the object's recursive set may count
+        // as internal: marked under the lock, before the caller can release it (see RObject::remove_gen)
+        if (needs_scan(n->node)) {
+            markRemovedIntern();
+        }
+
         // the scan count is maintained under the lock, as in push() and insert(); the queue holds the object
         // whose count includes it, so a value taken through the C++ API without the Queue object is uncounted too
         if (n->scan_counted) {
@@ -447,6 +460,12 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             write_cond.signal();
         }
 
+        // the value is handed to the caller with the queue's reference, which the object's recursive set may count
+        // as internal: marked under the lock, before the caller can release it (see RObject::remove_gen)
+        if (needs_scan(n->node)) {
+            markRemovedIntern();
+        }
+
         // the scan count is maintained under the lock, as in push() and insert(); the queue holds the object
         // whose count includes it, so a value taken through the C++ API without the Queue object is uncounted too
         if (n->scan_counted) {
@@ -480,6 +499,9 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
         // Queue object is uncounted too
         assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
+        // the values are released below, under the lock, which can take references that the object's recursive set
+        // counts as internal (see RObject::remove_gen)
+        markRemovedIntern();
         uncountAllIntern(release);
 
         clearIntern(xsink);
@@ -509,6 +531,9 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
         // Queue object is uncounted too
         assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
+        // the values are released below, under the lock, which can take references that the object's recursive set
+        // counts as internal (see RObject::remove_gen)
+        markRemovedIntern();
         uncountAllIntern(release);
 
         // clear the queue
@@ -544,6 +569,13 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
         return false;
     }
     AutoLocker al(l, true);
+
+    // the values are only reported while the queue knows its object, so that every value it hands out after the
+    // scan has read them marks the object (see scan_holder and RObject::remove_gen)
+    if (!scan_count) {
+        return false;
+    }
+    assert(&obj == scan_holder);
 
     QoreQueueNode* w = head;
     while (w) {

@@ -496,7 +496,7 @@ bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
     return rsh.checkNode(n);
 }
 
-void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen) {
+void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen) {
     assert(rml.checkRSectionExclusive());
     // the lock-free dereference path reads rset alone and infers rcount from it; see RObject::rset
     assert(rs || !rcnt);
@@ -512,13 +512,8 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen) {
     rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
     // record the edge generation the scan read before following the object's edges; see edgesUnchangedSinceScan()
     scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
-#ifdef DEBUG
-    if (rcount > references) {
-        printd(0, "RObject::setRSet() this: %p '%s' cannot set rcount %d > references %d\n", this, getName(), rcount,
-            references.load());
-    }
-    assert(rcount <= references);
-#endif
+    // and the removal generation; see RSet::removalsUnchangedSinceScan()
+    scan_remove_gen.store(seen_remove_gen, std::memory_order_relaxed);
     if (rs) {
         rs->ref();
         // we make a weak reference from the rset to the object to ensure that it does not disappear while the rset is
@@ -1048,6 +1043,15 @@ bool RSet::keepNeedsRescan(bool rescanned) const {
     return !rescanned && !edgesUnchangedSinceScan();
 }
 
+bool RSet::removalsUnchangedSinceScan() const {
+    for (rset_t::const_iterator i = set.begin(), e = set.end(); i != e; ++i) {
+        if (!(*i)->removalsUnchangedSinceScan()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool RSet::edgesUnchangedSinceScan() const {
     if (scan_epoch.load(std::memory_order_relaxed) != untracked_edge_epoch.load(std::memory_order_seq_cst)) {
         return false;
@@ -1159,6 +1163,15 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
                         break;
                     }
                 }
+            }
+            // Every reference is one the scan counted as internal, but a container of a member may have handed a
+            // value out since the scan: the caller holds the reference the container held, so the count is the
+            // same while the reference is now from outside the set.  Collecting the set would delete objects that
+            // the caller still uses; the rescan finds the graph as it is.  See RObject::remove_gen.
+            if (!need_rescan && !removalsUnchangedSinceScan()) {
+                printd(QRO_LVL, "RSet::canDelete() this: %p a member handed out a value since the scan; "
+                    "rescanning\n", this);
+                need_rescan = true;
             }
         }
     }
@@ -1414,6 +1427,8 @@ void RSetHelper::startNode(int id) {
             // read before the edges are followed: an edge added after this leaves the generation different from
             // the one the set records, whether or not this scan sees the edge
             nodes[id].edge_gen = static_cast<RObject*>(n.ptr)->edge_gen.load(std::memory_order_seq_cst);
+            // and so is the removal generation: a value handed out after this is one the scan may have counted
+            nodes[id].remove_gen = static_cast<RObject*>(n.ptr)->remove_gen.load(std::memory_order_seq_cst);
             if (!n.leaf) {
                 static_cast<RObject*>(n.ptr)->scanMembers(*this);
             }
@@ -2162,7 +2177,7 @@ void RSetHelper::commit() {
             }
             RObject* obj = static_cast<RObject*>(n.ptr);
             assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
-            obj->confirmRSet(obj == root_obj, n.edge_gen);
+            obj->confirmRSet(obj == root_obj, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2247,7 +2262,7 @@ void RSetHelper::commit() {
             // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
                 obj->rset.load(std::memory_order_relaxed));
-            obj->confirmRSet(true, n.edge_gen);
+            obj->confirmRSet(true, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2258,7 +2273,7 @@ void RSetHelper::commit() {
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
-        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen);
+        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen, n.remove_gen);
     }
 
 #ifdef DEBUG
@@ -2268,7 +2283,20 @@ void RSetHelper::commit() {
         }
         assert(rs->size() == rs->getCount());
         for (rset_t::iterator ri = rs->begin(), re = rs->end(); ri != re; ++ri) {
-            assert((*ri)->rset.load(std::memory_order_relaxed) == rs);
+            RObject* obj = *ri;
+            assert(obj->rset.load(std::memory_order_relaxed) == rs);
+            // Every reference counted as internal is held by a member whose rsection this scan holds, so it cannot
+            // be released - except one held by a container of a member, which can give the value up under its own
+            // lock after the scan read it: releasing it, or handing it to a caller that can release it before this.
+            // Such a container marks its object (RObject::edgesRemoved()) before the value can be released, so the
+            // mark is visible once the release is: the count is read first.
+            int refs = obj->refs();
+            bool unchanged = obj->rcount > refs && rs->removalsUnchangedSinceScan();
+            if (unchanged) {
+                printd(0, "RSetHelper::commit() obj %p '%s' rcount %d > references %d with no value handed out\n",
+                    obj, obj->getName(), obj->rcount, refs);
+            }
+            assert(!unchanged);
         }
     }
 #endif
