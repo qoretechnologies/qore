@@ -143,9 +143,15 @@ class PseudoToIntLeakTest inherits QUnit::Test {
     }
 
     #! returns the number of leaks in a leak checker's report
-    /** @throw LEAK-REPORT-ERROR the output holds no leak report
+    /** The test is skipped when the leak checker cannot inspect the process's heap, as with a qore built with
+        AddressSanitizer, whose allocator the leak checker does not support
+
+        @throw LEAK-REPORT-ERROR the output holds no leak report
     */
     private int getLeakCount(string report) {
+        if (report =~ /unable to inspect heap ranges of target process/) {
+            testSkip("the leak checker cannot inspect the heap of the process (sanitizer build)");
+        }
         *string count = (report =~ x/^Process [0-9]+: ([0-9]+) leaks? for /m)[0];
         if (!exists count) {
             throw "LEAK-REPORT-ERROR", sprintf("no leak report in: %s", report);
