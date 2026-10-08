@@ -1,0 +1,157 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file lvalue-path-threads-checks.qi checks that concurrent extract and splice operations on the same lvalue path each use their own keys and indexes
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** The same function is run concurrently by many threads, each with its own data and its own dynamic hash key or
+    list index in the lvalue path of an \c extract or \c splice operation.  The compiled code of the function, and
+    the lvalue path it describes, are shared by every thread running it, so each thread must resolve the dynamic keys
+    and indexes for itself; a thread that saw the key or index of another thread would operate on the wrong element
+    and give a wrong result (or corrupt the key while another thread reads it).
+
+    Each execution engine has its own lvalue path code, so the checks are run in each execution mode by
+    lvalue-path-threads-worker.q, which includes this file in its main program, and as a compiled (AOT) module by
+    LValuePathThreadChecks.qm, which includes it as well.
+*/
+public namespace LValuePathThreadChecks {
+#! the number of threads running the checks concurrently
+const Threads = 16;
+#! the number of times each thread runs each check; enough for tiered mode to compile the functions while threads run
+const Iterations = 400;
+
+#! returns the hash key used by the given thread; the keys have different lengths
+string sub thread_key(int t) {
+    return "key-" + strmul("k", t + 1);
+}
+
+#! extracts the first element of the list in the hash member named by a dynamic key
+auto sub extract_key(hash<auto> h, string k) {
+    return extract h{k}, 0, 1;
+}
+
+#! removes the first element of the list in the hash member named by a dynamic key and returns the list
+auto sub splice_key(hash<auto> h, string k) {
+    splice h{k}, 0, 1;
+    return h{k};
+}
+
+#! extracts the first element of the list at a dynamic index
+auto sub extract_index(list<auto> l, int i) {
+    return extract l[i], 0, 1;
+}
+
+#! replaces the second element of the list at a dynamic index and returns the list
+auto sub splice_index(list<auto> l, int i) {
+    splice l[i], 1, 1, 100 + i;
+    return l[i];
+}
+
+#! extracts the tail of the string at a dynamic index in the list in the hash member named by a dynamic key
+auto sub extract_nested(hash<auto> h, string k, int i) {
+    return extract h{k}[i], 1;
+}
+
+#! collects the wrong results of the checks from every thread
+class ThreadChecker {
+    private {
+        Mutex m();
+        #! check label -> number of wrong results
+        hash<string, int> wrong;
+        #! check label -> the first wrong result
+        hash<string, string> first;
+    }
+
+    chk(string label, auto actual, auto expected) {
+        if (actual === expected) {
+            return;
+        }
+        AutoLock al(m);
+        ++wrong{label};
+        if (!first{label}) {
+            first{label} = sprintf("got %y expected %y", actual, expected);
+        }
+    }
+
+    fail(string label, hash<ExceptionInfo> ex) {
+        AutoLock al(m);
+        ++wrong{label};
+        if (!first{label}) {
+            first{label} = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! returns \c "ok <label>" or \c "FAIL <label>: <reason>" for each check
+    list<string> getResults(list<string> labels) {
+        AutoLock al(m);
+        return map wrong{$1}
+            ? sprintf("FAIL %s: %d wrong results in %d; first: %s", $1, wrong{$1}, Threads * Iterations, first{$1})
+            : "ok " + $1,
+            labels;
+    }
+}
+
+public const Labels = ("extract key", "splice key", "extract index", "splice index", "extract nested");
+
+#! runs every check in one thread
+sub run_thread(ThreadChecker c, int t) {
+    string k = thread_key(t);
+    hash<auto> h = {k: (t, t + 1, t + 2)};
+    list<auto> l = map ($1, $1 + 1, $1 + 2), xrange(Threads);
+    int i = t % 2;
+    hash<auto> nh = {k: ("ab" + t, "cd" + t)};
+    for (int n = 0; n < Iterations; ++n) {
+        try {
+            c.chk("extract key", extract_key(h, k), (t,));
+            c.chk("splice key", splice_key(h, k), (t + 1, t + 2));
+            c.chk("extract index", extract_index(l, t), (t,));
+            c.chk("splice index", splice_index(l, t), (t, 100 + t, t + 2));
+            c.chk("extract nested", extract_nested(nh, k, i), (i ? "d" : "b") + t);
+        } catch (hash<ExceptionInfo> ex) {
+            c.fail("exception", ex);
+        }
+    }
+}
+
+#! starts a thread running the checks with the given thread number once \a start reaches zero
+sub start_thread(ThreadChecker c, int t, Counter start, Counter done) {
+    background sub () {
+        on_exit done.dec();
+        # all threads start together, to run the same code at the same time
+        start.waitForZero();
+        run_thread(c, t);
+    }();
+}
+
+#! runs the checks in #Threads threads at once and returns the result of each check
+public list<string> sub get_results() {
+    ThreadChecker c();
+    Counter done();
+    Counter start(1);
+    for (int t = 0; t < Threads; ++t) {
+        done.inc();
+        start_thread(c, t, start, done);
+    }
+    start.dec();
+    done.waitForZero();
+    return c.getResults(Labels + "exception");
+}
+}

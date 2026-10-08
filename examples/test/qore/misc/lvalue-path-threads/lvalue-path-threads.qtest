@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include lvalue-path-threads-checks.qi
+
+%exec-class LValuePathThreadsTest
+
+#! Tests that concurrent extract and splice operations on the same lvalue path use their own keys in every engine
+/** The checks in lvalue-path-threads-checks.qi run in this program, in each execution mode, and from a compiled
+    (AOT) module; every check must pass in every engine.
+*/
+class LValuePathThreadsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the result of each check
+        list<string> expected;
+    }
+
+    constructor() : QUnit::Test("LValuePathThreadsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        expected = map "ok " + $1, LValuePathThreadChecks::Labels + "exception";
+
+        addTestCase("in this program", \testInProcess());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("a compiled module", \testCompiledModule());
+        set_return_value(main());
+    }
+
+    testInProcess() {
+        checkResults("in-process", LValuePathThreadChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkResults(mode, getLines(runWorker("lvalue-path-threads-worker.q", get_script_dir(),
+                "--exec-mode=" + mode)));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-lvalue-path-threads-");
+        string qmod_path = tmp.path + DirSep + "LValuePathThreadChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "LValuePathThreadChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkResults("aot", getLines(runWorker("lvalue-path-threads-module-worker.q", tmp.path)));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1",
+            libqore_dir, libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    private list<string> getLines(string out) {
+        return select out.split("\n"), $1.val();
+    }
+
+    #! checks that every check ran and passed
+    private checkResults(string label, list<string> results) {
+        assertEq(expected, results, label);
+    }
+}

@@ -13941,20 +13941,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
         ExceptionSink* xsink) {
-    // Resolve dynamic key/index operands
-    uint32_t dyn_idx = 0;
-    for (auto& step : inst->path) {
-        if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-            QoreValue key_val = fromBits(dyn_vals[dyn_idx++]);
-            QoreHashKeyHelper key_str(key_val, xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
-            step.name.assign(key_str.c_str(), key_str.size());
-        } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-            QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
-            step.index = idx_val.getAsBigInt();
-        }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // the instruction and its path are shared by every thread running this code, so the dynamic keys and indexes
+    // of this call are resolved in a private copy of the path, as for the other lvalue path operations
+    std::vector<LVPathStep> path_copy;
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
     }
     QoreValue offset_val = fromBits(a_bits);
     QoreValue length_val = fromBits(b_bits);
@@ -13963,10 +13957,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     bool no_vivify = (inst->ternary_op == LVTernaryOp::Extract && replacement_val.isNothing());
     ReferenceHolder<QoreListNode> removed_list(xsink);
     LValueHelper lvh(xsink);
-    if (lvh.navigatePath(inst->path.data(), inst->path.size(), no_vivify)) {
-        if (no_vivify && !*xsink) {
-            return toBits(QoreValue());
-        }
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
         return toBits(QoreValue());
     }
     QoreValue res;

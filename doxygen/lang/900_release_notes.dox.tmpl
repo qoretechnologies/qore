@@ -4085,6 +4085,12 @@ while (*binary chunk = input.read(65536)) {
       operators were taken for their right operand, so for example the sum of two <tt>*=</tt> expressions on
       floats multiplied by integers was calculated as an integer
 
+    - Fixed \c extract and \c splice on a hash member or list element selected by a key or index that is not a
+      constant, such as <tt>extract h{k}, 0, 1</tt>, operating on the element selected by another thread when
+      threads ran the same code at the same time with JIT and tiered execution and in compiled (AOT) modules: the
+      key or index of each call was stored in data shared by every thread running the code, so a call could
+      extract from or splice the wrong element, or read a key while another thread was changing it
+
     - Fixed hash keys and object member names given as strings in a character encoding other than the default
       (UTF-8), such as ISO-8859-2, WINDOWS-1250 or UTF-16LE, being used as raw bytes in many operations: keys were
       stored with invalid UTF-8 bytes, keys stored correctly were not found, and UTF-16 keys were cut at their first
