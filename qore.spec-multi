@@ -365,6 +365,8 @@ cmake --build build --target qore-mongodb-bson-array-test -- %{?_smp_mflags}
 build/modules/mongodb/qore-mongodb-bson-array-test
 QORE_TEST_BUILD_DIR=$PWD/build QORE_TEST_CXXFLAGS="%{optflags} -DNDEBUG" \
     python3 -B -W error examples/test/cmake/test_ignored_qpp_parameters.py -v
+QORE_TEST_BUILD_DIR=$PWD/build \
+    python3 -B -W error examples/test/cmake/test_operator_root_effect.py -v
 %endif
 
 %files
