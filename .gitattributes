@@ -1,0 +1,3 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Preserve the source identity in archives without requiring a Git checkout.
+/.git-archive-revision export-subst

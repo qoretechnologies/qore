@@ -24,6 +24,7 @@ class CompilerFingerprintTest(unittest.TestCase):
         result = subprocess.run([CMAKE, *map(str, args)], text=True, capture_output=True, timeout=60)
         if success:
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertNotRegex(result.stdout + result.stderr, r"(?im)\bwarning\b")
         else:
             self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
         return result
@@ -79,6 +80,16 @@ file(WRITE "{build}/config.txt" "${{recorded}}")
         for labels in ("only-one\n", "duplicate\nduplicate\n", "\n@build-config\n"):
             (build / "labels.txt").write_text(labels)
             self.digest(build, success=False)
+
+    def test_blank_input_lines_and_unchanged_digest_preserve_output(self):
+        source, build = self.fixture("blank lines")
+        expected = self.digest(build)
+        (build / "inputs.txt").write_text(f"\n{source}/compiler.cpp\n\n{build}/config.txt\n\n")
+        os.utime(build / "digest", ns=(1_000_000_000, 1_000_000_000))
+        os.utime(build / "success", ns=(1_000_000_000, 1_000_000_000))
+        self.assertEqual(expected, self.digest(build))
+        self.assertEqual(1_000_000_000, (build / "digest").stat().st_mtime_ns)
+        self.assertGreater((build / "success").stat().st_mtime_ns, 1_000_000_000)
 
     def test_prefix_siblings_are_not_rewritten(self):
         source, build = self.fixture("boundaries")

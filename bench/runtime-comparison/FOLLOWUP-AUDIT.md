@@ -4800,3 +4800,90 @@ coverage is claimed. Performance timing never overlapped build/test/profile work
 |QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP methods changed.
 |Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No format strings from user input, credentials or unchecked external operations added. Same complete access/parse-policy/Program/epoch key retained; fixed argument index is guarded by nargs == 1.
 |Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release and debug each pass 24 selected files: 18 QUnit wrappers, 46 cases, 2510 assertions, plus 6 standalone scripts. Method suite has 514 assertions/build, covering O0/O3, EH, split, disabled modes, wide values, mismatch/NOTHING, exactly-once effects, foreign Programs, deletion, debugger and readers. Old AOT artifact retains all 300 checks; seven measurement runs pass reference checks. No sanitizer/full-repository claim.
+
+
+## Post-continuation upstream integration audit (2026-10-08)
+
+Reviewed the conflict-free merge of `e897fe252` into `c911af9ae`: encoded hash-key
+cancellation and archive/source-revision handling. All 62 checks: 21 Pass,
+41 N/A, 0 Fail. The upstream runtime/build/test diffs were inspected directly;
+this is a focused integration review, not a repository-wide audit. The audit
+record is finalized in the merge after validation; no runtime source resolution
+or performance implementation changes were needed.
+
+Release/debug each pass 15 QUnit files, 43 cases and 5409 assertions. Native hash
+cancellation reports 172 checks per build; old AOT retains all 300 records.
+Python 3.12 passes 7 source-revision and 5 fingerprint tests. System Python 3.9
+cannot run the archive extraction case because it lacks tarfile's data filter;
+that initial failure is retained, not treated as a successful test. The new
+CMake target required a fresh make invocation after automatic regeneration.
+No sanitizer/full-suite or post-merge performance claim is made.
+
+[Integration evidence](results-polymorphic-continuation-merge-macos-arm64.json)
+records parents, build hashes and individual test/check results. The prior
+performance measurements remain scoped to `c911af9ae`; rebuild and save the new
+merged baseline before further optimizations.
+
+|!Check|!Status|!Evidence
+|Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new installed Qore module or QPP class.
+|Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new installed Qore module or QPP class.
+|qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new installed Qore module or QPP class.
+|Module added to QMOD list in CMakeLists.txt|N/A|No new installed Qore module or QPP class.
+|.qm file has @section &lt;lowercasemodname&gt;intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new installed Qore module or QPP class.
+|%modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new installed Qore module or QPP class.
+|No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new installed Qore module or QPP class.
+|No %include usage (deprecated for modules)|Pass|No new deprecated %include usage in the merge.
+|Copyright 2026 on all new files|Pass|New archive metadata, Python/native/Qore tests and upstream audit records carry 2026 notices.
+|Directory layout: .qm inside qlib/&lt;ModuleName&gt;/ directory (not at qlib/&lt;ModuleName&gt;.qm for multi-file modules)|N/A|No new installed Qore module or QPP class.
+|No second .qm for the same module at qlib/&lt;ModuleName&gt;.qm|N/A|No new installed Qore module or QPP class.
+|ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new installed Qore module or QPP class.
+|%modern directive present|Pass|New hash-key-cancel.qtest uses %modern.
+|Executable permission set (chmod +x)|Pass|New Qore and Python test entrypoints are executable (100755).
+|Uses %prepend-module-path  before %requires for in-repo modules|Pass|The hash cancellation wrapper prepends qlib before its bundled QUnit import.
+|External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|N/A|Only bundled QUnit is imported.
+|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|No production C++ filesystem operation introduced. Build/test filesystem operations are explicit source/output or temporary-fixture work.
+|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|No network operation added.
+|If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No production filesystem/network operation requiring a new sandbox helper.
+|No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|The Qore wrapper only locates and launches the explicitly selected native fixture with quoted arguments; no File/Dir/Socket/HTTPClient API added.
+|All for/while loops that could iterate &gt;100 times have qore_check_cancel() checks|Pass|Encoded-key runtime scan checks cancellation before each at-most-100-byte chunk. Inner byte loop is bounded; native test loops use fixed small case sets. Non-throwing invariant-only overload intentionally has no exception sink.
+|Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|Pass|New scan uses qore_check_cancel, not the deprecated I/O interruption helper.
+|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|Pass|At most 100 byte inspections between runtime cancellation checks; chunk length uses size - i to avoid overflow.
+|No blocking operations without cancellation support|Pass|No production blocking primitive introduced. Native interruption fixtures are synchronous; Python subprocess helpers have timeouts.
+|Every action has display_name, short_desc (plain text, &lt;80 chars), desc (markdown)|N/A|No DataProvider/app/field/factory/JNI change.
+|Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider/app/field/factory/JNI change.
+|Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider/app/field/factory/JNI change.
+|DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider/app/field/factory/JNI change.
+|DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash&lt;string, AbstractDataField&gt;|N/A|No DataProvider/app/field/factory/JNI change.
+|Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider/app/field/factory/JNI change.
+|Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider/app/field/factory/JNI change.
+|Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider/app/field/factory/JNI change.
+|Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider/app/field/factory/JNI change.
+|Response/output types use private Fields|N/A|No DataProvider/app/field/factory/JNI change.
+|Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider/app/field/factory/JNI change.
+|Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider/app/field/factory/JNI change.
+|Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider/app/field/factory/JNI change.
+|Password/secret fields have "sensitive": True|N/A|No DataProvider/app/field/factory/JNI change.
+|groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider/app/field/factory/JNI change.
+|App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider/app/field/factory/JNI change.
+|App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider/app/field/factory/JNI change.
+|display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider/app/field/factory/JNI change.
+|short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider/app/field/factory/JNI change.
+|desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider/app/field/factory/JNI change.
+|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider/app/field/factory/JNI change.
+|No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider/app/field/factory/JNI change.
+|No bare field/option names in prose — must use backticks|N/A|No DataProvider/app/field/factory/JNI change.
+|Long descriptions (&gt;500 chars) use bold section headers and bullet lists|N/A|No DataProvider/app/field/factory/JNI change.
+|Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider/app/field/factory/JNI change.
+|getRecordTypeImpl() signature: must be private *hash&lt;string, AbstractDataField&gt; getRecordTypeImpl(*hash&lt;auto&gt; search_options) — NOT returning *AbstractDataProviderType|N/A|No DataProvider/app/field/factory/JNI change.
+|Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider/app/field/factory/JNI change.
+|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider/app/field/factory/JNI change.
+|No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Conflict-free merge of both upstream fixes; no workaround or partial optimization added. Archive tests run under installed Python3.12 instead of weakening their extraction filter for Python3.9.
+|Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|Cancelled key helpers remain invalid/empty and return before conversion. Existing unique_ptr/ReferenceHolder/RAII patterns retained; test cancellation and manager state reset on exit.
+|Thread safety: All mutable shared state protected by std::lock_guard&lt;std::mutex&gt; or documented as immutable-after-construction|Pass|Scan state is stack-local; no new shared runtime state. Existing thread/Program cancellation synchronization retained. Native fixture runs synchronously.
+|Type safety: Strongly-typed code&lt;return(args)&gt; instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Unsigned-byte ASCII tests, size_t chunk bounds, typed QoreValue results and boolean validity. Revision marker validated as 40/64 lowercase hex characters before writing.
+|Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Scanning remains O(n), with constant-time default-encoding/inline cases retained. Digest/revision scripts avoid rewriting unchanged content. No new post-merge speedup claim; premerge performance evidence stays separately identified.
+|Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Cancellation sink checked before slow conversion. Invalid/broken revision metadata fails without silently retaining success or borrowing a parent repository; malformed input tests pass.
+|Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Reviewed updated cancellation guide, BUILDING, helper comments, release notes and integration evidence. Optional invariant-only scan and source-identity failure behavior are documented.
+|QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP methods changed.
+|Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Chunk arithmetic avoids size_t overflow; CMake paths are quoted and revisions validated. Git fixtures are isolated in temporary directories and archive extraction uses the data safety filter. No credentials or uncontrolled format string added.
+|Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass15 focused QUnit files,43cases/5409assertions; native key-cancellation fixture reports172checks. Python3.12 passes7 source-revision and5 fingerprint tests. OldAOT retains300records. SystemPython3.9 fails one archive test because its tarfile lacks filter; no sanitizer/full-suite or postmerge timing claim.

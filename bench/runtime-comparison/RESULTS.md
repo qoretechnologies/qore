@@ -4608,3 +4608,14 @@ Next: preserve caller-local caches after a proven-pure native hit while retainin
 generic fallback invalidation, then investigate receiver assignment/ownership
 and native frame setup. Preserve declaration-order destruction, reentrant effects,
 debugger/stack readers and cross-Program fallback in each separately measured step.
+
+After committing the continuation as `c911af9ae`, a fresh fetch brought two
+additional upstream fixes through `e897fe252`: encoded hash-key cancellation
+and archive source-revision handling. They merge without conflicts and leave
+the continuation sources unchanged. Release/debug each pass 15 focused QUnit
+files, 43 cases and 5409 assertions, plus the native 172-check cancellation
+fixture; Python 3.12 passes both CMake suites (7 and 5 tests). Old AOT retains
+all 300 records. [Integration evidence](results-polymorphic-continuation-merge-macos-arm64.json)
+retains setup failures and the complete audit. The measurements above describe
+the optimization commit before this merge, not a timed result for the new merge.
+Rebuild and preserve the new merged baseline before the next optimization.

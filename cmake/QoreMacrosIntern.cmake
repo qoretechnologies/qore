@@ -1,4 +1,4 @@
-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # Written by Niclas Rosenvik <youremailsarecrap@gmail.com>
 # Based on the tests found in qores configure.ac
@@ -394,21 +394,17 @@ macro(create_git_revision)
     #   2. Add a custom target that re-runs UpdateGitRevision.cmake on every
     #      build; the script writes the file only if content changed, so
     #      including TUs are only recompiled when the hash actually changes.
-    find_package(Git)
-    if(NOT GIT_FOUND)
-        message(FATAL_ERROR "Git is needed to generate git-revision.h")
-    endif()
-
     set(_git_rev_file "${CMAKE_BINARY_DIR}/include/qore/intern/git-revision.h")
 
-    # Configure-time bootstrap: ensure the file exists before the build starts
-    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                    OUTPUT_VARIABLE GIT_REV
-                    OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(NOT EXISTS ${_git_rev_file})
-        file(WRITE ${_git_rev_file} "#define BUILD \"${GIT_REV}\"\n")
-        message(STATUS "Created git-revision.h: ${GIT_REV}")
+    # Bootstrap and build-time refresh use the same archive/worktree rules.
+    # Source archives carry their revision and do not require Git to be installed.
+    execute_process(COMMAND "${CMAKE_COMMAND}"
+                    "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+                    "-DOUTPUT_FILE=${_git_rev_file}"
+                    -P "${CMAKE_SOURCE_DIR}/cmake/UpdateGitRevision.cmake"
+                    RESULT_VARIABLE _git_revision_result)
+    if(NOT "${_git_revision_result}" STREQUAL "0")
+        message(FATAL_ERROR "Cannot generate git-revision.h")
     endif()
 
     # Build-time refresh: re-run on every build so the embedded hash always
@@ -419,7 +415,7 @@ macro(create_git_revision)
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
             -DOUTPUT_FILE=${_git_rev_file}
             -P ${CMAKE_SOURCE_DIR}/cmake/UpdateGitRevision.cmake
-        COMMENT "Updating git-revision.h with current HEAD sha"
+        COMMENT "Updating git-revision.h with source revision"
         VERBATIM)
 endmacro()
 

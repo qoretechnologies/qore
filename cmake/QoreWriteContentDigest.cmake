@@ -5,6 +5,10 @@
 # SUCCESS_STAMP is always touched so mtime-driven build tools can complete the
 # rule without propagating unchanged content to downstream targets.
 
+# Script mode does not inherit the parent project's policy settings. Preserve
+# empty list entries until the explicit filter below removes blank input lines.
+cmake_policy(SET CMP0007 NEW)
+
 if (NOT DEFINED INPUT_LIST OR "${INPUT_LIST}" STREQUAL "")
     message(FATAL_ERROR "INPUT_LIST is required")
 endif ()
