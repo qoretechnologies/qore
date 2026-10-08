@@ -167,6 +167,14 @@ admission cache, retaining the native companion. This runtime-only follow-up can
 reuse an identical AOT executable against before/after runtimes that both support
 the versioned binding.
 
+Native method object/class substitution also reuses the invocation's explicit
+`RuntimeConfig` and live thread view. `RuntimeConfigNativeObjectHelper` saves
+and restores both the live compatibility fields and the snapshot fields
+independently, without looking up either context again through TLS. It changes
+no object ownership, frame publication, stack check or admission guard. The
+generic `ObjectSubstitutionHelper` remains unchanged. The native context must
+belong to this thread and remain valid for the helper's entire scope.
+
 ### Guarded AOT method entries after typed assignment
 
 Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while

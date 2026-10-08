@@ -3605,3 +3605,106 @@ TLS lookup without omitting context updates. Then address the larger local
 assignment/load/ownership costs using guarded compiler proofs that preserve
 class access, weak-reference normalization, receiver lifetime and fallback effects.
 The active goal requires both call-path and surrounding execution improvements.
+
+## Explicit native method object context (2026-10-08)
+
+Retained result: polymorphic AOT improves **3.01%**, 112.26800 → 108.89255
+ns/element, with separated fork ranges. The earlier pilot improves 3.93%.
+Disabling native method entries removes the benefit: +0.57%, overlapping ranges.
+Java parity is **not** achieved: fresh Java is 2.53536 ns/element, about **42.95×**
+below current Qore on this whole workload.
+
+Baseline: `85d37a49eb11aef5edcc20f7af9617796d135eb8` on
+`feature/performance`, same macOS arm64 workstation. Runtime-only before/after
+pairs reuse an identical AOT executable. [Sanitized evidence](results-native-method-context-macos-arm64.json)
+retains the exact diff, library/source hashes, all samples and validation rows.
+
+### Change and invariants
+
+The pure native method path already has a live `RuntimeConfig`. Its new internal
+`RuntimeConfigNativeObjectHelper` borrows that context and its thread view,
+saving and restoring the live object/class fields and snapshot object/class
+fields independently. It avoids rediscovering those stores through TLS; it does
+not omit any context update or assume the two old stores were equal. The generic
+`ObjectSubstitutionHelper` remains unchanged.
+
+The admitted context is already initialized and belongs to the current thread
+and invocation. Public getters/setters retain their behavior. No new allocation
+occurs on that admitted path, and no object-reference ownership changes. Body,
+readiness, Program, receiver, integer-kind and debugger guards, native stack
+checks and frame-reader publication/waiting are unchanged. The inner diagnostic
+frame finishes before context restoration. No public RuntimeConfig layout,
+serialized AOT format or native entry ABI change is introduced.
+
+### Longer repeat
+
+1024 elements, five forks, three warmups and five 500 ms windows per fork:
+75 jobs / 375 samples across baseline/current IR and AOT plus fresh Java. Every
+mode passes 270 reference checks. No build, test, profile, disassembly or evidence
+validation overlaps timing.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-ir polymorphic_call|408.76435|411.79117|0.74%|402.40673–419.77220 / 405.77431–414.40125
+|qore-aot polymorphic_call|112.26800|108.89255|-3.01%|111.05948–113.45067 / 108.51424–109.08676
+|qore-ir indirect_wide|336.98597|338.15913|0.35%|336.44165–339.87070 / 335.69437–342.39728
+|qore-aot indirect_wide|8.11881|8.13349|0.18%|8.00380–8.14211 / 8.01098–8.21593
+|qore-ir temporary_hash|657.89081|664.78867|1.05%|653.11573–659.65427 / 656.23537–669.27445
+|qore-aot temporary_hash|314.82364|314.31578|-0.16%|310.15588–323.61362 / 308.26267–319.77186
+
+All IR and unrelated wide/hash ranges overlap. Neither improvement nor clear
+regression is attributed there. Fresh Java wide and hash medians are 1.67852
+and 15.54032 ns/element. Qore can inline the base polymorphic body while retaining
+the derived calls; Java prevents inlining all three bodies. This is not an
+identical isolated retained-call comparison.
+
+### Pilot and disabled-entry control
+
+Pilot: 4096 elements, five forks, three warmups and five 300 ms windows;
+30 jobs / 150 samples.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|111.23761|106.86153|-3.93%|108.03980–111.75979 / 105.67734–107.24463
+|qore-aot indirect_wide|7.27759|7.07798|-2.74%|7.09867–7.34225 / 6.97417–7.29837
+|qore-aot direct_call|1.31486|1.31107|-0.29%|1.31025–1.31628 / 1.30601–1.31716
+
+The final control sets `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` at compilation
+and runtime. Disabling only the admission cache would not exclude this change:
+both prepared and ordinary native admission use the new context helper. The
+control uses 4096 elements, seven forks, three warmups and five 500 ms windows;
+28 jobs / 140 samples.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|181.99065|183.02620|0.57%|179.76265–184.73262 / 179.75372–186.88206
+|qore-aot indirect_wide|7.22115|7.23683|0.22%|7.13827–7.35664 / 7.07408–7.36265
+
+Both control ranges overlap. All samples, including unfavorable ones, are
+retained. Fork ranges are descriptive, not confidence intervals; filesystem
+caches for startup samples are uncontrolled.
+
+### Validation and next work
+
+Release/debug builds each pass 57 selected files: 39 QUnit wrappers,
+206 cases / 16835 assertions plus 18 standalones. The native method wrapper
+contributes three cases / 284 assertions, including warmed receiver deletion,
+late publication after debugger detach, wide ownership, foreign Programs and
+concurrent readers/first calls. An initial eight-file subset also passes per
+build: eight QUnit cases / 533 assertions plus two standalones.
+
+Standalone runtime/thread syntax passes with 79/65 existing warnings; 11 harness
+tests pass, and old v2/v3 AOT artifacts reproduce all 225/270 reference records
+byte-for-byte. All 133 jobs / 665 samples, startup samples, complete/unique job
+combinations and recomputed medians are validated.
+
+Disassembly shows the native dispatch no longer calls the generic substitution
+constructor/destructor: the explicit helper is inlined. Normal out-of-line
+definitions remain for split builds. The dispatch stack allocation remains
+416 bytes. Runtime text grows 13879800 → 13881348 bytes (+1548).
+The [62-check audit](FOLLOWUP-AUDIT.md#explicit-native-method-object-context-audit-2026-10-08)
+records scope and limits; no full suite, sanitizer/race detector, Linux,
+allocation-failure injection or complete split-runtime build is claimed.
+
+Next: the previous separate profile identifies receiver-local assignment/load/
+ownership as larger costs than method dispatch. Investigate a fused checked
+class-local assignment/result path to avoid a redundant local reload, while
+retaining class access, type and weak-reference checks, cleanup ordering and
+owned cache lifetime across aliases. The performance goal remains active.

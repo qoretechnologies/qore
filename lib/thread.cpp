@@ -2562,6 +2562,26 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     td->current_pgm = old_pgm;
 }
 
+// Keep this narrow native-call save/restore visible to the register allocator
+// in the single-compilation-unit build; split builds retain normal definitions.
+__attribute__((always_inline)) RuntimeConfigNativeObjectHelper::RuntimeConfigNativeObjectHelper(
+        RuntimeConfig& rc, QoreObject* object, const qore_class_private* cls)
+        : rc(rc), td(RuntimeConfigNativeAccess::getThreadData(rc)),
+          old_object(td->current_obj), old_class(td->current_class),
+          old_rc_object(rc.getObject()), old_rc_class(rc.getClass()) {
+    td->current_obj = object;
+    td->current_class = cls;
+    rc.setObject(object);
+    rc.setClass(cls);
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeObjectHelper::~RuntimeConfigNativeObjectHelper() {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
     ThreadData* td  = thread_data.get();
     old_obj = td->current_obj;

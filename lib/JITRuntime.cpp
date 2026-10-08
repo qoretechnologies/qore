@@ -16847,7 +16847,7 @@ static bool try_dispatch_native_int_method(QoreObject* object,
     }
     // Even a pure body must preserve method context on error/stack observation.
     // No self/argv/parameter TLS slots are needed by this whole-body proof.
-    ObjectSubstitutionHelper context(object, CachedAdmission ? cache.native_int_class_ctx
+    RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_int_class_ctx
         : METHV_const(cache.variant)->getClassPriv());
     QoreValue value;
     {

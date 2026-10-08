@@ -4428,6 +4428,8 @@ while (*binary chunk = input.read(65536)) {
     - Cached immutable native-method eligibility, exact signature, execution Program, and defining-class
       facts for resolved polymorphic AOT calls, while continuing to check object validity, actual arguments,
       Program context, native-body readiness, and debugger state at runtime
+    - Reused the live <tt>RuntimeConfig</tt> view for native method object/class substitution, avoiding
+      repeated TLS lookup while retaining independent live-state and snapshot restoration
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

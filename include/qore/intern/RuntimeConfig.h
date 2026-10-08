@@ -129,6 +129,34 @@ public:
     }
 };
 
+//! Object/class substitution using an already-acquired native invocation context.
+/** Updates both live compatibility state and the RuntimeConfig snapshot, exactly
+    as ObjectSubstitutionHelper does, without rediscovering either through TLS.
+    The context and its live thread view must belong to this invocation/thread
+    and remain valid until destruction. Both previous stores are restored even
+    when they differed on entry. No object reference ownership is changed.
+*/
+class RuntimeConfigNativeObjectHelper {
+public:
+    //! @param rc current thread's live native invocation context
+    //! @param object borrowed method receiver, alive throughout this scope
+    //! @param cls actual method variant's defining-class access context
+    DLLLOCAL RuntimeConfigNativeObjectHelper(RuntimeConfig& rc, QoreObject* object,
+        const qore_class_private* cls);
+    //! Restore live and snapshot contexts without another TLS lookup.
+    DLLLOCAL ~RuntimeConfigNativeObjectHelper();
+    RuntimeConfigNativeObjectHelper(const RuntimeConfigNativeObjectHelper&) = delete;
+    RuntimeConfigNativeObjectHelper& operator=(const RuntimeConfigNativeObjectHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    ThreadData* td;
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+};
+
 //! Native same-Program frame with explicit execution state and normal publication.
 /** Keep this as the LAST member of a fully initialized QoreStackLocation subclass.
     Construction fills call_loc before publishing; destruction waits for stack

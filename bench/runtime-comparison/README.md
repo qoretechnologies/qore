@@ -101,6 +101,13 @@ follow-up, `--reuse-aot-for-baseline` is valid when both saved and current runti
 support `qore_rt_bind_method_int_unary_v1`; it isolates the runtime change with an
 identical executable.
 
+Native method object/class save/restore uses the already-acquired live
+`RuntimeConfig`; the generic substitution helper is unchanged. Runtime-only
+comparisons can reuse the same AOT executable. For a negative control, disable
+the native entry with `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1`, not just its
+admission cache: both prepared and ordinary native admission use the explicit
+context helper.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit
