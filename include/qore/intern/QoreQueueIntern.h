@@ -234,6 +234,12 @@ public:
     // released if the queue is deleted or in an error state
     DLLLOCAL void pushAndTakeRef(QoreValue n);
 
+    //! Counts the values of the queue that can be part of a cycle, with the given object as the queue's object
+    /** Called for a copy made by Queue::copy() before the copy is given to its object: the copy constructor has no
+        object to count the values with.
+    */
+    DLLLOCAL void countValues(QoreObject& self);
+
     // push at the end of the queue
     DLLLOCAL void push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to);
 

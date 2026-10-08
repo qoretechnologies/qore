@@ -4174,6 +4174,10 @@ while (*binary chunk = input.read(65536)) {
     - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
       could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
 
+    - Fixed reference cycles through a copy of a @ref Qore::Thread::Queue "Queue" never being collected: the copy
+      made by @ref Qore::Thread::Queue::copy() "Queue::copy()" did not register the objects it copied for garbage
+      collection scanning
+
     - Fixed the garbage collector deleting objects that were still in use after a value was taken from a
       @ref Qore::Thread::Queue "Queue" (@ref Qore::Thread::Queue::get() "Queue::get()",
       @ref Qore::Thread::Queue::pop() "Queue::pop()" and their variants) or a @ref Qore::TreeMap "TreeMap"

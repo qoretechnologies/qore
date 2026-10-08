@@ -302,6 +302,19 @@ void qore_queue_private::pushAndTakeRef(QoreValue n) {
     n.discard(&xsink);
 }
 
+void qore_queue_private::countValues(QoreObject& self) {
+    AutoLocker al(&l);
+    assert(!scan_count);
+    for (QoreQueueNode* w = head; w; w = w->next) {
+        if (needs_scan(w->node)) {
+            w->scan_counted = true;
+            countIntern(self);
+            // no scan follows the new edge (Pattern B in design/dgc.md)
+            qore_dgc_value_stored(*qore_object_private::get(self), w->node);
+        }
+    }
+}
+
 void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);

@@ -140,7 +140,10 @@ Queue::destructor() {
 /**
  */
 Queue::copy() {
-    self->setPrivate(CID_QUEUE, new Queue(*q));
+    ReferenceHolder<Queue> nq(new Queue(*q), xsink);
+    // the copy holds the values with the new object, which has to be scanned for cycles through them
+    qore_queue_private::get(**nq)->countValues(*self);
+    self->setPrivate(CID_QUEUE, nq.release());
 }
 
 //! Pushes a value on the end of the queue
