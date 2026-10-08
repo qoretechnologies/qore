@@ -10,6 +10,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires DataProvider
 
 #! A watch data provider that signals its first poll

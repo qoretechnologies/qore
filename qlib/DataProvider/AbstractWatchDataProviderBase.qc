@@ -244,25 +244,19 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
             try {
                 pollOnce();
             } catch (hash<ExceptionInfo> ex) {
-                # the thread is cancelled when polling is stopped
+                # the cancellation requested when polling is stopped is handled by pollThread(); it is not a polling
+                # error
                 if (ex.err == "THREAD-CANCELLED" && stop_flag) {
-                    break;
+                    rethrow;
                 }
                 logPollError(ex);
             }
 
-            # Wait for next poll interval with instant wakeup on stop
-            try {
-                AutoLock al(sleep_m);
-                if (!stop_flag) {
-                    sleep_cond.wait(sleep_m, poll_interval_secs * 1000);
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                # the thread is cancelled when polling is stopped
-                if (ex.err == "THREAD-CANCELLED" && stop_flag) {
-                    break;
-                }
-                rethrow;
+            # Wait for next poll interval with instant wakeup on stop; the cancellation requested when polling is
+            # stopped is handled by pollThread()
+            AutoLock al(sleep_m);
+            if (!stop_flag) {
+                sleep_cond.wait(sleep_m, poll_interval_secs * 1000);
             }
         }
     }
