@@ -219,6 +219,16 @@ run_case("usleep", auto sub () {
     });
 }
 
+# a counter, queue and semaphore wait
+{
+    Counter cnt(1);
+    run_case("counter wait", auto sub () { cnt.waitForZero(); });
+    Queue q();
+    run_case("queue get", auto sub () { return q.get(); });
+    Semaphore sem(0);
+    run_case("auto semaphore", auto sub () { AutoSemaphore as(sem); });
+}
+
 # a channel select wait, with and without a timeout
 {
     Channel ch();

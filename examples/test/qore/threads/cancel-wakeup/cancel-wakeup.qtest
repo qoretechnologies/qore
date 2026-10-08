@@ -43,9 +43,9 @@ class CancelWakeupTest inherits QUnit::Test {
         const Cases = (
             "pipe read", "backquote read", "system wait", "stream pipe read", "socket read", "tls socket read",
             "sleep", "usleep", "mutex lock", "mutex lock timeout", "auto lock", "read lock", "read lock timeout",
-            "write lock", "write lock timeout", "gate enter", "gate enter timeout", "condition wait",
-            "channel select", "channel select timeout", "datasource lock", "interrupted backquote read",
-            "deferred backquote read", "wait after cleared cancel",
+            "write lock", "write lock timeout", "gate enter", "gate enter timeout", "condition wait", "counter wait",
+            "queue get", "auto semaphore", "channel select", "channel select timeout", "datasource lock",
+            "interrupted backquote read", "deferred backquote read", "wait after cleared cancel",
         );
     }
 

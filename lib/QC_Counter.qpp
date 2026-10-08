@@ -33,6 +33,8 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Counter.h"
 
+#include <climits>
+
 //! Implements a class that can be used for blocking a thread until a counter reaches zero
 /** Counter objects allow Qore threads to sleep until a counter reaches zero.
 
@@ -125,26 +127,18 @@ counter.waitForZero();
     @endcode
 
     @throw COUNTER-ERROR Counter has been deleted in another thread
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 nothing Counter::waitForZero() {
-   // Always poll for cancel/interrupt checking
-   const int poll_ms = 500;  // 500ms polling interval
-   while (true) {
-      if (qore_check_cancel(xsink, "counter wait")) {
-         return QoreValue();
-      }
-      int rc = c->waitForZero(xsink, poll_ms);
-      if (*xsink) {
-         return QoreValue();  // Error occurred
-      }
-      if (rc == 0) {
-         return QoreValue();  // Counter reached zero
-      }
-      // rc != 0 means timeout, loop and check again
+   if (qore_check_cancel(xsink, "counter wait")) {
+      return QoreValue();
    }
+   // a single wait without a timeout: a cancellation request or program interrupt wakes it at once (see
+   // QoreCondition::waitWithInterrupt())
+   c->waitForZero(xsink, 0);
+   return QoreValue();
 }
 
 //! Blocks a thread until the counter reaches zero
@@ -159,43 +153,21 @@ if (counter.waitForZero(1500))
     @endcode
 
     @throw COUNTER-ERROR Counter has been deleted in another thread
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int Counter::waitForZero(timeout timeout_ms) [flags=NAMED_ARGS] {
-   // Always poll for cancel/interrupt checking
-   const int poll_ms = 500;  // 500ms polling interval
-   int64 remaining = timeout_ms;
-   bool infinite = (timeout_ms <= 0);
-
-   while (true) {
-      if (qore_check_cancel(xsink, "counter wait")) {
-         return -1;
-      }
-
-      int this_timeout;
-      if (infinite) {
-         this_timeout = poll_ms;
-      } else {
-         this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-      }
-
-      int rc = c->waitForZero(xsink, this_timeout);
-      if (*xsink) {
-         return -1;  // Error occurred
-      }
-      if (rc == 0) {
-         return 0;  // Counter reached zero
-      }
-
-      if (!infinite) {
-         remaining -= this_timeout;
-         if (remaining <= 0) {
-            return ETIMEDOUT;  // Overall timeout exceeded
-         }
-      }
+   if (qore_check_cancel(xsink, "counter wait")) {
+      return -1;
    }
+   // a single wait for the timeout (none if it is not positive): a cancellation request or program interrupt
+   // wakes it at once (see QoreCondition::waitWithInterrupt())
+   int rc = c->waitForZero(xsink, timeout_ms > 0 ? static_cast<int>(QORE_MIN(timeout_ms, (int64)INT_MAX)) : 0);
+   if (*xsink) {
+      return -1;
+   }
+   return rc;
 }
 
 //! Returns the current counter value
