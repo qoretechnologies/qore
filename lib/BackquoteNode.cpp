@@ -37,12 +37,17 @@
 #ifdef HAVE_POLL_H
 #include <poll.h>
 #endif
-#ifdef __linux__
+// a command is started with posix_spawn() where available: unlike fork(), it runs no code in the child before the
+// command is executed, which a multithreaded process must not do (another thread may hold a lock the child needs)
+#if defined(HAVE_POSIX_SPAWN) && defined(HAVE_SPAWN_H) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
+#define QORE_BACKQUOTE_POSIX_SPAWN 1
 #include <spawn.h>
-#endif
-
-#ifdef __linux__
+#ifdef DARWIN
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
+#else
 extern char **environ;
+#endif
 #endif
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/types.h>
@@ -93,7 +98,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
     QoreSandboxManagerHelper smh;
     const bool use_pgroup = (bool)smh;
-#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
+#ifdef QORE_BACKQUOTE_POSIX_SPAWN
     {
         int pipefd[2];
         if (pipe(pipefd)) {
@@ -230,7 +235,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         return s.release();
     }
 #endif
-#if !defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
+#if !defined(QORE_BACKQUOTE_POSIX_SPAWN) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
     {
         int pipefd[2];
         if (pipe(pipefd)) {

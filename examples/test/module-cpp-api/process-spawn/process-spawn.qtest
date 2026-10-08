@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ProcessSpawnTest
+
+#! Tests that the backquote operator and system() start commands without fork()
+/** A %Qore process is multithreaded, and after fork() in a multithreaded process the child may only call
+    async-signal-safe functions until it executes the command: any lock that another thread held at the time of the
+    fork stays locked in the child.  On macOS, the backquote operator and system() started their commands with
+    fork(), whose child runs the C library's fork handlers, which allocate memory; with AddressSanitizer, a child
+    created while another thread held the allocator's lock was killed before it ran the command, so the command
+    silently produced no output.  The commands are now started with posix_spawn() on every platform that has it,
+    which runs no code in the child before the command.
+
+    The cppapiuser test module records every child created with fork() through a pthread_atfork() child handler;
+    commands run with the backquote operator and system() must not be recorded, while a child created with fork()
+    by the module is (the positive control).
+*/
+class ProcessSpawnTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-process-spawn-");
+        string record;
+    }
+
+    constructor() : QUnit::Test("ProcessSpawnTest", "1.0", \ARGV) {
+        record = tmp.path + DirSep + "fork-children";
+        cpp_api_record_fork_children(record);
+
+        addTestCase("backquote and system() do not fork", \testNoFork());
+        addTestCase("positive control: fork() children are recorded", \testForkRecorded());
+        addTestCase("negative: another record file", \testRecordFileError());
+        set_return_value(main());
+    }
+
+    testNoFork() {
+        int before = getRecorded();
+        assertEq("spawned\n", backquote("echo spawned"));
+        int rc;
+        assertEq("status\n", backquote("echo status; exit 3", \rc));
+        assertEq(3, rc);
+        assertEq("operator\n", `echo operator`);
+        assertEq(5, system("exit 5"));
+        assertEq(before, getRecorded(), "no child was created with fork()");
+    }
+
+    testForkRecorded() {
+        int before = getRecorded();
+        assertEq(0, cpp_api_fork_and_wait());
+        assertEq(before + 1, getRecorded(), "the child created with fork() was recorded");
+    }
+
+    testRecordFileError() {
+        assertThrows("FORK-RECORD-ERROR", \cpp_api_record_fork_children(), record + ".other");
+    }
+
+    #! returns the number of children created with fork() so far
+    private int getRecorded() {
+        return is_file(record) ? hstat(record).size : 0;
+    }
+}

@@ -1474,7 +1474,7 @@ qore_openssl_checks()
 qore_mpfr_checks()
 
 qore_check_headers_cxx(arpa/inet.h cxxabi.h dlfcn.h fcntl.h getopt.h glob.h grp.h iconv.h inttypes.h linux/if_packet.h memory.h netdb.h
-    netinet/in.h netinet/tcp.h poll.h pwd.h stdbool.h stddef.h stdint.h stdlib.h string.h strings.h sys/select.h
+    netinet/in.h netinet/tcp.h poll.h pwd.h spawn.h stdbool.h stddef.h stdint.h stdlib.h string.h strings.h sys/select.h
     sys/socket.h sys/socket.h sys/stat.h sys/statvfs.h sys/time.h sys/types.h sys/un.h sys/wait.h termios.h umem.h
     unistd.h vfork.h winsock2.h ws2tcpip.h openssl/engine.h
 )
@@ -1555,7 +1555,7 @@ qore_check_funcs(
     access alarm atoll bzero chown clock_gettime doprnt exp2 floor fork fsync getaddrinfo getegid geteuid
     getgid getgrgid_r getgrnam_r getgroups gethostbyaddr gethostbyname gethostname getifaddrs getnameinfo getppid
     getpwnam_r getpwuid_r getrlimit getsockopt gettimeofday getuid glob gmtime_r inet_ntop inet_pton isblank kill lchown
-    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll
+    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll posix_spawn
     pthread_attr_getstack pthread_attr_getstacksize
     pthread_get_name_np pthread_get_stacksize_np pthread_getname_np putenv random
     readlink realloc realpath regcomp round select setegid setegid setenv

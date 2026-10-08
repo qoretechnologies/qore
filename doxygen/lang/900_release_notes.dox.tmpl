@@ -4139,6 +4139,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the @ref backquote_operator "backquote operator", @ref Qore::backquote() "backquote()" and
+      @ref Qore::system() "system()" starting their commands with \c fork() on platforms other than Linux, such as
+      macOS: in the multithreaded %Qore process, the child could be blocked or killed before it ran the command
+      when another thread held a lock that the child needed, so a command occasionally produced no output; commands
+      are now started with \c posix_spawn() wherever it is available
+
     - Fixed a closure created in a method raising \c OBJECT-ALREADY-DELETED with IR, JIT and tiered execution, once it
       had been called often, when it was called after its object was destroyed although it did not use the object;
       as with AST execution, the exception is now only raised when the closure uses the object

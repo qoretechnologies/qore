@@ -55,8 +55,13 @@
 #endif
 #ifdef __linux__
 #include <poll.h>
-#include <spawn.h>
 #include <sys/syscall.h>
+#endif
+// a command is started with posix_spawn() where available: unlike fork(), it runs no code in the child before the
+// command is executed, which a multithreaded process must not do (another thread may hold a lock the child needs)
+#if defined(HAVE_POSIX_SPAWN) && defined(HAVE_SPAWN_H) && defined(HAVE_SIGNAL_HANDLING)
+#define QORE_SYSTEM_POSIX_SPAWN 1
+#include <spawn.h>
 #endif
 
 #ifdef HAVE_GRP_H
@@ -95,8 +100,13 @@
 #define MAX_GIDS 100
 
 extern bool threads_initialized;
-#ifdef __linux__
+#ifdef QORE_SYSTEM_POSIX_SPAWN
+#ifdef DARWIN
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
+#else
 extern char **environ;
+#endif
 #endif
 
 AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink) {
@@ -686,7 +696,7 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     };
 
-#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+#ifdef QORE_SYSTEM_POSIX_SPAWN
     pid_t spawn_pid = -1;
     bool spawn_pgroup_ok = false;
     int spawn_rc = 0;

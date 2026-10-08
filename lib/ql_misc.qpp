@@ -1557,7 +1557,7 @@ int rc;
 string files = backquote("ls", \rc);
     @endcode
 
-    @throw BACKQUOTE-ERROR An error occurred with the fork() or opening the stdout pipe
+    @throw BACKQUOTE-ERROR An error occurred starting the process or opening the stdout pipe
 
     @see
     - system()

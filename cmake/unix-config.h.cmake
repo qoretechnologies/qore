@@ -18,6 +18,7 @@
 #cmakedefine HAVE_NET_IF_DL_H
 #cmakedefine HAVE_POLL_H
 #cmakedefine HAVE_PWD_H
+#cmakedefine HAVE_SPAWN_H
 #cmakedefine HAVE_STDBOOL_H
 #cmakedefine HAVE_STDDEF_H
 #cmakedefine HAVE_STDINT_H
@@ -87,6 +88,7 @@
 #cmakedefine HAVE_MKFIFO
 #cmakedefine HAVE_NANOSLEEP
 #cmakedefine HAVE_POLL
+#cmakedefine HAVE_POSIX_SPAWN
 #cmakedefine HAVE_PTHREAD_ATTR_GETSTACK
 #cmakedefine HAVE_PTHREAD_ATTR_GETSTACKSIZE
 #cmakedefine QORE_HAVE_PTHREAD_SETNAME_NP_1
