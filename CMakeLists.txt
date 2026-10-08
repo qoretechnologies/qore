@@ -2725,6 +2725,10 @@ add_executable(qore-date-add-test examples/test/qore/vars/date_add.cpp)
 target_include_directories(qore-date-add-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-date-add-test PRIVATE libqore)
+add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
+target_include_directories(qore-hash-lookup-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
 add_executable(qore-asn1-time-test EXCLUDE_FROM_ALL
     examples/test/qore/classes/SSLCertificate/asn1_time.cpp)
 target_include_directories(qore-asn1-time-test PRIVATE

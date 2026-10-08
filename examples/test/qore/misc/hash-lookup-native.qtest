@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%exec-class HashLookupNativeTest
+
+class HashLookupNativeTest inherits QUnit::Test {
+    constructor() : Test("Hash C++ encoded lookup", "1.0") {
+        addTestCase("encoded keys and lookup error outputs", \nativeLookup());
+        set_return_value(main());
+    }
+
+    private nativeLookup() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_HASH_LOOKUP_TEST ?? dirname(qore) + "/qore-hash-lookup-test";
+        if (!is_file(native)) {
+            testSkip("the native hash lookup test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 348 hash lookup checks\n", output);
+    }
+}

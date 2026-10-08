@@ -449,6 +449,7 @@ QoreValue qore_hash_private::getKeyValueExistence(const char* key, bool& exists,
     assert(key);
 
     if (checkKey(key, xsink)) {
+        exists = false;
         return QoreValue();
     }
 
@@ -587,7 +588,11 @@ int QoreHashKeyHelper::getConstKey(const QoreValue& n, std::string& name) {
 
 QoreValue QoreHashNode::getKeyValueExistence(const QoreString& key, bool& exists, ExceptionSink* xsink) const {
     QoreHashKeyHelper tmp(key, xsink);
-    return *xsink ? QoreValue() : getKeyValueExistence(tmp.c_str(), exists, xsink);
+    if (*xsink) {
+        exists = false;
+        return QoreValue();
+    }
+    return getKeyValueExistence(tmp.c_str(), exists, xsink);
 }
 
 QoreValue QoreHashNode::getKeyValue(const QoreString& key, ExceptionSink* xsink) const {

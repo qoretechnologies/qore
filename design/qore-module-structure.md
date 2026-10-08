@@ -703,6 +703,13 @@ The effective search path at any point, highest precedence first:
 `ModuleManager` builds this order directly; the per-Program lists live on
 `qore_program_private` as `prepended_module_paths` / `appended_module_paths`.
 
+Relative entries are resolved against the process working directory. Before a
+source loader receives a file or directory found through this search, the loader
+normalizes it to an absolute path. This keeps the module's reported filename,
+directory and sibling resource locations consistent: the importing Program's
+script directory must not be applied to a search result a second time. Explicit
+relative module imports still resolve against the importing script's directory.
+
 For AOT modules without an API-version suffix, source fallback uses the first
 matching source in this effective search path, including separated module
 directories. The source does not have to sit beside the `.qmod`: distributions

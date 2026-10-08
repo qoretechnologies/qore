@@ -140,6 +140,8 @@ public:
         @param exists true if the key existed (in case no value is returned), false if not
         @param xsink Qore language exceptions are raised here (ex: key is not valid for a hashdecl-derived hash)
 
+        @note If the lookup raises an exception, @p exists is set to false.
+
         @return the value of the given key, if the key is present; the value is not referenced for the return
 
         @since %Qore 0.8.13
@@ -176,11 +178,22 @@ public:
     DLLEXPORT QoreValue getKeyValue(const char* key) const;
 
     //! returns the value of the given key
-    /** @param key the key to return
+    /** @param key the key to return; converted to the default encoding before lookup
         @param exists true if the key existed (in case no value is returned), false if not
         @param xsink Qore language exceptions are raised here (ex: key is not valid for a hashdecl-derived hash)
 
         @return the value of the given key, if the key is present; the value is not referenced for the return
+
+        @note If conversion or lookup raises an exception, @p exists is set to false.
+        @par Example
+        @code{.cpp}
+        QoreString account_key("caf\xe9", QCS_ISO_8859_1);
+        bool found;
+        QoreValue account = accounts.getKeyValueExistence(account_key, found, &xsink);
+        if (!xsink && found) {
+            printf("Account balance: %lld\n", static_cast<long long>(account.getAsBigInt()));
+        }
+        @endcode
 
         @since %Qore 0.8.13
     */
@@ -197,7 +210,7 @@ public:
     DLLEXPORT QoreValue getKeyValueExistence(const QoreString& key, bool& exists) const;
 
     //! returns the value of the given key
-    /** @param key the key to return
+    /** @param key the key to return; converted to the default encoding before lookup
         @param xsink Qore language exceptions are raised here (ex: key is not valid for a hashdecl-derived hash)
 
         @return the value of the given key, if the key is present; the value is not referenced for the return

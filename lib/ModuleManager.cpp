@@ -1839,6 +1839,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             if (!has_separated_module_main(modulePath.c_str(), name)) {
                 continue;
             }
+            // Search paths are relative to the process cwd, just as for flat .qm files above.
+            // Resolve them before the separated loader normalizes metadata against the importing
+            // Program's directory; otherwise relative paths acquire that directory a second time.
+            if (!q_absolute_path(modulePath.c_str())) {
+                q_normalize_path(modulePath);
+            }
             //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);

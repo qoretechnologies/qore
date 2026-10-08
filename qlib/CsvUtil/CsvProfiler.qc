@@ -149,7 +149,9 @@ public class CsvProfiler {
             return {"encoding": bom_encoding, "bom": True};
         }
         try {
-            convert_encoding(binary_to_string(data, "UTF-8"), "UTF-16LE");
+            # A different target encoding validates the bytes; tagging a string as UTF-8 does not.
+            string validated = convert_encoding(binary_to_string(data, "UTF-8"), "UTF-16LE");
+            @assert(validated.encoding() == "UTF-16LE");
             return {"encoding": "UTF-8", "bom": False};
         } catch (hash<ExceptionInfo> ex) {
             # not valid UTF-8: an 8-bit encoding

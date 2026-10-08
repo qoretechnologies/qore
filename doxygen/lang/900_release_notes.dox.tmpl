@@ -4,6 +4,9 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The exception-aware C++ <tt>QoreHashNode</tt> existence APIs now set their
+    <tt>exists</tt> output to false on key-conversion or member-validation errors.
+
     The C++ <tt>DateTime::add()</tt> API now adds the right operand correctly when the left
     operand is an absolute date. Previously an implicit pointer conversion caused that operand
     to be ignored. Both pointer and reference overloads preserve their inputs and return an owned sum.
@@ -70,6 +73,11 @@
     Split user modules now parse their <tt>.qc</tt> and <tt>.ql</tt> files in filename order
     after the main <tt>.qm</tt> file. Filesystem enumeration and file creation order no longer
     change declaration order, class signatures, or compiled module metadata.
+
+    Directory modules found through relative module search paths now report the correct
+    absolute entry-point filename and directory in <tt>get_module_hash()</tt>. Previously,
+    the importing script's directory could be applied twice, causing resource lookup through
+    the reported filename to fail even though the module itself loaded successfully.
 
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of

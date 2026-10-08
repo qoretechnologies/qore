@@ -1,13 +1,15 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires DataProvider
-%requires CsvUtil
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/CsvUtil
 
 %exec-class CsvProfilerTest
 
@@ -16,6 +18,8 @@ public class CsvProfilerTest inherits QUnit::Test {
     constructor() : Test("CsvProfilerTest", "1.0") {
         addTestCase("separators", \separators());
         addTestCase("encodings and byte order marks", \encodings());
+        addTestCase("valid UTF-8 boundaries", \validUtf8());
+        addTestCase("invalid UTF-8 fallback and recovery", \invalidUtf8());
         addTestCase("line endings", \lineEndings());
         addTestCase("grid", \grid());
         addTestCase("profile of a European ERP export", \europeanExport());
@@ -61,6 +65,40 @@ public class CsvProfilerTest inherits QUnit::Test {
         assertEq("UTF-16LE", format.encoding);
         assertTrue(format.bom);
         assertEq(("1", "2"), CsvProfiler::readGrid(utf16).sheets[0].rows[1]);
+    }
+
+    private validUtf8() {
+        # Empty input and the endpoints of each UTF-8 length, including both sides of the surrogate gap.
+        hash<TabularTextFormat> empty = CsvProfiler::sniffTextFormat(binary());
+        assertEq("UTF-8", empty.encoding);
+        assertFalse(empty.bom);
+        foreach binary payload in ((<00>, <41>, <7f>, <c280>, <dfbf>, <e0a080>, <ed9fbf>, <ee8080>,
+                <efbfbf>, <f0908080>, <f48fbfbf>)) {
+            binary data = binary("value,count\n\"") + payload + binary("\",1\n");
+            hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(data);
+            assertEq("UTF-8", grid.text_format.encoding, payload.toString());
+            assertFalse(grid.text_format.bom);
+            assertEq(payload, binary(grid.sheets[0].rows[1][0]), "the original UTF-8 bytes survive CSV decoding");
+            assertEq("1", grid.sheets[0].rows[1][1]);
+        }
+    }
+
+    private invalidUtf8() {
+        # Lone continuations, truncated sequences, overlong forms, surrogate code points and values above Unicode.
+        foreach binary payload in ((<80>, <bf>, <c2>, <e0a0>, <f09080>, <c080>, <e08080>, <f0808080>,
+                <eda080>, <edbfbf>, <f4908080>, <ff>, <c220>, <e028a1>, <f0288cbc>)) {
+            hash<TabularTextFormat> format = CsvProfiler::sniffTextFormat(payload);
+            assertEq("ISO-8859-1", format.encoding, payload.toString());
+            assertFalse(format.bom);
+            binary data = binary("value,count\n\"") + payload + binary("\",1\n");
+            hash<TabularWorkbookGrid> grid = CsvProfiler::readGrid(data);
+            assertEq("ISO-8859-1", grid.text_format.encoding);
+            assertEq(payload, binary(convert_encoding(grid.sheets[0].rows[1][0], "ISO-8859-1")),
+                "fallback preserves every byte as a Latin-1 character");
+            assertEq("1", grid.sheets[0].rows[1][1]);
+            assertEq("UTF-8", sniff("Město;Množství\nPraha;5\n").encoding,
+                "a rejected sample does not affect the next valid sample");
+        }
     }
 
     lineEndings() {
