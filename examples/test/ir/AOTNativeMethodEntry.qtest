@@ -55,6 +55,7 @@ class NativeMethodEntryTest inherits QUnit::Test {
                         + name), name + " excluded body " + prefix + level);
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
@@ -75,9 +76,12 @@ class NativeMethodEntryTest inherits QUnit::Test {
             string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                 "QORE_DUMP_LLVM_IR=1 ");
             assertRegex("call void @qore_rt_bind_method_int_unary_v1[^\n]*NativeDebugDerived", ir);
+            assertRegex("call void @qore_rt_bind_method_int_unary_v1[^\n]*NativeDebugLateDerived", ir);
             assertEq(expected, run((executable,)), level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                 "fallback " + level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
+                "uncached admission " + level);
         }
     }
 
@@ -97,6 +101,8 @@ class NativeMethodEntryTest inherits QUnit::Test {
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                     "fallback " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
+                    "uncached admission " + prefix + level);
             }
         }
     }

@@ -185,6 +185,12 @@ struct QoreAOTMethodDispatchCacheEntry {
     std::array<const QoreTypeInfo*, MAX_ARGS> arg_types{};
     std::array<uint8_t, MAX_ARGS> arg_states{};
     uint8_t nargs = 0;
+
+    //! Immutable unary-int admission facts for this resolved variant and Program key.
+    //! A null variant keeps the ordinary path; body/readiness/debugger/value guards stay live.
+    const UserVariantBase* native_int_uvb = nullptr;
+    QoreProgram* native_int_program = nullptr;
+    const qore_class_private* native_int_class_ctx = nullptr;
 };
 
 //! Bounded polymorphic cache owned by one AOT call target.

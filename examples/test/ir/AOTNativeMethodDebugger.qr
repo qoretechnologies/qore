@@ -12,6 +12,9 @@ class NativeDebugDerived inherits NativeDebugBase {
         return value + 19; # METHOD_ENTRY
     }
 }
+class NativeDebugLateDerived inherits NativeDebugBase {
+    int next(int value) { return value + 23; }
+}
 int sub nativeDebugCall(NativeDebugBase input, int value) {
     NativeDebugBase receiver = input;
     return receiver.next(value);
@@ -38,6 +41,7 @@ class NativeMethodRecorder inherits DebugProgram {
     onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
 }
 NativeDebugDerived object();
+NativeDebugLateDerived late();
 for (int i = 0; i < 32; ++i) {
     if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "warmup"; }
 }
@@ -46,6 +50,7 @@ ProgramControl pc = ProgramControl::getProgram();
 recorder.addProgram(pc);
 for (int i = 0; i < 16; ++i) {
     if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "debug call"; }
+    if (nativeDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "first call under debugger"; }
 }
 recorder.removeProgram(pc);
 if (recorder.method_entries != 16 || recorder.method_exits != 16) {
@@ -54,5 +59,6 @@ if (recorder.method_entries != 16 || recorder.method_exits != 16) {
 }
 for (int i = 0; i < 16; ++i) {
     if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "restored call"; }
+    if (nativeDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "late native publication"; }
 }
 printf("native-method-debugger: ok\n");

@@ -16798,15 +16798,24 @@ private:
     RuntimeConfigNativeCallHelper helper;
 };
 
-static bool try_dispatch_native_int_method(QoreObject* object, const QoreMethod* method,
-        const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb,
-        const std::string& name, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+template <bool CachedAdmission>
+static bool try_dispatch_native_int_method(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink, uint64_t& result) {
+    if constexpr (CachedAdmission) {
+        // The ordinary helper checks this before admission. A prepared hit can
+        // bypass that helper, but must still observe deletion on every call.
+        if (!object->isValid()) {
+            return false;
+        }
+    }
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY");
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!enabled || !ctx || nargs != 1 || !uvb->hasCachedAOT()
             || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+            || fromBits(args[0]).getType() != NT_INT) {
         return false;
     }
     auto entry = ctx->native_int_unary_method_entry.load(std::memory_order_acquire);
@@ -16815,18 +16824,22 @@ static bool try_dispatch_native_int_method(QoreObject* object, const QoreMethod*
     }
     RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    QoreProgram* exec_pgm = CachedAdmission ? cache.native_int_program
+        : qore_rt_method_execution_program(cache.method, uvb);
     if (pgm != ctx->pgm || pgm != object->getProgram()
-            || pgm != qore_rt_method_execution_program(method, uvb)
+            || pgm != exec_pgm
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;
     }
-    const UserSignature* sig = uvb->getUserSignature();
-    // Validate the resolved override, never the parse-selected base signature.
-    // Exact int values include full-width boxed ints but not references/enums.
-    if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
-            || sig->getReturnTypeInfo() != bigIntTypeInfo
-            || sig->needsTypeParameterSubstitution() || fromBits(args[0]).getType() != NT_INT) {
-        return false;
+    if constexpr (!CachedAdmission) {
+        const UserSignature* sig = uvb->getUserSignature();
+        // Validate the resolved override, never the parse-selected base signature.
+        // Prepared entries record this immutable proof before publication.
+        if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
+                || sig->getReturnTypeInfo() != bigIntTypeInfo
+                || sig->needsTypeParameterSubstitution()) {
+            return false;
+        }
     }
     result = toBits(QoreValue());
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
@@ -16834,10 +16847,11 @@ static bool try_dispatch_native_int_method(QoreObject* object, const QoreMethod*
     }
     // Even a pure body must preserve method context on error/stack observation.
     // No self/argv/parameter TLS slots are needed by this whole-body proof.
-    ObjectSubstitutionHelper context(object, METHV_const(variant)->getClassPriv());
+    ObjectSubstitutionHelper context(object, CachedAdmission ? cache.native_int_class_ctx
+        : METHV_const(cache.variant)->getClassPriv());
     QoreValue value;
     {
-        QoreNativeMethodStackLocation frame(rc, name, uvb, pgm, xsink);
+        QoreNativeMethodStackLocation frame(rc, cache.call_name, uvb, pgm, xsink);
         if (!*xsink) {
             try {
                 value = QoreValue(entry(fromBits(args[0]).getAsBigInt(), ctx, xsink));
@@ -16863,7 +16877,7 @@ static bool try_dispatch_native_int_method(QoreObject* object, const QoreMethod*
 static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
-        uint64_t& result, const std::string* native_call_name = nullptr) {
+        uint64_t& result, const QoreAOTMethodDispatchCacheEntry* native_cache = nullptr) {
     if (!variant) {
         return false;
     }
@@ -16899,9 +16913,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return true;
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
-    if (native_call_name && (!receiver_type_info
+    if (native_cache && (!receiver_type_info
             || !QoreTypeInfo::getParameterizedClassType(receiver_type_info))
-            && try_dispatch_native_int_method(o, method, variant, uvb, *native_call_name,
+            && try_dispatch_native_int_method<false>(o, *native_cache, uvb,
                 args, arg_cleanups, nargs, xsink, result)) {
         return true;
     }
@@ -17603,6 +17617,44 @@ qore_rt_find_aot_method_dispatch_cache_entry(
     return nullptr;
 }
 
+static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCacheEntry& entry) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY");
+    if (!enabled || entry.nargs != 1 || entry.method->isStatic()
+            || !strcmp(entry.method->getName(), "copy")
+            || (entry.receiver_type_info
+                && QoreTypeInfo::getParameterizedClassType(entry.receiver_type_info))) {
+        return;
+    }
+    const auto* variant = dynamic_cast<const MethodVariantBase*>(entry.variant);
+    if (!variant || !variant->isStaticallyFastMethodCallEligible()) {
+        return;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!uvb->hasCachedAOT() || sig->numParams() != 1
+            || sig->getParamTypeInfo(0) != bigIntTypeInfo
+            || sig->getReturnTypeInfo() != bigIntTypeInfo
+            || sig->needsTypeParameterSubstitution()) {
+        return;
+    }
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    if (!ctx || !ctx->native_int_unary_method_entry.load(std::memory_order_acquire)
+            || ctx->uses_self || ctx->uses_argv) {
+        return;
+    }
+    QoreProgram* pgm = qore_rt_method_execution_program(entry.method, uvb);
+    if (!pgm || pgm != entry.caller_program || pgm != entry.object_program) {
+        return;
+    }
+    // These facts belong to the exact resolved variant and full PIC key. Entry
+    // identity/readiness remain live. A cache populated before publication keeps
+    // the ordinary path, which can discover the companion after debugger detach.
+    entry.native_int_uvb = uvb;
+    entry.native_int_program = pgm;
+    entry.native_int_class_ctx = variant->getClassPriv();
+}
+
 static void qore_rt_add_aot_method_dispatch_cache_entry(
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
@@ -17639,6 +17691,7 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->arg_types = arg_types;
     entry->arg_states = arg_states;
     entry->nargs = static_cast<uint8_t>(nargs);
+    qore_rt_prepare_aot_native_method_admission(*entry);
     std::lock_guard<std::mutex> lock(cache->write_mutex);
     if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
             receiver_type_info, class_ctx, caller_program, object_program,
@@ -17701,10 +17754,15 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                 uint64_t result;
                 static const bool use_fast_entry = !std::getenv(
                     "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+                if (use_fast_entry && entry->native_int_uvb
+                        && try_dispatch_native_int_method<true>(object, *entry, entry->native_int_uvb,
+                            args, arg_cleanups, nargs, xsink, result)) {
+                    return result;
+                }
                 if (use_fast_entry && !entry->method->isStatic()
                         && try_dispatch_method_fast(object, entry->method,
                             object->getClass(), entry->variant, args,
-                            arg_cleanups, nargs, xsink, result, &entry->call_name)) {
+                            arg_cleanups, nargs, xsink, result, entry)) {
                     return result;
                 }
                 ReferenceHolder<QoreListNode> arg_list(

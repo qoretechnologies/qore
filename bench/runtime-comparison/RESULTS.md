@@ -3500,3 +3500,108 @@ keeping mutable guards live; then evaluate a typed caller continuation and an
 explicit-RuntimeConfig native method entry. Parameter TLS is only one part of
 the remaining type/access/PIC, boxed-value, context/frame and native stack-entry
 cost. The broader performance goal remains active.
+
+## Cached native-method admission (2026-10-08)
+
+Retained result: AOT polymorphic calls improve **16.46%**, 133.44322 →
+111.48285 ns/element, with separated fork ranges. A 4096-element pilot improves
+16.62%; disabling only admission caching removes the benefit (−0.29%, overlapping
+ranges). Java parity is **not** achieved: fresh Java measures 2.54098 ns/element,
+about **43.87×** below current Qore on this whole workload.
+
+Baseline: `929e08f9081a17efcc5bdcd20d09d6704a3f00f8`, macOS arm64,
+`feature/performance`. This runtime-only change reuses an identical AOT executable
+against both libraries, which already support the native-method v1 binding.
+[Sanitized evidence](results-method-admission-macos-arm64.json) retains exact
+source/test diffs, hashes, all samples and validation details.
+
+### Implementation and guards
+
+When the normal method body has already published its native scalar companion,
+the existing PIC constructor records immutable actual-variant admission: static
+fast-method eligibility, exact unary integer signature, execution Program and
+defining class. Three borrowed pointer fields are initialized before release
+publication. Prepared hits avoid repeated RTTI, signature scans and Program lookup.
+No new allocation, compiler change or serialized ABI change is introduced.
+
+Every hit still validates the full PIC key, actual integer argument, receiver
+validity, body identity, context/PC-map readiness, matching Programs and debugger
+state. Object/class substitution, frame publication/reader waiting, local/closure
+markers, stack checks and boxed ownership are unchanged. Entries populated before
+native publication keep ordinary admission, which can discover the companion
+after debugger detach; no later prepared-entry upgrade is claimed.
+
+### Longer repeat
+
+1024 elements, five forks, three warmups and five 500 ms windows per fork.
+All five modes pass 270 reference checks. The 75 jobs / 375 samples include
+fresh Java and before/after IR and AOT. No builds, tests, profiles, disassembly
+or evidence validation overlap timing.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-ir polymorphic_call|411.58656|409.88764|-0.41%|408.37964–413.74252 / 403.56890–418.62596
+|qore-aot polymorphic_call|133.44322|111.48285|-16.46%|133.31260–135.15065 / 111.19630–112.50794
+|qore-ir indirect_wide|340.20363|337.04226|-0.93%|335.61935–342.07432 / 332.96729–339.01690
+|qore-aot indirect_wide|8.16456|8.09861|-0.81%|8.07493–10.92417 / 8.01006–11.14199
+|qore-ir temporary_hash|652.55831|660.73619|1.25%|649.89338–662.24418 / 649.88672–668.51273
+|qore-aot temporary_hash|319.11384|311.53810|-2.37%|313.84033–327.02860 / 300.84424–331.75521
+
+IR and unrelated control ranges overlap; no gains are attributed to them.
+The wide AOT control retains its 11.14199 ns candidate and 10.92417 ns baseline
+fork outliers. No samples are dropped. Fresh Java wide/hash medians are 1.67468
+and 15.52540 ns/element. Qore can inline the base-class arithmetic case but
+retains the derived calls; Java disables inlining for all three bodies. Neither
+these times nor their ratio measure an isolated call instruction.
+
+### Pilot and attribution control
+
+Pilot: 4096 elements, five forks, three warmups, five 300 ms windows;
+30 jobs / 150 samples. Only the polymorphic target gain is attributed.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|130.44051|108.75662|-16.62%|129.43173–131.96343 / 107.43775–110.00604
+|qore-aot indirect_wide|7.09401|7.26158|2.36%|6.93916–7.25208 / 7.11244–7.41953
+|qore-aot direct_call|1.27587|1.25505|-1.63%|1.26963–1.28569 / 1.24118–1.26687
+
+The final control sets `QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1`,
+retaining the native scalar companion. It uses 4096 elements, seven forks,
+three warmups and five 500 ms windows: 28 jobs / 140 samples.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|132.51692|132.13502|-0.29%|129.88591–134.18644 / 131.53298–133.31561
+|qore-aot indirect_wide|7.21275|7.18369|-0.40%|7.06262–7.28628 / 7.07585–7.28666
+
+Both control ranges overlap, supporting the target attribution. Startup samples
+are retained separately; filesystem caches are uncontrolled.
+
+### Validation and next experiments
+
+Release/debug builds each pass 57 selected files: 39 QUnit wrappers,
+206 cases / 16835 assertions and 18 standalones. The native wrapper has three
+cases / 284 assertions, including the admission-disable control. It was rerun
+in both builds after adding receiver deletion at a warmed native call site.
+The debugger fixture also tests first invocation while attached, then late native
+publication after detach. Existing wide-integer ownership, foreign Program,
+native-EH/split/no-DWARF and concurrent first-call/reader contracts remain covered.
+
+Standalone runtime syntax passes with 79 existing warnings; 11 harness tests pass;
+old v2/v3 AOT outputs remain byte-identical for 225/270 reference records. All
+133 jobs / 665 samples have validated unique/complete combinations, positive
+values, startup counts and recomputed medians. Runtime text grows 13878420 →
+13879800 bytes (+1380). The full 62-check audit is recorded in
+[FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md#cached-native-method-admission-audit-2026-10-08).
+No full-suite, sanitizer/race-detector, Linux, allocation-failure or complete
+split-runtime validation is claimed.
+
+A separate 10-second profile after all timing runs samples 7570 main-thread
+stacks. Distinct caller sites account for 2542 checked receiver-assignment samples,
+1705 method-dispatch samples, 739 receiver-load samples, 485 local-clear samples,
+464 temporary receiver-decref samples and 426 reload-if-stale samples. These are
+coarse sampled site counts, not precise component latencies. Method object/class
+substitution and native frame setup/teardown remain visible below dispatch.
+
+Next: measure explicit-RuntimeConfig object/class save/restore to avoid repeated
+TLS lookup without omitting context updates. Then address the larger local
+assignment/load/ownership costs using guarded compiler proofs that preserve
+class access, weak-reference normalization, receiver lifetime and fallback effects.
+The active goal requires both call-path and surrounding execution improvements.

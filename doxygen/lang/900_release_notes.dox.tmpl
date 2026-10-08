@@ -4425,6 +4425,9 @@ while (*binary chunk = input.read(65536)) {
       receiver, Program, and debugger checks
     - Fixed resolved fast-method cache hits bypassing debugger-aware AST/debug-IR execution after
       debugger attachment, restoring method entry/exit events for warmed polymorphic calls
+    - Cached immutable native-method eligibility, exact signature, execution Program, and defining-class
+      facts for resolved polymorphic AOT calls, while continuing to check object validity, actual arguments,
+      Program context, native-body readiness, and debugger state at runtime
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

@@ -8,6 +8,7 @@ class NativeMethodBase {
 }
 class NativeMethodDerived inherits NativeMethodBase {
     int next(int value) { return value * 5 + 11; }
+    nothing destroy() { delete self; }
 }
 class NativeMethodOther inherits NativeMethodBase {
     int next(int value) { return (value ^ 17) + 19; }
@@ -66,6 +67,22 @@ auto sub nativeMethodExcess(auto input, int value) {
         return e.err;
     }
 }
+string sub nativeMethodDeleted(NativeMethodBase input, NativeMethodDerived target) {
+    NativeMethodBase receiver = input;
+    for (int i = 0; i <= 16; ++i) {
+        if (i == 16) {
+            target.destroy();
+        }
+        try {
+            if (receiver.next(i) != i * 5 + 11) {
+                return "incorrect result";
+            }
+        } catch (hash<ExceptionInfo> e) {
+            return i == 16 ? e.err : "premature rejection";
+        }
+    }
+    return "deleted receiver accepted";
+}
 int sub nativeMethodWorkload() {
     NativeMethodBase base();
     NativeMethodDerived derived();
@@ -120,6 +137,11 @@ for (int round = 0; round < 16; ++round) {
                 nativeMethodArgs(derived, NOTHING), nativeMethodInvoke(divide, 0),
                 nativeMethodCall(divide, 2)));
     }
+}
+# The same call site must reject deletion after native admission has warmed.
+NativeMethodDerived doomed();
+if (nativeMethodDeleted(doomed, doomed) != "OBJECT-ALREADY-DELETED") {
+    throw "NATIVE-METHOD-DELETION", "warmed call accepted a deleted receiver";
 }
 # Imported objects and calls from another Program retain the generic context transition.
 Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);

@@ -148,6 +148,25 @@ statement temporary marker.
 native admission at runtime. Compiler comparisons require separate artifacts:
 old runtimes cannot load a new executable referencing the additive helper.
 
+Once the native companion is available, PIC construction records immutable
+admission facts for the actual resolved override: unary integer signature,
+static fast-method eligibility, execution Program and defining class. A prepared
+hit bypasses repeated RTTI, signature scans and execution-Program lookup. These
+three borrowed pointers are initialized before release publication and have the
+same retained-entry lifetime as the existing method/variant pointers; there is
+no additional allocation or serialized ABI change.
+
+The full PIC key, actual integer value, receiver validity, native-body identity,
+context/PC-map readiness, current Program and debugger state remain live guards.
+If the PIC is populated before companion publication (for example, on its first
+call under a debugger), it retains the ordinary native-admission path, which can
+discover the entry after debugger detachment. Regressions cover this order and
+receiver deletion after warming the same native call site.
+`QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables only this immutable
+admission cache, retaining the native companion. This runtime-only follow-up can
+reuse an identical AOT executable against before/after runtimes that both support
+the versioned binding.
+
 ### Guarded AOT method entries after typed assignment
 
 Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while

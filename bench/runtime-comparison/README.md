@@ -93,6 +93,14 @@ compilation: the additive helper is absent from older runtimes. The caller still
 uses boxed arguments/results, so these measurements are not an isolated native
 call instruction or evidence of Java retained-call parity.
 
+`QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables caching immutable
+eligibility/signature/Program/class facts in polymorphic method entries without
+disabling the native scalar companion itself. Mutable body/readiness, receiver,
+argument and debugger guards remain active in either case. For this runtime-only
+follow-up, `--reuse-aot-for-baseline` is valid when both saved and current runtimes
+support `qore_rt_bind_method_int_unary_v1`; it isolates the runtime change with an
+identical executable.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit
