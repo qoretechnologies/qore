@@ -998,6 +998,32 @@ val = "string";      # OK
     the proxy's certificate is verified against the proxy's host name.
     @endparblock
 
+    @par A Default Character Encoding That Is Not Compatible With ASCII Is Refused
+    @parblock
+    The @ref default_encoding "default character encoding" must be compatible with ASCII.  An encoding that is not
+    (such as UTF-16, UTF-32, EBCDIC code pages, or Shift_JIS) given with the \c --charset option or the
+    \c QORE_CHARSET environment variable now makes %Qore exit with an error at startup; given by the locale
+    (\c LANG), %Qore prints an error and uses UTF-8 instead.  Such an encoding could not work as the default
+    encoding (UTF-16 crashed).
+    @endparblock
+
+    @par The Generic "UTF-32" Encoding Is Big-Endian With No Byte Order Mark
+    @parblock
+    A string converted to the generic \c "UTF-32" encoding is now big-endian and no longer starts with a byte order
+    mark, as for the generic \c "UTF-16" encoding, so that strings in it have no extra character; data that starts
+    with a byte order mark still gives its byte order when it is read or converted.  Use \c "UTF-32LE" or
+    \c "UTF-32BE" for a specific byte order, and write a byte order mark explicitly where one is required.
+    @endparblock
+
+    @par Shift_JIS Is Not Compatible With ASCII
+    @parblock
+    Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932", \c "WINDOWS-31J") are now handled as
+    encodings that are not compatible with ASCII: in Shift_JIS, the bytes 0x5c and 0x7e are the yen sign and the
+    overline of JIS X 0201, not the backslash and tilde, and \c iconv implementations and variants map them
+    differently, so their handling depended on the platform.  Strings in these encodings are now converted wherever
+    text is parsed or used as a hash key, as for UTF-16, and they cannot be used as the default encoding.
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
@@ -4305,9 +4331,8 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::InputStreamLineIterator "InputStreamLineIterator" could match the second byte of a double-byte
       character (ex: \c "|" in the Shift_JIS character \c "ポ", 0x83 0x7c).  Such strings now have the same
       characters as the same text in UTF-8.  Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932",
-      \c "WINDOWS-31J") are now handled as encodings that are not compatible with ASCII on every platform, since
-      their bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201 in Shift_JIS, and iconv implementations
-      and variants map them differently
+      \c "WINDOWS-31J") are now handled as encodings that are not compatible with ASCII on every platform (see
+      @ref qore_3_0_0_compatibility)
 
     - %Qore now refuses a default character encoding that is not compatible with ASCII (such as UTF-16, UTF-32 or
       Shift_JIS), which could not work and crashed with UTF-16: given with \c --charset or \c QORE_CHARSET, %Qore
