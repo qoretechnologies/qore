@@ -182,6 +182,89 @@ bool QoreEncoding::isAsciiCompat() const {
     return priv->isAsciiCompat();
 }
 
+namespace {
+//! the iconv descriptors that decode characters to UTF-8 for QoreEncoding::getUnicode() in the current thread
+/** An encoding without a code point function (single-byte encodings other than ASCII, EBCDIC, and the multi-byte
+    encodings such as EUC-JP, Shift_JIS, or GB18030) gets the code point of a character from iconv.  Opening a
+    descriptor for each character would dominate the cost of a loop over the characters of a string, so a descriptor
+    is opened once per encoding and thread and reused; iconv descriptors cannot be shared between threads, and a
+    thread-local cache needs no lock, so other encodings and threads pay nothing for it.  The descriptors are closed
+    when the thread exits.
+*/
+class ThreadUnicodeDecoders {
+public:
+    DLLLOCAL ThreadUnicodeDecoders() = default;
+
+    DLLLOCAL ~ThreadUnicodeDecoders() {
+        for (auto& i : decoders) {
+            iconv_close(i.second);
+        }
+    }
+
+    //! returns the descriptor for decoding the given encoding to UTF-8, or (iconv_t)-1 if it cannot be opened
+    DLLLOCAL iconv_t get(const QoreEncoding* enc) {
+        for (auto& i : decoders) {
+            if (i.first == enc) {
+                return i.second;
+            }
+        }
+        iconv_t cd = iconv_open("UTF-8", enc->getCode());
+        if (cd != invalid()) {
+            // encodings are never deleted while threads run, so the pointer identifies the encoding
+            decoders.emplace_back(enc, cd);
+        }
+        return cd;
+    }
+
+    DLLLOCAL static iconv_t invalid() {
+        return reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1));
+    }
+
+private:
+    // a thread uses few encodings, so a linear search is the fastest lookup
+    std::vector<std::pair<const QoreEncoding*, iconv_t>> decoders;
+
+    ThreadUnicodeDecoders(const ThreadUnicodeDecoders&) = delete;
+    ThreadUnicodeDecoders& operator=(const ThreadUnicodeDecoders&) = delete;
+};
+
+thread_local ThreadUnicodeDecoders thread_unicode_decoders;
+
+// needed for platforms where the input buffer is defined as "const char"
+template<typename T>
+size_t decoder_iconv(size_t (*iconv_f)(iconv_t, T, size_t*, char**, size_t*), iconv_t handle, char** inbuf,
+        size_t* inavail, char** outbuf, size_t* outavail) {
+    return (*iconv_f)(handle, const_cast<T>(inbuf), inavail, outbuf, outavail);
+}
+
+//! returns the code point of the character of the given byte length with iconv, or -1 if an exception was raised
+int get_unicode_iconv(const QoreEncoding* enc, const char* p, unsigned clen, ExceptionSink* xsink) {
+    iconv_t cd = thread_unicode_decoders.get(enc);
+    if (cd == ThreadUnicodeDecoders::invalid()) {
+        xsink->raiseException("ENCODING-CONVERSION-ERROR", "cannot convert from \"%s\" to \"UTF-8\"",
+            enc->getCode());
+        return -1;
+    }
+    // a new conversion state for each character, as the descriptor is reused
+    decoder_iconv(::iconv, cd, nullptr, nullptr, nullptr, nullptr);
+    // a character of up to 4 bytes gives at most 4 bytes of UTF-8, or 8 for a stateful encoding that writes a
+    // sequence of characters (which are not decoded one at a time)
+    char out[16];
+    char* ib = const_cast<char*>(p);
+    size_t il = clen;
+    char* ob = out;
+    size_t ol = sizeof(out);
+    if (decoder_iconv(::iconv, cd, &ib, &il, &ob, &ol) == static_cast<size_t>(-1)
+            || decoder_iconv(::iconv, cd, nullptr, nullptr, &ob, &ol) == static_cast<size_t>(-1)
+            || ob == out) {
+        xsink->raiseException("INVALID-ENCODING", "invalid %s encoding encountered in string", enc->getCode());
+        return -1;
+    }
+    *ob = '\0';
+    return UTF8_getUnicode(out);
+}
+}
+
 int QoreEncoding::getUnicode(const char* p, const char* end, unsigned& clen, ExceptionSink* xsink) const {
     // get character length & check validity
     clen = (unsigned)getByteLen(p, end, 1, xsink);
@@ -196,16 +279,7 @@ int QoreEncoding::getUnicode(const char* p, const char* end, unsigned& clen, Exc
 
         // the character is converted with iconv; in an encoding that is not ASCII-compatible (ex: EBCDIC), an ASCII
         // byte is not the ASCII character
-        QoreString tmp(QCS_UTF8);
-        if (qore_string_private::convert_encoding_intern(p, clen, this, tmp, QCS_UTF8, xsink)) {
-            return -1;
-        }
-        if (tmp.empty()) {
-            xsink->raiseException("INVALID-ENCODING", "invalid %s encoding encountered in string", priv->code.c_str());
-            return -1;
-        }
-
-        return UTF8_getUnicode(tmp.c_str());
+        return get_unicode_iconv(this, p, clen, xsink);
     }
     return priv->getUnicode(p);
 }

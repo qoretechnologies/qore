@@ -43,6 +43,7 @@ class MultiByteEncodingTest inherits QUnit::Test {
         addTestCase("streams", \testStreams());
         addTestCase("Shift_JIS", \testShiftJis());
         addTestCase("invalid strings", \testInvalid());
+        addTestCase("code points in threads", \testThreads());
         set_return_value(main());
     }
 
@@ -126,6 +127,49 @@ class MultiByteEncodingTest inherits QUnit::Test {
             assertEq("ソ表", convert_encoding(s.substr(2), "UTF-8"), enc + " substr()");
             assertEq(0, int(convert_encoding("ソ1", enc)), enc + " int()");
         }
+    }
+
+    #! the code points of the characters of a string, one at a time
+    private static list<int> getCodePoints(string s) {
+        list<int> rv = ();
+        for (int i = 0; i < s.length(); ++i) {
+            rv += s.getUnicode(i);
+        }
+        return rv;
+    }
+
+    testThreads() {
+        # code points are decoded with a converter per thread and encoding; threads decoding different encodings at
+        # the same time must each get the code points of their own text
+        hash<string, string> strs = {};
+        hash<string, list<int>> expected = {};
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            if (supported(i.key, i.value)) {
+                strs{i.key} = convert_encoding(i.value, i.key);
+                expected{i.key} = getCodePoints(i.value);
+            }
+        }
+        Counter c();
+        Mutex m();
+        hash<string, int> errors = {};
+        for (int t = 0; t < 8; ++t) {
+            c.inc();
+            background sub () {
+                on_exit c.dec();
+                for (int n = 0; n < 50; ++n) {
+                    foreach hash<auto> i in (strs.pairIterator()) {
+                        if (getCodePoints(i.value) != expected{i.key}) {
+                            m.lock();
+                            on_exit m.unlock();
+                            ++errors{i.key};
+                        }
+                    }
+                }
+            }();
+        }
+        c.waitForZero();
+        assertEq({}, errors);
+        assertTrue(strs.size() > 0);
     }
 
     testInvalid() {
