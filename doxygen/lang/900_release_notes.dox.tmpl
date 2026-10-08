@@ -9,6 +9,14 @@
     previously use zero after an earlier temporary value had been released.
     Recompile existing AOT artifacts to apply the compiler fix.
 
+    AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
+    compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
+    names the module and both identities and asks for the module to be rebuilt, instead of loading and failing later
+    in unrelated code. The identity is derived automatically from the library sources that define the contract, so
+    rebuilding the library for other changes does not invalidate compiled modules; \c qcc <tt>--version</tt> shows
+    it. AOT modules compiled by earlier %Qore 3.0 development builds must be rebuilt; see
+    @ref aot_module_runtime_identity.
+
     Data provider factories report that a data provider does not support a constructor from an option hash only
     when its class has no such constructor. Other errors raised while looking up the constructor, such as
     <tt>PROGRAM-ERROR</tt> for a class whose @ref Qore::Program "Program" has been deleted, are raised unchanged

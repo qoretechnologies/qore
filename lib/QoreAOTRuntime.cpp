@@ -16436,6 +16436,16 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
     }
 }
 
+//! Records the AOT runtime identity that an AOT-compiled module was compiled for
+/** Called by the description function of every AOT module with descriptor revision 2 or later; the loader compares
+    the identity with qore_aot_runtime_identity before running any generated code.
+
+    @see design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity"
+*/
+extern "C" DLLEXPORT void qore_aot_fill_module_runtime_identity(QoreModuleInfo* mod_info, const char* identity) {
+    mod_info->aot_runtime_identity = identity ? identity : "";
+}
+
 //! Delivers %try-child-module declarations from an AOT-compiled module's description function
 /** Called after qore_aot_fill_module_desc() and only when the module declares child modules; artifacts
     compiled before child modules were supported never call this function.

@@ -3228,14 +3228,28 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     const char* name = mod_info.name.c_str();
 
-    if (mod_info.is_aot
-            && mod_info.aot_abi_version != QORE_AOT_MODULE_ABI_VERSION) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
-            "AOT module '%s': feature '%s': native ABI version %u is incompatible with runtime version %u; "
-            "rebuild the module with the current qcc",
-            path, name, mod_info.aot_abi_version,
-            static_cast<unsigned>(QORE_AOT_MODULE_ABI_VERSION));
-        return nullptr;
+    if (mod_info.is_aot) {
+        if (mod_info.aot_abi_version != QORE_AOT_MODULE_ABI_VERSION) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
+                "AOT module '%s': feature '%s': native ABI version %u is incompatible with runtime version %u; "
+                "rebuild the module with the current qcc",
+                path, name, mod_info.aot_abi_version,
+                static_cast<unsigned>(QORE_AOT_MODULE_ABI_VERSION));
+            return nullptr;
+        }
+        // the generated code of an AOT module can only run against a libqore with the generated-code contract it was
+        // compiled for; see design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity"
+        if (mod_info.aot_runtime_identity != qore_aot_runtime_identity) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
+                "AOT module '%s': feature '%s': the module was compiled for AOT runtime identity '%s', but this Qore "
+                "runtime (libqore %s) has AOT runtime identity '%s'; the module's native code was generated for a "
+                "different Qore library and cannot be run with this one; rebuild the module with the qcc of this "
+                "Qore installation",
+                path, name,
+                mod_info.aot_runtime_identity.empty() ? "<none>" : mod_info.aot_runtime_identity.c_str(),
+                qore_version_string, qore_aot_runtime_identity);
+            return nullptr;
+        }
     }
 
     // ensure provided feature matches with expected feature

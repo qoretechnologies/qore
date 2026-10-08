@@ -1775,6 +1775,7 @@ set(LIBQORE_CPP_SRC
     lib/DateTime.cpp
     lib/QoreLib.cpp
     lib/qore_git_revision.cpp
+    lib/qore_aot_runtime_identity.cpp
     lib/QoreTimeZoneManager.cpp
     lib/QoreString.cpp
     lib/QoreObject.cpp
@@ -2517,8 +2518,9 @@ if (SINGLE_COMPILATION_UNIT)
     # - qore-main.cpp: includes platform dynamic-loader headers such as
     #   <link.h> that define ELF macros conflicting with LLVM headers in the SCU
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
+    # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp)
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -2553,7 +2555,7 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
-add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision CHECK_GRAMMAR_CONFLICTS)
+add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
 if (APPLE)
@@ -2766,7 +2768,7 @@ endif (SINGLE_COMPILATION_UNIT)
 add_executable(qore-ir-phase0-smoke EXCLUDE_FROM_ALL
     examples/test/ir/phase0_metadata_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
-add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity)
 target_compile_definitions(qore-ir-phase0-smoke PRIVATE
     _QORE_LIB_INTERN
     HAVE_UNIX_CONFIG_H
@@ -2835,7 +2837,7 @@ target_include_directories(qore-xxhash-compat-test PRIVATE ${CMAKE_SOURCE_DIR}/i
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
-add_dependencies(qore-ir-plugin-registry-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+add_dependencies(qore-ir-plugin-registry-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity)
 target_compile_definitions(qore-ir-plugin-registry-smoke PRIVATE
     _QORE_LIB_INTERN
     HAVE_UNIX_CONFIG_H
@@ -3100,6 +3102,29 @@ add_custom_command(
 )
 add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
 add_dependencies(qcc qcc-format-version)
+
+# The AOT runtime identity of libqore: a digest of the source entries of the qcc format fingerprint above.  qcc
+# records it in every AOT module it compiles, and the module loader refuses an AOT module compiled for a different
+# identity, so a module compiled by an older libqore cannot run its native code against a runtime whose generated-code
+# contract has changed (see cmake/QoreWriteAOTRuntimeIdentity.cmake and design/aot-object-files-and-module-artifacts.md
+# "AOT Module Runtime Identity").  Only lib/qore_aot_runtime_identity.cpp includes the header, and the header is only
+# rewritten when the identity changes.
+set(QORE_AOT_RUNTIME_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_aot_runtime_identity.h)
+add_custom_command(
+    OUTPUT ${QORE_AOT_RUNTIME_IDENTITY_HEADER}
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT=${QCC_FORMAT_STAMP}
+        -DOUTPUT=${QORE_AOT_RUNTIME_IDENTITY_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
+    DEPENDS
+        ${QCC_FORMAT_STAMP}
+        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
+    COMMENT "Updating the AOT runtime identity"
+    VERBATIM
+)
+add_custom_target(qore-aot-runtime-identity DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
+    PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(
