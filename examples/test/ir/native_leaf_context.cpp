@@ -170,6 +170,31 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
     return QoreValue(result);
 }
 
+// Find the single method PIC populated by an actual compiled probe caller.
+static QoreAOTContext* getMethodProbeContext(QoreProgram* program, const char* caller_name, int& slot) {
+    ExceptionSink xsink;
+    // QoreExternalFunction is the public view of QoreFunction (QoreReflection.cpp).
+    // Use the exported lookup; internal namespace lookups are not exported.
+    const auto* function = reinterpret_cast<const QoreFunction*>(program->findFunction(caller_name));
+    assert(function);
+    const UserVariantBase* uvb = function->first()->getUserVariantBase();
+    assert(uvb && uvb->hasCachedAOT());
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    assert(ctx);
+    slot = -1;
+    for (int i = 0; i < ctx->num_exprs; ++i) {
+        if (ctx->call_targets[i].method_dispatch_cache.load(std::memory_order_acquire)) {
+            assert(slot == -1);
+            slot = i;
+        }
+        if (!(i % 100)) {
+            assert(!qore_check_cancel(&xsink, "native method receiver slots"));
+        }
+    }
+    assert(slot >= 0);
+    return ctx;
+}
+
 // Exercise the receiver gate itself after the ordinary caller has populated its
 // real PIC. Successful strong/opaque calls must actually use the continuation;
 // rejected representations must leave result, exception and context untouched.
@@ -186,25 +211,8 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
         ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
         assert(!xsink && result->getAsBigInt() == 24);
     }
-    // QoreExternalFunction is the public view of QoreFunction (QoreReflection.cpp).
-    // Use the exported lookup; internal namespace lookups are not exported.
-    const auto* function = reinterpret_cast<const QoreFunction*>(program->findFunction(caller_name));
-    assert(function);
-    const UserVariantBase* uvb = function->first()->getUserVariantBase();
-    assert(uvb && uvb->hasCachedAOT());
-    QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    assert(ctx);
-    int slot = -1;
-    for (int i = 0; i < ctx->num_exprs; ++i) {
-        if (ctx->call_targets[i].method_dispatch_cache.load(std::memory_order_acquire)) {
-            assert(slot == -1);
-            slot = i;
-        }
-        if (!(i % 100)) {
-            assert(!qore_check_cancel(&xsink, "native method receiver slots"));
-        }
-    }
-    assert(slot >= 0);
+    int slot;
+    QoreAOTContext* ctx = getMethodProbeContext(program, caller_name, slot);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreProgram* caller = qore_get_call_program_context();
     QoreObject* old_object = rc->getObject();
@@ -252,12 +260,66 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     check(*object, true);
 }
 
+// An int-backed enum can resolve to the same int(int) method, but its dispatch
+// argument key is not the native helper's integer key. First require a miss with
+// only that enum entry, then admission after a later integer entry is published.
+// The enum stays in the first PIC slot, exercising lookup past a nonmatching key.
+static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_name) {
+    ExceptionSink xsink;
+    ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && object->getType() == NT_OBJECT);
+    ValueHolder enumeration(program->callFunction("makeEnumProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && enumeration->isEnum() && enumeration->getTypeInfo() != bigIntTypeInfo);
+    auto warm = [&](QoreValue value) {
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push(object->refSelf(), &xsink);
+        assert(!xsink);
+        args->push(value.refSelf(), &xsink);
+        assert(!xsink);
+        for (unsigned i = 0; i < 16; ++i) {
+            ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
+            assert(!xsink && result->getAsBigInt() == 24);
+        }
+    };
+    warm(*enumeration);
+    int slot;
+    QoreAOTContext* ctx = getMethodProbeContext(program, caller_name, slot);
+    auto* cache = ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
+    const auto* first = cache->entries[0].load(std::memory_order_acquire);
+    assert(first && first->nargs == 1 && first->arg_types[0] == enumeration->getTypeInfo()
+        && first->arg_states[0] == 0);
+    assert(!cache->entries[1].load(std::memory_order_acquire));
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreProgram* caller = qore_get_call_program_context();
+    QoreObject* old_object = rc->getObject();
+    const qore_class_private* old_class = rc->getClass();
+    auto check = [&](bool accepted) {
+        int64_t result = -123;
+        assert(qore_rt_try_method_int_unary_v1(ctx, slot, object->rawBits(), 7, &result, &xsink, rc)
+            == static_cast<int>(accepted));
+        assert(!xsink && result == (accepted ? 24 : -123));
+        assert(qore_get_call_program_context() == caller);
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    };
+    check(false);
+    warm(QoreValue(int64_t{7}));
+    const auto* second = cache->entries[1].load(std::memory_order_acquire);
+    assert(second && second->nargs == 1 && second->arg_types[0] == bigIntTypeInfo
+        && second->arg_states[0] == 0 && second->native_int_uvb);
+    assert(cache->entries[0].load(std::memory_order_acquire) == first);
+    check(true);
+    warm(*enumeration);
+    check(true);
+}
+
 // Enter through a normal compiled function so probes inherit the same real
 // source parse policy as the warmed callers; the external host's policy differs.
 static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
     const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
     checkMethodReceivers(invocation.program, "methodProbe");
     checkMethodReceivers(invocation.program, "optionalMethodProbe");
+    checkMethodArgumentKeys(invocation.program, "methodArgumentProbe");
+    checkMethodArgumentKeys(invocation.program, "optionalMethodArgumentProbe");
     return QoreValue(int64_t{24});
 }
 

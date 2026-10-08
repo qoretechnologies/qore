@@ -42,7 +42,11 @@ class NativeLeafContextTest inherits QUnit::Test {
             "int sub methodProbe(NativeLeafMethodBase input, int value) {\n"
             "    NativeLeafMethodBase receiver = input; value = receiver.next(value); return value;\n}\n"
             "int sub optionalMethodProbe(*NativeLeafMethodBase receiver, int value) {\n"
-            "    value = receiver.next(value); return value;\n}\n");
+            "    value = receiver.next(value); return value;\n}\n"
+            "int sub methodArgumentProbe(NativeLeafMethodBase input, auto value) {\n"
+            "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n"
+            "int sub optionalMethodArgumentProbe(*NativeLeafMethodBase receiver, auto value) {\n"
+            "    return receiver.next(value);\n}\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);

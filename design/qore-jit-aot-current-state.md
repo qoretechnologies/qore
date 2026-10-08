@@ -472,6 +472,15 @@ checks context restoration and successful reuse after misses. The same fixture
 passes on the pre-change runtime, so it checks preserved behavior rather than
 new semantics.
 
+The native fixture also warms an int-backed enum argument entry before an
+ordinary-int entry. Although both resolve to the same int(int) method, their
+dispatch argument keys differ: an enum-only cache must reject the integer
+continuation, then admit it after the later integer entry is published. The
+enum remains first in the PIC, and ordinary enum dispatch still succeeds after
+integer calls. A separate publication-time argument-key flag was tested but
+not retained: it reduced generated helper size without a measured target
+speedup at either tested workload size. The existing full-key checks remain.
+
 Unresolved name-dispatched calls can also use this continuation after ordinary
 dispatch has populated the full-key PIC. This includes nullable-class and dynamic
 receivers; it does not resolve an AST/IR target or narrow its unknown return type.

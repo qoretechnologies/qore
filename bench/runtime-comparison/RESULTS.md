@@ -5847,3 +5847,95 @@ within an invocation. Any hoisting must retain weak/opaque/NOTHING semantics,
 local mutation, dispatch epoch, access, Program/debugger, ownership, diagnostic
 publication and live stack protection, with a fresh committed baseline and
 before/after measurements.
+
+## Native method argument-key proof rejected (2026-10-08)
+
+A candidate proved the exact unary ordinary-int dispatch argument key when
+publishing native method admission, then replaced repeated arity/type/state
+checks with one immutable flag. A separate flag was necessary: int-backed enums
+also use the existing generic native-method cache and must not lose that path.
+All receiver/access/context/Program/parse-policy/epoch matching and live
+body/readiness/debugger/stack guards remained.
+
+**Rejected and reverted.** Two workload sizes did not establish a target
+speedup, so smaller code did not justify additional cache state. Only the
+regression tests and negative evidence are retained; current production code
+still performs the original full-key checks.
+
+Baseline is clean committed `afb78b7250a82116f46f96b434b7b44bed97d9e8`.
+[Full evidence](results-method-argument-key-macos-arm64.json) preserves the
+reverted production diff, exact precommit runtime identities, every sample,
+assembly, tests and audit. The internal cache header changed the AOT fingerprint,
+so each runtime compiled its own matching executable. Old standalone AOT
+compatibility was separately checked; stale qmods correctly used source fallback.
+
+Apple M4 Pro, macOS arm64, release SCU, Temurin 25.0.2/JMH 1.37.
+Five randomized forks, three warmups, five 500 ms windows and three startup
+observations per mode. All 750 timing windows ran without competing builds,
+tests, profiling, disassembly or evidence validation. Values are median fork
+means in ns/element for whole kernels, not isolated call latency. Range overlap
+is descriptive rather than a statistical significance test.
+
+Count 1024, seed 810701, `run-6kdvn1li` (450 windows):
+
+|!Kernel|!Before ns/element|!Candidate ns/element|!Change|!Fork ranges overlap|!Java JIT
+|optional_method_call|13.560|13.540|-0.15%|yes|1.660
+|polymorphic_call|51.610|50.942|-1.29%|yes|2.523
+|monomorphic_call|7.117|7.318|+2.83%|yes|1.669
+|indirect_wide|8.496|8.333|-1.92%|yes|1.670
+|indirect_float|10.193|10.187|-0.05%|yes|1.647
+|arithmetic|2.417|2.404|-0.56%|yes|0.896
+
+Count 4096, seed 810702, `run-yh0yx3ag` (300 windows):
+
+|!Kernel|!Before ns/element|!Candidate ns/element|!Change|!Fork ranges overlap
+|optional_method_call|12.188|12.186|-0.02%|yes
+|polymorphic_call|49.082|49.487|+0.82%|yes
+|monomorphic_call|5.844|5.846|+0.03%|yes
+|indirect_wide|7.384|7.195|-2.56%|no
+|indirect_float|9.093|9.134|+0.46%|yes
+|arithmetic|1.350|1.349|-0.09%|yes
+
+Nullable changes are -0.15%/-0.02%; polymorphic -1.29%/+0.82%. All target ranges
+overlap, and polymorphic direction reverses. No target improvement or exact
+neutrality is established. The wide-callback control improves 2.56% at 4096
+with narrowly non-overlapping ranges, but does not exercise the changed method
+admission path; retain this observation without attributing it to the candidate.
+The 1024 monomorphic adverse movement of 2.83% also overlaps. No third batch or
+new profile was run after these two target-negative results.
+
+Startup before/candidate medians are 30.283/29.797 ms and 29.801/29.682 ms;
+both ranges overlap. Java startup is 23.520 ms. Compile observations are
+361.737/358.575 ms and 370.693/373.354 ms, single observations with uncontrolled
+filesystem caches. No startup or compilation improvement is claimed.
+
+The candidate reduced the dispatch helper from 757 to 725 AArch64 instructions
+(3,028 to 2,900 bytes) and its stack reservation from 352 to 336 bytes. Runtime
+`__text` shrank by 108 bytes (13,974,384 to 13,974,276); total segment size was
+unchanged. The immutable cache entry grew from 208 to 216 bytes. These static
+changes were real but did not yield a measured target benefit; all are reverted.
+
+The retained native fixture warms real required/nullable callers with an
+int-backed enum first. It verifies the actual enum argument key and requires the
+integer helper to miss without changing result/sink/context. It then warms an
+ordinary-int entry in the second PIC slot, requires actual native admission
+past the first enum entry, and verifies enum dispatch plus integer reuse.
+The shared cache-slot lookup retains cancellation checks. No test changes cache
+keys, parse policy, TLS or production guards to force admission.
+
+Expanded fixtures pass on both baseline builds and the candidate. Candidate
+release/debug each pass 33 files: 67 cases/4,038 assertions in 25 QUnit files
+plus eight standalones. The driver retains 120 assertions across O0/O3,
+independent compilation controls, eager/deferred context and foreign-thread
+re-registration; native assertions cover the new key probes. Six benchmark modes
+pass 330 references each, the saved older standalone passes 330, and 11 harness
+tests pass. After restoration, the expanded release/debug fixture passes again
+with 120 driver assertions each, and four benchmark modes pass 330 references
+each. The release library is byte-identical to the baseline; the restored debug
+rebuild's distinct hash is recorded separately. No runtime/header diff remains.
+
+This experiment makes no new speedup or Java-parity claim. Next investigate the
+remaining object/class context traffic for whole-body-proven pure native methods,
+preserving deferred error materialization and diagnostic readers, before a larger
+invocation-local prepared-method ABI. Existing mutable guards and ownership
+semantics remain requirements, not candidates for unchecked removal.

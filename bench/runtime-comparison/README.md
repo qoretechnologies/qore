@@ -232,6 +232,10 @@ weak wrappers, scalars, boxed values, strings, containers and enums must reject
 without changing the result, exception sink or caller context. Receiver admission
 uses a local pointer/node-type check; the general QoreValue type API and all
 subsequent method guards are unchanged.
+Argument probes additionally require an integer continuation to miss an enum-only
+cache, then hit a later integer entry while preserving ordinary enum dispatch.
+The [argument-key experiment](RESULTS.md#native-method-argument-key-proof-rejected-2026-10-08)
+records a publication-time proof flag that was rejected for lack of target benefit.
 The [receiver-admission measurements](RESULTS.md#local-strong-object-method-admission-2026-10-08)
 record repeated nullable/polymorphic gains against a merged method-v3 baseline,
 using identical AOT artifacts for this runtime-only change.
