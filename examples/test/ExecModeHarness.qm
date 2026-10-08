@@ -38,15 +38,18 @@ module ExecModeHarness {
     The tests that run a script with each <tt>--exec-mode</tt> run it through this module, so that the script
     really runs as native code with @ref exec_mode_jit "JIT" execution:
 
-    - native compilation is synchronous and follows the first call of a function (\c QORE_JIT_SYNC_COMPILE=1 and
-      \c QORE_JIT_THRESHOLD=1), so whether code runs as native code does not depend on timing: with
-      <tt>--exec-mode=jit</tt>, top-level code is compiled before it runs and a function before its first call
-      returns; with <tt>--exec-mode=tiered</tt>, a function is compiled after a call that its IR tier counts, so
-      top-level code and functions that the IR interpreter runs inline in their caller are not compiled
+    - native compilation is synchronous and follows the first call of a function (\c QORE_JIT_SYNC_COMPILE=1,
+      \c QORE_IR_THRESHOLD=1 and \c QORE_JIT_THRESHOLD=1), so whether code runs as native code does not depend on
+      timing: with <tt>--exec-mode=jit</tt>, top-level code is compiled before it runs and a function before its
+      first call returns; with <tt>--exec-mode=tiered</tt>, a function runs on the AST tier in its first call, on
+      the IR tier in its second, which compiles it, and as native code from its third call on; top-level code, which
+      runs once, is not compiled
     - \c QORE_JIT_TIMING traces every native compilation on stderr, and the trace is checked: native code must have
-      been compiled with <tt>--exec-mode=jit</tt>, and with <tt>--exec-mode=tiered</tt> when the caller requires
-      it with NativeCheck::JitAndTiered, which a script must be written for; nothing may be compiled with
-      <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>
+      been compiled with <tt>--exec-mode=jit</tt> and <tt>--exec-mode=tiered</tt> (NativeCheck::JitAndTiered, the
+      default), and nothing may be compiled with <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>; a run whose
+      script calls no function often enough to compile it with tiered execution requires native code with JIT
+      execution only (NativeCheck::Jit), and a harness whose scripts are of that kind can make it its default with
+      set_default_check()
 
     The trace is removed from the output; any other output on stderr follows the output on stdout.
 
@@ -62,7 +65,7 @@ public namespace ExecModeHarness {
 public const ExecModes = ("ast", "ir", "jit", "tiered");
 
 #! the environment that makes native compilation synchronous and traced
-public const TraceEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1";
+public const TraceEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1";
 
 #! the native compilation that a run must show
 public enum NativeCheck : string {
@@ -73,6 +76,29 @@ public enum NativeCheck : string {
     Jit = "jit",
     #! code must be compiled to native code with --exec-mode=jit and --exec-mode=tiered
     JitAndTiered = "jit-and-tiered",
+}
+
+#! holds the native compilation check used when a run gives none
+class Defaults {
+    public {
+        #! the default native compilation check
+        static NativeCheck check = NativeCheck::JitAndTiered;
+    }
+}
+
+#! sets the native compilation check for the runs that give none
+/** For a harness whose scripts call no function often enough to compile it with tiered execution, such as scripts
+    with only top-level code: those require native code with JIT execution only (NativeCheck::Jit)
+
+    @param check the native compilation check for the runs that give none
+*/
+public sub set_default_check(NativeCheck check) {
+    Defaults::check = check;
+}
+
+#! returns the native compilation check for the runs that give none
+public NativeCheck sub get_default_check() {
+    return Defaults::check;
 }
 
 #! the result of a command run by run_command()
@@ -146,13 +172,16 @@ public hash<ModeRunResult> sub run_command(string command) {
 
 #! checks that a run compiled native code as its execution mode requires
 /** @param r the result of the run
-    @param check the native compilation required
+    @param check the native compilation required; the default check (see set_default_check()) if not given
 
     @throw EXEC-MODE-HARNESS-ERROR the command that was run gave no execution mode
     @throw EXEC-MODE-NATIVE-ERROR code was compiled to native code with the AST or IR interpreter, or no code was
     compiled to native code in a mode that requires it
 */
-public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::Jit) {
+public sub check_native(hash<ModeRunResult> r, *NativeCheck check) {
+    if (!exists check) {
+        check = Defaults::check;
+    }
     if (!r.mode) {
         throw "EXEC-MODE-HARNESS-ERROR", "the command gave no --exec-mode option, so its native compilation cannot "
             "be checked";
@@ -179,14 +208,14 @@ public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::
 #! runs a command that runs qore with an execution mode, checks its native compilation, and returns its output
 /** @param command the shell command; it runs qore with \c --exec-mode and must not redirect stderr, which holds
     the trace
-    @param check the native compilation required
+    @param check the native compilation required; the default check (see set_default_check()) if not given
 
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
     @throw EXEC-MODE-HARNESS-ERROR the command has no or more than one \c --exec-mode option
     @throw EXEC-MODE-NATIVE-ERROR see check_native()
 */
-public string sub run(string command, NativeCheck check = NativeCheck::Jit) {
+public string sub run(string command, *NativeCheck check) {
     hash<ModeRunResult> r = run_command(command);
     check_native(r, check);
     return r.out;
@@ -197,13 +226,14 @@ public string sub run(string command, NativeCheck check = NativeCheck::Jit) {
     through one function
 
     @param command the shell command; it must not redirect stderr, which holds the trace
-    @param check the native compilation required when the command gives an execution mode
+    @param check the native compilation required when the command gives an execution mode; the default check (see
+    set_default_check()) if not given
 
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
     @throw EXEC-MODE-NATIVE-ERROR see check_native()
 */
-public string sub run_any(string command, NativeCheck check = NativeCheck::Jit) {
+public string sub run_any(string command, *NativeCheck check) {
     hash<ModeRunResult> r = run_command(command);
     if (r.mode) {
         check_native(r, check);

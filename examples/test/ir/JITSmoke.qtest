@@ -220,12 +220,12 @@ printf(\"%d:%y\\n\", ok, p.last_shape);
     }
 
     private string runScript(string code, *string exec_mode, *string suffix,
-            ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
+            *ExecModeHarness::NativeCheck check) {
         return runScriptWithOpts(code, exec_mode, NOTHING, suffix, check);
     }
 
     private string runScriptWithOpts(string code, *string exec_mode, *string extra_opts, *string suffix,
-            ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
+            *ExecModeHarness::NativeCheck check) {
         string mode = exec_mode ?? "jit";
         # .qr implies %modern for standalone smoke scripts.
         TmpFile tmp(NOTHING, suffix ?? ".qr");
@@ -1297,8 +1297,9 @@ int j;
 int s = j++;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:6:0:1", result, sprintf("int post-increment %s", mode));
         }
     }
@@ -1313,8 +1314,9 @@ int j;
 int s = j--;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:4:0:-1", result, sprintf("int post-decrement %s", mode));
         }
     }
@@ -1498,9 +1500,10 @@ sub f() {
 f();
 ";
         string expected = "UNH:Message header\nBGM:Beginning of message";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
-            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq(expected, result, sprintf("condition-local regex loop %s", mode));
         }
     }
@@ -1520,9 +1523,10 @@ sub f() {
 f();
 ";
         string expected = "integer\nstring\nbool";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
-            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq(expected, result, sprintf("condition-local maybe-NOTHING %s", mode));
         }
     }
@@ -1549,9 +1553,10 @@ hash<auto> h = {
 };
 printf(\"%d\\n\", count(h));
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
-            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("3", result, sprintf("optional hash local missing member %s", mode));
         }
     }
@@ -1565,9 +1570,10 @@ sub preserve(int n) {
 }
 preserve(2);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
-            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("2:integer", result, sprintf("direct params survive scoped loop locals %s", mode));
         }
     }
@@ -1603,9 +1609,10 @@ class SlotScopeRegression {
 SlotScopeRegression t();
 printf(\"%s\\n%s\\n\", t.bodyUse(2, 10000, 42), t.handlerUse(2, 10000));
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             string opts = mode == "tiered" ? "--jit-ir-threshold=1 --jit-jit-threshold=2" : "";
-            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("2/10000/42\n2/10000", result,
                 sprintf("on_block_exit preserves parameter slots %s", mode));
         }
@@ -5471,8 +5478,9 @@ list<int> input = (1, 2, 3, 4, 5);
 list<auto> result = map $1 * 2, input;
 printf(\"%y\\n\", result);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_int, mode));
+            string result = trim(runScript(map_int, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("[2, 4, 6, 8, 10]", result, sprintf("map int direct-index %s", mode));
         }
 
@@ -5483,7 +5491,7 @@ list<auto> result = map $1 * 2.0, input;
 printf(\"%y\\n\", result);
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_float, mode));
+            string result = trim(runScript(map_float, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("[3.0, 5.0, 6.0]", result, sprintf("map float direct-index %s", mode));
         }
 
@@ -5494,7 +5502,7 @@ list<auto> result = map $1 * $1 + 1, input;
 printf(\"%y\\n\", result);
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_complex, mode));
+            string result = trim(runScript(map_complex, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("[2, 5, 10, 17]", result, sprintf("map complex direct-index %s", mode));
         }
 
@@ -5505,7 +5513,7 @@ list<auto> result = map $1 + $#, input;
 printf(\"%y\\n\", result);
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_with_index, mode));
+            string result = trim(runScript(map_with_index, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("[10, 21, 32]", result, sprintf("map with index direct-index %s", mode));
         }
 
@@ -5516,7 +5524,7 @@ auto result = map $1 * 2, input;
 printf(\"%s %d\\n\", result.type(), result.size());
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_empty, mode));
+            string result = trim(runScript(map_empty, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("list 0", result, sprintf("map empty direct-index %s", mode));
         }
 
@@ -5527,7 +5535,7 @@ list<auto> result = map $1 * 10, input;
 printf(\"%d\\n\", result.size());
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(map_size, mode));
+            string result = trim(runScript(map_size, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5", result, sprintf("map size direct-index %s", mode));
         }
 
@@ -5566,7 +5574,7 @@ printf(\"%y\\n\", (map float_value, input));
         string map_assigned_expected = "[]\nRUNTIME-TYPE-ERROR\n[4, 4, 4]\nRUNTIME-TYPE-ERROR\n"
             + "RUNTIME-TYPE-ERROR\n[1.5, 1.5, 1.5]";
         foreach string mode in ("ast", "ir", "tiered", "jit") {
-            string result = trim(runScript(map_assigned_state, mode));
+            string result = trim(runScript(map_assigned_state, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq(map_assigned_expected, result,
                 sprintf("typed map assigned-state guard %s", mode));
         }
@@ -5579,8 +5587,9 @@ code add = int sub(int a, int b) { return a + b; };
 int result = add(3, 4);
 printf(\"%d\\n\", result);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(closure_basic, mode));
+            string result = trim(runScript(closure_basic, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("7", result, sprintf("closure basic %s", mode));
         }
 
@@ -5592,7 +5601,7 @@ int result = mult(5);
 printf(\"%d\\n\", result);
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(closure_capture, mode));
+            string result = trim(runScript(closure_capture, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("50", result, sprintf("closure capture %s", mode));
         }
 
@@ -5604,7 +5613,7 @@ int result = ref(21);
 printf(\"%d\\n\", result);
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(callref_test, mode));
+            string result = trim(runScript(callref_test, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("42", result, sprintf("callref %s", mode));
         }
 
@@ -5619,7 +5628,7 @@ printf(\"%d\\n\", sum);
 ";
         # 1 + 2 + 3 + 4 + 5 = 15
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(closure_loop, mode));
+            string result = trim(runScript(closure_loop, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("15", result, sprintf("closure loop %s", mode));
         }
 
@@ -5634,7 +5643,7 @@ try {
 }
 ";
         foreach string mode in ("ast", "ir", "jit") {
-            string result = trim(runScript(closure_trycatch, mode));
+            string result = trim(runScript(closure_trycatch, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("DIVISION-BY-ZERO", result, sprintf("closure trycatch %s", mode));
         }
 
@@ -5656,7 +5665,7 @@ for (int i = 0; i < 5; ++i) {
 printf(\"%s\\n\", ok ? \"PASS\" : \"FAIL\");
 ";
         foreach string mode in ("ast", "ir", "tiered", "jit") {
-            string result = trim(runScript(closure_over_loop_var, mode));
+            string result = trim(runScript(closure_over_loop_var, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("PASS", result, sprintf("closure over loop variable %s", mode));
         }
     }
@@ -5914,8 +5923,9 @@ list<hash<auto>> empty = select nonpositive, $1.value > 0;
 printf(\"%d:%s:%s:%s\\n\", result.size(), result[0].name,
     result.fullType(), empty.fullType());
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "tiered", "jit") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("1:positive:list<hash<auto>>:list<hash<auto>>", result,
                 sprintf("SelectHashKeyPositiveInt %s", mode));
         }

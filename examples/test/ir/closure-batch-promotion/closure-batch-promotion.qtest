@@ -116,9 +116,12 @@ class ClosureBatchPromotionTest inherits QUnit::Test {
         any output on stderr other than the trace is added to the output, where it fails the result check.
     */
     private hash<WorkerResult> runWorker(string mode) {
-        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
-            "DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode,
-            get_script_dir() + DirSep + "closure-batch-promotion-worker.q"));
+        # the default IR threshold keeps the closures on the AST tier, and so uncompiled, until their creators have
+        # compiled them in their batches: with QORE_IR_THRESHOLD=1, which ExecModeHarness sets, a closure would be
+        # compiled on its own by its first calls, before its creator's batch
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("QORE_IR_THRESHOLD=100 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin,
+            mode, get_script_dir() + DirSep + "closure-batch-promotion-worker.q"));
         ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
         return <WorkerResult>{
             "out": r.out,

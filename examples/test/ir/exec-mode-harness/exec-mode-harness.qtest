@@ -93,13 +93,20 @@ class ExecModeHarnessTest inherits QUnit::Test {
         assertEq("3\n", r.out);
         assertEq(1, (select r.trace, $1 =~ /^\[JIT\] compiled '.*' synchronously$/).size(), r.trace.join("\n"));
         ExecModeHarness::check_native(r);
-        # tiered execution runs top-level code with the IR interpreter
+        # tiered execution runs top-level code, which runs once, with the IR interpreter
         r = runScript("tiered", toplevel);
         assertEq("3\n", r.out);
         assertEq((), r.trace);
-        ExecModeHarness::check_native(r);
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
         assertThrows("EXEC-MODE-NATIVE-ERROR", \ExecModeHarness::check_native(), (r,
             ExecModeHarness::NativeCheck::JitAndTiered));
+        # native code with tiered execution is required by default
+        assertEq(ExecModeHarness::NativeCheck::JitAndTiered, ExecModeHarness::get_default_check());
+        assertThrows("EXEC-MODE-NATIVE-ERROR", \ExecModeHarness::check_native(), (r,));
+        # unless the harness makes JIT execution its default
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        on_exit ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::JitAndTiered);
+        ExecModeHarness::check_native(r);
         foreach string mode in (("ast", "ir")) {
             r = runScript(mode, toplevel);
             assertEq("3\n", r.out, mode);
@@ -113,6 +120,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
             assertEq("6\n", ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode,
                 function), ExecModeHarness::NativeCheck::JitAndTiered), mode);
         }
+        # f() runs on the AST tier in its first call and on the IR tier in its second, which compiles it
         hash<ExecModeHarness::ModeRunResult> r = runScript("tiered", function);
         assertEq(1, (select r.trace, $1 =~ /^\[BG-JIT\] compiled 'f@.*' and promoted to JIT tier$/).size(),
             r.trace.join("\n"));

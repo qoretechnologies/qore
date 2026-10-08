@@ -36,6 +36,9 @@ class ClosureBlockScopedCaptureTest inherits QUnit::Test {
     const Modes = ("ast", "ir", "jit", "tiered");
 
     constructor() : QUnit::Test("ClosureBlockScopedCaptureTest", "1.0", \ARGV) {
+        # the scripts have only top-level code, which tiered execution does not compile, so native code is only required
+        # with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         addTestCase("uninitialized block-scoped local read by closure", \testUninitializedRead());
         addTestCase("uninitialized block-scoped local written by closure", \testUninitializedWrite());
         addTestCase("uninitialized block-scoped local in background closure", \testBackgroundWrite());

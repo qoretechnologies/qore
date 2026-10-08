@@ -135,7 +135,8 @@ class BlockScopeUnwindTest inherits QUnit::Test {
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b "
             "--enable-debug --exec-mode=%s %s", shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode),
             shellQuote(top_level_worker)));
-        ExecModeHarness::check_native(r);
+        # the worker has only top-level code, which tiered execution does not compile
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
         string output = r.stdout;
         assertEq("top-level=RELEASED\n", output,
             sprintf("the top-level on_error saw the nested block's AutoLock released (%s)", mode));

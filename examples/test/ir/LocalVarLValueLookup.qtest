@@ -127,7 +127,9 @@ printf("%y\n", drop("present", "x", "i", "a"));
         TmpDir tmp("qore-lvalue-lookup-");
         string src = writeFile(tmp.path + DirSep + "closure.qr", ClosureSrc);
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            # the closure is called once, so tiered execution does not compile it
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src),
+                ExecModeHarness::NativeCheck::Jit);
             assertEq(0, rv.rc, mode + ": " + rv.err);
             assertEq(ClosureOut, rv.out, mode);
         }
@@ -222,10 +224,10 @@ printf("%y\n", drop("present", "x", "i", "a"));
     /** a command that runs qore with an execution mode runs through ExecModeHarness, which checks its native
         compilation
     */
-    private hash<auto> run(string cmd) {
+    private hash<auto> run(string cmd, *ExecModeHarness::NativeCheck check) {
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
         if (r.mode) {
-            ExecModeHarness::check_native(r);
+            ExecModeHarness::check_native(r, check);
         }
         return {"rc": r.rc, "out": r.stdout, "err": r.stderr};
     }

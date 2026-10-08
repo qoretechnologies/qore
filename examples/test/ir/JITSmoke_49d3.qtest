@@ -81,7 +81,7 @@ class JITSmokeTest inherits QUnit::Test {
     }
 
     private string runScript(string code, *string exec_mode, *string suffix,
-            ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
+            *ExecModeHarness::NativeCheck check) {
         string mode = exec_mode ?? "jit";
         TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
@@ -852,8 +852,9 @@ int j;
 int s = j++;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:6:0:1", result, sprintf("int post-increment %s", mode));
         }
     }
@@ -868,8 +869,9 @@ int j;
 int s = j--;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:4:0:-1", result, sprintf("int post-decrement %s", mode));
         }
     }

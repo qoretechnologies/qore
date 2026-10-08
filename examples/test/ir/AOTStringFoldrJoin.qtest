@@ -5,6 +5,10 @@
 %no-child-restrictions
 %requires ../ExecModeHarness.qm
 
+# the script runs its code too few times for tiered execution to compile it, so native code is only required with JIT
+# execution
+ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE

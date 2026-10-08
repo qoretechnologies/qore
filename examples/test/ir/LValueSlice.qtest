@@ -20,6 +20,9 @@
 
 class LValueSliceTest inherits QUnit::Test {
     constructor() : QUnit::Test("LValueSliceTest", "1.0", \ARGV) {
+        # the scripts have only top-level code, which tiered execution does not compile, so native code is only required
+        # with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         addTestCase("hash multi-key remove", \testHashMultiKeyRemove());
         addTestCase("hash multi-key delete", \testHashMultiKeyDelete());
         addTestCase("hash multi-key remove return value", \testHashMultiKeyRemoveReturn());

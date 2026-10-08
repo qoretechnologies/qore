@@ -46,6 +46,9 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("IRConstantContainerMaterializationTest", "1.0", \ARGV) {
+        # the scripts run their code too few times for tiered execution to compile it, so native code is only
+        # required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
