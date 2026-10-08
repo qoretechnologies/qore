@@ -33,6 +33,7 @@
 #define _QORE_STREAMREADER_H
 
 #include <cstdint>
+#include <deque>
 
 #include "qore/qore_bitopts.h"
 #include "qore/InputStream.h"
@@ -159,6 +160,14 @@ public:
         const size_t eolsize = eolstr->size();
         // the width of the smallest character; the end-of-line marker is a whole number of characters
         const size_t width = enc->getMinCharWidth();
+        // in a variable-width encoding whose characters can contain bytes that are other characters (ex: Big5, where
+        // the second byte of U+5F0B is 0x7c, "|"), the characters of the line are followed to find their boundaries
+        const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+        const mbcs_charlen_t charlen = ep->needs_boundary_check ? ep->fcharlen : nullptr;
+        // the byte offset of the start of the next character, if charlen is set
+        size_t char_start = 0;
+        // the offsets of the character boundaries in the last eolsize bytes, if charlen is set
+        std::deque<size_t> starts{0};
 
         // adds a byte to the line; returns true if the line is complete
         auto add_byte = [&](char c) -> bool {
@@ -167,6 +176,24 @@ public:
             // byte (ex: UTF-32), the bytes of the marker can also be the end of one character and the start of the
             // next one; memcmp() is used, as the encoding can have null bytes in characters (ex: UTF-16*)
             size_t size = str->size();
+            if (charlen) {
+                while (char_start < size) {
+                    qore_offset_t l = charlen(str->c_str() + char_start, size - char_start);
+                    if (l < 0) {
+                        // an incomplete character
+                        break;
+                    }
+                    // an invalid byte is skipped as a character of its own
+                    char_start += l ? static_cast<size_t>(l) : 1;
+                    starts.push_back(char_start);
+                }
+                while (!starts.empty() && starts.front() + eolsize < size) {
+                    starts.pop_front();
+                }
+                return eolsize && size >= eolsize && char_start == size && !starts.empty()
+                    && starts.front() == size - eolsize
+                    && !memcmp(str->c_str() + size - eolsize, eolstr->c_str(), eolsize);
+            }
             return eolsize && size >= eolsize && !(size % width)
                 && !memcmp(str->c_str() + size - eolsize, eolstr->c_str(), eolsize);
         };

@@ -4264,8 +4264,10 @@ while (*binary chunk = input.read(65536)) {
       \c "GB18030", \c "GBK", \c "WINDOWS-936", \c "BIG5", \c "EUC-KR" and \c "CP949" being handled one byte per
       character: lengths, offsets, @ref Qore::zzz8stringzzz9::substr() "<string>::substr()", character access,
       @ref Qore::zzz8stringzzz9::getUnicode() "<string>::getUnicode()", searches and splitting counted and cut bytes,
-      and searches and splits could match the second byte of a double-byte character (ex: \c "|" in the Shift_JIS
-      character \c "ポ", 0x83 0x7c).  Such strings now have the same characters as the same text in UTF-8.
+      and searches, splits, and lines read with an end-of-line marker by
+      @ref Qore::StreamReader::readLine() "StreamReader::readLine()" and
+      @ref Qore::InputStreamLineIterator "InputStreamLineIterator" could match the second byte of a double-byte
+      character (ex: \c "|" in the Shift_JIS character \c "ポ", 0x83 0x7c).  Such strings now have the same characters as the same text in UTF-8.
       Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932", \c "WINDOWS-31J") are now handled as
       encodings that are not compatible with ASCII on every platform, since the bytes 0x5c and 0x7e are the yen sign
       and overline in JIS X 0201 with some iconv implementations, and the second bytes of their double-byte

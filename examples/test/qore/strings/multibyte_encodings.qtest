@@ -45,6 +45,7 @@ class MultiByteEncodingTest inherits QUnit::Test {
         addTestCase("invalid strings", \testInvalid());
         addTestCase("code points in threads", \testThreads());
         addTestCase("HTML encoding", \testHtmlEncoding());
+        addTestCase("end-of-line markers", \testEndOfLine());
         set_return_value(main());
     }
 
@@ -195,6 +196,36 @@ class MultiByteEncodingTest inherits QUnit::Test {
             }
         }
         assertTrue(encoded > 0);
+    }
+
+    testEndOfLine() {
+        # characters whose second byte is "|" (0x7c)
+        foreach hash<auto> i in ({"enc": "BIG5", "char": <a47c>}, {"enc": "SHIFT_JIS", "char": <837c>},
+                {"enc": "GBK", "char": <817c>}, {"enc": "GB18030", "char": <817c>}) {
+            string c;
+            try {
+                c = convert_encoding(binary_to_string(i.char, i.enc), "UTF-8");
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            list<string> lines = (c + "x", "y" + c, c);
+            binary data = binary(convert_encoding(lines.join("|") + "|", i.enc));
+            StreamReader sr(new BinaryInputStream(data), i.enc);
+            list<string> got = ();
+            *string l;
+            while (exists (l = sr.readLine("|"))) {
+                got += convert_encoding(l, "UTF-8");
+            }
+            assertEq(lines, got, i.enc + " StreamReader::readLine()");
+            InputStreamLineIterator it(new BinaryInputStream(data), i.enc, "|");
+            assertEq(lines, (map convert_encoding($1, "UTF-8"), it), i.enc + " InputStreamLineIterator");
+            sr = new StreamReader(new BinaryInputStream(data), i.enc);
+            got = ();
+            while (exists (l = sr.readLine("|", False))) {
+                got += convert_encoding(l, "UTF-8");
+            }
+            assertEq((map $1 + "|", lines), got, i.enc + " StreamReader::readLine() untrimmed");
+        }
     }
 
     testInvalid() {
