@@ -5,8 +5,9 @@
 
 # The default character encoding must be compatible with ASCII: program text, hash keys, and the output of every
 # function that formats text are ASCII in it.  An encoding that is not (UTF-16, UTF-32, EBCDIC, Shift_JIS) is
-# refused at startup: given with --charset or QORE_CHARSET, Qore exits with an error; given by the locale (LANG),
-# which is not specific to Qore, Qore prints an error and uses UTF-8, as for an encoding that iconv does not know.
+# refused at startup: given with --charset or QORE_CHARSET, Qore exits with an error (status 1); given by the locale
+# (LANG), which is not specific to Qore, Qore prints an error and uses UTF-8, as for an encoding that iconv does not
+# know.  Each of the three sources is tested.
 
 %modern
 %no-child-restrictions
@@ -63,7 +64,7 @@ class DefaultCharsetTest inherits QUnit::Test {
     }
 
     testEnv() {
-        foreach string enc in ("UTF-16", "UTF-32BE", "UCS-2LE") {
+        foreach string enc in ("UTF-16", "UTF-32BE", "UCS-2LE", "SHIFT_JIS") {
             hash<RunResult> r = run("QORE_CHARSET=" + enc);
             assertEq(1, r.rc, enc + ": " + r.out);
             assertRegex("not compatible with ASCII", r.out, enc);
@@ -79,13 +80,25 @@ class DefaultCharsetTest inherits QUnit::Test {
     }
 
     testLang() {
-        hash<RunResult> r = run("LANG=en_US.UTF-32");
-        assertEq(0, r.rc, r.out);
-        assertRegex("not compatible with ASCII", r.out);
-        assertRegex("LANG", r.out);
-        assertRegex("UTF-8$", r.out);
-        r = run("LANG=de_DE.ISO-8859-1");
+        # an encoding from the locale that is not compatible with ASCII gives an error, and UTF-8 is used
+        foreach string lang in ("en_US.UTF-32", "en_US.UTF-16", "ja_JP.SJIS", "ja_JP.SJIS@modifier") {
+            hash<RunResult> r = run("LANG=" + lang);
+            assertEq(0, r.rc, lang + ": " + r.out);
+            assertRegex("^qore: error: character encoding '[^']+' from LANG is not compatible with ASCII", r.out,
+                lang);
+            # the modifier is not part of the encoding name
+            assertRegex("'(UTF-32|UTF-16|SJIS)'", r.out, lang);
+            assertRegex("\nUTF-8$", r.out, lang);
+        }
+        hash<RunResult> r = run("LANG=de_DE.ISO-8859-1");
         assertEq(0, r.rc, r.out);
         assertEq("ISO-8859-1", r.out);
+        r = run("LANG=de_DE.ISO-8859-15@euro");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-15", r.out);
+        # QORE_CHARSET takes precedence over LANG
+        r = run("LANG=ja_JP.SJIS QORE_CHARSET=ISO-8859-2");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-2", r.out);
     }
 }
