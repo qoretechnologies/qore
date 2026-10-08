@@ -12213,6 +12213,7 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx
 
 extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx,
         int32_t idx, uint64_t value, ExceptionSink* xsink) {
+    static const bool fresh_store = !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE");
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     LocalVar* var = ctx->locals[idx];
     if (!var || *xsink) {
@@ -12231,20 +12232,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
         if (*xsink) {
             return toBits(QoreValue());
         }
-        LValueHelper helper(xsink);
-        if (var->getLValue(helper, false, true)) {
-            return toBits(QoreValue());
-        }
-        // A plain empty local has no replaced value or recursive root whose
-        // cleanup could reenter Qore and change the stored value. Do not extend
-        // this shortcut to reassignment, references or captured/shared slots.
-        fresh = helper.isNothing();
-        QoreValue stored = val.hasNode() ? val.refSelf() : val;
-        if (helper.assign(stored, "<lvalue>", true)) {
-            return toBits(QoreValue());
-        }
-        if (fresh) {
-            result = helper.getReferencedValue();
+        if (fresh_store && var->tryAssignInitialClassValue(val, result, xsink)) {
+            fresh = true;
+        } else {
+            LValueHelper helper(xsink);
+            if (var->getLValue(helper, false, true)) {
+                return toBits(QoreValue());
+            }
+            // A plain empty local has no replaced value or recursive root whose
+            // cleanup could reenter Qore and change the stored value. Do not extend
+            // this shortcut to reassignment, references or captured/shared slots.
+            fresh = helper.isNothing();
+            QoreValue stored = val.hasNode() ? val.refSelf() : val;
+            if (helper.assign(stored, "<lvalue>", true)) {
+                return toBits(QoreValue());
+            }
+            if (fresh) {
+                result = helper.getReferencedValue();
+            }
         }
     }
     // Finish lvalue and weak-input cleanup before reporting success. Keep the

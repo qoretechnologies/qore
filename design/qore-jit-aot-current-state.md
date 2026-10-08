@@ -99,6 +99,23 @@ The regression also checks this control, captured fallback and split codegen.
 The additive versioned symbols require a compatible runtime for newly compiled
 artifacts; older artifacts keep their existing helpers.
 
+Inside the versioned helper, a fresh plain slot can omit generic `LValueHelper`
+construction/destruction. `LocalVar::tryAssignInitialClassValue()` checks the
+current-thread slot and excludes captured, self, substituted, finalized, static
+and already-assigned storage. It calls the same `acceptAssignment()` type/access
+validator and `assignAssume()` real-reference bookkeeping as the ordinary path.
+The stored value remains runtime-backed, so scope/exception cleanup and local
+ordering do not change. `QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1` restores the
+ordinary lvalue path at runtime (presence sampled once).
+
+An experimental native-only class-local lowering was rejected before timing:
+separate native/runtime cleanup phases changed destructor order on exception
+exits, including mixed typed/`auto` locals. `AOTClassBodyLocals.qtest` retains the
+AST/AOT lifetime regression coverage. The same fixture also exposes an existing
+JIT mixed-local unwind-order mismatch in the saved baseline; this AOT store
+specialization does not fix that independent issue. Extending native-only local
+admission requires a unified declaration-order cleanup proof first.
+
 ### AOT method context elision
 
 The resolved dot-eval fast-method path (also used by polymorphic dispatch-cache

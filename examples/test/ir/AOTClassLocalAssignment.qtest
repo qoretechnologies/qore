@@ -74,6 +74,8 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
                     "runtime context control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1 "),
+                    "runtime fresh-store control " + prefix + level);
             }
         }
     }

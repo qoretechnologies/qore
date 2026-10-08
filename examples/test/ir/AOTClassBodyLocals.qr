@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+thread_local list<string> events;
+thread_local int live = 0;
+
+sub mark(string event) { events += event; }
+
+class NativeLocalValue {
+    private { string name; bool fail; }
+    constructor(string name, bool fail = False) {
+        self.name = name;
+        self.fail = fail;
+        ++live;
+        mark(name + "+");
+    }
+    destructor() {
+        --live;
+        mark(name + "-");
+        if (fail) { throw "LOCAL-DESTRUCTOR", name; }
+    }
+    string getName() { return name; }
+}
+
+sub localOrder(bool fail) {
+    NativeLocalValue first = new NativeLocalValue("first");
+    NativeLocalValue second = new NativeLocalValue("second");
+    mark("body");
+    if (fail) { throw "LOCAL-BODY", "unwind"; }
+}
+
+sub mixedOrder(bool fail) {
+    NativeLocalValue first = new NativeLocalValue("first");
+    auto middle = new NativeLocalValue("middle");
+    NativeLocalValue last = new NativeLocalValue("last");
+    mark("body");
+    if (fail) { throw "LOCAL-BODY", "unwind"; }
+}
+
+sub scopedOrder(bool early, bool fail) {
+    NativeLocalValue outer = new NativeLocalValue("outer");
+    {
+        NativeLocalValue inner = new NativeLocalValue("inner");
+        mark("scope");
+        if (early) { return; }
+        if (fail) { throw "LOCAL-BODY", "unwind scope"; }
+    }
+    mark("after");
+}
+
+sub loopOrder() {
+    for (int i = 0; i < 4; ++i) {
+        NativeLocalValue receiver = new NativeLocalValue("item" + i);
+        if (i == 1) { mark("continue"); continue; }
+        if (i == 2) { mark("break"); break; }
+        mark(receiver.getName());
+    }
+    mark("after");
+}
+
+sub aliasOrder() {
+    NativeLocalValue first = new NativeLocalValue("first");
+    {
+        NativeLocalValue receiver = first;
+        first = new NativeLocalValue("replacement");
+        mark(receiver.getName());
+    }
+    mark("after");
+}
+
+sub destructorFailure() {
+    NativeLocalValue first = new NativeLocalValue("first");
+    {
+        NativeLocalValue failing = new NativeLocalValue("failing", True);
+        mark("body");
+    }
+    mark("unexpected-after");
+}
+
+sub reassignmentFailure() {
+    NativeLocalValue receiver = new NativeLocalValue("failing", True);
+    mark("before");
+    receiver = new NativeLocalValue("replacement");
+    mark("unexpected-after");
+}
+
+NativeLocalValue sub escapeReturn() {
+    NativeLocalValue receiver = new NativeLocalValue("escaped");
+    mark("return");
+    return receiver;
+}
+
+sub returnedLifetime() {
+    {
+        NativeLocalValue value = escapeReturn();
+        mark(value.getName());
+    }
+    mark("after");
+}
+
+sub handlerOrder() {
+    NativeLocalValue outer = new NativeLocalValue("outer");
+    {
+        NativeLocalValue inner = new NativeLocalValue("inner");
+        on_exit mark("handler");
+        mark("body");
+    }
+    mark("after");
+}
+
+sub run(string name, code<nothing()> action) {
+    events = ();
+    try { action(); }
+    catch (hash<ExceptionInfo> ex) { mark("caught=" + ex.err); }
+    printf("%s: %s live=%d\n", name, events.join(" "), live);
+    if (live) { throw "LOCAL-LIFETIME", "object leaked"; }
+}
+
+run("order", sub () { localOrder(False); });
+run("unwind", sub () { localOrder(True); });
+run("mixed", sub () { mixedOrder(False); });
+run("mixed-unwind", sub () { mixedOrder(True); });
+run("scope", sub () { scopedOrder(False, False); });
+run("return", sub () { scopedOrder(True, False); });
+run("scope-unwind", sub () { scopedOrder(False, True); });
+run("loop", \loopOrder());
+run("alias", \aliasOrder());
+run("destructor", \destructorFailure());
+run("reassign", \reassignmentFailure());
+run("escape", \returnedLifetime());
+run("handler", \handlerOrder());

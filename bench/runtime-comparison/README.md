@@ -93,6 +93,15 @@ snapshot; nonfresh/captured slots reload after cleanup. Type/access checks and
 weak normalization remain. Compile separate before/after artifacts: the new
 helper symbols are absent from older runtimes.
 
+`QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1` at runtime disables the fresh-slot
+specialization inside that versioned helper. The enabled path skips generic
+lvalue setup only for an unassigned, ordinary required-class local, keeping
+normal assignment type/access checks and real-reference bookkeeping. Captured,
+self, substituted, finalized, static and already-assigned slots fall back.
+Storage and destructor cleanup remain runtime-backed. This runtime-only change
+can use `--reuse-aot-for-baseline` when both runtimes provide the versioned helper.
+The presence flag is sampled once, on first helper use.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
 at compilation and its polymorphic-cache native path at runtime. Eligible
 `int(int)` overrides bypass parameter TLS binding but retain receiver, Program,

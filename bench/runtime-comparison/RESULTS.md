@@ -3825,3 +3825,143 @@ is native-only receiver-local storage with an explicit destructor/exception
 ordering proof, or a fresh plain-slot assignment specialization if that proof
 cannot be established. Prepared native method frames remain another target.
 The performance goal is active; this is an incremental workload improvement.
+
+## Fresh runtime-backed class-local stores (2026-10-08)
+
+Baseline: `e494737b8f7b2bb53875b984627962834ed5b003`. The retained
+specialization reduces the polymorphic AOT workload by **10.67%** in the longer
+repeat, **102.88905 → 91.90602 ns/element**. Fresh Java is **2.53880**, leaving
+a **36.20×** whole-workload gap. Java parity is not achieved.
+
+### Change and rejected alternative
+
+`LocalVar::tryAssignInitialClassValue()` bypasses generic lvalue setup only
+for a compiler-admitted required-class initializer whose current-thread slot
+is unassigned, ordinary and noncaptured. Self, substituted, finalized, static
+and assigned slots retain the ordinary path. The same `acceptAssignment()`
+type/access validator and `assignAssume()` real-reference accounting remain.
+Weak normalization and owned-result cleanup are unchanged. Locals stay on the
+runtime stack, preserving scope/exception destructor ordering. No compiler,
+serialized-format or public ABI change is made.
+
+A preceding native-only class-local prototype was **rejected before timing**:
+it changed destructor order on three exception paths. Its exact rejected diff
+and failures are retained in the evidence, not in the implementation. The new
+13-scenario AST/AOT fixture covers normal/mixed/scope/loop/return lifetimes,
+aliases, throwing destructors/reassignment and on-exit handlers. It also exposes
+a **pre-existing JIT mismatch** in the saved baseline: mixed unwind destroys
+`middle,last,first` rather than AST/AOT's `last,middle,first`. This independent
+issue is not fixed here; the new wrapper intentionally claims AST/AOT coverage,
+not all-mode lifetime equivalence.
+
+### Measurements
+
+Runtime-only comparisons reuse an identical AOT executable against both
+libraries. All modes pass 270 independent reference checks before timing.
+Jobs are sequential and shuffled, with no build, test, profile, disassembly or
+evidence validation overlapping timing. Values are medians of process means,
+ns/element including selection, assignment, computation, loop and checksum—not
+isolated call instructions.
+
+Primary `run-yz192xir`: 1024 elements, five forks, three warmups, five 500 ms
+windows. 75 jobs / 375 samples include fresh Java and before/after IR/AOT.
+
+|!Mode and kernel|!Before|!After|!Change|!Before / after fork-mean ranges
+|AOT polymorphic_call|102.88905|91.90602|-10.67%|101.56864–104.60869 / 90.97598–92.68506
+|AOT indirect_wide|8.21347|8.17261|-0.50%|8.00562–8.27631 / 8.14883–8.26050
+|AOT direct_call|2.25633|2.27053|0.63%|2.23493–2.26227 / 2.25157–2.29303
+|IR polymorphic_call|409.44292|409.94753|0.12%|403.29697–411.37786 / 405.20910–418.25825
+|IR indirect_wide|340.36033|337.92075|-0.72%|337.70893–345.94340 / 332.06291–349.47250
+|IR direct_call|357.27242|359.51034|0.63%|350.08008–362.39795 / 354.35716–374.92457
+
+Only the target ranges separate. Java wide/direct medians are 1.67990/0.88916,
+giving AOT ratios 4.86×/2.55×. Direct functions are inlineable, so that ratio is
+not retained-call overhead. The polymorphic base body can be inlined by Qore,
+whereas Java prevents inlining all three method bodies. Computations are
+equivalent, runtime contracts and generated call patterns are not identical.
+
+Pilot `run-t3awldof`: 4096 elements, five forks, three warmups, five 300 ms
+windows; 30 jobs / 150 samples.
+
+|!Kernel|!Before|!After|!Change|!Before / after fork-mean ranges
+|polymorphic_call|99.68054|89.57882|-10.13%|99.32854–100.73662 / 88.74092–89.97119
+|indirect_wide|7.16348|7.24238|1.10%|6.98678–7.23864 / 7.17427–7.28059
+|direct_call|1.24867|1.27015|1.72%|1.23844–1.26495 / 1.26741–1.27976
+
+The pilot direct-control ranges separate unfavorably. The longer primary and
+disabled direct controls instead overlap (+0.63%/+0.07%); this does not prove
+equivalence or exclude layout effects. All unfavorable samples remain.
+
+Disabled control `run-ppjfq5v9`: `QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1`
+at runtime, 4096 elements, seven forks, three warmups, five 500 ms windows;
+42 jobs / 210 samples. The flag is sampled once, on first helper use.
+
+|!Kernel|!Before|!After|!Change|!Before / after fork-mean ranges
+|polymorphic_call|102.63029|100.53304|-2.04%|101.00801–103.68853 / 99.89636–102.46482
+|indirect_wide|7.22083|7.25461|0.47%|7.12882–7.29012 / 7.02883–7.33159
+|direct_call|1.31619|1.31709|0.07%|1.30748–1.32268 / 1.31329–1.31949
+
+All disabled ranges overlap. The enabled target gain is larger and repeats
+with separated ranges, supporting the specialization; do not attribute the
+entire measured 10.67% to it or subtract medians to estimate isolated helper
+cost. Fork ranges are descriptive, not confidence intervals. Shared-host
+scheduling, frequency, thermal state and startup filesystem caches are uncontrolled.
+
+### Validation and next work
+
+Release/debug each pass 59 selected files: 41 QUnit wrappers, 215 cases /
+16983 assertions, plus 18 standalones. Focused class-assignment and new lifetime
+wrappers contribute 180 and 35 assertions per build, including O0/O3, native EH,
+split codegen and the disabled runtime path. Existing coverage checks access,
+weak/deleted values, alias/capture ownership, cancellation, stack limits,
+debugger attachment, Program guards and concurrent frame readers.
+
+Standalone runtime syntax passes with 79 existing warnings; 11 Python harness
+tests pass. Old AOT v2/v3 outputs retain byte-identical 225/270 records.
+Disassembly confirms the fresh branch bypasses generic lvalue setup while
+calling the checked type validator and normal slot assignment.
+
+Runtime diff SHA-256:
+`d731abd0a919a7e71e3dc4fce71969789fabd797bf0f25a65a0438f82525dbb7`.
+Release/debug library SHA-256:
+`b1fa14387a9cf7e645cbd665d239210e8afb7c2ac1f985f8def875a280edb36b` /
+`6ef42769f7ea188378582f143a0dd303cfd3791f4fe9aa5c2f4e1cc7770bf6a8`.
+Release text grows 13882644 → 13883608 bytes (+964).
+
+No full suite, sanitizer/race detector, Linux, allocation-failure injection or
+complete split-runtime build is claimed. Next: profile the remaining native
+method frame/context work and investigate deferring pure-method thread-private
+setup while retaining frame publication, reader synchronization and stack-error
+materialization. Native-only class locals remain excluded pending a unified
+declaration-order cleanup design. The performance goal remains active.
+
+### Refreshed call-category comparison
+
+At the user's request, `run-dbk_klgd` refreshes the other existing call kernels
+against Java: 1024 elements, five forks, three warmups and five 500 ms windows,
+80 jobs / 400 samples, 270 reference checks per mode. This is a current AOT/Java
+comparison, not an additional before/after optimization claim.
+
+|!Kernel|!Qore AOT ns/element|!Java JIT ns/element|!AOT/Java
+|method_call|2.50782|0.88512|2.83×
+|indirect_call|8.19611|1.65925|4.94×
+|indirect_float|10.07082|1.63656|6.15×
+|indirect_tagged_float|10.09860|1.63383|6.18×
+|indirect_branch_float|10.12481|1.64859|6.14×
+|indirect_affine|8.15667|1.62656|5.01×
+|indirect_affine_wide|8.05807|1.62793|4.95×
+|indirect_branch_int|8.16437|1.66063|4.92×
+
+Together with the primary run, the current snapshot puts integer callbacks at
+4.86–5.01× Java, float callbacks at 6.14–6.18×, inlineable direct functions/methods
+at 2.55×/2.83×, and the polymorphic workload at 36.20×. The direct/method ratios
+do not measure retained calls. General callback fallback was about 195.59
+ns/element in an earlier forced-fallback run, without a fresh Java comparison;
+it is not represented by these scalar fast-path numbers. General captures,
+constructors, builtins, complex arguments and cross-Program AOT calls have no
+current matched Java comparison in this snapshot.
+
+[Complete evidence](results-fresh-class-store-macos-arm64.json) retains all
+227 jobs / 1135 samples across the pilot, primary, disabled control and fresh
+call census, plus exact diffs/hashes, rejected-prototype evidence and all 62
+audit checks (20 Pass/42 N/A). No timing overlapped validation or other experiments.

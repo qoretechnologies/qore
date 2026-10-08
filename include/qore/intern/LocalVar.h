@@ -897,6 +897,48 @@ public:
             : LocalVarLValueLookup::Found;
     }
 
+    //! Attempts an admitted required-class initializer without generic lvalue setup.
+    /** The compiler must have proved a normal initial required-class assignment.
+        Captured, self, substituted, finalized, static and already-assigned slots
+        are not handled. The empty plain slot has no replaced value or recursive
+        root requiring lvalue cleanup. Type/access validation and real-reference
+        bookkeeping are identical to the normal assignment path.
+        @param value borrowed, already weak-normalized input
+        @param result initially empty holder receiving the owned stored value
+        @param xsink exception sink
+        @return true if handled (including a type error), false for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder& result, ExceptionSink* xsink) const {
+        assert(!*xsink && !result);
+        if (closure_use || is_self || name == "self"
+                || type_info_needs_substitution || ref_type_info_needs_substitution) {
+            return false;
+        }
+        LocalVarValue* slot = get_var();
+        if (!slot || slot->finalized || slot->val.assigned || slot->val.static_assignment) {
+            return false;
+        }
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        assert(QoreTypeInfo::getUniqueReturnClass(ti) && !QoreTypeInfo::isComplex(ti)
+            && !QoreTypeInfo::isReference(ti));
+        ValueHolder stored(value.refSelf(), xsink);
+        QoreTypeInfo::acceptAssignment(ti, "<lvalue>", *stored, xsink);
+        if (*xsink) {
+            return true;
+        }
+        // assignAssume consumes the value and retains the normal real-reference
+        // accounting. There can be no old node in this unassigned class slot.
+        AbstractQoreNode* removed = slot->val.assignAssume(*stored);
+        assert(!removed);
+        if (removed) {
+            removed->deref(xsink);
+        }
+        if (!*xsink) {
+            result = slot->val.getReferencedValue();
+        }
+        return true;
+    }
+
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
         if (read_only) {
             lvrh.getExceptionSink()->raiseException("RUNTIME-READONLY-VIOLATION",

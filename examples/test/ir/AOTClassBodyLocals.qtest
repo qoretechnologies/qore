@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClassBodyLocalsTest
+
+class ClassBodyLocalsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT class-local destructor ordering", "1.0", \ARGV) {
+        addTestCase("normal, exceptional and mixed local lifetimes", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTClassBodyLocals.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertTrue(expected.startsWith("order: first+ second+ body second- first- live=0\n"));
+        assertTrue(expected.find("mixed-unwind: first+ middle+ last+ body last- middle- first- caught=LOCAL-BODY live=0") >= 0);
+        assertTrue(expected.endsWith("handler: outer+ inner+ body handler inner- after outer- live=0\n"));
+        assertFalse(expected.find("unexpected-") >= 0);
+        TmpDir dir("qore-aot-class-lifetimes-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1 "),
+                    "ordinary store " + prefix + level);
+            }
+        }
+    }
+}
