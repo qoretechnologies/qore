@@ -45,6 +45,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <climits>
 #include <cstring>
 #include <string>
 #include <sys/file.h>
@@ -73,10 +74,13 @@ public:
                 ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0) {
     }
 
-    //! Returns true and sets the next bounded poll timeout, or false if the deadline has expired.
+    //! Returns true and sets the remaining poll timeout (-1 for none), or false if the deadline has expired.
+    /** The poll is not bounded for cancellation: a cancellation request ends it at once (see
+        qore_cancellable_poll()).
+    */
     DLLLOCAL bool getPollTimeout(int& poll_timeout_ms) {
         if (timeout_ms < 0) {
-            poll_timeout_ms = QORE_IO_POLL_INTERVAL_MS;
+            poll_timeout_ms = -1;
             return true;
         }
 
@@ -96,7 +100,7 @@ public:
         }
 
         int64 remaining_ms = (remaining_us + 999) / 1000;
-        poll_timeout_ms = static_cast<int>(std::min<int64>(remaining_ms, QORE_IO_POLL_INTERVAL_MS));
+        poll_timeout_ms = static_cast<int>(std::min<int64>(remaining_ms, INT_MAX));
         return true;
     }
 
@@ -350,26 +354,12 @@ struct qore_qf_private {
 
 #if defined HAVE_POLL
     DLLLOCAL int poll_intern(int timeout_ms, bool read, const char* mname, ExceptionSink* xsink) const {
-        int rc;
-        int poll_timeout_ms = timeout_ms;
-        int64 deadline_us = timeout_ms >= 0
-            ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
+        // the wait ends at once when the thread is cancelled or its Program is interrupted; EINTR is handled by
+        // qore_cancellable_poll()
         pollfd fds = {fd, static_cast<short>(read ? POLLIN : POLLOUT), 0};
-        while (true) {
-            rc = poll(&fds, 1, poll_timeout_ms);
-            if (rc != -1 || errno != EINTR) {
-                break;
-            }
-            if (qore_check_cancel(xsink, read ? "file read" : "file write")) {
-                return -1;
-            }
-            if (timeout_ms >= 0) {
-                int64 remaining_us = deadline_us - q_get_monotonic_us();
-                if (remaining_us <= 0) {
-                    return 0;
-                }
-                poll_timeout_ms = static_cast<int>((remaining_us + 999) / 1000);
-            }
+        int rc = qore_cancellable_poll(&fds, 1, timeout_ms, xsink, read ? "file read" : "file write");
+        if (rc == QORE_POLL_CANCELLED) {
+            return -1;
         }
         if (rc < 0 && !*xsink)
             xsink->raiseException("FILE-SELECT-ERROR", "poll(2) returned an error in call to File::%s()", mname);
@@ -407,7 +397,9 @@ struct qore_qf_private {
             tv.tv_sec  = select_timeout_ms / 1000;
             tv.tv_usec = (select_timeout_ms % 1000) * 1000;
 
-            rc = read ? ::select(fd + 1, &sfs, 0, 0, &tv) : ::select(fd + 1, 0, &sfs, 0, &tv);
+            // a negative timeout means no timeout
+            struct timeval* ptv = select_timeout_ms < 0 ? nullptr : &tv;
+            rc = read ? ::select(fd + 1, &sfs, 0, 0, ptv) : ::select(fd + 1, 0, &sfs, 0, ptv);
             if (rc >= 0 || errno != EINTR) {
                 break;
             }

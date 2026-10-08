@@ -443,6 +443,34 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+#ifdef HAVE_POLL
+struct pollfd;
+
+//! returned by qore_cancellable_poll() when an exception has been raised (normally a cancellation)
+#define QORE_POLL_CANCELLED -2
+
+//! Waits like poll(2) for events on the given descriptors or for a cancellation request for the current thread
+/** A cancellation request (@ref qore_cancel_thread()) or program interrupt
+    (@ref QoreSandboxManager::requestInterrupt()) signals the thread's wakeup channel, which is polled with the
+    caller's descriptors, so the wait ends as soon as cancellation is requested, without a periodic timeout.
+
+    @param fds the descriptors to poll; their \c revents members are set when events are returned
+    @param nfds the number of descriptors in \a fds
+    @param timeout_ms the timeout in milliseconds; negative for no timeout, 0 to check without waiting
+    @param xsink for the cancellation exception
+    @param operation the operation named in the cancellation exception
+
+    @return > 0 the number of descriptors with events, 0 on timeout, -1 if poll() failed (\c errno is set; \c EINTR
+    is handled internally), or @ref QORE_POLL_CANCELLED if the thread was cancelled or interrupted, or its wakeup
+    channel could not be created, in which case an exception has been raised on \a xsink
+
+    While cancellation is deferred (@ref qore_push_cancel_deferral()), nothing can be delivered, so the wait is a
+    plain poll().
+*/
+DLLLOCAL int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation);
+#endif
+
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
 /** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
     (@ref qore_cancel_thread()) or program interrupt (@ref QoreSandboxManager::requestInterrupt()) wakes the wait at

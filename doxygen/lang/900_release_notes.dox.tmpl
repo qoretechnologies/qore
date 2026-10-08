@@ -35,6 +35,14 @@
     @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the
     condition was signalled for another reason, possibly forever; the request now always ends the wait.
 
+    Blocked waits now end as soon as the thread is cancelled with @ref Qore::cancel_thread() "cancel_thread()" or
+    its @ref Qore::Program "Program" is interrupted with
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()", instead of at a periodic
+    check up to 500 ms later: reads of backquote and @ref Qore::backquote() "backquote()" output, reads from
+    pipes, FIFOs and terminals with @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile",
+    @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()", and blocked writes to the standard output and error
+    streams.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.

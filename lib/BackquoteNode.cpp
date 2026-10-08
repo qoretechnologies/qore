@@ -334,7 +334,13 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
         while (true) {
-            if (qore_check_cancel(xsink, "backquote read")) {
+            // the wait ends at once when the thread is cancelled or its Program is interrupted
+            struct pollfd pfd;
+            pfd.fd = pipefd[0];
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
+            if (prc == QORE_POLL_CANCELLED) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 int ignored;
@@ -343,21 +349,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
                 rc = -1;
                 return nullptr;
             }
-
-            struct pollfd pfd;
-            pfd.fd = pipefd[0];
-            pfd.events = POLLIN;
-            pfd.revents = 0;
-            int prc = poll(&pfd, 1, QORE_IO_POLL_INTERVAL_MS);
-            if (prc == 0) {
-                continue;
-            }
             if (prc < 0) {
-#ifdef EINTR
-                if (errno == EINTR) {
-                    continue;
-                }
-#endif
                 break;
             }
 
@@ -441,7 +433,13 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
         while (true) {
-            if (qore_check_cancel(xsink, "backquote read")) {
+            // the wait ends at once when the thread is cancelled or its Program is interrupted
+            struct pollfd pfd;
+            pfd.fd = pipefd[0];
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
+            if (prc == QORE_POLL_CANCELLED) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 int ignored;
@@ -450,21 +448,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
                 rc = -1;
                 return nullptr;
             }
-
-            struct pollfd pfd;
-            pfd.fd = pipefd[0];
-            pfd.events = POLLIN;
-            pfd.revents = 0;
-            int prc = poll(&pfd, 1, QORE_IO_POLL_INTERVAL_MS);
-            if (prc == 0) {
-                continue;
-            }
             if (prc < 0) {
-#ifdef EINTR
-                if (errno == EINTR) {
-                    continue;
-                }
-#endif
                 break;
             }
 

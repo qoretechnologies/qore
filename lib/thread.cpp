@@ -100,6 +100,17 @@
 #include <string>
 #include <sys/time.h>
 #include <vector>
+#include <climits>
+
+#ifdef HAVE_POLL
+#include <fcntl.h>
+#include <poll.h>
+#ifdef DARWIN
+#include <sys/event.h>
+#elif defined(__linux__)
+#include <sys/eventfd.h>
+#endif
+#endif
 
 #if defined(__ia64) && defined(__LP64__)
 #define IA64_64
@@ -822,8 +833,150 @@ void ThreadEntry::cleanup() {
     clearCancelState();
     // a thread in a cancellable condition wait unregisters before it returns
     assert(!waiting_on && !waiting_mutex && !wake_queued && !wake_busy);
+    // release the thread's cancellation wakeup channel with its TID
+    closeCancelWakeup();
 
     status = QTS_AVAIL;
+}
+
+#ifdef HAVE_POLL
+// the cancellation wakeup channel: an EVFILT_USER kqueue on macOS, an eventfd on Linux, and a pipe elsewhere; on
+// macOS and Linux one descriptor is both the end that is polled and the end that is signalled
+#ifdef DARWIN
+//! the EVFILT_USER identifier used in each thread's own kqueue
+static constexpr uintptr_t QORE_CANCEL_WAKEUP_IDENT = 1;
+#elif !defined(__linux__)
+//! the write end of each pipe in use as a wakeup channel, indexed by its read end; changed under thread_list.lck
+static std::map<int, int> qore_cancel_wakeup_pipe_map;
+#endif
+
+static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
+    int fdflags = fcntl(fd, F_GETFD);
+    if (fdflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0) {
+        return -1;
+    }
+    if (nonblock) {
+        int flflags = fcntl(fd, F_GETFL);
+        if (flflags < 0 || fcntl(fd, F_SETFL, flflags | O_NONBLOCK) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! creates a wakeup channel and returns the descriptor to poll, or -1 with errno set; thread_list.lck is held
+static int qore_cancel_wakeup_create() {
+#ifdef DARWIN
+    // a kqueue is never inherited over fork(); close-on-exec covers exec()
+    int kq = kqueue();
+    if (kq < 0) {
+        return -1;
+    }
+    struct kevent ev;
+    EV_SET(&ev, QORE_CANCEL_WAKEUP_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (qore_set_cloexec_nonblock(kq, false) || kevent(kq, &ev, 1, nullptr, 0, nullptr) < 0) {
+        int err = errno;
+        close(kq);
+        errno = err;
+        return -1;
+    }
+    return kq;
+#elif defined(__linux__)
+    return eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+#else
+    int fds[2];
+    if (pipe(fds)) {
+        return -1;
+    }
+    if (qore_set_cloexec_nonblock(fds[0], true) || qore_set_cloexec_nonblock(fds[1], true)) {
+        int err = errno;
+        close(fds[0]);
+        close(fds[1]);
+        errno = err;
+        return -1;
+    }
+    try {
+        qore_cancel_wakeup_pipe_map[fds[0]] = fds[1];
+    } catch (...) {
+        close(fds[0]);
+        close(fds[1]);
+        errno = ENOMEM;
+        return -1;
+    }
+    return fds[0];
+#endif
+}
+
+//! signals a wakeup channel; thread_list.lck is held, so the channel cannot be closed concurrently
+static void qore_cancel_wakeup_signal(int fd) {
+#ifdef DARWIN
+    struct kevent ev;
+    EV_SET(&ev, QORE_CANCEL_WAKEUP_IDENT, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
+    while (kevent(fd, &ev, 1, nullptr, 0, nullptr) < 0 && errno == EINTR) {
+    }
+#else
+#ifdef __linux__
+    uint64_t one = 1;
+    int wfd = fd;
+#else
+    char one = 1;
+    std::map<int, int>::const_iterator i = qore_cancel_wakeup_pipe_map.find(fd);
+    assert(i != qore_cancel_wakeup_pipe_map.end());
+    int wfd = i->second;
+#endif
+    // EAGAIN means that the channel is already readable, so the waiter wakes up in any case
+    while (write(wfd, &one, sizeof one) < 0 && errno == EINTR) {
+    }
+#endif
+}
+
+//! empties a wakeup channel after its thread has cleared waiting_fd, so that the next wait starts unsignalled
+static void qore_cancel_wakeup_drain(int fd) {
+#ifdef DARWIN
+    // EV_CLEAR resets the event when it is retrieved
+    struct kevent ev;
+    struct timespec ts = {0, 0};
+    while (kevent(fd, nullptr, 0, &ev, 1, &ts) < 0 && errno == EINTR) {
+    }
+#else
+    // the descriptor is non-blocking: read until EAGAIN
+    char buf[64];
+    while (true) {
+        ssize_t rc = read(fd, buf, sizeof buf);
+        if (rc > 0 || (rc < 0 && errno == EINTR)) {
+            continue;
+        }
+        break;
+    }
+#endif
+}
+#endif
+
+void ThreadEntry::closeCancelWakeup() {
+#ifdef HAVE_POLL
+    // a thread clears waiting_fd before it returns from a wait, and only the thread itself waits on its channel
+    assert(waiting_fd.load(std::memory_order_relaxed) == -1);
+    if (wake_fd == -1) {
+        return;
+    }
+#ifdef DARWIN
+    // a kqueue is not inherited over fork(): in a child the descriptor number is not ours to close
+    if (wake_pid == getpid()) {
+        close(wake_fd);
+    }
+#else
+    // an inherited eventfd or pipe is this process's own copy: closing it leaves the parent's channel intact
+    close(wake_fd);
+#ifndef __linux__
+    std::map<int, int>::iterator i = qore_cancel_wakeup_pipe_map.find(wake_fd);
+    assert(i != qore_cancel_wakeup_pipe_map.end());
+    close(i->second);
+    qore_cancel_wakeup_pipe_map.erase(i);
+#endif
+#endif
+    wake_fd = -1;
+    wake_pid = 0;
+#endif
 }
 
 void ThreadProgramData::delProgram(QoreProgram* pgm) {
@@ -4450,6 +4603,8 @@ void QoreThreadList::deleteData(int tid) {
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
+        // the thread is leaving while its TID stays reserved; its wakeup channel goes with it
+        entry[tid].closeCancelWakeup();
     }
 
     delete thread_data.get();
@@ -4597,13 +4752,60 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
     // wake the target if it's blocked (or about to block) in a cancellable condition wait
     wakeCondWaiter(tid);
+    // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
+    // lck before it drains or closes the channel
+    signalWaitingFd(tid);
     return 0;
+}
+
+void QoreThreadList::signalWaitingFd(int tid) {
+#ifdef HAVE_POLL
+    int fd = entry[tid].waiting_fd.load(std::memory_order_seq_cst);
+    if (fd >= 0) {
+        qore_cancel_wakeup_signal(fd);
+    }
+#endif
+}
+
+int QoreThreadList::getCancelWakeupFd(int tid) {
+#ifdef HAVE_POLL
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    assert(entry[tid].waiting_fd.load(std::memory_order_relaxed) == -1);
+    pid_t pid = getpid();
+    AutoLocker al(lck);
+    ThreadEntry& te = entry[tid];
+    if (te.wake_fd != -1) {
+        if (te.wake_pid == pid) {
+            return te.wake_fd;
+        }
+        // inherited from the parent process over fork(): a child must never share its channel with
+        // its parent, so that a cancellation in either process cannot wake the other
+        te.closeCancelWakeup();
+    }
+    int fd = qore_cancel_wakeup_create();
+    if (fd < 0) {
+        return -1;
+    }
+    te.wake_fd = fd;
+    te.wake_pid = pid;
+    return fd;
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+void QoreThreadList::clearCurrentWaitingFd(int tid) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    entry[tid].waiting_fd.store(-1, std::memory_order_seq_cst);
 }
 
 void QoreThreadList::wakeAllWaiters() {
     AutoLocker al(lck);
     for (int t = 0; t < MAX_QORE_THREADS; ++t) {
         wakeCondWaiter(t);
+        signalWaitingFd(t);
     }
 }
 
@@ -5026,6 +5228,126 @@ bool qore_is_cancel_deferred() {
     ThreadData* td = thread_data.get();
     return td && td->cancel_defer_count;
 }
+
+#ifdef HAVE_POLL
+//! the remaining part of a poll timeout in milliseconds: -1 for none, 0 if the deadline has passed
+static int qore_poll_remaining_ms(int timeout_ms, int64 deadline_us) {
+    if (timeout_ms <= 0) {
+        return timeout_ms;
+    }
+    int64 remaining_us = deadline_us - q_get_monotonic_us();
+    if (remaining_us <= 0) {
+        return 0;
+    }
+    int64 remaining_ms = (remaining_us + 999) / 1000;
+    return remaining_ms > INT_MAX ? INT_MAX : static_cast<int>(remaining_ms);
+}
+
+int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    assert(xsink);
+    assert(fds || !nfds);
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_POLL_CANCELLED;
+    }
+
+    int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
+
+    // no cancellation can be delivered while it is deferred, and a thread unknown to Qore cannot be cancelled,
+    // so the wait is a plain poll(); EINTR resumes it for the rest of the timeout
+    int tid = q_gettid();
+    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
+        while (true) {
+            int rc = poll(fds, nfds, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            if (rc >= 0 || errno != EINTR) {
+                return rc;
+            }
+            if (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us)) {
+                return 0;
+            }
+        }
+    }
+
+    int wake_fd = thread_list.getCancelWakeupFd(tid);
+    if (wake_fd < 0) {
+        xsink->raiseErrnoException("THREAD-ERROR", errno, "%s: cannot create the cancellation wakeup channel for "
+            "thread %d", operation, tid);
+        return QORE_POLL_CANCELLED;
+    }
+
+    // the caller's descriptors and the wakeup channel, which is always the last entry
+    pollfd local_pfds[4];
+    std::vector<pollfd> heap_pfds;
+    pollfd* pfds = local_pfds;
+    if (nfds + 1 > sizeof local_pfds / sizeof local_pfds[0]) {
+        try {
+            heap_pfds.resize(nfds + 1);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return QORE_POLL_CANCELLED;
+        }
+        pfds = heap_pfds.data();
+    }
+
+    while (true) {
+        for (unsigned i = 0; i < nfds; ++i) {
+            pfds[i] = fds[i];
+            pfds[i].revents = 0;
+        }
+        pfds[nfds].fd = wake_fd;
+        pfds[nfds].events = POLLIN;
+        pfds[nfds].revents = 0;
+
+        // register, then check: either this check sees a request delivered before the registration, or the
+        // canceller sees the registration and signals the channel (seq_cst on both sides)
+        thread_list.setCurrentWaitingFd(tid, wake_fd);
+        int rc = 0;
+        int poll_errno = 0;
+        bool cancelled = qore_check_cancel(xsink, operation);
+        if (!cancelled) {
+            rc = poll(pfds, nfds + 1, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            poll_errno = errno;
+        }
+        // once this returns, nothing can signal the channel any more, so draining it leaves it empty for the
+        // next wait, whether or not it was signalled
+        thread_list.clearCurrentWaitingFd(tid);
+        qore_cancel_wakeup_drain(wake_fd);
+
+        if (cancelled || qore_check_cancel(xsink, operation)) {
+            return QORE_POLL_CANCELLED;
+        }
+        if (rc < 0) {
+            if (poll_errno == EINTR) {
+                if (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us)) {
+                    return 0;
+                }
+                continue;
+            }
+            errno = poll_errno;
+            return -1;
+        }
+
+        int ready = rc;
+        if (rc && pfds[nfds].revents) {
+            --ready;
+        }
+        if (ready || !rc) {
+            for (unsigned i = 0; i < nfds; ++i) {
+                fds[i].revents = pfds[i].revents;
+            }
+            return ready;
+        }
+        // woken with no request to deliver (a request out of this thread's scope, which has now been dropped, or
+        // a cleared program interrupt): wait again for the rest of the timeout
+        if (!timeout_ms || (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us))) {
+            for (unsigned i = 0; i < nfds; ++i) {
+                fds[i].revents = 0;
+            }
+            return 0;
+        }
+    }
+}
+#endif
 
 bool qore_is_thread_cancel_requested() {
     int tid = q_gettid();
