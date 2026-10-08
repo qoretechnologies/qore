@@ -427,11 +427,26 @@ an overflow exception, including allocation rollback and live parse-policy
 override; successful calls have no deferred state to restore. Method-v1 keeps
 its eager path. `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` is a
 runtime-only eager control; it does not disable the native continuation or body.
-Only the private runtime leaf helper gains a typed metadata discriminator for
-callback versus method caches. No generated callback descriptor, method binding
-ABI or serialized metadata layout changes; floating callback marker policy
+Only the private runtime leaf helper uses a typed metadata discriminator for
+callback caches versus invocation-owned method context. No generated callback
+descriptor, method binding ABI or serialized metadata layout changes; floating callback marker policy
 remains eager. The boundary test checks required and nullable native method
 continuations with caller-owned local and closure stacks still live.
+
+The same whole-body proof now defers method object/class substitution as well.
+An invocation-owned descriptor borrows the already-owned receiver, live
+RuntimeConfig and immutable method cache entry. Only overflow materialization
+saves and installs the live object/class and the independent RuntimeConfig
+snapshot; exception cleanup restores both views after frame removal and reader
+completion. Successful pure calls leave both views untouched. The descriptor
+outlives the published frame and adds no receiver reference or callback-frame
+storage. Ordinary methods, method-v1 and the eager control retain eager
+substitution. No admission guard, diagnostic frame, stack check, emitted ABI or
+serialized layout changes. The native fixture verifies private member access
+and both context views after an actual callee overflow, distinct snapshot
+restoration on success/miss/failure, and reuse afterward. Repeated same-artifact
+measurements show about 11-12.4% lower nullable-call kernel time; polymorphic
+evidence is mixed. See `results-method-object-context-macos-arm64.json`.
 
 An additive method-v3 companion applies the same live-stack view as callback v3.
 It exists only after the complete non-throwing scalar proof and successful v2

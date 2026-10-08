@@ -189,7 +189,9 @@ support `qore_rt_bind_method_int_unary_v1`; it isolates the runtime change with 
 identical executable.
 
 Native method object/class save/restore uses the already-acquired live
-`RuntimeConfig`; the generic substitution helper is unchanged. Runtime-only
+`RuntimeConfig`; proven pure method-v2/v3 continuations defer that work until
+overflow materialization, while ordinary native methods retain eager setup.
+The generic substitution helper is unchanged. Runtime-only
 comparisons can reuse the same AOT executable. For a negative control, disable
 the native entry with `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1`, not just its
 admission cache: both prepared and ordinary native admission use the explicit
@@ -205,14 +207,18 @@ sets `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` at both compilation and execution,
 so it uses a different executable from the enabled runs, but one identical
 executable within each before/after pair.
 
-`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` selects eager private-context
-and empty variable-marker setup for the method-v2 scalar continuation at runtime.
-The native body, dispatch checks, object/class context, published diagnostic frame
+`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` selects eager private-context,
+object/class and empty variable-marker setup for the method-v2 scalar continuation
+at runtime. The native body, dispatch checks, published diagnostic frame
 and stack guards remain enabled. This isolates deferral from native dispatch;
 it can compare the same AOT artifact on the same runtime. The default defers
 private state until an overflow needs it, using the compiler's whole pure-body
 proof. Method-v1 and floating callback marker policy are unchanged. This is a
 runtime-only change, so compatible baseline comparisons may reuse AOT artifacts.
+The [object/class follow-up](RESULTS.md#deferred-objectclass-context-for-native-methods-2026-10-08)
+records three nullable-call gains and an eager-control comparison. Its native
+regression checks live private-member access and snapshot context after an actual
+callee overflow, including restoration when the caller's two views differ.
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK=1` at compilation omits the
 additive method-v3 companion and keeps method-v2's full stack-guard helper.

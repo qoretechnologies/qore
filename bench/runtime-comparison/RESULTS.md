@@ -5939,3 +5939,129 @@ remaining object/class context traffic for whole-body-proven pure native methods
 preserving deferred error materialization and diagnostic readers, before a larger
 invocation-local prepared-method ABI. Existing mutable guards and ownership
 semantics remain requirements, not candidates for unchecked removal.
+
+## Deferred object/class context for native methods (2026-10-08)
+
+Retain the runtime-only deferral of object/class substitution for whole-body-proven
+pure method-v2/v3 continuations. Three before/after batches reduce nullable-method
+kernel time by **10.97%, 12.40% and 10.99%**, with non-overlapping fork ranges.
+The eager-context negative control overlaps at -0.53%. This is targeted progress,
+not Java parity or a general speedup for all methods.
+
+Before this experiment, audited argument-key regression/negative evidence was
+committed as `a99cf6341`, then origin was fetched and develop `1369d1bd5` was
+merged cleanly as `f7945809656cda045c89424331eaabb39e296184`. Both builds and affected
+Qore modules were rebuilt; the merged runtime is the fresh saved baseline.
+[Full evidence](results-method-object-context-macos-arm64.json) records exact
+precommit library/compiler identities, the runtime diff, all samples, assembly,
+proof review, tests and the 62-item audit. A subsequent committed rebuild has a
+new identity and is not substituted for either measured binary.
+
+Apple M4 Pro, macOS arm64, release SCU, Temurin 25.0.2/JMH 1.37. Five randomized
+forks, three warmups, five 500 ms windows and three startup observations per mode.
+All **1,250 timing windows** ran without competing builds, tests, profiling,
+disassembly or evidence validation. The first benchmark survived a tool-session
+change; its original live process was verified and monitored, not restarted.
+Each pair used one identical AOT executable on both libraries. Values are median
+fork means in ns/element for entire kernels, not isolated call latency. Range
+overlap is descriptive, not a statistical significance test.
+
+Primary count 1024, seed 810801, `run-8ur6s_ap` (450 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT
+|optional_method_call|13.442|11.967|-10.97%|no|1.662
+|polymorphic_call|50.383|49.933|-0.89%|yes|2.525
+|monomorphic_call|7.052|7.141|+1.27%|yes|1.671
+|indirect_wide|8.254|8.318|+0.76%|yes|1.674
+|indirect_float|10.265|10.193|-0.70%|yes|1.636
+|arithmetic|2.412|2.421|+0.35%|yes|0.878
+
+Primary count 4096, seed 810802, `run-51dqhqsf` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|12.187|10.677|-12.40%|no
+|polymorphic_call|49.224|48.256|-1.97%|no
+|monomorphic_call|5.763|5.890|+2.21%|yes
+|indirect_wide|7.210|7.184|-0.35%|yes
+|indirect_float|8.981|9.063|+0.91%|yes
+|arithmetic|1.349|1.349|-0.01%|yes
+
+Repeat count 1024, seed 810803, `run-crmfidye` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|13.467|11.987|-10.99%|no
+|polymorphic_call|50.570|50.185|-0.76%|yes
+|monomorphic_call|7.080|7.172|+1.30%|yes
+|indirect_wide|8.278|8.272|-0.07%|yes
+|indirect_float|10.277|10.234|-0.42%|yes
+|arithmetic|2.392|2.417|+1.03%|yes
+
+The nullable result repeats at both sizes, saving roughly 1.5 ns/element.
+Polymorphic movement is -0.89%/-1.97%/-0.76%; only the larger workload has
+non-overlapping ranges, so a repeatable general polymorphic gain is not claimed.
+Monomorphic adverse movement (+1.27%/+2.21%/+1.30%) is retained; all ranges overlap.
+Callback and arithmetic controls also overlap. This does not prove exact
+neutrality or rule out smaller code-layout effects.
+
+Eager-context control, count 1024, seed 810804, `run-o3v_ti4l` (200 windows),
+sets `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` for compilation and
+execution of both libraries. Native dispatch/body remain enabled, while both
+use eager object/class and private-context setup. All control ranges overlap:
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|18.991|18.890|-0.53%|yes
+|polymorphic_call|54.030|54.345|+0.58%|yes
+|monomorphic_call|7.136|7.145|+0.12%|yes
+|arithmetic|2.409|2.385|-1.01%|yes
+
+The repeated nullable improvement largely disappears in this control, supporting
+the intended attribution. The control artifact differs from enabled batches but
+is identical within its own before/after pair. No fresh profile was collected.
+
+Startup before/after medians are 31.493/31.205, 30.590/30.501, 30.097/30.044 and
+29.458/29.616 ms; all ranges overlap. Java startup is 23.649 ms. Each shared-artifact
+pair has only one compile observation, not a before/after compilation comparison.
+Filesystem caches are uncontrolled; no startup or compilation gain is claimed.
+
+Implementation and tradeoff:
+
+- The immutable cache, borrowed receiver and initialized live RuntimeConfig are
+  held in a method-only invocation descriptor, which outlives frame unpublication
+  and reader completion. No extra object reference delays destruction.
+- Successful pure calls leave both live object/class and RuntimeConfig snapshot
+  untouched. The callee's failing full stack guard materializes both independently
+  before exception construction; cleanup restores their distinct previous values.
+- Existing marker-allocation rollback, diagnostic publication/reader handshake,
+  receiver/access/full-PIC-key/epoch/Program/body/readiness/debugger guards and
+  live stack protection remain. Method-v1, ordinary methods and eager control
+  keep eager substitution. Callback helper layout and successful cleanup are unchanged.
+- The dispatch helper shrinks from 757 to 751 AArch64 instructions, but its stack
+  reservation grows **352 to 400 bytes**. Runtime `__text` grows 360 bytes
+  (13,974,800 to 13,975,160); total segment size stays 21,774,336. The repeated
+  target saving justifies this bounded method-only tradeoff on the measured build;
+  other architectures and non-SCU builds remain unmeasured.
+
+The expanded native fixture passes on unchanged merged baseline and candidate,
+release/debug: it checks snapshot receiver/defining-class context after an actual
+published callee overflow, and independently reads a private member through the
+live object/class path. A distinct caller snapshot survives success, enum-key
+miss and materialized failure; recovery, O0/O3, independent full-guard controls,
+eager context, padded caller local/closure stacks and foreign re-registration
+remain covered. Artificial stack limits are restored before error inspection.
+
+Baseline and candidate release/debug each pass 33 selected files: 67 cases and
+4,038 assertions in 25 QUnit files plus eight standalones. The native driver has
+120 assertions plus the native C++ probes. Six benchmark modes pass 330 references
+each; the saved baseline executable also passes 330 on the candidate. Eleven
+harness tests pass. After the merge, local-only Bedrock streaming, LLM cancellation
+and LLM streaming pass 64 cases/387 assertions; live-service testing was disabled.
+No database tests or external inference requests were run.
+
+In the primary run, nullable remains **7.20x Java JIT**, polymorphic **19.78x**,
+monomorphic **4.27x**, wide callback **4.97x**, and float callback **6.23x**.
+Next investigate invocation-local preparation for stable nullable receivers,
+reusing the existing strong-local mutation-epoch safeguards where applicable.
+Hoisting must retain NOTHING/weak/opaque handling, reflective writes, receiver
+lifetime, access and Program checks, dispatch/body changes, debugger observation
+and stack diagnostics. Do not replace those semantics with an unchecked pointer
+cache merely to reduce the benchmark number.

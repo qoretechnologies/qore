@@ -37,6 +37,7 @@ class NativeLeafContextTest inherits QUnit::Test {
             "int sub methodReceiverProbe(code<int()> probe) { return probe(); }\n"
             "class NativeLeafMethodBase { int next(int value) { return value + 7; } }\n"
             "class NativeLeafMethodDerived inherits NativeLeafMethodBase {\n"
+            "    private { int leafContextMarker = 927; }\n"
             "    int next(int value) { return value + 17; }\n}\n"
             "NativeLeafMethodBase sub makeMethodProbe() { return new NativeLeafMethodDerived(); }\n"
             "int sub methodProbe(NativeLeafMethodBase input, int value) {\n"

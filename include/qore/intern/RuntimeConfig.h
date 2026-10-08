@@ -209,6 +209,38 @@ private:
 struct QorePreparedFunctionRefV3;
 struct QoreAOTMethodDispatchCacheEntry;
 
+//! Invocation-owned object context for a compiler-proven pure native method.
+/** Keep alive until its leaf helper has unpublished the diagnostic frame and
+    restored any materialized state. Construction only borrows the receiver and
+    immutable cache; it neither changes context nor extends object lifetime.
+    The leaf helper saves and substitutes both live and snapshot views only on
+    its exception path. Callback frames do not carry this method-only storage.
+*/
+class RuntimeConfigNativeMethodContext {
+public:
+    //! @param rc initialized same-thread native invocation context
+    //! @param object borrowed receiver, alive until the leaf helper is destroyed
+    //! @param cache immutable admitted method entry, alive for the same scope
+    RuntimeConfigNativeMethodContext(RuntimeConfig& rc, QoreObject* object,
+            const QoreAOTMethodDispatchCacheEntry& cache) : rc(rc), object(object), cache(cache) {
+    }
+    RuntimeConfigNativeMethodContext(const RuntimeConfigNativeMethodContext&) = delete;
+    RuntimeConfigNativeMethodContext& operator=(const RuntimeConfigNativeMethodContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    RuntimeConfig& rc;
+    QoreObject* object;
+    const QoreAOTMethodDispatchCacheEntry& cache;
+    // Only read after materialize() has installed all four saved values.
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
 //! Deferred context for a prepared pure scalar callback-v3 or method-v2 callee.
 /** Keep as the last member of its published stack location. The callee can
     only evaluate native scalar operations or enter the full stack guard; it
@@ -240,7 +272,7 @@ protected:
     // Only for method-v2 continuations: the complete body proof excludes reentry
     // and its first operation checks the live stack. Method-v1 stays eager.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
-        const QoreProgramLocation*& call_loc, const QoreAOTMethodDispatchCacheEntry& cache,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeMethodContext& context,
         ExceptionSink* xsink);
     ~RuntimeConfigNativeLeafCallHelper() = default;
     DLLLOCAL void restoreEager();
@@ -255,7 +287,7 @@ private:
     // Only materialize() discriminates metadata; successful cleanup does not.
     union {
         const QorePreparedFunctionRefV3* callback_cache;
-        const QoreAOTMethodDispatchCacheEntry* method_cache;
+        RuntimeConfigNativeMethodContext* method_context;
     };
     RuntimeConfigNativeLeafCallHelper* previous;
     const QoreStackLocation* old_stack;
@@ -294,14 +326,15 @@ public:
         @param rc current thread's live runtime context
         @param stack_loc initialized diagnostic frame; helper must be its last member
         @param call_loc caller-location slot, initialized before publication
-        @param cache immutable admitted PIC entry, pinned until readers finish
+        @param context invocation-owned receiver/cache descriptor, alive until readers finish
         @param xsink retained for the common construction signature, not modified
-        @note The caller must retain object/class context and all live admission guards.
+        @note Object/class substitution is materialized before exception work;
+            the caller must retain receiver ownership and all live admission guards.
     */
     __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
             QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-            const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink* xsink)
-            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, cache, xsink) {
+            RuntimeConfigNativeMethodContext& context, ExceptionSink* xsink)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink) {
         static_assert(DeferMarkers, "method-v2 leaf contexts use deferred empty markers");
     }
     //! Restore installed state and unpublish the frame, waiting for diagnostic readers before it dies.

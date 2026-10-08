@@ -17099,11 +17099,13 @@ class QoreNativeMethodStackLocation : public QoreStackLocation, public QoreAOTSt
 public:
     __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc,
             const QoreAOTMethodDispatchCacheEntry& cache,
-            const UserVariantBase* uvb, QoreProgram* pgm, ExceptionSink* xsink)
+            const UserVariantBase* uvb, QoreProgram* pgm, ExceptionSink* xsink,
+            RuntimeConfigNativeMethodContext* context = nullptr)
         : name(cache.call_name), statements(uvb->getStatementBlock()), pgm(pgm),
           helper([&]() __attribute__((always_inline)) {
               if constexpr (Deferred) {
-                  return RuntimeConfigNativeLeafCallHelperFor<true>(rc, this, loc, cache, xsink);
+                  assert(context);
+                  return RuntimeConfigNativeLeafCallHelperFor<true>(rc, this, loc, *context, xsink);
               } else {
                   return RuntimeConfigNativeCallHelper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
                       uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink);
@@ -18031,7 +18033,6 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
     if (*xsink || RuntimeConfigNativeAccess::checkStack(*rc, xsink)) {
         return 1;
     }
-    RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_int_class_ctx);
     auto invoke = [&]() __attribute__((always_inline)) {
         if (!*xsink) {
             try {
@@ -18045,9 +18046,14 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
     };
     static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
     if (defer_context) {
-        QoreNativeMethodStackLocation<true> frame(*rc, *cached, uvb, pgm, xsink);
+        // The descriptor outlives frame unpublication and any cold restoration.
+        // Borrow the already-owned receiver; successful pure calls never alter
+        // object/class state. Only the callee's failing guard materializes it.
+        RuntimeConfigNativeMethodContext context(*rc, object, *cached);
+        QoreNativeMethodStackLocation<true> frame(*rc, *cached, uvb, pgm, xsink, &context);
         invoke();
     } else {
+        RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_int_class_ctx);
         QoreNativeMethodStackLocation<> frame(*rc, *cached, uvb, pgm, xsink);
         invoke();
     }

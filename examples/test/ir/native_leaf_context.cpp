@@ -40,6 +40,7 @@ static thread_local QoreAOTContext::NativeIntUnaryMethodEntryV3 null_view_target
 static thread_local unsigned null_view_calls = 0;
 static thread_local bool method_null_view = false;
 static thread_local bool method_force_overflow = false;
+static thread_local QoreObject* method_expected_object = nullptr;
 static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* xsink,
         RuntimeConfig* rc, const size_t* view) {
     ++null_view_calls;
@@ -62,12 +63,30 @@ static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* x
         assert(false && "forced live limit requires a supported native stack view");
 #endif
     }
-    return null_view_target(arg, ctx, xsink, rc, method_null_view ? nullptr : view);
+    int64_t result = null_view_target(arg, ctx, xsink, rc, method_null_view ? nullptr : view);
+    if (method_force_overflow) {
+        assert(*xsink && method_expected_object);
+        // Inspect only after the real callee's failing guard has materialized
+        // context. Restore the artificial limit before a member access probe.
+        *restore.limit = restore.saved;
+        assert(rc->getObject() == method_expected_object);
+        assert(rc->getClass() == qore_class_private::get(*method_expected_object->getClass()));
+        ExceptionSink probe_sink;
+        uint64_t bits = qore_rt_load_self_member("leafContextMarker", &probe_sink);
+        QoreValue value;
+        std::memcpy(&value, &bits, sizeof(value));
+        ValueHolder marker(value, &probe_sink);
+        // This reads the live object and checks private access using the live
+        // defining class, independently of the RuntimeConfig snapshot above.
+        assert(!probe_sink && marker->getAsBigInt() == 927);
+    }
+    return result;
 }
 
 class MethodStackProbe {
 public:
-    MethodStackProbe(QoreAOTContext* ctx, bool null_view, bool overflow = false)
+    MethodStackProbe(QoreAOTContext* ctx, bool null_view, bool overflow = false,
+            QoreObject* expected_object = nullptr)
             : ctx(null_view || overflow ? ctx : nullptr) {
         if (this->ctx) {
             assert(!null_view_target);
@@ -76,6 +95,7 @@ public:
             null_view_calls = 0;
             method_null_view = null_view;
             method_force_overflow = overflow;
+            method_expected_object = expected_object;
             ctx->native_int_unary_method_entry_v3.store(nullViewMethod, std::memory_order_release);
         }
     }
@@ -84,6 +104,7 @@ public:
             assert(null_view_calls);
             ctx->native_int_unary_method_entry_v3.store(null_view_target, std::memory_order_release);
             null_view_target = nullptr;
+            method_expected_object = nullptr;
         }
     }
 private:
@@ -294,12 +315,21 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
     QoreObject* old_object = rc->getObject();
     const qore_class_private* old_class = rc->getClass();
     auto check = [&](bool accepted) {
+        // Deliberately make snapshot and live caller context different. Native
+        // admission must use the live key and restore the independent snapshot,
+        // on both an enum-key miss and a successful integer continuation.
+        QoreObject* snapshot_object = object->get<QoreObject>();
+        const auto* snapshot_class = qore_class_private::get(*snapshot_object->getClass());
+        rc->setObject(snapshot_object);
+        rc->setClass(snapshot_class);
         int64_t result = -123;
         assert(qore_rt_try_method_int_unary_v1(ctx, slot, object->rawBits(), 7, &result, &xsink, rc)
             == static_cast<int>(accepted));
         assert(!xsink && result == (accepted ? 24 : -123));
         assert(qore_get_call_program_context() == caller);
-        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+        assert(rc->getObject() == snapshot_object && rc->getClass() == snapshot_class);
+        rc->setObject(old_object);
+        rc->setClass(old_class);
     };
     check(false);
     warm(QoreValue(int64_t{7}));
@@ -308,6 +338,30 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
         && second->arg_states[0] == 0 && second->native_int_uvb);
     assert(cache->entries[0].load(std::memory_order_acquire) == first);
     check(true);
+    auto* target_ctx = second->native_int_uvb->getCachedAOTContext();
+    if (target_ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire)
+            && qore_rt_get_stack_limit_v1(rc)) {
+        ValueHolder other(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
+        assert(!xsink && other->getType() == NT_OBJECT);
+        for (bool null_view : {false, true}) {
+            // A distinct snapshot receiver must survive materialization and
+            // unwinding; restoring the live caller object instead is incorrect.
+            rc->setObject(other->get<QoreObject>());
+            rc->setClass(nullptr);
+            {
+                MethodStackProbe forced(target_ctx, null_view, true, object->get<QoreObject>());
+                int64_t result = -123;
+                assert(qore_rt_try_method_int_unary_v1(ctx, slot, object->rawBits(), 7, &result, &xsink, rc) == 1);
+                assert(xsink && result == 0 && qore_get_call_program_context() == caller);
+                assert(rc->getObject() == other->get<QoreObject>() && !rc->getClass());
+            }
+            rc->setObject(old_object);
+            rc->setClass(old_class);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+            assert(!xsink && info);
+        }
+    }
     warm(*enumeration);
     check(true);
 }
@@ -407,7 +461,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
         if (limit) {
             for (bool forced_null : {false, true}) {
                 {
-                    MethodStackProbe forced(ctx, forced_null, true);
+                    MethodStackProbe forced(ctx, forced_null, true, object->get<QoreObject>());
                     ValueHolder failed(program->callFunction(caller_name, *args, &xsink), &xsink);
                     assert(xsink && qore_get_call_program_context() == caller);
                     assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));

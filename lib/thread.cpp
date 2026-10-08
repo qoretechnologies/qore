@@ -2116,9 +2116,10 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-        const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink*)
-        : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_cache(&cache),
+        RuntimeConfigNativeMethodContext& context, ExceptionSink*)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_context(&context),
           previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
+    const auto& cache = context.cache;
     assert(cache.native_int_uvb && td->current_pgm == cache.native_int_program);
     call_loc = td->runtime_loc ? td->runtime_loc : cache.native_int_uvb->getUserSignature()->getParseLocation();
     td->native_leaf_context = this;
@@ -2137,8 +2138,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     QoreProgram* pgm;
     const QoreProgramLocation* parse_loc;
     if (target_kind == TargetKind::Method) {
-        uvb = method_cache->native_int_uvb;
-        pgm = method_cache->native_int_program;
+        uvb = method_context->cache.native_int_uvb;
+        pgm = method_context->cache.native_int_program;
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
         uvb = callback_cache->uvb;
@@ -2165,6 +2166,9 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     old_po = td->runtime_po;
     old_sp = td->runtime_loc_sp;
     swapped = parse_loc != nullptr;
+    if (target_kind == TargetKind::Method) {
+        method_context->materialize(td);
+    }
     state = ContextState::Materialized;
     td->call_program_context = pgm;
     td->closure_rt_env = nullptr;
@@ -2219,6 +2223,30 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
     tlpd->cvstack.popNativeLeafFrameBoundary();
     td->closure_rt_env = old_closure;
     td->call_program_context = old_call_pgm;
+    if (target_kind == TargetKind::Method) {
+        method_context->restore(td);
+    }
+}
+
+// The admitted body cannot observe object/class context or reenter Qore. Stack
+// overflow materializes it before constructing an exception; diagnostic readers
+// use the separately published immutable frame, never these thread-private views.
+__attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::materialize(ThreadData* td) {
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    td->current_obj = object;
+    td->current_class = cache.native_int_class_ctx;
+    rc.setObject(object);
+    rc.setClass(cache.native_int_class_ctx);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
 }
 
 // called when pushing a new location on the stack
